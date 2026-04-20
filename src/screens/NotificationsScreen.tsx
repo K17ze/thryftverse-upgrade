@@ -23,6 +23,8 @@ import { useStore } from '../store/useStore';
 import { NotificationEvent, listNotificationEvents } from '../services/notificationsApi';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
+import { MOCK_USERS } from '../data/mockData';
+import { mockFind } from '../utils/mockGate';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -65,6 +67,17 @@ function getNotifIcon(type: NotificationCardType): { name: string; color: string
 function parsePayloadEvent(payload: Record<string, unknown>): string {
   const candidate = payload.event;
   return typeof candidate === 'string' ? candidate.toLowerCase() : '';
+}
+
+function getPayloadString(payload: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const candidate = payload[key];
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 function deriveCardType(event: NotificationEvent): NotificationCardType {
@@ -319,6 +332,10 @@ export default function NotificationsScreen() {
         renderItem={({ item, index }) => {
           const icon = getNotifIcon(item.type);
           const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
+          const actorUserId = getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
+          const actorUser = actorUserId ? mockFind(MOCK_USERS, (user) => user.id === actorUserId) : null;
+          const actorHandle = actorUser?.username ?? actorUserId;
+
           return (
             <Reanimated.View
               entering={
@@ -329,35 +346,81 @@ export default function NotificationsScreen() {
                       .duration(Motion.list.enterDuration)
               }
             >
-              <AnimatedPressable
-                style={[styles.notifCard, !item.read && styles.notifCardUnread]}
-                activeOpacity={0.8}
-                onPress={() => handleOpenNotification(item)}
-                accessibilityLabel={`${item.read ? '' : 'Unread: '}${item.text}, ${item.time}`}
-              >
-                {!item.read && <View style={styles.unreadDot} />}
+              <View style={[styles.notifCard, !item.read && styles.notifCardUnread]}>
+                <AnimatedPressable
+                  style={styles.notifMainTap}
+                  activeOpacity={0.8}
+                  onPress={() => handleOpenNotification(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.read ? '' : 'Unread: '}${item.text}, ${item.time}`}
+                >
+                  {!item.read && <View style={styles.unreadDot} />}
 
-                <View style={styles.notifImageWrap}>
-                  <SharedTransitionView
-                    style={styles.notifImageShared}
-                    sharedTransitionTag={listingId ? `image-${listingId}-0` : undefined}
-                  >
-                    <CachedImage uri={item.itemImage} style={styles.notifImage} contentFit="cover" />
-                  </SharedTransitionView>
-                </View>
-
-                <View style={styles.notifBody}>
-                  <Text style={[styles.notifText, !item.read && styles.notifTextUnread]} numberOfLines={3}>
-                    {item.text}
-                  </Text>
-                  <View style={styles.notifMetaRow}>
-                    <View style={[styles.notifTypeIcon, { backgroundColor: icon.bg }]}> 
-                      <Ionicons name={icon.name as never} size={12} color={icon.color} />
-                    </View>
-                    <Text style={styles.notifTime}>{item.time}</Text>
+                  <View style={styles.notifImageWrap}>
+                    <SharedTransitionView
+                      style={styles.notifImageShared}
+                      sharedTransitionTag={listingId ? `image-${listingId}-0` : undefined}
+                    >
+                      <CachedImage uri={item.itemImage} style={styles.notifImage} contentFit="cover" />
+                    </SharedTransitionView>
                   </View>
-                </View>
-              </AnimatedPressable>
+
+                  <View style={styles.notifBody}>
+                    <Text style={[styles.notifText, !item.read && styles.notifTextUnread]} numberOfLines={3}>
+                      {item.text}
+                    </Text>
+                    <View style={styles.notifMetaRow}>
+                      <View style={[styles.notifTypeIcon, { backgroundColor: icon.bg }]}> 
+                        <Ionicons name={icon.name as never} size={12} color={icon.color} />
+                      </View>
+                      <Text style={styles.notifTime}>{item.time}</Text>
+                    </View>
+                  </View>
+                </AnimatedPressable>
+
+                {actorUserId && actorHandle ? (
+                  <View style={styles.notifActionRow}>
+                    <AnimatedPressable
+                      style={styles.notifActorChip}
+                      onPress={() => navigation.navigate('UserProfile', { userId: actorUserId })}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open @${actorHandle} profile`}
+                      accessibilityHint="Shows sender profile details"
+                    >
+                      {actorUser?.avatar ? (
+                        <CachedImage
+                          uri={actorUser.avatar}
+                          style={styles.notifActorAvatar}
+                          containerStyle={styles.notifActorAvatarWrap}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View style={styles.notifActorAvatarFallback}>
+                          <Ionicons name="person" size={10} color={Colors.textMuted} />
+                        </View>
+                      )}
+                      <Text style={styles.notifActorText} numberOfLines={1}>@{actorHandle}</Text>
+                    </AnimatedPressable>
+
+                    <AnimatedPressable
+                      style={styles.notifMessageBtn}
+                      onPress={() =>
+                        navigation.navigate('Chat', {
+                          conversationId: listingId ? `${actorUserId}_${listingId}` : `profile_${actorUserId}`,
+                          focusQuery: actorHandle,
+                          partnerUserId: actorUserId,
+                        })}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Message @${actorHandle}`}
+                      accessibilityHint="Opens chat with this user"
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+                    </AnimatedPressable>
+                  </View>
+                ) : null}
+              </View>
             </Reanimated.View>
           );
         }}
@@ -421,13 +484,15 @@ const styles = StyleSheet.create({
   notifCard: {
     backgroundColor: PANEL_BG,
     borderRadius: 20,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+  },
+  notifMainTap: {
     padding: 16,
     flexDirection: 'row',
     gap: 14,
     alignItems: 'center',
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
   },
   notifCardUnread: {
     backgroundColor: IS_LIGHT ? '#f9f6f0' : '#141210',
@@ -469,6 +534,64 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   notifTime: { fontSize: 12, color: Colors.textMuted, fontFamily: 'Inter_400Regular' },
+  notifActionRow: {
+    marginTop: 4,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: PANEL_BORDER,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  notifActorChip: {
+    flex: 1,
+    minHeight: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_ALT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  notifActorAvatarWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  notifActorAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  notifActorAvatarFallback: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: PANEL_BG,
+  },
+  notifActorText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  notifMessageBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_ALT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   loadingState: {
     marginTop: 40,

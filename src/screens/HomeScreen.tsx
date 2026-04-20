@@ -163,6 +163,7 @@ type ExploreTile = {
   posterUri?: string;
   likes: number;
   routeId?: string;
+  sellerId?: string;
   price?: number;
   caption: string;
   aspectRatio: number;
@@ -185,6 +186,8 @@ interface ExploreGridItemProps {
   formatPrice: (...args: any[]) => string;
   onPress: (routeId: string | undefined) => void;
   onLongPress: (item: ExploreTile) => void;
+  onPressSellerProfile: (sellerId: string) => void;
+  onPressSellerMessage: (sellerId: string, listingId: string) => void;
 }
 
 const ExploreGridItem = React.memo(function ExploreGridItem({
@@ -193,15 +196,21 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
   formatPrice,
   onPress,
   onLongPress,
+  onPressSellerProfile,
+  onPressSellerMessage,
 }: ExploreGridItemProps) {
   const sharedTag = item.mediaType === 'image' && item.routeId
     ? `image-${item.routeId}-0`
     : undefined;
+  const mediaHeight = Math.round(tileWidth * item.aspectRatio);
+  const seller = item.sellerId ? MOCK_USERS.find((entry) => entry.id === item.sellerId) : undefined;
+  const sellerHandle = seller?.username ?? item.sellerId;
+  const canShowSellerActions = Boolean(item.sellerId && item.routeId);
 
   return (
-    <View style={[styles.exploreItemBox, { width: tileWidth, height: Math.round(tileWidth * item.aspectRatio) }]}>
+    <View style={[styles.exploreItemBox, { width: tileWidth }]}>
       <AnimatedPressable
-        style={styles.exploreMediaWrap}
+        style={[styles.exploreMediaWrap, { height: mediaHeight }]}
         activeOpacity={0.92}
         onPress={() => onPress(item.routeId)}
         onLongPress={() => onLongPress(item)}
@@ -232,6 +241,44 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
           </View>
         </View>
       </AnimatedPressable>
+
+      {canShowSellerActions ? (
+        <View style={styles.exploreSellerRow}>
+          <AnimatedPressable
+            style={styles.exploreSellerChip}
+            onPress={() => onPressSellerProfile(item.sellerId as string)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${sellerHandle ?? 'seller'} profile`}
+            accessibilityHint="Shows seller profile details"
+          >
+            {seller?.avatar ? (
+              <CachedImage
+                uri={seller.avatar}
+                style={styles.exploreSellerAvatar}
+                containerStyle={styles.exploreSellerAvatarWrap}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.exploreSellerAvatarFallback}>
+                <Ionicons name="person" size={10} color={Colors.textMuted} />
+              </View>
+            )}
+            <Text style={styles.exploreSellerText} numberOfLines={1}>@{sellerHandle}</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={styles.exploreMessageBtn}
+            onPress={() => onPressSellerMessage(item.sellerId as string, item.routeId as string)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Message @${sellerHandle ?? 'seller'}`}
+            accessibilityHint="Opens chat with this seller"
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
+      ) : null}
     </View>
   );
 });
@@ -412,6 +459,7 @@ export default function HomeScreen() {
         likes: item.likes,
         price: item.price,
         routeId: item.id,
+        sellerId: item.sellerId,
         caption: item.title,
         aspectRatio: resolveTileAspectRatio(item.id),
       };
@@ -425,7 +473,7 @@ export default function HomeScreen() {
     const columnHeights = [0, 0];
 
     feedGridData.forEach((tile) => {
-      const tileHeight = Math.round(gridTileWidth * tile.aspectRatio);
+      const tileHeight = Math.round(gridTileWidth * tile.aspectRatio) + (tile.sellerId && tile.routeId ? 38 : 0);
       const targetIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
       columns[targetIndex].push(tile);
       columnHeights[targetIndex] += tileHeight + GRID_GAP;
@@ -593,6 +641,19 @@ export default function HomeScreen() {
     setPeekItem(item);
   }, []);
 
+  const handleSellerProfilePress = React.useCallback((sellerId: string) => {
+    navigation.navigate('UserProfile', { userId: sellerId });
+  }, [navigation]);
+
+  const handleSellerMessagePress = React.useCallback((sellerId: string, listingId: string) => {
+    const sellerHandle = MOCK_USERS.find((entry) => entry.id === sellerId)?.username ?? sellerId;
+    navigation.navigate('Chat', {
+      conversationId: `${sellerId}_${listingId}`,
+      focusQuery: sellerHandle,
+      partnerUserId: sellerId,
+    });
+  }, [navigation]);
+
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
@@ -657,12 +718,30 @@ export default function HomeScreen() {
           <View style={styles.masonryGrid}>
             <View style={styles.masonryColumn}>
               {masonryColumns[0].map((item) => (
-                <ExploreGridItem key={item.id} item={item} tileWidth={gridTileWidth} formatPrice={formatFromFiat} onPress={handleTilePress} onLongPress={handleTileLongPress} />
+                <ExploreGridItem
+                  key={item.id}
+                  item={item}
+                  tileWidth={gridTileWidth}
+                  formatPrice={formatFromFiat}
+                  onPress={handleTilePress}
+                  onLongPress={handleTileLongPress}
+                  onPressSellerProfile={handleSellerProfilePress}
+                  onPressSellerMessage={handleSellerMessagePress}
+                />
               ))}
             </View>
             <View style={styles.masonryColumn}>
               {masonryColumns[1].map((item) => (
-                <ExploreGridItem key={item.id} item={item} tileWidth={gridTileWidth} formatPrice={formatFromFiat} onPress={handleTilePress} onLongPress={handleTileLongPress} />
+                <ExploreGridItem
+                  key={item.id}
+                  item={item}
+                  tileWidth={gridTileWidth}
+                  formatPrice={formatFromFiat}
+                  onPress={handleTilePress}
+                  onLongPress={handleTileLongPress}
+                  onPressSellerProfile={handleSellerProfilePress}
+                  onPressSellerMessage={handleSellerMessagePress}
+                />
               ))}
             </View>
           </View>
@@ -1216,7 +1295,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
   },
   exploreMediaWrap: {
-    flex: 1,
     position: 'relative',
   },
   exploreSharedMedia: {
@@ -1245,6 +1323,61 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.14,
+  },
+  exploreSellerRow: {
+    marginTop: 7,
+    marginHorizontal: 8,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  exploreSellerChip: {
+    flex: 1,
+    minHeight: 28,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.cardAlt,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  exploreSellerAvatarWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  exploreSellerAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  exploreSellerAvatarFallback: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+  },
+  exploreSellerText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 10,
+    fontFamily: Typography.family.medium,
+  },
+  exploreMessageBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.cardAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   videoBadge: {
     position: 'absolute',

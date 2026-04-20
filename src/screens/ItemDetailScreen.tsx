@@ -1,6 +1,7 @@
 import React from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
+  AnimatedPressable
+} from '../components/AnimatedPressable';
 import {
   View,
   Text,
@@ -54,7 +55,7 @@ export default function ItemDetailScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  
+
   const isFav = useStore(state => state.isWishlisted(route.params?.itemId));
   const toggleFav = useStore(state => state.toggleWishlist);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
@@ -127,7 +128,7 @@ export default function ItemDetailScreen() {
       toggleFav(item.id);
       show('Added to wishlist ♥', 'success');
     }
-    
+
     bigHeartOpacity.value = 1;
     bigHeartScale.value = withSequence(
       withSpring(1.5, Motion.spring.flagshipPop),
@@ -145,13 +146,13 @@ export default function ItemDetailScreen() {
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
 
-      <Reanimated.ScrollView 
-        showsVerticalScrollIndicator={false} 
+      <Reanimated.ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 126 }}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
-        
+
         {/* ── Image Carousel ── */}
         <Reanimated.View style={[styles.heroContainer, heroStyle]}>
           <ImageViewer images={item.images} height={height * 0.65} onDoubleTap={handleDoubleTap} itemId={item.id} />
@@ -228,17 +229,40 @@ export default function ItemDetailScreen() {
           </View>
 
           {/* ── Seller Card ── */}
-          <AnimatedPressable style={styles.sellerCard} onPress={() => navigation.navigate('UserProfile', { userId: seller.id })} activeOpacity={0.8} accessibilityLabel={`View ${seller.username}'s profile, ${seller.rating} stars, ${seller.reviewCount} reviews`}>
-            <CachedImage uri={seller.avatar} style={styles.sellerAvatar} containerStyle={{ width: 46, height: 46, borderRadius: 23 }} contentFit="cover" />
-            <View style={styles.sellerInfo}>
-              <Text style={styles.sellerName}>{seller.username}</Text>
-              <Text style={styles.sellerStats}>{seller.rating} ★ • {seller.reviewCount} Reviews</Text>
-              <Text style={styles.sellerLastSeen}>Last seen: {seller.lastSeen}</Text>
-            </View>
-            <AnimatedPressable style={styles.followBtn} onPress={(e) => { e.stopPropagation(); navigation.navigate('Chat', { conversationId: `${seller.id}_${item.id}` }); }}>
-              <Text style={styles.followBtnText}>Message</Text>
+          <View style={styles.sellerCard}>
+            <AnimatedPressable
+              style={styles.sellerIdentityTap}
+              onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
+              activeOpacity={0.86}
+              accessibilityRole="button"
+              accessibilityLabel={`Open @${seller.username} profile`}
+              accessibilityHint="Shows seller profile and trust details"
+            >
+              <CachedImage uri={seller.avatar} style={styles.sellerAvatar} containerStyle={{ width: 46, height: 46, borderRadius: 23 }} contentFit="cover" />
+              <View style={styles.sellerInfo}>
+                <Text style={styles.sellerName}>@{seller.username}</Text>
+                <Text style={styles.sellerLocation} numberOfLines={1}>{seller.location}</Text>
+                <Text style={styles.sellerStats}>{seller.rating} ★ • {seller.reviewCount} Reviews</Text>
+                <Text style={styles.sellerLastSeen}>Last seen: {seller.lastSeen}</Text>
+              </View>
             </AnimatedPressable>
-          </AnimatedPressable>
+
+            <AppButton
+              title="Message"
+              style={styles.messageSellerBtn}
+              titleStyle={styles.messageSellerBtnText}
+              variant="secondary"
+              size="sm"
+              onPress={() =>
+                navigation.navigate('Chat', {
+                  conversationId: `${seller.id}_${item.id}`,
+                  focusQuery: seller.username,
+                  partnerUserId: seller.id,
+                })}
+              accessibilityLabel={`Message @${seller.username}`}
+              accessibilityHint="Opens chat with this seller"
+            />
+          </View>
 
           {/* Restored Similar Items Feature */}
           {sellerItems.length > 0 && (
@@ -246,8 +270,8 @@ export default function ItemDetailScreen() {
               <Text style={styles.sectionTitle}>More from {seller.username}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                 {sellerItems.map(sItem => (
-                  <AnimatedPressable 
-                    key={sItem.id} 
+                  <AnimatedPressable
+                    key={sItem.id}
                     style={styles.sellerItemCard}
                     onPress={() => navigation.push('ItemDetail', { itemId: sItem.id })}
                   >
@@ -382,18 +406,27 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
   },
+  sellerIdentityTap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   sellerAvatar: { width: 56, height: 56, borderRadius: 28 },
   sellerInfo: { flex: 1 },
   sellerName: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
+  sellerLocation: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 2 },
   sellerStats: { fontSize: 13, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 4 },
   sellerLastSeen: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.textMuted, marginTop: 2 },
-  followBtn: {
+  messageSellerBtn: {
+    minHeight: 38,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
     backgroundColor: PANEL_ALT_BG,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
   },
-  followBtnText: { color: Colors.textPrimary, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  messageSellerBtnText: { color: Colors.textPrimary, fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   sellerItemsSection: { marginTop: 24, paddingBottom: 32 },
   sectionTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 16 },
   sellerItemCard: { width: 100 },

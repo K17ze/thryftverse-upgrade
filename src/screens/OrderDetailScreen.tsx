@@ -438,29 +438,42 @@ export default function OrderDetailScreen() {
 
         {/* -- Seller Info -- */}
         <Text style={styles.sectionTitle}>Seller</Text>
-        <AnimatedPressable
-          style={styles.sellerCard}
-          onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
-          activeOpacity={0.88}
-        >
-          <CachedImage uri={seller.avatar} style={styles.sellerAvatar} contentFit="cover" />
-          <View style={styles.sellerInfo}>
-            <Text style={styles.sellerName}>{seller.username}</Text>
-            <View style={styles.sellerMeta}>
-              <Ionicons name="star" size={13} color={Colors.star} />
-              <Text style={styles.sellerRating}>{seller.rating} ({seller.reviewCount} reviews)</Text>
+        <View style={styles.sellerCard}>
+          <AnimatedPressable
+            style={styles.sellerIdentityTap}
+            onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${seller.username} profile`}
+            accessibilityHint="Shows seller profile details"
+          >
+            <CachedImage uri={seller.avatar} style={styles.sellerAvatar} contentFit="cover" />
+            <View style={styles.sellerInfo}>
+              <Text style={styles.sellerName}>@{seller.username}</Text>
+              <Text style={styles.sellerLocation} numberOfLines={1}>{seller.location}</Text>
+              <View style={styles.sellerMeta}>
+                <Ionicons name="star" size={13} color={Colors.star} />
+                <Text style={styles.sellerRating}>{seller.rating} ({seller.reviewCount} reviews)</Text>
+              </View>
+              <Text style={styles.sellerLastSeen}>Last seen {seller.lastSeen}</Text>
             </View>
-          </View>
+          </AnimatedPressable>
+
           <AppButton
             title="Message"
             style={styles.msgBtn}
             titleStyle={styles.msgBtnText}
             variant="secondary"
             size="sm"
-            onPress={() => navigation.navigate('Chat', { conversationId: 'c1' })}
+            onPress={() => navigation.navigate('Chat', {
+              conversationId: `${seller.id}_${listing.id}`,
+              focusQuery: seller.username,
+              partnerUserId: seller.id,
+            })}
             accessibilityLabel="Message seller"
+            accessibilityHint="Opens conversation with this seller"
           />
-        </AnimatedPressable>
+        </View>
 
         {/* -- Transaction Info -- */}
         <Text style={styles.sectionTitle}>Transaction</Text>
@@ -685,11 +698,19 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 28,
   },
+  sellerIdentityTap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   sellerAvatar: { width: 48, height: 48, borderRadius: 24 },
   sellerInfo: { flex: 1 },
   sellerName: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
+  sellerLocation: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginBottom: 2 },
   sellerMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sellerRating: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary },
+  sellerLastSeen: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.textMuted, marginTop: 3 },
   msgBtn: {
     minHeight: 40,
     paddingHorizontal: 16,

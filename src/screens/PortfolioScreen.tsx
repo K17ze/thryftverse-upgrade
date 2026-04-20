@@ -23,6 +23,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
+import { useToast } from '../context/ToastContext';
+import { MOCK_USERS } from '../data/mockData';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const IS_LIGHT = ActiveTheme === 'light';
@@ -40,8 +42,11 @@ export default function PortfolioScreen() {
   const navigation = useNavigation<NavT>();
   const customCoOwns = useStore((state) => state.customCoOwns);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
+  const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
+  const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
+  const supportUser = MOCK_USERS[0];
 
   const baseAssets = React.useMemo(() => getCoOwnMarket(customCoOwns), [customCoOwns]);
 
@@ -86,10 +91,22 @@ export default function PortfolioScreen() {
     }));
   }, [holdings, totalValue]);
 
+  const handleOpenPortfolioSupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'portfolio holdings support',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for portfolio help.', 'info');
+  }, [navigation, show, supportUser.id]);
+
   const renderHolding = ({ item, index }: { item: CoOwnAsset; index: number }) => {
     const value = item.yourUnits * item.unitPriceGBP;
     const avg = item.avgEntryPriceGBP ?? item.unitPriceGBP;
     const pnl = (item.unitPriceGBP - avg) * item.yourUnits;
+    const issuerUser = MOCK_USERS.find((user) => user.id === item.issuerId);
+    const issuerHandle = issuerUser?.username ?? item.issuerId;
+    const canMessageIssuer = currentUser?.id !== item.issuerId;
 
     return (
       <Reanimated.View
@@ -101,23 +118,67 @@ export default function PortfolioScreen() {
                 .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
         }
       >
-        <AnimatedPressable
-          style={styles.holdingRow}
-          activeOpacity={0.92}
-          onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-        >
-          <Image source={{ uri: item.image }} style={styles.holdingImage} />
-          <View style={styles.holdingInfo}>
-            <Text style={styles.holdingTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.holdingMeta}>{item.yourUnits} shares | Avg {formatFromFiat(avg, 'GBP', { displayMode: 'fiat' })}</Text>
+        <View style={styles.holdingCardShell}>
+          <AnimatedPressable
+            style={styles.holdingRow}
+            activeOpacity={0.92}
+            onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${item.title} asset details`}
+            accessibilityHint="Shows detailed chart, order book, and ownership insights"
+          >
+            <Image source={{ uri: item.image }} style={styles.holdingImage} />
+            <View style={styles.holdingInfo}>
+              <Text style={styles.holdingTitle} numberOfLines={1}>{item.title}</Text>
+              <Text style={styles.holdingMeta}>{item.yourUnits} shares | Avg {formatFromFiat(avg, 'GBP', { displayMode: 'fiat' })}</Text>
+            </View>
+            <View style={styles.holdingRight}>
+              <Text style={styles.holdingValue}>{formatFromFiat(value, 'GBP', { displayMode: 'fiat' })}</Text>
+              <Text style={[styles.holdingPnl, pnl >= 0 ? styles.pnlUp : styles.pnlDown]}>
+                {pnl >= 0 ? '+' : ''}{formatFromFiat(Math.abs(pnl), 'GBP', { displayMode: 'fiat' })}
+              </Text>
+            </View>
+          </AnimatedPressable>
+
+          <View style={styles.holdingActionRow}>
+            <AnimatedPressable
+              style={styles.holdingIssuerChip}
+              onPress={() => navigation.navigate('UserProfile', { userId: item.issuerId })}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Open @${issuerHandle} profile`}
+              accessibilityHint="Shows issuer profile details"
+            >
+              <Image
+                source={{ uri: issuerUser?.avatar ?? 'https://picsum.photos/seed/portfolio-issuer-fallback/80/80' }}
+                style={styles.holdingIssuerAvatar}
+              />
+              <Text style={styles.holdingIssuerText} numberOfLines={1}>Issuer @{issuerHandle}</Text>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={[styles.holdingMessageBtn, !canMessageIssuer && styles.holdingMessageBtnDisabled]}
+              onPress={() => {
+                if (!canMessageIssuer) {
+                  return;
+                }
+
+                navigation.navigate('Chat', {
+                  conversationId: `${item.issuerId}_${item.listingId}`,
+                  focusQuery: issuerHandle,
+                  partnerUserId: item.issuerId,
+                });
+              }}
+              disabled={!canMessageIssuer}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={canMessageIssuer ? `Message @${issuerHandle}` : 'Issuer is you'}
+              accessibilityHint={canMessageIssuer ? 'Opens chat with this issuer' : 'Messaging yourself is disabled'}
+            >
+              <Ionicons name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'} size={12} color={Colors.textPrimary} />
+            </AnimatedPressable>
           </View>
-          <View style={styles.holdingRight}>
-            <Text style={styles.holdingValue}>{formatFromFiat(value, 'GBP', { displayMode: 'fiat' })}</Text>
-            <Text style={[styles.holdingPnl, pnl >= 0 ? styles.pnlUp : styles.pnlDown]}>
-              {pnl >= 0 ? '+' : ''}{formatFromFiat(Math.abs(pnl), 'GBP', { displayMode: 'fiat' })}
-            </Text>
-          </View>
-        </AnimatedPressable>
+        </View>
       </Reanimated.View>
     );
   };
@@ -171,6 +232,31 @@ export default function PortfolioScreen() {
                   />
                 ))}
               </View>
+            </View>
+
+            <View style={styles.supportRow}>
+              <AnimatedPressable
+                style={styles.supportIdentity}
+                onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open @${supportUser.username} profile`}
+                accessibilityHint="Shows portfolio support profile"
+              >
+                <Image source={{ uri: supportUser.avatar }} style={styles.supportAvatar} />
+                <Text style={styles.supportText}>Need portfolio help? @{supportUser.username}</Text>
+              </AnimatedPressable>
+
+              <AnimatedPressable
+                style={styles.supportMessageBtn}
+                onPress={handleOpenPortfolioSupport}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Message portfolio support"
+                accessibilityHint="Opens support chat for holdings and PnL questions"
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+              </AnimatedPressable>
             </View>
 
             <View style={styles.sectionRow}>
@@ -315,11 +401,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
   },
-  holdingRow: {
+  supportRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    backgroundColor: CARD_BG,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  supportText: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    backgroundColor: CARD_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  holdingCardShell: {
     borderRadius: 12,
     borderWidth: 1,
     borderColor: CARD_BORDER,
     backgroundColor: CARD_BG,
+    overflow: 'hidden',
+  },
+  holdingRow: {
     paddingHorizontal: 10,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -358,6 +487,52 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 11,
     fontFamily: 'Inter_700Bold',
+  },
+  holdingActionRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: CARD_BORDER,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  holdingIssuerChip: {
+    flex: 1,
+    minHeight: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    backgroundColor: Colors.cardAlt,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  holdingIssuerAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  holdingIssuerText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  holdingMessageBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    backgroundColor: Colors.cardAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  holdingMessageBtnDisabled: {
+    opacity: 0.55,
   },
 });
 

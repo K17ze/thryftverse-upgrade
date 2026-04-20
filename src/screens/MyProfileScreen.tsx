@@ -78,7 +78,7 @@ export default function MyProfileScreen() {
   const { listings } = useBackendData();
   const customCoOwns = useStore((state) => state.customCoOwns);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
-  
+
   const userAvatar = useStore((state) => state.userAvatar);
   const userCover = useStore((state) => state.userCover);
   const currentUser = useStore((state) => state.currentUser);
@@ -285,7 +285,6 @@ export default function MyProfileScreen() {
         color: IS_LIGHT ? '#5c4830' : '#ccb893',
       },
       { icon: 'bookmark-outline', label: 'Wishlist', route: 'Favourites', color: IS_LIGHT ? '#704b3b' : '#e6c8b4' },
-      { icon: 'settings-outline', label: 'Settings', route: 'Settings', color: '#a0a0a0' },
     ],
     [formatFromFiat, coOwnHoldings.length]
   );
@@ -342,10 +341,10 @@ export default function MyProfileScreen() {
         <View style={styles.heroSection}>
           <View style={styles.heroTop}>
             <AnimatedPressable style={styles.avatarWrap} onPress={pickAvatar} activeOpacity={0.85}
-          accessibilityLabel="Change profile photo"
-          accessibilityRole="button"
-          accessibilityHint="Opens photo picker to update your avatar"
-        >
+              accessibilityLabel="Change profile photo"
+              accessibilityRole="button"
+              accessibilityHint="Opens photo picker to update your avatar"
+            >
               <CachedImage
                 uri={displayAvatar}
                 style={styles.heroAvatar}
@@ -361,11 +360,20 @@ export default function MyProfileScreen() {
             </AnimatedPressable>
           </View>
 
-          <Text style={styles.heroName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>{MY_USER.username.toUpperCase()}</Text>
-          <Text style={styles.heroHandle}>@{MY_USER.username}</Text>
-          <Text style={styles.heroMeta}>
-            {MY_USER.location} | {MY_USER.reviewCount} reviews | last seen {MY_USER.lastSeen.toLowerCase()}
-          </Text>
+          <AnimatedPressable
+            style={styles.heroIdentityTap}
+            onPress={() => navigation.navigate('UserProfile', { userId: MY_USER.id, isMe: true })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Open your public profile"
+            accessibilityHint="Shows how other users see your profile"
+          >
+            <Text style={styles.heroName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>{MY_USER.username.toUpperCase()}</Text>
+            <Text style={styles.heroHandle}>@{MY_USER.username}</Text>
+            <Text style={styles.heroMeta}>
+              {MY_USER.location} | {MY_USER.reviewCount} reviews | last seen {MY_USER.lastSeen.toLowerCase()}
+            </Text>
+          </AnimatedPressable>
 
           <View style={styles.profileActionRow}>
             <AppButton
@@ -743,6 +751,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.7,
     maxWidth: '100%',
     textAlign: 'center',
+  },
+  heroIdentityTap: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingTop: 2,
+    paddingBottom: 4,
   },
   heroHandle: {
     fontSize: 16,

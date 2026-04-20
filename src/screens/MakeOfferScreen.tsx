@@ -18,6 +18,7 @@ import { ActiveTheme, Colors } from '../constants/colors';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { CURRENCIES } from '../constants/currencies';
+import { useToast } from '../context/ToastContext';
 import {
   calculateOfferSummaryFromDisplay,
   convertGbpToDisplayAmount,
@@ -25,6 +26,10 @@ import {
 } from '../utils/currencyAuthoringFlows';
 import { AppButton } from '../components/ui/AppButton';
 import { AppCard } from '../components/ui/AppCard';
+import { useBackendData } from '../context/BackendDataContext';
+import { mockFind } from '../utils/mockGate';
+import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
+import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'MakeOffer'>;
 
@@ -41,12 +46,21 @@ const TIP_BORDER = IS_LIGHT ? '#d0c3af' : '#4f4638';
 const FOOTER_BG = IS_LIGHT ? 'rgba(236,234,230,0.94)' : 'rgba(10,10,10,0.9)';
 
 export default function MakeOfferScreen({ navigation, route }: Props) {
-  const { price, title } = route.params;
+  const { itemId, price, title } = route.params;
+  const { listings } = useBackendData();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
+  const { show } = useToast();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const [offerPrice, setOfferPrice] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  const listing =
+    listings.find((listingItem) => listingItem.id === itemId)
+    || mockFind(MOCK_LISTINGS, (listingItem) => listingItem.id === itemId)
+    || listings[0]
+    || MOCK_LISTINGS[0];
+  const seller = mockFind(MOCK_USERS, (user) => user.id === listing.sellerId) || MOCK_USERS[0];
 
   React.useEffect(() => {
     const defaultOffer = convertGbpToDisplayAmount(price, currencyCode, goldRates);
@@ -82,6 +96,15 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     navigation.navigate('MainTabs', { screen: 'Inbox' } as any);
   };
 
+  const handleMessageSeller = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: `offer_${seller.id}_${itemId}`,
+      focusQuery: title,
+      partnerUserId: seller.id,
+    });
+    show('Opening seller chat for your offer.', 'info');
+  }, [itemId, navigation, seller.id, show, title]);
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
@@ -101,8 +124,37 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           <View style={styles.itemThumb}>
             <Ionicons name="shirt-outline" size={24} color={MUTED} />
           </View>
-          <View>
+          <View style={styles.itemInfo}>
             <Text style={styles.itemTitle} numberOfLines={1}>{title}</Text>
+            <View style={styles.sellerActionRow}>
+              <AnimatedPressable
+                style={styles.sellerIdentityChip}
+                onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open @${seller.username} profile`}
+                accessibilityHint="Shows seller profile"
+              >
+                <CachedImage
+                  uri={seller.avatar}
+                  style={styles.sellerAvatar}
+                  containerStyle={styles.sellerAvatarWrap}
+                  contentFit="cover"
+                />
+                <Text style={styles.sellerHandle}>@{seller.username}</Text>
+              </AnimatedPressable>
+
+              <AnimatedPressable
+                style={styles.sellerMessageBtn}
+                onPress={handleMessageSeller}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Message seller"
+                accessibilityHint="Opens chat with the seller"
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
             <Text style={styles.itemListingPrice}>Listed at {formatFromFiat(price, 'GBP')}</Text>
           </View>
         </AppCard>
@@ -209,7 +261,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  itemInfo: {
+    flex: 1,
+  },
   itemTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: TEXT, marginBottom: 4, maxWidth: '90%' },
+  sellerActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
+  sellerIdentityChip: {
+    flex: 1,
+    minHeight: 30,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD_ALT,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sellerAvatarWrap: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  sellerAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  sellerHandle: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: MUTED,
+  },
+  sellerMessageBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   itemListingPrice: { fontSize: 15, fontFamily: 'Inter_500Medium', color: MUTED },
   
   section: { marginBottom: 32 },

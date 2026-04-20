@@ -13,7 +13,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import { ActiveTheme, Colors } from '../constants/colors';
@@ -33,21 +33,15 @@ import { AppSegmentControl, AppSegmentOption } from '../components/ui/AppSegment
 type NavT = StackNavigationProp<RootStackParamList>;
 type ListingSource = 'mine' | 'marketplace';
 type StoryPosition = 'top' | 'center' | 'bottom';
+type CreatePosterRoute = RouteProp<RootStackParamList, 'CreatePoster'>;
 
 const EXPIRY_OPTIONS = [6, 12, 24, 48] as const;
-const STORY_POSITIONS: StoryPosition[] = ['top', 'center', 'bottom'];
 type ExpiryOption = `${typeof EXPIRY_OPTIONS[number]}h`;
 
 const LISTING_SOURCE_OPTIONS: AppSegmentOption<ListingSource>[] = [
   { value: 'mine', label: 'Mine', accessibilityLabel: 'Show my listings' },
   { value: 'marketplace', label: 'Marketplace', accessibilityLabel: 'Show marketplace listings' },
 ];
-
-const STORY_POSITION_OPTIONS: AppSegmentOption<StoryPosition>[] = STORY_POSITIONS.map((position) => ({
-  value: position,
-  label: position.toUpperCase(),
-  accessibilityLabel: `Set story text position to ${position}`,
-}));
 
 const EXPIRY_SEGMENT_OPTIONS: AppSegmentOption<ExpiryOption>[] = EXPIRY_OPTIONS.map((hours) => ({
   value: `${hours}h` as ExpiryOption,
@@ -70,6 +64,7 @@ const IMAGE_BTN_DISABLED_BORDER = IS_LIGHT ? Colors.border : '#252525';
 
 export default function CreatePosterScreen() {
   const navigation = useNavigation<NavT>();
+  const route = useRoute<CreatePosterRoute>();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
@@ -102,7 +97,9 @@ export default function CreatePosterScreen() {
   const [posterImageUri, setPosterImageUri] = React.useState<string | null>(null);
   const [isPickingImage, setIsPickingImage] = React.useState(false);
   const [storyText, setStoryText] = React.useState('');
+  const [storyColor, setStoryColor] = React.useState('#ffffff');
   const [storyPosition, setStoryPosition] = React.useState<StoryPosition>('bottom');
+  const lastAppliedEditorResultAtRef = React.useRef<number | null>(null);
 
   const expiryOptionValue = `${expiryHours}h` as ExpiryOption;
 
@@ -122,6 +119,23 @@ export default function CreatePosterScreen() {
       setSelectedListingId(listingOptions[0].id);
     }
   }, [listingOptions, selectedListingId]);
+
+  React.useEffect(() => {
+    const storyEditorResult = route.params?.storyEditorResult;
+
+    if (!storyEditorResult) {
+      return;
+    }
+
+    if (lastAppliedEditorResultAtRef.current === storyEditorResult.updatedAt) {
+      return;
+    }
+
+    setStoryText(storyEditorResult.text);
+    setStoryColor(storyEditorResult.color);
+    setStoryPosition(storyEditorResult.position);
+    lastAppliedEditorResultAtRef.current = storyEditorResult.updatedAt;
+  }, [route.params?.storyEditorResult]);
 
   const selectedListing = React.useMemo(
     () => listingOptions.find((item) => item.id === selectedListingId),
@@ -229,7 +243,7 @@ export default function CreatePosterScreen() {
       storyOverlay: trimmedStoryText
         ? {
             text: trimmedStoryText,
-            color: '#ffffff',
+            color: storyColor,
             position: storyPosition,
           }
         : undefined,
@@ -239,6 +253,30 @@ export default function CreatePosterScreen() {
     show('Poster is now live', 'success');
     navigation.replace('PosterViewer', { posterId: newPoster.id });
   };
+
+  const handleMessageSelectedSeller = React.useCallback(() => {
+    if (!selectedListing) {
+      return;
+    }
+
+    const partnerUserId = selectedListingSeller?.id ?? selectedListing.sellerId;
+    navigation.navigate('Chat', {
+      conversationId: `poster_${selectedListing.id}_${partnerUserId}`,
+      focusQuery: selectedListing.title,
+      partnerUserId,
+    });
+    show('Opening seller chat for poster collaboration.', 'info');
+  }, [navigation, selectedListing, selectedListingSeller?.id, show]);
+
+  const handleOpenStoryEditor = React.useCallback(() => {
+    navigation.navigate('PosterEditor', {
+      baseImageUri: previewUri,
+      initialText: storyText,
+      initialColor: storyColor,
+      initialPosition: storyPosition,
+      createPosterRouteKey: route.key,
+    });
+  }, [navigation, previewUri, route.key, storyColor, storyPosition, storyText]);
 
   const renderListingCard = ({ item }: { item: Listing }) => {
     const selected = item.id === selectedListingId;
@@ -314,7 +352,7 @@ export default function CreatePosterScreen() {
           </View>
           {storyText.trim().length > 0 ? (
             <View style={[styles.storyOverlayWrap, storyOverlayPositionStyle]}>
-              <Text style={styles.storyOverlayText} numberOfLines={2}>
+              <Text style={[styles.storyOverlayText, { color: storyColor }]} numberOfLines={2}>
                 {storyText.trim()}
               </Text>
             </View>
@@ -325,6 +363,40 @@ export default function CreatePosterScreen() {
             </Text>
           </View>
         </View>
+
+        {selectedListing ? (
+          <View style={styles.selectedSellerRow}>
+            <AnimatedPressable
+              style={styles.selectedSellerIdentity}
+              onPress={() => navigation.navigate('UserProfile', { userId: selectedListingSeller?.id ?? selectedListing.sellerId })}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Open @${selectedListingSeller?.username ?? 'seller'} profile`}
+              accessibilityHint="Shows seller profile"
+            >
+              <CachedImage
+                uri={selectedListingSeller?.avatar ?? 'https://picsum.photos/seed/poster-seller-fallback/100/100'}
+                style={styles.selectedSellerAvatar}
+                containerStyle={styles.selectedSellerAvatarWrap}
+                contentFit="cover"
+              />
+              <Text style={styles.selectedSellerText} numberOfLines={1}>
+                @{selectedListingSeller?.username ?? 'seller'}
+              </Text>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={styles.selectedSellerMessageBtn}
+              onPress={handleMessageSelectedSeller}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Message selected seller"
+              accessibilityHint="Opens chat with the selected listing seller"
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+            </AnimatedPressable>
+          </View>
+        ) : null}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Listing Source</Text>
@@ -415,28 +487,42 @@ export default function CreatePosterScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Story Overlay</Text>
-          <TextInput
-            style={styles.storyInput}
-            value={storyText}
-            onChangeText={setStoryText}
-            placeholder="Add overlay text like Instagram stories"
-            placeholderTextColor={Colors.textMuted}
-            maxLength={48}
-          />
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Story Overlay</Text>
+            <Text style={styles.sectionHint}>{storyText.trim().length > 0 ? 'Layer ready' : 'No layer yet'}</Text>
+          </View>
 
-          <View style={styles.storyControlRow}>
-            <Text style={styles.storyControlLabel}>Position</Text>
-            <AppSegmentControl
-              options={STORY_POSITION_OPTIONS}
-              value={storyPosition}
-              onChange={setStoryPosition}
-              style={styles.storyPositionRow}
-              fullWidth
-              optionStyle={styles.storyPositionChip}
-              optionActiveStyle={styles.storyPositionChipActive}
-              optionTextStyle={styles.storyPositionText}
-              optionTextActiveStyle={styles.storyPositionTextActive}
+          <View style={styles.storyEditorCard}>
+            <View style={styles.storyPreviewMetaRow}>
+              <View style={[styles.storyColorDot, { backgroundColor: storyColor }]} />
+              <Text style={styles.storyMetaText}>Color</Text>
+              <Text style={styles.storyMetaDivider}>|</Text>
+              <Text style={styles.storyMetaText}>Position {storyPosition.toUpperCase()}</Text>
+            </View>
+
+            <Text
+              style={[
+                styles.storyEditorPreviewText,
+                storyText.trim().length === 0 && styles.storyEditorPreviewPlaceholder,
+                storyText.trim().length > 0 && { color: storyColor },
+              ]}
+              numberOfLines={2}
+            >
+              {storyText.trim().length > 0
+                ? storyText.trim()
+                : 'Tap Edit Story Layer to add and move text directly on the canvas.'}
+            </Text>
+
+            <AppButton
+              title={storyText.trim().length > 0 ? 'Edit Story Layer' : 'Add Story Layer'}
+              variant="secondary"
+              size="sm"
+              align="center"
+              style={styles.storyEditorBtn}
+              titleStyle={styles.storyEditorBtnText}
+              onPress={handleOpenStoryEditor}
+              accessibilityLabel="Open story editor"
+              accessibilityHint="Opens full-screen editor to drag and style story text"
             />
           </View>
         </View>
@@ -528,6 +614,51 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingBottom: 28,
+  },
+  selectedSellerRow: {
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  selectedSellerIdentity: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectedSellerAvatarWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  selectedSellerAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  selectedSellerText: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  selectedSellerMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   previewCard: {
     height: 198,
@@ -678,53 +809,59 @@ const styles = StyleSheet.create({
   sourceChipTextActive: {
     color: CHIP_ACTIVE_TEXT,
   },
-  storyInput: {
-    borderRadius: 12,
+  storyEditorCard: {
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: PANEL_BORDER,
     backgroundColor: PANEL_BG,
-    color: Colors.textPrimary,
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 10,
-  },
-  storyControlRow: {
-    marginTop: 6,
-  },
-  storyControlLabel: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 6,
-  },
-  storyPositionRow: {
-    flexDirection: 'row',
     gap: 8,
   },
-  storyPositionChip: {
-    borderRadius: 10,
+  storyPreviewMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  storyColorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  storyMetaText: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  storyMetaDivider: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+  },
+  storyEditorPreviewText: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    lineHeight: 20,
+  },
+  storyEditorPreviewPlaceholder: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+  },
+  storyEditorBtn: {
+    minHeight: 36,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: CHIP_BORDER,
     backgroundColor: CHIP_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
   },
-  storyPositionChipActive: {
-    borderColor: TRADE_ACCENT,
-    backgroundColor: CHIP_ACTIVE_BG,
-  },
-  storyPositionText: {
-    color: Colors.textSecondary,
-    fontSize: 10,
+  storyEditorBtnText: {
+    color: Colors.textPrimary,
+    fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.4,
-  },
-  storyPositionTextActive: {
-    color: CHIP_ACTIVE_TEXT,
   },
   expiryRow: {
     flexDirection: 'row',

@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
+  AnimatedPressable,
+} from '../components/AnimatedPressable';
+import {
   View,
   Text,
   StyleSheet,
@@ -32,6 +35,9 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
+import { MOCK_USERS } from '../data/mockData';
+import { CachedImage } from '../components/CachedImage';
+import { useToast } from '../context/ToastContext';
 
 const { height, width } = Dimensions.get('window');
 const SNAP_HALF = height * 0.5;
@@ -101,6 +107,8 @@ export default function FilterScreen() {
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
+  const { show } = useToast();
+  const supportUser = MOCK_USERS[0];
 
   const categoryId = route.params?.categoryId ?? 'search';
   const title = route.params?.title;
@@ -305,6 +313,15 @@ export default function FilterScreen() {
   const resultCount = getResultsCount();
   const applyLabel = showFilterLoadingState ? 'Loading options...' : `Show ${resultCount} items`;
 
+  const handleOpenFilterSupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: title ?? categoryId,
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for filter help.', 'info');
+  }, [categoryId, navigation, show, supportUser.id, title]);
+
   return (
     <View style={styles.container}>
       <Reanimated.View style={[StyleSheet.absoluteFill, { backgroundColor: OVERLAY_BG }, overlayStyle]}>
@@ -334,6 +351,39 @@ export default function FilterScreen() {
           <View style={styles.statusRow}>
             <Text style={styles.statusMeta}>{resultCount} matches currently</Text>
             <SyncStatusPill tone={filterStatus.tone} label={filterStatus.label} compact />
+          </View>
+
+          <View style={styles.contextActionRow}>
+            <AnimatedPressable
+              style={styles.contextIdentity}
+              onPress={() => navigation.navigate('CategoryTree', { categoryPrefix: categoryId === 'search' ? '' : categoryId })}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Open category tree"
+              accessibilityHint="Shows the full category tree for this filter context"
+            >
+              <Ionicons name="funnel-outline" size={14} color={Colors.textPrimary} />
+              <Text style={styles.contextText} numberOfLines={1}>
+                {title ?? categoryId}
+              </Text>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={styles.contextMessageBtn}
+              onPress={handleOpenFilterSupport}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Message @${supportUser.username}`}
+              accessibilityHint="Opens support chat for filter help"
+            >
+              <CachedImage
+                uri={supportUser.avatar}
+                style={styles.contextAvatar}
+                containerStyle={styles.contextAvatarWrap}
+                contentFit="cover"
+              />
+              <Ionicons name="chatbubble-ellipses-outline" size={10} color={Colors.textPrimary} />
+            </AnimatedPressable>
           </View>
 
           {lastError ? (
@@ -517,6 +567,53 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: Typography.size.caption,
     fontFamily: Typography.family.medium,
+  },
+  contextActionRow: {
+    marginHorizontal: 24,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  contextIdentity: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: CHIP_BORDER,
+    backgroundColor: CHIP_BG,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  contextText: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+  },
+  contextMessageBtn: {
+    minHeight: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: CHIP_BORDER,
+    backgroundColor: CHIP_BG,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  contextAvatarWrap: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  contextAvatar: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
   },
   syncRetryBanner: {
     marginHorizontal: 24,

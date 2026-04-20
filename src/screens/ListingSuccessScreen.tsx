@@ -19,8 +19,9 @@ import { useBackendData } from '../context/BackendDataContext';
 import { SyncStatusPill } from '../components/SyncStatusPill';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { CachedImage } from '../components/CachedImage';
-import { MY_USER } from '../data/mockData';
+import { MY_USER, MOCK_USERS } from '../data/mockData';
 import { getBackendSyncStatus } from '../utils/syncStatus';
+import { useToast } from '../context/ToastContext';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
 
@@ -34,6 +35,8 @@ const BADGE_TEXT = Colors.textInverse;
 export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const { source, isSyncing, lastError, refreshListings } = useBackendData();
+  const { show } = useToast();
+  const supportUser = MOCK_USERS[0];
   const bumpFeeLabel = formatFromFiat(1.99, 'GBP', { displayMode: 'fiat' });
   const listingTitle = route.params?.title || 'your listing';
   const listingPrice =
@@ -57,6 +60,15 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
       }),
     [isSyncing, lastError, source],
   );
+
+  const handleOpenPublishSupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'listing publish support',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for listing publishing help.', 'info');
+  }, [navigation, show, supportUser.id]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -93,6 +105,36 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               containerStyle={styles.syncRetryBanner}
             />
           ) : null}
+        </View>
+
+        <View style={styles.supportRow}>
+          <AnimatedPressable
+            style={styles.supportIdentity}
+            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${supportUser.username} profile`}
+            accessibilityHint="Shows publishing support profile"
+          >
+            <CachedImage
+              uri={supportUser.avatar}
+              style={styles.supportAvatar}
+              containerStyle={styles.supportAvatarWrap}
+              contentFit="cover"
+            />
+            <Text style={styles.supportText}>Need listing help? @{supportUser.username}</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={styles.supportMessageBtn}
+            onPress={handleOpenPublishSupport}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Message listing support"
+            accessibilityHint="Opens support chat for publish issues"
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+          </AnimatedPressable>
         </View>
 
         <View style={styles.summaryCard}>
@@ -238,6 +280,51 @@ const styles = StyleSheet.create({
   },
   syncRetryBanner: {
     marginTop: 10,
+  },
+  supportRow: {
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  supportAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  supportText: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   summaryCard: {
     flexDirection: 'row',

@@ -12,7 +12,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { MOCK_LISTINGS } from '../data/mockData';
+import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -37,9 +37,19 @@ export default function ManageListingScreen() {
   const { itemId } = route.params;
 
   const item = listings.find((l) => l.id === itemId) || mockFind(MOCK_LISTINGS, (l) => l.id === itemId) || listings[0] || MOCK_LISTINGS[0];
+  const seller = mockFind(MOCK_USERS, (u) => u.id === item.sellerId) || MOCK_USERS[0];
   const [isSold, setIsSold] = React.useState(Boolean(item.isSold));
   const [hasRecentBoost, setHasRecentBoost] = React.useState(false);
   const bumpFeeLabel = formatFromFiat(1.95, 'GBP', { displayMode: 'fiat' });
+
+  const handleMessageSeller = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: `listing_${item.id}_${seller.id}`,
+      focusQuery: item.title,
+      partnerUserId: seller.id,
+    });
+    show('Opening seller chat from listing manager.', 'info');
+  }, [item.id, item.title, navigation, seller.id, show]);
 
   const handleBumpListing = () => {
     Alert.alert('Bump Item', `Push this item to the top of the feed for ${bumpFeeLabel}?`, [
@@ -108,6 +118,35 @@ export default function ManageListingScreen() {
           <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/manage-listing-fallback/300/400')} style={styles.previewImg} contentFit="cover" />
           <View style={styles.previewInfo}>
             <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
+            <View style={styles.sellerActionRow}>
+              <AnimatedPressable
+                style={styles.sellerIdentityChip}
+                onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open @${seller.username} profile`}
+                accessibilityHint="Shows seller profile"
+              >
+                <CachedImage
+                  uri={seller.avatar}
+                  style={styles.sellerAvatar}
+                  containerStyle={styles.sellerAvatarWrap}
+                  contentFit="cover"
+                />
+                <Text style={styles.sellerHandle}>@{seller.username}</Text>
+              </AnimatedPressable>
+
+              <AnimatedPressable
+                style={styles.sellerMessageBtn}
+                onPress={handleMessageSeller}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Message seller"
+                accessibilityHint="Opens chat with this seller"
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
             <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
             <View style={styles.statusBadge}>
               <Text style={styles.statusText}>{isSold ? 'SOLD' : 'ACTIVE'}</Text>
@@ -205,6 +244,51 @@ const styles = StyleSheet.create({
   previewImg: { width: 80, height: 80, borderRadius: 12 },
   previewInfo: { flex: 1, justifyContent: 'center' },
   itemTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
+  sellerActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 6,
+  },
+  sellerIdentityChip: {
+    flex: 1,
+    minHeight: 30,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: ACTION_BORDER,
+    backgroundColor: Colors.cardAlt,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sellerAvatarWrap: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  sellerAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  sellerHandle: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textSecondary,
+  },
+  sellerMessageBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: ACTION_BORDER,
+    backgroundColor: Colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   itemPrice: { fontSize: 16, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, marginBottom: 8 },
   statusBadge: { alignSelf: 'flex-start', backgroundColor: STATUS_BG, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   statusText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, letterSpacing: 0.5 },

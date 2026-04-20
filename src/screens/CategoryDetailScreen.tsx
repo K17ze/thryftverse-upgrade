@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { MOCK_CATEGORIES } from '../data/mockData';
+import { MOCK_CATEGORIES, MOCK_USERS } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
@@ -71,27 +71,74 @@ export default function CategoryDetailScreen() {
 
         {/* Dense Grid - Restored Navigation & Real Data Mapping */}
         <View style={styles.grid}>
-          {gridData.map((item) => (
-            <AnimatedPressable 
-              key={item.id} 
-              style={styles.gridItem} 
-              activeOpacity={0.9}
-              onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
-              accessibilityRole="button"
-              accessibilityLabel={`Open ${item.title}`}
-              accessibilityHint={`View listing details priced at ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
-            >
-              <SharedTransitionView
-                style={styles.sharedImageLayer}
-                sharedTransitionTag={`image-${item.id}-0`}
-              >
-                <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/category-grid-fallback/400/500')} style={styles.gridImage} contentFit="cover" />
-              </SharedTransitionView>
-              <View style={styles.pricePill}>
-                <Text style={styles.priceText}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+          {gridData.map((item) => {
+            const seller = mockFind(MOCK_USERS, (user) => user.id === item.sellerId);
+            const sellerHandle = seller?.username ?? item.sellerId;
+
+            return (
+              <View key={item.id} style={styles.gridCard}>
+                <AnimatedPressable 
+                  style={styles.gridItemTap} 
+                  activeOpacity={0.9}
+                  onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${item.title}`}
+                  accessibilityHint={`View listing details priced at ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
+                >
+                  <SharedTransitionView
+                    style={styles.sharedImageLayer}
+                    sharedTransitionTag={`image-${item.id}-0`}
+                  >
+                    <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/category-grid-fallback/400/500')} style={styles.gridImage} contentFit="cover" />
+                  </SharedTransitionView>
+                  <View style={styles.pricePill}>
+                    <Text style={styles.priceText}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                  </View>
+                </AnimatedPressable>
+
+                <View style={styles.gridSellerRow}>
+                  <AnimatedPressable
+                    style={styles.gridSellerChip}
+                    onPress={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open @${sellerHandle} profile`}
+                    accessibilityHint="Shows seller profile details"
+                  >
+                    {seller?.avatar ? (
+                      <CachedImage
+                        uri={seller.avatar}
+                        style={styles.gridSellerAvatar}
+                        containerStyle={styles.gridSellerAvatarWrap}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View style={styles.gridSellerAvatarFallback}>
+                        <Ionicons name="person" size={9} color={Colors.textMuted} />
+                      </View>
+                    )}
+                    <Text style={styles.gridSellerText} numberOfLines={1}>@{sellerHandle}</Text>
+                  </AnimatedPressable>
+
+                  <AnimatedPressable
+                    style={styles.gridMessageBtn}
+                    onPress={() =>
+                      navigation.navigate('Chat', {
+                        conversationId: `${item.sellerId}_${item.id}`,
+                        focusQuery: sellerHandle,
+                        partnerUserId: item.sellerId,
+                      })}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Message @${sellerHandle}`}
+                    accessibilityHint="Opens chat with this seller"
+                  >
+                    <Ionicons name="chatbubble-ellipses-outline" size={10} color={Colors.textPrimary} />
+                  </AnimatedPressable>
+                </View>
               </View>
-            </AnimatedPressable>
-          ))}
+            );
+          })}
         </View>
         {gridData.length === 0 && (
           <Text style={{color: Colors.textMuted, textAlign: 'center', marginTop: 40}}>No items found in this category.</Text>
@@ -112,9 +159,63 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: Colors.card },
   chipText: { color: Colors.textPrimary, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_SPACING },
-  gridItem: { width: ITEM_SIZE, height: ITEM_SIZE * 1.25, backgroundColor: Colors.card, position: 'relative', overflow: 'hidden' },
+  gridCard: { width: ITEM_SIZE, marginBottom: 6 },
+  gridItemTap: { width: ITEM_SIZE, height: ITEM_SIZE * 1.15, backgroundColor: Colors.card, position: 'relative', overflow: 'hidden', borderRadius: 10 },
   sharedImageLayer: { ...StyleSheet.absoluteFillObject },
   gridImage: { width: '100%', height: '100%' },
   pricePill: { position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 8 },
   priceText: { color: '#fff', fontSize: 11, fontFamily: 'Inter_700Bold' },
+  gridSellerRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  gridSellerChip: {
+    flex: 1,
+    minHeight: 24,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+  },
+  gridSellerAvatarWrap: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  gridSellerAvatar: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  gridSellerAvatarFallback: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.cardAlt,
+  },
+  gridSellerText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 9,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  gridMessageBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

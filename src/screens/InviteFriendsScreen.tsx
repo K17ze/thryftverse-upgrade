@@ -9,11 +9,15 @@ import {
   StatusBar,
   Share
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
+import { useToast } from '../context/ToastContext';
+import { MOCK_USERS } from '../data/mockData';
+import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'InviteFriends'>;
 
@@ -36,6 +40,8 @@ const MOCK_CONTACTS = [
 
 export default function InviteFriendsScreen({ navigation }: Props) {
   const inviteLink = 'https://thryftverse.app/invite/user123';
+  const { show } = useToast();
+  const supportUser = MOCK_USERS[0];
 
   const handleShare = async () => {
     try {
@@ -45,6 +51,19 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       });
     } catch {}
   };
+
+  const handleCopyLink = React.useCallback(async () => {
+    await Clipboard.setStringAsync(inviteLink);
+    show('Invite link copied to clipboard.', 'success');
+  }, [inviteLink, show]);
+
+  const handleOpenReferralSupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'invite rewards',
+      partnerUserId: supportUser.id,
+    });
+  }, [navigation, supportUser.id]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -67,6 +86,39 @@ export default function InviteFriendsScreen({ navigation }: Props) {
           </Text>
         </View>
 
+        <View style={styles.supportRow}>
+          <AnimatedPressable
+            style={styles.supportIdentity}
+            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${supportUser.username} profile`}
+            accessibilityHint="Shows referral support profile"
+          >
+            <CachedImage
+              uri={supportUser.avatar}
+              style={styles.supportAvatar}
+              containerStyle={styles.supportAvatarWrap}
+              contentFit="cover"
+            />
+            <View style={styles.supportCopyWrap}>
+              <Text style={styles.supportTitle}>Questions about rewards?</Text>
+              <Text style={styles.supportHandle}>@{supportUser.username}</Text>
+            </View>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={styles.supportMessageBtn}
+            onPress={handleOpenReferralSupport}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Message referral support"
+            accessibilityHint="Opens chat for invite reward help"
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
+
         {/* Share Link */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
@@ -74,7 +126,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             <Text style={styles.linkText} numberOfLines={1}>
               {inviteLink}
             </Text>
-            <AnimatedPressable style={styles.copyBtn} onPress={handleShare}>
+            <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()}>
               <Ionicons name="copy-outline" size={16} color={ACCENT} />
               <Text style={styles.copyText}>Copy</Text>
             </AnimatedPressable>
@@ -145,6 +197,59 @@ const styles = StyleSheet.create({
   },
   heroTitle: { fontSize: 24, fontWeight: '800', color: TEXT, marginTop: 14, marginBottom: 8 },
   heroSubtitle: { fontSize: 14, color: MUTED, textAlign: 'center', lineHeight: 20 },
+  supportRow: {
+    marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  supportAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  supportCopyWrap: {
+    flex: 1,
+  },
+  supportTitle: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  supportHandle: {
+    marginTop: 1,
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sectionLabel: {
     fontSize: 11,
     color: MUTED,

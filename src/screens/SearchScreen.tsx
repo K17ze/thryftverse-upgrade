@@ -281,7 +281,11 @@ export default function SearchScreen() {
   const handleOpenLookComments = React.useCallback(
     (look: SavedLook) => {
       show(`Opening conversation about ${look.title}.`, 'info');
-      navigation.navigate('Chat', { conversationId: 'c1' });
+      navigation.navigate('Chat', {
+        conversationId: 'c1',
+        focusQuery: look.title,
+        partnerUserId: 'u1',
+      });
     },
     [navigation, show],
   );
@@ -523,6 +527,7 @@ export default function SearchScreen() {
                   <ProductCard
                     item={item}
                     onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+                    onPressSeller={(sellerId: string) => navigation.navigate('UserProfile', { userId: sellerId })}
                   />
                 </Reanimated.View>
               )}

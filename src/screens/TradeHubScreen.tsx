@@ -19,6 +19,9 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AnimatedCounter } from '../components/AnimatedCounter';
 import { AppButton } from '../components/ui/AppButton';
 import { t } from '../i18n';
+import { useToast } from '../context/ToastContext';
+import { MOCK_USERS } from '../data/mockData';
+import { CachedImage } from '../components/CachedImage';
 
 type TradeHubTab = 'AUCTIONS' | 'CO-OWN';
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -30,6 +33,8 @@ const PANEL_BORDER_STRONG = Colors.borderLight;
 export default function TradeHubScreen() {
   const navigation = useNavigation<NavT>();
   const { formatFromFiat } = useFormattedPrice();
+  const { show } = useToast();
+  const supportUser = MOCK_USERS[0];
   const [activeTab, setActiveTab] = React.useState<TradeHubTab>('AUCTIONS');
   const marketLedger = useStore((state) => state.marketLedger);
   const customAuctions = useStore((state) => state.customAuctions);
@@ -160,6 +165,15 @@ export default function TradeHubScreen() {
     ? 'Co-Own settles in 1ze only, with local fiat shown as price reference.'
     : 'Auctions run for 6 hours. Schedule posters early so bidders can discover your drop in time.';
 
+  const handleOpenTradeSupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: activeTab === 'CO-OWN' ? 'co-own trade help' : 'auction trade help',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for trade help.', 'info');
+  }, [activeTab, navigation, show, supportUser.id]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
@@ -184,6 +198,28 @@ export default function TradeHubScreen() {
           <Ionicons name="pulse-outline" size={15} color={BRAND} />
           <Text style={styles.ledgerShortcutText}>{t('tradeHub.ledger.label')}</Text>
         </AnimatedPressable>
+      </View>
+
+      {/* Primary mode switch is kept close to top context */}
+      <View style={styles.tabSwitcher}>
+        <Reanimated.View style={[styles.tabIndicator, indicatorStyle]} />
+        {(['AUCTIONS', 'CO-OWN'] as const).map((tab) => (
+          <AnimatedPressable
+            key={tab}
+            style={styles.tabBtn}
+            onPress={() => setActiveTab(tab)}
+            activeOpacity={0.9}
+            onLayout={(e: LayoutChangeEvent) => handleTabLayout(tab, e)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === tab }}
+            accessibilityLabel={tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
+            accessibilityHint="Switches the active trade hub view"
+          >
+            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+              {tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
+            </Text>
+          </AnimatedPressable>
+        ))}
       </View>
 
       <View style={styles.snapshotCard}>
@@ -231,26 +267,34 @@ export default function TradeHubScreen() {
         <Text style={styles.guidanceText}>{marketGuidance}</Text>
       </View>
 
-      {/* Animated tab switcher with sliding pill */}
-      <View style={styles.tabSwitcher}>
-        <Reanimated.View style={[styles.tabIndicator, indicatorStyle]} />
-        {(['AUCTIONS', 'CO-OWN'] as const).map((tab) => (
-          <AnimatedPressable
-            key={tab}
-            style={styles.tabBtn}
-            onPress={() => setActiveTab(tab)}
-            activeOpacity={0.9}
-            onLayout={(e: LayoutChangeEvent) => handleTabLayout(tab, e)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeTab === tab }}
-            accessibilityLabel={tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
-            accessibilityHint="Switches the active trade hub view"
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
-            </Text>
-          </AnimatedPressable>
-        ))}
+      <View style={styles.supportRow}>
+        <AnimatedPressable
+          style={styles.supportIdentity}
+          onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Open @${supportUser.username} profile`}
+          accessibilityHint="Shows trade support profile"
+        >
+          <CachedImage
+            uri={supportUser.avatar}
+            style={styles.supportAvatar}
+            containerStyle={styles.supportAvatarWrap}
+            contentFit="cover"
+          />
+          <Text style={styles.supportText}>Need trading help? @{supportUser.username}</Text>
+        </AnimatedPressable>
+
+        <AnimatedPressable
+          style={styles.supportMessageBtn}
+          onPress={handleOpenTradeSupport}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Message trade support"
+          accessibilityHint="Opens support chat for auctions and co-own"
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+        </AnimatedPressable>
       </View>
 
       <AnimatedPressable
@@ -442,6 +486,52 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontFamily: Typography.family.medium,
   },
+  supportRow: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_TINT_BG,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  supportAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  supportText: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_TINT_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // Animated tab switcher
   tabSwitcher: {
@@ -461,7 +551,7 @@ const styles = StyleSheet.create({
     top: 4,
     bottom: 4,
     borderRadius: 22,
-    backgroundColor: Colors.accentGold,
+    backgroundColor: Colors.accent,
     zIndex: 0,
   },
   tabBtn: {

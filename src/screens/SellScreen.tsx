@@ -334,6 +334,19 @@ export default function SellScreen() {
               ? 'Attach authentication photos before issuing co-own units.'
               : 'Everything is ready. You can continue now.';
 
+  const missingReadinessItems = visibleReadinessItems.filter((item) => !item.done);
+  const primaryCtaTitle = publishReady ? (coOwnEnabled ? 'Continue to Issue' : 'Publish Item') : 'Review Required Fields';
+  const primaryCtaSubtitle = publishReady
+    ? coOwnEnabled
+      ? 'Opens issuer setup with this listing prefilled.'
+      : 'Publishes this listing to your storefront.'
+    : missingReadinessItems.length > 2
+      ? `${missingReadinessItems
+        .slice(0, 2)
+        .map((item) => item.label)
+        .join(' + ')} +${missingReadinessItems.length - 2} more`
+      : missingReadinessItems.map((item) => item.label).join(' + ');
+
   React.useEffect(() => {
     if (publishReady && errorMsg) {
       setErrorMsg('');
@@ -756,12 +769,41 @@ export default function SellScreen() {
             </Text>
           </View>
 
-          <View style={{ height: 72 }} />
+          <View style={{ height: 164 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Huge Action Button ── */}
+      {/* ── Publish Dock ── */}
       <View style={styles.stickyFooter}>
+        <View style={styles.footerStatusCard}>
+          <View style={styles.footerStatusHeader}>
+            <View style={[styles.footerStatusDot, publishReady && styles.footerStatusDotReady]} />
+            <Text style={[styles.footerStatusTitle, publishReady && styles.footerStatusTitleReady]}>
+              {publishReady
+                ? coOwnEnabled
+                  ? 'Issuer checks complete'
+                  : 'Listing ready to publish'
+                : `${missingReadinessItems.length} required check${missingReadinessItems.length === 1 ? '' : 's'} left`}
+            </Text>
+          </View>
+
+          {publishReady ? (
+            <Text style={styles.footerReadyHint}>
+              {coOwnEnabled
+                ? 'You will continue into the Co-Own issuer flow after this step.'
+                : 'This will publish your listing directly to the marketplace feed.'}
+            </Text>
+          ) : (
+            <View style={styles.footerMissingChipRow}>
+              {missingReadinessItems.slice(0, 3).map((item) => (
+                <View key={item.key} style={styles.footerMissingChip}>
+                  <Text style={styles.footerMissingChipText}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         {!!errorMsg && (
           <Reanimated.Text 
             entering={statusEnterAnimation}
@@ -774,15 +816,22 @@ export default function SellScreen() {
         )}
         <Reanimated.View style={[shakeStyle, { width: '100%' }]} layout={layoutAnimation}>
           <AppButton
-            title={publishReady ? (coOwnEnabled ? 'Continue to Issue' : 'Publish Item') : 'Complete Required Fields'}
-            variant="primary"
+            title={primaryCtaTitle}
+            subtitle={primaryCtaSubtitle}
+            variant={publishReady ? 'primary' : 'secondary'}
             size="lg"
             onPress={handlePublish}
-            disabled={!publishReady}
-            style={[styles.uploadCta, !publishReady && styles.uploadCtaDisabled]}
-            titleStyle={[styles.uploadCtaText, !publishReady && styles.uploadCtaTextDisabled]}
+            align="start"
+            icon={<Ionicons name={publishReady ? 'cloud-upload-outline' : 'alert-circle-outline'} size={18} color={publishReady ? Colors.textInverse : Colors.textPrimary} />}
+            trailingIcon={<Ionicons name={publishReady ? 'arrow-forward' : 'sparkles-outline'} size={18} color={publishReady ? Colors.textInverse : Colors.textMuted} />}
+            style={[styles.uploadCta, !publishReady && styles.uploadCtaPending]}
+            contentStyle={styles.uploadCtaContent}
+            iconContainerStyle={[styles.uploadCtaIconWrap, !publishReady && styles.uploadCtaIconWrapPending]}
+            trailingIconContainerStyle={[styles.uploadCtaTrailingIconWrap, !publishReady && styles.uploadCtaTrailingIconWrapPending]}
+            titleStyle={[styles.uploadCtaText, !publishReady && styles.uploadCtaTextPending]}
+            subtitleStyle={[styles.uploadCtaSubtext, !publishReady && styles.uploadCtaSubtextPending]}
             accessibilityLabel={publishReady ? 'Publish listing' : 'Complete required fields'}
-            accessibilityHint={publishReady ? 'Publishes this listing' : 'Fill missing details to enable publishing'}
+            accessibilityHint={publishReady ? 'Publishes this listing' : 'Shows missing checks and highlights the first required fix'}
           />
         </Reanimated.View>
       </View>
@@ -1233,11 +1282,72 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
     paddingHorizontal: 16,
-    paddingTop: 6,
+    paddingTop: 10,
     paddingBottom: Platform.OS === 'ios' ? 16 : 10,
     backgroundColor: FOOTER_BG,
-    borderTopWidth: 0,
+    borderTopWidth: 1,
     borderTopColor: PANEL_BORDER,
+  },
+  footerStatusCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  footerStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.danger,
+  },
+  footerStatusDotReady: {
+    backgroundColor: BRAND,
+  },
+  footerStatusTitle: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  footerStatusTitleReady: {
+    color: BRAND,
+  },
+  footerReadyHint: {
+    marginTop: 5,
+    color: Colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 15,
+    fontFamily: 'Inter_500Medium',
+  },
+  footerMissingChipRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  footerMissingChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_SOFT_BG,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  footerMissingChipText: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.2,
   },
   footerFlowHint: {
     color: Colors.textMuted,
@@ -1247,19 +1357,65 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  errorText: { color: Colors.danger, fontSize: 12, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: 8 },
+  errorText: {
+    color: Colors.danger,
+    fontSize: 11,
+    lineHeight: 15,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 6,
+  },
   uploadCta: {
-    backgroundColor: Colors.accent,
-    height: 46,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    minHeight: 58,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: IS_LIGHT ? 'rgba(47,37,27,0.18)' : 'rgba(255,255,255,0.14)',
+    paddingHorizontal: 12,
   },
-  uploadCtaDisabled: {
-    backgroundColor: PANEL_BORDER,
+  uploadCtaPending: {
+    backgroundColor: PANEL_BG,
+    borderColor: PANEL_BORDER,
   },
-  uploadCtaText: { color: Colors.textInverse, fontSize: 14, fontFamily: 'Inter_700Bold', letterSpacing: -0.2 },
-  uploadCtaTextDisabled: {
+  uploadCtaContent: {
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  uploadCtaIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,0.16)',
+  },
+  uploadCtaIconWrapPending: {
+    backgroundColor: PANEL_SOFT_BG,
+  },
+  uploadCtaTrailingIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,0.16)',
+  },
+  uploadCtaTrailingIconWrapPending: {
+    backgroundColor: PANEL_SOFT_BG,
+  },
+  uploadCtaText: {
+    color: Colors.textInverse,
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: -0.2,
+  },
+  uploadCtaTextPending: {
+    color: Colors.textPrimary,
+  },
+  uploadCtaSubtext: {
+    marginTop: 1,
+    color: 'rgba(246,242,234,0.84)',
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+    letterSpacing: 0.1,
+  },
+  uploadCtaSubtextPending: {
     color: Colors.textMuted,
   },
 });

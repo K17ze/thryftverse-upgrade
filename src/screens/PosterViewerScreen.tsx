@@ -126,6 +126,7 @@ export default function PosterViewerScreen() {
 
   const minutesSincePosted = Math.max(1, Math.floor((Date.now() - activePoster.createdAtMs) / (60 * 1000)));
   const postedTimeLabel = minutesSincePosted < 60 ? `${minutesSincePosted}m` : `${Math.floor(minutesSincePosted / 60)}h`;
+  const uploaderHandle = activePoster.uploader?.username ?? activePoster.uploaderId;
   const storyOverlayPositionStyle =
     activePoster.storyOverlay?.position === 'top'
       ? styles.storyOverlayTop
@@ -163,20 +164,45 @@ export default function PosterViewerScreen() {
         </View>
 
         <View style={styles.topMetaRow}>
-          <View style={styles.authorRow}>
+          <AnimatedPressable
+            style={styles.authorIdentityBtn}
+            onPress={() => navigation.navigate('UserProfile', { userId: activePoster.uploaderId })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${uploaderHandle} profile`}
+            accessibilityHint="Shows poster creator profile"
+          >
             <CachedImage
               uri={activePoster.uploader?.avatar ?? 'https://picsum.photos/seed/poster-avatar/120/120'}
               style={styles.authorAvatar}
               containerStyle={{ width: 30, height: 30, borderRadius: 15 }}
               contentFit="cover"
             />
-            <Text style={styles.authorName}>@{activePoster.uploader?.username ?? 'seller'}</Text>
+            <Text style={styles.authorName}>@{uploaderHandle}</Text>
             <Text style={styles.postedTime}>| {postedTimeLabel}</Text>
-          </View>
-
-          <AnimatedPressable style={styles.closeBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-            <Ionicons name="close" size={22} color="#fff" />
           </AnimatedPressable>
+
+          <View style={styles.topControlRow}>
+            <AnimatedPressable
+              style={styles.topIconBtn}
+              onPress={() =>
+                navigation.navigate('Chat', {
+                  conversationId: `${activePoster.uploaderId}_${activePoster.listingId}`,
+                  focusQuery: uploaderHandle,
+                  partnerUserId: activePoster.uploaderId,
+                })}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Message @${uploaderHandle}`}
+              accessibilityHint="Opens chat with poster creator"
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
+            </AnimatedPressable>
+
+            <AnimatedPressable style={styles.closeBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+              <Ionicons name="close" size={22} color="#fff" />
+            </AnimatedPressable>
+          </View>
         </View>
 
         {isOwnedCustomPoster ? (
@@ -282,11 +308,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
   },
-  authorRow: {
+  authorIdentityBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    minHeight: 36,
+    borderRadius: 18,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(0,0,0,0.28)',
   },
   authorAvatar: {
     width: 30,
@@ -304,6 +335,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_500Medium',
     marginLeft: 4,
+  },
+  topControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  topIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.32)',
   },
   closeBtn: {
     width: 34,

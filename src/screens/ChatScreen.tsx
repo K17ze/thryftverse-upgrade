@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
+  AnimatedPressable
+} from '../components/AnimatedPressable';
 import {
   View,
   Text,
@@ -14,12 +15,12 @@ import {
   Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Reanimated, { 
-  SlideInRight, 
-  SlideInLeft, 
-  ZoomIn, 
-  FadeIn, 
-  Layout 
+import Reanimated, {
+  SlideInRight,
+  SlideInLeft,
+  ZoomIn,
+  FadeIn,
+  Layout
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -37,7 +38,7 @@ import {
 import { useToast } from '../context/ToastContext';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { parseApiError } from '../lib/apiClient';
-import { AppInput } from '../components/ui/AppInput';
+import { CachedImage } from '../components/CachedImage';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AppButton } from '../components/ui/AppButton';
 import { AppStatusPill } from '../components/ui/AppStatusPill';
@@ -187,7 +188,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const [messages, setMessages] = useState<Message[]>(hydratedMessages);
   const [input, setInput] = useState('');
-  const [threadSearch, setThreadSearch] = useState('');
+  const [inboxFocusQuery, setInboxFocusQuery] = useState(route.params.focusQuery?.trim() ?? '');
   const [messageFilter, setMessageFilter] = useState<MessageFilterMode>('all');
   const [showControls, setShowControls] = useState(false);
   const [showNotificationPicker, setShowNotificationPicker] = useState(false);
@@ -217,7 +218,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   }, [messages]);
 
   const visibleMessages = useMemo(() => {
-    const normalizedQuery = threadSearch.trim().toLowerCase();
+    const normalizedQuery = inboxFocusQuery.trim().toLowerCase();
 
     return messages.filter((item) => {
       if (messageFilter === 'offers' && item.type !== 'offer' && item.type !== 'offer_declined') {
@@ -235,11 +236,15 @@ export default function ChatScreen({ navigation, route }: Props) {
       return [item.text ?? '', item.senderLabel ?? '']
         .some((value) => value.toLowerCase().includes(normalizedQuery));
     });
-  }, [messageFilter, messages, threadSearch]);
+  }, [messageFilter, messages, inboxFocusQuery]);
 
   useEffect(() => {
     setMessages(hydratedMessages);
   }, [hydratedMessages]);
+
+  useEffect(() => {
+    setInboxFocusQuery(route.params.focusQuery?.trim() ?? '');
+  }, [conversationId, route.params.focusQuery]);
 
   useEffect(() => {
     markConversationRead(conversationId);
@@ -273,20 +278,29 @@ export default function ChatScreen({ navigation, route }: Props) {
       return null;
     }
 
+    if (route.params.partnerUserId) {
+      return route.params.partnerUserId;
+    }
+
     if (conversation?.sellerId) {
       return conversation.sellerId;
     }
 
     return conversation?.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id) ?? null;
-  }, [conversation?.participantIds, conversation?.sellerId, currentUser?.id, isGroup]);
+  }, [conversation?.participantIds, conversation?.sellerId, currentUser?.id, isGroup, route.params.partnerUserId]);
 
   const deployedBotIds = conversation?.botIds ?? [];
   const deployedBotNames = deployedBotIds
     .map((botId) => botLookup.get(botId))
     .filter((value): value is string => Boolean(value));
-  const chatTitle = isGroup
-    ? conversation?.title ?? 'Group Chat'
-    : `@${resolvedPartnerId ? userLookup.get(resolvedPartnerId) ?? resolvedPartnerId : 'chat'}`;
+  const sellerUser = resolvedPartnerId
+    ? mockArrayOrEmpty(MOCK_USERS).find((user) => user.id === resolvedPartnerId)
+    : undefined;
+  const sellerHandle = resolvedPartnerId
+    ? userLookup.get(resolvedPartnerId) ?? sellerUser?.username ?? resolvedPartnerId
+    : 'profile';
+  const sellerLocation = sellerUser?.location ?? 'South Elmsall, UK';
+  const sellerLastSeen = sellerUser?.lastSeen ?? '2h ago';
   const groupMemberLabels = (conversation?.participantIds ?? [])
     .map((participantId) => userLookup.get(participantId) ?? participantId)
     .slice(0, 4);
@@ -473,10 +487,10 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (msg.type === 'offer' || msg.type === 'offer_declined') {
       const isMe = msg.sender === 'me';
       const offerStatus = msg.offer!.status;
-      
+
       return (
-        <Reanimated.View 
-          key={msg.id} 
+        <Reanimated.View
+          key={msg.id}
           entering={reducedMotionEnabled ? undefined : ZoomIn.duration(400).springify()}
           layout={layoutAnimation}
           style={[styles.msgRow, isMe && styles.msgRowRight]}
@@ -491,7 +505,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 <Text style={styles.strikethrough}>{formatFromFiat(msg.offer!.originalPrice, 'GBP', { displayMode: 'fiat' })}</Text>
               </Text>
             </View>
-            
+
             {/* Context / Status */}
             {offerStatus === 'declined' && (
               <AppStatusPill
@@ -555,8 +569,8 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (!msg.text) return null;
     const isMe = msg.sender === 'me';
     return (
-      <Reanimated.View 
-        key={msg.id} 
+      <Reanimated.View
+        key={msg.id}
         entering={
           reducedMotionEnabled
             ? undefined
@@ -567,7 +581,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         layout={layoutAnimation}
         style={[styles.msgRow, isMe && styles.msgRowRight]}
       >
-         <View style={[styles.textBubble, isMe && styles.textBubbleMe]}>
+        <View style={[styles.textBubble, isMe && styles.textBubbleMe]}>
           {isGroup && !isMe && msg.senderLabel ? (
             <Text style={styles.groupSenderLabel}>{msg.senderLabel}</Text>
           ) : null}
@@ -580,7 +594,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
-      
+
       {/* Editorial Header */}
       <View style={styles.header}>
         <AnimatedPressable
@@ -592,7 +606,48 @@ export default function ChatScreen({ navigation, route }: Props) {
         >
           <Ionicons name="arrow-back" size={24} color={TEXT} />
         </AnimatedPressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>{chatTitle}</Text>
+
+        {isGroup ? (
+          <View style={styles.headerIdentityStatic}>
+            <Text style={styles.headerHandle} numberOfLines={1}>{conversation?.title ?? 'Group chat'}</Text>
+            <Text style={styles.headerMetaText} numberOfLines={1}>
+              {(conversation?.participantIds?.length ?? 0)} members
+            </Text>
+          </View>
+        ) : (
+          <AnimatedPressable
+            style={styles.headerIdentityBtn}
+            onPress={() => {
+              if (resolvedPartnerId) {
+                navigation.navigate('UserProfile', { userId: resolvedPartnerId });
+              }
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Open seller profile"
+            accessibilityHint="Opens seller profile and trust details"
+          >
+            {sellerUser?.avatar ? (
+              <CachedImage
+                uri={sellerUser.avatar}
+                style={styles.headerIdentityAvatar}
+                containerStyle={styles.headerIdentityAvatarWrap}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.headerIdentityAvatarFallback}>
+                <Ionicons name="person" size={16} color={MUTED} />
+              </View>
+            )}
+
+            <View style={styles.headerIdentityCopy}>
+              <Text style={styles.headerHandle} numberOfLines={1}>@{sellerHandle}</Text>
+              <Text style={styles.headerMetaText} numberOfLines={1}>
+                {sellerLocation} | Last seen {sellerLastSeen}
+              </Text>
+            </View>
+          </AnimatedPressable>
+        )}
+
         {isGroup ? (
           <AnimatedPressable
             style={styles.headerIconBtn}
@@ -606,18 +661,28 @@ export default function ChatScreen({ navigation, route }: Props) {
         ) : (
           <AnimatedPressable
             style={styles.headerIconBtn}
-            onPress={() => {
-              if (resolvedPartnerId) {
-                navigation.navigate('UserProfile', { userId: resolvedPartnerId });
-              }
-            }}
+            onPress={() => setShowControls((prev) => !prev)}
             accessibilityRole="button"
-            accessibilityLabel="Open user profile"
-            accessibilityHint="View profile details for this chat participant"
+            accessibilityLabel={showControls ? 'Hide conversation tools' : 'Show conversation tools'}
+            accessibilityHint="Shows or hides conversation-level controls"
           >
-            <Ionicons name="information-circle-outline" size={24} color={TEXT} />
+            <Ionicons name={showControls ? 'close-outline' : 'information-circle-outline'} size={24} color={TEXT} />
           </AnimatedPressable>
         )}
+      </View>
+
+      <View style={styles.primaryFilterWrap}>
+        <AppSegmentControl
+          style={styles.opsFilterStrip}
+          options={MESSAGE_FILTERS}
+          value={messageFilter}
+          onChange={setMessageFilter}
+          fullWidth
+          optionStyle={styles.opsFilterChip}
+          optionActiveStyle={styles.opsFilterChipActive}
+          optionTextStyle={styles.opsFilterChipText}
+          optionTextActiveStyle={styles.opsFilterChipTextActive}
+        />
       </View>
 
       {/* Floating Context Cards (No Dividers) */}
@@ -684,62 +749,30 @@ export default function ChatScreen({ navigation, route }: Props) {
               <Text style={styles.itemProtection}>{formatFromFiat(37.45, 'GBP', { displayMode: 'fiat' })} Includes platform charge</Text>
             </View>
           </View>
-
-          <View style={styles.sellerBubble}>
-            <View style={styles.smallAvatar2}>
-              <Ionicons name="person" size={16} color={MUTED} />
-            </View>
-            <View style={styles.sellerInfoCol}>
-              <Text style={styles.sellerName}>Seller {resolvedPartnerId ? userLookup.get(resolvedPartnerId) ?? resolvedPartnerId : 'profile'}</Text>
-              <Text style={styles.sellerMetaText}>South Elmsall, UK | Last seen 2h ago</Text>
-            </View>
-            {resolvedPartnerId ? (
-              <AnimatedPressable
-                style={styles.sellerProfileBtn}
-                onPress={() => navigation.navigate('UserProfile', { userId: resolvedPartnerId })}
-                accessibilityRole="button"
-                accessibilityLabel="Open seller profile"
-                accessibilityHint="View seller details"
-              >
-                <Text style={styles.sellerProfileBtnText}>Profile</Text>
-              </AnimatedPressable>
-            ) : null}
-          </View>
         </View>
       )}
 
       <View style={styles.opsContainer}>
-        <AppInput
-          value={threadSearch}
-          onChangeText={setThreadSearch}
-          placeholder="Search in conversation"
-          autoCapitalize="none"
-          autoCorrect={false}
-          inputContainerStyle={styles.opsSearchWrap}
-          inputStyle={styles.opsSearchInput}
-          prefix={<Ionicons name="search" size={16} color={MUTED} />}
-          suffix={threadSearch.length > 0 ? (
+        {inboxFocusQuery ? (
+          <View style={styles.inboxScopeCard}>
+            <Ionicons name="search-outline" size={16} color={MUTED} />
+            <View style={styles.inboxScopeCopy}>
+              <Text style={styles.inboxScopeLabel}>Inbox search scope</Text>
+              <Text style={styles.inboxScopeValue} numberOfLines={1}>{inboxFocusQuery}</Text>
+            </View>
             <AnimatedPressable
-              style={styles.clearOpsSearchBtn}
-              onPress={() => setThreadSearch('')}
-              accessibilityLabel="Clear thread search"
+              style={styles.inboxScopeClearBtn}
+              onPress={() => setInboxFocusQuery('')}
+              accessibilityRole="button"
+              accessibilityLabel="Clear inbox search scope"
+              accessibilityHint="Shows the full conversation again"
             >
-              <Ionicons name="close" size={14} color={TEXT} />
+              <Text style={styles.inboxScopeClearText}>Clear</Text>
             </AnimatedPressable>
-          ) : null}
-        />
-
-        <AppSegmentControl
-          style={styles.opsFilterStrip}
-          options={MESSAGE_FILTERS}
-          value={messageFilter}
-          onChange={setMessageFilter}
-          fullWidth
-          optionStyle={styles.opsFilterChip}
-          optionActiveStyle={styles.opsFilterChipActive}
-          optionTextStyle={styles.opsFilterChipText}
-          optionTextActiveStyle={styles.opsFilterChipTextActive}
-        />
+          </View>
+        ) : (
+          <Text style={styles.inboxScopeHelper}>Use Inbox search to scan across all conversations. Filters here apply only to this thread.</Text>
+        )}
 
         <View style={styles.opsCommandRow}>
           <View style={styles.opsSummaryCard}>
@@ -875,7 +908,11 @@ export default function ChatScreen({ navigation, route }: Props) {
             <View style={styles.emptySearchState}>
               <Ionicons name="search-outline" size={24} color={MUTED} />
               <Text style={styles.emptySearchTitle}>No messages in this scope</Text>
-              <Text style={styles.emptySearchSubtitle}>Try another keyword or filter.</Text>
+              <Text style={styles.emptySearchSubtitle}>
+                {inboxFocusQuery
+                  ? 'No timeline entries matched your Inbox search scope. Clear scope to view the full thread.'
+                  : 'Try another filter.'}
+              </Text>
             </View>
           )}
         </ScrollView>
@@ -955,14 +992,14 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 20,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
     backgroundColor: HEADER_BG,
@@ -978,8 +1015,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: TEXT },
-  
+  headerIdentityBtn: {
+    flex: 1,
+    marginHorizontal: 10,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerIdentityStatic: {
+    flex: 1,
+    marginHorizontal: 10,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  headerIdentityAvatarWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  headerIdentityAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  headerIdentityAvatarFallback: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD_ALT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerIdentityCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  headerHandle: {
+    fontSize: 19,
+    fontFamily: 'Inter_700Bold',
+    color: TEXT,
+    letterSpacing: -0.3,
+  },
+  headerMetaText: {
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+    color: MUTED,
+  },
+
+  primaryFilterWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+
   contextGallery: {
     paddingHorizontal: 16,
     gap: 12,
@@ -1103,85 +1194,63 @@ const styles = StyleSheet.create({
   itemTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: TEXT, marginBottom: 4 },
   itemPrice: { fontSize: 15, fontFamily: 'Inter_400Regular', color: MUTED, marginBottom: 2 },
   itemProtection: { fontSize: 12, fontFamily: 'Inter_500Medium', color: ACCENT },
-  
-  sellerBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 20,
-  },
-  smallAvatar2: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sellerInfoCol: {
-    flex: 1,
-    gap: 3,
-  },
-  sellerName: { fontSize: 14, fontFamily: 'Inter_700Bold', color: TEXT },
-  sellerMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  sellerMetaText: { fontSize: 12, fontFamily: 'Inter_500Medium', color: MUTED },
-  sellerProfileBtn: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 10,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sellerProfileBtnText: {
-    color: TEXT,
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.2,
-  },
 
   opsContainer: {
     paddingHorizontal: 16,
     paddingBottom: 12,
     gap: 10,
   },
-  opsSearchWrap: {
-    height: 42,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
+  inboxScopeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
     gap: 8,
-  },
-  opsSearchInput: {
-    flex: 1,
-    color: TEXT,
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    paddingVertical: 0,
-  },
-  clearOpsSearchBtn: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 1,
     borderColor: BORDER,
+    borderRadius: 14,
+    backgroundColor: CARD,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  inboxScopeCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  inboxScopeLabel: {
+    color: MUTED,
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  inboxScopeValue: {
+    color: TEXT,
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  inboxScopeClearBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD_ALT,
+    paddingHorizontal: 10,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inboxScopeClearText: {
+    color: TEXT,
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  inboxScopeHelper: {
+    color: MUTED,
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
   },
   opsFilterStrip: {
-    marginTop: 2,
+    marginTop: 0,
   },
   opsFilterChip: {
     height: 30,
@@ -1333,7 +1402,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     textTransform: 'uppercase',
   },
-  
+
   messageList: { flex: 1 },
   emptySearchState: {
     alignItems: 'center',
@@ -1353,7 +1422,7 @@ const styles = StyleSheet.create({
   },
   dateLabel: { alignItems: 'center', marginVertical: 12 },
   dateLabelText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: MUTED, textTransform: 'uppercase', letterSpacing: 1 },
-  
+
   statusBlock: {
     backgroundColor: CARD,
     borderRadius: 16,
@@ -1365,10 +1434,10 @@ const styles = StyleSheet.create({
   statusTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', color: TEXT, marginBottom: 8 },
   statusBody: { fontSize: 14, fontFamily: 'Inter_400Regular', color: MUTED, lineHeight: 22 },
   accentLink: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: ACCENT, marginTop: 12 },
-  
+
   msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   msgRowRight: { flexDirection: 'row-reverse' },
-  
+
   textBubble: {
     backgroundColor: CARD,
     borderWidth: 1,
@@ -1394,7 +1463,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-  
+
   offerBubble: {
     backgroundColor: CARD,
     borderRadius: 24,
@@ -1409,7 +1478,7 @@ const styles = StyleSheet.create({
   offerPrice: { fontSize: 28, fontFamily: 'Inter_700Bold', color: TEXT, letterSpacing: -1 },
   offerOriginal: { fontSize: 16, fontFamily: 'Inter_500Medium', color: MUTED },
   strikethrough: { textDecorationLine: 'line-through' },
-  
+
   offerStatusPill: {
     marginTop: 8,
     alignSelf: 'flex-start',

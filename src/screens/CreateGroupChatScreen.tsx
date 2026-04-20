@@ -172,29 +172,47 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           renderItem={({ item }) => {
             const selected = selectedIds.includes(item.id);
             return (
-              <AnimatedPressable
+              <View
                 style={[styles.memberRow, selected && styles.memberRowSelected]}
-                activeOpacity={0.85}
-                onPress={() => toggleMember(item.id)}
               >
-                <CachedImage
-                  uri={item.avatar}
-                  style={styles.memberAvatar}
-                  containerStyle={styles.memberAvatar}
-                  contentFit="cover"
-                />
+                <AnimatedPressable
+                  style={styles.memberSelectTap}
+                  activeOpacity={0.85}
+                  onPress={() => toggleMember(item.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${selected ? 'Deselect' : 'Select'} @${item.username}`}
+                  accessibilityHint="Toggles this member for the new group"
+                >
+                  <CachedImage
+                    uri={item.avatar}
+                    style={styles.memberAvatar}
+                    containerStyle={styles.memberAvatar}
+                    contentFit="cover"
+                  />
 
-                <View style={styles.memberTextWrap}>
-                  <Text style={styles.memberName}>@{item.username}</Text>
-                  <Text style={styles.memberLocation}>{item.location}</Text>
-                </View>
+                  <View style={styles.memberTextWrap}>
+                    <Text style={styles.memberName}>@{item.username}</Text>
+                    <Text style={styles.memberLocation}>{item.location}</Text>
+                  </View>
 
-                <Ionicons
-                  name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={22}
-                  color={selected ? Colors.accent : Colors.textMuted}
-                />
-              </AnimatedPressable>
+                  <Ionicons
+                    name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={22}
+                    color={selected ? Colors.accent : Colors.textMuted}
+                  />
+                </AnimatedPressable>
+
+                <AnimatedPressable
+                  style={styles.memberProfileBtn}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('UserProfile', { userId: item.id })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open @${item.username} profile`}
+                  accessibilityHint="Shows this member profile details"
+                >
+                  <Ionicons name="person-circle-outline" size={20} color={Colors.textPrimary} />
+                </AnimatedPressable>
+              </View>
             );
           }}
           contentContainerStyle={styles.memberList}
@@ -305,6 +323,12 @@ const styles = StyleSheet.create({
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+  },
+  memberSelectTap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
   memberRowSelected: {
@@ -328,6 +352,16 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
+  },
+  memberProfileBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: PANEL_ALT,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   joinBtn: {
     marginTop: 8,

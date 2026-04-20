@@ -14,6 +14,9 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useToast } from '../context/ToastContext';
+import { MOCK_USERS } from '../data/mockData';
+import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'BalanceHistory'>;
 
@@ -80,6 +83,17 @@ const colorForType = (type: TxType) => {
 
 export default function BalanceHistoryScreen({ navigation }: Props) {
   const { formatFromFiat } = useFormattedPrice();
+  const { show } = useToast();
+  const supportUser = MOCK_USERS[0];
+
+  const handleOpenSupportChat = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'balance history',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for transaction help.', 'info');
+  }, [navigation, show, supportUser.id]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -98,6 +112,39 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.supportCard}>
+          <AnimatedPressable
+            style={styles.supportIdentity}
+            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${supportUser.username} profile`}
+            accessibilityHint="Shows support profile details"
+          >
+            <CachedImage
+              uri={supportUser.avatar}
+              style={styles.supportAvatar}
+              containerStyle={styles.supportAvatarWrap}
+              contentFit="cover"
+            />
+            <View style={styles.supportCopy}>
+              <Text style={styles.supportTitle}>Need help with a transaction?</Text>
+              <Text style={styles.supportHandle}>@{supportUser.username}</Text>
+            </View>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={styles.supportMessageBtn}
+            onPress={handleOpenSupportChat}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Message support"
+            accessibilityHint="Opens support chat for this history screen"
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
+
         {TRANSACTIONS.map(group => (
           <View key={group.month} style={styles.group}>
             <Text style={styles.monthLabel}>{group.month}</Text>
@@ -145,6 +192,59 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontWeight: '700', color: TEXT },
   content: { padding: 20 },
+  supportCard: {
+    marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  supportAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  supportCopy: {
+    flex: 1,
+  },
+  supportTitle: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  supportHandle: {
+    marginTop: 1,
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   group: { marginBottom: 24 },
   monthLabel: { fontSize: 13, fontWeight: '700', color: MUTED, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
   card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden' },

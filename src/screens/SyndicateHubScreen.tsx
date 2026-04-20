@@ -27,6 +27,8 @@ import { AppStatusPill } from '../components/ui/AppStatusPill';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
+import { useToast } from '../context/ToastContext';
+import { MOCK_USERS } from '../data/mockData';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -49,8 +51,11 @@ export default function CoOwnHubScreen() {
   const navigation = useNavigation<NavT>();
   const customCoOwns = useStore((state) => state.customCoOwns);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
+  const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
+  const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
+  const supportUser = MOCK_USERS[0];
 
   const [query, setQuery] = React.useState('');
   const [sortBy, setSortBy] = React.useState<HubSort>('value');
@@ -104,10 +109,22 @@ export default function CoOwnHubScreen() {
     [marketAssets]
   );
 
+  const handleOpenCoOwnSupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'co-own hub support',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for co-own market help.', 'info');
+  }, [navigation, show, supportUser.id]);
+
   const renderAsset = ({ item, index }: { item: CoOwnAsset; index: number }) => {
     const isPositive = item.marketMovePct24h >= 0;
     const marketValue = item.totalUnits * item.unitPriceGBP;
     const openValue = item.availableUnits * item.unitPriceGBP;
+    const issuerUser = MOCK_USERS.find((user) => user.id === item.issuerId);
+    const issuerHandle = issuerUser?.username ?? item.issuerId;
+    const canMessageIssuer = currentUser?.id !== item.issuerId;
 
     return (
       <Reanimated.View
@@ -119,63 +136,109 @@ export default function CoOwnHubScreen() {
                 .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
         }
       >
-        <AnimatedPressable
-          style={styles.assetCard}
-          activeOpacity={0.92}
-          onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-        >
-          <Image source={{ uri: item.image }} style={styles.assetImage} />
+        <View style={styles.assetCard}>
+          <AnimatedPressable
+            style={styles.assetPrimaryTap}
+            activeOpacity={0.92}
+            onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${item.title} details`}
+            accessibilityHint="Shows issuer, chart, and order book details"
+          >
+            <Image source={{ uri: item.image }} style={styles.assetImage} />
 
-        <View style={styles.assetBody}>
-          <View style={styles.assetTopRow}>
-            <Text style={styles.assetTitle} numberOfLines={1}>{item.title}</Text>
-            <AppStatusPill
-              tone={isPositive ? 'positive' : 'negative'}
-              iconName={isPositive ? 'trending-up-outline' : 'trending-down-outline'}
-              label={`${isPositive ? '+' : ''}${item.marketMovePct24h.toFixed(1)}%`}
-            />
-          </View>
+            <View style={styles.assetBody}>
+              <View style={styles.assetTopRow}>
+                <Text style={styles.assetTitle} numberOfLines={1}>{item.title}</Text>
+                <AppStatusPill
+                  tone={isPositive ? 'positive' : 'negative'}
+                  iconName={isPositive ? 'trending-up-outline' : 'trending-down-outline'}
+                  label={`${isPositive ? '+' : ''}${item.marketMovePct24h.toFixed(1)}%`}
+                />
+              </View>
 
-          <Text style={styles.assetMeta}>{item.availableUnits} / {item.totalUnits} shares available</Text>
+              <Text style={styles.assetMeta}>{item.availableUnits} / {item.totalUnits} shares available</Text>
 
-          <View style={styles.assetStatsRow}>
-            <View>
-              <Text style={styles.assetStatLabel}>Share Price</Text>
-              <Text style={styles.assetStatValue}>{formatFromFiat(item.unitPriceGBP, 'GBP')}</Text>
+              <View style={styles.assetStatsRow}>
+                <View>
+                  <Text style={styles.assetStatLabel}>Share Price</Text>
+                  <Text style={styles.assetStatValue}>{formatFromFiat(item.unitPriceGBP, 'GBP')}</Text>
+                </View>
+                <View>
+                  <Text style={styles.assetStatLabel}>Market Value</Text>
+                  <Text style={styles.assetStatValue}>{formatFromFiat(marketValue, 'GBP', { displayMode: 'fiat' })}</Text>
+                </View>
+                <View>
+                  <Text style={styles.assetStatLabel}>Open Value</Text>
+                  <Text style={styles.assetStatValue}>{formatFromFiat(openValue, 'GBP', { displayMode: 'fiat' })}</Text>
+                </View>
+              </View>
             </View>
-            <View>
-              <Text style={styles.assetStatLabel}>Market Value</Text>
-              <Text style={styles.assetStatValue}>{formatFromFiat(marketValue, 'GBP', { displayMode: 'fiat' })}</Text>
-            </View>
-            <View>
-              <Text style={styles.assetStatLabel}>Open Value</Text>
-              <Text style={styles.assetStatValue}>{formatFromFiat(openValue, 'GBP', { displayMode: 'fiat' })}</Text>
-            </View>
-          </View>
+          </AnimatedPressable>
 
-          <View style={styles.assetActionRow}>
-            <AppButton
-              style={styles.tradeBtn}
-              variant="gold"
-              size="sm"
-              align="center"
-              title="Buy"
-              onPress={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
-              accessibilityLabel={`Buy shares of ${item.title}`}
-            />
+          <View style={styles.assetFooter}>
+            <View style={styles.assetIssuerRow}>
+              <AnimatedPressable
+                style={styles.assetIssuerChip}
+                onPress={() => navigation.navigate('UserProfile', { userId: item.issuerId })}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open @${issuerHandle} profile`}
+                accessibilityHint="Shows issuer profile"
+              >
+                <Image
+                  source={{ uri: issuerUser?.avatar ?? 'https://picsum.photos/seed/co-own-issuer-fallback/80/80' }}
+                  style={styles.assetIssuerAvatar}
+                />
+                <Text style={styles.assetIssuerText} numberOfLines={1}>Issuer @{issuerHandle}</Text>
+              </AnimatedPressable>
 
-            <AppButton
-              style={[styles.tradeBtn, styles.tradeBtnOutline]}
-              variant="secondary"
-              size="sm"
-              align="center"
-              title="Sell"
-              onPress={() => navigation.navigate('Trade', { assetId: item.id, side: 'sell' })}
-              accessibilityLabel={`Sell shares of ${item.title}`}
-            />
+              <AnimatedPressable
+                style={[styles.assetMessageBtn, !canMessageIssuer && styles.assetMessageBtnDisabled]}
+                onPress={() => {
+                  if (!canMessageIssuer) {
+                    return;
+                  }
+
+                  navigation.navigate('Chat', {
+                    conversationId: `${item.issuerId}_${item.listingId}`,
+                    focusQuery: issuerHandle,
+                    partnerUserId: item.issuerId,
+                  });
+                }}
+                disabled={!canMessageIssuer}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={canMessageIssuer ? `Message @${issuerHandle}` : 'Issuer is you'}
+                accessibilityHint={canMessageIssuer ? 'Opens chat with issuer' : 'Messaging yourself is disabled'}
+              >
+                <Ionicons name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'} size={12} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
+
+            <View style={styles.assetActionRow}>
+              <AppButton
+                style={styles.tradeBtn}
+                variant="gold"
+                size="sm"
+                align="center"
+                title="Buy"
+                onPress={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
+                accessibilityLabel={`Buy shares of ${item.title}`}
+              />
+
+              <AppButton
+                style={[styles.tradeBtn, styles.tradeBtnOutline]}
+                variant="secondary"
+                size="sm"
+                align="center"
+                title="Sell"
+                onPress={() => navigation.navigate('Trade', { assetId: item.id, side: 'sell' })}
+                accessibilityLabel={`Sell shares of ${item.title}`}
+              />
+            </View>
           </View>
         </View>
-        </AnimatedPressable>
       </Reanimated.View>
     );
   };
@@ -207,6 +270,31 @@ export default function CoOwnHubScreen() {
 
             <Text style={styles.headerLabel}>CO-OWN MARKET</Text>
             <Text style={styles.headerTitle}>Co-Own Hub</Text>
+
+            <View style={styles.supportRow}>
+              <AnimatedPressable
+                style={styles.supportIdentity}
+                onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open @${supportUser.username} profile`}
+                accessibilityHint="Shows co-own support profile"
+              >
+                <Image source={{ uri: supportUser.avatar }} style={styles.supportAvatar} />
+                <Text style={styles.supportText}>Need co-own help? @{supportUser.username}</Text>
+              </AnimatedPressable>
+
+              <AnimatedPressable
+                style={styles.supportMessageBtn}
+                onPress={handleOpenCoOwnSupport}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Message co-own support"
+                accessibilityHint="Opens support chat for issuance and trading help"
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
 
             <View style={styles.searchWrap}>
               <Ionicons name="search" size={18} color={Colors.textMuted} />
@@ -357,6 +445,46 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     letterSpacing: -0.7,
   },
+  supportRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  supportText: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerSubtitle: {
     marginTop: 6,
     color: Colors.textSecondary,
@@ -453,6 +581,9 @@ const styles = StyleSheet.create({
     backgroundColor: PANEL_BG,
     overflow: 'hidden',
   },
+  assetPrimaryTap: {
+    width: '100%',
+  },
   assetImage: {
     width: '100%',
     height: 180,
@@ -497,8 +628,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
   },
+  assetFooter: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: PANEL_BORDER,
+    paddingHorizontal: 12,
+    paddingTop: 9,
+    paddingBottom: 12,
+  },
+  assetIssuerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  assetIssuerChip: {
+    flex: 1,
+    minHeight: 30,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: SEARCH_BG,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  assetIssuerAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  assetIssuerText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  assetMessageBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: SEARCH_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  assetMessageBtnDisabled: {
+    opacity: 0.55,
+  },
   assetActionRow: {
-    marginTop: 12,
+    marginTop: 10,
     flexDirection: 'row',
     gap: 8,
   },

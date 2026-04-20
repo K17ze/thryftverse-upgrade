@@ -127,6 +127,9 @@ export default function AssetDetailScreen() {
   const asks = orderBook.filter((entry) => entry.side === 'ask').sort((a, b) => a.price - b.price);
   const marketValue = asset.totalUnits * asset.unitPriceGBP;
   const circulatingValue = Math.max(0, asset.totalUnits - asset.availableUnits) * asset.unitPriceGBP;
+  const issuerUser = MOCK_USERS.find((user) => user.id === asset.issuerId);
+  const issuerHandle = issuerUser?.username ?? getUserLabel(asset.issuerId).replace(/^@/, 'seller');
+  const canMessageIssuer = currentUser?.id !== asset.issuerId;
 
   const ownerAccounts: Array<{ id: string; handle: string; role: string; units: number }> = [];
   ownerAccounts.push({
@@ -190,6 +193,48 @@ export default function AssetDetailScreen() {
 
         <Text style={styles.assetTitle}>{asset.title}</Text>
         <Text style={styles.assetSub}>Asset ID {asset.id.toUpperCase()} | Issuer {asset.issuerId}</Text>
+
+        <View style={styles.issuerActionRow}>
+          <AnimatedPressable
+            style={styles.issuerIdentityChip}
+            onPress={() => navigation.navigate('UserProfile', { userId: asset.issuerId })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${issuerHandle} profile`}
+            accessibilityHint="Shows issuer profile details"
+          >
+            {issuerUser?.avatar ? (
+              <Image source={{ uri: issuerUser.avatar }} style={styles.issuerAvatar} />
+            ) : (
+              <View style={styles.issuerAvatarFallback}>
+                <Ionicons name="person" size={11} color={Colors.textMuted} />
+              </View>
+            )}
+            <Text style={styles.issuerHandle} numberOfLines={1}>Issuer @{issuerHandle}</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={[styles.issuerMessageBtn, !canMessageIssuer && styles.issuerMessageBtnDisabled]}
+            onPress={() => {
+              if (!canMessageIssuer) {
+                return;
+              }
+
+              navigation.navigate('Chat', {
+                conversationId: `${asset.issuerId}_${asset.listingId}`,
+                focusQuery: issuerHandle,
+                partnerUserId: asset.issuerId,
+              });
+            }}
+            disabled={!canMessageIssuer}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={canMessageIssuer ? `Message @${issuerHandle}` : 'Issuer is you'}
+            accessibilityHint={canMessageIssuer ? 'Opens chat with issuer' : 'Messaging yourself is disabled'}
+          >
+            <Ionicons name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'} size={12} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
 
         <View style={styles.priceRow}>
           <Text style={styles.pricePrimary}>{formatFromFiat(asset.unitPriceGBP, 'GBP')}</Text>
@@ -392,6 +437,57 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 12,
     fontFamily: 'Inter_500Medium',
+  },
+  issuerActionRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  issuerIdentityChip: {
+    flex: 1,
+    minHeight: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_SOFT_BG,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 10,
+  },
+  issuerAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  issuerAvatarFallback: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: PANEL_BG,
+  },
+  issuerHandle: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  issuerMessageBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_SOFT_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  issuerMessageBtnDisabled: {
+    opacity: 0.55,
   },
   priceRow: {
     marginTop: 8,

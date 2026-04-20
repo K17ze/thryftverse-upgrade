@@ -47,7 +47,11 @@ export default function HelpSupportScreen({ navigation }: Props) {
   }, [show]);
 
   const handleOpenLiveChat = React.useCallback(() => {
-    navigation.navigate('Chat', { conversationId: 'c1' });
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'support',
+      partnerUserId: 'u1',
+    });
   }, [navigation]);
 
   const handleOpenEmail = React.useCallback(() => {

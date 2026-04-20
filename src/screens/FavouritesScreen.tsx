@@ -99,6 +99,7 @@ export default function FavouritesScreen() {
             <ProductCard
               item={item}
               onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+              onPressSeller={(sellerId) => navigation.navigate('UserProfile', { userId: sellerId })}
             />
           </Reanimated.View>
         )}

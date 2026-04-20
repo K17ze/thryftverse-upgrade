@@ -19,14 +19,18 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
+import { CachedImage } from '../components/CachedImage';
 import { getOrderHistoryForAsset } from '../data/mockSyndicateData';
 import { TradeOrder } from '../data/syndicateModels';
+import { getCoOwnMarket } from '../data/tradeHub';
 import {
   MarketHistoryCursor,
   MarketHistoryItem,
   listUserMarketHistory,
 } from '../services/marketApi';
 import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
+import { useToast } from '../context/ToastContext';
+import { MOCK_USERS } from '../data/mockData';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -180,7 +184,9 @@ export default function CoOwnOrderHistoryScreen() {
   const marketLedger = useStore((state) => state.marketLedger);
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
+  const { show } = useToast();
   const viewerId = currentUser?.id ?? 'u1';
+  const supportUser = MOCK_USERS[0];
 
   const [sideFilter, setSideFilter] = React.useState<SideFilter>('all');
   const [dateFilter, setDateFilter] = React.useState<DateFilter>('all');
@@ -299,6 +305,23 @@ export default function CoOwnOrderHistoryScreen() {
     return ['all', ...ids];
   }, [allEntries]);
 
+  const assetIssuerMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const asset of getCoOwnMarket()) {
+      map.set(asset.id, asset.issuerId);
+    }
+    return map;
+  }, []);
+
+  const handleOpenHistorySupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'co-own order history',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for co-own order history.', 'info');
+  }, [navigation, show, supportUser.id]);
+
   React.useEffect(() => {
     if (!assetOptions.includes(assetFilter)) {
       setAssetFilter('all');
@@ -337,44 +360,91 @@ export default function CoOwnOrderHistoryScreen() {
     const isBuy = item.side === 'buy';
     const ts = new Date(item.createdAt);
     const statusStyle = statusPillStyle(item.status);
+    const issuerId = assetIssuerMap.get(item.assetId) ?? supportUser.id;
+    const issuerUser = MOCK_USERS.find((user) => user.id === issuerId);
+    const issuerHandle = issuerUser?.username ?? issuerId;
+    const canMessageIssuer = issuerId !== viewerId;
 
     return (
-      <AnimatedPressable
-        style={styles.row}
-        activeOpacity={0.92}
-        onPress={() => navigation.navigate('AssetDetail', { assetId: item.assetId })}
-        accessibilityRole="button"
-        accessibilityLabel={`${isBuy ? 'Buy' : 'Sell'} order for ${item.assetId.toUpperCase()}`}
-        accessibilityHint="Opens asset detail and market view"
-      >
-        <View style={[styles.iconCircle, isBuy ? styles.iconBuy : styles.iconSell]}>
-          <Ionicons
-            name={isBuy ? 'arrow-down-outline' : 'arrow-up-outline'}
-            size={15}
-            color={isBuy ? '#d7b98f' : '#ff9d9d'}
-          />
-        </View>
-
-        <View style={styles.rowBody}>
-          <View style={styles.rowTitleLine}>
-            <Text style={styles.rowTitle}>{isBuy ? 'Buy' : 'Sell'} | {item.assetId.toUpperCase()}</Text>
-            <View style={[styles.statusPill, { borderColor: statusStyle.borderColor, backgroundColor: statusStyle.backgroundColor }]}>
-              <Text style={[styles.statusPillText, { color: statusStyle.textColor }]}>{item.status.toUpperCase()}</Text>
-            </View>
+      <View style={styles.rowCard}>
+        <AnimatedPressable
+          style={styles.row}
+          activeOpacity={0.92}
+          onPress={() => navigation.navigate('AssetDetail', { assetId: item.assetId })}
+          accessibilityRole="button"
+          accessibilityLabel={`${isBuy ? 'Buy' : 'Sell'} order for ${item.assetId.toUpperCase()}`}
+          accessibilityHint="Opens asset detail and market view"
+        >
+          <View style={[styles.iconCircle, isBuy ? styles.iconBuy : styles.iconSell]}>
+            <Ionicons
+              name={isBuy ? 'arrow-down-outline' : 'arrow-up-outline'}
+              size={15}
+              color={isBuy ? '#d7b98f' : '#ff9d9d'}
+            />
           </View>
 
-          <Text style={styles.rowMeta}>
-            {item.quantity} units | {item.type.toUpperCase()} | {formatFromFiat(item.pricePerShare, 'GBP', { displayMode: 'fiat' })}/unit
-          </Text>
-          <Text style={styles.rowNote}>
-            Filled {item.filledQuantity}/{item.quantity} | {ts.toLocaleDateString()} {ts.toLocaleTimeString()}
-          </Text>
-        </View>
+          <View style={styles.rowBody}>
+            <View style={styles.rowTitleLine}>
+              <Text style={styles.rowTitle}>{isBuy ? 'Buy' : 'Sell'} | {item.assetId.toUpperCase()}</Text>
+              <View style={[styles.statusPill, { borderColor: statusStyle.borderColor, backgroundColor: statusStyle.backgroundColor }]}>
+                <Text style={[styles.statusPillText, { color: statusStyle.textColor }]}>{item.status.toUpperCase()}</Text>
+              </View>
+            </View>
 
-        <Text style={[styles.rowAmount, isBuy ? styles.rowAmountBuy : styles.rowAmountSell]}>
-          {isBuy ? '-' : '+'}{formatFromFiat(item.totalAmount, 'GBP', { displayMode: 'fiat' })}
-        </Text>
-      </AnimatedPressable>
+            <Text style={styles.rowMeta}>
+              {item.quantity} units | {item.type.toUpperCase()} | {formatFromFiat(item.pricePerShare, 'GBP', { displayMode: 'fiat' })}/unit
+            </Text>
+            <Text style={styles.rowNote}>
+              Filled {item.filledQuantity}/{item.quantity} | {ts.toLocaleDateString()} {ts.toLocaleTimeString()}
+            </Text>
+          </View>
+
+          <Text style={[styles.rowAmount, isBuy ? styles.rowAmountBuy : styles.rowAmountSell]}>
+            {isBuy ? '-' : '+'}{formatFromFiat(item.totalAmount, 'GBP', { displayMode: 'fiat' })}
+          </Text>
+        </AnimatedPressable>
+
+        <View style={styles.rowActionRow}>
+          <AnimatedPressable
+            style={styles.rowIssuerChip}
+            onPress={() => navigation.navigate('UserProfile', { userId: issuerId })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${issuerHandle} profile`}
+            accessibilityHint="Shows issuer profile details"
+          >
+            <CachedImage
+              uri={issuerUser?.avatar ?? 'https://picsum.photos/seed/history-issuer-fallback/80/80'}
+              style={styles.rowIssuerAvatar}
+              containerStyle={styles.rowIssuerAvatarWrap}
+              contentFit="cover"
+            />
+            <Text style={styles.rowIssuerText} numberOfLines={1}>Issuer @{issuerHandle}</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={[styles.rowMessageBtn, !canMessageIssuer && styles.rowMessageBtnDisabled]}
+            onPress={() => {
+              if (!canMessageIssuer) {
+                return;
+              }
+
+              navigation.navigate('Chat', {
+                conversationId: `${issuerId}_${item.assetId}`,
+                focusQuery: issuerHandle,
+                partnerUserId: issuerId,
+              });
+            }}
+            disabled={!canMessageIssuer}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={canMessageIssuer ? `Message @${issuerHandle}` : 'Issuer is you'}
+            accessibilityHint={canMessageIssuer ? 'Opens chat with issuer' : 'Messaging yourself is disabled'}
+          >
+            <Ionicons name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'} size={12} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
+      </View>
     );
   };
 
@@ -394,6 +464,36 @@ export default function CoOwnOrderHistoryScreen() {
         </AnimatedPressable>
         <Text style={styles.headerTitle}>Co-Own Orders</Text>
         <View style={{ width: 40 }} />
+      </View>
+
+      <View style={styles.supportRow}>
+        <AnimatedPressable
+          style={styles.supportIdentity}
+          onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Open @${supportUser.username} profile`}
+          accessibilityHint="Shows support profile details"
+        >
+          <CachedImage
+            uri={supportUser.avatar}
+            style={styles.supportAvatar}
+            containerStyle={styles.supportAvatarWrap}
+            contentFit="cover"
+          />
+          <Text style={styles.supportText} numberOfLines={1}>Support @{supportUser.username}</Text>
+        </AnimatedPressable>
+
+        <AnimatedPressable
+          style={styles.supportMessageBtn}
+          onPress={handleOpenHistorySupport}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Message @${supportUser.username}`}
+          accessibilityHint="Opens support chat for co-own order history"
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={14} color={Colors.textPrimary} />
+        </AnimatedPressable>
       </View>
 
       {isSyncingRemote ? <Text style={styles.syncHint}>Syncing backend order fills...</Text> : null}
@@ -529,6 +629,52 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontFamily: 'Inter_700Bold',
   },
+  supportRow: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  supportAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  supportText: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   filterRow: {
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -602,11 +748,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
-  row: {
+  rowCard: {
     borderRadius: 12,
     borderWidth: 1,
     borderColor: ROW_BORDER,
     backgroundColor: ROW_BG,
+    overflow: 'hidden',
+  },
+  row: {
     paddingHorizontal: 10,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -676,6 +825,58 @@ const styles = StyleSheet.create({
   },
   rowAmountSell: {
     color: POSITIVE_COLOR,
+  },
+  rowActionRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: PANEL_BORDER,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  rowIssuerChip: {
+    flex: 1,
+    minHeight: 30,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rowIssuerAvatarWrap: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  rowIssuerAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  rowIssuerText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  rowMessageBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowMessageBtnDisabled: {
+    opacity: 0.55,
   },
 });
 

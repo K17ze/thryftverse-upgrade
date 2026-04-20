@@ -21,6 +21,8 @@ import { CURRENCIES } from '../constants/currencies';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
+import { MOCK_USERS } from '../data/mockData';
+import { CachedImage } from '../components/CachedImage';
 import {
   createPayoutAccount,
   createPayoutRequest,
@@ -53,6 +55,7 @@ export default function WithdrawScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const savedPaymentMethod = useStore((state) => state.savedPaymentMethod);
   const currencySymbol = CURRENCIES[currencyCode].symbol;
+  const supportUser = MOCK_USERS[0];
 
   useEffect(() => {
     const displayAmount = getDefaultWithdrawDisplayAmount(availableBalance, currencyCode, goldRates);
@@ -335,6 +338,15 @@ export default function WithdrawScreen() {
     }
   };
 
+  const handleOpenPayoutSupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'withdrawal and payout setup',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for withdrawal help.', 'info');
+  }, [navigation, show, supportUser.id]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
@@ -373,6 +385,39 @@ export default function WithdrawScreen() {
           {policyScopeLabel ? <Text style={styles.policyLabel}>Policy scope: {policyScopeLabel}</Text> : null}
           {payoutPolicyHint ? <Text style={styles.policyHint}>{payoutPolicyHint}</Text> : null}
           {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
+
+          <View style={styles.supportRow}>
+            <AnimatedPressable
+              style={styles.supportIdentity}
+              onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Open @${supportUser.username} profile`}
+              accessibilityHint="Shows payout support profile"
+            >
+              <CachedImage
+                uri={supportUser.avatar}
+                style={styles.supportAvatar}
+                containerStyle={styles.supportAvatarWrap}
+                contentFit="cover"
+              />
+              <View style={styles.supportCopyWrap}>
+                <Text style={styles.supportTitle}>Need payout help?</Text>
+                <Text style={styles.supportHandle}>@{supportUser.username}</Text>
+              </View>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={styles.supportMessageBtn}
+              onPress={handleOpenPayoutSupport}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Message payout support"
+              accessibilityHint="Opens support chat for withdrawal issues"
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+            </AnimatedPressable>
+          </View>
 
           <Text style={styles.sectionTitle}>Transfer to</Text>
           <AnimatedPressable
@@ -461,6 +506,50 @@ const styles = StyleSheet.create({
   policyLabel: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, marginBottom: 4 },
   policyHint: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginBottom: 28 },
   balanceError: { textAlign: 'center', marginTop: 4, marginBottom: 20, fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.danger },
+  supportRow: {
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  supportAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  supportCopyWrap: {
+    flex: 1,
+  },
+  supportTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
+  supportHandle: { marginTop: 1, fontSize: 10, fontFamily: 'Inter_500Medium', color: Colors.textMuted },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   sectionTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
 

@@ -27,6 +27,7 @@ import { getListingCoverUri } from '../utils/media';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
+import { AppButton } from '../components/ui/AppButton';
 
 const { width } = Dimensions.get('window');
 
@@ -281,6 +282,10 @@ export default function MyOrdersScreen() {
               const trackingSnippet = backendMeta?.trackingNumber
                 ? `${backendMeta.shippingProvider ? `${backendMeta.shippingProvider.toUpperCase()} · ` : ''}${backendMeta.trackingNumber}`
                 : null;
+              const counterparty = activeTab === 'selling'
+                ? order.buyer
+                : mockFind(MOCK_USERS, (user) => user.id === order.item.sellerId);
+              const counterpartyRole = activeTab === 'selling' ? 'Buyer' : 'Seller';
 
               return (
                 <Reanimated.View
@@ -293,28 +298,68 @@ export default function MyOrdersScreen() {
                           .duration(Motion.list.enterDuration)
                   }
                 >
-                  <AnimatedPressable
-                    style={styles.cardGroup}
-                    onPress={() => navigation.navigate('OrderDetail', { orderId: order.id })}
-                    activeOpacity={0.9}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open order ${order.item.title}`}
-                    accessibilityHint={`View details for this ${order.status.toLowerCase()} order`}
-                  >
-                    <View style={styles.orderRow}>
-                      <CachedImage uri={getListingCoverUri(order.item.images, 'https://picsum.photos/seed/order-thumb-fallback/300/400')} style={styles.orderThumb} contentFit="cover" />
-                      <View style={styles.orderInfo}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={[styles.orderStatus, order.isDone && styles.orderStatusDone]}>{order.status}</Text>
-                          {order.buyer && <Text style={styles.buyerText}>to {order.buyer.username}</Text>}
+                  <View style={styles.cardGroup}>
+                    <AnimatedPressable
+                      style={styles.orderSummaryTap}
+                      onPress={() => navigation.navigate('OrderDetail', { orderId: order.id })}
+                      activeOpacity={0.9}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open order ${order.item.title}`}
+                      accessibilityHint={`View details for this ${order.status.toLowerCase()} order`}
+                    >
+                      <View style={styles.orderRow}>
+                        <CachedImage uri={getListingCoverUri(order.item.images, 'https://picsum.photos/seed/order-thumb-fallback/300/400')} style={styles.orderThumb} contentFit="cover" />
+                        <View style={styles.orderInfo}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={[styles.orderStatus, order.isDone && styles.orderStatusDone]}>{order.status}</Text>
+                            {order.buyer && <Text style={styles.buyerText}>to {order.buyer.username}</Text>}
+                          </View>
+                          <Text style={styles.orderTitle} numberOfLines={1}>{order.item.title}</Text>
+                          {trackingSnippet ? <Text style={styles.orderTracking} numberOfLines={1}>Tracking: {trackingSnippet}</Text> : null}
+                          <Text style={styles.orderPrice}>{formatFromFiat(order.item.price, 'GBP', { displayMode: 'fiat' })}</Text>
                         </View>
-                        <Text style={styles.orderTitle} numberOfLines={1}>{order.item.title}</Text>
-                        {trackingSnippet ? <Text style={styles.orderTracking} numberOfLines={1}>Tracking: {trackingSnippet}</Text> : null}
-                        <Text style={styles.orderPrice}>{formatFromFiat(order.item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
                       </View>
-                      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-                    </View>
-                  </AnimatedPressable>
+                    </AnimatedPressable>
+
+                    {counterparty ? (
+                      <View style={styles.counterpartyRow}>
+                        <AnimatedPressable
+                          style={styles.counterpartyIdentity}
+                          onPress={() => navigation.navigate('UserProfile', { userId: counterparty.id })}
+                          activeOpacity={0.85}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open ${counterpartyRole.toLowerCase()} profile`}
+                          accessibilityHint={`Shows ${counterparty.username} profile details`}
+                        >
+                          <CachedImage
+                            uri={counterparty.avatar}
+                            style={styles.counterpartyAvatar}
+                            containerStyle={{ width: 24, height: 24, borderRadius: 12 }}
+                            contentFit="cover"
+                          />
+                          <Text style={styles.counterpartyText} numberOfLines={1}>
+                            {counterpartyRole}: @{counterparty.username}
+                          </Text>
+                        </AnimatedPressable>
+
+                        <AppButton
+                          title="Message"
+                          style={styles.counterpartyMessageBtn}
+                          titleStyle={styles.counterpartyMessageBtnText}
+                          variant="secondary"
+                          size="sm"
+                          onPress={() =>
+                            navigation.navigate('Chat', {
+                              conversationId: `${counterparty.id}_${order.item.id}`,
+                              focusQuery: counterparty.username,
+                              partnerUserId: counterparty.id,
+                            })}
+                          accessibilityLabel={`Message ${counterparty.username}`}
+                        />
+                      </View>
+                    ) : null}
+                  </View>
                 </Reanimated.View>
               );
             })
@@ -350,6 +395,9 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, textAlign: 'center', marginTop: 8 },
 
   cardGroup: { backgroundColor: Colors.card, borderRadius: 24, padding: 16, marginBottom: 16 },
+  orderSummaryTap: {
+    borderRadius: 16,
+  },
   orderRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   orderThumb: { width: 70, height: 70, borderRadius: 16 },
   orderInfo: { flex: 1, justifyContent: 'center' },
@@ -359,4 +407,40 @@ const styles = StyleSheet.create({
   orderTracking: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginBottom: 4 },
   orderPrice: { fontSize: 14, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
   buyerText: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.textMuted },
+  counterpartyRow: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  counterpartyIdentity: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  counterpartyAvatar: { width: 24, height: 24, borderRadius: 12 },
+  counterpartyText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textPrimary,
+  },
+  counterpartyMessageBtn: {
+    minHeight: 34,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.cardAlt,
+  },
+  counterpartyMessageBtnText: {
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+  },
 });

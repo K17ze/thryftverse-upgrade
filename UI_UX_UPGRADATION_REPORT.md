@@ -1,230 +1,258 @@
-# Thryftverse UI/UX Modernization Report v3
+# Thryftverse UI/UX Upgradation Plan v4
 
-Date: 2026-04-17
-Scope: Completion check of the prior v2 roadmap, fresh evidence snapshot, and next-phase execution plan.
+Date: 2026-04-18
+Scope: Profile settings consolidation, Inbox and Chat information architecture redesign, and cross-screen UX consistency rollout.
 
-## Completion Verdict
-The modernization plan is not fully completed yet.
+## Product Direction (This Revision)
 
-Progress is strong and measurable, especially in primitive adoption and baseline accessibility metadata. However, completion criteria from v2 are only partially met because token guard scope is still narrow, accessibility hardening for payment/account surfaces is still missing, and virtualization work is still pending on priority screens.
+1. Keep only one settings entry in Profile.
+2. Move seller identity and seller navigation to the very top of Chat.
+3. Replace dedicated Profile button in Chat seller card with tap-on-identity behavior.
+4. Position message filters (All, Offers, Updates) directly below the top identity layer.
+5. Keep conversation search at Inbox level so users can search across threads (RAG-style retrieval path), not only inside one thread.
+6. Apply similar interaction patterns to other high-traffic pages.
 
-## Completion Check Against v2 Plan
+## Immediate Status
 
-### Immediate next sprint order status
-1. Primitive migration: Home, Browse, Filter, Sell, MyProfile
-   - Status: Partially complete (breadth complete, depth incomplete)
-   - Evidence: all five now use AppButton, but custom controls remain high in several of them.
-2. Accessibility pass: Payments, AddCard, AddBankAccount, TradeHub, CategoryDetail
-   - Status: Not complete
-   - Evidence: these screens still show zero accessibilityLabel and accessibilityHint coverage.
-3. Token lint scope expansion
-   - Status: Not complete
-   - Evidence: lint defaults still enforce a limited screen set; Home/Browse/Filter/Sell/MyProfile/UserProfile/OrderDetail/Payments are not in default enforced list.
-4. Performance migration for priority list screens
-   - Status: Not complete
-   - Evidence: priority screens still rely on ScrollView with little or no list virtualization references.
-5. Trust copy cleanup
-   - Status: Not complete
-   - Evidence: no systematic transactional language unification pass yet.
+Completed now:
+- Profile duplicate settings affordance has been consolidated.
+- Implemented in src/screens/MyProfileScreen.tsx by removing the extra settings tile from quick access while preserving the primary settings action button.
+- Chat seller identity now sits in the top rail with tap-to-profile, and the lower duplicate seller profile button has been removed.
+- All/Offers/Updates is now positioned directly below the top chat rail.
+- Chat thread-local search box has been removed from the conversation screen in favor of Inbox-level retrieval scope.
+- Inbox search now evaluates conversations, participants, listing metadata, and message history, and passes query scope into Chat.
+- Item Detail and Order Detail seller sections now use identity-first profile navigation with dedicated message CTA (no nested pressable conflicts).
+- Order Detail messaging now routes with dynamic seller/listing conversation context instead of static thread id.
+- Trade Hub mode switch (Auctions / Co-Own) now sits directly below the top header context for faster top-of-screen control access.
+- My Orders cards now split actions cleanly: order summary opens details, while counterparty identity opens profile and a dedicated Message CTA opens chat.
+- Browse listing cards now expose seller identity chips and direct message shortcuts without nesting actions inside the item-detail tap zone.
+- Reusable ProductCard now supports optional seller identity navigation; Search and Favourites use it for direct profile access.
+- Home feed masonry cards now separate primary listing-open tap from seller identity and message actions via a dedicated footer action row.
+- Live auction cards now include direct seller profile and message actions while preserving bid and buy/watch controls.
+- Global Search recommendation cards now include seller identity and message actions outside the main item-detail tap surface.
+- Category Detail grid cards now split listing-open from seller profile and message actions in a non-nested card layout.
+- Poster Viewer now uses a top identity rail with tap-to-profile and dedicated message action for poster creators.
+- User Profile now exposes a dedicated message action for non-self profiles in the hero CTA rail.
+- Notifications cards now separate primary destination open from actor profile and message actions using a non-nested action row.
+- Asset Detail now includes issuer identity/profile and dedicated message action beneath asset meta.
+- Chat routing now supports explicit partner identity fallback (`partnerUserId`) so direct message entries keep correct header identity even before thread hydration.
+- My Profile hero identity block is now tappable to open the public-profile view, keeping profile navigation identity-first.
+- Legacy static chat launches (Help & Support and Search look comments) now use partner-aware Chat params to preserve correct header identity.
+- Create Group Chat member rows now split selection and profile navigation into distinct actions (no mixed-tap row behavior).
+- Balance History now includes an explicit support identity + message action row for transaction issue escalation.
+- Push Notifications now includes support identity/message actions for device-registration troubleshooting.
+- Invite Friends now has true copy-to-clipboard behavior and referral support identity/message actions.
+- Add Card now includes payment support identity + message quick actions for setup and policy issues.
+- Add Bank Account now includes payment support identity + message quick actions for withdrawal-rail setup issues.
+- Wallet experience now includes support identity + message quick actions in the underlying Balance screen implementation.
+- Payments now includes support identity + message quick actions for cards/bank rails troubleshooting.
+- Withdraw now includes payout support identity + message quick actions alongside bank-rail controls.
+- Checkout item summary now provides explicit seller identity/profile and message actions separate from purchase actions.
+- Add Address now includes delivery support identity + message quick actions during address setup.
+- Filter sheet now includes explicit context identity and dedicated support message action in the top control layer.
+- Success screen now includes post-checkout support identity + message quick actions.
+- Manage Listing preview now includes explicit seller identity/profile and message actions.
+- Category Tree now includes support identity/message actions and resilient prefix fallback handling.
+- Listing Success now includes publishing support identity + message quick actions.
+- Postage now includes support identity + message actions for carrier and shipping-option setup.
+- Make Offer now includes explicit seller identity/profile and message actions in the offer context card.
+- Create Poster now includes selected-listing seller identity/profile and message actions.
+- Trade Hub now includes support identity + message actions in top context.
+- Portfolio now includes support identity/message actions and per-holding issuer identity + message actions with split primary-vs-secondary tap zones.
+- Co-Own Hub now includes support identity/message actions and per-asset issuer identity + message actions, with asset-open separated from Buy/Sell CTAs.
+- Syndicate holdings screen now includes support identity/message actions and per-asset issuer identity + message actions with split primary card tap vs footer action controls.
+- Co-Own order history now includes support identity/message actions and per-order issuer identity + message actions without nested pressables in row navigation.
 
-### Phase A acceptance criteria check
-1. Primitive usage in at least 15 screen files
-   - Status: Complete
-   - Evidence: AppButton is present in 18 screen files.
-2. Token guard includes all core trade/commerce/discovery screens
-   - Status: Not complete
-3. No new raw colors outside token files and approved markers
-   - Status: In progress
-   - Evidence: guard passes on changed scope, but broad codebase still has many raw literals.
+Planned next:
+- Continue applying the same identity-first and single-action CTA hierarchy to remaining high-traffic listing and feed surfaces.
+- Add deeper retrieval ranking and result-group labels once backend semantic indexing is introduced.
 
-## What Improved Since v2
+## Current UX Baseline (Observed)
 
-### Primitive coverage increased significantly
-- AppButton screen presence expanded from 8 files to 18 files.
-- AppSegmentControl screen presence expanded from 6 files to 10 files.
-- Recently migrated areas include Filter controls, AccountSettings transactional modal actions, EditProfile save CTA, Inbox header action, and MyProfile cover action pill.
+### Profile
+- Settings appears in two places within the profile experience (action row and quick access grid), which creates affordance duplication.
 
-### Accessibility baseline improved numerically
-- accessibilityLabel line matches increased from 70 to 146.
-- accessibilityHint line matches increased from 14 to 20.
+### Chat
+- Top header currently shows a static title or username and an info icon.
+- Seller identity (name, region, last seen, profile button) appears lower in the contextual card stack.
+- Message filters appear below thread-local utility search and cards.
+- Thread search is scoped only to the active conversation.
 
-### Custom control dependence declined but is still high
-- AnimatedPressable line matches decreased from 789 to 629.
-- Remaining high-traffic screens still have concentrated bespoke control usage.
+### Inbox
+- Inbox already has cross-thread keyword search input.
+- Search can be upgraded from basic lexical matching to richer retrieval (message body, listing metadata, participants, and semantic hints).
 
-## Current Evidence Snapshot
+## Target Interaction Architecture
 
-Metrics were re-collected from current source files using line-match and unique-file counts.
+### A. Chat Top Identity Rail (Primary)
+- Place seller avatar, @username, location, and last-seen at the top-most chat rail.
+- Make identity rail tappable to navigate to seller profile.
+- Remove separate Profile button from lower seller card.
+- Keep one optional right-side action icon for context actions (not duplicate profile navigation).
 
-### Style consistency
-- Hardcoded hex values: 426 matches across 73 files.
-- Direct fontSize declarations: 861 matches across 85 files.
-- Direct Inter font declarations: 620 matches across 57 files.
-- Typography token references (Typography.): 219 matches across 24 files.
-- Numeric borderRadius declarations: 533 matches across 85 files.
-- Unique numeric borderRadius values: 38.
-- Most frequent borderRadius values: 12, 16, 20, 14, 22, 24, 10, 18, 999, 28.
+### B. Chat Secondary Controls
+- Order directly below identity rail:
+  1. All / Offers / Updates segmented control.
+  2. Conversation summary card and tools toggle.
+  3. Optional item context card (compact).
+- Remove or demote thread-local search from this zone to reduce vertical clutter.
 
-### Primitive adoption in screens
-- AppButton: 72 matches across 18 screen files.
-- AppInput: 9 matches across 4 screen files.
-- AppCard: 19 matches across 3 screen files.
-- AppStatusPill: 8 matches across 3 screen files.
-- AppSegmentControl: 25 matches across 10 screen files.
+### C. Inbox Search as Retrieval Surface
+- Promote Inbox search to global conversation retrieval entry point.
+- Search should return:
+  - conversation title or participant match,
+  - message text snippets,
+  - listing title or metadata match,
+  - optional semantic nearest matches (RAG-ready).
+- Tapping result deep-links to thread and scroll anchor where possible.
 
-### CTA and control fragmentation indicators
-- saveBtn: 27 matches across 7 files.
-- submitBtn: 10 matches across 4 files.
-- actionBtn: 34 matches across 8 files.
-- primaryBtn: 36 matches across 11 files.
+### D. Consistency Pattern for Other Pages
+- Use tap-on-identity (name/avatar) as the primary profile navigation pattern.
+- Avoid duplicate actions that perform same navigation.
+- Keep filter controls near header context, not buried under unrelated cards.
+- Favor one global search surface per domain (Inbox for conversations, Search tab for listings).
 
-### Accessibility coverage indicators
-- AnimatedPressable references: 629 across 76 files.
-- accessibilityLabel: 146 matches across 27 files.
-- accessibilityHint: 20 matches across 10 files.
-- accessibilityRole: 16 matches across 7 files.
-- AccessibilityInfo: 6 matches across 2 files.
-- announceForAccessibility: 2 matches across 1 file.
+## Execution Plan
 
-### List rendering indicators
-- ScrollView references in screens: 144 across 42 files.
-- FlashList references in screens: 33 across 16 files.
+### Phase 1: Header and Navigation Cleanup (2-3 days)
 
-## Highest-Impact Remaining Gaps
-
-### Primitive migration depth priority
-These screens have high AnimatedPressable density and low primitive coverage:
-- SyndicateScreen (39 AnimatedPressable, 0 AppButton, 0 AppSegmentControl)
-- OrderDetailScreen (18, 0, 0)
-- CreateSyndicateScreen (17, 0, 0)
-- LoginScreen (15, 0, 0)
-- SearchScreen (13, 0, 0)
-- BalanceScreen (13, 0, 2)
-
-Additional in-progress screens still needing depth cleanup:
-- MyProfileScreen (21, 4, 0)
-- SellScreen (17, 4, 3)
-- HomeScreen (11, 4, 0)
-- BrowseScreen (9, 5, 0)
-
-### Accessibility hardening priority
-Business-critical screens with interactive controls and zero metadata coverage:
-- PaymentsScreen (interactive=9, labels=0, hints=0, roles=0)
-- AddCardScreen (5, 0, 0, 0)
-- AddBankAccountScreen (5, 0, 0, 0)
-- BalanceHistoryScreen (3, 0, 0, 0)
-- GroupBotDirectoryScreen (5, 0, 0, 0)
-- CategoryDetailScreen (7, 0, 0, 0)
-- TradeHubScreen (7, 0, 0, 0)
-- PersonalisationScreen (7, 0, 0, 0)
-- BuyoutScreen (7, 0, 0, 0)
-
-### Performance and virtualization priority
-High ScrollView usage with no virtualization references:
-- FilterScreen (ScrollView=7, virtualizedRefs=0)
-- ChatScreen (6, 0)
-- HomeScreen (5, 0)
-- GlobalSearchScreen (5, 0)
-- CategoryTreeScreen (5, 0)
-- MyOrdersScreen (4, 0)
-- MyProfileScreen (4, 0)
-- UserProfileScreen (2, 0)
-
-## Re-Analyzed Improvement Roadmap (v3)
-
-## Phase A-2: Finish foundation closure (1.5 weeks)
-
-### A2.1 Primitive depth completion
-- Target: remove remaining bespoke CTA/chip controls in top-priority screens before adding new patterns.
-- Sequence: SyndicateScreen, OrderDetailScreen, CreateSyndicateScreen, LoginScreen, SearchScreen, BalanceScreen.
-
-### A2.2 Token guard scope expansion
-- Update default enforced list in scripts/check-design-tokens.mjs to include:
-  - HomeScreen, BrowseScreen, FilterScreen, SellScreen, MyProfileScreen, UserProfileScreen, OrderDetailScreen, PaymentsScreen, AddCardScreen, AddBankAccountScreen.
-- Keep ALLOWED_FILES narrow and transition legacy files incrementally.
-
-### A2.3 Radius and type normalization starter
-- Add radius scale tokens and apply to primitives first, then migrate priority screens.
-- Require Typography token usage in newly touched files.
+1. Chat top rail redesign.
+   - Move seller info block to header layer in src/screens/ChatScreen.tsx.
+   - Convert username block into pressable navigation to UserProfile.
+2. Remove redundant seller profile CTA.
+   - Delete lower Profile button from seller bubble.
+3. Reorder chat control stack.
+   - Place AppSegmentControl (All/Offers/Updates) immediately under top identity rail.
+4. Keep message timeline behavior unchanged.
+   - Ensure no regression in offer actions, system updates, and message rendering.
 
 Acceptance criteria:
-- AppButton and/or AppSegmentControl present in 22+ screen files.
-- Default token guard scope includes all core discovery/trade/checkout/account screens.
-- Unique borderRadius values reduced in migrated surfaces.
+- Seller profile is reachable by tapping identity at top.
+- No duplicate profile navigation CTA in seller card.
+- Filters appear above lower utility panels.
 
-## Phase B: Accessibility hardening (2 weeks)
+### Phase 2: Inbox Search Upgrade (3-4 days)
 
-### B1. Metadata coverage guarantee
-- Add accessibilityLabel to all actionable controls in priority screens.
-- Add accessibilityHint for non-obvious transactional actions.
-- Add explicit accessibilityRole where needed for custom controls.
-
-### B2. Transaction announcements
-- Add announceForAccessibility for key state changes in payment/trade/order flows.
-
-### B3. Focus and touch quality
-- Verify touch targets and logical focus order on account/payment forms and trade rails.
+1. Retrieval model improvement in src/screens/InboxScreen.tsx.
+   - Extend matching fields: participants, listings, messages, and metadata tags.
+2. Search results behavior.
+   - Keep current in-list filtering for quick mode.
+   - Add expandable global matches grouping when query length is at least 2.
+3. Navigation integration.
+   - Deep-link into Chat with optional focus anchor.
 
 Acceptance criteria:
-- Priority screens reach 100% actionable-label coverage.
-- announceForAccessibility is present across all critical transaction outcomes.
+- Users can locate relevant conversations without opening thread-by-thread.
+- Search results include at least participant, listing, and message-context matches.
 
-## Phase C: Performance and list architecture (2 weeks)
+### Phase 3: Cross-Screen Pattern Adoption (4-5 days)
 
-### C1. Virtualize scalable lists
-- Migrate heavy ScrollView list sections to FlashList/FlatList where data scales.
-
-### C2. Render-path optimization
-- Memoize expensive row renderers and derived filters.
-- Reduce avoidable rerenders in Home, Chat, MyProfile, UserProfile, and GlobalSearch.
-
-### C3. Verification pass
-- Capture before/after interaction smoothness and frame stability for core journeys.
+1. Profile and user pages.
+   - Verify no duplicate settings or profile affordances.
+2. Trade Hub and transactional surfaces.
+   - Keep top context plus immediate filter controls model consistent.
+3. Messaging-adjacent pages.
+   - Align CTA hierarchy with one primary action and one secondary action maximum per section.
 
 Acceptance criteria:
-- Priority list screens use virtualization by default where applicable.
-- No visible stutter in Home, Chat, Trade, and Auctions under realistic load.
+- Interaction model is consistent across Profile, Chat, Inbox, and Trade surfaces.
+- Redundant navigation controls are removed in audited screens.
 
-## Phase D: Trust UX language standardization (1 week)
+### Phase 4: QA, Accessibility, and Performance Guardrails (2 days)
 
-### D1. Unified transaction states
-- Standardize pending, processing, settled, failed, and action-required language.
-
-### D2. Fee and risk clarity
-- Ensure money-moving actions disclose fee source, execution mode, and confirmation state.
-
-### D3. Region-aware disclosures
-- Add compliance-aware disclosure templates for CO-OWN and cross-border actions.
+1. Accessibility.
+   - Add or verify accessibilityLabel, accessibilityHint, and role metadata for new pressable identity rails and filters.
+2. Performance.
+   - Re-check render cost after header restructuring and search enhancements.
+3. UX polish.
+   - Ensure spacing hierarchy remains stable on small devices and long usernames.
 
 Acceptance criteria:
-- Consistent transactional wording across checkout, offers, bids, wallet, and CO-OWN surfaces.
+- No accessibility regressions on modified controls.
+- No visible scroll or input lag introduced by retrieval enhancements.
 
-## Updated KPI Targets
+## File-Level Change Map
 
-### System quality
-- Reduce hardcoded hex usage by at least 30% more in priority screens.
-- Double Typography token references in newly migrated files.
-- Reduce unique numeric borderRadius values from 38 to fewer than 14 in migrated surfaces.
+Already updated:
+- src/screens/MyProfileScreen.tsx
+- src/screens/InboxScreen.tsx
+- src/screens/ChatScreen.tsx
+- src/screens/ItemDetailScreen.tsx
+- src/screens/OrderDetailScreen.tsx
+- src/screens/TradeHubScreen.tsx
+- src/screens/MyOrdersScreen.tsx
+- src/screens/BrowseScreen.tsx
+- src/components/ProductCard.tsx
+- src/screens/FavouritesScreen.tsx
+- src/screens/SearchScreen.tsx
+- src/screens/HomeScreen.tsx
+- src/screens/AuctionsScreen.tsx
+- src/screens/GlobalSearchScreen.tsx
+- src/screens/CategoryDetailScreen.tsx
+- src/screens/PosterViewerScreen.tsx
+- src/screens/UserProfileScreen.tsx
+- src/screens/NotificationsScreen.tsx
+- src/screens/AssetDetailScreen.tsx
+- src/screens/MyProfileScreen.tsx
+- src/screens/HelpSupportScreen.tsx
+- src/screens/CreateGroupChatScreen.tsx
+- src/screens/BalanceHistoryScreen.tsx
+- src/screens/PushNotificationsScreen.tsx
+- src/screens/InviteFriendsScreen.tsx
+- src/screens/AddCardScreen.tsx
+- src/screens/AddBankAccountScreen.tsx
+- src/screens/BalanceScreen.tsx
+- src/screens/PaymentsScreen.tsx
+- src/screens/WithdrawScreen.tsx
+- src/screens/CheckoutScreen.tsx
+- src/screens/AddAddressScreen.tsx
+- src/screens/FilterScreen.tsx
+- src/screens/SuccessScreen.tsx
+- src/screens/ManageListingScreen.tsx
+- src/screens/CategoryTreeScreen.tsx
+- src/screens/ListingSuccessScreen.tsx
+- src/screens/PostageScreen.tsx
+- src/screens/MakeOfferScreen.tsx
+- src/screens/CreatePosterScreen.tsx
+- src/screens/TradeHubScreen.tsx
+- src/screens/PortfolioScreen.tsx
+- src/screens/SyndicateHubScreen.tsx
+- src/screens/SyndicateScreen.tsx
+- src/screens/SyndicateOrderHistoryScreen.tsx
+- src/navigation/types.ts
 
-### Primitive adoption
-- AppButton/AppSegmentControl usage across at least 75% of high-traffic screens.
-- Remove bespoke CTA/chip patterns from top six highest-density screens.
+Primary upcoming edits:
+- src/screens/CreateSyndicateScreen.tsx
+- src/screens/SyndicateOnboardingScreen.tsx
 
-### Accessibility
-- 100% actionable-label coverage in payment/account/trade priority screens.
-- announceForAccessibility added to all critical transaction transitions.
+Possible support edits:
+- src/navigation/types.ts (if search deep-link anchor params are added)
+- src/store/useStore.ts (if retrieval metadata indexing is centralized)
+- src/components/ui/AppSegmentControl.tsx (only if behavior extension is needed)
 
-### Performance
-- Priority long-list surfaces virtualized where data can scale.
-- Home and Chat maintain stable interaction quality under realistic data volume.
+## UX Rules to Enforce Going Forward
 
-## Immediate Next Sprint Execution Order
+1. One intent, one obvious action entry point.
+2. Identity-first navigation in communication flows.
+3. Keep controls close to their context layer.
+4. Prefer global retrieval surfaces over duplicate local search bars.
+5. Preserve existing design system primitives (AppInput, AppSegmentControl, AppButton) before adding bespoke controls.
 
-1. Primitive depth closure: SyndicateScreen, OrderDetailScreen, CreateSyndicateScreen, LoginScreen, SearchScreen.
-2. Accessibility pass: Payments, AddCard, AddBankAccount, TradeHub, CategoryDetail, Buyout.
-3. Token guard expansion: update default enforced paths for discovery/trade/account/payment surfaces.
-4. Performance migration: Filter, Chat, Home, GlobalSearch, MyOrders to stronger list virtualization.
-5. Trust copy standardization: unify state labels and post-action confirmations in money-moving flows.
+## KPI Targets for This Revision
 
-## Final Note
-This is still a mid-migration state, but it is materially ahead of v2 baseline in primitive adoption and accessibility metadata volume. The next gain is not new pattern creation; it is systematic breadth-and-depth closure on accessibility, token enforcement scope, and scalable list architecture.
+1. Duplicate settings or profile affordances in audited screens: 0.
+2. Chat header path to seller profile: single-tap completion.
+3. Inbox search success for known-thread queries: at least 90 percent in QA scenarios.
+4. Decrease time-to-open-correct-thread for support-style tasks by at least 25 percent versus current baseline.
+
+## Out of Scope for This Iteration
+
+1. Backend semantic vector indexing service implementation.
+2. Legal framework rollout for cross-country tokenized co-ownership.
+3. Full redesign of non-messaging tabs unrelated to profile/chat/inbox hierarchy.
+
+## Rollout Recommendation
+
+1. Ship Phase 1 first (low-risk, high-clarity IA win).
+2. Ship Phase 2 behind a feature flag for search quality validation.
+3. Complete Phase 3 and Phase 4 with one UX regression pass before broad release.

@@ -13,6 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
+import { useToast } from '../context/ToastContext';
+import { MOCK_USERS } from '../data/mockData';
+import { CachedImage } from '../components/CachedImage';
 
 type RouteT = RouteProp<RootStackParamList, 'CategoryTree'>;
 const HEADER_BORDER = Colors.border;
@@ -53,9 +56,22 @@ const TREES: Record<string, { title: string; subs: string[] }[]> = {
 export default function CategoryTreeScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
+  const { show } = useToast();
   const { categoryPrefix } = route.params;
+  const supportUser = MOCK_USERS[0];
 
-  const sections = TREES[categoryPrefix] || TREES['Women'];
+  const resolvedPrefix = TREES[categoryPrefix] ? categoryPrefix : 'Women';
+
+  const sections = TREES[resolvedPrefix];
+
+  const handleOpenCategorySupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: `${resolvedPrefix} categories`,
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for category help.', 'info');
+  }, [navigation, resolvedPrefix, show, supportUser.id]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -65,7 +81,7 @@ export default function CategoryTreeScreen() {
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
-        <Text style={styles.headerTitle}>{categoryPrefix}</Text>
+        <Text style={styles.headerTitle}>{resolvedPrefix}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -73,12 +89,42 @@ export default function CategoryTreeScreen() {
         {/* View All Master Button */}
         <AnimatedPressable 
           style={styles.viewAllRow}
-          onPress={() => navigation.navigate('Browse', { categoryId: categoryPrefix.toLowerCase(), title: `All ${categoryPrefix}` })}
+          onPress={() => navigation.navigate('Browse', { categoryId: resolvedPrefix.toLowerCase(), title: `All ${resolvedPrefix}` })}
           activeOpacity={0.9}
         >
-          <Text style={styles.viewAllText}>View All {categoryPrefix}</Text>
+          <Text style={styles.viewAllText}>View All {resolvedPrefix}</Text>
           <Ionicons name="arrow-forward" size={20} color={Colors.background} />
         </AnimatedPressable>
+
+        <View style={styles.supportRow}>
+          <AnimatedPressable
+            style={styles.supportIdentity}
+            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${supportUser.username} profile`}
+            accessibilityHint="Shows category support profile"
+          >
+            <CachedImage
+              uri={supportUser.avatar}
+              style={styles.supportAvatar}
+              containerStyle={styles.supportAvatarWrap}
+              contentFit="cover"
+            />
+            <Text style={styles.supportText}>Need category help? @{supportUser.username}</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={styles.supportMessageBtn}
+            onPress={handleOpenCategorySupport}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Message category support"
+            accessibilityHint="Opens support chat for category browsing"
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
 
         {sections.map((section, index) => (
           <View key={section.title} style={styles.section}>
@@ -86,8 +132,8 @@ export default function CategoryTreeScreen() {
             <AnimatedPressable 
               activeOpacity={0.9} 
               onPress={() => navigation.navigate('Browse', { 
-                categoryId: categoryPrefix.toLowerCase(), 
-                title: `${categoryPrefix} ${section.title}`
+                categoryId: resolvedPrefix.toLowerCase(), 
+                title: `${resolvedPrefix} ${section.title}`
               })}
             >
               <ImageBackground 
@@ -110,7 +156,7 @@ export default function CategoryTreeScreen() {
                   style={styles.subPill}
                   activeOpacity={0.8}
                   onPress={() => navigation.navigate('Browse', { 
-                    categoryId: categoryPrefix.toLowerCase(), 
+                    categoryId: resolvedPrefix.toLowerCase(), 
                     subcategoryId: sub.toLowerCase(),
                     title: sub
                   })}
@@ -154,6 +200,53 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   viewAllText: { fontSize: 16, fontFamily: 'Inter_700Bold', color: Colors.background, textTransform: 'uppercase', letterSpacing: 0.5 },
+  supportRow: {
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PILL_BORDER,
+    backgroundColor: PILL_BG,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  supportAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  supportText: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PILL_BORDER,
+    backgroundColor: PILL_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   section: { marginTop: 16 },
   

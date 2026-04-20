@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
+  AnimatedPressable
+} from '../components/AnimatedPressable';
 import {
   View,
   Text,
@@ -40,6 +41,11 @@ const PANEL_BG = Colors.card;
 
 type ConvoItem = Conversation;
 type InboxSegment = 'all' | 'unread' | 'groups' | 'direct';
+type ConversationSearchInsight = {
+  score: number;
+  matchedField: string;
+  preview: string;
+};
 
 const SEGMENT_OPTIONS: Array<{ value: InboxSegment; label: string; accessibilityLabel: string }> = [
   { value: 'direct', label: 'Direct', accessibilityLabel: 'Filter direct messages' },
@@ -53,6 +59,7 @@ export default function InboxScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { listings, refreshListings } = useBackendData();
+  const currentUser = useStore((state) => state.currentUser);
   const conversations = useStore((state) => state.conversations);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
@@ -88,10 +95,24 @@ export default function InboxScreen() {
 
   const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
 
-  const filteredConversations = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+  const participantNameLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const user of MOCK_USERS) {
+      map.set(user.id, user.username);
+    }
+    map.set('me', currentUser?.username ?? 'you');
+    if (currentUser?.id) {
+      map.set(currentUser.id, currentUser.username);
+    }
+    return map;
+  }, [currentUser?.id, currentUser?.username]);
 
-    return conversations.filter((conversation) => {
+  const { visibleConversations, searchInsights } = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
+    const nextSearchInsights = new Map<string, ConversationSearchInsight>();
+
+    const scopedConversations = conversations.filter((conversation) => {
       if (segment === 'unread' && !conversation.unread) {
         return false;
       }
@@ -111,24 +132,84 @@ export default function InboxScreen() {
       const listing = listings.find((item) => item.id === conversation.itemId)
         || mockFind(MOCK_LISTINGS, (item) => item.id === conversation.itemId);
       const seller = mockFind(MOCK_USERS, (user) => user.id === conversation.sellerId);
+      const counterpartyId = conversation.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
       const title = conversation.type === 'group'
         ? conversation.title ?? 'group chat'
-        : seller?.username ?? 'direct message';
+        : seller?.username ?? (counterpartyId ? participantNameLookup.get(counterpartyId) ?? counterpartyId : 'direct message');
 
-      return [
-        title,
-        conversation.lastMessage,
-        listing?.title ?? '',
-      ].some((value) => value.toLowerCase().includes(normalizedQuery));
+      const participantLabels = (conversation.participantIds ?? [])
+        .map((participantId) => participantNameLookup.get(participantId) ?? participantId)
+        .join(' ');
+
+      const messageCorpus = conversation.messages
+        .slice(-14)
+        .map((message) => `${message.text ?? message.systemTitle ?? ''}`)
+        .join(' ');
+
+      const candidates: Array<{ field: string; value: string; weight: number }> = [
+        { field: 'title', value: title, weight: 14 },
+        { field: 'last message', value: conversation.lastMessage, weight: 12 },
+        { field: 'participants', value: participantLabels, weight: 10 },
+        { field: 'message history', value: messageCorpus, weight: 9 },
+        { field: 'listing title', value: listing?.title ?? '', weight: 8 },
+        { field: 'listing brand', value: listing?.brand ?? '', weight: 6 },
+        { field: 'listing category', value: `${listing?.category ?? ''} ${listing?.subcategory ?? ''}`, weight: 5 },
+      ];
+
+      let bestMatch: ConversationSearchInsight | null = null;
+
+      for (const candidate of candidates) {
+        const normalizedCandidate = candidate.value.toLowerCase();
+        if (!normalizedCandidate) {
+          continue;
+        }
+
+        const directMatch = normalizedCandidate.includes(normalizedQuery);
+        const tokenMatch = queryTokens.length > 1 && queryTokens.every((token) => normalizedCandidate.includes(token));
+        if (!directMatch && !tokenMatch) {
+          continue;
+        }
+
+        const baseScore = directMatch ? candidate.weight : Math.max(candidate.weight - 2, 1);
+        const score = baseScore + (tokenMatch ? queryTokens.length : 0);
+
+        if (!bestMatch || score > bestMatch.score) {
+          bestMatch = {
+            score,
+            matchedField: candidate.field,
+            preview: candidate.value,
+          };
+        }
+      }
+
+      if (bestMatch) {
+        nextSearchInsights.set(conversation.id, bestMatch);
+        return true;
+      }
+
+      return false;
     });
-  }, [conversations, listings, searchQuery, segment]);
 
-  const visibleConversations = useMemo(() => {
-    const ordered = [...filteredConversations];
-    ordered.sort((a, b) => Number(b.unread) - Number(a.unread));
+    const orderedConversations = [...scopedConversations];
+    orderedConversations.sort((a, b) => {
+      const unreadDiff = Number(b.unread) - Number(a.unread);
+      if (unreadDiff !== 0) {
+        return unreadDiff;
+      }
 
-    return ordered;
-  }, [filteredConversations]);
+      const scoreDiff = (nextSearchInsights.get(b.id)?.score ?? 0) - (nextSearchInsights.get(a.id)?.score ?? 0);
+      if (scoreDiff !== 0) {
+        return scoreDiff;
+      }
+
+      return b.lastMessageTime.localeCompare(a.lastMessageTime);
+    });
+
+    return {
+      visibleConversations: orderedConversations,
+      searchInsights: nextSearchInsights,
+    };
+  }, [conversations, listings, searchQuery, segment, currentUser?.id, participantNameLookup]);
 
   const unreadCount = useMemo(
     () => conversations.filter((item) => item.unread).length,
@@ -185,9 +266,13 @@ export default function InboxScreen() {
     const isGroup = item.type === 'group';
     const seller = mockFind(MOCK_USERS, (u) => u.id === item.sellerId);
     const listing = listings.find((l) => l.id === item.itemId) || mockFind(MOCK_LISTINGS, (l) => l.id === item.itemId);
-    const displayTitle = isGroup ? item.title ?? 'Untitled Group' : seller?.username ?? 'Unknown user';
+    const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
+    const displayTitle = isGroup
+      ? item.title ?? 'Untitled Group'
+      : seller?.username ?? (counterpartyId ? participantNameLookup.get(counterpartyId) ?? counterpartyId : 'Unknown user');
     const memberCount = item.participantIds?.length ?? 0;
     const deployedBotCount = item.botIds?.length ?? 0;
+    const searchInsight = searchInsights.get(item.id);
 
     return (
       <Reanimated.View
@@ -195,8 +280,8 @@ export default function InboxScreen() {
           reducedMotionEnabled
             ? undefined
             : FadeInDown
-                .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                .duration(Motion.list.enterDuration)
+              .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+              .duration(Motion.list.enterDuration)
         }
       >
         <Swipeable
@@ -210,7 +295,10 @@ export default function InboxScreen() {
             style={styles.messageCard}
             onPress={() => {
               markConversationRead(item.id);
-              navigation.navigate('Chat', { conversationId: item.id });
+              navigation.navigate('Chat', {
+                conversationId: item.id,
+                focusQuery: searchQuery.trim() || undefined,
+              });
             }}
             activeOpacity={0.85}
             accessibilityLabel={`${displayTitle}${item.unread ? ', unread' : ''}, ${item.lastMessage}`}
@@ -254,6 +342,15 @@ export default function InboxScreen() {
               ) : null}
 
               <Text style={styles.snippet} numberOfLines={2}>{item.lastMessage}</Text>
+
+              {searchQuery.trim().length > 0 && searchInsight ? (
+                <View style={styles.searchHitRow}>
+                  <Ionicons name="sparkles-outline" size={12} color={Colors.textMuted} />
+                  <Text style={styles.searchHitText} numberOfLines={1}>
+                    Matched {searchInsight.matchedField}: {searchInsight.preview}
+                  </Text>
+                </View>
+              ) : null}
 
               {!isGroup && listing && (
                 <View style={styles.itemPreview}>
@@ -310,11 +407,11 @@ export default function InboxScreen() {
         <AppInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search conversations, members, listings"
+          placeholder="Search conversations, messages, members, listings"
           autoCapitalize="none"
           autoCorrect={false}
           accessibilityLabel="Search conversations"
-          accessibilityHint="Filters inbox conversations by keyword"
+          accessibilityHint="Searches across conversations, participants, listings, and message history"
           inputContainerStyle={styles.searchWrap}
           inputStyle={styles.searchInput}
           prefix={<Ionicons name="search" size={18} color={Colors.textMuted} />}
@@ -376,13 +473,17 @@ export default function InboxScreen() {
         </View>
 
         <Text style={styles.listMeta}>
-          {visibleConversations.length} conversation{visibleConversations.length === 1 ? '' : 's'} | {unreadCount} unread
+          {searchQuery.trim().length > 0
+            ? `${visibleConversations.length} matched thread${visibleConversations.length === 1 ? '' : 's'}`
+            : `${visibleConversations.length} conversation${visibleConversations.length === 1 ? '' : 's'}`}
+          {' | '}
+          {unreadCount} unread
         </Text>
       </View>
 
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
-        
+
         <AnimatedFlashList
           data={visibleConversations}
           keyExtractor={(c: any) => c.id}
@@ -644,6 +745,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   snippet: { color: Colors.textSecondary, fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 20, marginBottom: 10 },
+  searchHitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  searchHitText: {
+    flex: 1,
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+  },
 
   itemPreview: {
     flexDirection: 'row',

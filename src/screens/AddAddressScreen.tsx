@@ -20,6 +20,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { createUserAddress } from '../services/commerceApi';
+import { MOCK_USERS } from '../data/mockData';
+import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'AddAddress'>;
 const IS_LIGHT = ActiveTheme === 'light';
@@ -39,6 +41,7 @@ export default function AddAddressScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const saveAddress = useStore((state) => state.saveAddress);
   const { show } = useToast();
+  const supportUser = MOCK_USERS[0];
 
   const isFormValid = name.trim() && street.trim() && city.trim() && postcode.trim();
 
@@ -78,6 +81,15 @@ export default function AddAddressScreen({ navigation }: Props) {
     }
   };
 
+  const handleOpenDeliverySupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'delivery address setup',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for delivery setup help.', 'info');
+  }, [navigation, show, supportUser.id]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
@@ -104,6 +116,39 @@ export default function AddAddressScreen({ navigation }: Props) {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           
           <Text style={styles.heroCopy}>Where should we send your items?</Text>
+
+          <View style={styles.supportRow}>
+            <AnimatedPressable
+              style={styles.supportIdentity}
+              onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Open @${supportUser.username} profile`}
+              accessibilityHint="Shows delivery support profile"
+            >
+              <CachedImage
+                uri={supportUser.avatar}
+                style={styles.supportAvatar}
+                containerStyle={styles.supportAvatarWrap}
+                contentFit="cover"
+              />
+              <View style={styles.supportCopyWrap}>
+                <Text style={styles.supportTitle}>Need delivery help?</Text>
+                <Text style={styles.supportHandle}>@{supportUser.username}</Text>
+              </View>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={styles.supportMessageBtn}
+              onPress={handleOpenDeliverySupport}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Message delivery support"
+              accessibilityHint="Opens support chat for address setup"
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+            </AnimatedPressable>
+          </View>
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>Full Name</Text>
@@ -242,6 +287,59 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     marginBottom: 40,
     maxWidth: '80%',
+  },
+  supportRow: {
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  supportAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  supportCopyWrap: {
+    flex: 1,
+  },
+  supportTitle: {
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+  },
+  supportHandle: {
+    marginTop: 1,
+    fontSize: 10,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textMuted,
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   formGroup: { marginBottom: 24 },

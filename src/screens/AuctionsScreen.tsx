@@ -559,7 +559,34 @@ export default function AuctionsScreen() {
         </View>
 
         <Text style={styles.liveTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.liveSeller}>{t('auctions.seller.by', { seller: getUserLabel(item.sellerId) })}</Text>
+        <View style={styles.liveSellerRow}>
+          <AnimatedPressable
+            style={styles.liveSellerIdentity}
+            onPress={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${getUserLabel(item.sellerId)} profile`}
+            accessibilityHint="Shows seller profile details"
+          >
+            <Text style={styles.liveSeller}>{t('auctions.seller.by', { seller: getUserLabel(item.sellerId) })}</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={styles.liveSellerMessageBtn}
+            onPress={() =>
+              navigation.navigate('Chat', {
+                conversationId: `${item.sellerId}_${item.listingId}`,
+                focusQuery: getUserLabel(item.sellerId),
+                partnerUserId: item.sellerId,
+              })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Message ${getUserLabel(item.sellerId)}`}
+            accessibilityHint="Opens chat with this seller"
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
 
         <View style={styles.bidRow}>
           <Text style={styles.bidLabel}>{t('auctions.bid.current')}</Text>
@@ -1024,10 +1051,36 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   liveSeller: {
-    marginTop: 4,
     color: Colors.textSecondary,
     fontSize: 12,
     fontFamily: 'Inter_500Medium',
+  },
+  liveSellerRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  liveSellerIdentity: {
+    flex: 1,
+    minHeight: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_MUTED_BG,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+  },
+  liveSellerMessageBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_MUTED_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bidRow: {
     marginTop: 10,

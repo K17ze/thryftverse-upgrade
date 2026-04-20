@@ -32,6 +32,7 @@ import { CachedImage } from '../components/CachedImage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
+import { MOCK_USERS } from '../data/mockData';
 
 type Props = StackScreenProps<RootStackParamList, 'GlobalSearch'>;
 
@@ -48,6 +49,7 @@ interface RankedListing {
   image: string;
   price: number;
   likes: number;
+  sellerId: string;
   createdAt?: string;
   score: number;
   reason: string;
@@ -183,6 +185,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           image: listing.images[0] ?? `https://picsum.photos/seed/${listing.id}/500/600`,
           price: listing.price,
           likes: listing.likes,
+          sellerId: listing.sellerId,
           createdAt: listing.createdAt,
           score,
           reason: reasons[0] ?? 'Recommended from current market momentum',
@@ -360,6 +363,19 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     navigation.push('ItemDetail', { itemId: listingId });
   };
 
+  const handleOpenRecommendationSeller = (sellerId: string) => {
+    navigation.navigate('UserProfile', { userId: sellerId });
+  };
+
+  const handleMessageRecommendationSeller = (sellerId: string, listingId: string) => {
+    const sellerHandle = MOCK_USERS.find((entry) => entry.id === sellerId)?.username ?? sellerId;
+    navigation.navigate('Chat', {
+      conversationId: `${sellerId}_${listingId}`,
+      focusQuery: sellerHandle,
+      partnerUserId: sellerId,
+    });
+  };
+
   const renderSearchLoadingState = () => (
     <View style={styles.loadingStateWrap}>
       <View style={styles.loadingSection}>
@@ -486,36 +502,78 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
               {discoverListings.length > 0 ? (
                 <View style={styles.recoGrid}>
-                  {discoverListings.map((listing) => (
-                    <AnimatedPressable
-                      key={listing.id}
-                      style={styles.recoCard}
-                      activeOpacity={0.9}
-                      onPress={() => handleOpenRecommendation(listing.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
-                      accessibilityHint="Opens item detail"
-                    >
-                      <SharedTransitionView
-                        style={styles.recoImageContainer}
-                        sharedTransitionTag={`image-${listing.id}-0`}
-                      >
-                        <CachedImage
-                          uri={listing.image}
-                          style={styles.recoImage}
-                          contentFit="cover"
-                        />
-                      </SharedTransitionView>
-                      <View style={styles.recoBody}>
-                        <Text style={styles.recoReason} numberOfLines={1}>{listing.reason}</Text>
-                        <Text style={styles.recoTitle} numberOfLines={2}>{listing.title}</Text>
-                        <View style={styles.recoMetaRow}>
-                          <Text style={styles.recoBrand} numberOfLines={1}>{listing.brand}</Text>
-                          <Text style={styles.recoPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                  {discoverListings.map((listing) => {
+                    const seller = MOCK_USERS.find((entry) => entry.id === listing.sellerId);
+                    const sellerHandle = seller?.username ?? listing.sellerId;
+
+                    return (
+                      <View key={listing.id} style={styles.recoCardShell}>
+                        <AnimatedPressable
+                          style={styles.recoCard}
+                          activeOpacity={0.9}
+                          onPress={() => handleOpenRecommendation(listing.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                          accessibilityHint="Opens item detail"
+                        >
+                          <SharedTransitionView
+                            style={styles.recoImageContainer}
+                            sharedTransitionTag={`image-${listing.id}-0`}
+                          >
+                            <CachedImage
+                              uri={listing.image}
+                              style={styles.recoImage}
+                              contentFit="cover"
+                            />
+                          </SharedTransitionView>
+                          <View style={styles.recoBody}>
+                            <Text style={styles.recoReason} numberOfLines={1}>{listing.reason}</Text>
+                            <Text style={styles.recoTitle} numberOfLines={2}>{listing.title}</Text>
+                            <View style={styles.recoMetaRow}>
+                              <Text style={styles.recoBrand} numberOfLines={1}>{listing.brand}</Text>
+                              <Text style={styles.recoPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                            </View>
+                          </View>
+                        </AnimatedPressable>
+
+                        <View style={styles.recoSellerRow}>
+                          <AnimatedPressable
+                            style={styles.recoSellerChip}
+                            onPress={() => handleOpenRecommendationSeller(listing.sellerId)}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Open @${sellerHandle} profile`}
+                            accessibilityHint="Shows seller profile details"
+                          >
+                            {seller?.avatar ? (
+                              <CachedImage
+                                uri={seller.avatar}
+                                style={styles.recoSellerAvatar}
+                                containerStyle={styles.recoSellerAvatarWrap}
+                                contentFit="cover"
+                              />
+                            ) : (
+                              <View style={styles.recoSellerAvatarFallback}>
+                                <Ionicons name="person" size={10} color={Colors.textMuted} />
+                              </View>
+                            )}
+                            <Text style={styles.recoSellerText} numberOfLines={1}>@{sellerHandle}</Text>
+                          </AnimatedPressable>
+
+                          <AnimatedPressable
+                            style={styles.recoMessageBtn}
+                            onPress={() => handleMessageRecommendationSeller(listing.sellerId, listing.id)}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Message @${sellerHandle}`}
+                            accessibilityHint="Opens chat with this seller"
+                          >
+                            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+                          </AnimatedPressable>
                         </View>
                       </View>
-                    </AnimatedPressable>
-                  ))}
+                    );
+                  })}
                 </View>
               ) : (
                 <View style={styles.recoEmptyState}>
@@ -722,10 +780,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 12,
+    rowGap: 14,
+  },
+  recoCardShell: {
+    width: (SCREEN_WIDTH - 52) / 2,
   },
   recoCard: {
-    width: (SCREEN_WIDTH - 52) / 2,
+    width: '100%',
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
@@ -775,6 +836,59 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
+  },
+  recoSellerRow: {
+    marginTop: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  recoSellerChip: {
+    flex: 1,
+    minHeight: 28,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  recoSellerAvatarWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  recoSellerAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  recoSellerAvatarFallback: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+  },
+  recoSellerText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  recoMessageBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   recoEmptyState: {
     borderWidth: StyleSheet.hairlineWidth,

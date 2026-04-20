@@ -14,6 +14,7 @@ import ItemDetailScreen from '../screens/ItemDetailScreen';
 import FavouritesScreen from '../screens/FavouritesScreen';
 import PosterViewerScreen from '../screens/PosterViewerScreen';
 import CreatePosterScreen from '../screens/CreatePosterScreen';
+import PosterEditorScreen from '../screens/PosterEditorScreen';
 import CreateAuctionScreen from '../screens/CreateAuctionScreen';
 import CreateCoOwnScreen from '../screens/CreateSyndicateScreen';
 import MarketLedgerScreen from '../screens/MarketLedgerScreen';
@@ -153,6 +154,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Favourites" component={FavouritesScreen} />
       <Stack.Screen name="PosterViewer" component={PosterViewerScreen} options={modalScreenOptions} />
       <Stack.Screen name="CreatePoster" component={CreatePosterScreen} options={modalScreenOptions} />
+      <Stack.Screen name="PosterEditor" component={PosterEditorScreen} options={modalScreenOptions} />
       <Stack.Screen name="CreateAuction" component={CreateAuctionScreen} options={modalScreenOptions} />
       <Stack.Screen name="CreateCoOwn" component={CreateCoOwnScreen} options={modalScreenOptions} />
       <Stack.Screen name="MarketLedger" component={MarketLedgerScreen} />

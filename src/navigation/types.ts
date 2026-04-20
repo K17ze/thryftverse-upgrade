@@ -13,7 +13,23 @@ export type RootStackParamList = {
   ItemDetail: { itemId: string };
   Favourites: undefined;
   PosterViewer: { posterId: string };
-  CreatePoster: undefined;
+  CreatePoster:
+    | {
+        storyEditorResult?: {
+          text: string;
+          color: string;
+          position: 'top' | 'center' | 'bottom';
+          updatedAt: number;
+        };
+      }
+    | undefined;
+  PosterEditor: {
+    baseImageUri: string;
+    initialText?: string;
+    initialColor?: string;
+    initialPosition?: 'top' | 'center' | 'bottom';
+    createPosterRouteKey: string;
+  };
   CreateAuction: undefined;
   CreateCoOwn:
     | {
@@ -33,7 +49,11 @@ export type RootStackParamList = {
   AssetLeaderboard: undefined;
   Buyout: { assetId: string };
   CoOwnOnboarding: undefined;
-  Chat: { conversationId: string };
+  Chat: {
+    conversationId: string;
+    focusQuery?: string;
+    partnerUserId?: string;
+  };
   CreateGroupChat: undefined;
   GroupBotDirectory: { conversationId: string };
   UserProfile: { userId: string; isMe?: boolean };

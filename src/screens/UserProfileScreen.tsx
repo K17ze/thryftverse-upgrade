@@ -145,6 +145,20 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     }
   }, [displayHandle]);
 
+  const primaryListingId = profileListings[0]?.id;
+
+  const handleMessageProfile = React.useCallback(() => {
+    const conversationId = primaryListingId
+      ? `${profileUser.id}_${primaryListingId}`
+      : `profile_${profileUser.id}`;
+
+    navigation.navigate('Chat', {
+      conversationId,
+      focusQuery: displayUsername,
+      partnerUserId: profileUser.id,
+    });
+  }, [displayUsername, navigation, primaryListingId, profileUser.id]);
+
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -332,17 +346,38 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               }
             />
 
-            <AppButton
-              title="Share profile"
-              variant="secondary"
-              size="sm"
-              align="center"
-              style={styles.heroActionSecondary}
-              titleStyle={styles.heroActionSecondaryText}
-              onPress={handleShare}
-              accessibilityLabel="Share profile"
-              accessibilityHint="Opens share sheet for this user profile"
-            />
+            {isSelfProfile ? (
+              <AppButton
+                title="Share profile"
+                variant="secondary"
+                size="sm"
+                align="center"
+                style={styles.heroActionSecondary}
+                titleStyle={styles.heroActionSecondaryText}
+                onPress={handleShare}
+                accessibilityLabel="Share profile"
+                accessibilityHint="Opens share sheet for this user profile"
+              />
+            ) : (
+              <AppButton
+                title={isBlocked ? 'Unblock first' : 'Message'}
+                variant="secondary"
+                size="sm"
+                align="center"
+                style={styles.heroActionSecondary}
+                titleStyle={styles.heroActionSecondaryText}
+                onPress={() => {
+                  if (isBlocked) {
+                    show('This user is blocked. Unblock them before messaging.', 'info');
+                    return;
+                  }
+
+                  handleMessageProfile();
+                }}
+                accessibilityLabel={isBlocked ? 'Cannot message blocked user' : 'Message user'}
+                accessibilityHint={isBlocked ? 'Unblock this user before starting chat' : 'Opens chat with this user'}
+              />
+            )}
 
             <AnimatedPressable
               style={styles.heroActionIcon}

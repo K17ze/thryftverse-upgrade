@@ -374,6 +374,15 @@ export default function CheckoutScreen() {
     }
   };
 
+  const handleMessageSeller = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: `checkout_${seller.id}_${item.id}`,
+      focusQuery: item.title,
+      partnerUserId: seller.id,
+    });
+    show('Opening seller chat.', 'info');
+  }, [item.id, item.title, navigation, seller.id, show]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
@@ -393,7 +402,35 @@ export default function CheckoutScreen() {
           <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/checkout-item-fallback/300/400')} style={styles.itemThumb} contentFit="cover" />
           <View style={styles.itemInfo}>
             <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.itemSeller}>{t('checkout.header.fromSeller', { seller: seller.username })}</Text>
+            <View style={styles.itemSellerRow}>
+              <AnimatedPressable
+                style={styles.sellerIdentityChip}
+                onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open @${seller.username} profile`}
+                accessibilityHint="Shows seller profile"
+              >
+                <CachedImage
+                  uri={seller.avatar}
+                  style={styles.sellerIdentityAvatar}
+                  containerStyle={styles.sellerIdentityAvatarWrap}
+                  contentFit="cover"
+                />
+                <Text style={styles.itemSeller}>{t('checkout.header.fromSeller', { seller: seller.username })}</Text>
+              </AnimatedPressable>
+
+              <AnimatedPressable
+                style={styles.sellerMessageBtn}
+                onPress={handleMessageSeller}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Message seller"
+                accessibilityHint="Opens chat with this seller"
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
             <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP')}</Text>
           </View>
         </AppCard>
@@ -593,7 +630,46 @@ const styles = StyleSheet.create({
   itemThumb: { width: 64, height: 64, borderRadius: 12 },
   itemInfo: { flex: 1, justifyContent: 'center' },
   itemTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
-  itemSeller: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, marginBottom: 4 },
+  itemSellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
+  sellerIdentityChip: {
+    flex: 1,
+    minHeight: 30,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_SOFT_BG,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sellerIdentityAvatarWrap: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  sellerIdentityAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  itemSeller: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
+  sellerMessageBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   itemPrice: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
 
   readinessCard: {

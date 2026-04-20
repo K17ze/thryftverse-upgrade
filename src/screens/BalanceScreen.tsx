@@ -24,6 +24,8 @@ import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
 import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
+import { MOCK_USERS } from '../data/mockData';
+import { CachedImage } from '../components/CachedImage';
 import {
   confirmPaymentIntent,
   createPaymentIntent,
@@ -53,6 +55,7 @@ export default function BalanceScreen({ navigation }: Props) {
   const { formatFromFiat, formatFromIze } = useFormattedPrice();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
+  const supportUser = MOCK_USERS[0];
 
   const pendingBalance = 45;
 
@@ -189,6 +192,15 @@ export default function BalanceScreen({ navigation }: Props) {
     }
   };
 
+  const handleOpenWalletSupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'wallet setup',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for wallet help.', 'info');
+  }, [navigation, show, supportUser.id]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
@@ -211,6 +223,39 @@ export default function BalanceScreen({ navigation }: Props) {
           <Text style={styles.pegInfoText}>
             1ze is a closed-loop settlement credit. Live local reference value: {formatFromIze(1, { displayMode: 'fiat' })} per 1ze.
           </Text>
+        </View>
+
+        <View style={styles.supportRow}>
+          <AnimatedPressable
+            style={styles.supportIdentity}
+            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${supportUser.username} profile`}
+            accessibilityHint="Shows wallet support profile"
+          >
+            <CachedImage
+              uri={supportUser.avatar}
+              style={styles.supportAvatar}
+              containerStyle={styles.supportAvatarWrap}
+              contentFit="cover"
+            />
+            <View style={styles.supportCopyWrap}>
+              <Text style={styles.supportTitle}>Need wallet help?</Text>
+              <Text style={styles.supportHandle}>@{supportUser.username}</Text>
+            </View>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={styles.supportMessageBtn}
+            onPress={handleOpenWalletSupport}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Message wallet support"
+            accessibilityHint="Opens support chat for wallet issues"
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+          </AnimatedPressable>
         </View>
 
         <View style={styles.heroGroup}>
@@ -411,6 +456,60 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     fontFamily: 'Inter_600SemiBold',
+  },
+
+  supportRow: {
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  supportAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  supportCopyWrap: {
+    flex: 1,
+  },
+  supportTitle: {
+    color: Colors.textPrimary,
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+  },
+  supportHandle: {
+    marginTop: 1,
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontFamily: 'Inter_500Medium',
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   heroGroup: { marginBottom: 22, gap: 12 },

@@ -24,6 +24,8 @@ import { formatCountryPolicyScope, isPaymentMethodAllowed } from '../utils/capab
 import { createUserPaymentMethod } from '../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { parseApiError } from '../lib/apiClient';
+import { MOCK_USERS } from '../data/mockData';
+import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'AddCard'>;
 
@@ -46,6 +48,7 @@ export default function AddCardScreen({ navigation }: Props) {
   const [name, setName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
+  const supportUser = MOCK_USERS[0];
   const currentUser = useStore((state) => state.currentUser);
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
   const { show } = useToast();
@@ -159,6 +162,15 @@ export default function AddCardScreen({ navigation }: Props) {
     }
   };
 
+  const handleOpenPaymentSupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'card setup',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for card setup help.', 'info');
+  }, [navigation, show, supportUser.id]);
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
@@ -185,6 +197,39 @@ export default function AddCardScreen({ navigation }: Props) {
               <Text style={styles.blockedText}>Update your country policy or use supported payment rails.</Text>
             </View>
           ) : null}
+
+          <View style={styles.supportRow}>
+            <AnimatedPressable
+              style={styles.supportIdentity}
+              onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Open @${supportUser.username} profile`}
+              accessibilityHint="Shows payment support profile"
+            >
+              <CachedImage
+                uri={supportUser.avatar}
+                style={styles.supportAvatar}
+                containerStyle={styles.supportAvatarWrap}
+                contentFit="cover"
+              />
+              <View style={styles.supportCopyWrap}>
+                <Text style={styles.supportTitle}>Need help adding this card?</Text>
+                <Text style={styles.supportHandle}>@{supportUser.username}</Text>
+              </View>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={styles.supportMessageBtn}
+              onPress={handleOpenPaymentSupport}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Message payment support"
+              accessibilityHint="Opens chat for card setup help"
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+            </AnimatedPressable>
+          </View>
 
           {/* Card Preview */}
           <View style={styles.cardPreview}>
@@ -314,6 +359,59 @@ const styles = StyleSheet.create({
   },
   blockedTitle: { fontSize: 13, fontWeight: '700', color: TEXT, marginBottom: 4 },
   blockedText: { fontSize: 12, color: MUTED, lineHeight: 18 },
+  supportRow: {
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  supportAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  supportCopyWrap: {
+    flex: 1,
+  },
+  supportTitle: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  supportHandle: {
+    marginTop: 1,
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cardPreview: {
     backgroundColor: CARD_PREVIEW_BG,
     borderRadius: 20,

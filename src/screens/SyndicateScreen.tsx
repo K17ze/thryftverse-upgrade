@@ -37,6 +37,7 @@ import { formatIzeAmount, toIze } from '../utils/currency';
 import { parseApiError } from '../lib/apiClient';
 import { listCoOwnAssets, placeCoOwnOrder } from '../services/marketApi';
 import { t } from '../i18n';
+import { MOCK_USERS } from '../data/mockData';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type CoOwnView = 'ISSUED' | 'HOLDINGS';
@@ -76,6 +77,7 @@ export default function CoOwnScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const customCoOwns = useStore((state) => state.customCoOwns);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
+  const supportUser = MOCK_USERS[0];
 
   const actingUserId = currentUser?.id ?? 'u1';
 
@@ -251,6 +253,15 @@ export default function CoOwnScreen() {
     };
   }, [isSyncingAssets, marketAssets.length, remoteAssets.length, syncError]);
 
+  const handleOpenSyndicateSupport = React.useCallback(() => {
+    navigation.navigate('Chat', {
+      conversationId: 'c1',
+      focusQuery: 'co-own issuance and holdings',
+      partnerUserId: supportUser.id,
+    });
+    show('Opening support chat for co-own help.', 'info');
+  }, [navigation, show, supportUser.id]);
+
   const openUnitsComposer = (asset: CoOwnAsset, mode: ComposerMode) => {
     setComposerMode(mode);
     setSelectedAsset(asset);
@@ -344,6 +355,36 @@ export default function CoOwnScreen() {
     <View>
       <View style={styles.heroHeader}>
         <Text style={styles.heroTitle}>{t('syndicate.header.myCoOwn')}</Text>
+      </View>
+
+      <View style={styles.supportRow}>
+        <AnimatedPressable
+          style={styles.supportIdentity}
+          onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Open @${supportUser.username} profile`}
+          accessibilityHint="Shows co-own support profile"
+        >
+          <CachedImage
+            uri={supportUser.avatar}
+            style={styles.supportAvatar}
+            containerStyle={styles.supportAvatarWrap}
+            contentFit="cover"
+          />
+          <Text style={styles.supportText}>Need co-own help? @{supportUser.username}</Text>
+        </AnimatedPressable>
+
+        <AnimatedPressable
+          style={styles.supportMessageBtn}
+          onPress={handleOpenSyndicateSupport}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Message co-own support"
+          accessibilityHint="Opens support chat for co-own issuance and holdings"
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+        </AnimatedPressable>
       </View>
 
       <View style={styles.heroQuickRow}>
@@ -509,68 +550,116 @@ export default function CoOwnScreen() {
     const primaryDisabled = isHoldingsMode
       ? item.yourUnits === 0
       : !item.isOpen || item.availableUnits === 0;
+    const issuerUser = MOCK_USERS.find((user) => user.id === item.issuerId);
+    const issuerHandle = issuerUser?.username ?? item.issuerId;
+    const canMessageIssuer = currentUser?.id !== item.issuerId;
 
     return (
-      <AnimatedPressable
-        style={styles.assetCard}
-        activeOpacity={0.94}
-        onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${item.title}`}
-        accessibilityHint="Opens asset details and market activity"
-      >
-        <CachedImage uri={item.image} style={styles.assetImage} containerStyle={{ width: 54, height: 54, borderRadius: 14 }} contentFit="cover" />
+      <View style={styles.assetCard}>
+        <AnimatedPressable
+          style={styles.assetPrimaryTap}
+          activeOpacity={0.94}
+          onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${item.title}`}
+          accessibilityHint="Opens asset details and market activity"
+        >
+          <CachedImage uri={item.image} style={styles.assetImage} containerStyle={{ width: 54, height: 54, borderRadius: 14 }} contentFit="cover" />
 
-        <View style={styles.assetBody}>
-          <View style={styles.assetTopRow}>
-            <Text style={styles.assetTitle} numberOfLines={1}>{item.title}</Text>
-            <View style={[styles.movePill, moveIsPositive ? styles.movePillUp : styles.movePillDown]}>
-              <Ionicons
-                name={moveIsPositive ? 'trending-up-outline' : 'trending-down-outline'}
-                size={12}
-                color={moveIsPositive ? BRAND : '#ff9797'}
+          <View style={styles.assetBody}>
+            <View style={styles.assetTopRow}>
+              <Text style={styles.assetTitle} numberOfLines={1}>{item.title}</Text>
+              <View style={[styles.movePill, moveIsPositive ? styles.movePillUp : styles.movePillDown]}>
+                <Ionicons
+                  name={moveIsPositive ? 'trending-up-outline' : 'trending-down-outline'}
+                  size={12}
+                  color={moveIsPositive ? BRAND : '#ff9797'}
+                />
+                <Text style={[styles.moveText, moveIsPositive ? styles.moveTextUp : styles.moveTextDown]}>
+                  {moveIsPositive ? '+' : ''}{item.marketMovePct24h.toFixed(1)}%
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.assetIssuer}>{t('syndicate.asset.issuer', { issuer: getUserLabel(item.issuerId) })}</Text>
+
+            <View style={styles.assetBadgesRow}>
+              <View style={styles.assetBadgePill}>
+                <Text style={styles.assetBadgeText}>{settlementLabelMap.TVUSD}</Text>
+              </View>
+              <View style={styles.assetBadgePillMuted}>
+                <Text style={styles.assetBadgeTextMuted}>Local fiat reference</Text>
+              </View>
+            </View>
+
+            <View style={styles.priceRow}>
+              <Text style={styles.pricePrimary}>{t('syndicate.asset.pricePerUnit', { price: formatIzeAmount(unitPriceIze) })}</Text>
+              <Text style={styles.priceSecondary}>{formatFromFiat(item.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}</Text>
+            </View>
+
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${Math.max(4, soldPct)}%` }]} />
+            </View>
+
+            <View style={styles.metaRow}>
+              <Text style={styles.metaText}>
+                {t('syndicate.asset.meta.unitsLeft', { available: item.availableUnits, total: item.totalUnits })}
+              </Text>
+              <Text style={styles.metaText}>{t('syndicate.asset.meta.holders', { count: item.holders })}</Text>
+            </View>
+
+            {item.yourUnits > 0 ? (
+              <View style={styles.pnlRow}>
+                <Text style={styles.metaText}>{t('syndicate.asset.meta.entry', { amount: formatMoney(avgEntry) })}</Text>
+                <Text style={[styles.pnlValue, unrealized >= 0 ? styles.pnlUp : styles.pnlDown]}>
+                  {t('syndicate.asset.meta.unrealized', { amount: formatSigned(unrealized) })}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </AnimatedPressable>
+
+        <View style={styles.assetFooter}>
+          <View style={styles.assetIssuerActionRow}>
+            <AnimatedPressable
+              style={styles.assetIssuerIdentity}
+              onPress={() => navigation.navigate('UserProfile', { userId: item.issuerId })}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Open @${issuerHandle} profile`}
+              accessibilityHint="Shows issuer profile details"
+            >
+              <CachedImage
+                uri={issuerUser?.avatar ?? 'https://picsum.photos/seed/syndicate-issuer-fallback/80/80'}
+                style={styles.assetIssuerAvatar}
+                containerStyle={styles.assetIssuerAvatarWrap}
+                contentFit="cover"
               />
-              <Text style={[styles.moveText, moveIsPositive ? styles.moveTextUp : styles.moveTextDown]}>
-                {moveIsPositive ? '+' : ''}{item.marketMovePct24h.toFixed(1)}%
-              </Text>
-            </View>
+              <Text style={styles.assetIssuerActionText} numberOfLines={1}>Issuer @{issuerHandle}</Text>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={[styles.assetMessageBtn, !canMessageIssuer && styles.assetMessageBtnDisabled]}
+              onPress={() => {
+                if (!canMessageIssuer) {
+                  return;
+                }
+
+                navigation.navigate('Chat', {
+                  conversationId: `${item.issuerId}_${item.listingId}`,
+                  focusQuery: issuerHandle,
+                  partnerUserId: item.issuerId,
+                });
+              }}
+              disabled={!canMessageIssuer}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={canMessageIssuer ? `Message @${issuerHandle}` : 'Issuer is you'}
+              accessibilityHint={canMessageIssuer ? 'Opens chat with issuer' : 'Messaging yourself is disabled'}
+            >
+              <Ionicons name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'} size={12} color={Colors.textPrimary} />
+            </AnimatedPressable>
           </View>
-
-          <Text style={styles.assetIssuer}>{t('syndicate.asset.issuer', { issuer: getUserLabel(item.issuerId) })}</Text>
-
-          <View style={styles.assetBadgesRow}>
-            <View style={styles.assetBadgePill}>
-              <Text style={styles.assetBadgeText}>{settlementLabelMap.TVUSD}</Text>
-            </View>
-            <View style={styles.assetBadgePillMuted}>
-              <Text style={styles.assetBadgeTextMuted}>Local fiat reference</Text>
-            </View>
-          </View>
-
-          <View style={styles.priceRow}>
-            <Text style={styles.pricePrimary}>{t('syndicate.asset.pricePerUnit', { price: formatIzeAmount(unitPriceIze) })}</Text>
-            <Text style={styles.priceSecondary}>{formatFromFiat(item.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}</Text>
-          </View>
-
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${Math.max(4, soldPct)}%` }]} />
-          </View>
-
-          <View style={styles.metaRow}>
-            <Text style={styles.metaText}>
-              {t('syndicate.asset.meta.unitsLeft', { available: item.availableUnits, total: item.totalUnits })}
-            </Text>
-            <Text style={styles.metaText}>{t('syndicate.asset.meta.holders', { count: item.holders })}</Text>
-          </View>
-
-          {item.yourUnits > 0 ? (
-            <View style={styles.pnlRow}>
-              <Text style={styles.metaText}>{t('syndicate.asset.meta.entry', { amount: formatMoney(avgEntry) })}</Text>
-              <Text style={[styles.pnlValue, unrealized >= 0 ? styles.pnlUp : styles.pnlDown]}>
-                {t('syndicate.asset.meta.unrealized', { amount: formatSigned(unrealized) })}
-              </Text>
-            </View>
-          ) : null}
 
           <View style={styles.ctaRow}>
             <AnimatedPressable
@@ -619,7 +708,7 @@ export default function CoOwnScreen() {
             </AnimatedPressable>
           </View>
         </View>
-      </AnimatedPressable>
+      </View>
     );
   };
 
@@ -869,6 +958,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 10,
+  },
+  supportRow: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  supportIdentity: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarWrap: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  supportAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  supportText: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroTitle: {
     fontSize: Typography.size.hero,
@@ -1172,6 +1307,9 @@ const styles = StyleSheet.create({
     borderColor: PANEL_BORDER,
     backgroundColor: PANEL_BG,
   },
+  assetPrimaryTap: {
+    width: '100%',
+  },
   assetImage: {
     width: '100%',
     height: 160,
@@ -1306,8 +1444,62 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Inter_500Medium',
   },
+  assetFooter: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: PANEL_BORDER,
+    paddingHorizontal: 12,
+    paddingTop: 9,
+    paddingBottom: 12,
+    gap: 10,
+  },
+  assetIssuerActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  assetIssuerIdentity: {
+    flex: 1,
+    minHeight: 30,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_SOFT_BG,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  assetIssuerAvatarWrap: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  assetIssuerAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  assetIssuerActionText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+  },
+  assetMessageBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_SOFT_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  assetMessageBtnDisabled: {
+    opacity: 0.55,
+  },
   ctaRow: {
-    marginTop: 12,
     flexDirection: 'row',
     gap: 8,
   },

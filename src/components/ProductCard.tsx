@@ -29,9 +29,10 @@ interface Props {
   item: Listing;
   onPress: () => void;
   compact?: boolean;
+  onPressSeller?: (sellerId: string) => void;
 }
 
-export function ProductCard({ item, onPress, compact }: Props) {
+export function ProductCard({ item, onPress, compact, onPressSeller }: Props) {
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
   const { show } = useToast();
@@ -47,87 +48,117 @@ export function ProductCard({ item, onPress, compact }: Props) {
     }
   };
 
+  const handlePressSeller = () => {
+    if (!onPressSeller) {
+      return;
+    }
+
+    onPressSeller(item.sellerId);
+  };
+
   const conditionLabel =
     item.condition === 'New with tags' ? 'NEW' :
     item.condition === 'Very good' ? 'MINT' :
     item.condition === 'Good' ? 'GOOD' : undefined;
 
   return (
-    <AnimatedPressable style={[styles.container, compact && styles.containerCompact]} onPress={onPress} accessibilityLabel={`${item.title} by ${item.brand}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.isSold ? ', sold' : ''}`}>
-      <View style={[styles.imageContainer, compact && styles.imageContainerCompact]}>
-        <SharedTransitionView
-          style={styles.sharedMediaLayer}
-          sharedTransitionTag={`image-${item.id}-0`}
-        >
-          <CachedImage
-            uri={item.images[0]}
-            style={styles.image}
-            contentFit="cover"
-            priority={compact ? 'low' : 'normal'}
-          />
-        </SharedTransitionView>
+    <View style={[styles.container, compact && styles.containerCompact]}>
+      <AnimatedPressable onPress={onPress} accessibilityLabel={`${item.title} by ${item.brand}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.isSold ? ', sold' : ''}`}>
+        <View style={[styles.imageContainer, compact && styles.imageContainerCompact]}>
+          <SharedTransitionView
+            style={styles.sharedMediaLayer}
+            sharedTransitionTag={`image-${item.id}-0`}
+          >
+            <CachedImage
+              uri={item.images[0]}
+              style={styles.image}
+              contentFit="cover"
+              priority={compact ? 'low' : 'normal'}
+            />
+          </SharedTransitionView>
 
-        {/* Sold overlay */}
-        {item.isSold && (
-          <View style={styles.soldOverlay}>
-            <Text style={styles.soldText}>SOLD</Text>
+          {/* Sold overlay */}
+          {item.isSold && (
+            <View style={styles.soldOverlay}>
+              <Text style={styles.soldText}>SOLD</Text>
+            </View>
+          )}
+
+          {/* Condition chip - top left */}
+          {conditionLabel && !item.isSold && (
+            <View style={styles.conditionChip}>
+              <Text style={styles.conditionText}>{conditionLabel}</Text>
+            </View>
+          )}
+
+          {/* Multi-image indicator - top right */}
+          {(hasMultipleMedia || hasVideoMedia) && (
+            <View style={styles.multiImageBadge}>
+              <Ionicons name={hasVideoMedia ? 'videocam-outline' : 'images-outline'} size={11} color="#fff" />
+            </View>
+          )}
+
+          {/* Animated Favourite Button */}
+          <View style={styles.favBtn}>
+            <AnimatedHeart
+              isActive={isFav}
+              onToggle={handleToggle}
+              size={18}
+              activeColor={Colors.danger}
+              inactiveColor="#ffffff"
+            />
           </View>
-        )}
 
-        {/* Condition chip - top left */}
-        {conditionLabel && !item.isSold && (
-          <View style={styles.conditionChip}>
-            <Text style={styles.conditionText}>{conditionLabel}</Text>
+          {/* Seller avatar - visual only */}
+          <View style={styles.sellerAvatarWrap}>
+            <CachedImage
+              uri={seller.avatar}
+              style={styles.sellerAvatar}
+              containerStyle={styles.sellerAvatarContainer}
+              contentFit="cover"
+              transition={200}
+            />
           </View>
-        )}
-
-        {/* Multi-image indicator - top right */}
-        {(hasMultipleMedia || hasVideoMedia) && (
-          <View style={styles.multiImageBadge}>
-            <Ionicons name={hasVideoMedia ? 'videocam-outline' : 'images-outline'} size={11} color="#fff" />
-          </View>
-        )}
-
-        {/* Animated Favourite Button */}
-        <View style={styles.favBtn}>
-          <AnimatedHeart
-            isActive={isFav}
-            onToggle={handleToggle}
-            size={18}
-            activeColor={Colors.danger}
-            inactiveColor="#ffffff"
-          />
         </View>
 
-        {/* Seller avatar - bottom left */}
-        <View style={styles.sellerAvatarWrap}>
+        <View style={styles.info}>
+          <Text style={styles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+          <Text style={styles.brand} numberOfLines={1}>@{item.brand.toLowerCase()}</Text>
+          <View style={styles.engagementRow}>
+            <View style={styles.engagementItem}>
+              <Ionicons name="heart" size={10} color={Colors.textMuted} />
+              <Text style={styles.engagementText}>{item.likes}</Text>
+            </View>
+            {item.views !== undefined && (
+              <View style={styles.engagementItem}>
+                <Ionicons name="eye-outline" size={10} color={Colors.textMuted} />
+                <Text style={styles.engagementText}>{item.views}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </AnimatedPressable>
+
+      {onPressSeller ? (
+        <AnimatedPressable
+          style={styles.sellerLinkRow}
+          onPress={handlePressSeller}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Open @${seller.username} profile`}
+          accessibilityHint="Shows seller profile details"
+        >
           <CachedImage
             uri={seller.avatar}
-            style={styles.sellerAvatar}
-            containerStyle={styles.sellerAvatarContainer}
+            style={styles.sellerLinkAvatar}
+            containerStyle={styles.sellerLinkAvatarWrap}
             contentFit="cover"
             transition={200}
           />
-        </View>
-      </View>
-
-      <View style={styles.info}>
-        <Text style={styles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
-        <Text style={styles.brand} numberOfLines={1}>@{item.brand.toLowerCase()}</Text>
-        <View style={styles.engagementRow}>
-          <View style={styles.engagementItem}>
-            <Ionicons name="heart" size={10} color={Colors.textMuted} />
-            <Text style={styles.engagementText}>{item.likes}</Text>
-          </View>
-          {item.views !== undefined && (
-            <View style={styles.engagementItem}>
-              <Ionicons name="eye-outline" size={10} color={Colors.textMuted} />
-              <Text style={styles.engagementText}>{item.views}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </AnimatedPressable>
+          <Text style={styles.sellerLinkText} numberOfLines={1}>Seller: @{seller.username}</Text>
+        </AnimatedPressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -255,5 +286,33 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 13,
+  },
+  sellerLinkRow: {
+    marginTop: 6,
+    minHeight: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  sellerLinkAvatarWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  sellerLinkAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  sellerLinkText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: Typography.size.micro,
+    fontFamily: Typography.family.medium,
   },
 });

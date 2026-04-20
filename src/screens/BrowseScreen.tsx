@@ -33,6 +33,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { MOCK_USERS } from '../data/mockData';
+import { mockFind } from '../utils/mockGate';
 
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 16;
@@ -72,6 +74,8 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, showToast, formatPrice, reducedMotionEnabled }: any) => {
   const isWishlisted = wishlist.includes(item.id);
   const haptic = useHaptic();
+  const seller = mockFind(MOCK_USERS, (user) => user.id === item.sellerId);
+  const sellerHandle = seller?.username ?? item.sellerId ?? 'seller';
   const heartScale = useSharedValue(0);
   const likeBtnScale = useSharedValue(1);
 
@@ -174,6 +178,45 @@ const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, sho
           <Text style={styles.sizeText}>{item.size} • {item.condition}</Text>
         </View>
       </AnimatedPressable>
+
+      <View style={styles.sellerActionRow}>
+        <AnimatedPressable
+          style={styles.sellerIdentityChip}
+          onPress={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Open @${sellerHandle} profile`}
+          accessibilityHint="Shows seller profile details"
+        >
+          {seller?.avatar ? (
+            <CachedImage
+              uri={seller.avatar}
+              style={styles.sellerActionAvatar}
+              containerStyle={styles.sellerActionAvatarWrap}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={styles.sellerActionAvatarFallback}>
+              <Ionicons name="person" size={10} color={Colors.textMuted} />
+            </View>
+          )}
+          <Text style={styles.sellerActionHandle} numberOfLines={1}>@{sellerHandle}</Text>
+        </AnimatedPressable>
+
+        <AnimatedPressable
+          style={styles.sellerMessageBtn}
+          onPress={() => navigation.navigate('Chat', {
+            conversationId: `${item.sellerId}_${item.id}`,
+            focusQuery: sellerHandle,
+            partnerUserId: item.sellerId,
+          })}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Message @${sellerHandle}`}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+        </AnimatedPressable>
+      </View>
     </Reanimated.View>
   );
 };
@@ -585,4 +628,57 @@ const styles = StyleSheet.create({
   priceText: { color: Colors.textPrimary, fontSize: 18, fontFamily: 'Inter_700Bold' },
   brandText: { color: Colors.textSecondary, fontSize: 12, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
   sizeText: { color: Colors.textMuted, fontSize: 13, fontFamily: 'Inter_500Medium' },
+  sellerActionRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  sellerIdentityChip: {
+    flex: 1,
+    minHeight: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  sellerActionAvatarWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  sellerActionAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  sellerActionAvatarFallback: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.cardAlt,
+  },
+  sellerActionHandle: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  sellerMessageBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.cardAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
