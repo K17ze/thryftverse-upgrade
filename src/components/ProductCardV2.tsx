@@ -58,7 +58,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false }: 
         {/* Sold overlay */}
         {item.isSold && (
           <View style={styles.soldOverlay}>
-            <T.BodyEmphasis color={Colors.textInverse}>SOLD</T.BodyEmphasis>
+            <T.BodyEmphasis color="#FFFFFF">SOLD</T.BodyEmphasis>
           </View>
         )}
 
@@ -68,7 +68,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false }: 
             <Ionicons
               name={hasVideo ? 'videocam' : 'images'}
               size={12}
-              color={Colors.textInverse}
+              color="#FFFFFF"
             />
           </View>
         )}
@@ -80,7 +80,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false }: 
             onToggle={handleToggleFav}
             size={20}
             activeColor={Colors.danger}
-            inactiveColor={Colors.textInverse}
+            inactiveColor="#FFFFFF"
           />
         </View>
       </AnimatedPressable>

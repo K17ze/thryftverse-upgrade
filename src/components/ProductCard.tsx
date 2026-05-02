@@ -15,6 +15,8 @@ import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { haptics } from '../utils/haptics';
+import { getAccessibilityProps, accessibilityLabels, MIN_TOUCH_TARGET } from '../utils/accessibility';
 import { Ionicons } from '@expo/vector-icons';
 import { isVideoUri } from '../utils/media';
 import { SharedTransitionView } from './SharedTransitionView';
@@ -30,21 +32,31 @@ interface Props {
   onPress: () => void;
   compact?: boolean;
   onPressSeller?: (sellerId: string) => void;
+  onSaveToCollection?: (itemId: string) => void; // Opens collection selection modal
 }
 
-export function ProductCard({ item, onPress, compact, onPressSeller }: Props) {
+export function ProductCard({ item, onPress, compact, onPressSeller, onSaveToCollection }: Props) {
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
+  const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere(item.id));
+  const getItemCollections = useStore((state) => state.getItemCollections(item.id));
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const seller = mockFind(MOCK_USERS, (u) => u.id === item.sellerId) || MOCK_USERS[0];
   const hasVideoMedia = item.images.some((uri) => isVideoUri(uri));
   const hasMultipleMedia = item.images.length > 1;
 
-  const handleToggle = () => {
+  const handleToggleFav = () => {
     toggleFav(item.id);
     if (!isFav) {
+      haptics.like();
       show('Added to wishlist ♥', 'success');
+    }
+  };
+
+  const handleSavePress = () => {
+    if (onSaveToCollection) {
+      onSaveToCollection(item.id);
     }
   };
 
@@ -98,14 +110,28 @@ export function ProductCard({ item, onPress, compact, onPressSeller }: Props) {
             </View>
           )}
 
-          {/* Animated Favourite Button */}
-          <View style={styles.favBtn}>
+          {/* Action Buttons Row */}
+          <View style={styles.actionBtns}>
+            {/* Save to Collection Button */}
+            <AnimatedPressable onPress={handleSavePress} style={styles.saveBtn}>
+              <Ionicons
+                name={isItemSavedAnywhere ? 'bookmark' : 'bookmark-outline'}
+                size={18}
+                color={isItemSavedAnywhere ? Colors.brand : Colors.textPrimary}
+              />
+              {isItemSavedAnywhere && getItemCollections.length > 0 && (
+                <View style={styles.saveBadge}>
+                  <Text style={styles.saveBadgeText}>{getItemCollections.length}</Text>
+                </View>
+              )}
+            </AnimatedPressable>
+
+            {/* Animated Favourite Button */}
             <AnimatedHeart
               isActive={isFav}
-              onToggle={handleToggle}
+              onToggle={handleToggleFav}
               size={18}
               activeColor={Colors.danger}
-              inactiveColor="#ffffff"
             />
           </View>
 
@@ -190,7 +216,7 @@ const styles = StyleSheet.create({
   },
   soldOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.overlay,
+    backgroundColor: 'rgba(10, 10, 10, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -259,16 +285,44 @@ const styles = StyleSheet.create({
     fontSize: Typography.size.micro,
     fontFamily: Typography.family.medium,
   },
-  favBtn: {
+  actionBtns: {
     position: 'absolute',
     bottom: 8,
     right: 8,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  saveBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: CHIP_BG,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  saveBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBadgeText: {
+    color: Colors.background,
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
+  },
+  favIcon: {
+    // Style for AnimatedHeart wrapper
+  },
+  favBtn: {
+    // Deprecated - replaced by actionBtns
+    display: 'none',
   },
   sellerAvatarWrap: {
     position: 'absolute',
@@ -289,11 +343,11 @@ const styles = StyleSheet.create({
   },
   sellerLinkRow: {
     marginTop: 6,
-    minHeight: 28,
+    minHeight: MIN_TOUCH_TARGET.default,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,

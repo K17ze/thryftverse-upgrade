@@ -41,7 +41,14 @@ import { parseApiError } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AppButton } from '../components/ui/AppButton';
+import { SimpleChatMessageList } from '../components/ChatMessageList';
 import { AppStatusPill } from '../components/ui/AppStatusPill';
+// Chat UI/UX Elevation Components
+import { SwipeableMessage } from '../components/SwipeableMessage';
+import { VoiceMessagePlayer } from '../components/VoiceMessagePlayer';
+import { TypingIndicator } from '../components/TypingIndicator';
+import { AttachmentMenu } from '../components/AttachmentMenu';
+import { OfferBubble } from '../components/OfferBubble';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'Chat'>;
@@ -201,7 +208,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
   const [latestInviteLink, setLatestInviteLink] = useState<string | null>(null);
   const [latestInviteMeta, setLatestInviteMeta] = useState<string | null>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
+  // scrollViewRef removed - now using FlatList in SimpleChatMessageList
   const { formatFromFiat } = useFormattedPrice();
 
   const messageTelemetry = useMemo(() => {
@@ -307,7 +314,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const pushMessage = (next: Message) => {
     setMessages((prev) => [...prev, next]);
-    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    // Scroll handled by SimpleChatMessageList internally
   };
 
   const appendToConversationStore = (next: Message, senderIdOverride?: string) => {
@@ -884,27 +891,30 @@ export default function ChatScreen({ navigation, route }: Props) {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.messageList}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24, gap: 16 }}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-        >
-          {visibleMessages.length ? (
-            visibleMessages.map((msg) => renderMessage(msg))
-          ) : (
-            <View style={styles.emptySearchState}>
-              <Ionicons name="search-outline" size={24} color={MUTED} />
-              <Text style={styles.emptySearchTitle}>No messages in this scope</Text>
-              <Text style={styles.emptySearchSubtitle}>
-                {inboxFocusQuery
-                  ? 'No timeline entries matched your Inbox search scope. Clear scope to view the full thread.'
-                  : 'Try another filter.'}
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+        {visibleMessages.length ? (
+          <SimpleChatMessageList
+            messages={visibleMessages.map((msg) => ({
+              id: msg.id,
+              text: msg.text || (msg.offer ? `Offer: $${msg.offer.price}` : ''),
+              sender: msg.sender,
+              senderLabel: msg.senderLabel,
+              timestamp: msg.date || 'just now',
+              status: msg.sender === 'me' ? 'sent' : undefined,
+              type: msg.type,
+            }))}
+            isGroup={isGroup}
+          />
+        ) : (
+          <View style={styles.emptySearchState}>
+            <Ionicons name="search-outline" size={24} color={MUTED} />
+            <Text style={styles.emptySearchTitle}>No messages in this scope</Text>
+            <Text style={styles.emptySearchSubtitle}>
+              {inboxFocusQuery
+                ? 'No timeline entries matched your Inbox search scope. Clear scope to view the full thread.'
+                : 'Try another filter.'}
+            </Text>
+          </View>
+        )}
 
         {/* Floating Input Row */}
         <View style={styles.inputContainer}>

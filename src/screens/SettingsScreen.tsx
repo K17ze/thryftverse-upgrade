@@ -1,6 +1,5 @@
 import React from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { View,
   Text,
   StyleSheet,
@@ -11,6 +10,12 @@ import { View,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
+import { 
+  SettingsCell, 
+  SettingsGroup, 
+  SettingsSectionHeader, 
+  SettingsSectionFooter 
+} from '../components/SettingsCell';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -38,7 +43,7 @@ type Props = StackScreenProps<RootStackParamList, 'Settings'>;
 const ACCENT = '#d7b98f';
 const IS_LIGHT = ActiveTheme === 'light';
 const BRAND = IS_LIGHT ? '#2f251b' : ACCENT;
-const PANEL_BG = Colors.card;
+const PANEL_BG = Colors.surface;
 const PANEL_BORDER = Colors.border;
 
 interface SettingItem {
@@ -64,6 +69,13 @@ export default function SettingsScreen({ navigation }: Props) {
   const [themePickerVisible, setThemePickerVisible] = React.useState(false);
   const [languagePickerVisible, setLanguagePickerVisible] = React.useState(false);
   const [themePreference, setThemePreference] = React.useState<ThemePreference>('system');
+
+  // Additional toggle states
+  const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+  const [marketingEnabled, setMarketingEnabled] = React.useState(false);
+
+  const toggleNotifications = () => setNotificationsEnabled(v => !v);
+  const toggleMarketing = () => setMarketingEnabled(v => !v);
   const {
     currencyCode,
     displayModeLabel,
@@ -325,73 +337,237 @@ export default function SettingsScreen({ navigation }: Props) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-        {/* Profile Hub */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('settings.section.profileHub.title')}</Text>
-          <Text style={styles.sectionDesc}>{t('settings.section.profileHub.desc')}</Text>
-        </View>
-        <View style={styles.pillCard}>
-          {profileHubItems.map((item, i) => renderSettingRow(item, i === profileHubItems.length - 1))}
-        </View>
+        {/* Profile */}
+        <SettingsSectionHeader title="Profile" />
+        <SettingsGroup>
+          <SettingsCell
+            icon="person-circle-outline"
+            iconColor={Colors.brand}
+            title="Edit Profile"
+            value=""
+            isFirst={true}
+            onPress={() => navigation.navigate('EditProfile')}
+          />
+          <SettingsCell
+            icon="ribbon-outline"
+            iconColor="#FFD700"
+            title="Badges"
+            value="3 earned"
+            onPress={() => navigation.navigate('EditProfile')}
+          />
+          <SettingsCell
+            icon="shield-checkmark-outline"
+            iconColor={Colors.success}
+            title="Verification"
+            value="Verified"
+            isLast={true}
+            onPress={() => navigation.navigate('EditProfile')}
+          />
+        </SettingsGroup>
+        <SettingsSectionFooter text="Manage your profile and verification status." />
+
+        {/* Storage */}
+        <SettingsSectionHeader title="Storage" />
+        <SettingsGroup>
+          <SettingsCell
+            icon="cloud-download-outline"
+            iconColor={Colors.brand}
+            title="Manage Downloads"
+            value=""
+            isFirst={true}
+            onPress={() => {}}
+          />
+          <SettingsCell
+            icon="trash-outline"
+            iconColor={Colors.danger}
+            title="Clear Cache"
+            value="180 MB"
+            isLast={true}
+            onPress={() => console.log('Clear cache')}
+          />
+        </SettingsGroup>
+        <SettingsSectionFooter text="Clear cached images and downloaded content." />
+
+        {/* Security */}
+        <SettingsSectionHeader title="Security" />
+        <SettingsGroup>
+          <SettingsCell
+            icon="lock-closed-outline"
+            iconColor={Colors.success}
+            title="Two-Factor Authentication"
+            value="Off"
+            isFirst={true}
+            onPress={() => navigation.navigate('TwoFactorSetup')}
+          />
+          <SettingsCell
+            icon="phone-portrait-outline"
+            iconColor={Colors.brand}
+            title="Active Devices"
+            value="3 devices"
+            isLast={true}
+            onPress={() => navigation.navigate('AccountSettings')}
+          />
+        </SettingsGroup>
+        <SettingsSectionFooter text="Secure your account with additional protection." />
+
+        {/* Commerce */}
+        <SettingsSectionHeader title="Commerce" />
+        <SettingsGroup>
+          <SettingsCell
+            icon="wallet-outline"
+            iconColor={Colors.success}
+            title="Payout Method"
+            value="Bank •••• 4242"
+            isFirst={true}
+            onPress={() => navigation.navigate('Payments')}
+          />
+          <SettingsCell
+            icon="cube-outline"
+            iconColor="#FF9800"
+            title="Shipping Profiles"
+            value="2 saved"
+            isLast={true}
+            onPress={() => navigation.navigate('Postage')}
+          />
+        </SettingsGroup>
 
         {/* Account */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('settings.section.account.title')}</Text>
-          <Text style={styles.sectionDesc}>{t('settings.section.account.desc')}</Text>
-        </View>
-        <View style={styles.pillCard}>
-          {accountItems.map((item, i) => renderSettingRow(item, i === accountItems.length - 1))}
-        </View>
+        <SettingsSectionHeader title="Account" />
+        <SettingsGroup>
+          <SettingsCell
+            icon="person-outline"
+            iconColor={Colors.brand}
+            title="Personal Information"
+            value="John Doe"
+            isFirst={true}
+            onPress={() => navigation.navigate('EditProfile')}
+          />
+          <SettingsCell
+            icon="lock-closed-outline"
+            iconColor={Colors.success}
+            title="Password"
+            value="••••••••"
+            onPress={() => navigation.navigate('ChangePassword')}
+          />
+          <SettingsCell
+            icon="card-outline"
+            iconColor="#4CAF50"
+            title="Payment Methods"
+            value="2 cards"
+            onPress={() => navigation.navigate('Payments')}
+          />
+          <SettingsCell
+            icon="location-outline"
+            iconColor="#FF9800"
+            title="Addresses"
+            value="3 saved"
+            isLast={true}
+            onPress={() => navigation.navigate('AddAddress')}
+          />
+        </SettingsGroup>
 
         {/* Notifications */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('settings.section.notifications.title')}</Text>
-          <Text style={styles.sectionDesc}>{t('settings.section.notifications.desc')}</Text>
-        </View>
-        <View style={styles.pillCard}>
-          {notifItems.map((item, i) => renderSettingRow(item, i === notifItems.length - 1))}
-        </View>
+        <SettingsSectionHeader title="Notifications" />
+        <SettingsGroup>
+          <SettingsCell
+            icon="notifications-outline"
+            iconColor={Colors.brand}
+            title="Push Notifications"
+            variant="toggle"
+            toggleValue={notificationsEnabled}
+            onToggle={toggleNotifications}
+            isFirst={true}
+          />
+          <SettingsCell
+            icon="mail-outline"
+            iconColor="#4CAF50"
+            title="Email Notifications"
+            variant="toggle"
+            toggleValue={emailNotificationsEnabled}
+            onToggle={toggleEmailNotifications}
+            onPress={() => navigation.navigate('PushNotifications')}
+          />
+          <SettingsCell
+            icon="megaphone-outline"
+            iconColor="#FF9800"
+            title="Marketing Preferences"
+            variant="toggle"
+            toggleValue={marketingEnabled}
+            onToggle={toggleMarketing}
+            isLast={true}
+            onPress={() => navigation.navigate('PushNotifications')}
+          />
+        </SettingsGroup>
 
         {/* App */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('settings.section.app.title')}</Text>
-          <Text style={styles.sectionDesc}>{t('settings.section.app.desc')}</Text>
-        </View>
-        <View style={styles.pillCard}>
-          {appItems.map((item, i) => renderSettingRow(item, i === appItems.length - 1))}
-        </View>
+        <SettingsSectionHeader title="App" />
+        <SettingsGroup>
+          <SettingsCell
+            icon="swap-horizontal-outline"
+            iconColor={Colors.brand}
+            title="Currency Display"
+            value={displayModeLabel}
+            isFirst={true}
+            onPress={cycleDisplayMode}
+          />
+          <SettingsCell
+            icon="globe-outline"
+            iconColor="#64B5F6"
+            title="Local Currency"
+            value={`${currencyCode} (${CURRENCIES[currencyCode].symbol})`}
+            onPress={() => setCurrencyPickerVisible(true)}
+          />
+          <SettingsCell
+            icon="color-palette-outline"
+            iconColor="#BB86FC"
+            title="Theme"
+            value={getThemePreferenceLabel(themePreference)}
+            isLast={true}
+            onPress={() => setThemePickerVisible(true)}
+          />
+        </SettingsGroup>
 
         {/* Support */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('settings.section.support.title')}</Text>
-          <Text style={styles.sectionDesc}>{t('settings.section.support.desc')}</Text>
-        </View>
-        <View style={styles.pillCard}>
-          {supportItems.map((item, i) => renderSettingRow(item, i === supportItems.length - 1))}
-        </View>
+        <SettingsSectionHeader title="Support" />
+        <SettingsGroup>
+          <SettingsCell
+            icon="help-circle-outline"
+            iconColor={Colors.brand}
+            title="Help & Support"
+            subtitle="FAQs, contact us, and more"
+            isFirst={true}
+            onPress={() => navigation.navigate('HelpSupport')}
+          />
+          <SettingsCell
+            icon="document-text-outline"
+            iconColor="#a0a0a0"
+            title="Terms of Service"
+            onPress={() => handleOpenExternal('https://thryftverse.app/terms')}
+          />
+          <SettingsCell
+            icon="shield-checkmark-outline"
+            iconColor="#a0a0a0"
+            title="Privacy Policy"
+            isLast={true}
+            onPress={() => handleOpenExternal('https://thryftverse.app/privacy')}
+          />
+        </SettingsGroup>
+        <SettingsSectionFooter text="By using ThryftVerse, you agree to our Terms of Service and Privacy Policy." />
 
         {/* Logout */}
-        <AnimatedPressable 
-          style={styles.logoutPill} 
-          activeOpacity={0.8}
-          accessibilityLabel={t('settings.a11y.logout')}
-          accessibilityRole="button"
-          accessibilityHint="Signs out and returns to the authentication screen"
-          onPress={async () => {
-            await logoutFromSession();
-            logout();
-            navigation.replace('AuthLanding');
-          }}
-        >
-          <View style={styles.logoutIconWrap}>
-            <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
-          </View>
-          <View style={styles.logoutCopy}>
-            <Text style={styles.logoutText}>{t('settings.logout')}</Text>
-            <Text style={styles.logoutSubtext}>{t('settings.logout.subtitle')}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={Colors.danger} />
-        </AnimatedPressable>
+        <SettingsGroup style={{ marginTop: 8 }}>
+          <SettingsCell
+            variant="destructive"
+            title="Log Out"
+            isFirst={true}
+            isLast={true}
+            onPress={async () => {
+              await logoutFromSession();
+              logout();
+              navigation.replace('AuthLanding');
+            }}
+          />
+        </SettingsGroup>
 
         {/* Version */}
         <Text style={styles.versionText}>{t('settings.version', { version: '1.0.0' })}</Text>
@@ -442,7 +618,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -478,7 +654,7 @@ const styles = StyleSheet.create({
 
   // Pill cards
   pillCard: {
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     marginBottom: Space.xs,
     overflow: 'hidden',

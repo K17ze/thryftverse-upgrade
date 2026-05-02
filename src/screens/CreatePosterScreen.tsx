@@ -51,16 +51,16 @@ const EXPIRY_SEGMENT_OPTIONS: AppSegmentOption<ExpiryOption>[] = EXPIRY_OPTIONS.
 }));
 
 const IS_LIGHT = ActiveTheme === 'light';
-const TRADE_ACCENT = Colors.accentGold;
+const TRADE_ACCENT = Colors.brand;
 const HEADER_BORDER = Colors.border;
-const HEADER_BUTTON_BG = Colors.card;
-const PANEL_BG = Colors.card;
+const HEADER_BUTTON_BG = Colors.surface;
+const PANEL_BG = Colors.surface;
 const PANEL_BORDER = Colors.border;
-const CHIP_BG = Colors.card;
+const CHIP_BG = Colors.surface;
 const CHIP_BORDER = Colors.border;
 const CHIP_ACTIVE_BG = IS_LIGHT ? '#ede4d3' : '#2f291f';
 const CHIP_ACTIVE_TEXT = TRADE_ACCENT;
-const IMAGE_BTN_DISABLED_BG = IS_LIGHT ? Colors.cardAlt : '#101010';
+const IMAGE_BTN_DISABLED_BG = IS_LIGHT ? Colors.surface : '#101010';
 const IMAGE_BTN_DISABLED_BORDER = IS_LIGHT ? Colors.border : '#252525';
 
 export default function CreatePosterScreen() {
@@ -410,7 +410,7 @@ export default function CreatePosterScreen() {
             {[
               { key: 'marketplace', label: 'Marketplace', icon: 'pricetag-outline' },
               { key: 'co-own', label: 'Co-Own', icon: 'people-outline' },
-              { key: 'auction', label: 'Auction', icon: 'gavel-outline' },
+              { key: 'auction', label: 'Auction', icon: 'hammer-outline' },
               { key: 'blank', label: 'Blank', icon: 'color-palette-outline' },
             ].map((mode) => (
               <AnimatedPressable
@@ -877,11 +877,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
   },
   modeChipActive: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
   },
   modeChipText: {
     color: Colors.textPrimary,

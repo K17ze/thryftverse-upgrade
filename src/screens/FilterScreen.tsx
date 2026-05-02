@@ -35,8 +35,6 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
-import { MOCK_USERS } from '../data/mockData';
-import { CachedImage } from '../components/CachedImage';
 import { useToast } from '../context/ToastContext';
 
 const { height, width } = Dimensions.get('window');
@@ -46,11 +44,11 @@ const IS_LIGHT = ActiveTheme === 'light';
 const OVERLAY_BG = IS_LIGHT ? 'rgba(14, 12, 10, 0.34)' : 'rgba(0,0,0,0.6)';
 const SHEET_BG = Colors.surface;
 const HANDLE_BG = Colors.borderLight;
-const CHIP_BG = Colors.card;
+const CHIP_BG = Colors.surface;
 const CHIP_BORDER = Colors.border;
 const DIVIDER_COLOR = Colors.border;
 const RETRY_BANNER_BG = IS_LIGHT ? 'rgba(255,255,255,0.95)' : 'rgba(26,26,26,0.95)';
-const RETRY_BUTTON_BG = IS_LIGHT ? Colors.cardAlt : '#111';
+const RETRY_BUTTON_BG = IS_LIGHT ? Colors.surface : '#111';
 const FOOTER_BG = IS_LIGHT ? 'rgba(247, 245, 241, 0.96)' : 'rgba(10, 10, 10, 0.95)';
 const APPLY_DISABLED_BG = IS_LIGHT ? Colors.borderLight : '#333';
 
@@ -108,8 +106,6 @@ export default function FilterScreen() {
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
   const { show } = useToast();
-  const supportUser = MOCK_USERS[0];
-
   const categoryId = route.params?.categoryId ?? 'search';
   const title = route.params?.title;
   const subcategoryId = route.params?.subcategoryId;
@@ -251,12 +247,12 @@ export default function FilterScreen() {
     const selectedSizeKeys = new Set(selectedSizes.map((size) => size.toLowerCase()));
 
     return listings.filter((listing) => {
-      if (normalizedCategory !== 'search' && listing.category.toLowerCase() !== normalizedCategory) {
+      if (normalizedCategory !== 'search' && listing.category?.toLowerCase() !== normalizedCategory) {
         return false;
       }
 
       if (normalizedCategory !== 'search' && normalizedSubcategory) {
-        if (!listing.subcategory.toLowerCase().includes(normalizedSubcategory)) {
+        if (!listing.subcategory?.toLowerCase()?.includes(normalizedSubcategory)) {
           return false;
         }
       }
@@ -269,19 +265,20 @@ export default function FilterScreen() {
           listing.category,
           listing.subcategory,
         ]
+          .filter(Boolean)
           .join(' ')
           .toLowerCase();
 
-        if (!searchable.includes(query)) {
+        if (!searchable?.includes(query)) {
           return false;
         }
       }
 
-      if (selectedBrandKeys.size > 0 && !selectedBrandKeys.has(listing.brand.toLowerCase())) {
+      if (selectedBrandKeys.size > 0 && !selectedBrandKeys.has(listing.brand?.toLowerCase() ?? '')) {
         return false;
       }
 
-      if (selectedSizeKeys.size > 0 && !selectedSizeKeys.has(listing.size.toLowerCase())) {
+      if (selectedSizeKeys.size > 0 && !selectedSizeKeys.has(listing.size?.toLowerCase() ?? '')) {
         return false;
       }
 
@@ -312,15 +309,6 @@ export default function FilterScreen() {
 
   const resultCount = getResultsCount();
   const applyLabel = showFilterLoadingState ? 'Loading options...' : `Show ${resultCount} items`;
-
-  const handleOpenFilterSupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: title ?? categoryId,
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for filter help.', 'info');
-  }, [categoryId, navigation, show, supportUser.id, title]);
 
   return (
     <View style={styles.container}>
@@ -368,22 +356,6 @@ export default function FilterScreen() {
               </Text>
             </AnimatedPressable>
 
-            <AnimatedPressable
-              style={styles.contextMessageBtn}
-              onPress={handleOpenFilterSupport}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={`Message @${supportUser.username}`}
-              accessibilityHint="Opens support chat for filter help"
-            >
-              <CachedImage
-                uri={supportUser.avatar}
-                style={styles.contextAvatar}
-                containerStyle={styles.contextAvatarWrap}
-                contentFit="cover"
-              />
-              <Ionicons name="chatbubble-ellipses-outline" size={10} color={Colors.textPrimary} />
-            </AnimatedPressable>
           </View>
 
           {lastError ? (
@@ -499,7 +471,7 @@ export default function FilterScreen() {
                 titleStyle={[styles.applyBtnText, showFilterLoadingState && styles.applyBtnTextDisabled]}
                 onPress={handleApply}
                 disabled={showFilterLoadingState}
-                variant="contrast"
+                variant="primary"
                 size="lg"
                 align="center"
                 accessibilityLabel={applyLabel}
@@ -554,7 +526,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  clearText: { color: Colors.accent, fontSize: Typography.size.body, fontFamily: Typography.family.semibold },
+  clearText: { color: Colors.brand, fontSize: Typography.size.body, fontFamily: Typography.family.semibold },
   statusRow: {
     paddingHorizontal: 24,
     paddingBottom: 10,
@@ -593,27 +565,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-  },
-  contextMessageBtn: {
-    minHeight: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: CHIP_BORDER,
-    backgroundColor: CHIP_BG,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  contextAvatarWrap: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-  },
-  contextAvatar: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
   },
   syncRetryBanner: {
     marginHorizontal: 24,
@@ -664,7 +615,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  seeAllText: { color: Colors.accent, fontSize: Typography.size.body, fontFamily: Typography.family.semibold },
+  seeAllText: { color: Colors.brand, fontSize: Typography.size.body, fontFamily: Typography.family.semibold },
 
   hScroll: { paddingHorizontal: 20, gap: 10 },
   
@@ -715,7 +666,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   applyBtnText: {
-    color: Colors.textInverse,
+    color: Colors.textPrimary,
     fontSize: Typography.size.bodyLarge,
     fontFamily: Typography.family.bold,
     letterSpacing: Typography.tracking.wide,

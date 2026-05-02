@@ -77,7 +77,7 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 }
 
 const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, showToast, formatPrice, reducedMotionEnabled }: any) => {
-  const isWishlisted = wishlist.includes(item.id);
+  const isWishlisted = wishlist?.includes(item.id) ?? false;
   const haptic = useHaptic();
   const seller = mockFind(MOCK_USERS, (user) => user.id === item.sellerId);
   const sellerHandle = seller?.username ?? item.sellerId ?? 'seller';
@@ -281,12 +281,12 @@ export default function BrowseScreen() {
     const selectedSizes = new Set(browseFilters.sizes.map((size) => size.toLowerCase()));
 
     const baseList = listings.filter((listing) => {
-      if (normalizedCategory !== 'search' && listing.category.toLowerCase() !== normalizedCategory) {
+      if (normalizedCategory !== 'search' && listing.category?.toLowerCase() !== normalizedCategory) {
         return false;
       }
 
       if (normalizedCategory !== 'search' && normalizedSubcategory) {
-        return listing.subcategory.toLowerCase().includes(normalizedSubcategory);
+        return listing.subcategory?.toLowerCase()?.includes(normalizedSubcategory) ?? false;
       }
 
       return true;
@@ -301,19 +301,20 @@ export default function BrowseScreen() {
           listing.category,
           listing.subcategory,
         ]
+          .filter(Boolean)
           .join(' ')
           .toLowerCase();
 
-        if (!searchable.includes(normalizedQuery)) {
+        if (!searchable?.includes(normalizedQuery)) {
           return false;
         }
       }
 
-      if (selectedBrands.size > 0 && !selectedBrands.has(listing.brand.toLowerCase())) {
+      if (selectedBrands.size > 0 && !selectedBrands.has(listing.brand?.toLowerCase() ?? '')) {
         return false;
       }
 
-      if (selectedSizes.size > 0 && !selectedSizes.has(listing.size.toLowerCase())) {
+      if (selectedSizes.size > 0 && !selectedSizes.has(listing.size?.toLowerCase() ?? '')) {
         return false;
       }
 
@@ -402,12 +403,12 @@ export default function BrowseScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <AppButton
             style={styles.filterPill}
-            variant="contrast"
+            variant="primary"
             size="sm"
             align="center"
             title={hasActiveFilters ? 'Filter on' : 'Filter'}
             titleStyle={styles.filterPillTextActive}
-            icon={<Ionicons name="options-outline" size={16} color={Colors.textInverse} />}
+            icon={<Ionicons name="options-outline" size={16} color={Colors.background} />}
             onPress={() => navigation.navigate('Filter', { categoryId, subcategoryId, title })}
             accessibilityLabel="Open filters"
           />
@@ -503,7 +504,7 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  searchBtn: { width: 44, height: 44, borderRadius: Radius.full, backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center' },
+  searchBtn: { width: 44, height: 44, borderRadius: Radius.full, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   
   titleContainer: {
     paddingHorizontal: Space.md,
@@ -539,7 +540,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 24, 
   },
-  filterPillTextActive: { color: Colors.textInverse, fontSize: 13, fontFamily: 'Inter_700Bold' },
+  filterPillTextActive: { color: Colors.background, fontSize: 13, fontFamily: 'Inter_700Bold' },
   filterPillOutline: {
     minHeight: 40,
     paddingHorizontal: 16,
@@ -619,7 +620,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -641,7 +642,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.background,
   },
   sellerActionHandle: {
     flex: 1,
@@ -655,7 +656,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -17,15 +17,14 @@ import { MOCK_USERS } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
-import { createGroupConversationOnApi, joinGroupByInviteOnApi } from '../services/chatApi';
+import { createGroupConversationOnApi } from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
-import { extractGroupInviteToken } from '../utils/groupInviteLink';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateGroupChat'>;
 
-const PANEL = Colors.card;
+const PANEL = Colors.surface;
 const BORDER = Colors.border;
-const PANEL_ALT = Colors.cardAlt;
+const PANEL_ALT = Colors.border;
 
 export default function CreateGroupChatScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
@@ -36,8 +35,6 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const [title, setTitle] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
-  const [inviteInput, setInviteInput] = useState('');
-  const [isJoining, setIsJoining] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const members = useMemo(
@@ -49,7 +46,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
     if (!searchQuery.trim()) return members;
     const query = searchQuery.toLowerCase();
     return members.filter(
-      (user) => user.username.toLowerCase().includes(query)
+      (user) => user.username?.toLowerCase()?.includes(query) ?? false
     );
   }, [members, searchQuery]);
 
@@ -94,27 +91,6 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
     }
   };
 
-  const handleJoinViaInvite = async () => {
-    const inviteToken = extractGroupInviteToken(inviteInput);
-    if (!inviteToken) {
-      show('Paste a valid invite link or invite token.', 'error');
-      return;
-    }
-
-    setIsJoining(true);
-
-    try {
-      const result = await joinGroupByInviteOnApi(inviteToken);
-      upsertConversation(result.conversation);
-      show(result.joined ? 'Joined group successfully.' : 'You are already in this group.', 'success');
-      navigation.replace('Chat', { conversationId: result.conversation.id });
-    } catch (error) {
-      const parsedError = parseApiError(error, 'Unable to join group with invite link.');
-      show(parsedError.message, 'error');
-    } finally {
-      setIsJoining(false);
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -147,28 +123,6 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           />
         </View>
 
-        <View style={styles.joinCard}>
-          <Text style={styles.label}>Join with invite link</Text>
-          <TextInput
-            value={inviteInput}
-            onChangeText={setInviteInput}
-            placeholder="Paste invite link or token"
-            placeholderTextColor={Colors.textMuted}
-            style={styles.input}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <AnimatedPressable
-            style={[styles.joinBtn, (!inviteInput.trim() || isJoining) && styles.joinBtnDisabled]}
-            activeOpacity={0.9}
-            onPress={() => {
-              void handleJoinViaInvite();
-            }}
-            disabled={!inviteInput.trim() || isJoining}
-          >
-            <Text style={styles.joinBtnText}>{isJoining ? 'Joining...' : 'Join Group'}</Text>
-          </AnimatedPressable>
-        </View>
 
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Members (optional)</Text>
@@ -225,7 +179,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
                   <Ionicons
                     name={selected ? 'checkmark-circle' : 'ellipse-outline'}
                     size={22}
-                    color={selected ? Colors.accent : Colors.textMuted}
+                    color={selected ? Colors.brand : Colors.textMuted}
                   />
                 </AnimatedPressable>
 
@@ -380,7 +334,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   memberRowSelected: {
-    borderColor: Colors.accent,
+    borderColor: Colors.brand,
     backgroundColor: PANEL_ALT,
   },
   memberAvatar: {
@@ -413,7 +367,7 @@ const styles = StyleSheet.create({
   },
   joinBtn: {
     marginTop: 8,
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: PANEL,
     borderRadius: 20,
     height: 40,
     borderWidth: 1,
@@ -432,7 +386,7 @@ const styles = StyleSheet.create({
   },
   createBtn: {
     marginTop: 'auto',
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
     borderRadius: 26,
     height: 52,
     alignItems: 'center',
@@ -442,7 +396,7 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   createBtnText: {
-    color: Colors.textInverse,
+    color: Colors.textPrimary,
     fontFamily: 'Inter_700Bold',
     fontSize: 15,
   },

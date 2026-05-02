@@ -203,6 +203,20 @@ export default function MyOrdersScreen() {
 
   const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
 
+  // Helper to get status color
+  const getStatusColor = (status: string): string => {
+    const statusColors: Record<string, string> = {
+      'pending': '#F59E0B', // amber
+      'confirmed': '#3B82F6', // blue
+      'shipped': '#8B5CF6', // purple
+      'delivered': '#22C55E', // green
+      'completed': '#22C55E', // green
+      'cancelled': '#EF4444', // red
+      'refunded': '#6B7280', // gray
+    };
+    return statusColors[status.toLowerCase()] || Colors.textMuted;
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
@@ -311,7 +325,9 @@ export default function MyOrdersScreen() {
                         <CachedImage uri={getListingCoverUri(order.item.images, 'https://picsum.photos/seed/order-thumb-fallback/300/400')} style={styles.orderThumb} contentFit="cover" />
                         <View style={styles.orderInfo}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text style={[styles.orderStatus, order.isDone && styles.orderStatusDone]}>{order.status}</Text>
+                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '15' }]}>
+                              <Text style={[styles.orderStatus, { color: getStatusColor(order.status) }]}>{order.status}</Text>
+                            </View>
                             {order.buyer && <Text style={styles.buyerText}>to {order.buyer.username}</Text>}
                           </View>
                           <Text style={styles.orderTitle} numberOfLines={1}>{order.item.title}</Text>
@@ -374,17 +390,17 @@ export default function MyOrdersScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16, gap: 12 },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   hugeTitle: { fontSize: 34, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, letterSpacing: -0.5 },
   
-  tabsContainer: { marginHorizontal: 20, backgroundColor: Colors.card, borderRadius: 24, padding: 4, marginBottom: 16 },
+  tabsContainer: { marginHorizontal: 20, backgroundColor: Colors.surface, borderRadius: 24, padding: 4, marginBottom: 16 },
   tabBtn: { flex: 1, paddingVertical: 12, borderRadius: 20, borderWidth: 0, backgroundColor: 'transparent' },
-  activeTabBtn: { backgroundColor: Colors.cardAlt },
+  activeTabBtn: { backgroundColor: 'rgba(99, 102, 241, 0.12)' },
   tabText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted },
   activeTabText: { color: Colors.textPrimary },
 
   filterStrip: { marginBottom: 16, marginHorizontal: 20, gap: 10 },
-  filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border },
+  filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   activeFilterPill: { backgroundColor: Colors.textPrimary, borderColor: Colors.textPrimary },
   filterText: { fontSize: 13, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
   activeFilterText: { color: Colors.background, fontFamily: 'Inter_700Bold' },
@@ -394,15 +410,16 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginTop: 16 },
   emptySub: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, textAlign: 'center', marginTop: 8 },
 
-  cardGroup: { backgroundColor: Colors.card, borderRadius: 24, padding: 16, marginBottom: 16 },
+  cardGroup: { backgroundColor: Colors.surface, borderRadius: 24, padding: 16, marginBottom: 16 },
   orderSummaryTap: {
     borderRadius: 16,
   },
   orderRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   orderThumb: { width: 70, height: 70, borderRadius: 16 },
   orderInfo: { flex: 1, justifyContent: 'center' },
-  orderStatus: { fontSize: 13, fontFamily: 'Inter_700Bold', color: Colors.accent, marginBottom: 4, letterSpacing: 0.5 },
-  orderStatusDone: { fontSize: 13, fontFamily: 'Inter_700Bold', color: Colors.success, marginBottom: 4, letterSpacing: 0.5 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  orderStatus: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
+  orderStatusDone: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
   orderTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
   orderTracking: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginBottom: 4 },
   orderPrice: { fontSize: 14, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
@@ -436,7 +453,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.surface,
   },
   counterpartyMessageBtnText: {
     fontSize: 11,

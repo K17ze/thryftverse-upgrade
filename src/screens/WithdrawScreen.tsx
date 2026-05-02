@@ -271,7 +271,7 @@ export default function WithdrawScreen() {
 
       if (
         activeCapabilities
-        && !activeCapabilities.payouts.supportedCurrencies.includes(payoutCurrency)
+        && !activeCapabilities.payouts.supportedCurrencies?.includes(payoutCurrency)
       ) {
         throw new Error(
           `Payout currency ${payoutCurrency} is unavailable for your country policy. Update your payout account.`

@@ -192,7 +192,7 @@ export default function CheckoutScreen() {
 
         setPostageOption(fallbackOption);
 
-        if (!savedAddress?.id && !savedAddress?.postcode) {
+        if (!savedAddress?.id && !savedAddress?.postalCode) {
           return;
         }
 
@@ -201,7 +201,7 @@ export default function CheckoutScreen() {
             buyerId: currentUser.id,
             listingId: item.id,
             addressId: savedAddress?.id,
-            destinationPostcode: savedAddress?.postcode,
+            destinationPostcode: savedAddress?.postalCode,
             preferredCarrierId: primaryCarrier.id,
             declaredValueGbp: item.price,
           });
@@ -238,7 +238,7 @@ export default function CheckoutScreen() {
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id, savedAddress?.id, savedAddress?.postcode, item.id, item.price]);
+  }, [currentUser?.id, savedAddress?.id, savedAddress?.postalCode, item.id, item.price]);
 
   const checkoutStatus = React.useMemo(() => {
     if (isSubmittingPayment) {
@@ -289,9 +289,13 @@ export default function CheckoutScreen() {
           saveAddress({
             id: preferredAddress.id,
             name: preferredAddress.name,
-            street: preferredAddress.street,
+            streetAddress: preferredAddress.streetAddress,
+            apartment: preferredAddress.apartment,
             city: preferredAddress.city,
-            postcode: preferredAddress.postcode,
+            region: preferredAddress.region,
+            postalCode: preferredAddress.postalCode,
+            countryCode: preferredAddress.countryCode,
+            country: preferredAddress.country,
             isDefault: preferredAddress.isDefault,
           });
         }
@@ -466,15 +470,19 @@ export default function CheckoutScreen() {
           activeOpacity={0.8}
           onPress={() => setAddAddressSheetVisible(true)}
           accessibilityLabel={savedAddress
-            ? t('checkout.a11y.deliveryAddress', { street: savedAddress.street })
+            ? t('checkout.a11y.deliveryAddress', { street: savedAddress.streetAddress })
             : t('checkout.a11y.addDeliveryAddress')}
         >
           <View style={styles.blockLeft}>
             <Ionicons name="location-outline" size={24} color={Colors.textPrimary} />
             <View style={styles.blockTextCol}>
-              <Text style={styles.blockTitle}>{savedAddress ? savedAddress.street : t('checkout.delivery.addAddress')}</Text>
+              <Text style={styles.blockTitle}>
+                {savedAddress ? `${savedAddress.streetAddress}${savedAddress.apartment ? `, ${savedAddress.apartment}` : ''}` : t('checkout.delivery.addAddress')}
+              </Text>
               <Text style={styles.blockSub}>
-                {savedAddress ? `${savedAddress.city} | ${savedAddress.postcode}` : t('checkout.delivery.required')}
+                {savedAddress
+                  ? `${savedAddress.city}${savedAddress.region ? `, ${savedAddress.region}` : ''} | ${savedAddress.postalCode} | ${savedAddress.country}`
+                  : t('checkout.delivery.required')}
               </Text>
             </View>
           </View>

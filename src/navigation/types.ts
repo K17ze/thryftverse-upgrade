@@ -87,6 +87,8 @@ export type RootStackParamList = {
   // Phase 24 new screens
   GlobalSearch: undefined;
   AddAddress: undefined;
+  // Collections feature
+  CollectionDetail: { collectionId: string };
   // Phase 25 new screens
   Filter:
     | {

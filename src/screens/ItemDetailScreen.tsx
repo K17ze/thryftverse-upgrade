@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   AnimatedPressable
 } from '../components/AnimatedPressable';
@@ -9,7 +9,11 @@ import {
   ScrollView,
   StatusBar,
   Dimensions,
-  Share
+  Share,
+  Modal,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { BlurView } from 'expo-blur';
@@ -57,6 +61,18 @@ export default function ItemDetailScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  // Collection modal state
+  const [collectionModalVisible, setCollectionModalVisible] = useState(false);
+  const [newCollectionName, setNewCollectionName] = useState('');
+  const [showCreateInput, setShowCreateInput] = useState(false);
+
+  // Get collection functions from store
+  const collections = useStore((state) => state.collections);
+  const addToCollection = useStore((state) => state.addToCollection);
+  const removeFromCollection = useStore((state) => state.removeFromCollection);
+  const isInCollection = useStore((state) => state.isInCollection);
+  const createCollection = useStore((state) => state.createCollection);
+  const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
 
   const isFav = useStore(state => state.isWishlisted(route.params?.itemId));
   const toggleFav = useStore(state => state.toggleWishlist);
@@ -71,9 +87,9 @@ export default function ItemDetailScreen() {
   const seller: User = mockFind(MOCK_USERS, u => u.id === item.sellerId) ?? MOCK_USERS[0];
   const sellerItems = listings.filter(l => l.sellerId === seller.id && l.id !== item.id);
 
+  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const haptic = useHaptic();
-  const { formatFromFiat } = useFormattedPrice();
 
   const detailStatus = React.useMemo(
     () =>
@@ -143,6 +159,14 @@ export default function ItemDetailScreen() {
     opacity: bigHeartOpacity.value,
     transform: [{ scale: bigHeartScale.value }],
   }));
+
+  const onShare = useCallback(() => {
+    handleShare();
+  }, [handleShare]);
+
+  const onToggleSaved = useCallback(() => {
+    handleToggleFav();
+  }, [handleToggleFav]);
 
   return (
     <View style={styles.container}>
@@ -243,12 +267,15 @@ export default function ItemDetailScreen() {
           <View style={styles.descriptionBox}>
             <Text style={styles.description}>{item.description}</Text>
             <Text style={styles.timePosted}>Posted 2 hours ago in {seller.location}</Text>
-            <View style={styles.statsRow}>
-              <Ionicons name="eye-outline" size={16} color={Colors.textMuted} />
-              <Text style={styles.statsText}>{item.likes * 12} Views</Text>
-              <Ionicons name="heart-outline" size={16} color={Colors.textMuted} style={{ marginLeft: 12 }} />
-              <Text style={styles.statsText}>{item.likes} Likes</Text>
-            </View>
+            <TouchableOpacity onPress={onShare} style={styles.headerAction}>
+              <Ionicons name="share-outline" size={24} color={Colors.textPrimary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setCollectionModalVisible(true)} style={styles.headerAction}>
+              <Ionicons name="add-circle-outline" size={26} color={isItemSavedAnywhere(item?.id) ? Colors.brand : Colors.textPrimary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onToggleSaved} style={styles.headerAction}>
+              <AnimatedHeart size={24} isActive={isFav} onToggle={handleToggleFav} />
+            </TouchableOpacity>
           </View>
 
           {/* ── Seller Card ── */}
@@ -337,6 +364,83 @@ export default function ItemDetailScreen() {
           />
         </Reanimated.View>
       )}
+
+      {/* Collection Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={collectionModalVisible}
+        onRequestClose={() => setCollectionModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add to Collection</Text>
+              <TouchableOpacity onPress={() => setCollectionModalVisible(false)}>
+                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {collections.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No collections yet</Text>
+                <TouchableOpacity
+                  style={styles.createCollectionBtn}
+                  onPress={() => {
+                    setCollectionModalVisible(false);
+                    navigation.navigate('Collections');
+                  }}
+                >
+                  <Text style={styles.createCollectionBtnText}>Create Collection</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <FlatList
+                data={collections}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item: collection }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.collectionItem,
+                      isInCollection(collection.id, item?.id) && styles.collectionItemSelected
+                    ]}
+                    onPress={() => {
+                      if (isInCollection(collection.id, item?.id)) {
+                        removeFromCollection(collection.id, item?.id);
+                        show(`Removed from ${collection.name}`, 'info');
+                      } else {
+                        addToCollection(collection.id, item?.id);
+                        show(`Added to ${collection.name}`, 'success');
+                      }
+                    }}
+                  >
+                    <View style={styles.collectionInfo}>
+                      <Text style={styles.collectionName}>{collection.name}</Text>
+                      <Text style={styles.collectionCount}>
+                        {collection.itemIds.length} items
+                      </Text>
+                    </View>
+                    {isInCollection(collection.id, item?.id) && (
+                      <Ionicons name="checkmark-circle" size={24} color={Colors.brand} />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+
+            <TouchableOpacity
+              style={styles.createNewBtn}
+              onPress={() => {
+                setCollectionModalVisible(false);
+                navigation.navigate('Collections');
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={Colors.brand} />
+              <Text style={styles.createNewBtnText}>Create New Collection</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -456,9 +560,96 @@ const styles = StyleSheet.create({
     padding: Space.lg,
     borderRadius: Radius.xl,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  headerAction: {
+    padding: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: Colors.textMuted,
+    marginBottom: 16,
+  },
+  createCollectionBtn: {
+    backgroundColor: Colors.brand,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  createCollectionBtnText: {
+    color: Colors.background,
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  collectionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: PANEL_BG,
+  },
+  collectionItemSelected: {
+    borderWidth: 2,
+    borderColor: Colors.brand,
+  },
+  collectionInfo: {
+    flex: 1,
+  },
+  collectionName: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textPrimary,
+  },
+  collectionCount: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  createNewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  createNewBtnText: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.brand,
   },
   description: { fontSize: 15, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, lineHeight: 24 },
   timePosted: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 12 },

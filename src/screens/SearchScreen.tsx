@@ -17,6 +17,7 @@ import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProductCardV2 } from '../components/ProductCardV2';
+import { ProductCard } from '../components/ProductCard';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Radius } from '../theme/designTokens';
 import { Typography } from '../constants/typography';
@@ -203,21 +204,24 @@ export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [likedLooks, setLikedLooks] = useState<Record<string, boolean>>({});
-  const [savedLooksMap, setSavedLooksMap] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(SAVED_LOOKS.map((look) => [look.id, look.saved]))
-  );
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const wishlistIds = useStore(state => state.wishlist);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
+  const savedIds = useStore(state => state.saved);
 
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
   const reducedMotionEnabled = useReducedMotion();
 
   const wishlistItems = React.useMemo(
-    () => listings.filter(l => wishlistIds.includes(l.id)),
+    () => listings.filter(l => wishlistIds?.includes(l.id) ?? false),
     [listings, wishlistIds]
+  );
+
+  const savedItems = React.useMemo(
+    () => listings.filter(l => savedIds?.includes(l.id) ?? false),
+    [listings, savedIds]
   );
 
   const listingIdSet = React.useMemo(() => new Set(listings.map((item) => item.id)), [listings]);
@@ -237,16 +241,11 @@ export default function SearchScreen() {
   const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
 
   const filteredWishlist = wishlistItems.filter(l =>
-    !searchQuery || l.title.toLowerCase().includes(searchQuery.toLowerCase()) || l.brand?.toLowerCase().includes(searchQuery.toLowerCase())
+    !searchQuery || l.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) || l.brand?.toLowerCase()?.includes(searchQuery.toLowerCase())
   );
 
-  const savedLooks = React.useMemo(
-    () => SAVED_LOOKS.filter((look) => savedLooksMap[look.id] ?? look.saved),
-    [savedLooksMap],
-  );
-
-  const filteredLooks = savedLooks.filter(l =>
-    !searchQuery || l.title.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredSaved = savedItems.filter(l =>
+    !searchQuery || l.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) || l.brand?.toLowerCase()?.includes(searchQuery.toLowerCase())
   );
 
   const handleToggleLookLike = React.useCallback(
@@ -258,33 +257,6 @@ export default function SearchScreen() {
           ...prev,
           [look.id]: nextLiked,
         };
-      });
-    },
-    [show],
-  );
-
-  const handleToggleLookSave = React.useCallback(
-    (look: SavedLook) => {
-      setSavedLooksMap((prev) => {
-        const currentlySaved = prev[look.id] ?? look.saved;
-        const nextSaved = !currentlySaved;
-        show(nextSaved ? 'Look saved' : 'Look removed from saved', 'info');
-        return {
-          ...prev,
-          [look.id]: nextSaved,
-        };
-      });
-    },
-    [show],
-  );
-
-  const handleOpenLookComments = React.useCallback(
-    (look: SavedLook) => {
-      show(`Opening conversation about ${look.title}.`, 'info');
-      navigation.navigate('Chat', {
-        conversationId: 'c1',
-        focusQuery: look.title,
-        partnerUserId: 'u1',
       });
     },
     [navigation, show],
@@ -345,7 +317,7 @@ export default function SearchScreen() {
           <Text style={styles.hugeTitle}>Saved</Text>
         </View>
         <View style={styles.headerRight}>
-          <Text style={styles.itemCount}>{wishlistItems.length + savedLooks.length} items</Text>
+          <Text style={styles.itemCount}>{wishlistItems.length + savedItems.length} items</Text>
           <AppButton
             title="Discover"
             icon={<Ionicons name="compass-outline" size={14} color={Colors.textPrimary} />}
@@ -400,7 +372,7 @@ export default function SearchScreen() {
               }
               trailingIcon={
                 <Text style={[styles.tabCount, activeTab === tab.key && styles.tabCountActive]}>
-                  {tab.key === 'SAVED' ? filteredLooks.length : filteredWishlist.length}
+                  {tab.key === 'SAVED' ? filteredSaved.length : filteredWishlist.length}
                 </Text>
               }
               style={[styles.tab, activeTab === tab.key && styles.activeTab]}
@@ -432,10 +404,10 @@ export default function SearchScreen() {
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
         
         {activeTab === 'SAVED' ? (
-          filteredLooks.length > 0 ? (
+          filteredSaved.length > 0 ? (
             <AnimatedFlashList
               key="saved-looks"
-              data={filteredLooks}
+              data={filteredSaved}
               keyExtractor={(item: any) => item.id}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
@@ -450,36 +422,22 @@ export default function SearchScreen() {
                   progressBackgroundColor="transparent"
                 />
               }
-              renderItem={({ item, index }: any) => {
-                const itemId = resolveLookItemId(item);
-
-                return (
-                  <Reanimated.View
-                    entering={
-                      reducedMotionEnabled
-                        ? undefined
-                        : FadeInDown
-                            .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                            .duration(Motion.list.enterDuration)
-                    }
-                  >
-                    <LookCard
-                      look={item}
-                      isLiked={Boolean(likedLooks[item.id])}
-                      isSaved={Boolean(savedLooksMap[item.id] ?? item.saved)}
-                      sharedTransitionTag={itemId ? `image-${itemId}-0` : undefined}
-                      onPress={() => {
-                        if (itemId) {
-                          navigation.push('ItemDetail', { itemId });
-                        }
-                      }}
-                      onLikePress={() => handleToggleLookLike(item)}
-                      onCommentPress={() => handleOpenLookComments(item)}
-                      onSavePress={() => handleToggleLookSave(item)}
-                    />
-                  </Reanimated.View>
-                );
-              }}
+              renderItem={({ item, index }: any) => (
+                <Reanimated.View
+                  entering={
+                    reducedMotionEnabled
+                      ? undefined
+                      : FadeInDown
+                          .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+                          .duration(Motion.list.enterDuration)
+                  }
+                >
+                  <ProductCard
+                    item={item}
+                    onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+                  />
+                </Reanimated.View>
+              )}
               ListFooterComponent={<View style={styles.emptyFooter} />}
             />
           ) : (

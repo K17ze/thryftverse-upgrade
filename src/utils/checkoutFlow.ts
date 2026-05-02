@@ -1,9 +1,16 @@
+// Global address format supporting all countries
 export interface CheckoutSavedAddress {
   id?: number;
   name: string;
-  street: string;
-  city: string;
-  postcode: string;
+  // Address lines
+  streetAddress: string; // Primary street address
+  apartment?: string;    // Apartment, suite, unit, floor, etc.
+  // Location hierarchy
+  city: string;        // City / Town / Village
+  region?: string;      // State (US), Province (CA), County (UK), Prefecture (JP), etc.
+  postalCode: string;  // ZIP (US), Postcode (UK), PIN (IN), etc.
+  countryCode: string;   // ISO 3166-1 alpha-2 (e.g., 'US', 'GB', 'IN', 'JP')
+  country: string;       // Display name (e.g., 'United States', 'United Kingdom')
   isDefault?: boolean;
 }
 

@@ -4,9 +4,15 @@ export interface CommerceAddress {
   id: number;
   userId: string;
   name: string;
-  street: string;
-  city: string;
-  postcode: string;
+  // Address lines
+  streetAddress: string;      // Primary street address
+  apartment?: string;         // Apartment, suite, unit, floor
+  // Location hierarchy
+  city: string;               // City / Town / Village
+  region?: string;            // State (US), Province (CA), County (UK), etc.
+  postalCode: string;         // ZIP/Postcode/PIN
+  countryCode: string;        // ISO 3166-1 alpha-2 (e.g., 'US', 'GB', 'IN')
+  country: string;            // Display name (e.g., 'United States')
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
@@ -195,9 +201,13 @@ interface ListOrderParcelEventsResponse {
 
 export interface CreateAddressInput {
   name: string;
-  street: string;
+  streetAddress: string;
+  apartment?: string;
   city: string;
-  postcode: string;
+  region?: string;
+  postalCode: string;
+  countryCode: string;
+  country: string;
   isDefault?: boolean;
 }
 

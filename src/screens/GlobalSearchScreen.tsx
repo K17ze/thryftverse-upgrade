@@ -117,7 +117,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   );
 
   const wishlistListings = useMemo(
-    () => listings.filter((listing) => wishlistIds.includes(listing.id)),
+    () => listings.filter((listing) => wishlistIds?.includes(listing.id) ?? false),
     [listings, wishlistIds],
   );
 
@@ -132,12 +132,12 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
   const rankedListings = useMemo<RankedListing[]>(() => {
     return listings
-      .filter((listing) => !wishlistIds.includes(listing.id))
+      .filter((listing) => !(wishlistIds?.includes(listing.id) ?? false))
       .map((listing) => {
-        const title = listing.title.toLowerCase();
-        const brand = listing.brand.toLowerCase();
-        const category = listing.category.toLowerCase();
-        const subcategory = listing.subcategory.toLowerCase();
+        const title = listing.title?.toLowerCase() ?? '';
+        const brand = listing.brand?.toLowerCase() ?? '';
+        const category = listing.category?.toLowerCase() ?? '';
+        const subcategory = listing.subcategory?.toLowerCase() ?? '';
 
         let score = Math.min(listing.likes, 120) * 0.22;
         score += getRecencyBoost(listing.createdAt);
@@ -161,10 +161,10 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
         const matchedTokens = queryTokens.filter(
           (token) =>
-            title.includes(token)
-            || brand.includes(token)
-            || category.includes(token)
-            || subcategory.includes(token),
+            title?.includes(token)
+            || brand?.includes(token)
+            || category?.includes(token)
+            || subcategory?.includes(token),
         );
 
         if (queryTokens.length > 0) {

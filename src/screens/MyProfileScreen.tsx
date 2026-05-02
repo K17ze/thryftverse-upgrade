@@ -24,12 +24,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MY_USER } from '../data/mockData';
+import { useStore } from '../store/useStore';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
-import { useStore } from '../store/useStore';
 import { getCoOwnMarket } from '../data/tradeHub';
 import { resolveAssetMarketState } from '../data/mockSyndicateData';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -87,6 +87,8 @@ export default function MyProfileScreen() {
   const userAvatar = useStore((state) => state.userAvatar);
   const userCover = useStore((state) => state.userCover);
   const currentUser = useStore((state) => state.currentUser);
+  // Merge currentUser (from store) with MY_USER defaults - allows edits to persist
+  const user = currentUser ? { ...MY_USER, ...currentUser } : MY_USER;
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const updateUserAvatar = useStore((state) => state.updateUserAvatar);
   const updateUserCover = useStore((state) => state.updateUserCover);
@@ -200,11 +202,10 @@ export default function MyProfileScreen() {
     }
   };
 
-  const profileUserId = currentUser?.id ?? MY_USER.id;
-  const profileMediaOverride =
-    profileMediaOverrides[profileUserId] ?? profileMediaOverrides[MY_USER.id] ?? null;
-  const displayCover = userCover || profileMediaOverride?.cover || MY_USER.coverPhoto || COVER_IMAGE;
-  const displayAvatar = userAvatar || profileMediaOverride?.avatar || MY_USER.avatar;
+  const profileUserId = user.id;
+  const profileMediaOverride = profileMediaOverrides[profileUserId] ?? null;
+  const displayCover = userCover || profileMediaOverride?.cover || user.coverPhoto || COVER_IMAGE;
+  const displayAvatar = userAvatar || profileMediaOverride?.avatar || user.avatar;
 
   const myListings = React.useMemo(() => {
     const owned = listings.filter((item) => item.sellerId === profileUserId);
@@ -267,7 +268,7 @@ export default function MyProfileScreen() {
 
   const handleShare = async () => {
     try {
-      await Share.share({ message: `Check out @${MY_USER.username} on Thryftverse!` });
+      await Share.share({ message: `Check out @${user.username} on Thryftverse!` });
     } catch { /* ignore */ }
   };
 
@@ -348,7 +349,7 @@ export default function MyProfileScreen() {
 
       <AnimatedScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: COVER_HEIGHT - 60 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: COVER_HEIGHT - 60, paddingBottom: 0 }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
@@ -378,16 +379,19 @@ export default function MyProfileScreen() {
 
           <AnimatedPressable
             style={styles.heroIdentityTap}
-            onPress={() => navigation.navigate('UserProfile', { userId: MY_USER.id, isMe: true })}
+            onPress={() => navigation.navigate('UserProfile', { userId: user.id, isMe: true })}
             activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityLabel="Open your public profile"
             accessibilityHint="Shows how other users see your profile"
           >
-            <Text style={styles.heroName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>{MY_USER.username.toUpperCase()}</Text>
-            <Text style={styles.heroHandle}>@{MY_USER.username}</Text>
+            <Text style={styles.heroName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>{user.username.toUpperCase()}</Text>
+            <Text style={styles.heroHandle}>@{user.username}</Text>
+            {user.bio && (
+              <Text style={styles.heroBio} numberOfLines={2}>{user.bio}</Text>
+            )}
             <Text style={styles.heroMeta}>
-              {MY_USER.location} | {MY_USER.reviewCount} reviews | last seen {MY_USER.lastSeen.toLowerCase()}
+              {user.location} | {user.reviewCount} reviews | last seen {user.lastSeen.toLowerCase()}
             </Text>
           </AnimatedPressable>
 
@@ -436,28 +440,28 @@ export default function MyProfileScreen() {
           >
             <AnimatedPressable
               style={styles.statItem}
-              onPress={() => navigation.navigate('UserProfile', { userId: MY_USER.id, isMe: true })}
+              onPress={() => navigation.navigate('UserProfile', { userId: user.id, isMe: true })}
               activeOpacity={0.8}
-              accessibilityLabel={`${MY_USER.listingCount} listings. Tap to view full profile.`}
+              accessibilityLabel={`${user.listingCount} listings. Tap to view full profile.`}
               accessibilityRole="button"
               accessibilityHint="Opens your complete public profile"
             >
-              <Text style={styles.statNumber}>{MY_USER.listingCount}</Text>
+              <Text style={styles.statNumber}>{user.listingCount}</Text>
               <Text style={styles.statLabel}>LISTED</Text>
             </AnimatedPressable>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{MY_USER.followers}</Text>
+              <Text style={styles.statNumber}>{user.followers}</Text>
               <Text style={styles.statLabel}>FOLLOWERS</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{MY_USER.following}</Text>
+              <Text style={styles.statNumber}>{user.following}</Text>
               <Text style={styles.statLabel}>FOLLOWING</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{MY_USER.rating}*</Text>
+              <Text style={styles.statNumber}>{user.rating}*</Text>
               <Text style={styles.statLabel}>RATING</Text>
             </View>
           </Reanimated.View>
@@ -516,8 +520,10 @@ export default function MyProfileScreen() {
           </View>
         </View>
 
-        {/* ── Co-Own Portfolio Summary ── */}
-        <View style={styles.portfolioSummaryCard}>
+        {/* Content Below Hero */}
+        <View style={{ backgroundColor: Colors.background, paddingBottom: 120 }}>
+          {/* ── Co-Own Portfolio Summary ── */}
+          <View style={styles.portfolioSummaryCard}>
           <View style={styles.portfolioSummaryTop}>
             <Text style={styles.portfolioSummaryLabel}>MY CO-OWN HOLDINGS</Text>
             <AnimatedPressable
@@ -574,7 +580,7 @@ export default function MyProfileScreen() {
             </View>
             <AnimatedPressable
               style={styles.viewAllBtn}
-              onPress={() => navigation.navigate('UserProfile', { userId: MY_USER.id, isMe: true })}
+              onPress={() => navigation.navigate('UserProfile', { userId: user.id, isMe: true })}
               accessibilityRole="button"
               accessibilityLabel="View all listings"
               accessibilityHint="Opens your complete wardrobe listings"
@@ -622,19 +628,26 @@ export default function MyProfileScreen() {
         <View style={styles.badgesCard}>
           <Text style={styles.badgesTitle}>Badges</Text>
           <View style={styles.badgeRow}>
-            {[
-              { icon: 'star-outline', label: 'Top Seller', earned: false },
-              { icon: 'camera-outline', label: 'Active', earned: false },
-              { icon: 'shield-checkmark-outline', label: 'Verified', earned: true },
-            ].map((b) => (
-              <View key={b.label} style={styles.badgeItem}>
-                <View style={[styles.badgeCircle, b.earned && styles.badgeCircleEarned]}>
-                  <Ionicons name={b.icon as any} size={22} color={b.earned ? Colors.brand : Colors.textMuted} />
-                </View>
-                <Text style={[styles.badgeLabel, b.earned && styles.badgeLabelEarned]}>{b.label}</Text>
+            <View style={styles.badgeItem}>
+              <View style={[styles.badgeCircle, { backgroundColor: Colors.brand + '20' }]}>
+                <Ionicons name="shield-checkmark" size={24} color={Colors.brand} />
               </View>
-            ))}
+              <Text style={styles.badgeLabel}>Verified</Text>
+            </View>
+            <View style={styles.badgeItem}>
+              <View style={[styles.badgeCircle, { backgroundColor: '#FFD70020' }]}>
+                <Ionicons name="trophy" size={24} color="#FFD700" />
+              </View>
+              <Text style={styles.badgeLabel}>Top Seller</Text>
+            </View>
+            <View style={styles.badgeItem}>
+              <View style={[styles.badgeCircle, { backgroundColor: '#4CAF5020' }]}>
+                <Ionicons name="flash" size={24} color="#4CAF50" />
+              </View>
+              <Text style={styles.badgeLabel}>Fast Ship</Text>
+            </View>
           </View>
+        </View>
         </View>
 
       </AnimatedScrollView>

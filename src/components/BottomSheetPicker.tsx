@@ -16,7 +16,7 @@ const IS_LIGHT = ActiveTheme === 'light';
 const OVERLAY_BG = IS_LIGHT ? 'rgba(14, 12, 10, 0.34)' : 'rgba(0,0,0,0.6)';
 const SHEET_BG = Colors.surface;
 const HANDLE_BG = Colors.borderLight;
-const SEARCH_BG = Colors.cardAlt;
+const SEARCH_BG = Colors.background;
 const SEARCH_BORDER = Colors.border;
 const OPTION_BORDER = Colors.border;
 
@@ -37,7 +37,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
   const contextY = useSharedValue(0);
 
   // Derived filtered options
-  const filteredOptions = options.filter(o => o.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredOptions = options.filter(o => o?.toLowerCase()?.includes(searchQuery.toLowerCase()) ?? false);
 
   useEffect(() => {
     if (visible) {
@@ -138,7 +138,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
                   onPress={() => handleSelect(opt)}
                 >
                   <Text style={[styles.optionText, selectedValue === opt && styles.optionTextActive]}>{opt}</Text>
-                  {selectedValue === opt && <Ionicons name="checkmark-circle" size={24} color={Colors.accent} />}
+                  {selectedValue === opt && <Ionicons name="checkmark-circle" size={24} color={Colors.brand} />}
                 </AnimatedPressable>
               ))
             )}
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     borderBottomColor: OPTION_BORDER,
   },
   optionText: { fontSize: 16, fontFamily: Typography.family.medium, color: Colors.textPrimary, letterSpacing: 0.08 },
-  optionTextActive: { fontFamily: Typography.family.semibold, color: Colors.accent },
+  optionTextActive: { fontFamily: Typography.family.semibold, color: Colors.brand },
   
   noResultsText: { textAlign: 'center', color: Colors.textMuted, marginTop: 40, fontFamily: Typography.family.medium },
 });

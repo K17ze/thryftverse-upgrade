@@ -28,9 +28,9 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { MasonryGrid } from '../components/ProductCardV2';
 
 type NavT = StackNavigationProp<RootStackParamList>;
-const HEADER_BUTTON_BG = Colors.card;
+const HEADER_BUTTON_BG = Colors.surface;
 const HEADER_BUTTON_BORDER = Colors.border;
-const HEADER_LABEL_COLOR = Colors.accent;
+const HEADER_LABEL_COLOR = Colors.brand;
 
 export default function FavouritesScreen() {
   const navigation = useNavigation<NavT>();
@@ -42,7 +42,7 @@ export default function FavouritesScreen() {
   const scrollY = useSharedValue(0);
 
   const favouriteItems = React.useMemo(
-    () => listings.filter((item) => wishlistIds.includes(item.id)),
+    () => listings.filter((item) => wishlistIds?.includes(item.id) ?? false),
     [listings, wishlistIds]
   );
 

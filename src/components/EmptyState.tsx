@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Reanimated, {
   cancelAnimation,
@@ -28,7 +28,7 @@ interface Props {
   onCtaPress?: () => void;
   iconColor?: string;
 }
-export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, iconColor = Colors.accent }: Props) {
+export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, iconColor = Colors.brand }: Props) {
   const reducedMotionEnabled = useReducedMotion();
 
   // Floating animation on the icon ring
@@ -160,11 +160,11 @@ const styles = StyleSheet.create({
   },
   cta: {
     marginTop: 16,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
     paddingHorizontal: 34,
     paddingVertical: 15,
     borderRadius: 30,
-    shadowColor: Colors.accent,
+    shadowColor: Colors.brand,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
-    color: Colors.textInverse,
+    color: Colors.background,
   },
 });
 

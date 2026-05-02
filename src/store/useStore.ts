@@ -43,12 +43,19 @@ interface BrowseFilterState {
   condition: BrowseConditionOption;
 }
 
+// Global address format supporting all countries
 interface SavedAddress {
   id?: number;
   name: string;
-  street: string;
-  city: string;
-  postcode: string;
+  // Address lines (Line 1, Line 2 for apartments/suites)
+  streetAddress: string; // Primary street address
+  apartment?: string;    // Apartment, suite, unit, floor, etc.
+  // Location hierarchy
+  city: string;        // City / Town / Village
+  region?: string;      // State (US), Province (CA), County (UK), Prefecture (JP), etc.
+  postalCode: string;  // ZIP (US), Postcode (UK), PIN (IN), etc.
+  countryCode: string;   // ISO 3166-1 alpha-2 (e.g., 'US', 'GB', 'IN', 'JP')
+  country: string;       // Display name (e.g., 'United States', 'United Kingdom')
   isDefault?: boolean;
 }
 
@@ -145,17 +152,39 @@ async function persistLocalAuthSnapshot(
   }
 }
 
+// Collection for organizing saved items (like Pinterest boards)
+export interface Collection {
+  id: string;
+  name: string;
+  description?: string;
+  itemIds: string[];
+  coverImage?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 interface StoreState {
   // Auth
   currentUser: User | null;
   isAuthenticated: boolean;
   login: (user: User) => void;
   logout: () => void;
+  updateUserProfile: (updates: Partial<User>) => void;
 
   // Global Interactions
   wishlist: string[]; // array of string item IDs
   toggleWishlist: (id: string) => void;
   isWishlisted: (id: string) => boolean;
+  // Collections (replaces simple saved)
+  collections: Collection[];
+  createCollection: (name: string, description?: string) => string;
+  deleteCollection: (id: string) => void;
+  renameCollection: (id: string, name: string) => void;
+  addToCollection: (collectionId: string, itemId: string) => void;
+  removeFromCollection: (collectionId: string, itemId: string) => void;
+  isInCollection: (collectionId: string, itemId: string) => boolean;
+  isItemSavedAnywhere: (itemId: string) => boolean;
+  getItemCollections: (itemId: string) => Collection[];
   seenPosterIds: string[];
   markPosterSeen: (posterId: string) => void;
   hasSeenPoster: (posterId: string) => boolean;
@@ -240,6 +269,11 @@ export const useStore = create<StoreState>()(
     set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false });
     persistLocalAuthSnapshot(null, false);
   },
+  updateUserProfile: (updates) =>
+    set((state) => {
+      const updatedUser = state.currentUser ? { ...state.currentUser, ...updates } : null;
+      return { currentUser: updatedUser };
+    }),
 
   wishlist: [],
   toggleWishlist: (id) =>
@@ -252,6 +286,50 @@ export const useStore = create<StoreState>()(
       };
     }),
   isWishlisted: (id) => get().wishlist.includes(id),
+  collections: [],
+  createCollection: (name, description) => {
+    const id = `collection_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now = Date.now();
+    set((state) => ({
+      collections: [
+        ...state.collections,
+        { id, name, description, itemIds: [], createdAt: now, updatedAt: now },
+      ],
+    }));
+    return id;
+  },
+  deleteCollection: (id) =>
+    set((state) => ({
+      collections: state.collections.filter((c) => c.id !== id),
+    })),
+  renameCollection: (id, name) =>
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === id ? { ...c, name, updatedAt: Date.now() } : c
+      ),
+    })),
+  addToCollection: (collectionId, itemId) =>
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === collectionId && !(c.itemIds?.includes(itemId) ?? false)
+          ? { ...c, itemIds: [...(c.itemIds ?? []), itemId], updatedAt: Date.now() }
+          : c
+      ),
+    })),
+  removeFromCollection: (collectionId, itemId) =>
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === collectionId
+          ? { ...c, itemIds: (c.itemIds ?? []).filter((id) => id !== itemId), updatedAt: Date.now() }
+          : c
+      ),
+    })),
+  isInCollection: (collectionId, itemId) =>
+    get().collections.find((c) => c.id === collectionId)?.itemIds?.includes(itemId) ?? false,
+  isItemSavedAnywhere: (itemId) =>
+    get().collections.some((c) => c.itemIds?.includes(itemId) ?? false),
+  getItemCollections: (itemId) =>
+    get().collections.filter((c) => c.itemIds?.includes(itemId) ?? false),
   seenPosterIds: [],
   markPosterSeen: (posterId) =>
     set((state) => {
@@ -933,6 +1011,7 @@ export const useStore = create<StoreState>()(
       partialize: (state) => ({
         // Only persist user-critical data, not transient UI state
         wishlist: state.wishlist,
+        collections: state.collections,
         seenPosterIds: state.seenPosterIds,
         customPosters: state.customPosters,
         conversations: state.conversations,

@@ -39,13 +39,14 @@ export default function EditProfileScreen() {
   const navigation = useNavigation();
   const { show } = useToast();
   const currentUser = useStore(state => state.currentUser);
-  const userAvatar = useStore(state => state.userAvatar);
-  const updateUserAvatar = useStore(state => state.updateUserAvatar);
+  const userAvatar = useStore((state) => state.userAvatar);
+  const updateUserAvatar = useStore((state) => state.updateUserAvatar);
+  const updateUserProfile = useStore((state) => state.updateUserProfile);
 
-  const [bio, setBio] = useState('Vintage collector based in London.');
+  const [bio, setBio] = useState(currentUser?.bio || MY_USER.bio || '');
   const [location, setLocation] = useState('London, UK');
   const [gender, setGender] = useState('Non-binary');
-  const [website, setWebsite] = useState('https://vsco.co/thryftuser');
+  const [website, setWebsite] = useState(`https://vsco.co/${currentUser?.username || 'user'}`);
   const [genderPickerVisible, setGenderPickerVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -76,6 +77,13 @@ export default function EditProfileScreen() {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 600));
+    // Save profile changes to store
+    updateUserProfile({
+      bio,
+      location,
+      gender,
+      website,
+    });
     setIsSaving(false);
     show('Profile updated', 'success');
     navigation.goBack();
@@ -242,7 +250,7 @@ const styles = StyleSheet.create({
   avatarWrap: { position: 'relative', marginBottom: 12 },
   avatarContainer: {
     width: 100, height: 100, borderRadius: 50,
-    borderWidth: 3, borderColor: Colors.accent,
+    borderWidth: 3, borderColor: Colors.brand,
   },
   avatarImage: { width: '100%', height: '100%', borderRadius: 50 },
   avatarOverlay: {
@@ -250,7 +258,7 @@ const styles = StyleSheet.create({
   },
   avatarCameraCircle: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: Colors.background,
   },
@@ -274,12 +282,12 @@ const styles = StyleSheet.create({
   },
 
   saveBtn: { 
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
     borderRadius: 28,
     minHeight: 56,
     borderWidth: 0,
     marginTop: 8,
   },
   saveBtnDisabled: { opacity: 0.6 },
-  saveText: { color: Colors.textInverse, fontSize: 16, fontFamily: 'Inter_700Bold' },
+  saveText: { color: Colors.textPrimary, fontSize: 16, fontFamily: 'Inter_700Bold' },
 });

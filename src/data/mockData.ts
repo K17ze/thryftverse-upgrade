@@ -72,6 +72,7 @@ export interface User {
   badges: string[];
   lastSeen: string;
   listingCount: number;
+  bio?: string;
 }
 
 export interface Message {
@@ -593,6 +594,7 @@ export const MY_USER: User = {
   badges: [],
   lastSeen: 'Now',
   listingCount: 14,
+  bio: 'Fashion enthusiast & vintage curator. I love finding unique pieces and sharing them with the community. Always open to offers!',
 };
 
 // ─── MOCK CATEGORIES ───────────────────────────────────────────────────────────

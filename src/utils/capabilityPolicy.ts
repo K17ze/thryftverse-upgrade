@@ -29,7 +29,7 @@ export function isPaymentMethodAllowed(
     return fallback;
   }
 
-  return capabilities.payments.methodTypes.includes(methodType);
+  return capabilities.payments.methodTypes?.includes(methodType) ?? fallback;
 }
 
 export function formatPayoutPolicyHint(capabilities: UserCountryCapabilities | null | undefined): string | null {
