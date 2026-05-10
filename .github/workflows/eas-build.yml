@@ -45,17 +45,22 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
-      - run: npm ci
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
       - name: Typecheck
+        working-directory: frontend
         run: npm run typecheck
 
       - name: Unit Tests
+        working-directory: frontend
         run: npm run test
 
       - name: Design token guard
+        working-directory: frontend
         run: npm run lint:design-tokens
 
   eas-build:
@@ -77,9 +82,11 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
-      - run: npm ci
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
       - name: Setup EAS CLI
         uses: expo/expo-github-action@v8
@@ -88,6 +95,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build
+        working-directory: frontend
         run: |
           PROFILE="${{ github.event.inputs.profile || 'preview' }}"
           PLATFORM="${{ matrix.platform }}"
@@ -112,9 +120,11 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
-      - run: npm ci
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
       - name: Setup EAS CLI
         uses: expo/expo-github-action@v8
@@ -123,5 +133,6 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Submit to App Store & Play Store
+        working-directory: frontend
         run: |
           eas submit --platform all --profile production --non-interactive --latest

@@ -41,9 +41,9 @@ backend/api/dist/
 # typescript
 *.tsbuildinfo
 
-# generated native folders
-/ios
-/android
+# generated native folders (Expo prebuild output, now under frontend/)
+frontend/ios/
+frontend/android/
 
 # local git metadata backup folder
 .git_disabled/

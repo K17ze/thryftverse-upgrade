@@ -29,19 +29,23 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: |
-            package-lock.json
+            frontend/package-lock.json
             backend/api/package-lock.json
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
+        working-directory: frontend
         run: npm ci
 
-      - name: Typecheck
+      - name: Frontend typecheck
+        working-directory: frontend
         run: npm run typecheck
 
-      - name: Design token guard
+      - name: Frontend design token guard
+        working-directory: frontend
         run: npm run lint:design-tokens
 
-      - name: Run test suite
+      - name: Frontend test suite
+        working-directory: frontend
         run: npm run test
 
       - name: Install backend dependencies
