@@ -426,7 +426,7 @@ export default function NotificationsScreen() {
         ListEmptyComponent={
           isLoading ? (
             <View style={styles.loadingState}>
-              <ActivityIndicator color={Colors.accent} size="small" />
+              <ActivityIndicator color={Colors.brand} size="small" />
               <Text style={styles.loadingText}>Syncing notifications...</Text>
             </View>
           ) : (
@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
   },
 
   notifImageWrap: {
@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: Space.sm,

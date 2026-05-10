@@ -225,7 +225,7 @@ export default function PosterViewerScreen() {
         <View style={styles.bottomMetaWrap}>
           {activePoster.sharedFrom ? (
             <View style={styles.sharedFromPill}>
-              <Ionicons name="repeat-outline" size={14} color={Colors.accent} />
+              <Ionicons name="repeat-outline" size={14} color={Colors.brand} />
               <Text style={styles.sharedFromText}>Shared poster for @{activePoster.sharedFrom.username}</Text>
             </View>
           ) : null}
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 9,

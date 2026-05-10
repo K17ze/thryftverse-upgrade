@@ -179,7 +179,7 @@ export const SkeletonGrid: React.FC<SkeletonGridProps> = ({ count = 6, columns =
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.surfaceAlt,
     overflow: 'hidden',
   },
   shimmer: {

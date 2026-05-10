@@ -5,7 +5,7 @@ import { Colors } from '../../constants/colors';
 
 const { width: W } = Dimensions.get('window');
 const ITEM_W = (W - 48) / 2;
-const STATS_BG = Colors.card;
+const STATS_BG = Colors.surface;
 
 export function ProfileSkeleton() {
   return (

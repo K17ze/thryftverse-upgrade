@@ -18,8 +18,8 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const IS_LIGHT = ActiveTheme === 'light';
-const TRADE_ACCENT = Colors.accentGold;
-const HEADER_BUTTON_BG = Colors.card;
+const TRADE_ACCENT = Colors.brand;
+const HEADER_BUTTON_BG = Colors.surface;
 const HEADER_BUTTON_BORDER = Colors.border;
 const ICON_RING_BG = IS_LIGHT ? '#efe7d6' : '#0f1918';
 const ICON_RING_BORDER = IS_LIGHT ? '#d9c6a2' : '#23413d';
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     borderRadius: 14,
-    backgroundColor: Colors.accentGold,
+    backgroundColor: Colors.brand,
     paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',

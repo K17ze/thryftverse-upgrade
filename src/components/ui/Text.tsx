@@ -223,6 +223,47 @@ export const PriceCompact: React.FC<PriceProps> = ({
   </RNText>
 );
 
+export const PriceLarge: React.FC<PriceProps> = ({ 
+  amount, 
+  currency = '£', 
+  color = Colors.textPrimary,
+  style,
+  ...props 
+}) => (
+  <RNText 
+    style={[
+      styles.priceLarge,
+      { color },
+      style,
+    ]} 
+    {...props}
+  >
+    {currency}{amount.toFixed(2)}
+  </RNText>
+);
+
+// ============================================================================
+// META - Small metadata text (ELEVATED)
+// ============================================================================
+
+export const Meta: React.FC<TextComponentProps> = ({ 
+  children, 
+  color = Colors.textSecondary, 
+  style, 
+  ...props 
+}) => (
+  <RNText 
+    style={[
+      styles.meta,
+      { color },
+      style,
+    ]} 
+    {...props}
+  >
+    {children}
+  </RNText>
+);
+
 // ============================================================================
 // STYLES
 // ============================================================================
@@ -288,6 +329,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0,
   },
+  priceLarge: {
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: Type.priceLarge.letterSpacing,
+  },
+  meta: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: 'Inter_500Medium',
+    letterSpacing: Type.meta.letterSpacing,
+  },
 });
 
 // ============================================================================
@@ -305,6 +358,8 @@ export const T = {
   Title1,
   Price,
   PriceCompact,
+  PriceLarge,
+  Meta,
 };
 
 export default T;

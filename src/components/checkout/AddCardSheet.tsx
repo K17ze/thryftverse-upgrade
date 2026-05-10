@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   secureRow: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
   secureText: { fontSize: 12, color: MUTED },
   footer: { paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 0 : 20 },
-  saveBtn: { backgroundColor: Colors.accent, borderRadius: 30, paddingVertical: 16, alignItems: 'center' },
+  saveBtn: { backgroundColor: Colors.brand, borderRadius: 30, paddingVertical: 16, alignItems: 'center' },
   saveBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textInverse },
 });
 

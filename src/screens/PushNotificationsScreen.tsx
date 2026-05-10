@@ -34,7 +34,7 @@ type Props = StackScreenProps<RootStackParamList, 'PushNotifications'>;
 const IS_LIGHT = ActiveTheme === 'light';
 const ACCENT = IS_LIGHT ? '#2f251b' : '#d7b98f';
 const BG = Colors.background;
-const CARD = Colors.card;
+const CARD = Colors.surface;
 const BORDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
@@ -299,15 +299,15 @@ const styles = StyleSheet.create({
   },
   deviceBadgeActive: {
     color: Colors.background,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
   },
   deviceBadgeMuted: {
     color: MUTED,
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.surfaceAlt,
   },
   deviceCopy: { fontSize: 12, color: MUTED, lineHeight: 18 },
   deviceActionBtn: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',

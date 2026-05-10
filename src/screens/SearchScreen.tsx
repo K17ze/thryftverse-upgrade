@@ -17,7 +17,6 @@ import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProductCardV2 } from '../components/ProductCardV2';
-import { ProductCard } from '../components/ProductCard';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Radius } from '../theme/designTokens';
 import { Typography } from '../constants/typography';
@@ -208,7 +207,8 @@ export default function SearchScreen() {
   const { show } = useToast();
   const wishlistIds = useStore(state => state.wishlist);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
-  const savedIds = useStore(state => state.saved);
+  // "Saved looks" shares the wishlist as its source of truth.
+  const savedIds = wishlistIds;
 
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
@@ -432,7 +432,7 @@ export default function SearchScreen() {
                           .duration(Motion.list.enterDuration)
                   }
                 >
-                  <ProductCard
+                  <ProductCardV2
                     item={item}
                     onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
                   />

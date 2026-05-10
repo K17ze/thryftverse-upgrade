@@ -113,6 +113,8 @@ export type RootStackParamList = {
   TwoFactorSetup: undefined;
   WriteReview: { orderId: string };
   Report: { type: 'item' | 'user' };
+  MyBids: undefined;
+  MyListings: { type?: 'coown' | 'auction' | 'standard' } | undefined;
 };
 
 export type TabParamList = {

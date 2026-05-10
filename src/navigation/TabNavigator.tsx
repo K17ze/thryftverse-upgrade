@@ -11,7 +11,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { TabParamList } from './types';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Duration } from '../theme/designTokens';
+import { Space, Radius, Duration, Elevation } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AnimatedBadge } from '../components/AnimatedBadge';
 import { useHaptic } from '../hooks/useHaptic';
@@ -83,8 +83,8 @@ export default function TabNavigator() {
             paddingBottom: Math.max(insets.bottom, 8),
           },
           tabBarItemStyle: styles.tabBarItem,
-          tabBarActiveTintColor: Colors.tabActive,
-          tabBarInactiveTintColor: Colors.tabInactive,
+          tabBarActiveTintColor: Colors.textPrimary,
+          tabBarInactiveTintColor: Colors.textMuted,
           tabBarLabelStyle: {
             fontSize: 10,
             fontFamily: 'Inter_600SemiBold',
@@ -162,12 +162,13 @@ const styles = StyleSheet.create({
   fixedTabBar: {
     backgroundColor: Colors.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    elevation: 0,
-    shadowColor: 'transparent',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0,
-    shadowRadius: 0,
+    borderTopColor: Colors.borderLight,
+    // ELEVATED: Subtle top shadow for depth
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 4,
     paddingHorizontal: Space.md,
   },
   tabBarItem: {
@@ -184,7 +185,7 @@ const styles = StyleSheet.create({
     width: Space.md - Space.xs,
     height: Space.md - Space.xs,
     borderRadius: Radius.full,
-    backgroundColor: Colors.tabActive,
+    backgroundColor: Colors.textPrimary,
     marginTop: Space.xs - 1,
   },
 });

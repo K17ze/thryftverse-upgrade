@@ -22,9 +22,11 @@ describe('checkout journey smoke', () => {
 
     state.saveAddress({
       name: 'Ava Harper',
-      street: '22 Wardrobe Lane',
+      streetAddress: '22 Wardrobe Lane',
       city: 'Manchester',
-      postcode: 'M1 2AB',
+      postalCode: 'M1 2AB',
+      countryCode: 'GB',
+      country: 'United Kingdom',
     });
 
     let checkoutState = useStore.getState();
@@ -44,9 +46,11 @@ describe('checkout journey smoke', () => {
 
     state.saveAddress({
       name: 'Noah Clark',
-      street: '71 Archive Street',
+      streetAddress: '71 Archive Street',
       city: 'London',
-      postcode: 'EC1A 1BB',
+      postalCode: 'EC1A 1BB',
+      countryCode: 'GB',
+      country: 'United Kingdom',
     });
     state.savePaymentMethod(buildBankAccountPaymentMethod('7788', '04-00-04'));
 

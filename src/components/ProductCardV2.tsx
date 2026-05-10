@@ -8,13 +8,14 @@ import React from 'react';
 import { View, StyleSheet, Dimensions, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Layout } from '../theme/designTokens';
+import { Space, Radius, Layout, Elevation } from '../theme/designTokens';
 import { T, Price } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
 import { AnimatedHeart } from './AnimatedHeart';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
 import { Listing, MOCK_USERS } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
 import { isVideoUri } from '../utils/media';
@@ -32,6 +33,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false }: 
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
   const { show } = useToast();
+  const haptic = useHaptic();
   const seller = mockFind(MOCK_USERS, (u) => u.id === item.sellerId);
 
   // Deterministic aspect ratio based on item id
@@ -40,8 +42,12 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false }: 
   const hasMultiple = item.images.length > 1;
 
   const handleToggleFav = () => {
+    haptic.light(); // ELEVATED: Subtle haptic feedback
     toggleFav(item.id);
-    if (!isFav) show('Added to wishlist', 'success');
+    if (!isFav) {
+      haptic.success(); // ELEVATED: Success feedback on add
+      show('Added to wishlist', 'success');
+    }
   };
 
   return (
@@ -58,7 +64,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false }: 
         {/* Sold overlay */}
         {item.isSold && (
           <View style={styles.soldOverlay}>
-            <T.BodyEmphasis color="#FFFFFF">SOLD</T.BodyEmphasis>
+            <Text style={styles.soldText}>SOLD</Text>
           </View>
         )}
 
@@ -106,7 +112,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false }: 
               style={styles.sellerAvatar}
               contentFit="cover"
             />
-            <Text style={{ fontSize: 9, color: Colors.textSecondary, fontFamily: 'Inter_500Medium' }}>@{seller.username}</Text>
+            <T.Meta>@{seller.username}</T.Meta>
           </View>
         )}
       </View>
@@ -156,7 +162,8 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2 }: MasonryGridP
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginBottom: Space.md,
+    marginBottom: 10,
+    ...Elevation.subtle, // ELEVATED: Use design system
   },
 
   // Image - No border radius, full bleed
@@ -171,31 +178,47 @@ const styles = StyleSheet.create({
   // Overlays
   soldOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  soldText: {
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   mediaBadge: {
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    width: 24,
-    height: 24,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    width: 26,
+    height: 26,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   favBtn: {
     position: 'absolute',
     bottom: Space.sm,
     right: Space.sm,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  // Info - Tight padding
+  // Info - Refined padding
   info: {
     padding: Space.sm,
-    gap: Space.xs,
+    paddingTop: Space.sm + 2,
+    gap: 3,
   },
   priceRow: {
     flexDirection: 'row',
@@ -205,7 +228,13 @@ const styles = StyleSheet.create({
   likes: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: 3,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
   },
   sellerRow: {
     flexDirection: 'row',
@@ -216,7 +245,10 @@ const styles = StyleSheet.create({
   sellerAvatar: {
     width: 16,
     height: 16,
-    borderRadius: Radius.full,
+    borderRadius: 8,
+    // ADD: Subtle border for definition
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
 
   // Grid

@@ -31,8 +31,8 @@ type Props = StackScreenProps<RootStackParamList, 'AddBankAccount'>;
 
 const IS_LIGHT = ActiveTheme === 'light';
 const BG = Colors.background;
-const CARD = Colors.card;
-const CARD_SOFT = Colors.cardAlt;
+const CARD = Colors.surface;
+const CARD_SOFT = Colors.surfaceAlt;
 const BORDER = Colors.border;
 const DIVIDER = Colors.border;
 const MUTED = Colors.textMuted;

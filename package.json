@@ -27,12 +27,7 @@
     "launch:phase8": "node backend/scripts/phase8-launch-ops.mjs --strict",
     "launch:phase8:full": "node backend/scripts/phase8-launch-ops.mjs --strict --run-rehearsal",
     "launch:phase8:cleanup:dry": "node backend/scripts/phase8-launch-ops.mjs --cleanup-db",
-    "launch:phase8:cleanup:apply": "node backend/scripts/phase8-launch-ops.mjs --cleanup-db --confirm-db-cleanup",
-    "visual:capture": "node scripts/capture-visual-audit.mjs",
-    "visual:capture:all": "node scripts/capture-visual-audit.mjs all",
-    "visual:capture:home": "node scripts/capture-visual-audit.mjs home",
-    "visual:capture:item": "node scripts/capture-visual-audit.mjs item",
-    "visual:capture:search": "node scripts/capture-visual-audit.mjs search"
+    "launch:phase8:cleanup:apply": "node backend/scripts/phase8-launch-ops.mjs --cleanup-db --confirm-db-cleanup"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

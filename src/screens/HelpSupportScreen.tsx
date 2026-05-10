@@ -25,7 +25,7 @@ type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
 const IS_LIGHT = ActiveTheme === 'light';
 const ACCENT = IS_LIGHT ? '#2f251b' : '#d7b98f';
 const BG = Colors.background;
-const CARD = Colors.card;
+const CARD = Colors.surface;
 const BORDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
@@ -196,7 +196,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
             multiline
             numberOfLines={5}
             textAlignVertical="top"
-            selectionColor={Colors.accent}
+            selectionColor={Colors.brand}
             accessibilityLabel="Support message"
             accessibilityHint="Type details about your issue so support can help you."
           />
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: BORDER, marginHorizontal: 18 },
   contactCard: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, padding: 16, marginBottom: 24 },
   messageInput: { fontSize: 14, color: TEXT, minHeight: 100, marginBottom: 14 },
-  sendBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.accent, borderRadius: 24, paddingVertical: 12, justifyContent: 'center' },
+  sendBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.brand, borderRadius: 24, paddingVertical: 12, justifyContent: 'center' },
   sendBtnText: { fontSize: 14, fontWeight: '700', color: Colors.textInverse },
   linksCard: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 16 },

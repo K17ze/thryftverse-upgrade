@@ -39,18 +39,18 @@ type LedgerEntry = {
 
 const PAGE_SIZE = 80;
 const IS_LIGHT = ActiveTheme === 'light';
-const TRADE_ACCENT = Colors.accentGold;
-const HEADER_BUTTON_BG = Colors.card;
+const TRADE_ACCENT = Colors.brand;
+const HEADER_BUTTON_BG = Colors.surface;
 const HEADER_BUTTON_BORDER = Colors.border;
 const METRICS_CARD_BG = IS_LIGHT ? '#f0ede7' : '#0f151b';
 const METRICS_CARD_BORDER = IS_LIGHT ? '#d7d1c8' : '#22303a';
-const CHIP_BG = Colors.card;
+const CHIP_BG = Colors.surface;
 const CHIP_BORDER = Colors.border;
 const CHIP_ACTIVE_BG = IS_LIGHT ? '#ede4d3' : '#15201f';
-const ROW_BG = Colors.card;
+const ROW_BG = Colors.surface;
 const ROW_BORDER = Colors.border;
-const ROW_ICON_BG = Colors.cardAlt;
-const EMPTY_ICON_BG = Colors.card;
+const ROW_ICON_BG = Colors.surfaceAlt;
+const EMPTY_ICON_BG = Colors.surface;
 const POSITIVE_COLOR = IS_LIGHT ? '#7c5f1e' : '#d7b98f';
 const NEGATIVE_COLOR = IS_LIGHT ? '#b64242' : '#ff9797';
 const REFRESH_BG = Colors.surface;

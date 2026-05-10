@@ -11,9 +11,12 @@ import Reanimated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { ActiveTheme, Colors } from '../constants/colors';
 
+// ELEVATED: Refined shimmer colors for premium feel
 const IS_LIGHT = ActiveTheme === 'light';
-const BASE_BG = IS_LIGHT ? '#e8e4de' : '#1a1a1a';
-const SHIMMER_COLOR = IS_LIGHT ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.06)';
+const BASE_BG = IS_LIGHT ? '#f0ede8' : '#1c1c1c';
+const SHIMMER_COLOR = IS_LIGHT 
+  ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.5)', 'rgba(255,255,255,0)'] 
+  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0)'];
 
 interface SkeletonProps {
   width: number | `${number}%`;
@@ -28,7 +31,7 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style }: Skele
   useEffect(() => {
     translateX.value = withRepeat(
       withSequence(
-        withTiming(400, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+        withTiming(400, { duration: 1400, easing: Easing.inOut(Easing.ease) }), // ELEVATED: Slower, smoother
         withTiming(-300, { duration: 0 })
       ),
       -1,
@@ -55,10 +58,10 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style }: Skele
     >
       <Reanimated.View style={[StyleSheet.absoluteFill, animStyle]}>
         <LinearGradient
-          colors={['transparent', SHIMMER_COLOR, 'transparent']}
+          colors={SHIMMER_COLOR as [string, string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={{ width: 200, height: '100%' }}
+          style={{ width: 240, height: '100%' }} // ELEVATED: Wider gradient for smoother effect
         />
       </Reanimated.View>
     </View>

@@ -11,6 +11,10 @@ interface User {
   id: string;
   username: string;
   avatar: string;
+  bio?: string;
+  location?: string;
+  gender?: string;
+  website?: string;
 }
 
 interface ProfileMediaOverride {

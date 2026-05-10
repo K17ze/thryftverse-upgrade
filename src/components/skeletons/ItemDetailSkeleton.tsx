@@ -4,7 +4,7 @@ import { SkeletonLoader } from '../SkeletonLoader';
 import { Colors } from '../../constants/colors';
 
 const { width: W } = Dimensions.get('window');
-const SELLER_CARD_BG = Colors.card;
+const SELLER_CARD_BG = Colors.surface;
 
 export function ItemDetailSkeleton() {
   return (

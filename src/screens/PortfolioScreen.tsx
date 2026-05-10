@@ -28,12 +28,12 @@ import { MOCK_USERS } from '../data/mockData';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const IS_LIGHT = ActiveTheme === 'light';
-const TRADE_ACCENT = Colors.accentGold;
-const HEADER_BTN_BG = Colors.card;
+const TRADE_ACCENT = Colors.brand;
+const HEADER_BTN_BG = Colors.surface;
 const HEADER_BTN_BORDER = Colors.border;
 const HERO_BG = IS_LIGHT ? '#f0ede7' : '#10161c';
 const HERO_BORDER = IS_LIGHT ? '#d7d1c8' : '#24313b';
-const CARD_BG = Colors.card;
+const CARD_BG = Colors.surface;
 const CARD_BORDER = Colors.border;
 const POSITIVE_COLOR = IS_LIGHT ? '#7c5f1e' : '#d7b98f';
 const NEGATIVE_COLOR = IS_LIGHT ? '#b64242' : '#ff9d9d';
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: CARD_BORDER,
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: CARD_BORDER,
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },

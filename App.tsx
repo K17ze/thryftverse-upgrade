@@ -72,7 +72,7 @@ function applyGlobalTypographyDefaults(useInterFonts: boolean) {
     ...inputDefaultProps,
     allowFontScaling: false,
     maxFontSizeMultiplier: 1.04,
-    selectionColor: Colors.accent,
+    selectionColor: Colors.brand,
     style: [inputDefaultProps.style, { fontFamily: inputFamily, letterSpacing: 0 }],
   };
 }
@@ -337,7 +337,7 @@ export default function App() {
     ...baseNavigationTheme,
     colors: {
       ...baseNavigationTheme.colors,
-      primary: Colors.accent,
+      primary: Colors.brand,
       background: Colors.background,
       card: Colors.surface,
       text: Colors.textPrimary,

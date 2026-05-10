@@ -39,10 +39,10 @@ const SORT_OPTIONS: Array<{ value: HubSort; label: string; accessibilityLabel: s
   { value: 'latest', label: 'LATEST', accessibilityLabel: 'Sort by latest listings' },
 ];
 const IS_LIGHT = ActiveTheme === 'light';
-const TRADE_ACCENT = Colors.accentGold;
-const PANEL_BG = Colors.card;
+const TRADE_ACCENT = Colors.brand;
+const PANEL_BG = Colors.surface;
 const PANEL_BORDER = Colors.border;
-const SEARCH_BG = Colors.cardAlt;
+const SEARCH_BG = Colors.surfaceAlt;
 const METRIC_BG = IS_LIGHT ? '#f0ede7' : '#10161c';
 const METRIC_BORDER = IS_LIGHT ? '#d7d1c8' : '#24313b';
 const SORT_ACTIVE_BG = IS_LIGHT ? '#ede4d3' : '#17302b';

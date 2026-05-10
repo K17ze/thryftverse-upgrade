@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   shimmerBase: {
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
   },
   image: {
     width: '100%',

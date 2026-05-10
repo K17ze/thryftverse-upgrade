@@ -23,10 +23,10 @@ import { getListingCoverUri } from '../utils/media';
 
 type RouteT = RouteProp<RootStackParamList, 'ManageListing'>;
 const HEADER_BORDER = Colors.border;
-const PREVIEW_BG = Colors.card;
-const STATUS_BG = Colors.cardAlt;
+const PREVIEW_BG = Colors.surface;
+const STATUS_BG = Colors.surfaceAlt;
 const ACTION_BORDER = Colors.border;
-const EDIT_ICON_BG = Colors.cardAlt;
+const EDIT_ICON_BG = Colors.surfaceAlt;
 
 export default function ManageListingScreen() {
   const navigation = useNavigation<any>();
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: ACTION_BORDER,
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     borderWidth: 1,
     borderColor: ACTION_BORDER,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -300,5 +300,5 @@ const styles = StyleSheet.create({
   iconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   blockTextCol: { justifyContent: 'center' },
   blockTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
-  blockSub: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.accent, marginTop: 4 },
+  blockSub: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.brand, marginTop: 4 },
 });

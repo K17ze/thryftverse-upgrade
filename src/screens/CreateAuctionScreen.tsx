@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   launchBtn: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     backgroundColor: PANEL_ALT_BG,
   },
   windowChipActive: {
-    borderColor: Colors.accent,
+    borderColor: Colors.brand,
     backgroundColor: ACTIVE_SURFACE,
   },
   windowChipText: {
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
   },
   windowChipTextActive: {
-    color: Colors.accent,
+    color: Colors.brand,
   },
   inputLabel: {
     color: Colors.textSecondary,
@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
     backgroundColor: PANEL_ALT_BG,
   },
   toggleBtnActive: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
   },
   toggleText: {
     color: Colors.textSecondary,
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     backgroundColor: PANEL_BG,
   },
   listingCardSelected: {
-    borderColor: Colors.accent,
+    borderColor: Colors.brand,
     backgroundColor: ACTIVE_SURFACE,
   },
   listingImage: {
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
   },
 });
 

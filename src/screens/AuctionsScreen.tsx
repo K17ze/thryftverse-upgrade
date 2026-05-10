@@ -472,7 +472,7 @@ export default function AuctionsScreen() {
           <AnimatedPressable
             style={styles.myBidsBtn}
             activeOpacity={0.9}
-            onPress={() => {}}
+            onPress={() => navigation.navigate('MyBids')}
             accessibilityRole="button"
             accessibilityLabel="My Bids"
             accessibilityHint="View your active bids"

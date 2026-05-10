@@ -24,8 +24,8 @@ import { MOCK_USERS } from '../data/mockData';
 import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'Payments'>;
-const PANEL_BG = Colors.card;
-const PANEL_SOFT_BG = Colors.cardAlt;
+const PANEL_BG = Colors.surface;
+const PANEL_SOFT_BG = Colors.surfaceAlt;
 const PANEL_BORDER = Colors.border;
 
 export default function PaymentsScreen({ navigation }: Props) {

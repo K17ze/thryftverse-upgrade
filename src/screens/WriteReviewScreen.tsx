@@ -51,7 +51,7 @@ export default function WriteReviewScreen() {
                 <Ionicons 
                   name={rating >= star ? "star" : "star-outline"} 
                   size={44} 
-                  color={rating >= star ? Colors.star : Colors.textMuted} 
+                  color={rating >= star ? Colors.brand : Colors.textMuted} 
                 />
               </AnimatedPressable>
             ))}
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
   
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
   input: { 
     flex: 1,
     maxHeight: 200,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 16,

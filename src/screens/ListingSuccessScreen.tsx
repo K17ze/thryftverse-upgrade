@@ -26,10 +26,10 @@ import { useToast } from '../context/ToastContext';
 type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
 
 const IS_LIGHT = ActiveTheme === 'light';
-const PANEL_BG = Colors.card;
-const PANEL_ALT_BG = Colors.cardAlt;
+const PANEL_BG = Colors.surface;
+const PANEL_ALT_BG = Colors.surfaceAlt;
 const PANEL_BORDER = Colors.border;
-const BADGE_BG = Colors.accent;
+const BADGE_BG = Colors.brand;
 const BADGE_TEXT = Colors.textInverse;
 
 export default function ListingSuccessScreen({ navigation, route }: Props) {
@@ -80,7 +80,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         {/* Celebration Header */}
         <View style={styles.heroSection}>
           <View style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={64} color={Colors.accent} />
+            <Ionicons name="checkmark" size={64} color={Colors.brand} />
           </View>
           <Text style={styles.heroBigText}>Published</Text>
           <Text style={styles.heroSubText}>Your item is now visible.</Text>

@@ -69,6 +69,12 @@ export const Type: Record<string, TypeStyle> = {
   
   /** 12/16/400 - Captions, metadata, timestamps, hints */
   caption: { size: 12, lineHeight: 16, weight: '400', letterSpacing: 0 },
+  
+  /** 11/14/500 - Small metadata, seller handles (ELEVATED) */
+  meta: { size: 11, lineHeight: 14, weight: '500', letterSpacing: 0.15 },
+  
+  /** 18/24/700 - Large prices for detail screen (ELEVATED) */
+  priceLarge: { size: 18, lineHeight: 24, weight: '700', letterSpacing: -0.3 },
 } as const;
 
 // REMOVED (to reduce visual chaos):
@@ -98,38 +104,43 @@ export const Elevation: Record<string, ShadowConfig> = {
     shadowRadius: 0,
     elevation: 0,
   },
-  /** Subtle shadow - cards at rest */
-  sm: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  /** Medium shadow - elevated cards, buttons */
-  md: {
+  /** Subtle - Cards, small elements (ELEVATED: softer, larger radius) */
+  subtle: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  /** Large shadow - modals, floating elements */
-  lg: {
+  /** Card - Elevated cards, buttons (ELEVATED: refined values) */
+  card: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.16,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  /** Extra large - bottom sheets, dialogs */
-  xl: {
+  /** Floating - FABs, overlays (ELEVATED: larger radius) */
+  floating: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.12,
     shadowRadius: 16,
+    elevation: 8,
+  },
+  /** Modal - Bottom sheets, dialogs (ELEVATED: premium feel) */
+  modal: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
     elevation: 16,
   },
+  /** Legacy aliases for backward compatibility */
+  sm: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2, elevation: 2 },
+  md: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 4 },
+  lg: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.16, shadowRadius: 8, elevation: 8 },
+  xl: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 16 },
 } as const;
 
 // ============================================================================

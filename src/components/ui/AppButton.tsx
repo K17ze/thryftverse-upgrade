@@ -10,7 +10,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 // Uses 5-core color palette
 // ============================================================================
 
-export type AppButtonVariant = 'primary' | 'secondary';
+export type AppButtonVariant = 'primary' | 'secondary' | 'gold' | 'contrast';
 export type AppButtonSize = 'sm' | 'md' | 'lg';
 type AppButtonHapticFeedback = 'none' | 'light' | 'medium' | 'heavy' | 'selection';
 
@@ -53,6 +53,22 @@ function resolveVariantTokens(variant: AppButtonVariant): VariantTokens {
         titleColor: Colors.textPrimary,
         subtitleColor: Colors.textSecondary,
         iconBackgroundColor: 'transparent',
+      };
+    case 'gold':
+      return {
+        backgroundColor: Colors.brand,
+        borderColor: Colors.brand,
+        titleColor: Colors.textInverse,
+        subtitleColor: Colors.textInverse,
+        iconBackgroundColor: 'rgba(0,0,0,0.15)',
+      };
+    case 'contrast':
+      return {
+        backgroundColor: Colors.textPrimary,
+        borderColor: Colors.textPrimary,
+        titleColor: Colors.background,
+        subtitleColor: Colors.background,
+        iconBackgroundColor: 'rgba(255,255,255,0.15)',
       };
     case 'primary':
     default:

@@ -277,7 +277,7 @@ export default function PosterEditorScreen({ navigation, route }: Props) {
             {
               left: layerOffset.x,
               top: layerOffset.y,
-              borderColor: isDragging ? Colors.accent : 'rgba(255,255,255,0.58)',
+              borderColor: isDragging ? Colors.brand : 'rgba(255,255,255,0.58)',
             },
           ]}
           onPress={() => inputRef.current?.focus()}
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
   },
   headerCopy: {
     flex: 1,
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
   },
   canvasImage: {
     width: '100%',
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     color: Colors.textPrimary,
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
@@ -517,12 +517,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     minHeight: 34,
   },
   positionChipActive: {
-    borderColor: Colors.accent,
-    backgroundColor: Colors.cardAlt,
+    borderColor: Colors.brand,
+    backgroundColor: Colors.surfaceAlt,
   },
   positionChipText: {
     color: Colors.textSecondary,
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   positionChipTextActive: {
-    color: Colors.accent,
+    color: Colors.brand,
   },
   clearBtn: {
     marginTop: 2,
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
   },
   clearBtnText: {
     color: Colors.textSecondary,

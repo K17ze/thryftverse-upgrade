@@ -17,9 +17,10 @@ async function getAsyncStorage(): Promise<AsyncStorageLike | null> {
       asyncStorageCache = null;
       return null;
     }
-    const resolved = (module as { default?: AsyncStorageLike }).default ?? module;
+    const resolved = ((module as { default?: AsyncStorageLike }).default ??
+      (module as unknown as AsyncStorageLike)) as AsyncStorageLike;
     if (resolved && typeof resolved.getItem === 'function') {
-      asyncStorageCache = resolved as AsyncStorageLike;
+      asyncStorageCache = resolved;
       return asyncStorageCache;
     }
   } catch {

@@ -39,6 +39,7 @@ import { useStore } from '../store/useStore';
 import { useTabScroll } from '../context/TabScrollContext';
 // Phase 3: Removed AnimatedBadge (badge clutter reduced)
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useHaptic } from '../hooks/useHaptic';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -52,14 +53,14 @@ import { DoubleTapHeart } from '../components/DoubleTapHeart';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Elevation } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
 const HEADER_EXPANDED = 80;
 const HEADER_COLLAPSED = 56;
-const GRID_GAP = 6;
+const GRID_GAP = 10;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const IS_LIGHT = ActiveTheme === 'light';
@@ -302,6 +303,7 @@ export default function HomeScreen() {
   const hasSeenPoster = useStore((state) => state.hasSeenPoster);
   const customPosters = useStore((state) => state.customPosters);
   const { formatFromFiat } = useFormattedPrice();
+  const haptic = useHaptic();
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
 
   const [refreshing, setRefreshing] = React.useState(false);
@@ -630,7 +632,7 @@ export default function HomeScreen() {
           const ratio = TILE_RATIO_SEQUENCE[index % TILE_RATIO_SEQUENCE.length];
           return (
             <View key={`feed_loading_left_${index}`}>
-              <SkeletonLoader width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={14} />
+              <SkeletonLoader width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={0} />
             </View>
           );
         })}
@@ -640,7 +642,7 @@ export default function HomeScreen() {
           const ratio = TILE_RATIO_SEQUENCE[(index + 2) % TILE_RATIO_SEQUENCE.length];
           return (
             <View key={`feed_loading_right_${index}`}>
-              <SkeletonLoader width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={14} />
+              <SkeletonLoader width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={0} />
             </View>
           );
         })}
@@ -650,25 +652,29 @@ export default function HomeScreen() {
 
   const handleTilePress = React.useCallback((routeId: string | undefined) => {
     if (!routeId) return;
+    haptic.selection(); // ELEVATED: Selection haptic on press
     navigation.push('ItemDetail', { itemId: routeId });
-  }, [navigation]);
+  }, [navigation, haptic]);
 
   const handleTileLongPress = React.useCallback((item: ExploreTile) => {
+    haptic.medium(); // ELEVATED: Medium haptic for long press
     setPeekItem(item);
-  }, []);
+  }, [haptic]);
 
   const handleSellerProfilePress = React.useCallback((sellerId: string) => {
+    haptic.light(); // ELEVATED: Light haptic on seller interaction
     navigation.navigate('UserProfile', { userId: sellerId });
-  }, [navigation]);
+  }, [navigation, haptic]);
 
   const handleSellerMessagePress = React.useCallback((sellerId: string, listingId: string) => {
+    haptic.light(); // ELEVATED: Light haptic on message action
     const sellerHandle = MOCK_USERS.find((entry) => entry.id === sellerId)?.username ?? sellerId;
     navigation.navigate('Chat', {
       conversationId: `${sellerId}_${listingId}`,
       focusQuery: sellerHandle,
       partnerUserId: sellerId,
     });
-  }, [navigation]);
+  }, [navigation, haptic]);
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
@@ -843,8 +849,9 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 20,
     overflow: 'hidden',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderLight,
+    ...Elevation.subtle, // ELEVATED: Subtle shadow for depth
   },
   headerForeground: {
     flex: 1,
@@ -858,11 +865,12 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   brandTitle: {
-    fontSize: 28,
-    fontFamily: 'Inter_800ExtraBold',
-    letterSpacing: -0.6,
+    fontSize: 26, // Slightly reduced
+    fontFamily: 'Inter_700Bold', // Changed from ExtraBold for elegance
+    letterSpacing: 2, // Luxury spacing (ELEVATED)
     color: Colors.textPrimary,
-    lineHeight: 32,
+    lineHeight: 30,
+    textTransform: 'uppercase', // ELEVATED: Uppercase like luxury brands
   },
   brandSubtitle: {
     marginTop: 2,
@@ -882,8 +890,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.surface,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
+    ...Elevation.subtle, // ELEVATED: Subtle shadow
   },
   feedContent: {
     paddingBottom: 120,
@@ -1349,10 +1358,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 7,
-    paddingVertical: 5,
-    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   exploreTagText: {
     color: '#fff',
@@ -1380,6 +1391,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 8,
+    ...Elevation.subtle, // ELEVATED: Use design system
   },
   exploreSellerAvatarWrap: {
     width: 18,
@@ -1402,8 +1414,9 @@ const styles = StyleSheet.create({
   exploreSellerText: {
     flex: 1,
     color: Colors.textSecondary,
-    fontSize: 10,
-    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.1,
   },
   exploreMessageBtn: {
     width: 28,
@@ -1414,6 +1427,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Elevation.subtle, // ELEVATED: Use design system
   },
   videoBadge: {
     position: 'absolute',
@@ -1435,11 +1449,11 @@ const styles = StyleSheet.create({
   exploreLoadingGrid: {
     flexDirection: 'row',
     paddingHorizontal: Space.sm,
-    gap: Space.sm,
+    gap: GRID_GAP, // ELEVATED: Match actual grid gap
   },
   exploreLoadingColumn: {
     flex: 1,
-    gap: Space.sm,
+    gap: GRID_GAP, // ELEVATED: Match actual grid gap
   },
 
   peekBackdrop: {

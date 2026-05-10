@@ -846,6 +846,15 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     letterSpacing: 0.12,
   },
+  heroBio: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 6,
+    paddingHorizontal: 16,
+  },
   heroMeta: {
     fontSize: 11,
     fontFamily: Typography.family.light,

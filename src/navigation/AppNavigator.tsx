@@ -22,6 +22,8 @@ import CoOwnHubScreen from '../screens/SyndicateHubScreen';
 import AssetDetailScreen from '../screens/AssetDetailScreen';
 import TradeScreen from '../screens/TradeScreen';
 import PortfolioScreen from '../screens/PortfolioScreen';
+import MyBidsScreen from '../screens/MyBidsScreen';
+import MyListingsScreen from '../screens/MyListingsScreen';
 import CoOwnOrderHistoryScreen from '../screens/SyndicateOrderHistoryScreen';
 import AssetLeaderboardScreen from '../screens/AssetLeaderboardScreen';
 import BuyoutScreen from '../screens/BuyoutScreen';
@@ -162,6 +164,8 @@ export default function AppNavigator() {
       <Stack.Screen name="AssetDetail" component={AssetDetailScreen} />
       <Stack.Screen name="Trade" component={TradeScreen} options={modalScreenOptions} />
       <Stack.Screen name="Portfolio" component={PortfolioScreen} />
+      <Stack.Screen name="MyBids" component={MyBidsScreen} />
+      <Stack.Screen name="MyListings" component={MyListingsScreen} />
       <Stack.Screen name="CoOwnOrderHistory" component={CoOwnOrderHistoryScreen} />
       <Stack.Screen name="AssetLeaderboard" component={AssetLeaderboardScreen} />
       <Stack.Screen name="Buyout" component={BuyoutScreen} />

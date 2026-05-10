@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 24,
     borderWidth: 0,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
   },
   otpVerifyText: {
     color: Colors.textInverse,

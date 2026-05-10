@@ -14,6 +14,7 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
+import { Elevation } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
@@ -129,23 +130,21 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   iconRing: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 1.5,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     backgroundColor: RING_BG,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
-    shadowColor: '#d7b98f',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
+    marginBottom: 16,
+    ...Elevation.card, // ELEVATED: Better shadow
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
     color: Colors.textPrimary,
     textAlign: 'center',
   },
@@ -159,21 +158,17 @@ const styles = StyleSheet.create({
     maxWidth: 260,
   },
   cta: {
-    marginTop: 16,
-    backgroundColor: Colors.brand,
-    paddingHorizontal: 34,
-    paddingVertical: 15,
-    borderRadius: 30,
-    shadowColor: Colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 4,
+    marginTop: 20,
+    backgroundColor: Colors.textPrimary, // ELEVATED: Use textPrimary for high contrast
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 24,
+    ...Elevation.floating, // ELEVATED: Use design system
   },
   ctaText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: Typography.family.bold,
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
     color: Colors.background,
   },
 });

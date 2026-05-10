@@ -53,7 +53,7 @@ function resolveTone(tone: AppStatusTone): ToneTokens {
     case 'neutral':
     default:
       return {
-        backgroundColor: Colors.cardAlt,
+        backgroundColor: Colors.surfaceAlt,
         borderColor: Colors.border,
         textColor: Colors.textSecondary,
       };

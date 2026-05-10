@@ -19,7 +19,7 @@ import { deployBotToConversationOnApi, undeployBotFromConversationOnApi } from '
 
 type Props = StackScreenProps<RootStackParamList, 'GroupBotDirectory'>;
 
-const PANEL = Colors.card;
+const PANEL = Colors.surface;
 const BORDER = Colors.border;
 
 export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
     borderColor: BORDER,
   },
@@ -235,12 +235,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: BORDER,
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: 12,
   },
   deployBtnActive: {
-    borderColor: Colors.accent,
-    backgroundColor: Colors.accent,
+    borderColor: Colors.brand,
+    backgroundColor: Colors.brand,
   },
   deployBtnText: {
     color: Colors.textPrimary,
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: BORDER,
-    backgroundColor: Colors.cardAlt,
+    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },

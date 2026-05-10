@@ -19,8 +19,8 @@ import { CachedImage } from '../components/CachedImage';
 
 type RouteT = RouteProp<RootStackParamList, 'CategoryTree'>;
 const HEADER_BORDER = Colors.border;
-const BANNER_BG = Colors.cardAlt;
-const PILL_BG = Colors.card;
+const BANNER_BG = Colors.surfaceAlt;
+const PILL_BG = Colors.surface;
 const PILL_BORDER = Colors.border;
 
 // Premium imagery for category headers

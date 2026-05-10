@@ -22,7 +22,7 @@ import { useToast } from '../context/ToastContext';
 import { requestTwoFactorEnrollment, verifyTwoFactorEnrollment } from '../services/authApi';
 
 type Props = StackScreenProps<RootStackParamList, 'TwoFactorSetup'>;
-const PANEL_BG = Colors.card;
+const PANEL_BG = Colors.surface;
 const PANEL_BORDER = Colors.border;
 
 export default function TwoFactorSetupScreen({ navigation }: Props) {

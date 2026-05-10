@@ -358,7 +358,7 @@ export default function OrderDetailScreen() {
 
         {/* -- Status Banner -- */}
         <View style={styles.statusBanner}>
-          <Ionicons name="cube-outline" size={20} color={Colors.accent} />
+          <Ionicons name="cube-outline" size={20} color={Colors.brand} />
           <View style={{ flex: 1 }}>
             <Text style={styles.statusLabel}>{statusBanner.label}</Text>
             <Text style={styles.statusSub}>{statusBanner.subtitle}</Text>
@@ -383,7 +383,7 @@ export default function OrderDetailScreen() {
               {backendOrder?.shippingLabelUrl ? (
                 <AppButton
                   title="Open shipping label"
-                  icon={<Ionicons name="open-outline" size={16} color={Colors.accent} />}
+                  icon={<Ionicons name="open-outline" size={16} color={Colors.brand} />}
                   style={styles.shipmentLinkBtn}
                   titleStyle={styles.shipmentLinkBtnText}
                   iconContainerStyle={styles.shipmentLinkIconWrap}
@@ -453,7 +453,7 @@ export default function OrderDetailScreen() {
               <Text style={styles.sellerName}>@{seller.username}</Text>
               <Text style={styles.sellerLocation} numberOfLines={1}>{seller.location}</Text>
               <View style={styles.sellerMeta}>
-                <Ionicons name="star" size={13} color={Colors.star} />
+                <Ionicons name="star" size={13} color={Colors.brand} />
                 <Text style={styles.sellerRating}>{seller.rating} ({seller.reviewCount} reviews)</Text>
               </View>
               <Text style={styles.sellerLastSeen}>Last seen {seller.lastSeen}</Text>
@@ -553,10 +553,10 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   backBtn: { width: 40, height: 40, borderRadius: Radius.full,
-    backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center',
   },
   moreBtn: { width: 40, height: 40, borderRadius: Radius.full,
-    backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18, fontFamily: 'Inter_700Bold', color: Colors.textPrimary,
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
 
   itemCard: {
     flexDirection: 'row',
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md - Space.xs,
     alignItems: 'center',
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: STATUS_PANEL_BORDER,
   },
-  statusLabel: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.accent, marginBottom: 4 },
+  statusLabel: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.brand, marginBottom: 4 },
   statusSub: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, lineHeight: 20 },
   syncHint: {
     marginTop: -12,
@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
   },
 
   shipmentMetaCard: {
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     padding: Space.md,
     marginBottom: Space.lg,
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.accent,
+    borderColor: Colors.brand,
   },
   shipmentLinkIconWrap: {
     width: 18,
@@ -656,28 +656,28 @@ const styles = StyleSheet.create({
   shipmentLinkBtnText: {
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
-    color: Colors.accent,
+    color: Colors.brand,
   },
 
   // Timeline
-  timelineCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Space.lg, marginBottom: Space.lg + Space.sm },
+  timelineCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Space.lg, marginBottom: Space.lg + Space.sm },
   timelineRow: { flexDirection: 'row', gap: 16 },
   timelineLeft: { alignItems: 'center', width: 20 },
   dot: {
     width: 16, height: 16, borderRadius: 8,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
     marginTop: 2,
   },
   dotActive: {
-    backgroundColor: Colors.accent,
-    shadowColor: Colors.accent,
+    backgroundColor: Colors.brand,
+    shadowColor: Colors.brand,
     shadowOpacity: 0.6,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
     elevation: 4,
   },
   dotInactive: { backgroundColor: Colors.border },
-  line: { width: 2, flex: 1, backgroundColor: Colors.accent, marginVertical: 4, minHeight: 24 },
+  line: { width: 2, flex: 1, backgroundColor: Colors.brand, marginVertical: 4, minHeight: 24 },
   lineInactive: { backgroundColor: Colors.borderLight },
   timelineContent: { flex: 1, paddingBottom: 20 },
   timelineTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
   // Seller card
   sellerCard: {
     flexDirection: 'row',
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     alignItems: 'center',
@@ -715,12 +715,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.accent,
+    borderColor: Colors.brand,
   },
-  msgBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.accent },
+  msgBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.brand },
 
   // Transaction card
-  txCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, paddingHorizontal: Space.lg, paddingVertical: Space.sm, marginBottom: Space.lg + Space.sm },
+  txCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, paddingHorizontal: Space.lg, paddingVertical: Space.sm, marginBottom: Space.lg + Space.sm },
   txDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 6 },
 
   // Actions
@@ -729,7 +729,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 56,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
   },
   actionSecondaryIconWrap: {
     width: 20,
@@ -743,7 +743,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
     borderRadius: Radius.lg,
     borderWidth: 0,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brand,
   },
   actionBtnPrimaryText: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.background },
 });

@@ -11,25 +11,28 @@ const THEME_OVERRIDE_GLOBAL_KEY = '__THRYFTVERSE_THEME_OVERRIDE__';
 // ============================================================================
 
 const DARK_COLORS = {
-  // 1. BACKGROUND - Deep neutral (was background)
+  // 1. BACKGROUND - Deep neutral
   background: '#0A0A0A',
-  
-  // 2. SURFACE - Slightly elevated (was card)
+
+  // 2. SURFACE - Slightly elevated (replaces `card`)
   surface: '#141414',
-  
-  // 3. BRAND/PRIMARY - Gold accent (use sparingly for CTAs only)
+  // 2b. SURFACE ALT - More elevated tier (replaces `cardAlt`)
+  surfaceAlt: '#1F1F1F',
+
+  // 3. BRAND/PRIMARY - Gold accent (replaces `accent` / `accentGold` / `star`)
   brand: '#D4A853',
   brandPressed: '#B8944F',
-  
-  // 4. TEXT - Three levels of hierarchy only
+
+  // 4. TEXT - Three levels of hierarchy + inverse for on-brand surfaces
   textPrimary: '#FFFFFF',
   textSecondary: '#A3A3A3',
   textMuted: '#666666',
-  
+  textInverse: '#000000',
+
   // 5. BORDERS - Subtle separators
   border: '#262626',
   borderLight: '#333333',
-  
+
   // Status (minimal set)
   danger: '#DC2626',
   success: '#16A34A',
@@ -38,23 +41,26 @@ const DARK_COLORS = {
 const LIGHT_COLORS = {
   // 1. BACKGROUND - Clean white
   background: '#FFFFFF',
-  
-  // 2. SURFACE - Light grey for cards
+
+  // 2. SURFACE - Light grey for cards (replaces `card`)
   surface: '#F5F5F5',
-  
-  // 3. BRAND/PRIMARY - Gold accent (use sparingly for CTAs only)
+  // 2b. SURFACE ALT - More elevated tier (replaces `cardAlt`)
+  surfaceAlt: '#EBEBEB',
+
+  // 3. BRAND/PRIMARY - Gold accent (replaces `accent` / `accentGold` / `star`)
   brand: '#C9A227',
   brandPressed: '#A68B4B',
-  
-  // 4. TEXT - Three levels of hierarchy only
+
+  // 4. TEXT - Three levels of hierarchy + inverse for on-brand surfaces
   textPrimary: '#000000',
   textSecondary: '#666666',
   textMuted: '#999999',
-  
+  textInverse: '#FFFFFF',
+
   // 5. BORDERS - Subtle separators
   border: '#E5E5E5',
   borderLight: '#F0F0F0',
-  
+
   // Status (minimal set)
   danger: '#DC2626',
   success: '#16A34A',

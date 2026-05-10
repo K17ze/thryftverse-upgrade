@@ -47,3 +47,6 @@ backend/api/dist/
 
 # local git metadata backup folder
 .git_disabled/
+
+# cleanup quarantine (recoverable, not tracked)
+trash/

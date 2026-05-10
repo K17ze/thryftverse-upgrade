@@ -15,7 +15,7 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 
 const ACCENT = '#d7b98f';
-const PANEL_BG = Colors.card;
+const PANEL_BG = Colors.surface;
 const PANEL_BORDER = Colors.border;
 const INFO_BG = ActiveTheme === 'light' ? '#e6efe8' : '#0d2020';
 const INFO_BORDER = ActiveTheme === 'light' ? '#c5d7ca' : '#1a3a3a';
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: PANEL_BG, borderRadius: 20, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: PANEL_BORDER },
   prefRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 16 },
   prefIcon: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.card,
+    width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.surface,
     alignItems: 'center', justifyContent: 'center', marginRight: 14,
   },
   prefText: { flex: 1 },

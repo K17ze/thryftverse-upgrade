@@ -7,7 +7,7 @@ import { Colors } from '../../constants/colors';
 // 3 variants only: surface | elevated | brand
 // ============================================================================
 
-export type AppCardVariant = 'surface' | 'elevated' | 'brand';
+export type AppCardVariant = 'surface' | 'elevated' | 'brand' | 'tint';
 
 interface AppCardProps {
   children: React.ReactNode;
@@ -23,6 +23,11 @@ function resolveCardStyle(variant: AppCardVariant) {
       return {
         backgroundColor: Colors.brand,
         borderColor: Colors.brand,
+      };
+    case 'tint':
+      return {
+        backgroundColor: Colors.surfaceAlt,
+        borderColor: Colors.borderLight,
       };
     case 'elevated':
       return {
