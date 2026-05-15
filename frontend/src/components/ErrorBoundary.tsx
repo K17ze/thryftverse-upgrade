@@ -3,6 +3,7 @@ import { View, StyleSheet, Text } from 'react-native';
 import { RetryState } from './RetryState';
 import { Colors } from '../constants/colors';
 import { trackTelemetryEvent } from '../lib/telemetry';
+import { Sentry } from '../lib/sentry';
 
 interface Props {
   children: ReactNode;
@@ -28,6 +29,12 @@ export class ErrorBoundary extends React.Component<Props, State> {
       error_name: error.name,
       error_message: error.message,
       component_stack: errorInfo.componentStack ?? '',
+    });
+
+    Sentry.captureException(error, {
+      contexts: {
+        react: { componentStack: errorInfo.componentStack ?? '' },
+      },
     });
   }
 

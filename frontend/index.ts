@@ -1,3 +1,6 @@
+// Sentry must initialise before any other code runs.
+import './src/lib/sentry';
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';

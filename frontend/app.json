@@ -34,7 +34,14 @@
       "expo-asset",
       "expo-web-browser",
       "expo-notifications",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "thryftverse",
+          "project": "thryftverse-mobile"
+        }
+      ]
     ]
   }
 }
