@@ -1,24 +1,22 @@
 import React, { useState } from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
+  AnimatedPressable
+} from '../components/AnimatedPressable';
 import {
   View,
   Text,
   StyleSheet,
   StatusBar,
   TextInput,
-  ScrollView,
   Dimensions,
   RefreshControl
 } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
 import { CachedImage } from '../components/CachedImage';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ProductCardV2 } from '../components/ProductCardV2';
+import { MasonryGrid } from '../components/ProductCardV2';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Space, Radius } from '../theme/designTokens';
 import { Typography } from '../constants/typography';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -42,7 +40,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ACCENT = '#d7b98f';
 const IS_LIGHT = ActiveTheme === 'light';
 const PANEL_BG = Colors.surface;
-const PANEL_ALT = IS_LIGHT ? '#ece4d8' : '#1f1f1f';
+const PANEL_ALT = IS_LIGHT ? '#ece4d8' : Colors.surfaceAlt;
 const BRAND = IS_LIGHT ? '#2f251b' : ACCENT;
 
 // Saved look data
@@ -135,7 +133,7 @@ function LookCard({
         >
           <CachedImage uri={look.coverImage} style={lookStyles.image} containerStyle={{ width: '100%', height: 200, borderRadius: 14 }} contentFit="cover" />
         </SharedTransitionView>
-        
+
         {/* Floating item tags */}
         {look.items.map((item, i) => (
           <View
@@ -199,16 +197,15 @@ function LookCard({
 
 // Main screen
 export default function SearchScreen() {
-  const [activeTab, setActiveTab] = useState<'SAVED' | 'WISHLIST'>('SAVED');
+  const [activeTab, setActiveTab] = useState<'SAVED' | 'WISHLIST' | 'WATCHLIST'>('SAVED');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [likedLooks, setLikedLooks] = useState<Record<string, boolean>>({});
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const wishlistIds = useStore(state => state.wishlist);
+  const savedProductIds = useStore((state) => state.savedProducts);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
-  // "Saved looks" shares the wishlist as its source of truth.
-  const savedIds = wishlistIds;
 
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
@@ -220,9 +217,11 @@ export default function SearchScreen() {
   );
 
   const savedItems = React.useMemo(
-    () => listings.filter(l => savedIds?.includes(l.id) ?? false),
-    [listings, savedIds]
+    () => listings.filter(l => savedProductIds?.includes(l.id) ?? false),
+    [listings, savedProductIds]
   );
+
+  const watchlistItems = wishlistItems;
 
   const listingIdSet = React.useMemo(() => new Set(listings.map((item) => item.id)), [listings]);
 
@@ -238,13 +237,15 @@ export default function SearchScreen() {
     setTimeout(() => setRefreshing(false), 400);
   };
 
-  const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
-
   const filteredWishlist = wishlistItems.filter(l =>
     !searchQuery || l.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) || l.brand?.toLowerCase()?.includes(searchQuery.toLowerCase())
   );
 
   const filteredSaved = savedItems.filter(l =>
+    !searchQuery || l.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) || l.brand?.toLowerCase()?.includes(searchQuery.toLowerCase())
+  );
+
+  const filteredWatchlist = watchlistItems.filter(l =>
     !searchQuery || l.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) || l.brand?.toLowerCase()?.includes(searchQuery.toLowerCase())
   );
 
@@ -276,7 +277,7 @@ export default function SearchScreen() {
   );
 
   const showWishlistLoadingState =
-    activeTab === 'WISHLIST' &&
+    (activeTab === 'WISHLIST' || activeTab === 'WATCHLIST') &&
     isSyncing &&
     source === 'mock' &&
     wishlistItems.length === 0 &&
@@ -286,6 +287,7 @@ export default function SearchScreen() {
   const closetTabs = [
     { key: 'SAVED' as const, label: 'Saved', icon: 'bookmark-outline' as const },
     { key: 'WISHLIST' as const, label: 'Wishlist', icon: 'heart-outline' as const },
+    { key: 'WATCHLIST' as const, label: 'Watchlist', icon: 'eye-outline' as const },
   ];
 
   const resolveLookItemId = React.useCallback(
@@ -314,13 +316,13 @@ export default function SearchScreen() {
       {/* â”€â”€ Header â”€â”€ */}
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.hugeTitle}>Saved</Text>
+          <Text style={styles.hugeTitle}>Explore</Text>
         </View>
         <View style={styles.headerRight}>
-          <Text style={styles.itemCount}>{wishlistItems.length + savedItems.length} items</Text>
+          <Text style={styles.itemCount}>{new Set([...wishlistItems.map((item) => item.id), ...savedItems.map((item) => item.id)]).size} items</Text>
           <AppButton
             title="Discover"
-            icon={<Ionicons name="compass-outline" size={14} color={Colors.textPrimary} />}
+            icon={<Ionicons name="compass-outline" size={14} color={IS_LIGHT ? '#fff' : '#fff'} />}
             variant="secondary"
             size="sm"
             style={styles.discoverBtn}
@@ -336,22 +338,24 @@ export default function SearchScreen() {
       {/* â”€â”€ Search Bar â”€â”€ */}
       <View style={styles.searchRow}>
         <View style={[styles.searchBar, isSearchFocused && styles.searchBarFocused]}>
-          <Ionicons name="search" size={18} color={Colors.textMuted} />
+          <Ionicons name="search" size={20} color={Colors.textMuted} style={{ marginLeft: 4 }} />
           <TextInput
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search your closet..."
+            placeholder="Search Thryftverse"
             placeholderTextColor={Colors.textMuted}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
-            selectionColor={ACCENT}
+            selectionColor={Colors.brand}
             returnKeyType="search"
           />
-          {searchQuery.length > 0 && (
+          {searchQuery.length > 0 ? (
             <AnimatedPressable onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+              <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
             </AnimatedPressable>
+          ) : (
+            <Ionicons name="camera-outline" size={22} color={Colors.textMuted} style={{ marginRight: 4 }} />
           )}
         </View>
       </View>
@@ -366,13 +370,13 @@ export default function SearchScreen() {
               icon={
                 <Ionicons
                   name={tab.icon}
-                  size={14}
-                  color={activeTab === tab.key ? Colors.background : Colors.textSecondary}
+                  size={16}
+                  color={activeTab === tab.key ? (IS_LIGHT ? '#000' : '#fff') : Colors.textMuted}
                 />
               }
               trailingIcon={
                 <Text style={[styles.tabCount, activeTab === tab.key && styles.tabCountActive]}>
-                  {tab.key === 'SAVED' ? filteredSaved.length : filteredWishlist.length}
+                  {tab.key === 'SAVED' ? filteredSaved.length : tab.key === 'WATCHLIST' ? filteredWatchlist.length : filteredWishlist.length}
                 </Text>
               }
               style={[styles.tab, activeTab === tab.key && styles.activeTab]}
@@ -402,60 +406,12 @@ export default function SearchScreen() {
       {/* â”€â”€ Content â”€â”€ */}
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
-        
-        {activeTab === 'SAVED' ? (
+
+        {showWishlistLoadingState ? (
+          renderWishlistLoadingState()
+        ) : activeTab === 'SAVED' ? (
           filteredSaved.length > 0 ? (
-            <AnimatedFlashList
-              key="saved-looks"
-              data={filteredSaved}
-              keyExtractor={(item: any) => item.id}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-              onScroll={scrollHandler}
-              scrollEventThrottle={16}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleRefresh}
-                  tintColor="transparent"
-                  colors={['transparent']}
-                  progressBackgroundColor="transparent"
-                />
-              }
-              renderItem={({ item, index }: any) => (
-                <Reanimated.View
-                  entering={
-                    reducedMotionEnabled
-                      ? undefined
-                      : FadeInDown
-                          .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                          .duration(Motion.list.enterDuration)
-                  }
-                >
-                  <ProductCardV2
-                    item={item}
-                    onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
-                  />
-                </Reanimated.View>
-              )}
-              ListFooterComponent={<View style={styles.emptyFooter} />}
-            />
-          ) : (
-            <EmptyState
-              icon="layers-outline"
-              title="No saved looks yet"
-              subtitle="Saved looks will appear here."
-            />
-          )
-        ) : (
-          showWishlistLoadingState ? (
-            renderWishlistLoadingState()
-          ) : filteredWishlist.length > 0 ? (
-            <AnimatedFlashList
-              key="wishlist-items"
-              data={filteredWishlist}
-              keyExtractor={(item: any) => item.id}
-              numColumns={2}
+            <Reanimated.ScrollView
               contentContainerStyle={styles.gridContent}
               showsVerticalScrollIndicator={false}
               onScroll={scrollHandler}
@@ -469,32 +425,90 @@ export default function SearchScreen() {
                   progressBackgroundColor="transparent"
                 />
               }
-              renderItem={({ item, index }: any) => (
-                <Reanimated.View
-                  entering={
-                    reducedMotionEnabled
-                      ? undefined
-                      : FadeInDown
-                          .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                          .duration(Motion.list.enterDuration)
-                  }
-                >
-                  <ProductCardV2
-                    item={item}
-                    onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
-                    showSeller={true}
-                  />
-                </Reanimated.View>
-              )}
-              ListFooterComponent={<View style={styles.emptyFooter} />}
-            />
+            >
+              <MasonryGrid
+                items={filteredSaved}
+                onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
+                numColumns={2}
+                showSeller={false}
+                showSaveButton={false}
+                visualOnly={true}
+              />
+              <View style={styles.emptyFooter} />
+            </Reanimated.ScrollView>
           ) : (
             <EmptyState
-              icon="heart-outline"
-              title="Your wishlist is empty"
-              subtitle="Saved items will appear here."
+              icon="layers-outline"
+              title="No saved products yet"
+              subtitle="Tap Save from Wishlist and products will appear here."
             />
           )
+        ) : activeTab === 'WATCHLIST' ? (
+          filteredWatchlist.length > 0 ? (
+            <Reanimated.ScrollView
+              contentContainerStyle={styles.gridContent}
+              showsVerticalScrollIndicator={false}
+              onScroll={scrollHandler}
+              scrollEventThrottle={16}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  tintColor="transparent"
+                  colors={['transparent']}
+                  progressBackgroundColor="transparent"
+                />
+              }
+            >
+              <MasonryGrid
+                items={filteredWatchlist}
+                onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
+                numColumns={2}
+                showSeller={false}
+                showSaveButton={false}
+                visualOnly={true}
+              />
+              <View style={styles.emptyFooter} />
+            </Reanimated.ScrollView>
+          ) : (
+            <EmptyState
+              icon="eye-outline"
+              title="Your watchlist is empty"
+              subtitle="Products you like will appear here."
+            />
+          )
+        ) : filteredWishlist.length > 0 ? (
+          <Reanimated.ScrollView
+            contentContainerStyle={styles.gridContent}
+            showsVerticalScrollIndicator={false}
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor="transparent"
+                colors={['transparent']}
+                progressBackgroundColor="transparent"
+              />
+            }
+          >
+            <MasonryGrid
+              items={filteredWishlist}
+              onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
+              numColumns={2}
+              showSeller={false}
+              showSaveButton={false}
+              visualOnly={true}
+            />
+            <View style={styles.emptyFooter} />
+          </Reanimated.ScrollView>
+        ) : (
+          <EmptyState
+            icon="heart-outline"
+            title="Your wishlist is empty"
+            subtitle="Saved items will appear here."
+          />
         )}
       </View>
     </SafeAreaView>
@@ -599,7 +613,7 @@ const lookStyles = StyleSheet.create({
   },
 });
 
-// â”€â”€ Main Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
@@ -608,7 +622,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 16,
   },
@@ -620,17 +634,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   hugeTitle: {
-    fontSize: 31,
+    fontSize: 28,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    letterSpacing: -0.35,
+    letterSpacing: -0.5,
   },
   headerRight: {
     alignItems: 'flex-end',
   },
   itemCount: {
     fontSize: 13,
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.medium,
     letterSpacing: 0.12,
     color: Colors.textSecondary,
   },
@@ -638,14 +652,13 @@ const styles = StyleSheet.create({
     marginTop: 7,
   },
   discoverBtn: {
-    marginTop: 9,
-    minHeight: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: PANEL_BG,
+    marginTop: 8,
+    minHeight: 32,
+    borderRadius: 16,
+    borderWidth: 0,
+    backgroundColor: Colors.surfaceAlt,
     alignSelf: 'flex-end',
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
   },
   discoverBtnIconWrap: {
     width: 18,
@@ -654,54 +667,54 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   discoverBtnText: {
-    color: Colors.textPrimary,
-    fontSize: 11,
+    color: '#fff',
+    fontSize: 12,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
   },
 
   // Search
-  searchRow: { paddingHorizontal: 20, paddingBottom: 12 },
+  searchRow: { paddingHorizontal: 16, paddingBottom: 12 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: PANEL_BG,
-    borderRadius: 16,
-    paddingHorizontal: 14,
+    backgroundColor: Colors.surface,
+    borderRadius: 30,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: Colors.border,
   },
-  searchBarFocused: { borderColor: BRAND },
+  searchBarFocused: { backgroundColor: Colors.surfaceAlt, borderColor: Colors.brand },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     color: Colors.textPrimary,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.08,
   },
 
   // Tabs
-  tabsContainer: { paddingHorizontal: 20, paddingBottom: 12 },
-  tabsWrapper: { flexDirection: 'row', backgroundColor: PANEL_BG, borderRadius: 30, padding: 4 },
+  tabsContainer: { paddingHorizontal: 16, paddingBottom: 12 },
+  tabsWrapper: { flexDirection: 'row', backgroundColor: 'transparent', gap: 10 },
   tab: {
     flex: 1,
-    borderRadius: 26,
-    minHeight: 44,
+    borderRadius: 24,
+    minHeight: 40,
     borderWidth: 0,
-    backgroundColor: 'transparent',
-    paddingHorizontal: 10,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 12,
   },
-  activeTab: { backgroundColor: Colors.brand },
+  activeTab: { backgroundColor: IS_LIGHT ? '#fff' : Colors.textPrimary },
   tabIconWrap: {
     width: 16,
     height: 16,
     borderRadius: 8,
     backgroundColor: 'transparent',
   },
-  tabText: { fontSize: 11, fontFamily: Typography.family.semibold, color: Colors.textSecondary, letterSpacing: 0.2 },
-  activeTabText: { color: Colors.background },
+  tabText: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, letterSpacing: 0.2 },
+  activeTabText: { color: IS_LIGHT ? '#000' : '#000' },
   tabCountWrap: {
     width: 'auto',
     height: 'auto',
@@ -714,42 +727,42 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     minWidth: 20,
     textAlign: 'center',
-    borderRadius: 999,
-    paddingHorizontal: 5,
+    borderRadius: 10,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     overflow: 'hidden',
-    backgroundColor: PANEL_ALT,
-    color: Colors.textMuted,
-    fontSize: 10,
+    backgroundColor: Colors.surfaceAlt,
+    color: Colors.textSecondary,
+    fontSize: 11,
     fontFamily: Typography.family.semibold,
   },
   tabCountActive: {
-    backgroundColor: '#d4c5aa',
-    color: Colors.background,
+    backgroundColor: IS_LIGHT ? '#000' : Colors.background,
+    color: IS_LIGHT ? '#fff' : Colors.textPrimary,
   },
   syncRetryBanner: {
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginBottom: 12,
   },
 
   // Lists
-  listContent: { paddingHorizontal: 20, paddingBottom: 120 },
-  gridContent: { paddingHorizontal: 16, paddingBottom: 120 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 120 },
+  gridContent: { paddingHorizontal: 12, paddingBottom: 120 },
   gridRow: { justifyContent: 'space-between' },
   wishlistLoadingGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingBottom: 120,
-    rowGap: 16,
+    rowGap: 12,
   },
   wishlistLoadingCard: {
-    width: (SCREEN_WIDTH - 44) / 2,
+    width: (SCREEN_WIDTH - 32) / 2,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: PANEL_BG,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    backgroundColor: Colors.surface,
     overflow: 'hidden',
   },
   wishlistLoadingBody: {
@@ -769,7 +782,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: PANEL_BG,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,

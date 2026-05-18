@@ -227,7 +227,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
       >
         <DoubleTapHeart
           isLiked={item.isSaved || false}
-          onLike={() => {}}
+          onLike={() => { }}
         >
           <SharedTransitionView
             style={styles.exploreSharedMedia}

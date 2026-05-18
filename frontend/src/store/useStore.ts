@@ -179,6 +179,9 @@ interface StoreState {
   wishlist: string[]; // array of string item IDs
   toggleWishlist: (id: string) => void;
   isWishlisted: (id: string) => boolean;
+  savedProducts: string[];
+  toggleSavedProduct: (id: string) => void;
+  isSavedProduct: (id: string) => boolean;
   // Collections (replaces simple saved)
   collections: Collection[];
   createCollection: (name: string, description?: string) => string;
@@ -290,6 +293,17 @@ export const useStore = create<StoreState>()(
       };
     }),
   isWishlisted: (id) => get().wishlist.includes(id),
+  savedProducts: [],
+  toggleSavedProduct: (id) =>
+    set((state) => {
+      const isSaved = state.savedProducts.includes(id);
+      return {
+        savedProducts: isSaved
+          ? state.savedProducts.filter((savedId) => savedId !== id)
+          : [...state.savedProducts, id],
+      };
+    }),
+  isSavedProduct: (id) => get().savedProducts.includes(id),
   collections: [],
   createCollection: (name, description) => {
     const id = `collection_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -331,7 +345,7 @@ export const useStore = create<StoreState>()(
   isInCollection: (collectionId, itemId) =>
     get().collections.find((c) => c.id === collectionId)?.itemIds?.includes(itemId) ?? false,
   isItemSavedAnywhere: (itemId) =>
-    get().collections.some((c) => c.itemIds?.includes(itemId) ?? false),
+    get().savedProducts.includes(itemId) || get().collections.some((c) => c.itemIds?.includes(itemId) ?? false),
   getItemCollections: (itemId) =>
     get().collections.filter((c) => c.itemIds?.includes(itemId) ?? false),
   seenPosterIds: [],
@@ -1015,6 +1029,7 @@ export const useStore = create<StoreState>()(
       partialize: (state) => ({
         // Only persist user-critical data, not transient UI state
         wishlist: state.wishlist,
+        savedProducts: state.savedProducts,
         collections: state.collections,
         seenPosterIds: state.seenPosterIds,
         customPosters: state.customPosters,

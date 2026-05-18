@@ -38,8 +38,6 @@ export default function PaymentsScreen({ navigation }: Props) {
   const savedPaymentMethod = useStore((state) => state.savedPaymentMethod);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
-  const supportUser = MOCK_USERS[0];
-
   const syncPaymentMethods = useCallback(async (isCancelled?: () => boolean) => {
     setIsSyncing(true);
     try {
@@ -94,15 +92,6 @@ export default function PaymentsScreen({ navigation }: Props) {
   const allowBankAccounts = isPaymentMethodAllowed(countryCapabilities, 'bank_account');
   const policyLabel = formatCountryPolicyScope(countryCapabilities);
 
-  const handleOpenPaymentSupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'payments and payout methods',
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for payment setup help.', 'info');
-  }, [navigation, show, supportUser.id]);
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
@@ -123,39 +112,6 @@ export default function PaymentsScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         {policyLabel ? <Text style={styles.policyLabel}>Payment policy: {policyLabel}</Text> : null}
 
-        <View style={styles.supportRow}>
-          <AnimatedPressable
-            style={styles.supportIdentity}
-            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Open @${supportUser.username} profile`}
-            accessibilityHint="Shows payment support profile"
-          >
-            <CachedImage
-              uri={supportUser.avatar}
-              style={styles.supportAvatar}
-              containerStyle={styles.supportAvatarWrap}
-              contentFit="cover"
-            />
-            <View style={styles.supportCopyWrap}>
-              <Text style={styles.supportTitle}>Need payment rail help?</Text>
-              <Text style={styles.supportHandle}>@{supportUser.username}</Text>
-            </View>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={styles.supportMessageBtn}
-            onPress={handleOpenPaymentSupport}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Message payment support"
-            accessibilityHint="Opens support chat for cards and bank methods"
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
-        
         {/* Restored Balance usage toggle */}
         <Text style={styles.sectionTitle}>Preferences</Text>
         <View style={styles.cardGroup}>
@@ -343,51 +299,6 @@ const styles = StyleSheet.create({
   hugeTitle: { fontSize: 34, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, letterSpacing: -0.5 },
   content: { paddingHorizontal: 20, paddingBottom: 40 },
   policyLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 4, marginBottom: 8, marginLeft: 8 },
-  supportRow: {
-    marginBottom: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  supportIdentity: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  supportAvatarWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-  },
-  supportAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-  },
-  supportCopyWrap: {
-    flex: 1,
-  },
-  supportTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
-  supportHandle: { marginTop: 1, fontSize: 10, fontFamily: 'Inter_500Medium', color: Colors.textMuted },
-  supportMessageBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
   sectionTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginLeft: 8, marginBottom: 12, marginTop: 24 },
   cardGroup: {
     backgroundColor: PANEL_BG,

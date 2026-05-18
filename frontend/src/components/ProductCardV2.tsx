@@ -27,11 +27,15 @@ interface ProductCardV2Props {
   onPress: () => void;
   index?: number;
   showSeller?: boolean;
+  showSaveButton?: boolean;
+  visualOnly?: boolean;
 }
 
-export function ProductCardV2({ item, onPress, index = 0, showSeller = false }: ProductCardV2Props) {
+export function ProductCardV2({ item, onPress, index = 0, showSeller = false, showSaveButton = false, visualOnly = false }: ProductCardV2Props) {
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
+  const isSaved = useStore((state) => state.isSavedProduct(item.id));
+  const toggleSaved = useStore((state) => state.toggleSavedProduct);
   const { show } = useToast();
   const haptic = useHaptic();
   const seller = mockFind(MOCK_USERS, (u) => u.id === item.sellerId);
@@ -50,13 +54,19 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false }: 
     }
   };
 
+  const handleToggleSave = () => {
+    haptic.light();
+    toggleSaved(item.id);
+    show(isSaved ? 'Removed from saved' : 'Added to saved', 'info');
+  };
+
   return (
     <View style={styles.container}>
       {/* Image - Full bleed, no border radius */}
       <AnimatedPressable onPress={onPress} style={styles.imageWrap}>
         <CachedImage
           uri={item.images[0]}
-          style={[styles.image, { aspectRatio }]}
+          style={[styles.image, { aspectRatio, borderRadius: visualOnly ? 16 : Radius.none }]}
           contentFit="cover"
           transition={300}
         />
@@ -80,42 +90,57 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false }: 
         )}
 
         {/* Favorite button */}
-        <View style={styles.favBtn}>
-          <AnimatedHeart
-            isActive={isFav}
-            onToggle={handleToggleFav}
-            size={20}
-            activeColor={Colors.danger}
-            inactiveColor="#FFFFFF"
-          />
+        <View style={styles.actionButtonsRow}>
+          {showSaveButton ? (
+            <AnimatedPressable
+              style={styles.saveBtn}
+              onPress={handleToggleSave}
+              accessibilityRole="button"
+              accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
+              accessibilityHint="Toggles this product in your saved page"
+            >
+              <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? Colors.brand : '#FFFFFF'} />
+            </AnimatedPressable>
+          ) : null}
+          <View style={styles.favBtn}>
+            <AnimatedHeart
+              isActive={isFav}
+              onToggle={handleToggleFav}
+              size={20}
+              activeColor={Colors.danger}
+              inactiveColor="#FFFFFF"
+            />
+          </View>
         </View>
       </AnimatedPressable>
 
       {/* Info - Tight padding like Depop */}
-      <View style={styles.info}>
-        <View style={styles.priceRow}>
-          <Price amount={item.price} />
-          {item.likes > 0 && (
-            <View style={styles.likes}>
-              <Ionicons name="heart" size={10} color={Colors.textMuted} />
-              <T.Caption>{item.likes}</T.Caption>
+      {!visualOnly && (
+        <View style={styles.info}>
+          <View style={styles.priceRow}>
+            <Price amount={item.price} />
+            {item.likes > 0 && (
+              <View style={styles.likes}>
+                <Ionicons name="heart" size={10} color={Colors.textMuted} />
+                <T.Caption>{item.likes}</T.Caption>
+              </View>
+            )}
+          </View>
+
+          <T.Caption numberOfLines={1}>{item.size}</T.Caption>
+
+          {showSeller && seller && (
+            <View style={styles.sellerRow}>
+              <CachedImage
+                uri={seller.avatar}
+                style={styles.sellerAvatar}
+                contentFit="cover"
+              />
+              <T.Meta>@{seller.username}</T.Meta>
             </View>
           )}
         </View>
-
-        <T.Caption numberOfLines={1}>{item.size}</T.Caption>
-
-        {showSeller && seller && (
-          <View style={styles.sellerRow}>
-            <CachedImage
-              uri={seller.avatar}
-              style={styles.sellerAvatar}
-              contentFit="cover"
-            />
-            <T.Meta>@{seller.username}</T.Meta>
-          </View>
-        )}
-      </View>
+      )}
     </View>
   );
 }
@@ -128,9 +153,12 @@ interface MasonryGridProps {
   items: Listing[];
   onPressItem: (item: Listing) => void;
   numColumns?: number;
+  showSeller?: boolean;
+  showSaveButton?: boolean;
+  visualOnly?: boolean;
 }
 
-export function MasonryGrid({ items, onPressItem, numColumns = 2 }: MasonryGridProps) {
+export function MasonryGrid({ items, onPressItem, numColumns = 2, showSeller = false, showSaveButton = false, visualOnly = false }: MasonryGridProps) {
   // Split items into columns for masonry effect
   const columns: Listing[][] = Array.from({ length: numColumns }, () => []);
   items.forEach((item, index) => {
@@ -147,6 +175,9 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2 }: MasonryGridP
               item={item}
               onPress={() => onPressItem(item)}
               index={colIndex * items.length + index}
+              showSeller={showSeller}
+              showSaveButton={showSaveButton}
+              visualOnly={visualOnly}
             />
           ))}
         </View>
@@ -203,15 +234,28 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)',
   },
   favBtn: {
-    position: 'absolute',
-    bottom: Space.sm,
-    right: Space.sm,
     width: 32,
     height: 32,
     borderRadius: 16,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  saveBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonsRow: {
+    position: 'absolute',
+    bottom: Space.sm,
+    right: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
   },
 
   // Info - Refined padding

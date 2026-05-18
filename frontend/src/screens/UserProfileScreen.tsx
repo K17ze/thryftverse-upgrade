@@ -188,16 +188,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       key={item.id}
       style={styles.gridItem}
       activeOpacity={0.9}
-      onPress={() => {
-        if (isSelfProfile) {
-          navigation.navigate('ManageListing', { itemId: item.id });
-        } else {
-          navigation.push('ItemDetail', { itemId: item.id });
-        }
-      }}
+      onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
       accessibilityRole="button"
       accessibilityLabel={`Open listing ${item.title}`}
-      accessibilityHint={isSelfProfile ? 'Opens listing management' : 'Opens listing details'}
+      accessibilityHint="Opens listing details"
     >
       <View style={styles.gridImageWrap}>
         <SharedTransitionView

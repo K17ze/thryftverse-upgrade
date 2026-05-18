@@ -73,6 +73,8 @@ export default function ItemDetailScreen() {
   const isInCollection = useStore((state) => state.isInCollection);
   const createCollection = useStore((state) => state.createCollection);
   const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
+  const isSavedProduct = useStore((state) => state.isSavedProduct);
+  const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
 
   const isFav = useStore(state => state.isWishlisted(route.params?.itemId));
   const toggleFav = useStore(state => state.toggleWishlist);
@@ -83,9 +85,9 @@ export default function ItemDetailScreen() {
   const mockItem = mockFind(MOCK_LISTINGS, l => l.id === itemId);
   const fallbackItem = listings[0] ?? mockFind(MOCK_LISTINGS, () => true);
   const item: Listing = backendItem ?? mockItem ?? fallbackItem!;
-  const backendSeller = listings.length > 0 ? undefined : undefined; // placeholder — seller API TBD
   const seller: User = mockFind(MOCK_USERS, u => u.id === item.sellerId) ?? MOCK_USERS[0];
   const sellerItems = listings.filter(l => l.sellerId === seller.id && l.id !== item.id);
+  const otherListings = listings.filter(l => l.id !== item.id).slice(0, 12);
 
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
@@ -203,6 +205,18 @@ export default function ItemDetailScreen() {
               <AnimatedPressable style={styles.blurBtn} onPress={handleShare} accessibilityLabel="Share this listing">
                 <Ionicons name="share-outline" size={24} color="#fff" />
               </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.blurBtn}
+                onPress={() => setCollectionModalVisible(true)}
+                accessibilityLabel={isItemSavedAnywhere(item?.id) ? 'Saved to collection' : 'Save to collection'}
+                accessibilityHint="Opens collection picker"
+              >
+                <Ionicons
+                  name={isItemSavedAnywhere(item?.id) ? 'bookmark' : 'bookmark-outline'}
+                  size={24}
+                  color={isItemSavedAnywhere(item?.id) ? Colors.brand : '#fff'}
+                />
+              </AnimatedPressable>
               <View style={styles.blurBtn}>
                 <AnimatedHeart
                   isActive={isFav}
@@ -217,41 +231,41 @@ export default function ItemDetailScreen() {
         </Reanimated.View>
 
         <View style={styles.detailsContainer}>
-          {/* ── Seller Card at Top ── */}
-          <View style={styles.sellerCardTop}>
-            <AnimatedPressable
-              style={styles.sellerIdentityTapTop}
-              onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
-              activeOpacity={0.86}
-              accessibilityRole="button"
-              accessibilityLabel={`Open @${seller.username} profile`}
-              accessibilityHint="Shows seller profile and trust details"
-            >
-              <CachedImage uri={seller.avatar} style={styles.sellerAvatarTop} containerStyle={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
-              <View style={styles.sellerInfoTop}>
-                <Text style={styles.sellerNameTop}>@{seller.username}</Text>
-                <Text style={styles.sellerLocationTop} numberOfLines={1}>{seller.location}</Text>
-              </View>
-            </AnimatedPressable>
-          </View>
 
-          {/* ── Price & Details Row ── */}
-          <View style={styles.priceDetailsRow}>
-            <View style={styles.priceSection}>
-              <Text style={styles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
-              {item.priceWithProtection && (
-                <Text style={styles.protectionText}>
-                  incl. {formatFromFiat(item.priceWithProtection - item.price, 'GBP', { displayMode: 'fiat' })} Platform charge
-                </Text>
-              )}
-            </View>
-            <View style={styles.itemMetaSection}>
-              <Text style={styles.brandTag} numberOfLines={1} ellipsizeMode="tail">{item.brand}</Text>
-              <Text style={styles.sizeConditionTag}>{item.size} • {item.condition}</Text>
-            </View>
-          </View>
-
+          {/* ── Title ── */}
           <Text style={styles.title}>{item.title}</Text>
+
+          {/* ── Price ── */}
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+            {item.priceWithProtection > item.price && (
+              <Text style={styles.protectionText}>
+                + {formatFromFiat(item.priceWithProtection - item.price, 'GBP', { displayMode: 'fiat' })} protection
+              </Text>
+            )}
+          </View>
+
+          {/* ── Product Attributes ── */}
+          <View style={styles.attributesRow}>
+            <View style={styles.attributeChip}>
+              <Text style={styles.attributeLabel}>Brand</Text>
+              <Text style={styles.attributeValue} numberOfLines={1}>{item.brand}</Text>
+            </View>
+            <View style={styles.attributeChip}>
+              <Text style={styles.attributeLabel}>Size</Text>
+              <Text style={styles.attributeValue}>{item.size}</Text>
+            </View>
+            <View style={styles.attributeChip}>
+              <Text style={styles.attributeLabel}>Condition</Text>
+              <Text style={styles.attributeValue}>{item.condition}</Text>
+            </View>
+          </View>
+
+          {/* ── Description ── */}
+          <View style={styles.descriptionBox}>
+            <Text style={styles.description}>{item.description}</Text>
+            <Text style={styles.timePosted}>Posted 2 hours ago · {seller.location}</Text>
+          </View>
 
           {/* Phase 3: Removed sync status card - cleaner detail view */}
           {lastError ? (
@@ -264,21 +278,7 @@ export default function ItemDetailScreen() {
             />
           ) : null}
 
-          <View style={styles.descriptionBox}>
-            <Text style={styles.description}>{item.description}</Text>
-            <Text style={styles.timePosted}>Posted 2 hours ago in {seller.location}</Text>
-            <TouchableOpacity onPress={onShare} style={styles.headerAction}>
-              <Ionicons name="share-outline" size={24} color={Colors.textPrimary} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setCollectionModalVisible(true)} style={styles.headerAction}>
-              <Ionicons name="add-circle-outline" size={26} color={isItemSavedAnywhere(item?.id) ? Colors.brand : Colors.textPrimary} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onToggleSaved} style={styles.headerAction}>
-              <AnimatedHeart size={24} isActive={isFav} onToggle={handleToggleFav} />
-            </TouchableOpacity>
-          </View>
-
-          {/* ── Seller Card ── */}
+          {/* ── Seller Card (single, comprehensive) ── */}
           <View style={styles.sellerCard}>
             <AnimatedPressable
               style={styles.sellerIdentityTap}
@@ -286,14 +286,15 @@ export default function ItemDetailScreen() {
               activeOpacity={0.86}
               accessibilityRole="button"
               accessibilityLabel={`Open @${seller.username} profile`}
-              accessibilityHint="Shows seller profile and trust details"
             >
-              <CachedImage uri={seller.avatar} style={styles.sellerAvatar} containerStyle={{ width: 46, height: 46, borderRadius: 23 }} contentFit="cover" />
+              <CachedImage uri={seller.avatar} style={styles.sellerAvatar} containerStyle={{ width: 52, height: 52, borderRadius: 26 }} contentFit="cover" />
               <View style={styles.sellerInfo}>
                 <Text style={styles.sellerName}>@{seller.username}</Text>
-                <Text style={styles.sellerLocation} numberOfLines={1}>{seller.location}</Text>
-                <Text style={styles.sellerStats}>{seller.rating} ★ • {seller.reviewCount} Reviews</Text>
-                <Text style={styles.sellerLastSeen}>Last seen: {seller.lastSeen}</Text>
+                <View style={styles.sellerMetaRow}>
+                  <Ionicons name="star" size={12} color={Colors.brand} />
+                  <Text style={styles.sellerStats}>{seller.rating} · {seller.reviewCount} reviews</Text>
+                </View>
+                <Text style={styles.sellerLastSeen}>Last seen {seller.lastSeen} · {seller.location}</Text>
               </View>
             </AnimatedPressable>
 
@@ -309,16 +310,19 @@ export default function ItemDetailScreen() {
                   focusQuery: seller.username,
                   partnerUserId: seller.id,
                 })}
-              accessibilityLabel={`Message @${seller.username}`}
-              accessibilityHint="Opens chat with this seller"
             />
           </View>
 
-          {/* Restored Similar Items Feature */}
+          {/* ── More from this seller ── */}
           {sellerItems.length > 0 && (
             <View style={styles.sellerItemsSection}>
-              <Text style={styles.sectionTitle}>More from {seller.username}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>More from @{seller.username}</Text>
+                <AnimatedPressable onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}>
+                  <Text style={styles.sectionLink}>See all</Text>
+                </AnimatedPressable>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
                 {sellerItems.map(sItem => (
                   <AnimatedPressable
                     key={sItem.id}
@@ -329,9 +333,33 @@ export default function ItemDetailScreen() {
                       style={styles.sellerItemMediaWrap}
                       sharedTransitionTag={`image-${sItem.id}-0`}
                     >
-                      <CachedImage uri={sItem.images[0]} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 12 }} contentFit="cover" />
+                      <CachedImage uri={sItem.images[0]} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 14 }} contentFit="cover" />
                     </SharedTransitionView>
                     <Text style={styles.sellerItemPrice}>{formatFromFiat(sItem.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                  </AnimatedPressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ── You may also like ── */}
+          {otherListings.length > 0 && (
+            <View style={styles.sellerItemsSection}>
+              <Text style={styles.sectionTitle}>You may also like</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
+                {otherListings.map(oItem => (
+                  <AnimatedPressable
+                    key={oItem.id}
+                    style={styles.sellerItemCard}
+                    onPress={() => navigation.push('ItemDetail', { itemId: oItem.id })}
+                  >
+                    <SharedTransitionView
+                      style={styles.sellerItemMediaWrap}
+                      sharedTransitionTag={`image-${oItem.id}-0`}
+                    >
+                      <CachedImage uri={oItem.images[0]} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 14 }} contentFit="cover" />
+                    </SharedTransitionView>
+                    <Text style={styles.sellerItemPrice}>{formatFromFiat(oItem.price, 'GBP', { displayMode: 'fiat' })}</Text>
                   </AnimatedPressable>
                 ))}
               </ScrollView>
@@ -375,69 +403,118 @@ export default function ItemDetailScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add to Collection</Text>
+              <Text style={styles.modalTitle}>Save</Text>
               <TouchableOpacity onPress={() => setCollectionModalVisible(false)}>
                 <Ionicons name="close" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            {collections.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No collections yet</Text>
+            {/* Individual Save Toggle */}
+            <TouchableOpacity
+              style={styles.saveToggleRow}
+              onPress={() => {
+                toggleSavedProduct(item?.id);
+                show(isSavedProduct(item?.id) ? 'Removed from saved' : 'Saved', 'success');
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.saveToggleLeft}>
+                <View style={[styles.saveToggleIcon, { backgroundColor: isSavedProduct(item?.id) ? 'rgba(52,199,89,0.12)' : Colors.surfaceAlt }]}>
+                  <Ionicons name={isSavedProduct(item?.id) ? 'bookmark' : 'bookmark-outline'} size={20} color={isSavedProduct(item?.id) ? '#34C759' : Colors.textPrimary} />
+                </View>
+                <View>
+                  <Text style={styles.saveToggleTitle}>{isSavedProduct(item?.id) ? 'Saved' : 'Save for later'}</Text>
+                  <Text style={styles.saveToggleSub}>{isSavedProduct(item?.id) ? 'In your saved items' : 'Add to your saved items'}</Text>
+                </View>
+              </View>
+              <Ionicons
+                name={isSavedProduct(item?.id) ? 'checkmark-circle' : 'ellipse-outline'}
+                size={26}
+                color={isSavedProduct(item?.id) ? '#34C759' : Colors.border}
+              />
+            </TouchableOpacity>
+
+            {/* Collections Section */}
+            <Text style={styles.modalSectionTitle}>Collections</Text>
+            <FlatList
+              data={collections}
+              keyExtractor={(col) => col.id}
+              ListEmptyComponent={(
+                <Text style={styles.emptyText}>No collections yet. Create one below.</Text>
+              )}
+              renderItem={({ item: collection }) => (
                 <TouchableOpacity
-                  style={styles.createCollectionBtn}
+                  style={[
+                    styles.collectionItem,
+                    isInCollection(collection.id, item?.id) && styles.collectionItemSelected
+                  ]}
                   onPress={() => {
-                    setCollectionModalVisible(false);
-                    navigation.navigate('Collections');
+                    if (isInCollection(collection.id, item?.id)) {
+                      removeFromCollection(collection.id, item?.id);
+                      show(`Removed from ${collection.name}`, 'info');
+                    } else {
+                      addToCollection(collection.id, item?.id);
+                      show(`Added to ${collection.name}`, 'success');
+                    }
                   }}
                 >
-                  <Text style={styles.createCollectionBtnText}>Create Collection</Text>
+                  <View style={styles.collectionInfo}>
+                    <Text style={styles.collectionName}>{collection.name}</Text>
+                    <Text style={styles.collectionCount}>{collection.itemIds.length} items</Text>
+                  </View>
+                  {isInCollection(collection.id, item?.id) && (
+                    <Ionicons name="checkmark-circle" size={24} color={Colors.brand} />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+
+            {/* Inline Create Collection */}
+            {showCreateInput ? (
+              <View style={styles.createInputWrap}>
+                <TextInput
+                  style={styles.createInput}
+                  placeholder="Collection name"
+                  placeholderTextColor={Colors.textMuted}
+                  value={newCollectionName}
+                  onChangeText={setNewCollectionName}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={() => {
+                    if (newCollectionName.trim()) {
+                      const newId = createCollection(newCollectionName.trim());
+                      addToCollection(newId, item?.id);
+                      setNewCollectionName('');
+                      setShowCreateInput(false);
+                      show('Created and added to collection', 'success');
+                    }
+                  }}
+                />
+                <TouchableOpacity
+                  style={[styles.createInputBtn, !newCollectionName.trim() && { opacity: 0.45 }]}
+                  disabled={!newCollectionName.trim()}
+                  onPress={() => {
+                    if (newCollectionName.trim()) {
+                      const newId = createCollection(newCollectionName.trim());
+                      addToCollection(newId, item?.id);
+                      setNewCollectionName('');
+                      setShowCreateInput(false);
+                      show('Created and added to collection', 'success');
+                    }
+                  }}
+                >
+                  <Text style={styles.createInputBtnText}>Create</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <FlatList
-                data={collections}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item: collection }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.collectionItem,
-                      isInCollection(collection.id, item?.id) && styles.collectionItemSelected
-                    ]}
-                    onPress={() => {
-                      if (isInCollection(collection.id, item?.id)) {
-                        removeFromCollection(collection.id, item?.id);
-                        show(`Removed from ${collection.name}`, 'info');
-                      } else {
-                        addToCollection(collection.id, item?.id);
-                        show(`Added to ${collection.name}`, 'success');
-                      }
-                    }}
-                  >
-                    <View style={styles.collectionInfo}>
-                      <Text style={styles.collectionName}>{collection.name}</Text>
-                      <Text style={styles.collectionCount}>
-                        {collection.itemIds.length} items
-                      </Text>
-                    </View>
-                    {isInCollection(collection.id, item?.id) && (
-                      <Ionicons name="checkmark-circle" size={24} color={Colors.brand} />
-                    )}
-                  </TouchableOpacity>
-                )}
-              />
+              <TouchableOpacity
+                style={styles.createNewBtn}
+                onPress={() => setShowCreateInput(true)}
+              >
+                <Ionicons name="add-circle-outline" size={20} color={Colors.brand} />
+                <Text style={styles.createNewBtnText}>Create New Collection</Text>
+              </TouchableOpacity>
             )}
-
-            <TouchableOpacity
-              style={styles.createNewBtn}
-              onPress={() => {
-                setCollectionModalVisible(false);
-                navigation.navigate('Collections');
-              }}
-            >
-              <Ionicons name="add-circle-outline" size={20} color={Colors.brand} />
-              <Text style={styles.createNewBtnText}>Create New Collection</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -464,59 +541,14 @@ const styles = StyleSheet.create({
   detailsContainer: { paddingHorizontal: 20, paddingTop: 24 },
   price: { fontSize: 38, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, letterSpacing: -0.9, marginBottom: 2 },
   brand: { fontSize: 15, fontFamily: 'Inter_300Light', color: Colors.textSecondary, letterSpacing: 0.34, marginBottom: 8 },
-  sellerCardTop: {
+  priceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: PANEL_BG,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  sellerIdentityTapTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: 10,
+    marginBottom: 8,
   },
-  sellerAvatarTop: { width: 40, height: 40, borderRadius: 20 },
-  sellerInfoTop: { flex: 1 },
-  sellerNameTop: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
-  sellerLocationTop: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 2 },
-  priceDetailsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  priceSection: {
-    flex: 1,
-    alignItems: 'flex-start',
-  },
-  itemMetaSection: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  brandTag: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.textPrimary,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  sizeConditionTag: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.textSecondary,
-  },
-  protectionText: { fontSize: 12, color: Colors.textSecondary, fontFamily: 'Inter_400Regular', marginBottom: 12 },
-  title: { fontSize: 22, fontFamily: 'Inter_500Medium', color: Colors.textPrimary, marginBottom: 12, lineHeight: 30 },
+  protectionText: { fontSize: 13, color: Colors.textMuted, fontFamily: 'Inter_500Medium' },
+  title: { fontSize: 22, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 6, lineHeight: 30 },
   sizeCondition: { fontSize: 15, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
   syncStatusCard: {
     marginTop: 14,
@@ -549,23 +581,50 @@ const styles = StyleSheet.create({
   },
   syncFallbackHint: {
     marginTop: 8,
+    flex: 1,
+    backgroundColor: PANEL_BG,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+  },
+  attributesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  attributeChip: {
+    flex: 1,
+    backgroundColor: PANEL_BG,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    alignItems: 'center',
+  },
+  attributeLabel: {
     fontSize: 11,
-    lineHeight: 15,
-    color: Colors.textMuted,
     fontFamily: 'Inter_500Medium',
+    color: Colors.textMuted,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  attributeValue: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textPrimary,
   },
   descriptionBox: {
-    marginTop: Space.lg,
-    backgroundColor: PANEL_ALT_BG,
-    padding: Space.lg,
-    borderRadius: Radius.xl,
-    shadowColor: '#000',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  headerAction: {
-    padding: 8,
+    marginTop: 4,
+    backgroundColor: PANEL_BG,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
   },
   modalOverlay: {
     flex: 1,
@@ -651,6 +710,82 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     color: Colors.brand,
   },
+  saveToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: PANEL_BG,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    marginBottom: 16,
+  },
+  saveToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  saveToggleIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveToggleTitle: {
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+  },
+  saveToggleSub: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  modalSectionTitle: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  createInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  createInput: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: PANEL_BG,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textPrimary,
+  },
+  createInputBtn: {
+    height: 48,
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createInputBtnText: {
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.background,
+  },
   description: { fontSize: 15, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, lineHeight: 24 },
   timePosted: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 12 },
   statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
@@ -658,16 +793,14 @@ const styles = StyleSheet.create({
   sellerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 26,
+    marginTop: 24,
     paddingHorizontal: 14,
     paddingVertical: 14,
     borderRadius: 20,
     backgroundColor: PANEL_BG,
-    gap: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
+    gap: 12,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
   },
   sellerIdentityTap: {
     flex: 1,
@@ -675,25 +808,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  sellerAvatar: { width: 56, height: 56, borderRadius: 28 },
+  sellerAvatar: { width: 52, height: 52, borderRadius: 26 },
   sellerInfo: { flex: 1 },
-  sellerName: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
-  sellerLocation: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 2 },
-  sellerStats: { fontSize: 13, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 4 },
-  sellerLastSeen: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.textMuted, marginTop: 2 },
+  sellerName: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
+  sellerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  sellerStats: { fontSize: 13, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
+  sellerLastSeen: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.textMuted, marginTop: 2 },
   messageSellerBtn: {
     minHeight: 38,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_ALT_BG,
+    backgroundColor: Colors.background,
   },
-  messageSellerBtnText: { color: Colors.textPrimary, fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  sellerItemsSection: { marginTop: 24, paddingBottom: 32 },
-  sectionTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 16 },
-  sellerItemCard: { width: 100 },
-  sellerItemMediaWrap: { width: 100, height: 130, borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
+  messageSellerBtnText: { color: Colors.textPrimary, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  sellerItemsSection: { marginTop: 28, paddingBottom: 8 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    paddingRight: 4,
+  },
+  sectionTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
+  sectionLink: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.brand },
+  sellerItemCard: { width: 140 },
+  sellerItemMediaWrap: { width: 140, height: 180, borderRadius: 14, overflow: 'hidden', marginBottom: 8 },
   sellerItemImg: { width: '100%', height: '100%' },
   sellerItemPrice: { fontSize: 14, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
   floatingBuyBar: {

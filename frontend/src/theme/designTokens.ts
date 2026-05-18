@@ -57,22 +57,22 @@ interface TypeStyle {
 export const Type: Record<string, TypeStyle> = {
   /** 24/32/700 - Hero titles, screen headers, profile names */
   title: { size: 24, lineHeight: 32, weight: '700', letterSpacing: -0.6 },
-  
+
   /** 17/24/600 - Section titles, card headers, product names */
   subtitle: { size: 17, lineHeight: 24, weight: '600', letterSpacing: -0.4 },
-  
+
   /** 14/20/400 - Body text, descriptions, general content */
   body: { size: 14, lineHeight: 20, weight: '400', letterSpacing: -0.2 },
-  
+
   /** 14/20/600 - Button text, emphasized content, prices */
   price: { size: 14, lineHeight: 20, weight: '600', letterSpacing: -0.2 },
-  
+
   /** 12/16/400 - Captions, metadata, timestamps, hints */
   caption: { size: 12, lineHeight: 16, weight: '400', letterSpacing: 0 },
-  
+
   /** 11/14/500 - Small metadata, seller handles (ELEVATED) */
   meta: { size: 11, lineHeight: 14, weight: '500', letterSpacing: 0.15 },
-  
+
   /** 18/24/700 - Large prices for detail screen (ELEVATED) */
   priceLarge: { size: 18, lineHeight: 24, weight: '700', letterSpacing: -0.3 },
 } as const;

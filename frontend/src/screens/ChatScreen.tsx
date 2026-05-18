@@ -27,8 +27,10 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { MOCK_USERS } from '../data/mockData';
-import { mockArrayOrEmpty } from '../utils/mockGate';
+import { MOCK_USERS, MOCK_LISTINGS } from '../data/mockData';
+import { mockArrayOrEmpty, mockFind } from '../utils/mockGate';
+import { useBackendData } from '../context/BackendDataContext';
+import { getListingCoverUri } from '../utils/media';
 import { useStore } from '../store/useStore';
 import {
   createGroupInviteLinkOnApi,
@@ -117,9 +119,72 @@ const INITIAL_MESSAGES: Message[] = [
 
 const CHAT_ORDER_ID = 'ord1';
 
+function TaggedItemCard({
+  itemId,
+  navigation,
+  formatFromFiat,
+}: {
+  itemId?: string;
+  navigation: any;
+  formatFromFiat: any;
+}) {
+  const { listings } = useBackendData();
+  const listing = useMemo(() => {
+    if (!itemId) return null;
+    return listings.find((l) => l.id === itemId) || mockFind(MOCK_LISTINGS, (l) => l.id === itemId);
+  }, [itemId, listings]);
+
+  if (!listing) {
+    return (
+      <View style={styles.contextGallery}>
+        <View style={styles.itemCard}>
+          <View style={styles.itemThumb}>
+            <Ionicons name="shirt-outline" size={24} color={MUTED} />
+          </View>
+          <View style={styles.itemInfo}>
+            <Text style={styles.itemTitle}>Simple striped shirt</Text>
+            <Text style={styles.itemPrice}>{formatFromFiat(35, 'GBP', { displayMode: 'fiat' })}</Text>
+            <Text style={styles.itemProtection}>{formatFromFiat(37.45, 'GBP', { displayMode: 'fiat' })} Includes platform charge</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.contextGallery}>
+      <AnimatedPressable
+        style={styles.itemCard}
+        onPress={() => navigation.navigate('ItemDetail', { itemId: listing.id })}
+        activeOpacity={0.85}
+      >
+        <CachedImage
+          uri={getListingCoverUri(listing.images, 'https://picsum.photos/seed/chat-item/100/100')}
+          style={styles.itemThumbImage}
+          containerStyle={styles.itemThumb}
+          contentFit="cover"
+        />
+        <View style={styles.itemInfo}>
+          <Text style={styles.itemTitle} numberOfLines={1}>{listing.title}</Text>
+          <Text style={styles.itemPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+          {listing.priceWithProtection > listing.price ? (
+            <Text style={styles.itemProtection}>
+              {formatFromFiat(listing.priceWithProtection, 'GBP', { displayMode: 'fiat' })} includes protection
+            </Text>
+          ) : (
+            <Text style={styles.itemProtection}>Free shipping available</Text>
+          )}
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={MUTED} />
+      </AnimatedPressable>
+    </View>
+  );
+}
+
 export default function ChatScreen({ navigation, route }: Props) {
-  const { conversationId } = route.params;
+  const { conversationId, itemId: routeItemId } = route.params;
   const currentUser = useStore((state) => state.currentUser);
+  const { listings } = useBackendData();
   const conversations = useStore((state) => state.conversations);
   const bots = useStore((state) => state.availableChatBots);
   const appendConversationMessage = useStore((state) => state.appendConversationMessage);
@@ -745,18 +810,11 @@ export default function ChatScreen({ navigation, route }: Props) {
           </View>
         </View>
       ) : (
-        <View style={styles.contextGallery}>
-          <View style={styles.itemCard}>
-            <View style={styles.itemThumb}>
-              <Ionicons name="shirt-outline" size={24} color={MUTED} />
-            </View>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemTitle}>Simple striped shirt</Text>
-              <Text style={styles.itemPrice}>{formatFromFiat(35, 'GBP', { displayMode: 'fiat' })}</Text>
-              <Text style={styles.itemProtection}>{formatFromFiat(37.45, 'GBP', { displayMode: 'fiat' })} Includes platform charge</Text>
-            </View>
-          </View>
-        </View>
+        <TaggedItemCard
+          itemId={routeItemId}
+          navigation={navigation}
+          formatFromFiat={formatFromFiat}
+        />
       )}
 
       <View style={styles.opsContainer}>
@@ -1188,6 +1246,12 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_ALT,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  itemThumbImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
   },
   itemInfo: { flex: 1 },
   itemTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: TEXT, marginBottom: 4 },

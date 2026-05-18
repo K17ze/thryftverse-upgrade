@@ -24,6 +24,7 @@ import { AppSegmentControl, AppSegmentOption } from '../components/ui/AppSegment
 
 type Props = StackScreenProps<RootStackParamList, 'PosterEditor'>;
 type StoryPosition = 'top' | 'center' | 'bottom';
+const IS_LIGHT = ActiveTheme === 'light';
 
 type LayerOffset = {
   x: number;
@@ -35,7 +36,11 @@ const MIN_LAYER_HEIGHT = 38;
 const HORIZONTAL_PADDING = 10;
 const VERTICAL_PADDING = 14;
 
-const COLOR_OPTIONS = ['#ffffff', '#e2d5c2', '#ffd9b5', '#d6f5de', '#ffccda'];
+const COLOR_OPTIONS = [
+  '#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00',
+  '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55',
+  '#e2d5c2', '#ffd9b5', '#d6f5de', '#ffccda', '#c7c7cc',
+];
 
 const POSITION_OPTIONS: AppSegmentOption<StoryPosition>[] = [
   { value: 'top', label: 'TOP', accessibilityLabel: 'Move text near top of poster' },
@@ -239,31 +244,13 @@ export default function PosterEditorScreen({ navigation, route }: Props) {
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
       <View style={styles.header}>
-        <AnimatedPressable
-          style={styles.iconBtn}
-          activeOpacity={0.85}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Close story editor"
-        >
-          <Ionicons name="close" size={20} color={Colors.textPrimary} />
+        <AnimatedPressable style={styles.headerBtn} activeOpacity={0.85} onPress={() => navigation.goBack()}>
+          <Ionicons name="close" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
-
-        <View style={styles.headerCopy}>
-          <Text style={styles.headerLabel}>STORY EDITOR</Text>
-          <Text style={styles.headerTitle}>Move text on canvas</Text>
-        </View>
-
-        <AppButton
-          title="Done"
-          variant="primary"
-          size="sm"
-          align="center"
-          style={styles.doneBtn}
-          titleStyle={styles.doneBtnText}
-          onPress={handleDone}
-          accessibilityLabel="Apply story edit"
-        />
+        <Text style={styles.headerTitle}>Edit Text</Text>
+        <AnimatedPressable style={[styles.headerBtn, styles.donePill]} activeOpacity={0.85} onPress={handleDone}>
+          <Text style={styles.donePillText}>Done</Text>
+        </AnimatedPressable>
       </View>
 
       <View style={styles.canvasWrap} onLayout={handleCanvasLayout}>
@@ -277,14 +264,12 @@ export default function PosterEditorScreen({ navigation, route }: Props) {
             {
               left: layerOffset.x,
               top: layerOffset.y,
-              borderColor: isDragging ? Colors.brand : 'rgba(255,255,255,0.58)',
+              borderColor: isDragging ? Colors.brand : 'rgba(255,255,255,0.35)',
+              backgroundColor: isDragging ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.22)',
             },
           ]}
           onPress={() => inputRef.current?.focus()}
           activeOpacity={0.96}
-          accessibilityRole="button"
-          accessibilityLabel="Drag story text layer"
-          accessibilityHint="Drag this text around the poster"
           onLayout={handleLayerLayout}
         >
           <Text style={[styles.layerText, { color: textColor }, text.trim().length === 0 && styles.layerPlaceholder]}>
@@ -295,69 +280,54 @@ export default function PosterEditorScreen({ navigation, route }: Props) {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.controlsPanel}>
+          {/* Text input */}
           <TextInput
             ref={inputRef}
             style={styles.textInput}
             value={text}
             onChangeText={setText}
-            placeholder="Type story text"
+            placeholder="Type something..."
             placeholderTextColor={Colors.textMuted}
             maxLength={56}
+            autoFocus
           />
 
-          <Text style={styles.dragHint}>Drag the text directly on the canvas. Use snap presets for quick placement.</Text>
-
-          <View style={styles.controlRow}>
-            <Text style={styles.controlLabel}>Color</Text>
-            <View style={styles.colorRow}>
-              {COLOR_OPTIONS.map((option) => {
-                const isActive = option === textColor;
-
-                return (
-                  <AnimatedPressable
-                    key={option}
-                    style={[
-                      styles.colorChip,
-                      { backgroundColor: option },
-                      isActive && styles.colorChipActive,
-                    ]}
-                    activeOpacity={0.9}
-                    onPress={() => setTextColor(option)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Select text color"
-                  >
-                    {isActive ? <Ionicons name="checkmark" size={11} color={Colors.textInverse} /> : null}
-                  </AnimatedPressable>
-                );
-              })}
-            </View>
+          {/* Colors */}
+          <View style={styles.colorRow}>
+            {COLOR_OPTIONS.map((option) => {
+              const isActive = option === textColor;
+              return (
+                <AnimatedPressable
+                  key={option}
+                  style={[
+                    styles.colorOrb,
+                    { backgroundColor: option },
+                    isActive && styles.colorOrbActive,
+                  ]}
+                  activeOpacity={0.9}
+                  onPress={() => setTextColor(option)}
+                >
+                  {isActive && <Ionicons name="checkmark" size={14} color={option === '#ffffff' || option === '#c7c7cc' || option === '#e2d5c2' || option === '#ffd9b5' || option === '#d6f5de' || option === '#ffccda' ? '#000' : '#fff'} />}
+                </AnimatedPressable>
+              );
+            })}
           </View>
 
-          <View style={styles.controlRow}>
-            <Text style={styles.controlLabel}>Snap</Text>
-            <AppSegmentControl
-              options={POSITION_OPTIONS}
-              value={positionHint}
-              onChange={applyPresetPosition}
-              style={styles.positionRow}
-              fullWidth
-              optionStyle={styles.positionChip}
-              optionActiveStyle={styles.positionChipActive}
-              optionTextStyle={styles.positionChipText}
-              optionTextActiveStyle={styles.positionChipTextActive}
-            />
+          {/* Snap position */}
+          <View style={styles.snapRow}>
+            {(['top', 'center', 'bottom'] as StoryPosition[]).map((pos) => (
+              <AnimatedPressable
+                key={pos}
+                style={[styles.snapPill, positionHint === pos && styles.snapPillActive]}
+                onPress={() => applyPresetPosition(pos)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.snapPillText, positionHint === pos && styles.snapPillTextActive]}>
+                  {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                </Text>
+              </AnimatedPressable>
+            ))}
           </View>
-
-          <AppButton
-            title="Clear Text"
-            variant="secondary"
-            size="sm"
-            align="center"
-            style={styles.clearBtn}
-            titleStyle={styles.clearBtnText}
-            onPress={() => setText('')}
-            accessibilityLabel="Clear story text"
-          />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -373,54 +343,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
-  iconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
-  },
-  headerCopy: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  headerLabel: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    letterSpacing: 0.9,
-    fontFamily: 'Inter_700Bold',
   },
   headerTitle: {
-    marginTop: 2,
-    color: Colors.textPrimary,
-    fontSize: 14,
+    fontSize: 17,
     fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+    letterSpacing: -0.3,
   },
-  doneBtn: {
-    minHeight: 34,
-    borderRadius: 14,
-    paddingHorizontal: 10,
+  donePill: {
+    backgroundColor: Colors.brand,
+    width: 'auto',
+    paddingHorizontal: 16,
   },
-  doneBtnText: {
-    color: Colors.background,
-    fontSize: 12,
+  donePillText: {
+    color: '#fff',
+    fontSize: 14,
     fontFamily: 'Inter_700Bold',
   },
   canvasWrap: {
     flex: 1,
-    marginHorizontal: 12,
-    marginTop: 10,
-    borderRadius: 20,
+    marginHorizontal: 20,
+    marginTop: 14,
+    borderRadius: 24,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
   },
@@ -434,115 +392,93 @@ const styles = StyleSheet.create({
   },
   layerBubble: {
     position: 'absolute',
-    borderRadius: 14,
-    borderWidth: 1,
-    backgroundColor: 'rgba(0,0,0,0.32)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     maxWidth: '82%',
   },
   layerText: {
-    color: '#fff',
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: 'Inter_700Bold',
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowRadius: 8,
-    letterSpacing: 0.2,
+    textShadowOffset: { width: 0, height: 2 },
+    letterSpacing: 0.3,
   },
   layerPlaceholder: {
-    opacity: 0.75,
+    opacity: 0.6,
   },
   controlsPanel: {
-    marginTop: 10,
-    borderTopWidth: 1,
+    marginTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
     backgroundColor: Colors.background,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 14,
-    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 20,
+    gap: 14,
   },
   textInput: {
-    minHeight: 42,
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
     color: Colors.textPrimary,
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Inter_500Medium',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  dragHint: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-    lineHeight: 16,
-  },
-  controlRow: {
-    gap: 7,
-  },
-  controlLabel: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontFamily: 'Inter_700Bold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   colorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    paddingHorizontal: 4,
   },
-  colorChip: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  colorOrb: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  colorChipActive: {
+  colorOrbActive: {
     borderWidth: 2,
     borderColor: Colors.textPrimary,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
-  positionRow: {
+  snapRow: {
     flexDirection: 'row',
     gap: 8,
   },
-  positionChip: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    minHeight: 34,
-  },
-  positionChipActive: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  positionChipText: {
-    color: Colors.textSecondary,
-    fontSize: 10,
-    fontFamily: 'Inter_700Bold',
-  },
-  positionChipTextActive: {
-    color: Colors.brand,
-  },
-  clearBtn: {
-    marginTop: 2,
-    minHeight: 34,
+  snapPill: {
+    flex: 1,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
-  clearBtnText: {
+  snapPillActive: {
+    borderColor: Colors.brand,
+    backgroundColor: IS_LIGHT ? '#ede4d3' : '#2f291f',
+  },
+  snapPillText: {
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
+  },
+  snapPillTextActive: {
+    color: Colors.brand,
+    fontFamily: 'Inter_700Bold',
   },
 });

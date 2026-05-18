@@ -26,8 +26,6 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
 import { deactivateNotificationDevice, registerNotificationDevice } from '../services/notificationsApi';
-import { MOCK_USERS } from '../data/mockData';
-import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'PushNotifications'>;
 
@@ -54,7 +52,6 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const [isSyncingDevice, setIsSyncingDevice] = React.useState(false);
   const [registeredToken, setRegisteredToken] = React.useState<string | null>(null);
   const [isDeviceRegistered, setIsDeviceRegistered] = React.useState(false);
-  const supportUser = MOCK_USERS[0];
 
   const resolvePushPlatform = React.useCallback((): 'ios' | 'android' | 'web' => {
     if (Platform.OS === 'ios') {
@@ -184,15 +181,6 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     show,
   ]);
 
-  const handleOpenSupportChat = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'push notifications',
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for push setup help.', 'info');
-  }, [navigation, show, supportUser.id]);
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
@@ -321,59 +309,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.2,
-  },
-  supportRow: {
-    marginTop: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  supportIdentity: {
-    flex: 1,
-    minHeight: 34,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  supportAvatarWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  supportAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  supportCopyWrap: {
-    flex: 1,
-  },
-  supportTitle: {
-    color: TEXT,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  supportHandle: {
-    marginTop: 1,
-    color: MUTED,
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  supportMessageBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   footerNote: { fontSize: 12, color: MUTED, textAlign: 'center', lineHeight: 18, paddingHorizontal: 10 },
   footerMeta: { marginTop: 10, fontSize: 12, color: MUTED, textAlign: 'center' },

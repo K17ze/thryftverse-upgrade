@@ -289,7 +289,6 @@ export default function MyProfileScreen() {
         value: `${coOwnHoldings.length} assets`,
         color: IS_LIGHT ? '#5c4830' : '#ccb893',
       },
-      { icon: 'bookmark-outline', label: 'Watchlist', route: 'Favourites', color: IS_LIGHT ? '#704b3b' : '#e6c8b4' },
     ],
     [formatFromFiat, coOwnHoldings.length]
   );
@@ -494,10 +493,10 @@ export default function MyProfileScreen() {
                 key={`hero_media_${item.id}_${index}`}
                 style={[styles.mediaTile, (index + 1) % 3 === 0 && styles.mediaTileLast]}
                 activeOpacity={0.9}
-                onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+                onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
                 accessibilityRole="button"
-                accessibilityLabel={`Open listing ${item.title}`}
-                accessibilityHint="Opens the item detail page"
+                accessibilityLabel={`Manage listing ${item.title}`}
+                accessibilityHint="Opens listing management"
               >
                 <SharedTransitionView
                   style={styles.mediaThumbWrap}
@@ -600,10 +599,10 @@ export default function MyProfileScreen() {
                 key={item.id}
                 style={styles.wardrobeItem}
                 activeOpacity={0.9}
-                onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+                onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
                 accessibilityRole="button"
-                accessibilityLabel={`Open wardrobe listing ${item.title}`}
-                accessibilityHint="Opens listing details"
+                accessibilityLabel={`Manage listing ${item.title}`}
+                accessibilityHint="Opens listing management"
               >
                 <SharedTransitionView
                   style={styles.wardrobeImageWrap}

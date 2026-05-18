@@ -24,8 +24,6 @@ import { buildBankAccountPaymentMethod } from '../utils/checkoutFlow';
 import { createUserPaymentMethod } from '../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { parseApiError } from '../lib/apiClient';
-import { MOCK_USERS } from '../data/mockData';
-import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'AddBankAccount'>;
 
@@ -45,7 +43,6 @@ export default function AddBankAccountScreen({ navigation }: Props) {
   const [sortCode, setSortCode] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
-  const supportUser = MOCK_USERS[0];
   const currentUser = useStore((state) => state.currentUser);
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
   const { show } = useToast();
@@ -145,15 +142,6 @@ export default function AddBankAccountScreen({ navigation }: Props) {
     }
   };
 
-  const handleOpenPaymentSupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'bank account setup',
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for bank setup help.', 'info');
-  }, [navigation, show, supportUser.id]);
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
@@ -180,39 +168,6 @@ export default function AddBankAccountScreen({ navigation }: Props) {
               <Text style={styles.blockedText}>Switch your country policy to enable bank withdrawal rails.</Text>
             </View>
           ) : null}
-
-          <View style={styles.supportRow}>
-            <AnimatedPressable
-              style={styles.supportIdentity}
-              onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={`Open @${supportUser.username} profile`}
-              accessibilityHint="Shows payment support profile"
-            >
-              <CachedImage
-                uri={supportUser.avatar}
-                style={styles.supportAvatar}
-                containerStyle={styles.supportAvatarWrap}
-                contentFit="cover"
-              />
-              <View style={styles.supportCopyWrap}>
-                <Text style={styles.supportTitle}>Need help adding this account?</Text>
-                <Text style={styles.supportHandle}>@{supportUser.username}</Text>
-              </View>
-            </AnimatedPressable>
-
-            <AnimatedPressable
-              style={styles.supportMessageBtn}
-              onPress={handleOpenPaymentSupport}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Message payment support"
-              accessibilityHint="Opens chat for bank setup help"
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-            </AnimatedPressable>
-          </View>
 
           <Text style={styles.intro}>
             Your bank account is used for withdrawals. We use bank-grade encryption to keep your details safe.
@@ -311,70 +266,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 14,
     marginBottom: 16,
   },
   blockedTitle: { fontSize: 13, fontWeight: '700', color: TEXT, marginBottom: 4 },
   blockedText: { fontSize: 12, color: MUTED, lineHeight: 18 },
-  supportRow: {
-    marginBottom: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  supportIdentity: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  supportAvatarWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-  },
-  supportAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-  },
-  supportCopyWrap: {
-    flex: 1,
-  },
-  supportTitle: {
-    color: TEXT,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  supportHandle: {
-    marginTop: 1,
-    color: MUTED,
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  supportMessageBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  intro: { fontSize: 14, color: MUTED, lineHeight: 20, marginBottom: 24 },
+  intro: { fontSize: 13, color: MUTED, lineHeight: 20, marginBottom: 20, textAlign: 'center' },
   sectionLabel: { fontSize: 11, color: MUTED, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 },
-  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
+  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
   fieldRow: { paddingHorizontal: 18, paddingVertical: 14 },
-  fieldLabel: { fontSize: 11, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
-  fieldInput: { fontSize: 16, color: TEXT, fontWeight: '500' },
+  fieldLabel: { fontSize: 12, color: MUTED, marginBottom: 6, fontWeight: '600' },
+  fieldInput: { fontSize: 16, color: TEXT, fontWeight: '500', paddingVertical: 4 },
   divider: { height: 1, backgroundColor: DIVIDER },
   secureRow: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', marginBottom: 16 },
   secureText: { fontSize: 12, color: BRAND },

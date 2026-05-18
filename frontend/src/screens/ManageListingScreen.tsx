@@ -1,58 +1,91 @@
 import React from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import { View,
+  View,
   Text,
   StyleSheet,
   ScrollView,
   StatusBar,
-  Alert
+  Alert,
+  Dimensions,
+  Share,
+  Switch,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, {
+  useAnimatedScrollHandler,
+  useSharedValue,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
+import { MOCK_LISTINGS } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
-import { getListingCoverUri } from '../utils/media';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const { width: SCREEN_W } = Dimensions.get('window');
+const IS_LIGHT = ActiveTheme === 'light';
+const CARD_BG = Colors.surface;
+const CARD_BORDER = Colors.border;
+const SUCCESS_TEXT = '#34C759';
+const DANGER_TEXT = '#FF3B30';
+const BRAND_TINT = IS_LIGHT ? 'rgba(198,166,108,0.18)' : 'rgba(215,185,143,0.22)';
+const WARN_TINT = 'rgba(245,166,35,0.12)';
+const ICON_BG = IS_LIGHT ? '#f4f1eb' : '#1a1a1a';
 
 type RouteT = RouteProp<RootStackParamList, 'ManageListing'>;
-const HEADER_BORDER = Colors.border;
-const PREVIEW_BG = Colors.surface;
-const STATUS_BG = Colors.surfaceAlt;
-const ACTION_BORDER = Colors.border;
-const EDIT_ICON_BG = Colors.surfaceAlt;
 
 export default function ManageListingScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
+  const insets = useSafeAreaInsets();
   const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
   const { show } = useToast();
   const { itemId } = route.params;
 
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
+
   const item = listings.find((l) => l.id === itemId) || mockFind(MOCK_LISTINGS, (l) => l.id === itemId) || listings[0] || MOCK_LISTINGS[0];
-  const seller = mockFind(MOCK_USERS, (u) => u.id === item.sellerId) || MOCK_USERS[0];
   const [isSold, setIsSold] = React.useState(Boolean(item.isSold));
   const [hasRecentBoost, setHasRecentBoost] = React.useState(false);
+  const [imgIndex, setImgIndex] = React.useState(0);
   const bumpFeeLabel = formatFromFiat(1.95, 'GBP', { displayMode: 'fiat' });
 
-  const handleMessageSeller = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: `listing_${item.id}_${seller.id}`,
-      focusQuery: item.title,
-      partnerUserId: seller.id,
-    });
-    show('Opening seller chat from listing manager.', 'info');
-  }, [item.id, item.title, navigation, seller.id, show]);
+  const images = React.useMemo(() => item.images?.length ? item.images : [`https://picsum.photos/seed/ml-${item.id}/800/800`], [item.images, item.id]);
+
+  const headerBgStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
+    return { backgroundColor: IS_LIGHT ? `rgba(247,245,241,${opacity})` : `rgba(10,10,10,${opacity})` };
+  });
+
+  const headerTitleStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(scrollY.value, [60, 140], [0, 1], Extrapolation.CLAMP);
+    return { opacity };
+  });
+
+  const handleShare = React.useCallback(async () => {
+    try {
+      await Share.share({
+        message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}.`,
+      });
+    } catch {
+      // silently fail
+    }
+  }, [item.title, item.price, formatFromFiat]);
 
   const handleBumpListing = () => {
-    Alert.alert('Bump Item', `Push this item to the top of the feed for ${bumpFeeLabel}?`, [
+    Alert.alert('Bump Listing', `Push this item to the top of the feed for ${bumpFeeLabel}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Confirm',
@@ -65,240 +98,416 @@ export default function ManageListingScreen() {
     ]);
   };
 
-  const handleMarkAsSold = () => {
-    Alert.alert('Mark as Sold', 'Are you sure you want to mark this item as sold? It will no longer be available for purchase.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Confirm',
-        style: 'default',
-        onPress: () => {
-          setIsSold(true);
-          show('Listing marked as sold.', 'success');
-        },
-      },
-    ]);
-  };
-
   const handleDeleteListing = () => {
-    Alert.alert('Delete Item', 'Are you sure you want to permanently delete this listing?', [
+    Alert.alert('Delete Listing', 'This cannot be undone. Permanently remove this listing?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          show('Listing deleted from your wardrobe.', 'success');
+          show('Listing deleted.', 'success');
           navigation.goBack();
         },
       },
     ]);
   };
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+  const toggleSold = (next: boolean) => {
+    if (next) {
+      Alert.alert('Mark as Sold', 'This item will no longer be available for purchase.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark Sold',
+          style: 'default',
+          onPress: () => { setIsSold(true); show('Listing marked as sold.', 'success'); },
+        },
+      ]);
+    } else {
+      setIsSold(false);
+      show('Item relisted', 'success');
+    }
+  };
 
-      <View style={styles.header}>
-        <AnimatedPressable
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to previous screen"
-        >
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+
+      <Reanimated.View style={[styles.floatingHeader, headerBgStyle, { paddingTop: Math.max(insets.top, 20) }]}>
+        <AnimatedPressable style={styles.hdrBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
-        <Text style={styles.headerTitle}>Manage Listing</Text>
-        <View style={{ width: 44 }} />
-      </View>
+        <Reanimated.View style={headerTitleStyle}>
+          <Text style={styles.hdrTitle} numberOfLines={1}>Manage</Text>
+        </Reanimated.View>
+        <AnimatedPressable style={styles.hdrBtn} onPress={handleShare}>
+          <Ionicons name="share-outline" size={22} color={Colors.textPrimary} />
+        </AnimatedPressable>
+      </Reanimated.View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        
-        {/* Item Preview */}
-        <View style={styles.previewCard}>
-          <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/manage-listing-fallback/300/400')} style={styles.previewImg} contentFit="cover" />
-          <View style={styles.previewInfo}>
-            <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-            <View style={styles.sellerActionRow}>
-              <AnimatedPressable
-                style={styles.sellerIdentityChip}
-                onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Open @${seller.username} profile`}
-                accessibilityHint="Shows seller profile"
-              >
-                <CachedImage
-                  uri={seller.avatar}
-                  style={styles.sellerAvatar}
-                  containerStyle={styles.sellerAvatarWrap}
-                  contentFit="cover"
-                />
-                <Text style={styles.sellerHandle}>@{seller.username}</Text>
-              </AnimatedPressable>
+      <Reanimated.ScrollView
+        showsVerticalScrollIndicator={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 24 }}
+      >
+        {/* Hero Carousel */}
+        <View style={styles.heroWrap}>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+              setImgIndex(idx);
+            }}
+            scrollEventThrottle={32}
+          >
+            {images.map((uri, i) => (
+              <CachedImage key={i} uri={uri} style={styles.heroImage} contentFit="cover" />
+            ))}
+          </ScrollView>
+          <View style={styles.heroOverlay} />
 
-              <AnimatedPressable
-                style={styles.sellerMessageBtn}
-                onPress={handleMessageSeller}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Message seller"
-                accessibilityHint="Opens chat with this seller"
-              >
-                <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-              </AnimatedPressable>
+          <View style={styles.statusPill}>
+            <View style={[styles.statusDot, { backgroundColor: isSold ? DANGER_TEXT : SUCCESS_TEXT }]} />
+            <Text style={styles.statusPillText}>{isSold ? 'Sold' : 'Active'}</Text>
+          </View>
+
+          {images.length > 1 && (
+            <View style={styles.dotRow}>
+              {images.map((_, i) => (
+                <View key={i} style={[styles.dot, i === imgIndex && styles.dotActive]} />
+              ))}
             </View>
-            <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>{isSold ? 'SOLD' : 'ACTIVE'}</Text>
+          )}
+        </View>
+
+        {/* Info Card */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle} numberOfLines={2}>{item.title}</Text>
+          <Text style={styles.infoPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+
+          <View style={styles.attrRow}>
+            <View style={styles.attrChip}>
+              <Text style={styles.attrLabel}>Brand</Text>
+              <Text style={styles.attrValue}>{item.brand}</Text>
+            </View>
+            <View style={styles.attrChip}>
+              <Text style={styles.attrLabel}>Size</Text>
+              <Text style={styles.attrValue}>{item.size}</Text>
+            </View>
+            <View style={styles.attrChip}>
+              <Text style={styles.attrLabel}>Condition</Text>
+              <Text style={styles.attrValue}>{item.condition}</Text>
             </View>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Promote</Text>
-        <AnimatedPressable 
-          style={styles.actionBlock} 
-          activeOpacity={0.8}
-          onPress={handleBumpListing}
-          accessibilityRole="button"
-          accessibilityLabel="Bump listing"
-          accessibilityHint="Promotes this listing for additional visibility"
+        {/* Primary Edit Button */}
+        <AnimatedPressable
+          style={styles.editBtn}
+          activeOpacity={0.9}
+          onPress={() => show('Edit coming soon', 'info')}
         >
-          <View style={styles.blockLeft}>
-            <View style={[styles.iconBox, { backgroundColor: 'rgba(245,166,35,0.1)' }]}>
+          <Ionicons name="create-outline" size={18} color={Colors.background} />
+          <Text style={styles.editBtnText}>Edit Listing</Text>
+        </AnimatedPressable>
+
+        {/* Icon Actions Row */}
+        <View style={styles.iconActionsRow}>
+          <AnimatedPressable style={styles.iconAction} activeOpacity={0.82} onPress={handleBumpListing}>
+            <View style={[styles.iconCircle, { backgroundColor: WARN_TINT }]}>
               <Ionicons name="flash-outline" size={22} color="#F5A623" />
             </View>
-            <View style={styles.blockTextCol}>
-              <Text style={styles.blockTitle}>Bump Listing</Text>
-              <Text style={styles.blockSub}>{hasRecentBoost ? 'Boosted just now' : 'Get up to 5x more views'}</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-        </AnimatedPressable>
-
-        <Text style={styles.sectionTitle}>Actions</Text>
-        
-        <AnimatedPressable 
-          style={styles.actionBlock} 
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('MainTabs', { screen: 'Sell' })}
-          accessibilityRole="button"
-          accessibilityLabel="Edit listing details"
-          accessibilityHint="Opens listing editor"
-        >
-          <View style={styles.blockLeft}>
-            <View style={[styles.iconBox, { backgroundColor: EDIT_ICON_BG }]}>
-              <Ionicons name="create-outline" size={22} color={Colors.textPrimary} />
-            </View>
-            <Text style={styles.blockTitle}>Edit details</Text>
-          </View>
-        </AnimatedPressable>
-
-        {!isSold && (
-          <AnimatedPressable 
-            style={styles.actionBlock} 
-            activeOpacity={0.8}
-            onPress={handleMarkAsSold}
-            accessibilityRole="button"
-            accessibilityLabel="Mark listing as sold"
-            accessibilityHint="Marks item unavailable for purchase"
-          >
-            <View style={styles.blockLeft}>
-              <View style={[styles.iconBox, { backgroundColor: 'rgba(52,199,89,0.1)' }]}>
-                <Ionicons name="checkmark-circle-outline" size={22} color={Colors.success} />
-              </View>
-              <Text style={styles.blockTitle}>Mark as Sold</Text>
-            </View>
+            <Text style={styles.iconActionLabel}>Bump</Text>
           </AnimatedPressable>
-        )}
-
-        <AnimatedPressable 
-          style={[styles.actionBlock, { borderBottomWidth: 0 }]} 
-          activeOpacity={0.8}
-          onPress={handleDeleteListing}
-          accessibilityRole="button"
-          accessibilityLabel="Delete listing"
-          accessibilityHint="Permanently deletes this listing"
-        >
-          <View style={styles.blockLeft}>
-            <View style={[styles.iconBox, { backgroundColor: 'rgba(255,59,48,0.1)' }]}>
-              <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+          <AnimatedPressable style={styles.iconAction} activeOpacity={0.82} onPress={() => navigation.navigate('CreatePoster')}>
+            <View style={[styles.iconCircle, { backgroundColor: BRAND_TINT }]}>
+              <Ionicons name="image-outline" size={22} color={Colors.brand} />
             </View>
-            <Text style={[styles.blockTitle, { color: '#FF3B30' }]}>Delete Listing</Text>
-          </View>
-        </AnimatedPressable>
+            <Text style={styles.iconActionLabel}>Poster</Text>
+          </AnimatedPressable>
+          <AnimatedPressable style={styles.iconAction} activeOpacity={0.82} onPress={handleShare}>
+            <View style={[styles.iconCircle, { backgroundColor: ICON_BG }]}>
+              <Ionicons name="share-outline" size={22} color={Colors.textPrimary} />
+            </View>
+            <Text style={styles.iconActionLabel}>Share</Text>
+          </AnimatedPressable>
+          <AnimatedPressable style={styles.iconAction} activeOpacity={0.82} onPress={() => navigation.push('ItemDetail', { itemId: item.id })}>
+            <View style={[styles.iconCircle, { backgroundColor: ICON_BG }]}>
+              <Ionicons name="eye-outline" size={22} color={Colors.textPrimary} />
+            </View>
+            <Text style={styles.iconActionLabel}>Preview</Text>
+          </AnimatedPressable>
+        </View>
 
-      </ScrollView>
-    </SafeAreaView>
+        {/* Status Toggle */}
+        <View style={styles.card}>
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleLeft}>
+              <View style={[styles.toggleIconWrap, { backgroundColor: isSold ? 'rgba(255,59,48,0.12)' : 'rgba(52,199,89,0.12)' }]}>
+                <Ionicons name={isSold ? 'close-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? DANGER_TEXT : SUCCESS_TEXT} />
+              </View>
+              <View>
+                <Text style={styles.toggleTitle}>{isSold ? 'Sold' : 'Active'}</Text>
+                <Text style={styles.toggleSub}>{isSold ? 'Buyers cannot purchase this item' : 'Visible to buyers in search and browse'}</Text>
+              </View>
+            </View>
+            <Switch
+              value={!isSold}
+              onValueChange={(v) => toggleSold(!v)}
+              trackColor={{ false: Colors.border, true: SUCCESS_TEXT }}
+              thumbColor={Colors.background}
+              ios_backgroundColor={Colors.border}
+            />
+          </View>
+        </View>
+
+        {/* Delete */}
+        <AnimatedPressable style={styles.deleteRow} activeOpacity={0.8} onPress={handleDeleteListing}>
+          <Ionicons name="trash-outline" size={18} color={DANGER_TEXT} />
+          <Text style={styles.deleteText}>Delete this listing</Text>
+        </AnimatedPressable>
+      </Reanimated.ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 56, borderBottomWidth: 1, borderBottomColor: HEADER_BORDER },
-  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
-  headerTitle: { fontSize: 17, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
 
-  content: { paddingHorizontal: 20, paddingTop: 20 },
-
-  previewCard: { flexDirection: 'row', backgroundColor: PREVIEW_BG, padding: 16, borderRadius: 20, marginBottom: 32, gap: 16 },
-  previewImg: { width: 80, height: 80, borderRadius: 12 },
-  previewInfo: { flex: 1, justifyContent: 'center' },
-  itemTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
-  sellerActionRow: {
+  floatingHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 6,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
   },
-  sellerIdentityChip: {
-    flex: 1,
-    minHeight: 30,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: ACTION_BORDER,
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sellerAvatarWrap: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  sellerAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  sellerHandle: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.textSecondary,
-  },
-  sellerMessageBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: ACTION_BORDER,
-    backgroundColor: Colors.surface,
+  hdrBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemPrice: { fontSize: 16, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, marginBottom: 8 },
-  statusBadge: { alignSelf: 'flex-start', backgroundColor: STATUS_BG, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, letterSpacing: 0.5 },
+  hdrTitle: {
+    fontSize: 17,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+    maxWidth: SCREEN_W * 0.5,
+  },
 
-  sectionTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
+  heroWrap: {
+    width: SCREEN_W,
+    height: SCREEN_W,
+    position: 'relative',
+    backgroundColor: Colors.surface,
+  },
+  heroImage: {
+    width: SCREEN_W,
+    height: SCREEN_W,
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+  },
+  statusPill: {
+    position: 'absolute',
+    top: 68,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusPillText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.3,
+  },
+  dotRow: {
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.45)',
+  },
+  dotActive: {
+    backgroundColor: '#fff',
+    width: 18,
+  },
 
-  actionBlock: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: ACTION_BORDER },
-  blockLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  iconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  blockTextCol: { justifyContent: 'center' },
-  blockTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
-  blockSub: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.brand, marginTop: 4 },
+  infoCard: {
+    marginTop: -24,
+    marginHorizontal: 16,
+    backgroundColor: CARD_BG,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  infoTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+    lineHeight: 28,
+    marginBottom: 6,
+  },
+  infoPrice: {
+    fontSize: 26,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.brand,
+    letterSpacing: -0.5,
+    marginBottom: 14,
+  },
+  attrRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  attrChip: {
+    flex: 1,
+    backgroundColor: IS_LIGHT ? '#f4f1eb' : '#1a1a1a',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  attrLabel: {
+    fontSize: 10,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 3,
+  },
+  attrValue: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+  },
+
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 16,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: Colors.textPrimary,
+  },
+  editBtnText: {
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.background,
+  },
+
+  iconActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginHorizontal: 16,
+    marginTop: 18,
+    marginBottom: 4,
+  },
+  iconAction: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconActionLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textSecondary,
+  },
+
+  card: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: CARD_BG,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    paddingVertical: 4,
+    paddingHorizontal: 16,
+    overflow: 'hidden',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+  },
+  toggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  toggleIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleTitle: {
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+  },
+  toggleSub: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+
+  deleteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+    marginBottom: 8,
+    paddingVertical: 12,
+  },
+  deleteText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: DANGER_TEXT,
+  },
 });

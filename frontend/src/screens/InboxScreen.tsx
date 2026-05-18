@@ -375,14 +375,14 @@ export default function InboxScreen() {
 
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <View>
+          <View style={styles.headerTitleWrap}>
             <Text style={styles.hugeTitle}>Inbox</Text>
-            <Text style={styles.headerSubtitle}>Priority queue for offers, groups, and buyer updates</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>Offers, groups & buyer updates</Text>
           </View>
           <View style={styles.headerActions}>
             <AppButton
               title="New Group"
-              icon={<Ionicons name="people-outline" size={16} color={Colors.textPrimary} />}
+              icon={<Ionicons name="people-outline" size={15} color={Colors.textPrimary} />}
               onPress={() => navigation.navigate('CreateGroupChat')}
               variant="secondary"
               size="sm"
@@ -547,36 +547,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     marginBottom: 14,
+  },
+  headerTitleWrap: {
+    flex: 1,
+    flexShrink: 1,
+    paddingRight: 8,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
   },
   addGroupBtn: {
-    borderRadius: 16,
-    minHeight: 36,
-    paddingHorizontal: 12,
-    alignSelf: 'center',
-    marginTop: 0,
+    borderRadius: 18,
+    minHeight: 38,
+    paddingHorizontal: 14,
     borderWidth: 1,
     backgroundColor: Colors.surface,
     borderColor: Colors.border,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   addGroupIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.background,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'transparent',
   },
   addGroupBtnText: {
     color: Colors.textPrimary,
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.2,
   },
   policiesBtn: {
     width: 36,

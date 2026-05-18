@@ -57,6 +57,12 @@ function requiredSecret(name: string, developmentFallback: string): string {
 export const config = {
   nodeEnv,
   port: Number(process.env.PORT ?? '4000'),
+  /**
+   * Public HTTPS base URL of the API itself, used to build absolute callback
+   * links (Stripe Connect onboarding/return URLs, magic-link emails, etc.).
+   * In production this must be the public Koyeb / load-balancer URL.
+   */
+  appUrl: process.env.APP_URL?.trim() || `http://localhost:${Number(process.env.PORT ?? '4000')}`,
   databaseUrl: required('DATABASE_URL'),
   databaseReplicaUrl: process.env.DATABASE_REPLICA_URL?.trim() || undefined,
   redisUrl: required('REDIS_URL', 'redis://localhost:6379'),

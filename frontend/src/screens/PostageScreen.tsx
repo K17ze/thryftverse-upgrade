@@ -18,10 +18,6 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { formatCountryPolicyScope } from '../utils/capabilityPolicy';
 import { CapabilityCarrier, getUserCountryCapabilities } from '../services/capabilitiesApi';
-import { useToast } from '../context/ToastContext';
-import { MOCK_USERS } from '../data/mockData';
-import { CachedImage } from '../components/CachedImage';
-
 type Props = StackScreenProps<RootStackParamList, 'Postage'>;
 
 const IS_LIGHT = ActiveTheme === 'light';
@@ -52,8 +48,6 @@ function mapCapabilityCarriers(carriers: CapabilityCarrier[]) {
 export default function PostageScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
-  const { show } = useToast();
-  const supportUser = MOCK_USERS[0];
   const [carriers, setCarriers] = useState(CARRIERS);
   const [freeShipping, setFreeShipping] = useState(false);
   const [bundleDiscount, setBundleDiscount] = useState(true);
@@ -99,15 +93,6 @@ export default function PostageScreen({ navigation }: Props) {
   const selectCarrier = (key: string) =>
     setCarriers(prev => prev.map(c => ({ ...c, selected: c.key === key })));
 
-  const handleOpenPostageSupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'postage setup',
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for postage help.', 'info');
-  }, [navigation, show, supportUser.id]);
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
@@ -122,36 +107,6 @@ export default function PostageScreen({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.supportRow}>
-          <AnimatedPressable
-            style={styles.supportIdentity}
-            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Open @${supportUser.username} profile`}
-            accessibilityHint="Shows postage support profile"
-          >
-            <CachedImage
-              uri={supportUser.avatar}
-              style={styles.supportAvatar}
-              containerStyle={styles.supportAvatarWrap}
-              contentFit="cover"
-            />
-            <Text style={styles.supportText}>Need postage help? @{supportUser.username}</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={styles.supportMessageBtn}
-            onPress={handleOpenPostageSupport}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Message postage support"
-            accessibilityHint="Opens support chat for postage settings"
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
-
         <Text style={styles.sectionLabel}>DEFAULT CARRIER</Text>
         {carrierScopeLabel ? (
           <Text style={styles.scopeLabel}>Region policy: {carrierScopeLabel}</Text>
@@ -224,51 +179,6 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '700', color: TEXT },
   saveBtn: { fontSize: 15, fontWeight: '600', color: BRAND },
   content: { padding: 20 },
-  supportRow: {
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  supportIdentity: {
-    flex: 1,
-    minHeight: 36,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  supportAvatarWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  supportAvatar: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  supportText: {
-    flex: 1,
-    color: TEXT,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  supportMessageBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   sectionLabel: {
     fontSize: 11,
     color: MUTED,

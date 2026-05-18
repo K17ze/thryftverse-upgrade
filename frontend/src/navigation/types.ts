@@ -53,6 +53,7 @@ export type RootStackParamList = {
     conversationId: string;
     focusQuery?: string;
     partnerUserId?: string;
+    itemId?: string;
   };
   CreateGroupChat: undefined;
   GroupBotDirectory: { conversationId: string };

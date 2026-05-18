@@ -315,162 +315,92 @@ export default function CreatePosterScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} activeOpacity={0.85} onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={20} color={Colors.textPrimary} />
+        <AnimatedPressable style={styles.headerBtn} activeOpacity={0.85} onPress={() => navigation.goBack()}>
+          <Ionicons name="close" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
-
-        <View>
-          <Text style={styles.headerLabel}>POSTER COMPOSER</Text>
-          <Text style={styles.headerTitle}>Create Poster</Text>
-        </View>
-
-        <AppButton
-          title="Publish"
-          variant="primary"
-          size="sm"
-          align="center"
-          style={styles.publishBtn}
-          titleStyle={styles.publishBtnText}
+        <Text style={styles.headerTitle}>New Poster</Text>
+        <AnimatedPressable
+          style={[styles.headerBtn, styles.publishPill]}
+          activeOpacity={0.85}
           onPress={handlePublish}
-          accessibilityLabel="Publish poster"
-        />
+        >
+          <Text style={styles.publishPillText}>Publish</Text>
+        </AnimatedPressable>
       </View>
 
       <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.previewCard}>
-          <CachedImage uri={previewUri ?? blankBackgroundColor} style={styles.previewImage} contentFit="cover" />
-          <View style={styles.previewOverlayTop}>
-            {selectedListing && selectedListing.sellerId !== uploaderId ? (
-              <View style={styles.sharedListingPill}>
-                <Ionicons name="repeat-outline" size={12} color="#fff" />
-                <Text style={styles.sharedListingText}>Shared @{selectedListingSeller?.username ?? 'seller'}</Text>
+        {/* ── Story-style Preview ── */}
+        <View style={styles.previewWrap}>
+          <View style={styles.previewPhone}>
+            <CachedImage uri={previewUri ?? blankBackgroundColor} style={styles.previewImage} contentFit="cover" />
+
+            {/* Top overlay pills */}
+            <View style={styles.previewOverlayTop}>
+              {selectedListing && selectedListing.sellerId !== uploaderId ? (
+                <View style={styles.pillDark}>
+                  <Ionicons name="repeat-outline" size={11} color="#fff" />
+                  <Text style={styles.pillDarkText}>@{selectedListingSeller?.username ?? 'seller'}</Text>
+                </View>
+              ) : null}
+              <View style={styles.pillDark}>
+                <Ionicons name="time-outline" size={11} color="#fff" />
+                <Text style={styles.pillDarkText}>{expiryHours}h</Text>
+              </View>
+            </View>
+
+            {/* Story text overlay */}
+            {storyText.trim().length > 0 ? (
+              <View style={[styles.storyOverlayWrap, storyOverlayPositionStyle]}>
+                <Text style={[styles.storyOverlayText, { color: storyColor }]} numberOfLines={2}>
+                  {storyText.trim()}
+                </Text>
               </View>
             ) : null}
-            <View style={styles.previewExpiryPill}>
-              <Ionicons name="time-outline" size={12} color="#fff" />
-              <Text style={styles.previewExpiryText}>{expiryHours}h</Text>
-            </View>
-          </View>
-          {storyText.trim().length > 0 ? (
-            <View style={[styles.storyOverlayWrap, storyOverlayPositionStyle]}>
-              <Text style={[styles.storyOverlayText, { color: storyColor }]} numberOfLines={2}>
-                {storyText.trim()}
+
+            {/* Caption at bottom */}
+            <View style={styles.previewOverlayBottom}>
+              <Text style={styles.previewCaption} numberOfLines={2}>
+                {caption.trim() || 'Tap to add caption...'}
               </Text>
             </View>
-          ) : null}
-          <View style={styles.previewOverlayBottom}>
-            <Text style={styles.previewCaption} numberOfLines={2}>
-              {caption.trim() || 'Add caption for this poster...'}
-            </Text>
           </View>
         </View>
 
-        {selectedListing ? (
-          <View style={styles.selectedSellerRow}>
+        {/* ── Mode Tabs ── */}
+        <View style={styles.modeTabs}>
+          {[
+            { key: 'marketplace', label: 'Marketplace', icon: 'pricetag-outline' as const },
+            { key: 'co-own', label: 'Co-Own', icon: 'people-outline' as const },
+            { key: 'auction', label: 'Auction', icon: 'hammer-outline' as const },
+            { key: 'blank', label: 'Blank', icon: 'color-palette-outline' as const },
+          ].map((mode) => (
             <AnimatedPressable
-              style={styles.selectedSellerIdentity}
-              onPress={() => navigation.navigate('UserProfile', { userId: selectedListingSeller?.id ?? selectedListing.sellerId })}
+              key={mode.key}
+              style={[styles.modeTab, posterMode === mode.key && styles.modeTabActive]}
+              onPress={() => setPosterMode(mode.key as PosterMode)}
               activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={`Open @${selectedListingSeller?.username ?? 'seller'} profile`}
-              accessibilityHint="Shows seller profile"
             >
-              <CachedImage
-                uri={selectedListingSeller?.avatar ?? 'https://picsum.photos/seed/poster-seller-fallback/100/100'}
-                style={styles.selectedSellerAvatar}
-                containerStyle={styles.selectedSellerAvatarWrap}
-                contentFit="cover"
+              <Ionicons
+                name={mode.icon}
+                size={18}
+                color={posterMode === mode.key ? Colors.brand : Colors.textMuted}
               />
-              <Text style={styles.selectedSellerText} numberOfLines={1}>
-                @{selectedListingSeller?.username ?? 'seller'}
+              <Text style={[styles.modeTabText, posterMode === mode.key && styles.modeTabTextActive]}>
+                {mode.label}
               </Text>
             </AnimatedPressable>
-
-            <AnimatedPressable
-              style={styles.selectedSellerMessageBtn}
-              onPress={handleMessageSelectedSeller}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Message selected seller"
-              accessibilityHint="Opens chat with the selected listing seller"
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-            </AnimatedPressable>
-          </View>
-        ) : null}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Poster Type</Text>
-          <View style={styles.modeSelector}>
-            {[
-              { key: 'marketplace', label: 'Marketplace', icon: 'pricetag-outline' },
-              { key: 'co-own', label: 'Co-Own', icon: 'people-outline' },
-              { key: 'auction', label: 'Auction', icon: 'hammer-outline' },
-              { key: 'blank', label: 'Blank', icon: 'color-palette-outline' },
-            ].map((mode) => (
-              <AnimatedPressable
-                key={mode.key}
-                style={[
-                  styles.modeChip,
-                  posterMode === mode.key && styles.modeChipActive,
-                ]}
-                onPress={() => setPosterMode(mode.key as PosterMode)}
-                activeOpacity={0.85}
-              >
-                <Ionicons
-                  name={mode.icon as any}
-                  size={16}
-                  color={posterMode === mode.key ? '#fff' : Colors.textPrimary}
-                />
-                <Text
-                  style={[
-                    styles.modeChipText,
-                    posterMode === mode.key && styles.modeChipTextActive,
-                  ]}
-                >
-                  {mode.label}
-                </Text>
-              </AnimatedPressable>
-            ))}
-          </View>
+          ))}
         </View>
 
-        {posterMode === 'blank' && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Background Color</Text>
-              <View style={[styles.colorPreview, { backgroundColor: blankBackgroundColor }]} />
-            </View>
-            <View style={styles.colorGrid}>
-              {[
-                '#1a1a2e', '#16213e', '#0f3460', '#e94560', '#ff6b6b',
-                '#feca57', '#48dbfb', '#1dd1a1', '#5f27cd', '#ff9f43',
-                '#10ac84', '#00d2d3', '#54a0ff', '#5f27cd', '#341f97',
-                '#222f3e', '#576574', '#8395a7', '#c8d6e5', '#dfe6e9',
-              ].map((color) => (
-                <AnimatedPressable
-                  key={color}
-                  style={[
-                    styles.colorSwatch,
-                    { backgroundColor: color },
-                    blankBackgroundColor === color && styles.colorSwatchActive,
-                  ]}
-                  onPress={() => setBlankBackgroundColor(color)}
-                  activeOpacity={0.85}
-                />
-              ))}
-            </View>
-          </View>
-        )}
-
+        {/* ── Listing Source (hidden for blank) ── */}
         {posterMode !== 'blank' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Listing Source</Text>
             <AppSegmentControl
               options={LISTING_SOURCE_OPTIONS}
               value={listingSource}
@@ -482,154 +412,134 @@ export default function CreatePosterScreen() {
               optionTextStyle={styles.sourceChipText}
               optionTextActiveStyle={styles.sourceChipTextActive}
             />
-            <Text style={styles.helperTextLeft}>Pick your own listing or share another seller listing with attribution.</Text>
           </View>
         )}
 
+        {/* ── Blank color picker ── */}
+        {posterMode === 'blank' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Background</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorRail}>
+              {[
+                '#1a1a2e', '#16213e', '#0f3460', '#e94560', '#ff6b6b',
+                '#feca57', '#48dbfb', '#1dd1a1', '#5f27cd', '#ff9f43',
+                '#10ac84', '#00d2d3', '#54a0ff', '#341f97',
+                '#222f3e', '#576574', '#8395a7', '#c8d6e5', '#dfe6e9',
+              ].map((color) => (
+                <AnimatedPressable
+                  key={color}
+                  style={[
+                    styles.colorOrb,
+                    { backgroundColor: color },
+                    blankBackgroundColor === color && styles.colorOrbActive,
+                  ]}
+                  onPress={() => setBlankBackgroundColor(color)}
+                  activeOpacity={0.85}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* ── Image Pick (non-blank) ── */}
         {posterMode !== 'blank' && (
           <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Poster Image</Text>
-              <Text style={styles.sectionHint}>{posterImageUri ? 'Custom image selected' : 'Using listing image'}</Text>
-            </View>
-
             <View style={styles.imagePickerRow}>
-              <AppButton
-                title="Gallery"
-                variant="secondary"
-                size="sm"
-                align="center"
-                style={styles.imagePickerBtn}
-                icon={<Ionicons name="images-outline" size={16} color={Colors.textPrimary} />}
-                iconContainerStyle={styles.imagePickerIconWrap}
-                titleStyle={styles.imagePickerBtnText}
-                onPress={pickFromLibrary}
-                disabled={isPickingImage}
-                accessibilityLabel="Choose image from gallery"
-              />
-
-              <AppButton
-                title="Camera"
-                variant="secondary"
-                size="sm"
-                align="center"
-                style={styles.imagePickerBtn}
-                icon={<Ionicons name="camera-outline" size={16} color={Colors.textPrimary} />}
-                iconContainerStyle={styles.imagePickerIconWrap}
-                titleStyle={styles.imagePickerBtnText}
-                onPress={pickFromCamera}
-                disabled={isPickingImage}
-                accessibilityLabel="Capture image using camera"
-              />
-
-              <AppButton
-                title="Reset"
-                variant="secondary"
-                size="sm"
-                align="center"
-                style={[styles.imagePickerBtn, !posterImageUri && styles.imagePickerBtnDisabled]}
-                icon={<Ionicons name="refresh-outline" size={16} color={posterImageUri ? Colors.textPrimary : Colors.textMuted} />}
-                iconContainerStyle={styles.imagePickerIconWrap}
-                titleStyle={[styles.imagePickerBtnText, !posterImageUri && styles.imagePickerBtnTextDisabled]}
-                onPress={() => setPosterImageUri(null)}
-                disabled={!posterImageUri || isPickingImage}
-                accessibilityLabel="Reset poster image"
-              />
+              <AnimatedPressable style={styles.mediaBtn} onPress={pickFromLibrary} activeOpacity={0.85}>
+                <Ionicons name="images-outline" size={20} color={Colors.textPrimary} />
+                <Text style={styles.mediaBtnText}>Gallery</Text>
+              </AnimatedPressable>
+              <AnimatedPressable style={styles.mediaBtn} onPress={pickFromCamera} activeOpacity={0.85}>
+                <Ionicons name="camera-outline" size={20} color={Colors.textPrimary} />
+                <Text style={styles.mediaBtnText}>Camera</Text>
+              </AnimatedPressable>
+              {posterImageUri && (
+                <AnimatedPressable style={styles.mediaBtn} onPress={() => setPosterImageUri(null)} activeOpacity={0.85}>
+                  <Ionicons name="refresh-outline" size={20} color={Colors.danger} />
+                  <Text style={[styles.mediaBtnText, { color: Colors.danger }]}>Reset</Text>
+                </AnimatedPressable>
+              )}
             </View>
-
-            {isPickingImage ? (
+            {isPickingImage && (
               <View style={styles.pickingRow}>
-                <ActivityIndicator size="small" color="#d7b98f" />
-                <Text style={styles.pickingText}>Opening picker...</Text>
+                <ActivityIndicator size="small" color={Colors.brand} />
+                <Text style={styles.pickingText}>Opening...</Text>
               </View>
-            ) : null}
+            )}
           </View>
         )}
 
+        {/* ── Caption ── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Caption</Text>
           <TextInput
             style={styles.captionInput}
             value={caption}
             onChangeText={setCaption}
-            placeholder="Write a short hook for your poster"
+            placeholder="Write a caption..."
             placeholderTextColor={Colors.textMuted}
             multiline
             maxLength={120}
           />
-          <Text style={styles.helperText}>{caption.length}/120</Text>
+          <Text style={styles.charCount}>{caption.length}/120</Text>
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Story Overlay</Text>
-            <Text style={styles.sectionHint}>{storyText.trim().length > 0 ? 'Layer ready' : 'No layer yet'}</Text>
-          </View>
-
-          <View style={styles.storyEditorCard}>
-            <View style={styles.storyPreviewMetaRow}>
-              <View style={[styles.storyColorDot, { backgroundColor: storyColor }]} />
-              <Text style={styles.storyMetaText}>Color</Text>
-              <Text style={styles.storyMetaDivider}>|</Text>
-              <Text style={styles.storyMetaText}>Position {storyPosition.toUpperCase()}</Text>
-            </View>
-
-            <Text
-              style={[
-                styles.storyEditorPreviewText,
-                storyText.trim().length === 0 && styles.storyEditorPreviewPlaceholder,
-                storyText.trim().length > 0 && { color: storyColor },
-              ]}
-              numberOfLines={2}
-            >
-              {storyText.trim().length > 0
-                ? storyText.trim()
-                : 'Tap Edit Story Layer to add and move text directly on the canvas.'}
+        {/* ── Story Overlay Quick Action ── */}
+        <AnimatedPressable style={styles.storyActionRow} onPress={handleOpenStoryEditor} activeOpacity={0.85}>
+          <View style={styles.storyActionLeft}>
+            <View style={[styles.storyColorDot, { backgroundColor: storyColor }]} />
+            <Text style={styles.storyActionLabel}>
+              {storyText.trim().length > 0 ? storyText.trim() : 'Add text overlay'}
             </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+        </AnimatedPressable>
 
-            <AppButton
-              title={storyText.trim().length > 0 ? 'Edit Story Layer' : 'Add Story Layer'}
-              variant="secondary"
-              size="sm"
-              align="center"
-              style={styles.storyEditorBtn}
-              titleStyle={styles.storyEditorBtnText}
-              onPress={handleOpenStoryEditor}
-              accessibilityLabel="Open story editor"
-              accessibilityHint="Opens full-screen editor to drag and style story text"
+        {/* ── Expiry ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Expires in</Text>
+          <View style={styles.expiryRow}>
+            {EXPIRY_OPTIONS.map((h) => {
+              const active = expiryHours === h;
+              return (
+                <AnimatedPressable
+                  key={h}
+                  style={[styles.expiryPill, active && styles.expiryPillActive]}
+                  onPress={() => setExpiryHours(h)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.expiryPillText, active && styles.expiryPillTextActive]}>{h}h</Text>
+                </AnimatedPressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* ── Listing Selector ── */}
+        {posterMode !== 'blank' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionLabel}>Select Listing</Text>
+              <Text style={styles.sectionCount}>{listingOptions.length}</Text>
+            </View>
+            <FlashList
+              data={listingOptions}
+              horizontal
+              keyExtractor={(item) => item.id}
+              renderItem={renderListingCard}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.listingListContent}
             />
           </View>
-        </View>
+        )}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Expires In</Text>
-          <AppSegmentControl
-            options={EXPIRY_SEGMENT_OPTIONS}
-            value={expiryOptionValue}
-            onChange={handleExpiryOptionChange}
-            style={styles.expiryRow}
-            optionStyle={styles.expiryChip}
-            optionActiveStyle={styles.expiryChipActive}
-            optionTextStyle={styles.expiryChipText}
-            optionTextActiveStyle={styles.expiryChipTextActive}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Attach Listing</Text>
-            <Text style={styles.sectionHint}>{listingOptions.length} items</Text>
-          </View>
-
-          <FlashList
-            data={listingOptions}
-            horizontal
-            keyExtractor={(item) => item.id}
-            renderItem={renderListingCard}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.listingListContent}
-          />
-        </View>
+        {/* ── Publish Button ── */}
+        <AppButton
+          title="Create Poster"
+          variant="primary"
+          size="lg"
+          style={styles.createBtn}
+          onPress={handlePublish}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -640,107 +550,64 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: HEADER_BORDER,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: HEADER_BUTTON_BG,
-  },
-  headerLabel: {
-    color: '#d7b98f',
-    fontSize: 10,
-    letterSpacing: 1,
-    fontFamily: 'Inter_600SemiBold',
-    textAlign: 'center',
   },
   headerTitle: {
+    fontSize: 17,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
-  publishBtn: {
-    minHeight: 36,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-  },
-  publishBtnText: {
-    color: Colors.background,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-  },
-  content: {
-    flex: 1,
+  publishPill: {
+    backgroundColor: Colors.brand,
+    width: 'auto',
     paddingHorizontal: 16,
-    paddingTop: 14,
   },
-  contentContainer: {
-    paddingBottom: 28,
+  publishPillText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
   },
-  selectedSellerRow: {
-    marginBottom: 14,
-    flexDirection: 'row',
+
+  // Scroll
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
+
+  // Preview
+  previewWrap: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+    marginBottom: 20,
   },
-  selectedSellerIdentity: {
-    flex: 1,
-    minHeight: 36,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  selectedSellerAvatarWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  selectedSellerAvatar: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  selectedSellerText: {
-    flex: 1,
-    color: Colors.textPrimary,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  selectedSellerMessageBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewCard: {
-    height: 198,
-    borderRadius: 16,
+  previewPhone: {
+    width: 280,
+    height: 420,
+    borderRadius: 28,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    marginBottom: 16,
+    backgroundColor: Colors.surface,
+    borderWidth: 4,
+    borderColor: Colors.border,
+    position: 'relative',
   },
   previewImage: {
     width: '100%',
@@ -748,181 +615,129 @@ const styles = StyleSheet.create({
   },
   previewOverlayTop: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
+    top: 14,
+    left: 14,
+    right: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
   },
-  sharedListingPill: {
+  pillDark: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 5,
-    maxWidth: '68%',
   },
-  sharedListingText: {
+  pillDarkText: {
     color: '#fff',
     fontSize: 11,
     fontFamily: 'Inter_600SemiBold',
-  },
-  previewExpiryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
-  previewExpiryText: {
-    color: '#fff',
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
   },
   previewOverlayBottom: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   previewCaption: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
+    lineHeight: 18,
   },
   storyOverlayWrap: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    left: 16,
+    right: 16,
     alignItems: 'center',
     zIndex: 2,
   },
-  storyOverlayTop: {
-    top: 46,
-  },
-  storyOverlayCenter: {
-    top: '45%',
-  },
-  storyOverlayBottom: {
-    bottom: 44,
-  },
+  storyOverlayTop: { top: 54 },
+  storyOverlayCenter: { top: '42%' },
+  storyOverlayBottom: { bottom: 56 },
   storyOverlayText: {
-    color: '#fff',
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: 'Inter_700Bold',
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowRadius: 8,
-    letterSpacing: 0.2,
+    textShadowOffset: { width: 0, height: 2 },
+    letterSpacing: 0.3,
   },
+
+  // Mode tabs
+  modeTabs: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+    marginBottom: 20,
+  },
+  modeTab: {
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    opacity: 0.6,
+  },
+  modeTabActive: {
+    opacity: 1,
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.brand,
+  },
+  modeTabText: {
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textMuted,
+  },
+  modeTabTextActive: {
+    color: Colors.brand,
+  },
+
+  // Sections
   section: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
-  sectionTitle: {
-    color: Colors.textPrimary,
-    fontSize: 14,
+  sectionLabel: {
+    fontSize: 13,
     fontFamily: 'Inter_700Bold',
-    marginBottom: 8,
-  },
-  captionInput: {
-    minHeight: 80,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
     color: Colors.textPrimary,
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    textAlignVertical: 'top',
+    marginBottom: 10,
+    letterSpacing: -0.2,
   },
-  helperText: {
-    marginTop: 6,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionCount: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-    textAlign: 'right',
   },
-  helperTextLeft: {
-    marginTop: 6,
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
+
+  // Source
   sourceRow: {
     flexDirection: 'row',
     gap: 8,
   },
-  modeSelector: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  modeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  modeChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-  },
-  modeChipText: {
-    color: Colors.textPrimary,
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  modeChipTextActive: {
-    color: '#fff',
-  },
-  colorPreview: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-  },
-  colorGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  colorSwatch: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  colorSwatchActive: {
-    borderWidth: 3,
-    borderColor: '#fff',
-  },
   sourceChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: CHIP_BORDER,
-    backgroundColor: CHIP_BG,
-    paddingHorizontal: 14,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 16,
     paddingVertical: 8,
   },
   sourceChipActive: {
-    borderColor: TRADE_ACCENT,
-    backgroundColor: CHIP_ACTIVE_BG,
+    borderColor: Colors.brand,
+    backgroundColor: IS_LIGHT ? '#ede4d3' : '#2f291f',
   },
   sourceChipText: {
     color: Colors.textSecondary,
@@ -930,126 +745,49 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   sourceChipTextActive: {
-    color: CHIP_ACTIVE_TEXT,
+    color: Colors.brand,
   },
-  storyEditorCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
+
+  // Color picker
+  colorRail: {
+    gap: 10,
+    paddingRight: 16,
   },
-  storyPreviewMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  colorOrb: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
-  storyColorDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  colorOrbActive: {
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
-  storyMetaText: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  storyMetaDivider: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
-  storyEditorPreviewText: {
-    color: Colors.textPrimary,
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-    lineHeight: 20,
-  },
-  storyEditorPreviewPlaceholder: {
-    color: Colors.textMuted,
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-  },
-  storyEditorBtn: {
-    minHeight: 36,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: CHIP_BORDER,
-    backgroundColor: CHIP_BG,
-  },
-  storyEditorBtnText: {
-    color: Colors.textPrimary,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-  },
-  expiryRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  expiryChip: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: CHIP_BORDER,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: CHIP_BG,
-  },
-  expiryChipActive: {
-    borderColor: TRADE_ACCENT,
-    backgroundColor: CHIP_ACTIVE_BG,
-  },
-  expiryChipText: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  expiryChipTextActive: {
-    color: CHIP_ACTIVE_TEXT,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  sectionHint: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
+
+  // Media buttons
   imagePickerRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
-  imagePickerBtn: {
+  mediaBtn: {
     flex: 1,
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: CHIP_BORDER,
-    backgroundColor: CHIP_BG,
-    minHeight: 42,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingVertical: 10,
   },
-  imagePickerIconWrap: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-  },
-  imagePickerBtnDisabled: {
-    borderColor: IMAGE_BTN_DISABLED_BORDER,
-    backgroundColor: IMAGE_BTN_DISABLED_BG,
-  },
-  imagePickerBtnText: {
-    color: Colors.textPrimary,
-    fontSize: 12,
+  mediaBtnText: {
+    fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
-  },
-  imagePickerBtnTextDisabled: {
-    color: Colors.textMuted,
+    color: Colors.textPrimary,
   },
   pickingRow: {
     marginTop: 8,
@@ -1062,31 +800,116 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_500Medium',
   },
-  listingListContent: {
+
+  // Caption
+  captionInput: {
+    minHeight: 56,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    textAlignVertical: 'top',
+  },
+  charCount: {
+    marginTop: 6,
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+    textAlign: 'right',
+  },
+
+  // Story action
+  storyActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 18,
+  },
+  storyActionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  storyColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  storyActionLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textPrimary,
+  },
+
+  // Expiry
+  expiryRow: {
+    flexDirection: 'row',
     gap: 8,
-    paddingBottom: 8,
+  },
+  expiryPill: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  expiryPillActive: {
+    borderColor: Colors.brand,
+    backgroundColor: IS_LIGHT ? '#ede4d3' : '#2f291f',
+  },
+  expiryPillText: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  expiryPillTextActive: {
+    color: Colors.brand,
+    fontFamily: 'Inter_700Bold',
+  },
+
+  // Listings
+  listingListContent: {
+    gap: 10,
+    paddingBottom: 4,
   },
   listingCard: {
-    width: 118,
-    borderRadius: 12,
+    width: 120,
+    borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: PANEL_BG,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
+    borderColor: Colors.border,
   },
   listingCardSelected: {
-    borderColor: TRADE_ACCENT,
+    borderColor: Colors.brand,
+    borderWidth: 2,
   },
   listingImage: {
     width: '100%',
-    height: 92,
+    height: 100,
   },
   listingMeta: {
-    padding: 8,
+    padding: 10,
   },
   listingTitle: {
     color: Colors.textPrimary,
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
   },
   listingSeller: {
@@ -1099,18 +922,25 @@ const styles = StyleSheet.create({
     marginTop: 3,
     color: Colors.textSecondary,
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_600SemiBold',
   },
   selectedBadge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: TRADE_ACCENT,
+    top: 8,
+    right: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Create button
+  createBtn: {
+    marginTop: 8,
+    borderRadius: 18,
+    minHeight: 52,
   },
 });
 

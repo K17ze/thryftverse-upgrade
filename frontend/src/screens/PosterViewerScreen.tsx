@@ -141,7 +141,7 @@ export default function PosterViewerScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="#000" />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <SharedTransitionView
         style={StyleSheet.absoluteFillObject}
@@ -161,6 +161,22 @@ export default function PosterViewerScreen() {
               </View>
             );
           })}
+        </View>
+
+        {/* Tap layer rendered BEFORE top controls so buttons sit on top */}
+        <View style={styles.tapLayer} pointerEvents="box-none">
+          <Pressable
+            style={styles.tapLeft}
+            onPress={goPrevious}
+            onPressIn={() => setIsPaused(true)}
+            onPressOut={() => setIsPaused(false)}
+          />
+          <Pressable
+            style={styles.tapRight}
+            onPress={goNext}
+            onPressIn={() => setIsPaused(true)}
+            onPressOut={() => setIsPaused(false)}
+          />
         </View>
 
         <View style={styles.topMetaRow}>
@@ -190,6 +206,7 @@ export default function PosterViewerScreen() {
                   conversationId: `${activePoster.uploaderId}_${activePoster.listingId}`,
                   focusQuery: uploaderHandle,
                   partnerUserId: activePoster.uploaderId,
+                  itemId: activePoster.listingId,
                 })}
               activeOpacity={0.85}
               accessibilityRole="button"
@@ -248,21 +265,6 @@ export default function PosterViewerScreen() {
             </AnimatedPressable>
           </View>
         </View>
-
-        <View style={styles.tapLayer} pointerEvents="box-none">
-          <Pressable
-            style={styles.tapLeft}
-            onPress={goPrevious}
-            onPressIn={() => setIsPaused(true)}
-            onPressOut={() => setIsPaused(false)}
-          />
-          <Pressable
-            style={styles.tapRight}
-            onPress={goNext}
-            onPressIn={() => setIsPaused(true)}
-            onPressOut={() => setIsPaused(false)}
-          />
-        </View>
       </SafeAreaView>
     </View>
   );
@@ -271,7 +273,7 @@ export default function PosterViewerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: Colors.background,
   },
   posterImage: {
     position: 'absolute',
@@ -288,19 +290,19 @@ const styles = StyleSheet.create({
   },
   progressRow: {
     flexDirection: 'row',
-    gap: 5,
-    marginTop: 6,
+    gap: 4,
+    marginTop: 8,
   },
   progressTrack: {
     flex: 1,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 1,
     backgroundColor: '#fff',
   },
   topMetaRow: {
@@ -314,16 +316,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    minHeight: 36,
-    borderRadius: 18,
-    paddingHorizontal: 8,
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    minHeight: 38,
+    borderRadius: 19,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    gap: 8,
   },
   authorAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
   },
   authorName: {
     color: '#fff',
@@ -342,20 +344,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   topIconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.32)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.32)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   ownerActionsRow: {
     marginTop: 10,
@@ -380,7 +382,8 @@ const styles = StyleSheet.create({
   },
   bottomMetaWrap: {
     marginTop: 'auto',
-    paddingBottom: 22,
+    paddingBottom: 28,
+    gap: 10,
   },
   storyOverlayWrap: {
     position: 'absolute',
@@ -416,7 +419,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 14,
-    marginBottom: 8,
   },
   sharedFromText: {
     color: '#d7b98f',
@@ -428,7 +430,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     fontFamily: 'Inter_600SemiBold',
-    marginBottom: 14,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowRadius: 8,
   },
@@ -436,7 +437,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 10,
+    marginTop: 4,
   },
   expiryPill: {
     flexDirection: 'row',
@@ -458,18 +460,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     backgroundColor: Colors.brand,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
   viewListingText: {
-    color: Colors.background,
-    fontSize: 12,
+    color: '#fff',
+    fontSize: 13,
     fontFamily: 'Inter_700Bold',
   },
   tapLayer: {
     position: 'absolute',
-    top: 70,
+    top: 120,
     bottom: 110,
     left: 0,
     right: 0,
