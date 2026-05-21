@@ -17,7 +17,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MasonryGrid } from '../components/ProductCardV2';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -34,14 +33,15 @@ import { AppButton } from '../components/ui/AppButton';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
+import { Type } from '../theme/designTokens';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ACCENT = '#d7b98f';
-const IS_LIGHT = ActiveTheme === 'light';
+
+
 const PANEL_BG = Colors.surface;
 const PANEL_ALT = Colors.surfaceAlt;
-const BRAND = IS_LIGHT ? '#2f251b' : ACCENT;
+const BRAND = Colors.brand;
 
 // Saved look data
 interface SavedLook {
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   hugeTitle: {
-    fontSize: 28,
+    fontSize: Type.title.size,
     fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
     letterSpacing: -0.5,
@@ -571,8 +571,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
   },
   tabCountActive: {
-    backgroundColor: IS_LIGHT ? '#000' : Colors.background,
-    color: Colors.textPrimary,
+    backgroundColor: Colors.textPrimary,
+    color: Colors.textInverse,
   },
   syncRetryBanner: {
     marginHorizontal: 16,
