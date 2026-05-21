@@ -172,18 +172,21 @@ export default function TradeHubScreen() {
       <View style={styles.tabSwitcher}>
         <Reanimated.View style={[styles.tabIndicator, indicatorStyle]} />
         {(['AUCTIONS', 'CO-OWN'] as const).map((tab) => (
-          <View key={tab} style={{ flex: 1 }} onLayout={(e: LayoutChangeEvent) => handleTabLayout(tab, e)}>
-            <AppButton
-              title={tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
-              style={styles.tabBtn}
-              titleStyle={styles.tabBtnText}
-              variant="secondary"
-              size="sm"
-              onPress={() => setActiveTab(tab)}
-              accessibilityLabel={`${tab} tab${activeTab === tab ? ' selected' : ''}`}
-              hapticFeedback="light"
-            />
-          </View>
+          <AnimatedPressable
+            key={tab}
+            style={styles.tabBtn}
+            onPress={() => setActiveTab(tab)}
+            activeOpacity={0.9}
+            onLayout={(e: LayoutChangeEvent) => handleTabLayout(tab, e)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === tab }}
+            accessibilityLabel={tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
+            accessibilityHint="Switches the active trade hub view"
+          >
+            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+              {tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
+            </Text>
+          </AnimatedPressable>
         ))}
       </View>
 
@@ -273,8 +276,15 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  tabBtnText: {
+  tabText: {
     color: Colors.textSecondary,
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  tabTextActive: {
+    color: Colors.textInverse,
   },
   guidanceWrap: {
     flexDirection: 'row',
