@@ -197,31 +197,16 @@ function LookCard({
 
 // Main screen
 export default function SearchScreen() {
-  const [activeTab, setActiveTab] = useState<'SAVED' | 'WISHLIST' | 'WATCHLIST'>('SAVED');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [likedLooks, setLikedLooks] = useState<Record<string, boolean>>({});
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
-  const wishlistIds = useStore(state => state.wishlist);
-  const savedProductIds = useStore((state) => state.savedProducts);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
 
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
   const reducedMotionEnabled = useReducedMotion();
-
-  const wishlistItems = React.useMemo(
-    () => listings.filter(l => wishlistIds?.includes(l.id) ?? false),
-    [listings, wishlistIds]
-  );
-
-  const savedItems = React.useMemo(
-    () => listings.filter(l => savedProductIds?.includes(l.id) ?? false),
-    [listings, savedProductIds]
-  );
-
-  const watchlistItems = wishlistItems;
 
   const listingIdSet = React.useMemo(() => new Set(listings.map((item) => item.id)), [listings]);
 
@@ -237,17 +222,7 @@ export default function SearchScreen() {
     setTimeout(() => setRefreshing(false), 400);
   };
 
-  const filteredWishlist = wishlistItems.filter(l =>
-    !searchQuery || l.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) || l.brand?.toLowerCase()?.includes(searchQuery.toLowerCase())
-  );
 
-  const filteredSaved = savedItems.filter(l =>
-    !searchQuery || l.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) || l.brand?.toLowerCase()?.includes(searchQuery.toLowerCase())
-  );
-
-  const filteredWatchlist = watchlistItems.filter(l =>
-    !searchQuery || l.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) || l.brand?.toLowerCase()?.includes(searchQuery.toLowerCase())
-  );
 
   const handleToggleLookLike = React.useCallback(
     (look: SavedLook) => {
@@ -263,50 +238,9 @@ export default function SearchScreen() {
     [navigation, show],
   );
 
-  const closetStatus = React.useMemo(
-    () =>
-      getBackendSyncStatus({
-        isSyncing,
-        source,
-        hasError: Boolean(lastError),
-        labels: {
-          live: 'Synced',
-        },
-      }),
-    [isSyncing, lastError, source],
-  );
-
-  const showWishlistLoadingState =
-    (activeTab === 'WISHLIST' || activeTab === 'WATCHLIST') &&
-    isSyncing &&
-    source === 'mock' &&
-    wishlistItems.length === 0 &&
-    !lastError &&
-    !searchQuery;
-
-  const closetTabs = [
-    { key: 'SAVED' as const, label: 'Saved', icon: 'bookmark-outline' as const },
-    { key: 'WISHLIST' as const, label: 'Wishlist', icon: 'heart-outline' as const },
-    { key: 'WATCHLIST' as const, label: 'Watchlist', icon: 'eye-outline' as const },
-  ];
-
   const resolveLookItemId = React.useCallback(
     (look: SavedLook) => look.items.find((entry) => listingIdSet.has(entry.id))?.id ?? listings[0]?.id,
     [listingIdSet, listings]
-  );
-
-  const renderWishlistLoadingState = () => (
-    <View style={styles.wishlistLoadingGrid}>
-      {Array.from({ length: 6 }).map((_, index) => (
-        <View key={`wishlist_loading_${index}`} style={styles.wishlistLoadingCard}>
-          <SkeletonLoader width="100%" height={190} borderRadius={14} />
-          <View style={styles.wishlistLoadingBody}>
-            <SkeletonLoader width="56%" height={13} borderRadius={6} />
-            <SkeletonLoader width="40%" height={11} borderRadius={6} style={{ marginTop: 7 }} />
-          </View>
-        </View>
-      ))}
-    </View>
   );
 
   return (
@@ -319,10 +253,10 @@ export default function SearchScreen() {
           <Text style={styles.hugeTitle}>Explore</Text>
         </View>
         <View style={styles.headerRight}>
-          <Text style={styles.itemCount}>{new Set([...wishlistItems.map((item) => item.id), ...savedItems.map((item) => item.id)]).size} items</Text>
+
           <AppButton
             title="Discover"
-            icon={<Ionicons name="compass-outline" size={14} color={IS_LIGHT ? '#fff' : '#fff'} />}
+            icon={<Ionicons name="compass-outline" size={14} color={Colors.background} />}
             variant="secondary"
             size="sm"
             style={styles.discoverBtn}
@@ -360,158 +294,58 @@ export default function SearchScreen() {
         </View>
       </View>
 
-      {/* â”€â”€ Segmented Control â”€â”€ */}
-      <View style={styles.tabsContainer}>
-        <View style={styles.tabsWrapper}>
-          {closetTabs.map(tab => (
-            <AppButton
-              key={tab.key}
-              title={tab.label}
-              icon={
-                <Ionicons
-                  name={tab.icon}
-                  size={16}
-                  color={activeTab === tab.key ? (IS_LIGHT ? '#000' : '#fff') : Colors.textMuted}
-                />
-              }
-              trailingIcon={
-                <Text style={[styles.tabCount, activeTab === tab.key && styles.tabCountActive]}>
-                  {tab.key === 'SAVED' ? filteredSaved.length : tab.key === 'WATCHLIST' ? filteredWatchlist.length : filteredWishlist.length}
-                </Text>
-              }
-              style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-              variant="secondary"
-              size="sm"
-              titleStyle={[styles.tabText, activeTab === tab.key && styles.activeTabText]}
-              iconContainerStyle={styles.tabIconWrap}
-              trailingIconContainerStyle={styles.tabCountWrap}
-              onPress={() => setActiveTab(tab.key)}
-              activeOpacity={0.8}
-              accessibilityLabel={`Show ${tab.label.toLowerCase()} tab`}
-            />
-          ))}
+            {/* ── Closet Shortcut ── */}
+      <AnimatedPressable
+        style={styles.closetShortcut}
+        onPress={() => navigation.push('Closet')}
+        activeOpacity={0.9}
+        accessibilityRole="button"
+        accessibilityLabel="Open your closet"
+        accessibilityHint="View your saved items, wishlist, and collections"
+      >
+        <View style={styles.closetShortcutLeft}>
+          <View style={styles.closetShortcutIcon}>
+            <Ionicons name="shirt-outline" size={22} color={Colors.brand} />
+          </View>
+          <View>
+            <Text style={styles.closetShortcutTitle}>Your Closet</Text>
+            <Text style={styles.closetShortcutSub}>Saved, Wishlist & Collections</Text>
+          </View>
         </View>
-      </View>
+        <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+      </AnimatedPressable>
 
-      {lastError ? (
-        <SyncRetryBanner
-          message="Closet sync is delayed. Showing cached saved items."
-          onRetry={() => void refreshListings()}
-          isRetrying={isSyncing}
-          telemetryContext="search_saved_sync"
-          containerStyle={styles.syncRetryBanner}
-        />
-      ) : null}
-
-      {/* â”€â”€ Content â”€â”€ */}
+      {/* ── Content ── */}
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
 
-        {showWishlistLoadingState ? (
-          renderWishlistLoadingState()
-        ) : activeTab === 'SAVED' ? (
-          filteredSaved.length > 0 ? (
-            <Reanimated.ScrollView
-              contentContainerStyle={styles.gridContent}
-              showsVerticalScrollIndicator={false}
-              onScroll={scrollHandler}
-              scrollEventThrottle={16}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleRefresh}
-                  tintColor="transparent"
-                  colors={['transparent']}
-                  progressBackgroundColor="transparent"
-                />
-              }
-            >
-              <MasonryGrid
-                items={filteredSaved}
-                onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
-                numColumns={2}
-                showSeller={false}
-                showSaveButton={false}
-                visualOnly={true}
-              />
-              <View style={styles.emptyFooter} />
-            </Reanimated.ScrollView>
-          ) : (
-            <EmptyState
-              icon="layers-outline"
-              title="No saved products yet"
-              subtitle="Tap Save from Wishlist and products will appear here."
+        <Reanimated.ScrollView
+          contentContainerStyle={styles.gridContent}
+          showsVerticalScrollIndicator={false}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="transparent"
+              colors={['transparent']}
+              progressBackgroundColor="transparent"
             />
-          )
-        ) : activeTab === 'WATCHLIST' ? (
-          filteredWatchlist.length > 0 ? (
-            <Reanimated.ScrollView
-              contentContainerStyle={styles.gridContent}
-              showsVerticalScrollIndicator={false}
-              onScroll={scrollHandler}
-              scrollEventThrottle={16}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleRefresh}
-                  tintColor="transparent"
-                  colors={['transparent']}
-                  progressBackgroundColor="transparent"
-                />
-              }
-            >
-              <MasonryGrid
-                items={filteredWatchlist}
-                onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
-                numColumns={2}
-                showSeller={false}
-                showSaveButton={false}
-                visualOnly={true}
-              />
-              <View style={styles.emptyFooter} />
-            </Reanimated.ScrollView>
-          ) : (
-            <EmptyState
-              icon="eye-outline"
-              title="Your watchlist is empty"
-              subtitle="Products you like will appear here."
-            />
-          )
-        ) : filteredWishlist.length > 0 ? (
-          <Reanimated.ScrollView
-            contentContainerStyle={styles.gridContent}
-            showsVerticalScrollIndicator={false}
-            onScroll={scrollHandler}
-            scrollEventThrottle={16}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                tintColor="transparent"
-                colors={['transparent']}
-                progressBackgroundColor="transparent"
-              />
-            }
-          >
-            <MasonryGrid
-              items={filteredWishlist}
-              onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
-              numColumns={2}
-              showSeller={false}
-              showSaveButton={false}
-              visualOnly={true}
-            />
-            <View style={styles.emptyFooter} />
-          </Reanimated.ScrollView>
-        ) : (
-          <EmptyState
-            icon="heart-outline"
-            title="Your wishlist is empty"
-            subtitle="Saved items will appear here."
+          }
+        >
+          <MasonryGrid
+            items={listings.slice(0, 20)}
+            onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
+            numColumns={2}
+            showSeller={false}
+            showSaveButton={false}
+            visualOnly={true}
           />
-        )}
+          <View style={styles.emptyFooter} />
+        </Reanimated.ScrollView>
       </View>
-    </SafeAreaView>
+        </SafeAreaView>
   );
 }
 
@@ -811,6 +645,42 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: 'center',
     letterSpacing: 0.1,
+  },
+  closetShortcut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  closetShortcutLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  closetShortcutIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closetShortcutTitle: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textPrimary,
+  },
+  closetShortcutSub: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.textMuted,
+    marginTop: 2,
   },
 });
 

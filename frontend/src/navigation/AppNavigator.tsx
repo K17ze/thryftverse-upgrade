@@ -11,10 +11,11 @@ import TabNavigator from './TabNavigator';
 import CategoryDetailScreen from '../screens/CategoryDetailScreen';
 import BrowseScreen from '../screens/BrowseScreen';
 import ItemDetailScreen from '../screens/ItemDetailScreen';
-import FavouritesScreen from '../screens/FavouritesScreen';
+import ClosetScreen from '../screens/ClosetScreen';
+import CollectionDetailScreen from '../screens/CollectionDetailScreen';
 import PosterViewerScreen from '../screens/PosterViewerScreen';
 import CreatePosterScreen from '../screens/CreatePosterScreen';
-import PosterEditorScreen from '../screens/PosterEditorScreen';
+
 import CreateAuctionScreen from '../screens/CreateAuctionScreen';
 import CreateCoOwnScreen from '../screens/CreateSyndicateScreen';
 import MarketLedgerScreen from '../screens/MarketLedgerScreen';
@@ -153,10 +154,11 @@ export default function AppNavigator() {
       <Stack.Screen name="CategoryDetail" component={CategoryDetailScreen} />
       <Stack.Screen name="Browse" component={BrowseScreen} />
       <Stack.Screen name="ItemDetail" component={ItemDetailScreen} />
-      <Stack.Screen name="Favourites" component={FavouritesScreen} />
+      <Stack.Screen name="Closet" component={ClosetScreen} />
+      <Stack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
       <Stack.Screen name="PosterViewer" component={PosterViewerScreen} options={modalScreenOptions} />
       <Stack.Screen name="CreatePoster" component={CreatePosterScreen} options={modalScreenOptions} />
-      <Stack.Screen name="PosterEditor" component={PosterEditorScreen} options={modalScreenOptions} />
+
       <Stack.Screen name="CreateAuction" component={CreateAuctionScreen} options={modalScreenOptions} />
       <Stack.Screen name="CreateCoOwn" component={CreateCoOwnScreen} options={modalScreenOptions} />
       <Stack.Screen name="MarketLedger" component={MarketLedgerScreen} />

@@ -7,7 +7,6 @@ import {
   StatusBar,
   Dimensions,
   Share,
-  Image,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
@@ -39,7 +38,6 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useToast } from '../context/ToastContext';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius } from '../theme/designTokens';
-import { T } from '../components/ui/Text';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   setStoredUserAvatar,
@@ -53,7 +51,7 @@ import { isVideoUri } from '../utils/media';
 type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COVER_HEIGHT = 200;
-const AVATAR_SIZE = 100;
+const AVATAR_SIZE = 108;
 const HERO_MEDIA_GAP = 6;
 const HERO_MEDIA_TILE = (SCREEN_WIDTH - 40 - HERO_MEDIA_GAP * 2) / 3;
 // Phase 3: Simplified to use new 5-core palette
@@ -266,31 +264,46 @@ export default function MyProfileScreen() {
     };
   });
 
+  const headerOpacityStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(scrollY.value, [COVER_HEIGHT - 60, COVER_HEIGHT - 10], [0, 1], Extrapolation.CLAMP);
+    return { opacity, backgroundColor: Colors.background };
+  });
+
   const handleShare = async () => {
     try {
       await Share.share({ message: `Check out @${user.username} on Thryftverse!` });
     } catch { /* ignore */ }
   };
 
+  const wishlistCount = useStore((state) => state.wishlist.length);
+  const savedCount = useStore((state) => state.savedProducts.length);
+
   const quickAccess = React.useMemo<QuickAccessItem[]>(
     () => [
       { icon: 'receipt-outline', label: 'Orders', route: 'MyOrders', color: BRAND },
+      {
+        icon: 'shirt-outline',
+        label: 'Closet',
+        route: 'Closet',
+        value: `${savedCount + wishlistCount} items`,
+        color: IS_LIGHT ? '#6a4f2f' : '#d8c6a2',
+      },
       {
         icon: 'wallet-outline',
         label: 'Wallet',
         route: 'Wallet',
         value: formatFromFiat(120.5, 'GBP', { displayMode: 'fiat' }),
-        color: IS_LIGHT ? '#6a4f2f' : '#d8c6a2',
+        color: IS_LIGHT ? '#5c4830' : '#ccb893',
       },
       {
         icon: 'pie-chart-outline',
         label: 'Co-Own',
         route: 'Portfolio',
         value: `${coOwnHoldings.length} assets`,
-        color: IS_LIGHT ? '#5c4830' : '#ccb893',
+        color: IS_LIGHT ? '#4a3a28' : '#bba882',
       },
     ],
-    [formatFromFiat, coOwnHoldings.length]
+    [formatFromFiat, coOwnHoldings.length, savedCount, wishlistCount]
   );
 
   const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
@@ -311,10 +324,11 @@ export default function MyProfileScreen() {
             isMuted
           />
         ) : (
-          <Image 
-            source={{ uri: displayCover }} 
-            style={styles.coverImage} 
-            resizeMode="cover"
+          <CachedImage
+            uri={displayCover}
+            style={styles.coverImage}
+            contentFit="cover"
+            priority="high"
           />
         )}
         <View style={styles.coverGradient} />
@@ -345,6 +359,13 @@ export default function MyProfileScreen() {
           </AnimatedPressable>
         </Reanimated.View>
       </View>
+
+      {/* Floating header on scroll */}
+      <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]}>
+        <View style={{ flex: 1 }} />
+        <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{user.username}</Text>
+        <View style={{ flex: 1 }} />
+      </Reanimated.View>
 
       <AnimatedScrollView
         showsVerticalScrollIndicator={false}
@@ -594,32 +615,49 @@ export default function MyProfileScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.wardrobeScroll}
           >
-            {myListings.map((item) => (
+            {myListings.length === 0 ? (
               <AnimatedPressable
-                key={item.id}
-                style={styles.wardrobeItem}
-                activeOpacity={0.9}
-                onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
+                style={styles.wardrobeEmptyState}
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate('MainTabs')}
                 accessibilityRole="button"
-                accessibilityLabel={`Manage listing ${item.title}`}
-                accessibilityHint="Opens listing management"
+                accessibilityLabel="List your first item"
+                accessibilityHint="Opens the listing creation flow"
               >
-                <SharedTransitionView
-                  style={styles.wardrobeImageWrap}
-                  sharedTransitionTag={`image-${item.id}-0`}
-                >
-                  <CachedImage uri={item.images[0]} style={styles.wardrobeImage} containerStyle={{ width: '100%', height: '100%', borderRadius: 16 }} contentFit="cover" />
-                </SharedTransitionView>
-                <View style={styles.wardrobeInfo}>
-                  <Text style={styles.wardrobePrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
-                  <Text style={styles.wardrobeBrand} numberOfLines={1}>@{item.brand.toLowerCase()}</Text>
+                <View style={styles.wardrobeEmptyIconCircle}>
+                  <Ionicons name="add" size={28} color={Colors.brand} />
                 </View>
-                <View style={styles.wardrobeLikes}>
-                  <Ionicons name="heart" size={10} color={Colors.textMuted} />
-                  <Text style={styles.wardrobeLikeCount}>{item.likes}</Text>
-                </View>
+                <Text style={styles.wardrobeEmptyTitle}>List your first item</Text>
+                <Text style={styles.wardrobeEmptySubtitle}>Tap to start selling</Text>
               </AnimatedPressable>
-            ))}
+            ) : (
+              myListings.map((item) => (
+                <AnimatedPressable
+                  key={item.id}
+                  style={styles.wardrobeItem}
+                  activeOpacity={0.9}
+                  onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Manage listing ${item.title}`}
+                  accessibilityHint="Opens listing management"
+                >
+                  <SharedTransitionView
+                    style={styles.wardrobeImageWrap}
+                    sharedTransitionTag={`image-${item.id}-0`}
+                  >
+                    <CachedImage uri={item.images[0]} style={styles.wardrobeImage} containerStyle={{ width: '100%', height: '100%', borderRadius: 16 }} contentFit="cover" />
+                  </SharedTransitionView>
+                  <View style={styles.wardrobeInfo}>
+                    <Text style={styles.wardrobePrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                    <Text style={styles.wardrobeBrand} numberOfLines={1}>@{item.brand.toLowerCase()}</Text>
+                  </View>
+                  <View style={styles.wardrobeLikes}>
+                    <Ionicons name="heart" size={10} color={Colors.textMuted} />
+                    <Text style={styles.wardrobeLikeCount}>{item.likes}</Text>
+                  </View>
+                </AnimatedPressable>
+              ))
+            )}
           </ScrollView>
         </View>
 
@@ -724,6 +762,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
+  floatingHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: PANEL_BORDER,
+  },
+  floatingHeaderTitle: {
+    fontSize: 18,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+
   // Hero
   heroSection: {
     alignItems: 'center',
@@ -734,11 +792,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
   },
-  heroTop: {
-    alignItems: 'center',
-    marginTop: -(AVATAR_SIZE + 8),
-    marginBottom: 12,
-  },
+
   avatarContainer: {
     marginTop: -(AVATAR_SIZE / 2 + 10),
     paddingHorizontal: 20,
@@ -777,8 +831,8 @@ const styles = StyleSheet.create({
   },
   editAvatarChipLinkedIn: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
+    bottom: 4,
+    left: AVATAR_SIZE / 2 - 16,
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 16,
     width: 32,
@@ -1028,7 +1082,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   quickItem: {
-    width: '22%',
+    width: '31%',
     alignItems: 'center',
     marginBottom: 10,
     backgroundColor: Colors.surface,
@@ -1245,6 +1299,36 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
+  },
+  wardrobeEmptyState: {
+    width: 200,
+    height: 180,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginRight: 12,
+  },
+  wardrobeEmptyIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wardrobeEmptyTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  wardrobeEmptySubtitle: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
 
   // Badges (original preserved)

@@ -11,25 +11,9 @@ export type RootStackParamList = {
     searchQuery?: string;
   };
   ItemDetail: { itemId: string };
-  Favourites: undefined;
+  Closet: undefined;
   PosterViewer: { posterId: string };
-  CreatePoster:
-    | {
-        storyEditorResult?: {
-          text: string;
-          color: string;
-          position: 'top' | 'center' | 'bottom';
-          updatedAt: number;
-        };
-      }
-    | undefined;
-  PosterEditor: {
-    baseImageUri: string;
-    initialText?: string;
-    initialColor?: string;
-    initialPosition?: 'top' | 'center' | 'bottom';
-    createPosterRouteKey: string;
-  };
+  CreatePoster: undefined;
   CreateAuction: undefined;
   CreateCoOwn:
     | {

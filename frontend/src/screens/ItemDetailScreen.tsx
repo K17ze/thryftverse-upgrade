@@ -10,10 +10,6 @@ import {
   StatusBar,
   Dimensions,
   Share,
-  Modal,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { BlurView } from 'expo-blur';
@@ -46,6 +42,7 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { AppButton } from '../components/ui/AppButton';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Space, Radius } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
@@ -63,18 +60,7 @@ export default function ItemDetailScreen() {
   const insets = useSafeAreaInsets();
   // Collection modal state
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
-  const [newCollectionName, setNewCollectionName] = useState('');
-  const [showCreateInput, setShowCreateInput] = useState(false);
-
-  // Get collection functions from store
-  const collections = useStore((state) => state.collections);
-  const addToCollection = useStore((state) => state.addToCollection);
-  const removeFromCollection = useStore((state) => state.removeFromCollection);
-  const isInCollection = useStore((state) => state.isInCollection);
-  const createCollection = useStore((state) => state.createCollection);
   const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
-  const isSavedProduct = useStore((state) => state.isSavedProduct);
-  const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
 
   const isFav = useStore(state => state.isWishlisted(route.params?.itemId));
   const toggleFav = useStore(state => state.toggleWishlist);
@@ -393,131 +379,11 @@ export default function ItemDetailScreen() {
         </Reanimated.View>
       )}
 
-      {/* Collection Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      <SaveToCollectionModal
         visible={collectionModalVisible}
-        onRequestClose={() => setCollectionModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Save</Text>
-              <TouchableOpacity onPress={() => setCollectionModalVisible(false)}>
-                <Ionicons name="close" size={24} color={Colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Individual Save Toggle */}
-            <TouchableOpacity
-              style={styles.saveToggleRow}
-              onPress={() => {
-                toggleSavedProduct(item?.id);
-                show(isSavedProduct(item?.id) ? 'Removed from saved' : 'Saved', 'success');
-              }}
-              activeOpacity={0.8}
-            >
-              <View style={styles.saveToggleLeft}>
-                <View style={[styles.saveToggleIcon, { backgroundColor: isSavedProduct(item?.id) ? 'rgba(52,199,89,0.12)' : Colors.surfaceAlt }]}>
-                  <Ionicons name={isSavedProduct(item?.id) ? 'bookmark' : 'bookmark-outline'} size={20} color={isSavedProduct(item?.id) ? '#34C759' : Colors.textPrimary} />
-                </View>
-                <View>
-                  <Text style={styles.saveToggleTitle}>{isSavedProduct(item?.id) ? 'Saved' : 'Save for later'}</Text>
-                  <Text style={styles.saveToggleSub}>{isSavedProduct(item?.id) ? 'In your saved items' : 'Add to your saved items'}</Text>
-                </View>
-              </View>
-              <Ionicons
-                name={isSavedProduct(item?.id) ? 'checkmark-circle' : 'ellipse-outline'}
-                size={26}
-                color={isSavedProduct(item?.id) ? '#34C759' : Colors.border}
-              />
-            </TouchableOpacity>
-
-            {/* Collections Section */}
-            <Text style={styles.modalSectionTitle}>Collections</Text>
-            <FlatList
-              data={collections}
-              keyExtractor={(col) => col.id}
-              ListEmptyComponent={(
-                <Text style={styles.emptyText}>No collections yet. Create one below.</Text>
-              )}
-              renderItem={({ item: collection }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.collectionItem,
-                    isInCollection(collection.id, item?.id) && styles.collectionItemSelected
-                  ]}
-                  onPress={() => {
-                    if (isInCollection(collection.id, item?.id)) {
-                      removeFromCollection(collection.id, item?.id);
-                      show(`Removed from ${collection.name}`, 'info');
-                    } else {
-                      addToCollection(collection.id, item?.id);
-                      show(`Added to ${collection.name}`, 'success');
-                    }
-                  }}
-                >
-                  <View style={styles.collectionInfo}>
-                    <Text style={styles.collectionName}>{collection.name}</Text>
-                    <Text style={styles.collectionCount}>{collection.itemIds.length} items</Text>
-                  </View>
-                  {isInCollection(collection.id, item?.id) && (
-                    <Ionicons name="checkmark-circle" size={24} color={Colors.brand} />
-                  )}
-                </TouchableOpacity>
-              )}
-            />
-
-            {/* Inline Create Collection */}
-            {showCreateInput ? (
-              <View style={styles.createInputWrap}>
-                <TextInput
-                  style={styles.createInput}
-                  placeholder="Collection name"
-                  placeholderTextColor={Colors.textMuted}
-                  value={newCollectionName}
-                  onChangeText={setNewCollectionName}
-                  autoFocus
-                  returnKeyType="done"
-                  onSubmitEditing={() => {
-                    if (newCollectionName.trim()) {
-                      const newId = createCollection(newCollectionName.trim());
-                      addToCollection(newId, item?.id);
-                      setNewCollectionName('');
-                      setShowCreateInput(false);
-                      show('Created and added to collection', 'success');
-                    }
-                  }}
-                />
-                <TouchableOpacity
-                  style={[styles.createInputBtn, !newCollectionName.trim() && { opacity: 0.45 }]}
-                  disabled={!newCollectionName.trim()}
-                  onPress={() => {
-                    if (newCollectionName.trim()) {
-                      const newId = createCollection(newCollectionName.trim());
-                      addToCollection(newId, item?.id);
-                      setNewCollectionName('');
-                      setShowCreateInput(false);
-                      show('Created and added to collection', 'success');
-                    }
-                  }}
-                >
-                  <Text style={styles.createInputBtnText}>Create</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.createNewBtn}
-                onPress={() => setShowCreateInput(true)}
-              >
-                <Ionicons name="add-circle-outline" size={20} color={Colors.brand} />
-                <Text style={styles.createNewBtnText}>Create New Collection</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </Modal>
+        itemId={item?.id}
+        onClose={() => setCollectionModalVisible(false)}
+      />
     </View>
   );
 }
@@ -625,166 +491,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: PANEL_BORDER,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.textPrimary,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: Colors.textMuted,
-    marginBottom: 16,
-  },
-  createCollectionBtn: {
-    backgroundColor: Colors.brand,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  createCollectionBtnText: {
-    color: Colors.background,
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  collectionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    backgroundColor: PANEL_BG,
-  },
-  collectionItemSelected: {
-    borderWidth: 2,
-    borderColor: Colors.brand,
-  },
-  collectionInfo: {
-    flex: 1,
-  },
-  collectionName: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.textPrimary,
-  },
-  collectionCount: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  createNewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  createNewBtnText: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.brand,
-  },
-  saveToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: PANEL_BG,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    marginBottom: 16,
-  },
-  saveToggleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  saveToggleIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveToggleTitle: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.textPrimary,
-  },
-  saveToggleSub: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  modalSectionTitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 10,
-  },
-  createInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  createInput: {
-    flex: 1,
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.textPrimary,
-  },
-  createInputBtn: {
-    height: 48,
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    backgroundColor: Colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  createInputBtnText: {
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.background,
   },
   description: { fontSize: 15, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, lineHeight: 24 },
   timePosted: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 12 },
