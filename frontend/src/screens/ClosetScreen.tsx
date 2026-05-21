@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,14 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Reanimated, { FadeInDown, useSharedValue } from 'react-native-reanimated';
+import Reanimated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -24,27 +31,28 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { CollectionCard } from '../components/closet/CollectionCard';
+import { AppButton } from '../components/ui/AppButton';
 
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS';
+type SortOption = 'Recently Added' | 'Price: Low to High' | 'Price: High to Low' | 'Newest';
 type NavT = StackNavigationProp<RootStackParamList>;
 
-const TABS = [
-  { value: 'SAVED' as TabKey, label: 'Saved', icon: <Ionicons name="bookmark-outline" size={14} color={Colors.textSecondary} /> },
-  { value: 'WISHLIST' as TabKey, label: 'Wishlist', icon: <Ionicons name="heart-outline" size={14} color={Colors.textSecondary} /> },
-  { value: 'COLLECTIONS' as TabKey, label: 'Collections', icon: <Ionicons name="folder-open-outline" size={14} color={Colors.textSecondary} /> },
-];
+const SORT_OPTIONS: SortOption[] = ['Recently Added', 'Price: Low to High', 'Price: High to Low', 'Newest'];
 
 export default function ClosetScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const [activeTab, setActiveTab] = useState<TabKey>('SAVED');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('Recently Added');
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
 
   const wishlistIds = useStore((state) => state.wishlist);
   const savedProductIds = useStore((state) => state.savedProducts);
   const collections = useStore((state) => state.collections);
+  const createCollection = useStore((state) => state.createCollection);
   const { listings, refreshListings } = useBackendData();
 
   const handleRefresh = async () => {
@@ -52,6 +60,18 @@ export default function ClosetScreen() {
     await refreshListings();
     setTimeout(() => setRefreshing(false), 350);
   };
+
+  const handleGoBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('MainTabs');
+    }
+  }, [navigation]);
+
+  const handleBrowse = useCallback(() => {
+    navigation.navigate('GlobalSearch');
+  }, [navigation]);
 
   const savedItems = useMemo(
     () => listings.filter((l) => savedProductIds?.includes(l.id) ?? false),
@@ -63,23 +83,41 @@ export default function ClosetScreen() {
     [listings, wishlistIds]
   );
 
-  const filteredSaved = useMemo(
-    () => savedItems.filter((l) =>
-      !searchQuery ||
-      l.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.brand?.toLowerCase().includes(searchQuery.toLowerCase())
-    ),
-    [savedItems, searchQuery]
-  );
+  const sortItems = useCallback((items: typeof listings) => {
+    switch (sortBy) {
+      case 'Price: Low to High':
+        return [...items].sort((a, b) => a.price - b.price);
+      case 'Price: High to Low':
+        return [...items].sort((a, b) => b.price - a.price);
+      case 'Newest':
+        return [...items].sort((a, b) => {
+          const da = a.createdAt ? Date.parse(a.createdAt) : 0;
+          const db = b.createdAt ? Date.parse(b.createdAt) : 0;
+          return (db as number) - (da as number);
+        });
+      case 'Recently Added':
+      default:
+        return items;
+    }
+  }, [sortBy]);
 
-  const filteredWishlist = useMemo(
-    () => wishlistItems.filter((l) =>
+  const filteredSaved = useMemo(() => {
+    const filtered = savedItems.filter((l) =>
       !searchQuery ||
       l.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       l.brand?.toLowerCase().includes(searchQuery.toLowerCase())
-    ),
-    [wishlistItems, searchQuery]
-  );
+    );
+    return sortItems(filtered);
+  }, [savedItems, searchQuery, sortItems]);
+
+  const filteredWishlist = useMemo(() => {
+    const filtered = wishlistItems.filter((l) =>
+      !searchQuery ||
+      l.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      l.brand?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    return sortItems(filtered);
+  }, [wishlistItems, searchQuery, sortItems]);
 
   const filteredCollections = useMemo(
     () => collections.filter((c) =>
@@ -89,11 +127,87 @@ export default function ClosetScreen() {
     [collections, searchQuery]
   );
 
-  const totalCount = savedProductIds.length + wishlistIds.length + collections.length;
+  const tabCount = useMemo(() => {
+    switch (activeTab) {
+      case 'SAVED': return filteredSaved.length;
+      case 'WISHLIST': return filteredWishlist.length;
+      case 'COLLECTIONS': return filteredCollections.length;
+    }
+  }, [activeTab, filteredSaved, filteredWishlist, filteredCollections]);
+
+  const searchPlaceholder = useMemo(() => {
+    switch (activeTab) {
+      case 'SAVED': return 'Search saved items';
+      case 'WISHLIST': return 'Search wishlist';
+      case 'COLLECTIONS': return 'Search collections';
+    }
+  }, [activeTab]);
 
   const handleTabChange = (tab: TabKey) => {
     haptic.light();
     setActiveTab(tab);
+    setSearchQuery('');
+  };
+
+  const handleCreateCollection = useCallback(() => {
+    haptic.medium();
+    // Quick inline creation with default name
+    const newId = createCollection('New Collection');
+    navigation.navigate('CollectionDetail', { collectionId: newId });
+  }, [createCollection, haptic, navigation]);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y;
+    },
+  });
+
+  const headerBgStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP),
+    borderBottomWidth: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP),
+  }));
+
+  const TAB_ICONS = {
+    SAVED: 'bookmark-outline' as const,
+    WISHLIST: 'heart-outline' as const,
+    COLLECTIONS: 'folder-open-outline' as const,
+  };
+
+  const renderSortBar = () => (
+    <View style={styles.sortBar}>
+      <Text style={styles.resultCount}>{tabCount} {tabCount === 1 ? 'item' : 'items'}</Text>
+      <AnimatedPressable
+        style={styles.sortBtn}
+        onPress={() => setShowSortMenu((v) => !v)}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.sortLabel}>{sortBy}</Text>
+        <Ionicons name={showSortMenu ? 'chevron-up' : 'chevron-down'} size={14} color={Colors.textMuted} />
+      </AnimatedPressable>
+    </View>
+  );
+
+  const renderSortMenu = () => {
+    if (!showSortMenu || activeTab === 'COLLECTIONS') return null;
+    return (
+      <View style={styles.sortMenu}>
+        {SORT_OPTIONS.map((opt) => (
+          <AnimatedPressable
+            key={opt}
+            style={[styles.sortOption, sortBy === opt && styles.sortOptionActive]}
+            onPress={() => {
+              haptic.light();
+              setSortBy(opt);
+              setShowSortMenu(false);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.sortOptionText, sortBy === opt && styles.sortOptionTextActive]}>{opt}</Text>
+            {sortBy === opt && <Ionicons name="checkmark" size={16} color={Colors.brand} />}
+          </AnimatedPressable>
+        ))}
+      </View>
+    );
   };
 
   const renderSavedContent = () => {
@@ -104,15 +218,17 @@ export default function ClosetScreen() {
           title="No saved products yet"
           subtitle="Tap the bookmark on any product to save it here."
           ctaLabel="Browse"
-          onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
+          onCtaPress={handleBrowse}
         />
       );
     }
     return (
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+        {renderSortBar()}
+        {renderSortMenu()}
         <MasonryGrid
           items={filteredSaved}
-          onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
+          onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
           numColumns={2}
           showSeller
           showSaveButton
@@ -129,15 +245,17 @@ export default function ClosetScreen() {
           title="Your wishlist is empty"
           subtitle="Heart items to track them."
           ctaLabel="Browse"
-          onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
+          onCtaPress={handleBrowse}
         />
       );
     }
     return (
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+        {renderSortBar()}
+        {renderSortMenu()}
         <MasonryGrid
           items={filteredWishlist}
-          onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
+          onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
           numColumns={2}
           showSeller
           showSaveButton
@@ -154,23 +272,31 @@ export default function ClosetScreen() {
           title="No collections yet"
           subtitle="Group your saved items into boards."
           ctaLabel="Create Collection"
-          onCtaPress={() => {
-            // Navigate to first saved item or show create modal
-            // For now, just navigate to saved tab to start building
-            setActiveTab('SAVED');
-          }}
+          onCtaPress={handleCreateCollection}
         />
       );
     }
     return (
-      <Reanimated.View entering={FadeInDown.duration(300)} style={styles.collectionsList}>
-        {filteredCollections.map((collection) => (
-          <CollectionCard
+      <Reanimated.View entering={FadeInDown.duration(300).delay(50)} style={styles.collectionsList}>
+        {renderSortBar()}
+        {filteredCollections.map((collection, index) => (
+          <Reanimated.View
             key={collection.id}
-            collection={collection}
-            onPress={() => navigation.push('CollectionDetail', { collectionId: collection.id })}
-          />
+            entering={FadeInDown.duration(250).delay(index * 40)}
+          >
+            <CollectionCard
+              collection={collection}
+              onPress={() => navigation.navigate('CollectionDetail', { collectionId: collection.id })}
+            />
+          </Reanimated.View>
         ))}
+        {/* FAB-style create button on Collections tab */}
+        <AppButton
+          title="Create Collection"
+          icon={<Ionicons name="add" size={16} color={Colors.background} />}
+          onPress={handleCreateCollection}
+          style={styles.createCollectionBtn}
+        />
       </Reanimated.View>
     );
   };
@@ -179,16 +305,22 @@ export default function ClosetScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
+      {/* Animated Header Border */}
+      <Reanimated.View style={[styles.headerBorder, headerBgStyle]} pointerEvents="none" />
+
       {/* Header */}
       <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+        <AnimatedPressable style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.85}>
           <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
         </AnimatedPressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerLabel}>CLOSET</Text>
           <Text style={styles.headerTitle}>Closet</Text>
         </View>
-        <Text style={styles.countBadge}>{totalCount}</Text>
+        <View style={styles.countPill}>
+          <Ionicons name={TAB_ICONS[activeTab]} size={12} color={Colors.textMuted} />
+          <Text style={styles.countBadge}>{tabCount}</Text>
+        </View>
       </View>
 
       <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
@@ -196,9 +328,7 @@ export default function ClosetScreen() {
       <Reanimated.ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        onScroll={(event) => {
-          scrollY.value = event.nativeEvent.contentOffset.y;
-        }}
+        onScroll={scrollHandler}
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
@@ -215,7 +345,7 @@ export default function ClosetScreen() {
           <AppInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder={`Search ${activeTab.toLowerCase()}`}
+            placeholder={searchPlaceholder}
             prefix={<Ionicons name="search" size={18} color={Colors.textMuted} />}
             suffix={
               searchQuery.length > 0 ? (
@@ -231,7 +361,11 @@ export default function ClosetScreen() {
         {/* Tabs */}
         <View style={styles.tabsWrap}>
           <AppSegmentControl
-            options={TABS}
+            options={[
+              { value: 'SAVED', label: `Saved`, icon: <Ionicons name="bookmark-outline" size={14} color={Colors.textSecondary} /> },
+              { value: 'WISHLIST', label: `Wishlist`, icon: <Ionicons name="heart-outline" size={14} color={Colors.textSecondary} /> },
+              { value: 'COLLECTIONS', label: `Collections`, icon: <Ionicons name="folder-open-outline" size={14} color={Colors.textSecondary} /> },
+            ]}
             value={activeTab}
             onChange={handleTabChange}
             fullWidth
@@ -254,6 +388,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  headerBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 90,
+    backgroundColor: Colors.background,
+    borderBottomColor: Colors.border,
+    zIndex: 1,
+  },
   header: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
@@ -261,6 +405,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    zIndex: 2,
   },
   backBtn: {
     width: 40,
@@ -273,24 +418,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerLabel: {
-    ...Type.meta,
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
     color: Colors.brand,
-    textTransform: 'uppercase',
     letterSpacing: 0.7,
+    textTransform: 'uppercase',
   },
   headerTitle: {
-    ...Type.subtitle,
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
     fontSize: 22,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
     marginTop: 2,
   },
+  countPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   countBadge: {
-    ...Type.caption,
-    color: Colors.textMuted,
+    fontSize: 12,
     fontFamily: 'Inter_700Bold',
-    minWidth: 24,
-    textAlign: 'right',
+    color: Colors.textMuted,
   },
   searchWrap: {
     paddingHorizontal: Space.md,
@@ -303,7 +457,69 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: Space.sm,
   },
+  sortBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
+  },
+  resultCount: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textSecondary,
+  },
+  sortBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  sortLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textSecondary,
+  },
+  sortMenu: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  sortOptionActive: {
+    backgroundColor: Colors.surfaceAlt,
+  },
+  sortOptionText: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textPrimary,
+  },
+  sortOptionTextActive: {
+    fontFamily: 'Inter_700Bold',
+    color: Colors.brand,
+  },
   collectionsList: {
     paddingHorizontal: Space.md,
+  },
+  createCollectionBtn: {
+    marginTop: Space.lg,
+    marginBottom: Space.md,
   },
 });

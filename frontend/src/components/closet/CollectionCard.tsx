@@ -1,12 +1,17 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Type, Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { Collection } from '../../store/useStore';
+import { Listing } from '../../data/mockData';
 import { useBackendData } from '../../context/BackendDataContext';
+
+const { width: SCREEN_W } = Dimensions.get('window');
+const CARD_W = SCREEN_W - Space.md * 2;
+const COVER_SIZE = (CARD_W - 8) / 3; // 3-up collage with 4px gaps
 
 interface Props {
   collection: Collection;
@@ -17,42 +22,66 @@ export function CollectionCard({ collection, onPress }: Props) {
   const { listings } = useBackendData();
   const count = collection.itemIds?.length ?? 0;
 
-  // Resolve cover images from first 3 items
-  const coverImages = React.useMemo(() => {
+  // Resolve up to 3 cover images safely
+  const covers = React.useMemo(() => {
     return collection.itemIds
       .slice(0, 3)
       .map((id) => listings.find((l) => l.id === id))
-      .filter(Boolean)
-      .map((l) => l!.images[0]);
+      .filter((l): l is Listing => {
+        if (l == null) return false;
+        return Array.isArray(l.images) && l.images.length > 0;
+      })
+      .map((l) => l.images[0]);
   }, [collection.itemIds, listings]);
 
   return (
     <AnimatedPressable
       style={styles.container}
       onPress={onPress}
-      activeOpacity={0.9}
+      activeOpacity={0.92}
       accessibilityRole="button"
-      accessibilityLabel={`${collection.name} collection with ${count} items`}
+      accessibilityLabel={`${collection.name} collection, ${count} ${count === 1 ? 'item' : 'items'}`}
       accessibilityHint="Tap to view collection"
     >
-      {/* Thumbnail Grid */}
-      <View style={styles.thumbGrid}>
-        {coverImages.length > 0 ? (
-          coverImages.map((uri, i) => (
-            <View key={i} style={[styles.thumb, coverImages.length === 1 && styles.thumbSingle]}>
-              <CachedImage uri={uri} style={styles.thumbImage} contentFit="cover" />
+      {/* Cover Collage */}
+      <View style={styles.collage}>
+        {covers.length > 0 ? (
+          <>
+            <View style={[styles.mainCover, covers.length === 1 && styles.mainCoverSingle]}>
+              <CachedImage uri={covers[0]} style={styles.coverImg} contentFit="cover" />
             </View>
-          ))
+            {covers.length > 1 && (
+              <View style={styles.sideColumn}>
+                <View style={styles.sideCover}>
+                  <CachedImage uri={covers[1]} style={styles.coverImg} contentFit="cover" />
+                </View>
+                {covers.length > 2 && (
+                  <View style={styles.sideCover}>
+                    <CachedImage uri={covers[2]} style={styles.coverImg} contentFit="cover" />
+                  </View>
+                )}
+                {covers.length === 2 && (
+                  <View style={[styles.sideCover, styles.sideEmpty]}>
+                    <Ionicons name="folder-open-outline" size={20} color={Colors.textMuted} />
+                  </View>
+                )}
+              </View>
+            )}
+          </>
         ) : (
-          <View style={styles.thumbEmpty}>
-            <Ionicons name="folder-open-outline" size={28} color={Colors.textMuted} />
+          <View style={styles.emptyCover}>
+            <Ionicons name="folder-open-outline" size={40} color={Colors.textMuted} />
+            <Text style={styles.emptyCoverText}>Empty</Text>
           </View>
         )}
       </View>
 
       {/* Info */}
       <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>{collection.name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1}>{collection.name}</Text>
+          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+        </View>
         <Text style={styles.meta}>{count} {count === 1 ? 'item' : 'items'}</Text>
       </View>
     </AnimatedPressable>
@@ -61,55 +90,79 @@ export function CollectionCard({ collection, onPress }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    padding: Space.sm,
     borderRadius: Radius.lg,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginBottom: Space.xs,
+    marginBottom: Space.md,
+    overflow: 'hidden',
   },
-  thumbGrid: {
-    width: 64,
-    height: 64,
+  collage: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    height: COVER_SIZE * 2 + 4,
+  },
+  mainCover: {
+    width: COVER_SIZE * 2,
+    height: '100%',
     borderRadius: Radius.md,
     overflow: 'hidden',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 2,
     backgroundColor: Colors.surfaceAlt,
   },
-  thumb: {
-    flex: 1,
-    minWidth: '48%',
-    minHeight: '48%',
-  },
-  thumbSingle: {
-    minWidth: '100%',
-    minHeight: '100%',
-  },
-  thumbImage: {
+  mainCoverSingle: {
     width: '100%',
-    height: '100%',
   },
-  thumbEmpty: {
+  sideColumn: {
     flex: 1,
+    gap: 4,
+  },
+  sideCover: {
+    flex: 1,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
+  },
+  sideEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  info: {
+  coverImg: {
+    width: '100%',
+    height: '100%',
+  },
+  emptyCover: {
     flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: Space.sm,
+  },
+  emptyCoverText: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textMuted,
+  },
+  info: {
+    padding: Space.sm,
+    paddingHorizontal: Space.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
   },
   name: {
-    ...Type.price,
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
+    flex: 1,
   },
   meta: {
-    ...Type.caption,
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
     color: Colors.textMuted,
     marginTop: 2,
   },

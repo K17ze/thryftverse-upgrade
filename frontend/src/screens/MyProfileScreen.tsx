@@ -57,10 +57,10 @@ const HERO_MEDIA_TILE = (SCREEN_WIDTH - 40 - HERO_MEDIA_GAP * 2) / 3;
 // Phase 3: Simplified to use new 5-core palette
 const IS_LIGHT = ActiveTheme === 'light';
 const BRAND = Colors.brand;
-const PANEL_BG = IS_LIGHT ? '#ffffff' : '#111';
-const PANEL_SOFT = IS_LIGHT ? '#f4efe7' : '#171717';
-const PANEL_ICON = IS_LIGHT ? '#ece5d9' : '#1a1a1a';
-const PANEL_BORDER = IS_LIGHT ? '#d8d1c6' : '#2a2a2a';
+const PANEL_BG = Colors.surface;
+const PANEL_SOFT = Colors.surfaceAlt;
+const PANEL_ICON = Colors.surfaceAlt;
+const PANEL_BORDER = Colors.border;
 
 const COVER_IMAGE = MY_USER.coverPhoto || 'https://picsum.photos/seed/profilecoverdefault/1200/800';
 
@@ -705,9 +705,9 @@ const styles = StyleSheet.create({
     height: COVER_HEIGHT,
     zIndex: 0,
     overflow: 'hidden',
-    backgroundColor: IS_LIGHT ? '#e8e4dc' : '#1a1a1a',
+    backgroundColor: Colors.surfaceAlt,
   },
-  coverImage: { width: '100%', height: '100%', backgroundColor: IS_LIGHT ? '#d8d1c6' : '#2a2a2a' },
+  coverImage: { width: '100%', height: '100%', backgroundColor: Colors.border },
   coverGradient: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: IS_LIGHT ? 'rgba(236,234,230,0.25)' : 'rgba(9,9,9,0.4)',
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
   topUtilityPillText: {
     color: '#fff',
     fontSize: 12,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.2,
   },
 
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
   },
   floatingHeaderTitle: {
     fontSize: 18,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -876,7 +876,7 @@ const styles = StyleSheet.create({
   heroName: {
     fontSize: 18,
     lineHeight: 22,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
     marginBottom: 2,
     alignSelf: 'center',
@@ -894,7 +894,7 @@ const styles = StyleSheet.create({
   heroHandle: {
     fontSize: 11,
     lineHeight: 14,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     color: Colors.textSecondary,
     marginBottom: 6,
     letterSpacing: 0.12,
@@ -902,7 +902,7 @@ const styles = StyleSheet.create({
   heroBio: {
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textSecondary,
     textAlign: 'center',
     marginBottom: 6,
@@ -910,7 +910,7 @@ const styles = StyleSheet.create({
   },
   heroMeta: {
     fontSize: 11,
-    fontFamily: Typography.family.light,
+    fontFamily: 'Inter_300Light',
     color: Colors.textMuted,
     alignSelf: 'center',
     marginBottom: 12,
@@ -931,7 +931,7 @@ const styles = StyleSheet.create({
   profileActionPrimaryText: {
     color: Colors.background,
     fontSize: 13,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.15,
   },
   profileActionSecondary: {
@@ -942,7 +942,7 @@ const styles = StyleSheet.create({
   profileActionSecondaryText: {
     color: Colors.textPrimary,
     fontSize: 13,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.18,
   },
   profileActionIcon: {
@@ -990,7 +990,7 @@ const styles = StyleSheet.create({
   mediaTilePriceText: {
     color: '#fff',
     fontSize: 9,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.08,
   },
 
@@ -1005,13 +1005,13 @@ const styles = StyleSheet.create({
   statsTitle: {
     color: Colors.textPrimary,
     fontSize: 14,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.2,
   },
   statsHint: {
     color: Colors.textMuted,
     fontSize: 11,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -1037,13 +1037,13 @@ const styles = StyleSheet.create({
   },
   statNumber: {
     fontSize: 18,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 10,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.textMuted,
     letterSpacing: 0.55,
   },
@@ -1069,7 +1069,7 @@ const styles = StyleSheet.create({
   },
   quickAccessTitle: {
     fontSize: 14,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.textPrimary,
   },
   quickAccessHint: {
@@ -1104,14 +1104,14 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 10,
-    backgroundColor: IS_LIGHT ? '#f5f3f0' : '#2a2a2a',
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
   quickLabel: {
     fontSize: 10,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 12,
@@ -1119,7 +1119,7 @@ const styles = StyleSheet.create({
   },
   quickValue: {
     fontSize: 8,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.brand,
     marginTop: 1,
     letterSpacing: 0.06,
@@ -1141,7 +1141,7 @@ const styles = StyleSheet.create({
   },
   portfolioSummaryLabel: {
     fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.brand,
     letterSpacing: 0.9,
   },
@@ -1152,12 +1152,12 @@ const styles = StyleSheet.create({
   },
   portfolioSummaryLinkText: {
     fontSize: 12,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.brand,
   },
   portfolioSummaryValue: {
     fontSize: 26,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
     letterSpacing: -0.35,
   },
@@ -1170,13 +1170,13 @@ const styles = StyleSheet.create({
   },
   portfolioSummaryMeta: {
     fontSize: 12,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     color: Colors.textSecondary,
     letterSpacing: 0.1,
   },
   portfolioSummaryPnl: {
     fontSize: 12,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
   },
   portfolioPnlUp: { color: Colors.brand },
   portfolioPnlDown: { color: '#ff9d9d' },
@@ -1194,7 +1194,7 @@ const styles = StyleSheet.create({
   portfolioSummaryCtaText: {
     color: Colors.background,
     fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.16,
   },
 
@@ -1211,7 +1211,7 @@ const styles = StyleSheet.create({
   },
   wardrobeSectionLabel: {
     fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.brand,
     letterSpacing: 1,
     marginBottom: 4,
@@ -1233,7 +1233,7 @@ const styles = StyleSheet.create({
   },
   wardrobeTitle: {
     fontSize: 20,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
     letterSpacing: -0.25,
   },
@@ -1244,7 +1244,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     fontSize: 13,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.brand,
     letterSpacing: 0.16,
   },
@@ -1273,12 +1273,12 @@ const styles = StyleSheet.create({
   },
   wardrobePrice: {
     fontSize: 14,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.textPrimary,
   },
   wardrobeBrand: {
     fontSize: 12,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textSecondary,
     marginTop: 2,
     letterSpacing: 0.08,
@@ -1297,7 +1297,7 @@ const styles = StyleSheet.create({
   },
   wardrobeLikeCount: {
     fontSize: 10,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     color: Colors.textSecondary,
   },
   wardrobeEmptyState: {
@@ -1322,12 +1322,12 @@ const styles = StyleSheet.create({
   },
   wardrobeEmptyTitle: {
     fontSize: 13,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.textPrimary,
   },
   wardrobeEmptySubtitle: {
     fontSize: 11,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
   },
 
@@ -1341,14 +1341,14 @@ const styles = StyleSheet.create({
   },
   badgesSectionLabel: {
     fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.brand,
     letterSpacing: 1,
     marginBottom: 4,
   },
   badgesTitle: {
     fontSize: 20,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
     marginBottom: 14,
     letterSpacing: -0.2,
@@ -1370,7 +1370,7 @@ const styles = StyleSheet.create({
   badgeLabel: {
     fontSize: 11,
     color: Colors.textMuted,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     textAlign: 'center',
     maxWidth: 64,
   },

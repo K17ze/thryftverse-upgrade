@@ -58,7 +58,7 @@ const LISTING_TYPE_OPTIONS: AppSegmentOption<ListingType>[] = [
 const IS_LIGHT = ActiveTheme === 'light';
 const BRAND = IS_LIGHT ? '#2f251b' : Colors.brand;
 const HEADER_BG = IS_LIGHT ? '#f3eee7' : '#0a0a0a';
-const PANEL_BG = IS_LIGHT ? '#ffffff' : '#111111';
+const PANEL_BG = Colors.surface;
 const PANEL_SOFT_BG = IS_LIGHT ? '#f7f4ef' : '#171717';
 const PANEL_BORDER = IS_LIGHT ? '#d8d1c6' : '#2b2b2b';
 const FOOTER_BG = IS_LIGHT ? 'rgba(236,234,230,0.97)' : 'rgba(10,10,10,0.95)';

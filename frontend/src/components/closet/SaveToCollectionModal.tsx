@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Modal,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -37,17 +40,18 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
   const isSavedProduct = useStore((state) => state.isSavedProduct);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
 
-  const saved = isSavedProduct(itemId);
-
-  const handleToggleSaved = () => {
+  // Always read fresh state when toggling to avoid stale closure
+  const handleToggleSaved = useCallback(() => {
     haptic.light();
+    const currentlySaved = isSavedProduct(itemId);
     toggleSavedProduct(itemId);
-    show(saved ? 'Removed from saved' : 'Saved', 'success');
-  };
+    show(currentlySaved ? 'Removed from saved' : 'Saved to items', 'success');
+  }, [haptic, isSavedProduct, itemId, show, toggleSavedProduct]);
 
-  const handleToggleCollection = (collection: Collection) => {
+  const handleToggleCollection = useCallback((collection: Collection) => {
     haptic.light();
-    if (isInCollection(collection.id, itemId)) {
+    const currentlyIn = isInCollection(collection.id, itemId);
+    if (currentlyIn) {
       removeFromCollection(collection.id, itemId);
       show(`Removed from ${collection.name}`, 'info');
     } else {
@@ -55,9 +59,9 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
       haptic.success();
       show(`Added to ${collection.name}`, 'success');
     }
-  };
+  }, [addToCollection, haptic, isInCollection, itemId, removeFromCollection, show]);
 
-  const handleCreateCollection = () => {
+  const handleCreateCollection = useCallback(() => {
     const trimmed = newCollectionName.trim();
     if (!trimmed) return;
     haptic.success();
@@ -65,11 +69,20 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
     addToCollection(newId, itemId);
     setNewCollectionName('');
     setShowCreateInput(false);
+    Keyboard.dismiss();
     show('Created and added to collection', 'success');
-  };
+  }, [addToCollection, createCollection, haptic, itemId, newCollectionName, show]);
+
+  const handleClose = useCallback(() => {
+    setNewCollectionName('');
+    setShowCreateInput(false);
+    Keyboard.dismiss();
+    onClose();
+  }, [onClose]);
 
   const renderCollectionItem = ({ item: collection }: { item: Collection }) => {
     const selected = isInCollection(collection.id, itemId);
+    const count = collection.itemIds?.length ?? 0;
     return (
       <AnimatedPressable
         style={[styles.collectionRow, selected && styles.collectionRowSelected]}
@@ -77,31 +90,36 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
         activeOpacity={0.85}
         accessibilityRole="button"
         accessibilityState={{ selected }}
-        accessibilityLabel={`Save to ${collection.name} collection`}
+        accessibilityLabel={`${selected ? 'Remove from' : 'Add to'} ${collection.name} collection`}
         accessibilityHint={selected ? 'Tap to remove from this collection' : 'Tap to add to this collection'}
       >
         <View style={styles.collectionInfo}>
           <Text style={styles.collectionName}>{collection.name}</Text>
-          <Text style={styles.collectionCount}>{collection.itemIds.length} items</Text>
+          <Text style={styles.collectionCount}>{count} {count === 1 ? 'item' : 'items'}</Text>
         </View>
         {selected && <Ionicons name="checkmark-circle" size={24} color={Colors.brand} />}
       </AnimatedPressable>
     );
   };
 
+  const saved = isSavedProduct(itemId);
+
   return (
     <Modal
       animationType="slide"
       transparent
       visible={visible}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.overlay}
+      >
         <AppCard variant="elevated" style={styles.card} noBorder>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Save</Text>
-            <AnimatedPressable onPress={onClose} accessibilityLabel="Close save modal">
+            <AnimatedPressable onPress={handleClose} accessibilityLabel="Close save modal">
               <Ionicons name="close" size={24} color={Colors.textPrimary} />
             </AnimatedPressable>
           </View>
@@ -157,6 +175,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
                 containerStyle={{ flex: 1 }}
                 returnKeyType="done"
                 onSubmitEditing={handleCreateCollection}
+                autoFocus
               />
               <AppButton
                 title="Create"
@@ -179,7 +198,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
             </AnimatedPressable>
           )}
         </AppCard>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -205,10 +224,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   title: {
-    ...Type.title,
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
     fontSize: 20,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
   },
   savedRow: {
     flexDirection: 'row',
@@ -237,17 +255,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   savedRowTitle: {
-    ...Type.price,
-    color: Colors.textPrimary,
+    fontSize: 14,
     fontFamily: 'Inter_600SemiBold',
+    color: Colors.textPrimary,
   },
   savedRowSub: {
-    ...Type.caption,
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
     marginTop: 2,
   },
   sectionLabel: {
-    ...Type.meta,
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
@@ -275,12 +295,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   collectionName: {
-    ...Type.body,
-    color: Colors.textPrimary,
+    fontSize: 14,
     fontFamily: 'Inter_600SemiBold',
+    color: Colors.textPrimary,
   },
   collectionCount: {
-    ...Type.caption,
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
     marginTop: 2,
   },
@@ -289,7 +310,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xl,
   },
   emptyText: {
-    ...Type.body,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
   },
   createWrap: {
@@ -311,7 +333,8 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
   },
   createTriggerText: {
-    ...Type.price,
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.brand,
   },
 });

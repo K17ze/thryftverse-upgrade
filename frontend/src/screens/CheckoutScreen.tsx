@@ -44,9 +44,9 @@ import { t } from '../i18n';
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 const IS_LIGHT = ActiveTheme === 'light';
 const BRAND = IS_LIGHT ? '#2f251b' : '#d7b98f';
-const PANEL_BG = IS_LIGHT ? '#ffffff' : '#111111';
+const PANEL_BG = Colors.surface;
 const PANEL_SOFT_BG = IS_LIGHT ? '#f7f4ef' : '#161616';
-const PANEL_BORDER = IS_LIGHT ? '#d8d1c6' : '#2a2a2a';
+const PANEL_BORDER = Colors.border;
 const FOOTER_BG = IS_LIGHT ? 'rgba(236,234,230,0.97)' : 'rgba(10,10,10,0.95)';
 
 interface CheckoutPostageOption {

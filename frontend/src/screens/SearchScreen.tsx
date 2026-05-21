@@ -40,7 +40,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ACCENT = '#d7b98f';
 const IS_LIGHT = ActiveTheme === 'light';
 const PANEL_BG = Colors.surface;
-const PANEL_ALT = IS_LIGHT ? '#ece4d8' : Colors.surfaceAlt;
+const PANEL_ALT = Colors.surfaceAlt;
 const BRAND = IS_LIGHT ? '#2f251b' : ACCENT;
 
 // Saved look data
@@ -400,7 +400,7 @@ const lookStyles = StyleSheet.create({
   tagLabel: {
     color: '#fff',
     fontSize: 11,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
   },
   infoRow: {
     flexDirection: 'row',
@@ -420,14 +420,14 @@ const lookStyles = StyleSheet.create({
   lookTitle: {
     color: Colors.textPrimary,
     fontSize: 16,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.06,
     marginBottom: 2,
   },
   creatorName: {
     color: Colors.textMuted,
     fontSize: 12,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
     letterSpacing: 0.1,
   },
   statsRow: {
@@ -443,7 +443,7 @@ const lookStyles = StyleSheet.create({
   statCount: {
     color: Colors.textSecondary,
     fontSize: 13,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
   },
 });
 
@@ -462,14 +462,14 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: BRAND,
     letterSpacing: 1.1,
     marginBottom: 4,
   },
   hugeTitle: {
     fontSize: 28,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
     letterSpacing: -0.5,
   },
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
   },
   itemCount: {
     fontSize: 13,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     letterSpacing: 0.12,
     color: Colors.textSecondary,
   },
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   discoverBtnText: {
     color: '#fff',
     fontSize: 12,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.2,
   },
 
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: Colors.textPrimary,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     letterSpacing: 0.08,
   },
 
@@ -540,15 +540,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     paddingHorizontal: 12,
   },
-  activeTab: { backgroundColor: IS_LIGHT ? '#fff' : Colors.textPrimary },
+  activeTab: { backgroundColor: Colors.textPrimary },
   tabIconWrap: {
     width: 16,
     height: 16,
     borderRadius: 8,
     backgroundColor: 'transparent',
   },
-  tabText: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, letterSpacing: 0.2 },
-  activeTabText: { color: IS_LIGHT ? '#000' : '#000' },
+  tabText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, letterSpacing: 0.2 },
+  activeTabText: { color: Colors.textPrimary },
   tabCountWrap: {
     width: 'auto',
     height: 'auto',
@@ -568,11 +568,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
     color: Colors.textSecondary,
     fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
   },
   tabCountActive: {
     backgroundColor: IS_LIGHT ? '#000' : Colors.background,
-    color: IS_LIGHT ? '#fff' : Colors.textPrimary,
+    color: Colors.textPrimary,
   },
   syncRetryBanner: {
     marginHorizontal: 16,
@@ -623,13 +623,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.textPrimary,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
@@ -641,7 +641,7 @@ const styles = StyleSheet.create({
   },
   footerHint: {
     fontSize: 13,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
     textAlign: 'center',
     letterSpacing: 0.1,

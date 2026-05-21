@@ -43,9 +43,9 @@ type NotificationCard = {
 };
 
 const IS_LIGHT = ActiveTheme === 'light';
-const PANEL_BG = IS_LIGHT ? '#ffffff' : '#111111';
+const PANEL_BG = Colors.surface;
 const PANEL_ALT = IS_LIGHT ? '#f7f4ef' : '#161616';
-const PANEL_BORDER = IS_LIGHT ? '#d8d1c6' : '#2a2a2a';
+const PANEL_BORDER = Colors.border;
 const BRAND = IS_LIGHT ? '#2f251b' : '#d7b98f';
 
 function getNotifIcon(type: NotificationCardType): { name: string; color: string; bg: string } {

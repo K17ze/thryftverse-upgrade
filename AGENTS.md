@@ -529,3 +529,419 @@ Replace all raw `fontSize` / `fontFamily` / `fontWeight` in affected files with:
 9. Grid items use `Reanimated` entrance animations (`FadeInDown` staggered).
 10. Every interactive element has correct `accessibilityRole`, `accessibilityLabel`, and `accessibilityHint`.
 11. Empty states exist for every tab and screen with contextual CTAs.
+
+---
+
+# ThryftVerse — Inbox / Messaging UI/UX Upgrade Plan
+
+## 1. Current State Audit
+
+### Screens Analyzed
+- `InboxScreen.tsx` — Main inbox hub with conversation list, search, segments, quick filters
+- `ChatScreen.tsx` — Individual chat thread with messages, offers, composer, controls
+- `CreateGroupChatScreen.tsx` — Group chat creation with member selection
+- `GroupBotDirectoryScreen.tsx` — Bot deployment / removal for group chats
+
+### Components Analyzed
+- `ChatMessageList.tsx` — FlashList/FlatList wrapper with date separators
+- `ChatMessageItem.tsx` — Message bubble primitive (text, status, avatar placeholder)
+- `SwipeableMessage.tsx` — PanResponder swipe-to-reply wrapper
+- `VoiceMessagePlayer.tsx` — Voice message waveform player
+- `TypingIndicator.tsx` — Animated dot typing indicator
+- `AttachmentMenu.tsx` — Bottom-sheet attachment picker modal
+- `OfferBubble.tsx` — Offer/counter/accept/decline bubble
+- `MessageStatusIndicator.tsx` — Read receipt / sent / delivered / failed indicator
+
+### Design System in Use (App-wide)
+- **Colors**: `Colors.background`, `Colors.surface`, `Colors.surfaceAlt`, `Colors.brand`, `Colors.textPrimary/Secondary/Muted`, `Colors.border`, `Colors.danger`, `Colors.success`, `Colors.textInverse`
+- **Spacing**: `Space.xs/sm/md/lg/xl/xxl` (4px base grid)
+- **Radius**: `Radius.sm/md/lg/xl/full` (4/8/12/16/999)
+- **Elevation**: `Elevation.none/subtle/card/floating/modal`
+- **Typography**: `Type.title/subtitle/body/price/caption/meta/priceLarge`
+- **Components**: `AppButton`, `AppCard` (surface/elevated/brand/tint), `AppInput`, `AppSegmentControl`, `AnimatedPressable`, `T` (text primitive), `SettingsHeader`
+
+---
+
+## 2. Critical Inconsistencies Found
+
+### A. Header Pattern Fragmentation
+Every messaging surface invents its own header:
+
+| Screen | Back Button | Title Style | Right Action |
+|--------|-------------|-------------|--------------|
+| InboxScreen | None (tab root) | `hugeTitle` (30px) + subtitle | "New Group" button + shield icon |
+| ChatScreen | 44x44 rounded square | `headerHandle` (19px bold) + meta | Info icon / Bot directory icon |
+| CreateGroupChatScreen | 44x44 rounded square | `headerTitle` (18px bold) | 44px spacer |
+| GroupBotDirectoryScreen | 44x44 rounded square | `headerTitle` (18px bold) + subtitle | 44px spacer |
+
+**Problem**: No unified "Messaging Header" component. Chat and sub-screens use completely different header structures from `SettingsHeader` and each other.
+
+### B. Massive Hardcoded Theme-Aware Color Blocks
+`ChatScreen.tsx` contains the largest inline theme switch block in the entire codebase:
+
+```tsx
+const IS_LIGHT = ActiveTheme === 'light';
+const ACCENT = IS_LIGHT ? '#2f251b' : '#d7b98f';
+const CARD = IS_LIGHT ? '#ffffff' : '#111111';
+const CARD_ALT = IS_LIGHT ? '#f3eee7' : '#1a1a1a';
+const BORDER = IS_LIGHT ? '#d8d1c6' : '#2a2a2a';
+const HEADER_BG = IS_LIGHT ? 'rgba(247,245,241,0.96)' : 'rgba(10, 10, 10, 0.95)';
+const FOOTER_BG = IS_LIGHT ? 'rgba(236,234,230,0.96)' : 'rgba(10,10,10,0.95)';
+```
+
+**Problem**: These override `Colors.*` tokens entirely. Any dark-mode refinement to the global palette does not propagate to chat. This is exactly the anti-pattern that was purged from Settings.
+
+### C. Typography Token Abandonment (Severe)
+Messaging screens use raw font sizes and families instead of the `Type` scale. Examples:
+
+| Style Name | Current | Should Be |
+|------------|---------|-------------|
+| `hugeTitle` | `fontSize: 30, family: Inter_700Bold` | `Type.title` |
+| `headerHandle` | `fontSize: 19, family: Inter_700Bold` | `Type.subtitle` |
+| `headerMetaText` | `fontSize: 11, family: Inter_500Medium` | `Type.meta` |
+| `senderName` | `fontSize: 15, family: Inter_600SemiBold` | `Type.price` |
+| `snippet` | `fontSize: 14, family: Inter_400Regular` | `Type.body` |
+| `bubbleText` | `fontSize: 15, family: Inter_500Medium` | `Type.body` |
+| `offerPrice` | `fontSize: 28, family: Inter_700Bold` | `Type.priceLarge` |
+| `statusTitle` | `fontSize: 16, family: Inter_700Bold` | `Type.subtitle` |
+| `statusBody` | `fontSize: 14, family: Inter_400Regular` | `Type.body` |
+| `dateLabelText` | `fontSize: 12, family: Inter_600SemiBold` | `Type.caption` |
+| `time` | `fontSize: 11, family: Inter_400Regular` | `Type.caption` |
+| `groupMetaText` | `fontSize: 11, family: Inter_500Medium` | `Type.meta` |
+| `templateChipText` | `fontSize: 11, family: Inter_600SemiBold` | `Type.meta` |
+| `groupBotLabel` | `fontSize: 11, family: Inter_600SemiBold` | `Type.meta` |
+| `botName` | `fontSize: 15, family: Inter_700Bold` | `Type.price` |
+| `botCategory` | `fontSize: 10, family: Inter_600SemiBold` | `Type.meta` |
+
+**Problem**: Over 30+ raw typography declarations. The luxury aesthetic depends on a restrained, consistent type system.
+
+### D. Card / Surface Style Drift
+Messaging surfaces do not use `AppCard` consistently:
+
+- `InboxScreen`: `messageCard` uses `borderRadius: 22`, raw `Colors.surface` + `Colors.border` — not `AppCard`
+- `ChatScreen`: `itemCard`, `groupSummaryCard`, `groupBotRow`, `controlPanel`, `inboxScopeCard`, `opsSummaryCard` — all custom-styled with raw `CARD`, `BORDER`, `CARD_ALT`
+- `CreateGroupChatScreen`: `titleCard`, `searchCard`, `memberRow` — all custom
+- `GroupBotDirectoryScreen`: `botCard` — custom `borderRadius: 18`
+
+**Problem**: No standardized card primitive for messaging surfaces. Every card looks slightly different.
+
+### E. Input Style Fragmentation
+Multiple inline input clones exist:
+
+- `ChatScreen`: `textInput` inside `inputFloatingPill` (raw `TextInput`, borderRadius 30, custom padding)
+- `CreateGroupChatScreen`: `TextInput` for group title and member search (no `AppInput` usage)
+- `GroupBotDirectoryScreen`: no input, but `deployBtn` is custom
+
+The app has `AppInput` (borderRadius 10, `Colors.surface`, `Colors.border`, prefix/suffix support, error states, helper text). Messaging screens ignore it.
+
+### F. Spacing Inconsistencies
+- `paddingHorizontal: 18`, `paddingHorizontal: 20` instead of `Space.md` (16) or `Space.lg` (24)
+- `gap: 14` instead of `Space.sm` (8) or `Space.md` (16)
+- `marginVertical: 8` instead of `Space.sm`
+- `borderRadius: 22` on header buttons instead of `Radius.md` (8) or `Radius.lg` (12)
+- `borderRadius: 24` on message bubbles instead of `Radius.xl` (16)
+
+### G. Missing Motion & Feedback
+- `SwipeableMessage` uses old `PanResponder` + `Animated` API instead of Reanimated
+- `Swipeable` actions in `InboxScreen` (`renderRightActions`, `renderLeftActions`) have no haptic feedback
+- Send button, template chips, control toggles, offer actions — no haptic feedback
+- `AttachmentMenu` uses `TouchableOpacity` instead of `AnimatedPressable`
+- `VoiceMessagePlayer` uses `TouchableOpacity` instead of `AnimatedPressable`
+- `OfferBubble` action buttons use `TouchableOpacity` instead of `AppButton` / `AnimatedPressable`
+
+### H. Component Primitive Issues
+
+#### `ChatMessageItem.tsx`
+- Uses `Typography.family.regular` (old system), not `Type` tokens
+- Avatar uses text initial placeholder instead of `CachedImage` fallback
+- No `showAvatar` prop actually used; avatars are never rendered for DMs
+- Message status indicator only shows for outgoing; incoming messages lack timestamp integration
+
+#### `SwipeableMessage.tsx`
+- Uses legacy `Animated.Value` + `PanResponder` instead of Reanimated
+- `TouchableOpacity` is imported but unused
+- Hardcoded `backgroundColor: 'rgba(0, 0, 0, 0.3)'` for action icon
+- No haptic on swipe threshold trigger
+
+#### `VoiceMessagePlayer.tsx`
+- Hardcoded `#FFFFFF`, `rgba(255,255,255,0.3)`, `rgba(0,0,0,0.1)` instead of theme-aware colors
+- Uses `TouchableOpacity` instead of `AnimatedPressable`
+- Waveform width is hardcoded to 200 instead of measured layout
+
+#### `AttachmentMenu.tsx`
+- Uses `TouchableOpacity` instead of `AnimatedPressable`
+- Title uses raw `fontSize: 18, fontWeight: '600'` instead of `Type.subtitle`
+- Option labels use raw `fontSize: 13` instead of `Type.caption`
+
+#### `OfferBubble.tsx`
+- Uses `Image` instead of `CachedImage`
+- Raw typography everywhere (`fontSize: 24`, `fontWeight: '700'`, etc.)
+- Action buttons use `TouchableOpacity` instead of `AppButton`
+- `discountBadge` uses `#FFFFFF` hardcoded
+
+#### `MessageStatusIndicator.tsx`
+- `timestamp` uses raw `fontSize: 11, fontWeight: '400'` instead of `Type.caption`
+- `iconContainer` uses fixed pixel dimensions without `Space` tokens
+
+### I. Dead / Unused Code
+- `ChatScreen` imports `ChatMessageList` but only uses `SimpleChatMessageList` (the FlatList fallback)
+- `ChatMessageList.tsx` contains a full `FlashList` implementation that is never consumed
+- `SwipeableMessage` is imported in `ChatScreen` but never actually wraps messages (commented out or unused in render)
+
+### J. Keyboard & Composer Issues
+- `ChatScreen` uses raw `KeyboardAvoidingView` but no `KeyboardAwareScrollView` pattern
+- Composer `TextInput` has no `AppInput` wrapper, so no error states, labels, or helper text
+- `returnKeyType="send"` is present but platform behavior is inconsistent
+- No mention of `InputAccessoryView` for rich composer features
+
+### K. Accessibility Gaps
+- `CachedImage` container styles in `InboxScreen` are inline objects, not stylesheet references
+- `ChatScreen` status block has an `AnimatedPressable` without `accessibilityRole` on the inner text link
+- `VoiceMessagePlayer` has no `accessibilityLabel` on play/pause or speed toggle
+- `AttachmentMenu` option buttons lack `accessibilityRole` and `accessibilityHint`
+- `OfferBubble` action buttons lack `accessibilityRole` and `accessibilityHint`
+
+---
+
+## 3. Upgrade Plan
+
+### Phase 1 — Foundational Primitives (needed before any screen work)
+
+#### 1.1 Create `ChatHeader` Component
+A reusable header for all messaging subpages:
+- Left: `AnimatedPressable` back button (44x44, `Radius.md`, `Colors.surface`)
+- Center: Title using `Type.subtitle`, subtitle/meta using `Type.meta`
+- Right: Optional action slot (info icon, bot directory icon, or spacer)
+- Supports both DM mode (avatar + handle + location/last-seen) and Group mode (title + member count)
+- Uses `SafeAreaView` insets correctly
+- Haptic feedback on back press
+
+#### 1.2 Create `MessageBubble` Primitive
+Standardized message bubble component:
+- Supports `variant='me' | 'them'` with correct `Radius.xl` + asymmetric tail radius
+- Uses `Colors.brand` for me, `Colors.surface` + `Colors.border` for them
+- Integrates `MessageStatusIndicator` for outgoing messages
+- Integrates timestamp using `Type.caption`
+- Supports `senderLabel` for group chats using `Type.meta`
+- Uses `Reanimated` `FadeIn` for entrance animation
+- Replaces raw `textBubble` styles in `ChatScreen`
+
+#### 1.3 Create `ComposerInput` Primitive
+Standardized chat composer input:
+- Wraps `AppInput` with `variant='chat'` or dedicated chat mode
+- Prefix slot for camera/attachment button
+- Suffix slot for send button (`AnimatedPressable` with haptic)
+- Template strip above input (horizontal scroll of quick-reply chips)
+- Uses `Colors.surface`, `Radius.full` (pill shape), `Colors.border`
+- Supports `KeyboardAvoidingView` integration
+
+#### 1.4 Create `ChatCard` Wrapper
+Standardized card for messaging surfaces:
+- Uses `AppCard` with `variant='surface'` or `'elevated'`
+- Enforces `Radius.lg` (12px) or `Radius.xl` (16px) consistently
+- Used for context cards (item preview, group summary), control panels, and bot rows
+
+#### 1.5 Migrate `SwipeableMessage` to Reanimated
+- Replace `PanResponder` + `Animated.Value` with `useSharedValue` + `useAnimatedGestureHandler`
+- Add haptic feedback on swipe threshold trigger
+- Keep reply (right swipe on others) and actions (left swipe on me) behavior
+- Use theme-aware colors for background reveal layer
+
+### Phase 2 — InboxScreen Overhaul
+
+#### 2.1 Adopt Unified Header
+- Replace custom `hugeTitle` header with standardized header pattern
+- Keep "New Group" and shield action buttons but styled with `AppButton` and `AnimatedPressable`
+- Use `Type.title` for screen title, `Type.caption` for subtitle
+
+#### 2.2 Migrate Search to `AppInput`
+- Remove `searchWrap` and `searchInput` raw style overrides
+- Use `AppInput` with `prefix` and `suffix` props only
+- Use `inputContainerStyle` minimally (only radius tweaks if needed)
+
+#### 2.3 Migrate Conversation Cards to `ChatCard`
+- Replace `messageCard` raw styles with `ChatCard` / `AppCard`
+- Ensure `Radius.lg` and `Elevation.subtle` for consistent surface feel
+- Keep swipe actions but add haptic feedback on delete/archive
+
+#### 2.4 Typography Token Migration
+- `hugeTitle` → `Type.title`
+- `senderName` → `Type.price`
+- `snippet` → `Type.body`
+- `time` → `Type.caption`
+- `groupMetaText` → `Type.meta`
+- `listMeta` → `Type.caption`
+
+#### 2.5 Centralize Theme Colors
+- Remove hardcoded `'#4caf50'` online dot → `Colors.success`
+- Remove hardcoded `'#FF3B30'` swipe delete → `Colors.danger`
+- Remove hardcoded `'#fff'` swipe text → `Colors.textInverse`
+
+#### 2.6 Add Entrance Animations
+- Keep existing `FadeInDown` stagger on conversation rows
+- Add `AnimatedPressable` scale feedback on every conversation card press
+
+#### 2.7 Accessibility Polish
+- Move inline `CachedImage` container styles to stylesheet
+- Ensure every conversation row has complete `accessibilityLabel` (title, unread state, last message preview)
+- Ensure swipe actions announce "Delete conversation" and "Archive conversation" correctly
+
+### Phase 3 — ChatScreen Overhaul
+
+#### 3.1 Remove All Inline Theme Color Constants
+- Delete `IS_LIGHT`, `ACCENT`, `CARD`, `CARD_ALT`, `BORDER`, `HEADER_BG`, `FOOTER_BG`
+- Replace every usage with `Colors.*` tokens:
+  - `CARD` → `Colors.surface`
+  - `CARD_ALT` → `Colors.surfaceAlt`
+  - `BORDER` → `Colors.border`
+  - `HEADER_BG` → `Colors.background` + opacity, or use `Colors.surface` with `Elevation.subtle`
+  - `FOOTER_BG` → `Colors.surface` with `Elevation.subtle`
+  - `ACCENT` → `Colors.brand`
+  - `TEXT` → `Colors.textPrimary`
+  - `MUTED` → `Colors.textMuted`
+
+#### 3.2 Adopt `ChatHeader`
+- Replace custom editorial header with `ChatHeader` component
+- Wire DM avatar, handle, location/last-seen through props
+- Wire Group title, member count through props
+
+#### 3.3 Migrate Context Cards to `ChatCard`
+- `itemCard` (TaggedItemCard) → `ChatCard` / `AppCard variant='elevated'`
+- `groupSummaryCard` → `ChatCard`
+- `groupBotRow` → `ChatCard`
+- `controlPanel` → `ChatCard`
+- `inboxScopeCard` → `ChatCard`
+- `opsSummaryCard` → `ChatCard`
+
+#### 3.4 Migrate Composer to `ComposerInput`
+- Replace raw `TextInput` inside `inputFloatingPill` with `ComposerInput`
+- Keep camera button, send button, template strip behavior
+- Add haptic feedback on send
+
+#### 3.5 Migrate Message Rendering to `MessageBubble`
+- Replace `textBubble` / `textBubbleMe` raw styles with `MessageBubble`
+- Replace `offerBubble` / `offerBubbleMe` raw styles with `OfferBubble` (upgraded) or `MessageBubble`
+- Integrate `SwipeableMessage` (Reanimated version) as wrapper
+
+#### 3.6 Typography Token Migration
+- `headerHandle` → `Type.subtitle`
+- `headerMetaText` → `Type.meta`
+- `bubbleText` → `Type.body`
+- `bubbleTextMe` → `Type.body` with `Colors.textInverse`
+- `offerPrice` → `Type.priceLarge`
+- `offerOriginal` → `Type.caption`
+- `statusTitle` → `Type.subtitle`
+- `statusBody` → `Type.body`
+- `dateLabelText` → `Type.caption`
+- `templateChipText` → `Type.meta`
+- `groupSenderLabel` → `Type.meta`
+
+#### 3.7 Add Haptic & Motion Feedback
+- Light haptic on send button press
+- Medium haptic on offer accept/decline
+- Light haptic on template chip press
+- Light haptic on control toggle switches
+- `FadeIn` / `SlideInRight` / `SlideInLeft` on message bubbles (already partially present; ensure all use `reducedMotionEnabled` check)
+
+#### 3.8 Fix Keyboard Handling
+- Ensure `KeyboardAvoidingView` behavior is `padding` on iOS, `height` on Android
+- Verify composer stays above keyboard on all screen sizes
+
+### Phase 4 — Subpage Unification
+
+#### 4.1 `CreateGroupChatScreen`
+- Adopt `SettingsHeader` (or `ChatHeader`) for unified header
+- Replace raw `TextInput` with `AppInput` for group title and search
+- Replace `titleCard` / `searchCard` / `memberRow` with `ChatCard` / `AppCard`
+- Migrate typography to `Type` tokens
+- Add haptic feedback on member selection and group creation
+- Add `FadeInDown` entrance animation on member rows
+
+#### 4.2 `GroupBotDirectoryScreen`
+- Adopt `SettingsHeader` (or `ChatHeader`) for unified header
+- Replace `botCard` raw styles with `ChatCard` / `AppCard`
+- Migrate typography to `Type` tokens
+- Replace custom `deployBtn` with `AppButton` (variant toggle between secondary/primary)
+- Add haptic feedback on deploy/remove
+- Add `FadeInDown` entrance animation on bot cards
+
+### Phase 5 — Component Polish
+
+#### 5.1 `ChatMessageItem.tsx`
+- Migrate to `Type` tokens
+- Replace `Typography.family.regular` with `Type.body` fontFamily resolution
+- Use `CachedImage` for avatars (even as fallback) instead of text placeholder
+- Integrate `MessageBubble` for the actual bubble rendering
+- Keep `DateSeparator` but use `Type.caption`
+
+#### 5.2 `SwipeableMessage.tsx` (Reanimated Migration)
+- Replace `PanResponder` + `Animated.Value` with `useSharedValue` + `useAnimatedGestureHandler`
+- Add haptic feedback on reply/actions trigger
+- Use theme-aware colors for background reveal layer (`Colors.brand` for reply, `Colors.textMuted` for actions)
+- Remove unused `TouchableOpacity` import
+
+#### 5.3 `VoiceMessagePlayer.tsx`
+- Replace `TouchableOpacity` with `AnimatedPressable`
+- Replace hardcoded `#FFFFFF` / `rgba(255,255,255,0.3)` with `Colors.textInverse` / theme-aware opacity
+- Replace hardcoded `rgba(0,0,0,0.1)` with `Colors.border` or `Colors.textMuted` at low opacity
+- Use `Type.caption` for duration text, `Type.meta` for speed text
+- Measure waveform width via `onLayout` instead of hardcoded 200
+
+#### 5.4 `AttachmentMenu.tsx`
+- Replace `TouchableOpacity` with `AnimatedPressable`
+- Use `Type.subtitle` for title, `Type.caption` for option labels
+- Use `Radius.lg` / `Radius.xl` for sheet corners and icon containers
+- Add `accessibilityRole` and `accessibilityHint` to every option
+
+#### 5.5 `OfferBubble.tsx`
+- Replace `Image` with `CachedImage`
+- Use `AppButton` for Accept / Counter / Decline actions
+- Migrate all typography to `Type` tokens
+- Use `Colors.textInverse` instead of `#FFFFFF`
+- Use `ChatCard` / `AppCard` for container
+
+#### 5.6 `MessageStatusIndicator.tsx`
+- Use `Type.caption` for timestamp
+- Use `Space` tokens for container gaps and icon container sizing
+
+---
+
+## 4. Files to Create / Modify
+
+### New Components
+- `frontend/src/components/chat/ChatHeader.tsx` — Unified header for Chat and messaging subpages
+- `frontend/src/components/chat/MessageBubble.tsx` — Standardized message bubble primitive
+- `frontend/src/components/chat/ComposerInput.tsx` — Standardized chat composer with AppInput base
+- `frontend/src/components/chat/ChatCard.tsx` — Standardized card wrapper for messaging surfaces (wraps AppCard)
+
+### Modified Screens
+- `frontend/src/screens/InboxScreen.tsx` — unified header, AppInput search, ChatCard conversation rows, Type tokens, centralized colors
+- `frontend/src/screens/ChatScreen.tsx` — remove inline color constants, ChatHeader, ChatCard context cards, ComposerInput, MessageBubble, Type tokens
+- `frontend/src/screens/CreateGroupChatScreen.tsx` — SettingsHeader, AppInput, ChatCard, Type tokens
+- `frontend/src/screens/GroupBotDirectoryScreen.tsx` — SettingsHeader, AppCard/ChatCard, AppButton, Type tokens
+
+### Modified Components
+- `frontend/src/components/ChatMessageItem.tsx` — Type tokens, CachedImage avatar, MessageBubble integration
+- `frontend/src/components/SwipeableMessage.tsx` — Reanimated migration, haptic feedback, theme-aware colors
+- `frontend/src/components/VoiceMessagePlayer.tsx` — AnimatedPressable, theme-aware colors, Type tokens, onLayout measurement
+- `frontend/src/components/AttachmentMenu.tsx` — AnimatedPressable, Type tokens, Radius tokens, accessibility
+- `frontend/src/components/OfferBubble.tsx` — CachedImage, AppButton, Type tokens, ChatCard container
+- `frontend/src/components/MessageStatusIndicator.tsx` — Type tokens, Space tokens
+- `frontend/src/components/ChatMessageList.tsx` — Remove dead FlashList code if still unused, or wire it properly
+
+---
+
+## 5. Success Criteria
+
+1. All messaging screens (Inbox, Chat, CreateGroupChat, GroupBotDirectory) use the same header, card, and input primitives.
+2. No inline `IS_LIGHT ? ... : ...` color constants remain in any messaging screen.
+3. All typography in messaging files uses `Type` or `T` design tokens.
+4. All cards in messaging use `AppCard` or `ChatCard` instead of raw StyleSheet card clones.
+5. All interactive elements provide haptic feedback (send, swipe actions, template chips, offer actions, bot deploy).
+6. `SwipeableMessage` uses Reanimated (`useSharedValue`) instead of legacy `Animated.Value` + `PanResponder`.
+7. `ChatScreen` composer uses `ComposerInput` / `AppInput` instead of raw `TextInput`.
+8. All `TouchableOpacity` in messaging components replaced with `AnimatedPressable`.
+9. `VoiceMessagePlayer` uses theme-aware colors instead of hardcoded `#FFFFFF` and `rgba(0,0,0,0.1)`.
+10. `OfferBubble` uses `CachedImage` and `AppButton` instead of `Image` and `TouchableOpacity`.
+11. Accessibility labels/roles/hints pass a screen-reader walkthrough on all messaging surfaces.
+12. Entrance animations use `FadeInDown` / `FadeIn` with `reducedMotionEnabled` guards consistently.

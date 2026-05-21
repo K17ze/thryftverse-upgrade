@@ -1,24 +1,15 @@
 import React, { useState } from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import { View,
-  Text,
-  StyleSheet,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  StatusBar,
-  ScrollView,
-  Keyboard,
-} from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, StatusBar, ScrollView, Keyboard } from 'react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
+import { Type, Space } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { AppButton } from '../components/ui/AppButton';
+import { AppInput } from '../components/ui/AppInput';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   loginWithPassword,
@@ -27,9 +18,6 @@ import {
   verifyEmailOtp,
   type LoginWithPasswordError,
 } from '../services/authApi';
-
-const IS_LIGHT = ActiveTheme === 'light';
-const PANEL_BG = IS_LIGHT ? '#ffffff' : Colors.surface;
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
@@ -292,43 +280,38 @@ export default function LoginScreen() {
             <Text style={styles.subtitle}>Log in to continue buying, selling, and trading.</Text>
 
             <View style={styles.form}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  value={email}
-                  onChangeText={(value) => {
-                    setEmail(value);
-                    setRequiresTwoFactor(false);
-                    setTwoFactorCode('');
-                    setRecoveryCode('');
-                    if (otpChallengeId) {
-                      setOtpChallengeId(null);
-                      setOtpCode('');
-                    }
-                    if (errorMsg) {
-                      setErrorMsg('');
-                    }
-                    if (infoMsg) {
-                      setInfoMsg('');
-                    }
-                  }}
-                />
-              </View>
+              <AppInput
+                label="Email"
+                placeholder="Enter your email"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                value={email}
+                onChangeText={(value) => {
+                  setEmail(value);
+                  setRequiresTwoFactor(false);
+                  setTwoFactorCode('');
+                  setRecoveryCode('');
+                  if (otpChallengeId) {
+                    setOtpChallengeId(null);
+                    setOtpCode('');
+                  }
+                  if (errorMsg) {
+                    setErrorMsg('');
+                  }
+                  if (infoMsg) {
+                    setInfoMsg('');
+                  }
+                }}
+                containerStyle={styles.inputGroup}
+              />
 
               {requiresTwoFactor && (
                 <View style={styles.twoFactorGroup}>
-                  <Text style={styles.label}>Authenticator code</Text>
-                  <TextInput
-                    style={styles.input}
+                  <AppInput
+                    label="Authenticator code"
                     placeholder="123456"
-                    placeholderTextColor={Colors.textMuted}
                     keyboardType="number-pad"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -344,11 +327,9 @@ export default function LoginScreen() {
 
                   <Text style={styles.twoFactorHint}>If you lost access, use a recovery code below.</Text>
 
-                  <Text style={styles.label}>Recovery code (optional)</Text>
-                  <TextInput
-                    style={styles.input}
+                  <AppInput
+                    label="Recovery code (optional)"
                     placeholder="ABCD-1234"
-                    placeholderTextColor={Colors.textMuted}
                     autoCapitalize="characters"
                     autoCorrect={false}
                     value={recoveryCode}
@@ -362,24 +343,21 @@ export default function LoginScreen() {
                 </View>
               )}
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Password</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your password"
-                  placeholderTextColor={Colors.textMuted}
-                  secureTextEntry
-                  returnKeyType="done"
-                  value={password}
-                  onChangeText={setPassword}
-                  onSubmitEditing={() => {
-                    Keyboard.dismiss();
-                    if (canSubmit) {
-                      void handleLogin();
-                    }
-                  }}
-                />
-              </View>
+              <AppInput
+                label="Password"
+                placeholder="Enter your password"
+                secureTextEntry
+                returnKeyType="done"
+                value={password}
+                onChangeText={setPassword}
+                onSubmitEditing={() => {
+                  Keyboard.dismiss();
+                  if (canSubmit) {
+                    void handleLogin();
+                  }
+                }}
+                containerStyle={styles.inputGroup}
+              />
 
               <AnimatedPressable
                 style={styles.forgotBtn}
@@ -418,11 +396,9 @@ export default function LoginScreen() {
 
               {!!otpChallengeId && (
                 <View style={styles.otpGroup}>
-                  <Text style={styles.label}>One-time code</Text>
-                  <TextInput
-                    style={styles.input}
+                  <AppInput
+                    label="One-time code"
                     placeholder="Enter OTP"
-                    placeholderTextColor={Colors.textMuted}
                     keyboardType="number-pad"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -503,45 +479,33 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 8 },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: PANEL_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
+  header: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xs },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
   backBtnSpacer: { width: 44, height: 44 },
-  
+
   keyboardWrap: { flex: 1 },
   content: { flex: 1 },
   contentContainer: {
     flexGrow: 1,
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 10,
-    paddingBottom: 24,
+    paddingHorizontal: Space.lg,
+    paddingTop: Space.sm,
+    paddingBottom: Space.lg,
   },
-  title: { fontSize: 34, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: 38, letterSpacing: -0.7 },
-  subtitle: { marginTop: 8, fontSize: 14, lineHeight: 20, color: Colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: 24 },
-  
-  form: { marginBottom: 24 },
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textSecondary, marginBottom: 8 },
-  input: { 
-    height: 52,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 14,
-    color: Colors.textPrimary, 
-    fontSize: 16, 
-    fontFamily: Typography.family.regular 
-  },
-  
-  forgotBtn: { alignSelf: 'flex-start', marginTop: 8 },
-  forgotText: { color: Colors.textSecondary, fontSize: 14, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
+  title: { fontSize: Type.title.size, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, lineHeight: Type.title.lineHeight, letterSpacing: Type.title.letterSpacing },
+  subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: Colors.textSecondary, fontFamily: 'Inter_400Regular', marginBottom: Space.lg },
+
+  form: { marginBottom: Space.lg },
+  inputGroup: { marginBottom: Space.md },
+
+  forgotBtn: { alignSelf: 'flex-start', marginTop: Space.sm },
+  forgotText: { color: Colors.textSecondary, fontSize: Type.body.size, fontFamily: 'Inter_500Medium', textDecorationLine: 'underline' },
   dividerRow: {
-    marginTop: 18,
-    marginBottom: 12,
+    marginTop: Space.md + 2,
+    marginBottom: Space.sm + 4,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
   },
   dividerLine: {
     flex: 1,
@@ -550,8 +514,8 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_500Medium',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
@@ -560,25 +524,25 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: PANEL_BG,
+    backgroundColor: Colors.surface,
   },
   otpRequestText: {
     color: Colors.textPrimary,
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_600SemiBold',
   },
   otpGroup: {
-    marginTop: 14,
-    gap: 10,
+    marginTop: Space.sm + 6,
+    gap: Space.sm + 2,
   },
   twoFactorGroup: {
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: Space.md,
+    gap: Space.sm,
   },
   twoFactorHint: {
     color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_500Medium',
     marginBottom: 2,
   },
   magicLinkBtn: {
@@ -586,12 +550,12 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     borderWidth: 0,
     backgroundColor: 'transparent',
-    marginTop: 10,
+    marginTop: Space.sm + 2,
   },
   magicLinkText: {
     color: Colors.textSecondary,
     fontSize: 13,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     textDecorationLine: 'underline',
   },
   otpVerifyBtn: {
@@ -602,18 +566,18 @@ const styles = StyleSheet.create({
   },
   otpVerifyText: {
     color: Colors.textInverse,
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_600SemiBold',
   },
-  
-  footer: { paddingTop: 8, position: 'relative' },
-  infoText: { color: Colors.success, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: 12 },
-  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: 12 },
+
+  footer: { paddingTop: Space.sm, position: 'relative' },
+  infoText: { color: Colors.success, fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: Colors.danger, fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtn: { backgroundColor: Colors.textPrimary, minHeight: 56, borderRadius: 28, borderWidth: 0 },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.semibold },
+  primaryText: { color: Colors.background, fontSize: Type.body.size, fontFamily: 'Inter_600SemiBold' },
   switchRow: {
-    marginTop: 14,
+    marginTop: Space.sm + 6,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -622,12 +586,12 @@ const styles = StyleSheet.create({
   switchText: {
     color: Colors.textSecondary,
     fontSize: 13,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
   },
   switchLink: {
     color: Colors.textPrimary,
     fontSize: 13,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     textDecorationLine: 'underline',
   },
 });

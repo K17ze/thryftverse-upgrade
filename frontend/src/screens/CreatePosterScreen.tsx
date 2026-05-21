@@ -16,11 +16,12 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { MOCK_LISTINGS, MOCK_USERS, Listing } from '../data/mockData';
 import { mockArrayOrEmpty } from '../utils/mockGate';
 import type { Poster } from '../data/posters';
+import { POSTER_TEMPLATES, PosterTemplate } from '../data/posters';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
@@ -37,8 +38,38 @@ import LayoutPicker, { LayoutType } from '../components/poster/LayoutPicker';
 import FilterStrip, { ImageFilter, getFilterOverlay } from '../components/poster/FilterStrip';
 import GLFilterView from '../components/poster/GLFilterView';
 import MultiPhotoCollage from '../components/poster/MultiPhotoCollage';
+import TemplatePicker from '../components/poster/TemplatePicker';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+function useCountdownLabel(targetDate?: string): string {
+  const [label, setLabel] = React.useState('');
+
+  React.useEffect(() => {
+    if (!targetDate) {
+      setLabel('');
+      return;
+    }
+
+    const update = () => {
+      const diff = new Date(targetDate).getTime() - Date.now();
+      if (diff <= 0) {
+        setLabel('Ended');
+        return;
+      }
+      const h = Math.floor(diff / (1000 * 60 * 60));
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const s = Math.floor((diff % (1000 * 60)) / 1000);
+      setLabel(`${h}h ${m}m ${s}s`);
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  return label;
+}
 
 export default function CreatePosterScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -73,6 +104,7 @@ export default function CreatePosterScreen() {
   const [showBackgroundPicker, setShowBackgroundPicker] = React.useState(false);
   const [showStickerPicker, setShowStickerPicker] = React.useState(false);
   const [showLayoutPicker, setShowLayoutPicker] = React.useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = React.useState(false);
   const [isPublishing, setIsPublishing] = React.useState(false);
 
   const [recentPhotos, setRecentPhotos] = React.useState<MediaLibrary.Asset[]>([]);
@@ -80,13 +112,14 @@ export default function CreatePosterScreen() {
 
   const [canvasSize, setCanvasSize] = React.useState({ width: SCREEN_W, height: SCREEN_H });
 
-  // New creative state
+  // Creative state
   const [stickers, setStickers] = React.useState<StickerItem[]>([]);
   const [drawings, setDrawings] = React.useState<BrushStroke[]>([]);
   const [layout, setLayout] = React.useState<LayoutType>('single');
   const [filter, setFilter] = React.useState<ImageFilter>('normal');
   const [showFilterStrip, setShowFilterStrip] = React.useState(false);
   const [collagePhotos, setCollagePhotos] = React.useState<string[]>([]);
+  const [activeTemplateId, setActiveTemplateId] = React.useState<string | undefined>();
 
   // ── Init listing selection ──
   React.useEffect(() => {
@@ -100,7 +133,6 @@ export default function CreatePosterScreen() {
   // ── Load recent photos ──
   React.useEffect(() => {
     if (!mediaLibPermission?.granted) return;
-
     const load = async () => {
       try {
         const result = await MediaLibrary.getAssetsAsync({
@@ -109,18 +141,15 @@ export default function CreatePosterScreen() {
           sortBy: MediaLibrary.SortBy.creationTime,
         });
         setRecentPhotos(result.assets);
-      } catch {
-        // silently fail
-      }
+      } catch { /* silently fail */ }
     };
-
     load();
   }, [mediaLibPermission?.granted]);
 
   // ── Tool handling ──
   React.useEffect(() => {
     if (activeTool === 'text') {
-      // text tool activated - canvas handles add-layer UI
+      // canvas handles
     } else if (activeTool === 'background') {
       setShowBackgroundPicker(true);
       setActiveTool(null);
@@ -128,12 +157,55 @@ export default function CreatePosterScreen() {
       setShowStickerPicker(true);
       setActiveTool(null);
     } else if (activeTool === 'draw') {
-      // drawing stays active on the canvas
+      // stays active
     } else if (activeTool === 'layout') {
       setShowLayoutPicker(true);
       setActiveTool(null);
     }
   }, [activeTool]);
+
+  // ── Template application ──
+  const applyTemplate = (template: PosterTemplate) => {
+    setActiveTemplateId(template.id);
+    setLayout(template.layout as LayoutType);
+    if (template.backgroundColor) {
+      setBlankBackgroundColor(template.backgroundColor);
+      setSelectedImageUri(null);
+    }
+    if (template.filter) {
+      setFilter(template.filter as ImageFilter);
+    }
+
+    // Apply text layers
+    if (template.textLayers) {
+      const layers: TextLayer[] = template.textLayers.map((tl, i) => ({
+        id: `tpl_text_${i}_${Date.now()}`,
+        text: tl.text,
+        color: tl.color,
+        fontFamily: (tl.fontFamily as any) ?? 'bold',
+        fontSize: tl.fontSize ?? 24,
+        x: tl.x,
+        y: tl.y,
+        backgroundColor: tl.backgroundColor,
+        alignment: (tl.alignment as any) ?? 'center',
+        rotation: 0,
+      }));
+      setTextLayers(layers);
+    }
+
+    // Apply stickers
+    if (template.stickers) {
+      const stickerItems: StickerItem[] = template.stickers.map((s, i) => ({
+        id: `tpl_sticker_${i}_${Date.now()}`,
+        type: s.type,
+        content: s.content,
+        color: s.color,
+        x: s.x,
+        y: s.y,
+      }));
+      setStickers(stickerItems);
+    }
+  };
 
   // ── Capture handlers ──
   const handlePhotoCapture = (uri: string) => {
@@ -158,14 +230,12 @@ export default function CreatePosterScreen() {
       show('Allow photo library access to select images', 'error');
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       aspect: [4, 5],
       quality: 0.92,
     });
-
     if (!result.canceled && result.assets?.[0]?.uri) {
       const asset = result.assets[0];
       setSelectedImageUri(asset.uri);
@@ -184,9 +254,7 @@ export default function CreatePosterScreen() {
     setLayout('single');
   };
 
-  const handleFlipCamera = () => {
-    // handled inside CameraCapture, this is for BottomControlBar fallback
-  };
+  const handleFlipCamera = () => { /* handled inside CameraCapture */ };
 
   // ── Sticker handlers ──
   const handleStickerSelect = (sticker: StickerItem) => {
@@ -215,21 +283,13 @@ export default function CreatePosterScreen() {
         setStickers((prev) =>
           prev.map((s) => {
             if (s.id !== stickerId) return s;
-            const nextX = Math.min(
-              Math.max((s.x ?? startX) + gestureState.dx, 0),
-              canvasSize.width - 80
-            );
-            const nextY = Math.min(
-              Math.max((s.y ?? startY) + gestureState.dy, 0),
-              canvasSize.height - 40
-            );
+            const nextX = Math.min(Math.max((s.x ?? startX) + gestureState.dx, 0), canvasSize.width - 80);
+            const nextY = Math.min(Math.max((s.y ?? startY) + gestureState.dy, 0), canvasSize.height - 40);
             return { ...s, x: nextX, y: nextY };
           })
         );
       },
-      onPanResponderRelease: () => {
-        // done
-      },
+      onPanResponderRelease: () => { /* done */ },
     });
   };
 
@@ -241,7 +301,6 @@ export default function CreatePosterScreen() {
   const handlePublish = () => {
     const trimmedCaption = caption.trim();
     const trimmedStoryText = textLayers[0]?.text.trim() ?? '';
-
     const selectedListing = allListingOptions.find((l) => l.id === selectedListingId);
 
     const posterImageUri =
@@ -264,39 +323,27 @@ export default function CreatePosterScreen() {
       expiryHours,
       storyOverlay:
         textLayers.length > 0
-          ? {
-              text: textLayers[0].text,
-              color: textLayers[0].color,
-              position: 'center',
-            }
+          ? { text: textLayers[0].text, color: textLayers[0].color, position: 'center' }
           : undefined,
       textLayers: textLayers.map((l) => ({
-        text: l.text,
-        color: l.color,
-        position: 'center',
-        fontFamily: l.fontFamily,
-        fontSize: l.fontSize,
-        backgroundColor: l.backgroundColor,
-        alignment: l.alignment,
+        text: l.text, color: l.color, position: 'center',
+        fontFamily: l.fontFamily, fontSize: l.fontSize,
+        backgroundColor: l.backgroundColor, alignment: l.alignment,
       })),
       stickers: stickers.map((s) => ({
-        id: s.id,
-        type: s.type,
-        content: s.content,
-        color: s.color,
+        id: s.id, type: s.type, content: s.content, color: s.color,
+        targetDate: s.targetDate, listingId: s.listingId,
+        options: s.options, votes: s.votes,
       })),
       drawings: drawings.map((d) => ({
-        id: d.id,
-        points: d.points,
-        color: d.color,
-        width: d.width,
+        id: d.id, points: d.points, color: d.color, width: d.width,
       })),
       layout: layout === 'single' ? undefined : layout,
       filter: filter === 'normal' ? undefined : filter,
+      templateId: activeTemplateId,
     };
 
     setIsPublishing(true);
-
     setTimeout(() => {
       addPoster(newPoster);
       show('Poster published!', 'success');
@@ -317,6 +364,7 @@ export default function CreatePosterScreen() {
       setFilter('normal');
       setLayout('single');
       setCollagePhotos([]);
+      setActiveTemplateId(undefined);
     } else {
       navigation.goBack();
     }
@@ -327,11 +375,20 @@ export default function CreatePosterScreen() {
   const isCollage = layout !== 'single';
   const filterOverlay = getFilterOverlay(filter);
 
+  const stickerListings = React.useMemo(() =>
+    allListingOptions.slice(0, 10).map((l) => ({
+      id: l.id,
+      title: l.title,
+      price: l.price,
+    })),
+    [allListingOptions]
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* ── Canvas / Camera ── */}
+      {/* Canvas */}
       <View
         style={styles.canvas}
         onLayout={(e) => {
@@ -357,32 +414,17 @@ export default function CreatePosterScreen() {
         ) : selectedImageUri && filter !== 'normal' && !isVideo ? (
           <GLFilterView uri={selectedImageUri} filter={filter} style={StyleSheet.absoluteFillObject} />
         ) : (
-          <Image
-            source={{ uri: selectedImageUri || undefined }}
-            style={StyleSheet.absoluteFillObject}
-            resizeMode="cover"
-          />
+          <Image source={{ uri: selectedImageUri || undefined }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
         )}
 
-        {/* Filter overlay (for collage / video where GL filter doesn't apply) */}
         {hasCanvas && filterOverlay.opacity > 0 && filterOverlay.color && (isCollage || isVideo) && (
-          <View
-            style={[
-              StyleSheet.absoluteFillObject,
-              {
-                backgroundColor: filterOverlay.color,
-                opacity: filterOverlay.opacity,
-              },
-            ]}
-            pointerEvents="none"
-          />
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: filterOverlay.color, opacity: filterOverlay.opacity }]} pointerEvents="none" />
         )}
 
-        {/* Dark overlay for contrast when editing */}
         {hasCanvas && <View style={styles.canvasOverlay} />}
       </View>
 
-      {/* ── Top bar (when canvas is active) ── */}
+      {/* Top bar */}
       {hasCanvas && activeTool !== 'draw' && (
         <SafeAreaView style={styles.topBar} edges={['top']} pointerEvents="box-none">
           <Pressable style={styles.topIconBtn} onPress={handleClose} hitSlop={12}>
@@ -390,6 +432,12 @@ export default function CreatePosterScreen() {
           </Pressable>
 
           <View style={styles.topActions}>
+            <Pressable
+              style={[styles.topActionPill, showTemplatePicker && styles.topActionPillActive]}
+              onPress={() => setShowTemplatePicker(true)}
+            >
+              <Ionicons name="albums-outline" size={16} color="#fff" />
+            </Pressable>
             <Pressable
               style={[styles.topActionPill, showFilterStrip && styles.topActionPillActive]}
               onPress={() => setShowFilterStrip((prev) => !prev)}
@@ -406,16 +454,16 @@ export default function CreatePosterScreen() {
         </SafeAreaView>
       )}
 
-      {/* ── Creative Toolbar ── */}
+      {/* Creative Toolbar */}
       {hasCanvas && activeTool !== 'draw' && (
         <CreativeToolbar
           activeTool={activeTool}
           onToolSelect={setActiveTool}
-          visible={!showDetails && !showBackgroundPicker && !showStickerPicker && !showLayoutPicker}
+          visible={!showDetails && !showBackgroundPicker && !showStickerPicker && !showLayoutPicker && !showTemplatePicker}
         />
       )}
 
-      {/* ── Text Overlay Canvas ── */}
+      {/* Text Overlay */}
       {hasCanvas && (
         <TextOverlayCanvas
           layers={textLayers}
@@ -425,7 +473,7 @@ export default function CreatePosterScreen() {
         />
       )}
 
-      {/* ── Drawing Canvas ── */}
+      {/* Drawing Canvas */}
       {hasCanvas && (
         <DrawingCanvas
           strokes={drawings}
@@ -436,47 +484,25 @@ export default function CreatePosterScreen() {
         />
       )}
 
-      {/* ── Sticker Overlays (draggable) ── */}
+      {/* Sticker Overlays (draggable) */}
       {hasCanvas && stickers.length > 0 && activeTool !== 'draw' && (
         <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
           {stickers.map((sticker) => {
             const pan = createStickerPanResponder(sticker.id);
             return (
-              <View
+              <StickerOverlay
                 key={sticker.id}
-                style={[
-                  styles.stickerBubble,
-                  {
-                    left: sticker.x ?? canvasSize.width / 2 - 40,
-                    top: sticker.y ?? canvasSize.height / 2 - 20,
-                  },
-                  sticker.type === 'mention' && styles.mentionBubble,
-                  sticker.type === 'hashtag' && styles.hashtagBubble,
-                  sticker.type === 'poll' && styles.pollBubble,
-                  sticker.type === 'question' && styles.questionBubble,
-                  sticker.type === 'shape' && { backgroundColor: sticker.color || '#ff2d55' },
-                ]}
-                pointerEvents="box-none"
-              >
-                <View {...pan.panHandlers} pointerEvents="auto" style={styles.stickerDragArea}>
-                  <Text style={styles.stickerText} numberOfLines={3}>
-                    {sticker.content}
-                  </Text>
-                </View>
-                <Pressable
-                  style={styles.stickerDeleteBtn}
-                  onPress={() => removeSticker(sticker.id)}
-                  hitSlop={6}
-                >
-                  <Ionicons name="close-circle" size={16} color="#ff3b30" />
-                </Pressable>
-              </View>
+                sticker={sticker}
+                panHandlers={pan.panHandlers}
+                onDelete={() => removeSticker(sticker.id)}
+                canvasSize={canvasSize}
+              />
             );
           })}
         </View>
       )}
 
-      {/* ── Filter Strip ── */}
+      {/* Filter Strip */}
       {hasCanvas && (
         <FilterStrip
           activeFilter={filter}
@@ -486,7 +512,7 @@ export default function CreatePosterScreen() {
         />
       )}
 
-      {/* ── Bottom Control Bar ── */}
+      {/* Bottom Control Bar */}
       {!hasCanvas && (
         <BottomControlBar
           mode={captureMode}
@@ -499,7 +525,7 @@ export default function CreatePosterScreen() {
         />
       )}
 
-      {/* ── Background Picker ── */}
+      {/* Overlays */}
       <BackgroundPicker
         visible={showBackgroundPicker}
         currentColor={blankBackgroundColor}
@@ -510,14 +536,13 @@ export default function CreatePosterScreen() {
         onClose={() => setShowBackgroundPicker(false)}
       />
 
-      {/* ── Sticker Picker ── */}
       <StickerPicker
         visible={showStickerPicker}
         onClose={() => setShowStickerPicker(false)}
         onStickerSelect={handleStickerSelect}
+        listings={stickerListings}
       />
 
-      {/* ── Layout Picker ── */}
       <LayoutPicker
         visible={showLayoutPicker}
         currentLayout={layout}
@@ -531,7 +556,13 @@ export default function CreatePosterScreen() {
         previewUri={selectedImageUri ?? undefined}
       />
 
-      {/* ── Details Drawer ── */}
+      <TemplatePicker
+        visible={showTemplatePicker}
+        onClose={() => setShowTemplatePicker(false)}
+        onSelect={applyTemplate}
+        currentTemplateId={activeTemplateId}
+      />
+
       <DetailsDrawer
         visible={showDetails}
         onClose={() => setShowDetails(false)}
@@ -554,6 +585,67 @@ export default function CreatePosterScreen() {
         isPublishing={isPublishing}
         currentUserId={uploaderId}
       />
+    </View>
+  );
+}
+
+/** Individual sticker overlay with type-specific rendering */
+function StickerOverlay({
+  sticker,
+  panHandlers,
+  onDelete,
+  canvasSize,
+}: {
+  sticker: StickerItem;
+  panHandlers: any;
+  onDelete: () => void;
+  canvasSize: { width: number; height: number };
+}) {
+  const countdownLabel = useCountdownLabel(sticker.targetDate);
+
+  const baseStyle = [
+    styles.stickerBubble,
+    {
+      left: sticker.x ?? canvasSize.width / 2 - 40,
+      top: sticker.y ?? canvasSize.height / 2 - 20,
+    },
+    sticker.type === 'mention' && styles.mentionBubble,
+    sticker.type === 'hashtag' && styles.hashtagBubble,
+    sticker.type === 'poll' && styles.pollBubble,
+    sticker.type === 'question' && styles.questionBubble,
+    sticker.type === 'shape' && { backgroundColor: sticker.color || '#ff2d55' },
+    sticker.type === 'countdown' && styles.countdownBubble,
+    sticker.type === 'productTag' && styles.productTagBubble,
+    sticker.type === 'quiz' && styles.quizBubble,
+    sticker.type === 'slider' && styles.sliderBubble,
+  ];
+
+  const displayContent = sticker.type === 'countdown' && countdownLabel
+    ? countdownLabel
+    : sticker.content;
+
+  return (
+    <View style={baseStyle} pointerEvents="box-none">
+      <View {...panHandlers} pointerEvents="auto" style={styles.stickerDragArea}>
+        {sticker.type === 'countdown' && (
+          <Ionicons name="timer-outline" size={14} color="#ff3b30" style={{ marginRight: 4 }} />
+        )}
+        {sticker.type === 'productTag' && (
+          <Ionicons name="pricetag-outline" size={14} color="#4cd964" style={{ marginRight: 4 }} />
+        )}
+        {sticker.type === 'quiz' && (
+          <Ionicons name="help-circle-outline" size={14} color="#5ac8fa" style={{ marginRight: 4 }} />
+        )}
+        {sticker.type === 'slider' && (
+          <Ionicons name="swap-horizontal-outline" size={14} color="#ff9500" style={{ marginRight: 4 }} />
+        )}
+        <Text style={styles.stickerText} numberOfLines={3}>
+          {displayContent}
+        </Text>
+      </View>
+      <Pressable style={styles.stickerDeleteBtn} onPress={onDelete} hitSlop={6}>
+        <Ionicons name="close-circle" size={16} color="#ff3b30" />
+      </Pressable>
     </View>
   );
 }
@@ -618,6 +710,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     maxWidth: 200,
     alignItems: 'center',
+    flexDirection: 'row',
   },
   mentionBubble: {
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -639,11 +732,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,149,0,0.4)',
   },
+  countdownBubble: {
+    backgroundColor: 'rgba(255,59,48,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,59,48,0.5)',
+  },
+  productTagBubble: {
+    backgroundColor: 'rgba(77,201,100,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(77,201,100,0.5)',
+  },
+  quizBubble: {
+    backgroundColor: 'rgba(90,200,250,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(90,200,250,0.4)',
+  },
+  sliderBubble: {
+    backgroundColor: 'rgba(255,149,0,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,149,0,0.4)',
+  },
   stickerDragArea: {
     minWidth: 30,
     minHeight: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
   },
   stickerText: {
     color: '#fff',

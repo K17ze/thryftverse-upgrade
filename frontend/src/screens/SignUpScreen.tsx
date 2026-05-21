@@ -1,23 +1,15 @@
 import React, { useState } from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import { View,
-  Text,
-  StyleSheet,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  StatusBar,
-  ScrollView,
-  Keyboard,
-} from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, StatusBar, ScrollView, Keyboard } from 'react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
+import { Type, Space } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { signupWithPassword } from '../services/authApi';
+import { AppInput } from '../components/ui/AppInput';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 export default function SignUpScreen() {
@@ -133,53 +125,42 @@ export default function SignUpScreen() {
             <Text style={styles.title}>Join{'\n'}the movement.</Text>
 
             <View style={styles.form}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Username</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Pick a unique username"
-                  placeholderTextColor={Colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  value={username}
-                  onChangeText={setUsername}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  value={email}
-                  onChangeText={setEmail}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Password</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Create a password"
-                  placeholderTextColor={Colors.textMuted}
-                  secureTextEntry
-                  returnKeyType="done"
-                  value={password}
-                  onChangeText={setPassword}
-                  onSubmitEditing={() => {
-                    Keyboard.dismiss();
-                    if (canSubmit) {
-                      void handleSignUp();
-                    }
-                  }}
-                />
-              </View>
+              <AppInput
+                label="Username"
+                placeholder="Pick a unique username"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                value={username}
+                onChangeText={setUsername}
+                containerStyle={styles.inputGroup}
+              />
+              <AppInput
+                label="Email"
+                placeholder="Enter your email"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                value={email}
+                onChangeText={setEmail}
+                containerStyle={styles.inputGroup}
+              />
+              <AppInput
+                label="Password"
+                placeholder="Create a password"
+                secureTextEntry
+                returnKeyType="done"
+                value={password}
+                onChangeText={setPassword}
+                onSubmitEditing={() => {
+                  Keyboard.dismiss();
+                  if (canSubmit) {
+                    void handleSignUp();
+                  }
+                }}
+                containerStyle={styles.inputGroup}
+              />
             </View>
           </View>
 
@@ -218,36 +199,27 @@ export default function SignUpScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 },
+  header: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.lg },
   backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  
+
   keyboardWrap: { flex: 1 },
   content: { flex: 1 },
   contentContainer: {
     flexGrow: 1,
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 10,
-    paddingBottom: 24,
+    paddingHorizontal: Space.lg,
+    paddingTop: Space.sm,
+    paddingBottom: Space.lg,
   },
-  title: { fontSize: 44, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, lineHeight: 48, letterSpacing: -1, marginBottom: 40 },
-  
-  form: { marginBottom: 30 },
-  inputGroup: { marginBottom: 24 },
-  label: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.textSecondary, marginBottom: 12 },
-  input: { 
-    height: 56, 
-    borderBottomWidth: 1, 
-    borderBottomColor: Colors.border, 
-    color: Colors.textPrimary, 
-    fontSize: 16, 
-    fontFamily: 'Inter_400Regular' 
-  },
-  
-  footer: { paddingBottom: 8, position: 'relative' },
-  termsText: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.textMuted, textAlign: 'center', marginBottom: 20, lineHeight: 18 },
-  errorText: { color: Colors.danger, fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: 12 },
+  title: { fontSize: Type.title.size + 8, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, lineHeight: Type.title.lineHeight + 8, letterSpacing: Type.title.letterSpacing - 0.4, marginBottom: Space.xl + 8 },
+
+  form: { marginBottom: Space.lg + 6 },
+  inputGroup: { marginBottom: Space.lg - 2 },
+
+  footer: { paddingBottom: Space.sm, position: 'relative' },
+  termsText: { fontSize: Type.caption.size, fontFamily: 'Inter_400Regular', color: Colors.textMuted, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
+  errorText: { color: Colors.danger, fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: 'Inter_700Bold' },
+  primaryText: { color: Colors.background, fontSize: Type.body.size + 2, fontFamily: 'Inter_700Bold' },
 });

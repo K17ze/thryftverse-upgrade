@@ -17,17 +17,22 @@ const DRAWER_HEIGHT = SCREEN_H * 0.7;
 
 export interface StickerItem {
   id: string;
-  type: 'mention' | 'hashtag' | 'poll' | 'question' | 'emoji' | 'shape';
+  type: 'mention' | 'hashtag' | 'poll' | 'question' | 'emoji' | 'shape' | 'countdown' | 'productTag' | 'quiz' | 'slider';
   content: string;
   color?: string;
   x?: number;
   y?: number;
+  targetDate?: string;
+  listingId?: string;
+  options?: string[];
+  votes?: number[];
 }
 
 interface StickerPickerProps {
   visible: boolean;
   onClose: () => void;
   onStickerSelect: (sticker: StickerItem) => void;
+  listings?: { id: string; title: string; price: number }[];
 }
 
 const EMOJIS = ['🔥', '❤️', '😂', '😍', '👀', '✨', '🎉', '💯', '🙌', '🔥', '⚡', '🌟', '💥', '🏷️', '📌'];
@@ -54,10 +59,32 @@ const PRESET_QUESTIONS = [
   'Where from?',
 ];
 
-export default function StickerPicker({ visible, onClose, onStickerSelect }: StickerPickerProps) {
-  const [tab, setTab] = React.useState<'popular' | 'mentions' | 'polls' | 'questions'>('popular');
+const COUNTDOWN_PRESETS = [
+  { label: '1 Hour', hours: 1 },
+  { label: '6 Hours', hours: 6 },
+  { label: '12 Hours', hours: 12 },
+  { label: '24 Hours', hours: 24 },
+  { label: '3 Days', hours: 72 },
+  { label: '1 Week', hours: 168 },
+];
+
+const QUIZ_PRESETS = [
+  { q: 'Real or fake?', o1: 'Real', o2: 'Fake' },
+  { q: 'Keep or resell?', o1: 'Keep', o2: 'Resell' },
+  { q: 'Dress up or down?', o1: 'Up', o2: 'Down' },
+];
+
+const SLIDER_PRESETS = [
+  'Rate this fit',
+  'How rare is this?',
+  'Cop or drop?',
+];
+
+export default function StickerPicker({ visible, onClose, onStickerSelect, listings }: StickerPickerProps) {
+  const [tab, setTab] = React.useState<'popular' | 'mentions' | 'polls' | 'questions' | 'interactive'>('popular');
   const [mentionInput, setMentionInput] = React.useState('');
   const [hashtagInput, setHashtagInput] = React.useState('');
+  const [selectedListingId, setSelectedListingId] = React.useState('');
   const translateY = React.useRef(new Animated.Value(DRAWER_HEIGHT)).current;
   const backdropOpacity = React.useRef(new Animated.Value(0)).current;
 
@@ -93,6 +120,50 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
     }
   };
 
+  const handleCountdownSelect = (hours: number) => {
+    const target = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+    onStickerSelect({
+      id: `countdown_${Date.now()}`,
+      type: 'countdown',
+      content: `${hours}h left`,
+      color: '#ff3b30',
+      targetDate: target,
+    });
+    onClose();
+  };
+
+  const handleProductTagSelect = (listingId: string, title: string) => {
+    onStickerSelect({
+      id: `product_${Date.now()}`,
+      type: 'productTag',
+      content: title,
+      color: '#4cd964',
+      listingId,
+    });
+    onClose();
+  };
+
+  const handleQuizSelect = (q: string, o1: string, o2: string) => {
+    onStickerSelect({
+      id: `quiz_${Date.now()}`,
+      type: 'quiz',
+      content: q,
+      options: [o1, o2],
+      votes: [0, 0],
+    });
+    onClose();
+  };
+
+  const handleSliderSelect = (q: string) => {
+    onStickerSelect({
+      id: `slider_${Date.now()}`,
+      type: 'slider',
+      content: q,
+      votes: [0],
+    });
+    onClose();
+  };
+
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents={visible ? 'auto' : 'none'}>
       <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} pointerEvents={visible ? 'auto' : 'none'}>
@@ -106,7 +177,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
 
         {/* Tabs */}
         <View style={styles.tabRow}>
-          {(['popular', 'mentions', 'polls', 'questions'] as const).map((t) => (
+          {(['popular', 'mentions', 'polls', 'questions', 'interactive'] as const).map((t) => (
             <Pressable key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)}>
               <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -212,12 +283,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 >
                   <Text style={styles.pollQ}>{poll.q}</Text>
                   <View style={styles.pollOptions}>
-                    <View style={styles.pollOption}>
-                      <Text style={styles.pollOptionText}>{poll.o1}</Text>
-                    </View>
-                    <View style={styles.pollOption}>
-                      <Text style={styles.pollOptionText}>{poll.o2}</Text>
-                    </View>
+                    <View style={styles.pollOption}><Text style={styles.pollOptionText}>{poll.o1}</Text></View>
+                    <View style={styles.pollOption}><Text style={styles.pollOptionText}>{poll.o2}</Text></View>
                   </View>
                 </Pressable>
               ))}
@@ -237,6 +304,77 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 >
                   <Ionicons name="help-circle" size={20} color="#ff9500" />
                   <Text style={styles.questionText}>{q}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {tab === 'interactive' && (
+            <View style={styles.presetSection}>
+              {/* Countdown */}
+              <Text style={styles.sectionLabel}>Countdown</Text>
+              <View style={styles.countdownRow}>
+                {COUNTDOWN_PRESETS.map((c) => (
+                  <Pressable
+                    key={c.label}
+                    style={styles.countdownBtn}
+                    onPress={() => handleCountdownSelect(c.hours)}
+                  >
+                    <Ionicons name="timer-outline" size={16} color="#ff3b30" />
+                    <Text style={styles.countdownText}>{c.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Product Tags */}
+              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Product Tag</Text>
+              {listings && listings.length > 0 ? (
+                <View style={styles.productList}>
+                  {listings.slice(0, 6).map((l) => (
+                    <Pressable
+                      key={l.id}
+                      style={[styles.productRow, selectedListingId === l.id && styles.productRowActive]}
+                      onPress={() => {
+                        setSelectedListingId(l.id);
+                        handleProductTagSelect(l.id, l.title);
+                      }}
+                    >
+                      <Ionicons name="pricetag-outline" size={16} color="#4cd964" />
+                      <Text style={styles.productText} numberOfLines={1}>{l.title}</Text>
+                      <Text style={styles.productPrice}>£{l.price}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyText}>No listings available to tag</Text>
+              )}
+
+              {/* Quiz */}
+              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Quiz</Text>
+              {QUIZ_PRESETS.map((q) => (
+                <Pressable
+                  key={q.q}
+                  style={styles.quizCard}
+                  onPress={() => handleQuizSelect(q.q, q.o1, q.o2)}
+                >
+                  <Text style={styles.quizQ}>{q.q}</Text>
+                  <View style={styles.quizOptions}>
+                    <View style={styles.quizOption}><Text style={styles.quizOptionText}>{q.o1}</Text></View>
+                    <View style={styles.quizOption}><Text style={styles.quizOptionText}>{q.o2}</Text></View>
+                  </View>
+                </Pressable>
+              ))}
+
+              {/* Slider */}
+              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Slider</Text>
+              {SLIDER_PRESETS.map((q) => (
+                <Pressable
+                  key={q}
+                  style={styles.sliderCard}
+                  onPress={() => handleSliderSelect(q)}
+                >
+                  <Ionicons name="swap-horizontal-outline" size={18} color="#5ac8fa" />
+                  <Text style={styles.sliderText}>{q}</Text>
                 </Pressable>
               ))}
             </View>
@@ -409,6 +547,102 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   questionText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#fff',
+  },
+  countdownRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  countdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,59,48,0.15)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  countdownText: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#ff3b30',
+  },
+  productList: {
+    gap: 6,
+    marginTop: 6,
+  },
+  productRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  productRowActive: {
+    backgroundColor: 'rgba(77,201,100,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(77,201,100,0.4)',
+  },
+  productText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#fff',
+  },
+  productPrice: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    color: '#4cd964',
+  },
+  emptyText: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: 8,
+  },
+  quizCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+  },
+  quizQ: {
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    color: '#fff',
+  },
+  quizOptions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quizOption: {
+    flex: 1,
+    backgroundColor: 'rgba(90,200,250,0.15)',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  quizOptionText: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#5ac8fa',
+  },
+  sliderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  sliderText: {
     fontSize: 14,
     fontFamily: 'Inter_600SemiBold',
     color: '#fff',
