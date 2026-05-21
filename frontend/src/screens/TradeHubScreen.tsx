@@ -11,31 +11,20 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
 import AuctionsScreen from './AuctionsScreen';
 import CoOwnScreen from './SyndicateScreen';
-import { useStore } from '../store/useStore';
 import { RootStackParamList } from '../navigation/types';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { AnimatedCounter } from '../components/AnimatedCounter';
 import { AppButton } from '../components/ui/AppButton';
 import { t } from '../i18n';
 import { useToast } from '../context/ToastContext';
-import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius } from '../theme/designTokens';
-import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
-import { MetricGrid } from '../components/trade';
 
 type TradeHubTab = 'AUCTIONS' | 'CO-OWN';
 type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function TradeHubScreen() {
   const navigation = useNavigation<NavT>();
-  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const [activeTab, setActiveTab] = React.useState<TradeHubTab>('AUCTIONS');
-  const marketLedger = useStore((state) => state.marketLedger);
-  const customAuctions = useStore((state) => state.customAuctions);
-  const customCoOwns = useStore((state) => state.customCoOwns);
-  const coOwnRuntime = useStore((state) => state.coOwnRuntime);
 
   const tabLayouts = React.useRef<{ [key: string]: { x: number; width: number } }>({});
   const indicatorX = useSharedValue(4);
@@ -63,58 +52,6 @@ export default function TradeHubScreen() {
     width: indicatorWidth.value,
   }));
 
-  const latestActivity = marketLedger[0];
-
-  const latestActivityText = React.useMemo(() => {
-    if (!latestActivity) return t('tradeHub.activity.empty');
-    if (latestActivity.channel === 'auction' && latestActivity.action === 'bid') {
-      return t('tradeHub.activity.bid', {
-        amount: formatFromFiat(latestActivity.amountGBP, 'GBP', { displayMode: 'fiat' }),
-        referenceId: latestActivity.referenceId,
-      });
-    }
-    if (latestActivity.channel === 'auction' && latestActivity.action === 'win') {
-      return t('tradeHub.activity.win', {
-        amount: formatFromFiat(latestActivity.amountGBP, 'GBP', { displayMode: 'fiat' }),
-        referenceId: latestActivity.referenceId,
-      });
-    }
-    if (latestActivity.channel === 'co-own' && latestActivity.action === 'sell-units') {
-      const units = latestActivity.units ?? 0;
-      return t('tradeHub.activity.soldUnits', {
-        units,
-        plural: units === 1 ? '' : 's',
-        referenceId: latestActivity.referenceId,
-      });
-    }
-    const units = latestActivity.units ?? 0;
-    return t('tradeHub.activity.boughtUnits', {
-      units,
-      plural: units === 1 ? '' : 's',
-      referenceId: latestActivity.referenceId,
-    });
-  }, [formatFromFiat, latestActivity]);
-
-  const marketSnapshot = React.useMemo(() => {
-    const nowTs = Date.now();
-    const liveAuctions = customAuctions.filter((auction) => {
-      const startsAtMs = new Date(auction.startsAt).getTime();
-      const endsAtMs = new Date(auction.endsAt).getTime();
-      return startsAtMs <= nowTs && endsAtMs > nowTs;
-    }).length;
-
-    const openPools = customCoOwns.filter((asset) => asset.isOpen).length;
-
-    const holdingsValue = customCoOwns.reduce((sum, asset) => {
-      const runtime = coOwnRuntime[asset.id];
-      const units = runtime?.yourUnits ?? asset.yourUnits ?? 0;
-      const unitPrice = runtime?.unitPriceGBP ?? asset.unitPriceGBP;
-      return sum + units * unitPrice;
-    }, 0);
-
-    return { liveAuctions, openPools, holdingsValue };
-  }, [customAuctions, customCoOwns, coOwnRuntime]);
-
   const quickActions = React.useMemo(() => {
     if (activeTab === 'AUCTIONS') {
       return [
@@ -131,44 +68,11 @@ export default function TradeHubScreen() {
     ];
   }, [activeTab, navigation, show]);
 
-  const marketGuidance = activeTab === 'CO-OWN'
-    ? 'Co-Own settles in 1ze only, with local fiat shown as price reference.'
-    : 'Auctions run for 6 hours. Schedule posters early so bidders can discover your drop in time.';
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <View style={styles.headerWrap}>
-        <View style={styles.titleRow}>
-          <View style={styles.liveDot} />
-          <BodyEmphasis style={styles.headerTitle}>{t('tradeHub.header.title')}</BodyEmphasis>
-          <Ionicons name="sparkles-outline" size={18} color={Colors.brand} />
-        </View>
-
-        <AnimatedPressable
-          style={styles.ledgerShortcutBtn}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('MarketLedger')}
-          accessibilityRole="button"
-          accessibilityLabel="Open market ledger"
-          accessibilityHint="Shows recent trading events and settlement activity"
-        >
-          <Ionicons name="pulse-outline" size={15} color={Colors.brand} />
-          <Meta style={styles.ledgerShortcutText}>{t('tradeHub.ledger.label')}</Meta>
-        </AnimatedPressable>
-      </View>
-
-      <MetricGrid
-        metrics={[
-          { label: 'Live Auctions', value: String(marketSnapshot.liveAuctions) },
-          { label: 'Open Pools', value: String(marketSnapshot.openPools) },
-          { label: 'Holdings', value: formatFromFiat(marketSnapshot.holdingsValue, 'GBP', { displayMode: 'fiat' }) },
-        ]}
-        columns={3}
-        style={{ marginBottom: Space.sm }}
-      />
-
+      {/* Tab switcher at the very top */}
       <View style={styles.tabSwitcher}>
         <Reanimated.View style={[styles.tabIndicator, indicatorStyle]} />
         {(['AUCTIONS', 'CO-OWN'] as const).map((tab) => (
@@ -190,24 +94,25 @@ export default function TradeHubScreen() {
         ))}
       </View>
 
-      <View style={styles.guidanceWrap}>
-        <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
-        <Meta style={styles.guidanceText}>{marketGuidance}</Meta>
+      {/* Tab-specific quick actions */}
+      <View style={styles.quickActionsWrap}>
+        {quickActions.map((action) => (
+          <AppButton
+            key={action.key}
+            title={action.label}
+            icon={<Ionicons name={action.icon} size={14} color={Colors.textSecondary} />}
+            variant="secondary"
+            size="sm"
+            style={styles.quickActionBtn}
+            titleStyle={styles.quickActionBtnText}
+            iconContainerStyle={styles.quickActionIconWrap}
+            onPress={action.onPress}
+            accessibilityLabel={action.label}
+          />
+        ))}
       </View>
 
-      <AnimatedPressable
-        style={styles.activityWrap}
-        activeOpacity={0.92}
-        onPress={() => navigation.navigate('MarketLedger')}
-        accessibilityRole="button"
-        accessibilityLabel="Open market activity"
-        accessibilityHint="Shows detailed market ledger events"
-      >
-        <Ionicons name="pulse-outline" size={14} color={Colors.brand} />
-        <Meta style={styles.activityText}>{latestActivityText}</Meta>
-        <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
-      </AnimatedPressable>
-
+      {/* Tab content */}
       {activeTab === 'AUCTIONS' ? <AuctionsScreen /> : <CoOwnScreen />}
     </SafeAreaView>
   );
@@ -218,41 +123,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ff4444',
-  },
-  headerTitle: {},
-  ledgerShortcutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  ledgerShortcutText: {
-    color: Colors.brand,
-  },
   tabSwitcher: {
     marginHorizontal: Space.md,
+    marginTop: Space.sm,
     marginBottom: Space.sm,
     backgroundColor: Colors.surface,
     borderRadius: Radius.full,
@@ -275,6 +148,8 @@ const styles = StyleSheet.create({
     minHeight: 34,
     borderWidth: 0,
     backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabText: {
     color: Colors.textSecondary,
@@ -286,29 +161,24 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: Colors.textInverse,
   },
-  guidanceWrap: {
+  quickActionsWrap: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    gap: Space.sm,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
+  },
+  quickActionBtn: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: Radius.lg,
+  },
+  quickActionBtnText: {
+    fontSize: 11,
+  },
+  quickActionIconWrap: {
+    width: 22,
+    height: 22,
     borderRadius: Radius.md,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 8,
-  },
-  guidanceText: {
-    flex: 1,
-  },
-  activityWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
-  activityText: {
-    flex: 1,
-    color: Colors.textSecondary,
+    backgroundColor: Colors.surfaceAlt,
   },
 });
