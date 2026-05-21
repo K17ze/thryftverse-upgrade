@@ -34,6 +34,7 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { Type } from '../theme/designTokens';
+import { Typography } from '../constants/typography';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -400,7 +401,7 @@ const lookStyles = StyleSheet.create({
   tagLabel: {
     color: '#fff',
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   infoRow: {
     flexDirection: 'row',
@@ -420,14 +421,14 @@ const lookStyles = StyleSheet.create({
   lookTitle: {
     color: Colors.textPrimary,
     fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.06,
     marginBottom: 2,
   },
   creatorName: {
     color: Colors.textMuted,
     fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     letterSpacing: 0.1,
   },
   statsRow: {
@@ -443,7 +444,7 @@ const lookStyles = StyleSheet.create({
   statCount: {
     color: Colors.textSecondary,
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
 });
 
@@ -462,14 +463,14 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: BRAND,
     letterSpacing: 1.1,
     marginBottom: 4,
   },
   hugeTitle: {
     fontSize: Type.title.size,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.5,
   },
@@ -478,7 +479,7 @@ const styles = StyleSheet.create({
   },
   itemCount: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     letterSpacing: 0.12,
     color: Colors.textSecondary,
   },
@@ -503,7 +504,7 @@ const styles = StyleSheet.create({
   discoverBtnText: {
     color: '#fff',
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
   },
 
@@ -525,7 +526,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     letterSpacing: 0.08,
   },
 
@@ -547,7 +548,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: 'transparent',
   },
-  tabText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, letterSpacing: 0.2 },
+  tabText: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, letterSpacing: 0.2 },
   activeTabText: { color: Colors.textPrimary },
   tabCountWrap: {
     width: 'auto',
@@ -568,7 +569,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
     color: Colors.textSecondary,
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   tabCountActive: {
     backgroundColor: Colors.textPrimary,
@@ -623,13 +624,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
@@ -641,7 +642,7 @@ const styles = StyleSheet.create({
   },
   footerHint: {
     fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     textAlign: 'center',
     letterSpacing: 0.1,
@@ -673,12 +674,12 @@ const styles = StyleSheet.create({
   },
   closetShortcutTitle: {
     fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   closetShortcutSub: {
     fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     marginTop: 2,
   },

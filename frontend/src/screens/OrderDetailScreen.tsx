@@ -1,3 +1,4 @@
+import { Typography } from '../constants/typography';
 import React from 'react';
 import {
   AnimatedPressable,
@@ -32,6 +33,11 @@ import { CachedImage } from '../components/CachedImage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { Body, Caption, Meta, Headline } from '../components/ui/Text';
+import { haptics } from '../utils/haptics';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
@@ -45,9 +51,9 @@ type TrackingStep = {
   active?: boolean;
 };
 
-const IS_LIGHT = ActiveTheme === 'light';
-const STATUS_PANEL_BG = IS_LIGHT ? '#e6efe8' : '#0d2020';
-const STATUS_PANEL_BORDER = IS_LIGHT ? '#c5d7ca' : '#1a3a3a';
+
+const STATUS_PANEL_BG = Colors.surfaceAlt;
+const STATUS_PANEL_BORDER = Colors.border;
 
 type OrderStatus = 'created' | 'paid' | 'shipped' | 'delivered' | 'cancelled';
 
@@ -248,6 +254,7 @@ export default function OrderDetailScreen() {
   const [backendOrder, setBackendOrder] = React.useState<CommerceOrder | null>(null);
   const [parcelEvents, setParcelEvents] = React.useState<OrderParcelEvent[]>([]);
   const [isSyncingOrder, setIsSyncingOrder] = React.useState(false);
+  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
     let cancelled = false;
@@ -323,23 +330,23 @@ export default function OrderDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      {/* -- Header -- */}
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Order Details</Text>
-        <AnimatedPressable style={styles.moreBtn} onPress={() => navigation.navigate('HelpSupport')}>
-          <Ionicons name="ellipsis-horizontal" size={22} color={Colors.textPrimary} />
-        </AnimatedPressable>
-      </View>
+      <ScreenHeader
+        title="Order Details"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          <AnimatedPressable onPress={() => navigation.navigate('HelpSupport')}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        }
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
 
         {/* -- Item Card -- */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
         <AnimatedPressable
           style={styles.itemCard}
-          onPress={() => navigation.push('ItemDetail', { itemId: listing.id })}
+          onPress={() => { haptics.tap(); navigation.push('ItemDetail', { itemId: listing.id }); }}
           activeOpacity={0.88}
         >
           <SharedTransitionView
@@ -355,8 +362,10 @@ export default function OrderDetailScreen() {
           </View>
           <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
         </AnimatedPressable>
+        </Reanimated.View>
 
         {/* -- Status Banner -- */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(60)}>
         <View style={styles.statusBanner}>
           <Ionicons name="cube-outline" size={20} color={Colors.brand} />
           <View style={{ flex: 1 }}>
@@ -364,10 +373,12 @@ export default function OrderDetailScreen() {
             <Text style={styles.statusSub}>{statusBanner.subtitle}</Text>
           </View>
         </View>
+        </Reanimated.View>
         {isSyncingOrder ? <Text style={styles.syncHint}>Syncing live order status...</Text> : null}
 
         {showShipmentMeta ? (
           <>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}>
             <Text style={styles.sectionTitle}>Shipment details</Text>
             <View style={styles.shipmentMetaCard}>
               {backendOrder?.shippingProvider ? (
@@ -402,10 +413,12 @@ export default function OrderDetailScreen() {
                 />
               ) : null}
             </View>
+            </Reanimated.View>
           </>
         ) : null}
 
         {/* -- Tracking Timeline -- */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}>
         <Text style={styles.sectionTitle}>Tracking</Text>
         <View style={styles.timelineCard}>
           {trackingSteps.map((step, index) => (
@@ -436,13 +449,15 @@ export default function OrderDetailScreen() {
             </View>
           ))}
         </View>
+        </Reanimated.View>
 
         {/* -- Seller Info -- */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}>
         <Text style={styles.sectionTitle}>Seller</Text>
         <View style={styles.sellerCard}>
           <AnimatedPressable
             style={styles.sellerIdentityTap}
-            onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
+            onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: seller.id }); }}
             activeOpacity={0.88}
             accessibilityRole="button"
             accessibilityLabel={`Open @${seller.username} profile`}
@@ -475,8 +490,10 @@ export default function OrderDetailScreen() {
             accessibilityHint="Opens conversation with this seller"
           />
         </View>
+        </Reanimated.View>
 
         {/* -- Transaction Info -- */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(300)}>
         <Text style={styles.sectionTitle}>Transaction</Text>
         <View style={styles.txCard}>
           <TxRow label="Item price" value={formatFromFiat(subtotal, 'GBP', { displayMode: 'fiat' })} />
@@ -485,8 +502,10 @@ export default function OrderDetailScreen() {
           <View style={styles.txDivider} />
           <TxRow label="Total paid" value={formatFromFiat(totalPaid, 'GBP', { displayMode: 'fiat' })} bold />
         </View>
+        </Reanimated.View>
 
         {/* -- Actions -- */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(360)}>
         <View style={styles.actionsRow}>
           <AppButton
             title="Report issue"
@@ -509,6 +528,7 @@ export default function OrderDetailScreen() {
             accessibilityLabel="Mark order as received"
           />
         </View>
+        </Reanimated.View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -536,31 +556,14 @@ function ShipmentMetaRow({ label, value }: { label: string; value: string }) {
 
 const txStyles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10 },
-  label: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.textSecondary },
-  value: { fontSize: 14, fontFamily: 'Inter_500Medium', color: Colors.textPrimary },
-  bold: { fontFamily: 'Inter_700Bold', color: Colors.textPrimary, fontSize: 15 },
+  label: { fontSize: 14, fontFamily: Typography.family.regular, color: Colors.textSecondary },
+  value: { fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textPrimary },
+  bold: { fontFamily: Typography.family.bold, color: Colors.textPrimary, fontSize: 15 },
 });
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 16,
-  },
-  backBtn: { width: 40, height: 40, borderRadius: Radius.full,
-    backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center',
-  },
-  moreBtn: { width: 40, height: 40, borderRadius: Radius.full,
-    backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 18, fontFamily: 'Inter_700Bold', color: Colors.textPrimary,
-  },
 
   content: { paddingHorizontal: 20, paddingTop: 8 },
 
@@ -576,9 +579,9 @@ const styles = StyleSheet.create({
   itemThumb: { width: 72, height: 72, borderRadius: 14, overflow: 'hidden' },
   itemThumbImage: { width: '100%', height: '100%' },
   itemInfo: { flex: 1 },
-  itemTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
-  itemMeta: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textMuted, marginBottom: 4 },
-  itemPrice: { fontSize: 16, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
+  itemTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
+  itemMeta: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textMuted, marginBottom: 4 },
+  itemPrice: { fontSize: 16, fontFamily: Typography.family.bold, color: Colors.textPrimary },
 
   statusBanner: {
     flexDirection: 'row',
@@ -591,19 +594,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: STATUS_PANEL_BORDER,
   },
-  statusLabel: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.brand, marginBottom: 4 },
-  statusSub: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, lineHeight: 20 },
+  statusLabel: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.brand, marginBottom: 4 },
+  statusSub: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary, lineHeight: 20 },
   syncHint: {
     marginTop: -12,
     marginBottom: 18,
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
   },
 
   sectionTitle: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
@@ -627,13 +630,13 @@ const styles = StyleSheet.create({
   },
   shipmentMetaLabel: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     flex: 1,
   },
   shipmentMetaValue: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     flex: 2,
     textAlign: 'right',
@@ -655,7 +658,7 @@ const styles = StyleSheet.create({
   },
   shipmentLinkBtnText: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.brand,
   },
 
@@ -681,10 +684,10 @@ const styles = StyleSheet.create({
   lineInactive: { backgroundColor: Colors.borderLight },
   timelineContent: { flex: 1, paddingBottom: 20 },
   timelineTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  stepLabel: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
+  stepLabel: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
   stepLabelInactive: { color: Colors.textMuted },
-  stepDate: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.textMuted },
-  stepSub: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, lineHeight: 18 },
+  stepDate: { fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted },
+  stepSub: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary, lineHeight: 18 },
   stepSubInactive: { color: Colors.textMuted },
 
   // Seller card
@@ -705,11 +708,11 @@ const styles = StyleSheet.create({
   },
   sellerAvatar: { width: 48, height: 48, borderRadius: 24 },
   sellerInfo: { flex: 1 },
-  sellerName: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
-  sellerLocation: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginBottom: 2 },
+  sellerName: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
+  sellerLocation: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted, marginBottom: 2 },
   sellerMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  sellerRating: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary },
-  sellerLastSeen: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.textMuted, marginTop: 3 },
+  sellerRating: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
+  sellerLastSeen: { fontSize: 11, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: 3 },
   msgBtn: {
     minHeight: 40,
     paddingHorizontal: Space.md,
@@ -717,7 +720,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.brand,
   },
-  msgBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.brand },
+  msgBtnText: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.brand },
 
   // Transaction card
   txCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, paddingHorizontal: Space.lg, paddingVertical: Space.sm, marginBottom: Space.lg + Space.sm },
@@ -737,7 +740,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'transparent',
   },
-  actionBtnSecondaryText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
+  actionBtnSecondaryText: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
   actionBtnPrimary: {
     flex: 2,
     minHeight: 56,
@@ -745,5 +748,5 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: Colors.brand,
   },
-  actionBtnPrimaryText: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.background },
+  actionBtnPrimaryText: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.background },
 });

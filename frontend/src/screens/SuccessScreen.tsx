@@ -14,6 +14,7 @@ import { Confetti } from '../components/Confetti';
 import { useToast } from '../context/ToastContext';
 import { MOCK_USERS } from '../data/mockData';
 import { CachedImage } from '../components/CachedImage';
+import { Typography } from '../constants/typography';
 
 export default function SuccessScreen() {
   const navigation = useNavigation<any>();
@@ -108,8 +109,8 @@ const styles = StyleSheet.create({
     marginBottom: 32 
   },
   
-  title: { fontSize: 28, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, marginBottom: 12, textAlign: 'center' },
-  subtitle: { fontSize: 15, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: 28, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 12, textAlign: 'center' },
+  subtitle: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
   supportRow: {
     marginTop: 18,
     width: '100%',
@@ -143,7 +144,7 @@ const styles = StyleSheet.create({
   supportText: {
     flex: 1,
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   supportMessageBtn: {
@@ -159,7 +160,7 @@ const styles = StyleSheet.create({
   
   footer: { paddingHorizontal: 24, paddingBottom: 40, gap: 12 },
   primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: 'Inter_700Bold' },
+  primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold },
   secondaryBtn: { backgroundColor: 'transparent', height: 56, borderRadius: 28, borderWidth: 1, borderColor: '#333', alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { color: Colors.textPrimary, fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+  secondaryText: { color: Colors.textPrimary, fontSize: 16, fontFamily: Typography.family.semibold },
 });

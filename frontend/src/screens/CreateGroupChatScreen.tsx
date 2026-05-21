@@ -4,7 +4,6 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -19,18 +18,26 @@ import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { createGroupConversationOnApi } from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
+import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { AppInput } from '../components/ui/AppInput';
+import { AppButton } from '../components/ui/AppButton';
+import { ChatCard } from '../components/chat/ChatCard';
+import { Space, Radius, Type } from '../theme/designTokens';
+import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
+import { Motion } from '../constants/motion';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateGroupChat'>;
-
-const PANEL = Colors.surface;
-const BORDER = Colors.border;
-const PANEL_ALT = Colors.border;
 
 export default function CreateGroupChatScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const createGroupConversation = useStore((state) => state.createGroupConversation);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const { show } = useToast();
+  const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [title, setTitle] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -51,6 +58,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   }, [members, searchQuery]);
 
   const toggleMember = (userId: string) => {
+    haptic.light();
     setSelectedIds((current) =>
       current.includes(userId)
         ? current.filter((id) => id !== userId)
@@ -91,7 +99,6 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
     }
   };
 
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
@@ -99,120 +106,140 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         backgroundColor={Colors.background}
       />
 
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.headerBtn} onPress={() => navigation.goBack()}
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Create Group Chat</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <SettingsHeader
+        title="Create Group Chat"
+        onBack={() => navigation.goBack()}
+      />
 
       <View style={styles.body}>
-        <View style={styles.titleCard}>
-          <Text style={styles.label}>Group title</Text>
-          <TextInput
+        <ChatCard variant="surface" style={styles.titleCard}>
+          <Meta color={Colors.textMuted} style={styles.label}>Group title</Meta>
+          <AppInput
             value={title}
             onChangeText={setTitle}
             placeholder="Example: Thryft Snipers"
             placeholderTextColor={Colors.textMuted}
-            style={styles.input}
             maxLength={40}
+            inputContainerStyle={styles.inputWrap}
+            inputStyle={styles.input}
+            accessibilityLabel="Group title input"
+            accessibilityHint="Enter a name for the new group chat"
           />
-        </View>
-
+        </ChatCard>
 
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Members (optional)</Text>
-          <Text style={styles.sectionMeta}>{selectedIds.length} selected</Text>
+          <BodyEmphasis>Members (optional)</BodyEmphasis>
+          <Caption color={Colors.textMuted}>{selectedIds.length} selected</Caption>
         </View>
 
-        <View style={styles.searchCard}>
+        <ChatCard variant="surface" style={styles.searchCard}>
           <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
-          <TextInput
+          <AppInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search by username..."
             placeholderTextColor={Colors.textMuted}
-            style={styles.searchInput}
             autoCapitalize="none"
             autoCorrect={false}
+            inputContainerStyle={styles.searchInputWrap}
+            inputStyle={styles.searchInput}
+            accessibilityLabel="Search members"
+            accessibilityHint="Search for users to add to the group"
           />
           {searchQuery.length > 0 && (
-            <AnimatedPressable onPress={() => setSearchQuery('')}>
+            <AnimatedPressable
+              onPress={() => setSearchQuery('')}
+              activeOpacity={0.7}
+              scaleValue={0.9}
+              hapticFeedback="light"
+            >
               <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
             </AnimatedPressable>
           )}
-        </View>
+        </ChatCard>
 
         <FlashList
           data={filteredMembers}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const selected = selectedIds.includes(item.id);
             return (
-              <View
-                style={[styles.memberRow, selected && styles.memberRowSelected]}
+              <Reanimated.View
+                entering={
+                  reducedMotionEnabled
+                    ? undefined
+                    : FadeInDown
+                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+                      .duration(Motion.list.enterDuration)
+                }
               >
-                <AnimatedPressable
-                  style={styles.memberSelectTap}
-                  activeOpacity={0.85}
-                  onPress={() => toggleMember(item.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${selected ? 'Deselect' : 'Select'} @${item.username}`}
-                  accessibilityHint="Toggles this member for the new group"
+                <ChatCard
+                  variant={selected ? 'tint' : 'surface'}
+                  style={[styles.memberRow, selected && styles.memberRowSelected]}
                 >
-                  <CachedImage
-                    uri={item.avatar}
-                    style={styles.memberAvatar}
-                    containerStyle={styles.memberAvatar}
-                    contentFit="cover"
-                  />
+                  <AnimatedPressable
+                    style={styles.memberSelectTap}
+                    activeOpacity={0.85}
+                    onPress={() => toggleMember(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${selected ? 'Deselect' : 'Select'} @${item.username}`}
+                    accessibilityHint="Toggles this member for the new group"
+                    scaleValue={0.98}
+                    hapticFeedback="light"
+                  >
+                    <CachedImage
+                      uri={item.avatar}
+                      style={styles.memberAvatar}
+                      containerStyle={styles.memberAvatar}
+                      contentFit="cover"
+                    />
 
-                  <View style={styles.memberTextWrap}>
-                    <Text style={styles.memberName}>@{item.username}</Text>
-                    <Text style={styles.memberLocation}>{item.location}</Text>
-                  </View>
+                    <View style={styles.memberTextWrap}>
+                      <BodyEmphasis>@{item.username}</BodyEmphasis>
+                      <Caption color={Colors.textSecondary}>{item.location}</Caption>
+                    </View>
 
-                  <Ionicons
-                    name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={22}
-                    color={selected ? Colors.brand : Colors.textMuted}
-                  />
-                </AnimatedPressable>
+                    <Ionicons
+                      name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={22}
+                      color={selected ? Colors.brand : Colors.textMuted}
+                    />
+                  </AnimatedPressable>
 
-                <AnimatedPressable
-                  style={styles.memberProfileBtn}
-                  activeOpacity={0.85}
-                  onPress={() => navigation.navigate('UserProfile', { userId: item.id })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open @${item.username} profile`}
-                  accessibilityHint="Shows this member profile details"
-                >
-                  <Ionicons name="person-circle-outline" size={20} color={Colors.textPrimary} />
-                </AnimatedPressable>
-              </View>
+                  <AnimatedPressable
+                    style={styles.memberProfileBtn}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('UserProfile', { userId: item.id })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open @${item.username} profile`}
+                    accessibilityHint="Shows this member profile details"
+                    scaleValue={0.9}
+                    hapticFeedback="light"
+                  >
+                    <Ionicons name="person-circle-outline" size={20} color={Colors.textPrimary} />
+                  </AnimatedPressable>
+                </ChatCard>
+              </Reanimated.View>
             );
           }}
           contentContainerStyle={styles.memberList}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          ItemSeparatorComponent={() => <View style={{ height: Space.sm + 2 }} />}
           showsVerticalScrollIndicator={false}
         />
 
-        <AnimatedPressable
+        <AppButton
           style={[styles.createBtn, (!title.trim() || isCreating) && styles.createBtnDisabled]}
-          activeOpacity={0.9}
+          variant="primary"
+          size="md"
+          align="center"
+          title={isCreating ? 'Creating...' : 'Create Group'}
           onPress={() => {
             void handleCreateGroup();
           }}
           disabled={!title.trim() || isCreating}
           accessibilityLabel={isCreating ? 'Creating group chat' : 'Create group chat'}
           accessibilityRole="button"
-        >
-          <Text style={styles.createBtnText}>{isCreating ? 'Creating...' : 'Create Group'}</Text>
-        </AnimatedPressable>
+        />
       </View>
     </SafeAreaView>
   );
@@ -220,184 +247,94 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  body: {
+    flex: 1,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
   },
-  headerBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: PANEL,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  headerTitle: {
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-  },
-  headerSpacer: { width: 44, height: 44 },
-  body: { flex: 1, paddingHorizontal: 16, paddingBottom: 18 },
   titleCard: {
-    backgroundColor: PANEL,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 8,
-    marginBottom: 14,
-  },
-  joinCard: {
-    backgroundColor: PANEL,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    marginBottom: 14,
+    marginBottom: Space.md,
   },
   label: {
-    color: Colors.textMuted,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 8,
+    marginBottom: Space.xs + 4,
+  },
+  inputWrap: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    minHeight: 44,
+    paddingHorizontal: 0,
   },
   input: {
+    fontSize: Type.body.size,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
-    paddingVertical: 10,
+    paddingVertical: 0,
   },
   sectionRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sectionMeta: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.textSecondary,
+    alignItems: 'center',
+    marginBottom: Space.sm + 2,
   },
   searchCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: PANEL,
-    marginBottom: 12,
+    gap: Space.sm + 2,
+    marginBottom: Space.sm + 2,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.sm,
+  },
+  searchInputWrap: {
+    flex: 1,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    minHeight: 40,
+    paddingHorizontal: 0,
   },
   searchInput: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    fontSize: Type.body.size,
     color: Colors.textPrimary,
-    padding: 0,
+    paddingVertical: 0,
   },
-  memberList: { paddingBottom: 12 },
+  memberList: {
+    paddingBottom: Space.xxl + 24,
+  },
   memberRow: {
-    backgroundColor: PANEL,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    padding: Space.sm + 2,
+  },
+  memberRowSelected: {
+    borderColor: Colors.brand,
   },
   memberSelectTap: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  memberRowSelected: {
-    borderColor: Colors.brand,
-    backgroundColor: PANEL_ALT,
+    gap: Space.sm + 2,
   },
   memberAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: Colors.surface,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
   },
-  memberTextWrap: { flex: 1 },
-  memberName: {
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    marginBottom: 2,
-  },
-  memberLocation: {
-    color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
+  memberTextWrap: {
+    flex: 1,
   },
   memberProfileBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: PANEL_ALT,
-    alignItems: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
     justifyContent: 'center',
-  },
-  joinBtn: {
-    marginTop: 8,
-    backgroundColor: PANEL,
-    borderRadius: 20,
-    height: 40,
-    borderWidth: 1,
-    borderColor: BORDER,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  joinBtnDisabled: {
-    opacity: 0.45,
-  },
-  joinBtnText: {
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 13,
-    letterSpacing: 0.2,
+    marginLeft: Space.sm,
   },
   createBtn: {
-    marginTop: 'auto',
-    backgroundColor: Colors.brand,
-    borderRadius: 26,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: Space.md,
+    marginBottom: Space.lg,
+    height: 50,
+    borderRadius: Radius.lg,
   },
   createBtnDisabled: {
-    opacity: 0.45,
-  },
-  createBtnText: {
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+    opacity: 0.5,
   },
 });

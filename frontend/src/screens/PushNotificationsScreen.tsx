@@ -27,6 +27,7 @@ import { SettingsHeader } from '../components/settings/SettingsHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'PushNotifications'>;
 
@@ -264,7 +265,7 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
     letterSpacing: Type.caption.letterSpacing,
     minWidth: 60,
@@ -272,7 +273,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
     marginLeft: Space.xs,
     marginBottom: Space.sm,
@@ -281,7 +282,7 @@ const styles = StyleSheet.create({
   },
   footerNote: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     marginTop: Space.sm,

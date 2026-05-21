@@ -1,16 +1,12 @@
+import { Typography } from '../constants/typography';
 import React, { useState } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
-import { View,
-  Text,
-  StyleSheet,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  StatusBar
-} from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { AppInput } from '../components/ui/AppInput';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { requestPasswordReset } from '../services/authApi';
@@ -57,11 +53,11 @@ export default function ForgotPasswordScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
       
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-      </View>
+      <ScreenHeader
+        title=""
+        onBack={() => navigation.goBack()}
+        showBackButton
+      />
 
       <KeyboardAvoidingView 
         style={styles.content} 
@@ -80,23 +76,20 @@ export default function ForgotPasswordScreen() {
         ) : (
           <View style={styles.form}>
             <Text style={styles.subtitle}>Enter your email address and we will send you a link to reset your password.</Text>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="Enter your email" 
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={(value) => {
-                  setEmail(value);
-                  if (errorMsg) {
-                    setErrorMsg('');
-                  }
-                }}
-              />
-            </View>
+            <AppInput
+              label="Email"
+              placeholder="Enter your email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={(value) => {
+                setEmail(value);
+                if (errorMsg) {
+                  setErrorMsg('');
+                }
+              }}
+              containerStyle={styles.inputGroup}
+            />
 
             {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
@@ -120,30 +113,28 @@ export default function ForgotPasswordScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   
   content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center' },
-  title: { fontSize: 44, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, lineHeight: 48, letterSpacing: -1, marginBottom: 20 },
-  subtitle: { fontSize: 16, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, marginBottom: 40, lineHeight: 24 },
+  title: { fontSize: 44, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: 48, letterSpacing: -1, marginBottom: 20 },
+  subtitle: { fontSize: 16, fontFamily: Typography.family.regular, color: Colors.textSecondary, marginBottom: 40, lineHeight: 24 },
   
   form: { marginBottom: 40 },
   inputGroup: { marginBottom: 40 },
-  label: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.textSecondary, marginBottom: 12 },
+  label: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textSecondary, marginBottom: 12 },
   input: { 
     height: 56, 
     borderBottomWidth: 1, 
     borderBottomColor: Colors.border, 
     color: Colors.textPrimary, 
     fontSize: 16, 
-    fontFamily: 'Inter_400Regular' 
+    fontFamily: Typography.family.regular 
   },
   
   footer: { paddingBottom: 40 },
-  errorText: { color: Colors.danger, fontSize: 13, fontFamily: 'Inter_500Medium', marginBottom: 4 },
+  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, marginBottom: 4 },
   primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', width: '100%', marginTop: 20 },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: 'Inter_700Bold' },
+  primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold },
 
   successState: {
     alignItems: 'center',
@@ -152,7 +143,7 @@ const styles = StyleSheet.create({
   successText: {
     fontSize: 16,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     textAlign: 'center',
     marginVertical: 24,
     lineHeight: 24,

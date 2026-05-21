@@ -32,6 +32,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { CollectionCard } from '../components/closet/CollectionCard';
 import { AppButton } from '../components/ui/AppButton';
+import { Typography } from '../constants/typography';
 
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS';
 type SortOption = 'Recently Added' | 'Price: Low to High' | 'Price: High to Low' | 'Newest';
@@ -219,6 +220,10 @@ export default function ClosetScreen() {
           subtitle="Tap the bookmark on any product to save it here."
           ctaLabel="Browse"
           onCtaPress={handleBrowse}
+          suggestedActions={[
+            { label: 'Trending', onPress: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' }) },
+            { label: 'New Arrivals', onPress: () => navigation.navigate('Browse', { categoryId: 'all', title: 'New Arrivals' }) },
+          ]}
         />
       );
     }
@@ -246,6 +251,10 @@ export default function ClosetScreen() {
           subtitle="Heart items to track them."
           ctaLabel="Browse"
           onCtaPress={handleBrowse}
+          suggestedActions={[
+            { label: 'Streetwear', onPress: () => navigation.navigate('Browse', { categoryId: 'streetwear', title: 'Streetwear' }) },
+            { label: 'Vintage', onPress: () => navigation.navigate('Browse', { categoryId: 'vintage', title: 'Vintage' }) },
+          ]}
         />
       );
     }
@@ -419,14 +428,14 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     fontSize: 10,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.brand,
     letterSpacing: 0.7,
     textTransform: 'uppercase',
   },
   headerTitle: {
     fontSize: 22,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     marginTop: 2,
   },
@@ -443,7 +452,7 @@ const styles = StyleSheet.create({
   },
   countBadge: {
     fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textMuted,
   },
   searchWrap: {
@@ -466,7 +475,7 @@ const styles = StyleSheet.create({
   },
   resultCount: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
   },
   sortBtn: {
@@ -482,7 +491,7 @@ const styles = StyleSheet.create({
   },
   sortLabel: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
   },
   sortMenu: {
@@ -508,11 +517,11 @@ const styles = StyleSheet.create({
   },
   sortOptionText: {
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
   },
   sortOptionTextActive: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.brand,
   },
   collectionsList: {

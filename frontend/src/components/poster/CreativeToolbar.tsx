@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Typography } from '../../constants/typography';
 
 export type CreativeTool =
   | 'text'
@@ -88,7 +89,7 @@ const styles = StyleSheet.create({
   },
   toolLabel: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: 'rgba(255,255,255,0.85)',
     includeFontPadding: false,
   },

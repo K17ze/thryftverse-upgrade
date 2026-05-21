@@ -40,6 +40,7 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { MOCK_USERS } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
+import { Typography } from '../constants/typography';
 
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 16;
@@ -513,7 +514,7 @@ const styles = StyleSheet.create({
   },
   hugeTitle: { 
     fontSize: 44, 
-    fontFamily: 'Inter_700Bold', 
+    fontFamily: Typography.family.bold, 
     color: Colors.textPrimary, 
     letterSpacing: -1.5,
     textTransform: 'uppercase',
@@ -521,7 +522,7 @@ const styles = StyleSheet.create({
   },
   itemCountText: {
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     marginTop: 8,
   },
@@ -540,13 +541,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 24, 
   },
-  filterPillTextActive: { color: Colors.background, fontSize: 13, fontFamily: 'Inter_700Bold' },
+  filterPillTextActive: { color: Colors.background, fontSize: 13, fontFamily: Typography.family.bold },
   filterPillOutline: {
     minHeight: 40,
     paddingHorizontal: 16,
     borderRadius: 24, 
   },
-  filterPillText: { color: Colors.textPrimary, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  filterPillText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
   syncRetryBanner: {
     marginHorizontal: 20,
     marginBottom: 14,
@@ -604,9 +605,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  priceText: { color: Colors.textPrimary, fontSize: 18, fontFamily: 'Inter_700Bold' },
-  brandText: { color: Colors.textSecondary, fontSize: 12, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
-  sizeText: { color: Colors.textMuted, fontSize: 13, fontFamily: 'Inter_500Medium' },
+  priceText: { color: Colors.textPrimary, fontSize: 18, fontFamily: Typography.family.bold },
+  brandText: { color: Colors.textSecondary, fontSize: 12, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
+  sizeText: { color: Colors.textMuted, fontSize: 13, fontFamily: Typography.family.medium },
   sellerActionRow: {
     marginTop: 8,
     flexDirection: 'row',
@@ -648,7 +649,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textSecondary,
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   sellerMessageBtn: {
     width: 28,

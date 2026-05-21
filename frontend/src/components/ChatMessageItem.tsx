@@ -2,9 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
+import { Space, Radius, Type } from '../theme/designTokens';
 import { MessageStatusIndicator, MessageStatus } from './MessageStatusIndicator';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { CachedImage } from './CachedImage';
+import { Typography } from '../constants/typography';
+import { Meta, Caption, Body } from './ui/Text';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_BUBBLE_WIDTH = SCREEN_WIDTH * 0.75;
@@ -29,53 +32,64 @@ interface ChatMessageItemProps {
 export function ChatMessageItem({
   message,
   isGroup = false,
+  showAvatar = false,
+  avatarUrl,
 }: ChatMessageItemProps) {
   const isMe = message.sender === 'me';
   const reducedMotionEnabled = useReducedMotion();
 
-  // Entry animation - subtle fade only (not annoying)
   const enteringAnimation = reducedMotionEnabled
     ? undefined
     : FadeIn.duration(150);
+
+  const renderAvatar = () => {
+    if (isMe || !isGroup || !message.senderLabel) return null;
+
+    if (showAvatar && avatarUrl) {
+      return (
+        <CachedImage
+          uri={avatarUrl}
+          style={styles.avatarImage}
+          containerStyle={styles.avatarPlaceholder}
+          contentFit="cover"
+        />
+      );
+    }
+
+    return (
+      <View style={styles.avatarPlaceholder}>
+        <Text style={styles.avatarInitial}>
+          {message.senderLabel.charAt(0).toUpperCase()}
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <Reanimated.View
       entering={enteringAnimation}
       style={[styles.container, isMe && styles.containerRight]}
     >
-      {/* Avatar for group chats */}
-      {!isMe && isGroup && message.senderLabel && (
-        <View style={styles.avatarPlaceholder}>
-          <Text style={styles.avatarInitial}>
-            {message.senderLabel.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-      )}
+      {renderAvatar()}
 
       <View style={styles.bubbleContainer}>
-        {/* Sender name for group chats */}
         {!isMe && isGroup && message.senderLabel && (
-          <Text style={styles.senderName}>{message.senderLabel}</Text>
+          <Meta color={Colors.brand} style={styles.senderName}>
+            {message.senderLabel}
+          </Meta>
         )}
 
-        {/* Message bubble */}
         <View
           style={[
             styles.bubble,
             isMe ? styles.bubbleMe : styles.bubbleThem,
           ]}
         >
-          <Text
-            style={[
-              styles.messageText,
-              isMe && styles.messageTextMe,
-            ]}
-          >
+          <Body color={isMe ? Colors.textInverse : Colors.textPrimary}>
             {message.text}
-          </Text>
+          </Body>
         </View>
 
-        {/* Status indicator for outgoing messages */}
         {isMe && (
           <View style={styles.statusContainer}>
             <MessageStatusIndicator
@@ -86,9 +100,10 @@ export function ChatMessageItem({
           </View>
         )}
 
-        {/* Timestamp for incoming messages */}
         {!isMe && message.timestamp && (
-          <Text style={styles.incomingTimestamp}>{message.timestamp}</Text>
+          <Caption color={Colors.textMuted} style={styles.incomingTimestamp}>
+            {message.timestamp}
+          </Caption>
         )}
       </View>
     </Reanimated.View>
@@ -109,7 +124,7 @@ export function DateSeparator({ date }: DateSeparatorProps) {
       style={styles.dateContainer}
     >
       <View style={styles.dateLine} />
-      <Text style={styles.dateText}>{date}</Text>
+      <Caption color={Colors.textMuted} style={styles.dateText}>{date}</Caption>
       <View style={styles.dateLine} />
     </Reanimated.View>
   );
@@ -118,97 +133,80 @@ export function DateSeparator({ date }: DateSeparatorProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    marginVertical: 4,
-    paddingHorizontal: 12,
+    marginVertical: Space.xs,
+    paddingHorizontal: Space.md - 4,
     alignItems: 'flex-end',
   },
   containerRight: {
     justifyContent: 'flex-end',
   },
 
-  // Avatar
   avatarPlaceholder: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.full,
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: Space.sm,
     borderWidth: 1,
     borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.full,
   },
   avatarInitial: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
   },
 
-  // Bubble container
   bubbleContainer: {
     maxWidth: MAX_BUBBLE_WIDTH,
   },
 
-  // Sender name (group chats)
   senderName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.brand,
     marginBottom: 2,
-    marginLeft: 4,
+    marginLeft: Space.xs,
   },
 
-  // Message bubble
   bubble: {
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Space.md - 2,
+    paddingVertical: Space.sm + 2,
     maxWidth: MAX_BUBBLE_WIDTH,
   },
   bubbleMe: {
     backgroundColor: Colors.brand,
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: Space.xs,
   },
   bubbleThem: {
     backgroundColor: Colors.surface,
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: Space.xs,
     borderWidth: 1,
     borderColor: Colors.border,
   },
 
-  // Message text
-  messageText: {
-    fontSize: 16,
-    lineHeight: 22,
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.regular,
-  },
-  messageTextMe: {
-    color: '#FFFFFF', // White text on brand background
-  },
-
-  // Status
   statusContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     marginTop: 2,
-    marginRight: 4,
+    marginRight: Space.xs,
   },
 
-  // Incoming timestamp
   incomingTimestamp: {
-    fontSize: 11,
-    color: Colors.textMuted,
     marginTop: 2,
-    marginLeft: 4,
+    marginLeft: Space.xs,
   },
 
-  // Date separator
   dateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 16,
-    paddingHorizontal: 20,
+    marginVertical: Space.md,
+    paddingHorizontal: Space.lg - 4,
   },
   dateLine: {
     flex: 1,
@@ -216,10 +214,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
   },
   dateText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Colors.textMuted,
-    marginHorizontal: 12,
+    marginHorizontal: Space.sm + 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

@@ -19,6 +19,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { SharedTransitionView } from '../components/SharedTransitionView';
+import { Typography } from '../constants/typography';
 
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 2;
@@ -157,14 +158,14 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 40 },
   chipsScroll: { paddingHorizontal: 20, gap: 8, paddingBottom: 24 },
   chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: Colors.surface },
-  chipText: { color: Colors.textPrimary, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  chipText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_SPACING },
   gridCard: { width: ITEM_SIZE, marginBottom: 6 },
   gridItemTap: { width: ITEM_SIZE, height: ITEM_SIZE * 1.15, backgroundColor: Colors.surface, position: 'relative', overflow: 'hidden', borderRadius: 10 },
   sharedImageLayer: { ...StyleSheet.absoluteFillObject },
   gridImage: { width: '100%', height: '100%' },
   pricePill: { position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 8 },
-  priceText: { color: '#fff', fontSize: 11, fontFamily: 'Inter_700Bold' },
+  priceText: { color: '#fff', fontSize: 11, fontFamily: Typography.family.bold },
   gridSellerRow: {
     marginTop: 4,
     flexDirection: 'row',
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textSecondary,
     fontSize: 9,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   gridMessageBtn: {
     width: 24,

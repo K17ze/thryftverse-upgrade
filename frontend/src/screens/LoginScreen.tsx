@@ -11,6 +11,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Typography } from '../constants/typography';
 import {
   loginWithPassword,
   requestEmailOtp,
@@ -492,14 +493,14 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
   },
-  title: { fontSize: Type.title.size, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, lineHeight: Type.title.lineHeight, letterSpacing: Type.title.letterSpacing },
-  subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: Colors.textSecondary, fontFamily: 'Inter_400Regular', marginBottom: Space.lg },
+  title: { fontSize: Type.title.size, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: Type.title.lineHeight, letterSpacing: Type.title.letterSpacing },
+  subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: Colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.lg },
 
   form: { marginBottom: Space.lg },
   inputGroup: { marginBottom: Space.md },
 
   forgotBtn: { alignSelf: 'flex-start', marginTop: Space.sm },
-  forgotText: { color: Colors.textSecondary, fontSize: Type.body.size, fontFamily: 'Inter_500Medium', textDecorationLine: 'underline' },
+  forgotText: { color: Colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
   dividerRow: {
     marginTop: Space.md + 2,
     marginBottom: Space.sm + 4,
@@ -515,7 +516,7 @@ const styles = StyleSheet.create({
   dividerText: {
     color: Colors.textMuted,
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
@@ -529,7 +530,7 @@ const styles = StyleSheet.create({
   otpRequestText: {
     color: Colors.textPrimary,
     fontSize: Type.body.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   otpGroup: {
     marginTop: Space.sm + 6,
@@ -542,7 +543,7 @@ const styles = StyleSheet.create({
   twoFactorHint: {
     color: Colors.textMuted,
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     marginBottom: 2,
   },
   magicLinkBtn: {
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
   magicLinkText: {
     color: Colors.textSecondary,
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textDecorationLine: 'underline',
   },
   otpVerifyBtn: {
@@ -567,15 +568,15 @@ const styles = StyleSheet.create({
   otpVerifyText: {
     color: Colors.textInverse,
     fontSize: Type.body.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
 
   footer: { paddingTop: Space.sm, position: 'relative' },
-  infoText: { color: Colors.success, fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: Space.md - 4 },
-  errorText: { color: Colors.danger, fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: Space.md - 4 },
+  infoText: { color: Colors.success, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtn: { backgroundColor: Colors.textPrimary, minHeight: 56, borderRadius: 28, borderWidth: 0 },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: Colors.background, fontSize: Type.body.size, fontFamily: 'Inter_600SemiBold' },
+  primaryText: { color: Colors.background, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
   switchRow: {
     marginTop: Space.sm + 6,
     flexDirection: 'row',
@@ -586,12 +587,12 @@ const styles = StyleSheet.create({
   switchText: {
     color: Colors.textSecondary,
     fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
   switchLink: {
     color: Colors.textPrimary,
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     textDecorationLine: 'underline',
   },
 });

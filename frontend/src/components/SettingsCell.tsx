@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Type, Space, Radius } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
+import { Typography } from '../constants/typography';
 
 export type SettingsCellVariant = 'default' | 'value' | 'toggle' | 'button' | 'destructive' | 'custom';
 
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
@@ -232,7 +233,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     marginTop: 2,
     lineHeight: Type.caption.lineHeight,
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
   },
   valueText: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     maxWidth: 150,
     letterSpacing: Type.body.letterSpacing,
@@ -264,13 +265,13 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: '#FFFFFF',
     letterSpacing: Type.caption.letterSpacing,
   },
   sectionHeader: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textMuted,
     marginHorizontal: Space.md + Space.md,
     marginTop: Space.lg + Space.sm,
@@ -279,7 +280,7 @@ const styles = StyleSheet.create({
   },
   sectionFooter: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     marginHorizontal: Space.md + Space.md,
     marginTop: Space.xs + Space.xs,

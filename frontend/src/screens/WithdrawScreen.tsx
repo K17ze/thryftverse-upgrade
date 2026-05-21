@@ -29,6 +29,7 @@ import {
   PayoutAccountPayload,
 } from '../services/walletApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
+import { Typography } from '../constants/typography';
 import {
   convertDisplayToGbpAmount,
   getDefaultWithdrawDisplayAmount,
@@ -450,32 +451,32 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 56, borderBottomWidth: 1, borderBottomColor: Colors.border },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
-  headerTitle: { fontSize: 17, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
+  headerTitle: { fontSize: 17, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
 
   content: { flex: 1, paddingHorizontal: 20 },
   
   amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 40, marginBottom: 12 },
-  currencySymbol: { fontSize: 44, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, marginRight: 8 },
-  amountInput: { fontSize: 56, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, minWidth: 150 },
-  availableText: { textAlign: 'center', fontSize: 14, fontFamily: 'Inter_500Medium', color: Colors.textSecondary, marginBottom: 8 },
-  policyLabel: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, marginBottom: 4 },
-  policyHint: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginBottom: 28 },
-  balanceError: { textAlign: 'center', marginTop: 4, marginBottom: 20, fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.danger },
-  sectionTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
+  currencySymbol: { fontSize: 44, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginRight: 8 },
+  amountInput: { fontSize: 56, fontFamily: Typography.family.bold, color: Colors.textPrimary, minWidth: 150 },
+  availableText: { textAlign: 'center', fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary, marginBottom: 8 },
+  policyLabel: { textAlign: 'center', fontSize: 12, fontFamily: Typography.family.semibold, color: Colors.textMuted, marginBottom: 4 },
+  policyHint: { textAlign: 'center', fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted, marginBottom: 28 },
+  balanceError: { textAlign: 'center', marginTop: 4, marginBottom: 20, fontSize: 12, fontFamily: Typography.family.semibold, color: Colors.danger },
+  sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
 
   bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: 16, borderRadius: 16, marginBottom: 12 },
   bankLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   bankIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  bankName: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
-  bankDetails: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary },
+  bankName: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
+  bankDetails: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
 
   addBankBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
-  addBankText: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.brand },
-  railHintText: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, paddingVertical: 12 },
+  addBankText: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.brand },
+  railHintText: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted, paddingVertical: 12 },
 
   footer: { paddingVertical: 20, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.background },
-  feeText: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.textMuted, textAlign: 'center', marginBottom: 16 },
+  feeText: { fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted, textAlign: 'center', marginBottom: 16 },
   primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: 'Inter_700Bold' },
+  primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold },
 });

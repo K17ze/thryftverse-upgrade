@@ -1,4 +1,5 @@
 ﻿import React, { useState } from 'react';
+import { Typography } from '../constants/typography';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import {
@@ -25,6 +26,7 @@ import {
   sanitizeDecimalInput,
 } from '../utils/currencyAuthoringFlows';
 import { AppButton } from '../components/ui/AppButton';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppCard } from '../components/ui/AppCard';
 import { useBackendData } from '../context/BackendDataContext';
 import { mockFind } from '../utils/mockGate';
@@ -33,17 +35,17 @@ import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'MakeOffer'>;
 
-const IS_LIGHT = ActiveTheme === 'light';
+
 const BG = Colors.background;
-const CARD = IS_LIGHT ? '#ffffff' : '#111111';
-const CARD_ALT = IS_LIGHT ? '#f3eee7' : '#1a1a1a';
-const BORDER = IS_LIGHT ? '#d8d1c6' : '#333333';
+const CARD = Colors.surface;
+const CARD_ALT = Colors.surfaceAlt;
+const BORDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
-const BRAND = IS_LIGHT ? '#2f251b' : '#d7b98f';
-const TIP_BG = IS_LIGHT ? '#ece4d8' : '#2f291f';
-const TIP_BORDER = IS_LIGHT ? '#d0c3af' : '#4f4638';
-const FOOTER_BG = IS_LIGHT ? 'rgba(236,234,230,0.94)' : 'rgba(10,10,10,0.9)';
+const BRAND = Colors.brand;
+const TIP_BG = Colors.surfaceAlt;
+const TIP_BORDER = Colors.border;
+const FOOTER_BG = Colors.background;
 
 export default function MakeOfferScreen({ navigation, route }: Props) {
   const { itemId, price, title } = route.params;
@@ -109,14 +111,11 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
-      {/* Editorial Header */}
-      <View style={styles.header}>
-        <AnimatedPressable onPress={() => navigation.goBack()} style={styles.headerBtn} activeOpacity={0.8}>
-          <Ionicons name="close" size={28} color={TEXT} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Make Offer</Text>
-        <View style={{ width: 44 }} />
-      </View>
+      <ScreenHeader
+        title="Make Offer"
+        onBack={() => navigation.goBack()}
+        backIcon="close"
+      />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Item Info Context */}
@@ -201,7 +200,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             <Ionicons name="bulb" size={16} color={Colors.textInverse} />
           </View>
           <Text style={styles.tipText}>
-            Offers within 10% of the listing price are <Text style={{ fontFamily: 'Inter_700Bold', color: TEXT }}>3x</Text> more likely to be accepted.
+            Offers within 10% of the listing price are <Text style={{ fontFamily: Typography.family.bold, color: TEXT }}>3x</Text> more likely to be accepted.
           </Text>
         </AppCard>
 
@@ -229,16 +228,6 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 24,
-  },
-  headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: TEXT, textTransform: 'uppercase', letterSpacing: 1 },
   
   content: { paddingHorizontal: 20, paddingBottom: 40 },
   
@@ -264,7 +253,7 @@ const styles = StyleSheet.create({
   itemInfo: {
     flex: 1,
   },
-  itemTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: TEXT, marginBottom: 4, maxWidth: '90%' },
+  itemTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 4, maxWidth: '90%' },
   sellerActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -297,7 +286,7 @@ const styles = StyleSheet.create({
   sellerHandle: {
     flex: 1,
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: MUTED,
   },
   sellerMessageBtn: {
@@ -310,12 +299,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemListingPrice: { fontSize: 15, fontFamily: 'Inter_500Medium', color: MUTED },
+  itemListingPrice: { fontSize: 15, fontFamily: Typography.family.medium, color: MUTED },
   
   section: { marginBottom: 32 },
   sectionLabel: { 
     fontSize: 14, 
-    fontFamily: 'Inter_700Bold', 
+    fontFamily: Typography.family.bold, 
     color: MUTED, 
     marginBottom: 12, 
     textTransform: 'uppercase', 
@@ -332,11 +321,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: BORDER,
   },
-  currencySymbol: { fontSize: 48, fontFamily: 'Inter_700Bold', color: BRAND, marginRight: 12, marginBottom: 4 },
+  currencySymbol: { fontSize: 48, fontFamily: Typography.family.bold, color: BRAND, marginRight: 12, marginBottom: 4 },
   priceInput: { 
     flex: 1, 
     fontSize: 56, 
-    fontFamily: 'Inter_700Bold', 
+    fontFamily: Typography.family.bold, 
     color: TEXT, 
     paddingVertical: 12,
     letterSpacing: -2,
@@ -351,15 +340,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   protectionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  protectionLabel: { flex: 1, fontSize: 15, fontFamily: 'Inter_500Medium', color: MUTED },
-  protectionValue: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: TEXT },
+  protectionLabel: { flex: 1, fontSize: 15, fontFamily: Typography.family.medium, color: MUTED },
+  protectionValue: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
   
-  totalLabel: { flex: 1, fontSize: 18, fontFamily: 'Inter_700Bold', color: TEXT },
-  totalValue: { fontSize: 22, fontFamily: 'Inter_700Bold', color: BRAND },
+  totalLabel: { flex: 1, fontSize: 18, fontFamily: Typography.family.bold, color: TEXT },
+  totalValue: { fontSize: 22, fontFamily: Typography.family.bold, color: BRAND },
   
   protectionNote: { 
     fontSize: 13, 
-    fontFamily: 'Inter_400Regular', 
+    fontFamily: Typography.family.regular, 
     color: MUTED, 
     lineHeight: 20, 
     marginTop: 16,
@@ -386,12 +375,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tipText: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium', color: Colors.textSecondary, lineHeight: 20 },
+  tipText: { flex: 1, fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary, lineHeight: 20 },
   errorText: {
     marginTop: 14,
     color: Colors.danger,
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   
   footer: { 

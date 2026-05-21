@@ -8,6 +8,7 @@ import React from 'react';
 import { Text as RNText, TextProps as RNTextProps, StyleSheet, StyleProp, TextStyle } from 'react-native';
 import { Type } from '../../theme/designTokens';
 import { Colors } from '../../constants/colors';
+import { Typography } from '../../constants/typography';
 
 interface TextComponentProps extends RNTextProps {
   children: React.ReactNode;
@@ -272,73 +273,73 @@ const styles = StyleSheet.create({
   caption: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
   },
   captionEmphasis: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: Type.caption.letterSpacing,
   },
   body: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     letterSpacing: Type.body.letterSpacing,
   },
   bodyEmphasis: {
     fontSize: Type.price.size,
     lineHeight: Type.price.lineHeight,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: Type.price.letterSpacing,
   },
   headline: {
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   title3: {
     fontSize: Type.title.size,
     lineHeight: Type.title.lineHeight,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: Type.title.letterSpacing,
   },
   title2: {
     fontSize: Type.title.size,
     lineHeight: Type.title.lineHeight,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: Type.title.letterSpacing,
   },
   title1: {
     fontSize: Type.title.size,
     lineHeight: Type.title.lineHeight,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: Type.title.letterSpacing,
   },
   price: {
     fontSize: Type.price.size,
     lineHeight: Type.price.lineHeight,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: 0,
   },
   priceCompact: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0,
   },
   priceLarge: {
     fontSize: Type.priceLarge.size,
     lineHeight: Type.priceLarge.lineHeight,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: Type.priceLarge.letterSpacing,
   },
   meta: {
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     letterSpacing: Type.meta.letterSpacing,
   },
 });

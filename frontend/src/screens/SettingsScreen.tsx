@@ -43,6 +43,7 @@ import { AppCard } from '../components/ui/AppCard';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { MY_USER } from '../data/mockData';
+import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -621,14 +622,14 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
     letterSpacing: Type.meta.letterSpacing,
     marginBottom: 2,
   },
   hugeTitle: {
     fontSize: Type.title.size,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
     lineHeight: Type.title.lineHeight,
@@ -664,14 +665,14 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: Type.subtitle.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
     lineHeight: Type.subtitle.lineHeight,
   },
   profileMeta: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
     marginTop: 2,
     letterSpacing: Type.caption.letterSpacing,
@@ -684,7 +685,7 @@ const styles = StyleSheet.create({
   },
   verifiedLabel: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.success,
     letterSpacing: Type.meta.letterSpacing,
   },
@@ -707,7 +708,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: Type.body.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     paddingVertical: 0,
@@ -722,7 +723,7 @@ const styles = StyleSheet.create({
   },
   emptySearchText: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -732,7 +733,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: Colors.textMuted,
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     marginTop: Space.lg,
     letterSpacing: Type.caption.letterSpacing,
   },

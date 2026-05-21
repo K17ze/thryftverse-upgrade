@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { Space, Type } from '../theme/designTokens';
+import { Caption } from './ui/Text';
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
@@ -75,7 +77,9 @@ export function MessageStatusIndicator({
   return (
     <View style={styles.container}>
       {timestamp && (
-        <Text style={styles.timestamp}>{timestamp}</Text>
+        <Caption color={Colors.textMuted} style={styles.timestamp}>
+          {timestamp}
+        </Caption>
       )}
       <View style={styles.iconContainer}>{renderIcon()}</View>
     </View>
@@ -86,12 +90,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   timestamp: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontWeight: '400',
+    fontSize: Type.meta.size,
   },
   iconContainer: {
     width: 14,

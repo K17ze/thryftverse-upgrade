@@ -15,14 +15,14 @@ import Reanimated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Typography } from '../constants/typography';
 
 type NavT = StackNavigationProp<RootStackParamList>;
-const IS_LIGHT = ActiveTheme === 'light';
 const TRADE_ACCENT = Colors.brand;
 const HEADER_BUTTON_BG = Colors.surface;
 const HEADER_BUTTON_BORDER = Colors.border;
-const ICON_RING_BG = IS_LIGHT ? '#efe7d6' : '#0f1918';
-const ICON_RING_BORDER = IS_LIGHT ? '#d9c6a2' : '#23413d';
+const ICON_RING_BG = Colors.surfaceAlt;
+const ICON_RING_BORDER = Colors.border;
 const DOT_BG = Colors.borderLight;
 
 const SLIDES = [
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   skipText: {
     color: Colors.textSecondary,
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   hero: {
     flex: 1,
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     marginTop: 22,
     color: Colors.textPrimary,
     fontSize: 30,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: -0.8,
     textAlign: 'center',
   },
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: Colors.textSecondary,
     fontSize: 15,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     lineHeight: 23,
     textAlign: 'center',
   },
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: Colors.background,
     fontSize: 14,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
 });
 

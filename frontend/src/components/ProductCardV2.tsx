@@ -16,9 +16,11 @@ import { AnimatedHeart } from './AnimatedHeart';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Listing, MOCK_USERS } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
 import { isVideoUri } from '../utils/media';
+import { Typography } from '../constants/typography';
 
 const ASPECT_RATIOS = [0.75, 1.0, 1.25, 1.5]; // Masonry varied heights
 
@@ -38,6 +40,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
   const toggleSaved = useStore((state) => state.toggleSavedProduct);
   const { show } = useToast();
   const haptic = useHaptic();
+  const { formatFromFiat } = useFormattedPrice();
   const seller = mockFind(MOCK_USERS, (u) => u.id === item.sellerId);
 
   // Deterministic aspect ratio based on item id
@@ -60,6 +63,11 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
     show(isSaved ? 'Removed from saved' : 'Added to saved', 'info');
   };
 
+  const hasPriceDrop = item.originalPrice && item.originalPrice > item.price;
+  const priceDropPercent = hasPriceDrop
+    ? Math.round(((item.originalPrice! - item.price) / item.originalPrice!) * 100)
+    : 0;
+
   return (
     <View style={styles.container}>
       {/* Image - Full bleed, no border radius */}
@@ -78,6 +86,20 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
           </View>
         )}
 
+        {/* Condition badge - top left */}
+        {!item.isSold && (
+          <View style={styles.conditionBadge}>
+            <Text style={styles.conditionText}>{item.condition}</Text>
+          </View>
+        )}
+
+        {/* Price drop flash - top left below condition */}
+        {hasPriceDrop && !item.isSold && (
+          <View style={[styles.conditionBadge, styles.priceDropBadge]}>
+            <Text style={styles.conditionText}>-{priceDropPercent}%</Text>
+          </View>
+        )}
+
         {/* Media indicator */}
         {(hasMultiple || hasVideo) && (
           <View style={styles.mediaBadge}>
@@ -85,6 +107,17 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
               name={hasVideo ? 'videocam' : 'images'}
               size={12}
               color="#FFFFFF"
+            />
+          </View>
+        )}
+
+        {/* Seller avatar overlay - bottom left, Depop style */}
+        {showSeller && seller && (
+          <View style={styles.sellerOverlay}>
+            <CachedImage
+              uri={seller.avatar}
+              style={styles.sellerOverlayAvatar}
+              contentFit="cover"
             />
           </View>
         )}
@@ -118,7 +151,12 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
       {!visualOnly && (
         <View style={styles.info}>
           <View style={styles.priceRow}>
-            <Price amount={item.price} />
+            <View style={styles.priceWrap}>
+              <Price amount={item.price} />
+              {hasPriceDrop && (
+                <Text style={styles.originalPrice}>{formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })}</Text>
+              )}
+            </View>
             {item.likes > 0 && (
               <View style={styles.likes}>
                 <Ionicons name="heart" size={10} color={Colors.textMuted} />
@@ -137,6 +175,12 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
                 contentFit="cover"
               />
               <T.Meta>@{seller.username}</T.Meta>
+              {seller.rating > 0 && (
+                <View style={styles.ratingPill}>
+                  <Ionicons name="star" size={8} color={Colors.brand} />
+                  <T.Meta style={styles.ratingText}>{seller.rating.toFixed(1)}</T.Meta>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -215,7 +259,7 @@ const styles = StyleSheet.create({
   },
   soldText: {
     fontSize: 14,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -269,6 +313,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  priceWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  originalPrice: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    textDecorationLine: 'line-through',
+  },
   likes: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -290,9 +345,64 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    // ADD: Subtle border for definition
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  ratingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+    marginLeft: 2,
+  },
+  ratingText: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+  },
+
+  // Condition & price-drop badges
+  conditionBadge: {
+    position: 'absolute',
+    top: Space.sm,
+    left: Space.sm,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  priceDropBadge: {
+    top: Space.sm + 26,
+    backgroundColor: 'rgba(220,38,38,0.75)',
+  },
+  conditionText: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+
+  // Seller overlay on image
+  sellerOverlay: {
+    position: 'absolute',
+    bottom: Space.sm,
+    left: Space.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#fff',
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
+  },
+  sellerOverlayAvatar: {
+    width: '100%',
+    height: '100%',
   },
 
   // Grid

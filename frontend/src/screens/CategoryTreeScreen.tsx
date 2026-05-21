@@ -16,6 +16,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { MOCK_USERS } from '../data/mockData';
 import { CachedImage } from '../components/CachedImage';
+import { Typography } from '../constants/typography';
 
 type RouteT = RouteProp<RootStackParamList, 'CategoryTree'>;
 const HEADER_BORDER = Colors.border;
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
     borderBottomColor: HEADER_BORDER 
   },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
-  headerTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, textTransform: 'uppercase', letterSpacing: 1 },
+  headerTitle: { fontSize: 17, fontFamily: Typography.family.bold, color: Colors.textPrimary, textTransform: 'uppercase', letterSpacing: 1 },
 
   viewAllRow: { 
     flexDirection: 'row', 
@@ -199,7 +200,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 16,
   },
-  viewAllText: { fontSize: 16, fontFamily: 'Inter_700Bold', color: Colors.background, textTransform: 'uppercase', letterSpacing: 0.5 },
+  viewAllText: { fontSize: 16, fontFamily: Typography.family.bold, color: Colors.background, textTransform: 'uppercase', letterSpacing: 0.5 },
   supportRow: {
     marginHorizontal: 16,
     marginTop: 6,
@@ -235,7 +236,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textPrimary,
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   supportMessageBtn: {
     width: 32,
@@ -266,7 +267,7 @@ const styles = StyleSheet.create({
   },
   bannerTitle: {
     fontSize: 28,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: '#fff',
     letterSpacing: -0.5,
   },
@@ -287,6 +288,6 @@ const styles = StyleSheet.create({
   subPillText: {
     color: Colors.textPrimary,
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
 });

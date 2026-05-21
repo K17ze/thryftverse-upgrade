@@ -39,6 +39,7 @@ import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
 import { EditorialSection } from '../components/discover/EditorialSection';
 import { FeaturedBoardCard, FeaturedBoard } from '../components/discover/FeaturedBoardCard';
 import { EditorialImageRow, EditorialImage } from '../components/discover/EditorialImageRow';
+import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'GlobalSearch'>;
 
@@ -872,7 +873,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     letterSpacing: 0.08,
   },
   clearBtn: {
@@ -910,7 +911,7 @@ const styles = StyleSheet.create({
   sectionSupertitle: {
     color: Colors.textMuted,
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     marginBottom: 4,
   },
 
@@ -929,7 +930,7 @@ const styles = StyleSheet.create({
   },
   recentPillText: {
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
   },
 
@@ -956,7 +957,7 @@ const styles = StyleSheet.create({
   },
   topSearchCardText: {
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
   },
 
@@ -975,7 +976,7 @@ const styles = StyleSheet.create({
   },
   trendingPillText: {
     fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
 
@@ -1006,7 +1007,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   sortChipText: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     fontSize: 13,
     color: Colors.textPrimary,
   },
@@ -1023,7 +1024,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   filterChipText: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     fontSize: 13,
     color: Colors.textPrimary,
   },
@@ -1039,7 +1040,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterBadgeText: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     fontSize: 10,
     color: Colors.textInverse,
   },
@@ -1055,7 +1056,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.danger,
   },
   clearChipText: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     fontSize: 13,
     color: Colors.danger,
   },
@@ -1070,7 +1071,7 @@ const styles = StyleSheet.create({
   },
   recoHeaderTitle: {
     fontSize: 22,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.5,
   },
@@ -1112,7 +1113,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 16,
   },
   resultPrice: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     fontSize: 14,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.5)',
@@ -1120,7 +1121,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   resultReason: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     fontSize: 11,
     color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
@@ -1140,6 +1141,6 @@ const styles = StyleSheet.create({
   recoEmptyText: {
     color: Colors.textSecondary,
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
 });

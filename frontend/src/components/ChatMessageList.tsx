@@ -2,6 +2,7 @@ import React, { useCallback, useRef } from 'react';
 import { View, StyleSheet, FlatList, ViewToken } from 'react-native';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Colors } from '../constants/colors';
+import { Space } from '../theme/designTokens';
 import { ChatMessageItem, ChatMessage, DateSeparator } from './ChatMessageItem';
 
 interface ChatMessageListProps {
@@ -31,7 +32,6 @@ export function ChatMessageList({
     let lastDate: string | null = null;
 
     for (const message of messages) {
-      // Add date separator if date changed
       if (message.timestamp) {
         const messageDate = formatMessageDate(message.timestamp);
         if (messageDate !== lastDate) {
@@ -46,7 +46,6 @@ export function ChatMessageList({
     return items;
   }, [messages]);
 
-  // Render item
   const renderItem: ListRenderItem<ListItem> = useCallback(
     ({ item }) => {
       if (item.type === 'date') {
@@ -63,7 +62,6 @@ export function ChatMessageList({
     [isGroup]
   );
 
-  // Key extractor
   const keyExtractor = useCallback((item: ListItem, index: number) => {
     if (item.type === 'date') {
       return `date-${item.date}-${index}`;
@@ -71,7 +69,6 @@ export function ChatMessageList({
     return item.data.id;
   }, []);
 
-  // Viewability callback
   const handleViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       const visibleMessages = viewableItems
@@ -83,13 +80,11 @@ export function ChatMessageList({
     [onViewableItemsChanged]
   );
 
-  // Scroll to bottom
   const scrollToBottom = useCallback((animated = true) => {
     if (listRef.current && messages.length > 0) {
       listRef.current.scrollToEnd({ animated });
     }
   }, [messages.length]);
-
 
   return (
     <View style={styles.container}>
@@ -107,7 +102,6 @@ export function ChatMessageList({
           minimumViewTime: 200,
           viewAreaCoveragePercentThreshold: 50,
         }}
-        // Invert for chat (newest at bottom)
         inverted={false}
       />
     </View>
@@ -141,7 +135,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   contentContainer: {
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
   },
 });
 

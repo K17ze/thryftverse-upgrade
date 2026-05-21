@@ -19,6 +19,7 @@ import { AppCard } from '../ui/AppCard';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useStore, Collection } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
+import { Typography } from '../../constants/typography';
 
 interface Props {
   visible: boolean;
@@ -225,7 +226,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
   savedRow: {
@@ -256,18 +257,18 @@ const styles = StyleSheet.create({
   },
   savedRowTitle: {
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   savedRowSub: {
     fontSize: 11,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     marginTop: 2,
   },
   sectionLabel: {
     fontSize: 11,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
@@ -296,12 +297,12 @@ const styles = StyleSheet.create({
   },
   collectionName: {
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   collectionCount: {
     fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     marginTop: 2,
   },
@@ -311,7 +312,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
   },
   createWrap: {
@@ -334,7 +335,7 @@ const styles = StyleSheet.create({
   },
   createTriggerText: {
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.brand,
   },
 });

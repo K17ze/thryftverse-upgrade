@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Typography } from '../../constants/typography';
 
 export interface BrushStroke {
   id: string;
@@ -299,6 +300,6 @@ const styles = StyleSheet.create({
   doneDrawText: {
     color: '#000',
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
 });

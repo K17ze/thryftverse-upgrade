@@ -1,12 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AnimatedPressable
-} from '../components/AnimatedPressable';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   ScrollView,
   StatusBar,
   KeyboardAvoidingView,
@@ -20,7 +17,7 @@ import Reanimated, {
   SlideInLeft,
   ZoomIn,
   FadeIn,
-  Layout
+  Layout,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -45,26 +42,25 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AppButton } from '../components/ui/AppButton';
 import { SimpleChatMessageList } from '../components/ChatMessageList';
 import { AppStatusPill } from '../components/ui/AppStatusPill';
-// Chat UI/UX Elevation Components
-import { SwipeableMessage } from '../components/SwipeableMessage';
-import { VoiceMessagePlayer } from '../components/VoiceMessagePlayer';
-import { TypingIndicator } from '../components/TypingIndicator';
-import { AttachmentMenu } from '../components/AttachmentMenu';
-import { OfferBubble } from '../components/OfferBubble';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
+import { ChatHeader } from '../components/chat/ChatHeader';
+import { ChatCard } from '../components/chat/ChatCard';
+import { ComposerInput } from '../components/chat/ComposerInput';
+import { MessageBubble } from '../components/chat/MessageBubble';
+import { Space, Radius, Type } from '../theme/designTokens';
+import { Typography } from '../constants/typography';
+import { MessageContextMenu, MessageAction } from '../components/chat/MessageContextMenu';
+import { EmojiReactionsBar, EmojiReaction, MessageReactionsSummary } from '../components/chat/EmojiReactionsBar';
+import { ReplyQuote } from '../components/chat/ReplyQuote';
+import { ScrollToBottomFAB } from '../components/chat/ScrollToBottomFAB';
+import { NewMessagesSeparator } from '../components/chat/NewMessagesSeparator';
+import { LinkPreviewCard, extractFirstUrl } from '../components/chat/LinkPreviewCard';
+import { MentionHighlight } from '../components/chat/MentionHighlight';
+import * as Clipboard from 'expo-clipboard';
+import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 
 type Props = StackScreenProps<RootStackParamList, 'Chat'>;
-
-const IS_LIGHT = ActiveTheme === 'light';
-const ACCENT = IS_LIGHT ? '#2f251b' : '#d7b98f';
-const BG = Colors.background;
-const CARD = Colors.surface;
-const CARD_ALT = IS_LIGHT ? '#f3eee7' : '#1a1a1a';
-const BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const HEADER_BG = IS_LIGHT ? 'rgba(247,245,241,0.96)' : 'rgba(10, 10, 10, 0.95)';
-const FOOTER_BG = IS_LIGHT ? 'rgba(236,234,230,0.96)' : 'rgba(10,10,10,0.95)';
 
 type MsgType = 'text' | 'offer' | 'offer_declined' | 'purchase_status';
 type MessageFilterMode = 'all' | 'offers' | 'updates';
@@ -112,7 +108,7 @@ const INITIAL_MESSAGES: Message[] = [
     id: 's1',
     type: 'purchase_status',
     sender: 'them',
-    text: 'Purchase successful\nmariefullery has to send it before 26 Mar. We\'ll keep you updated on the progress.',
+    text: "Purchase successful\nmariefullery has to send it before 26 Mar. We'll keep you updated on the progress.",
     date: '20/03/2026',
   },
 ];
@@ -137,16 +133,16 @@ function TaggedItemCard({
   if (!listing) {
     return (
       <View style={styles.contextGallery}>
-        <View style={styles.itemCard}>
+        <ChatCard variant="elevated" style={styles.itemCard}>
           <View style={styles.itemThumb}>
-            <Ionicons name="shirt-outline" size={24} color={MUTED} />
+            <Ionicons name="shirt-outline" size={24} color={Colors.textMuted} />
           </View>
           <View style={styles.itemInfo}>
-            <Text style={styles.itemTitle}>Simple striped shirt</Text>
-            <Text style={styles.itemPrice}>{formatFromFiat(35, 'GBP', { displayMode: 'fiat' })}</Text>
-            <Text style={styles.itemProtection}>{formatFromFiat(37.45, 'GBP', { displayMode: 'fiat' })} Includes platform charge</Text>
+            <BodyEmphasis>Simple striped shirt</BodyEmphasis>
+            <Caption color={Colors.textSecondary}>{formatFromFiat(35, 'GBP', { displayMode: 'fiat' })}</Caption>
+            <Caption color={Colors.brand}>{formatFromFiat(37.45, 'GBP', { displayMode: 'fiat' })} Includes platform charge</Caption>
           </View>
-        </View>
+        </ChatCard>
       </View>
     );
   }
@@ -157,25 +153,29 @@ function TaggedItemCard({
         style={styles.itemCard}
         onPress={() => navigation.navigate('ItemDetail', { itemId: listing.id })}
         activeOpacity={0.85}
+        scaleValue={0.98}
+        hapticFeedback="light"
       >
-        <CachedImage
-          uri={getListingCoverUri(listing.images, 'https://picsum.photos/seed/chat-item/100/100')}
-          style={styles.itemThumbImage}
-          containerStyle={styles.itemThumb}
-          contentFit="cover"
-        />
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemTitle} numberOfLines={1}>{listing.title}</Text>
-          <Text style={styles.itemPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
-          {listing.priceWithProtection > listing.price ? (
-            <Text style={styles.itemProtection}>
-              {formatFromFiat(listing.priceWithProtection, 'GBP', { displayMode: 'fiat' })} includes protection
-            </Text>
-          ) : (
-            <Text style={styles.itemProtection}>Free shipping available</Text>
-          )}
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={MUTED} />
+        <ChatCard variant="elevated" style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm + 6 }}>
+          <CachedImage
+            uri={getListingCoverUri(listing.images, 'https://picsum.photos/seed/chat-item/100/100')}
+            style={styles.itemThumbImage}
+            containerStyle={styles.itemThumb}
+            contentFit="cover"
+          />
+          <View style={styles.itemInfo}>
+            <BodyEmphasis numberOfLines={1}>{listing.title}</BodyEmphasis>
+            <Caption color={Colors.textSecondary}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Caption>
+            {listing.priceWithProtection > listing.price ? (
+              <Caption color={Colors.brand}>
+                {formatFromFiat(listing.priceWithProtection, 'GBP', { displayMode: 'fiat' })} includes protection
+              </Caption>
+            ) : (
+              <Caption color={Colors.brand}>Free shipping available</Caption>
+            )}
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+        </ChatCard>
       </AnimatedPressable>
     </View>
   );
@@ -191,6 +191,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const replaceConversationMessages = useStore((state) => state.replaceConversationMessages);
   const markConversationRead = useStore((state) => state.markConversationRead);
   const { show } = useToast();
+  const haptic = useHaptic();
   const conversation = useMemo(
     () => conversations.find((item) => item.id === conversationId),
     [conversationId, conversations]
@@ -273,7 +274,6 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
   const [latestInviteLink, setLatestInviteLink] = useState<string | null>(null);
   const [latestInviteMeta, setLatestInviteMeta] = useState<string | null>(null);
-  // scrollViewRef removed - now using FlatList in SimpleChatMessageList
   const { formatFromFiat } = useFormattedPrice();
 
   const messageTelemetry = useMemo(() => {
@@ -379,7 +379,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const pushMessage = (next: Message) => {
     setMessages((prev) => [...prev, next]);
-    // Scroll handled by SimpleChatMessageList internally
   };
 
   const appendToConversationStore = (next: Message, senderIdOverride?: string) => {
@@ -403,6 +402,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     if (safetyGuardEnabled && /seed phrase|private key|mnemonic|recovery phrase/i.test(trimmed)) {
       show('Sensitive credential phrase detected. Message blocked by safety guard.', 'error');
+      haptic.error();
       return;
     }
 
@@ -444,11 +444,13 @@ export default function ChatScreen({ navigation, route }: Props) {
   };
 
   const sendTemplateMessage = (template: string) => {
+    haptic.light();
     setInput(template);
     show('Template inserted', 'info');
   };
 
   const handleExportConversationSummary = () => {
+    haptic.light();
     const summary = `Total ${messageTelemetry.total} | Offers ${messageTelemetry.offerCount} | Updates ${messageTelemetry.systemUpdateCount}`;
     show(`Conversation summary ready: ${summary}`, 'success');
   };
@@ -459,12 +461,14 @@ export default function ChatScreen({ navigation, route }: Props) {
       return;
     }
 
+    haptic.medium();
     const visibleIds = new Set(visibleMessages.map((item) => item.id));
     setMessages((prev) => prev.filter((item) => !visibleIds.has(item.id)));
     show('Visible messages cleared from local view', 'info');
   };
 
   const handleAttachPhoto = () => {
+    haptic.light();
     const photoMessage: Message = {
       id: String(Date.now()),
       type: 'text',
@@ -494,7 +498,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       const usageLabel = invite.maxUses > 0
         ? `${invite.useCount}/${invite.maxUses} uses`
         : `${invite.useCount} uses`;
-      setLatestInviteMeta(`${usageLabel} · Expires ${expiryLabel}`);
+      setLatestInviteMeta(`${usageLabel} \u00b7 Expires ${expiryLabel}`);
 
       await Share.share({
         message: `Join ${conversation?.title ?? 'my group'} on Thryftverse: ${invite.inviteLink}`,
@@ -510,12 +514,13 @@ export default function ChatScreen({ navigation, route }: Props) {
   };
 
   const handleAcceptOffer = (msgId: string) => {
+    haptic.medium();
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, offer: { ...m.offer!, status: 'accepted' } } : m));
-    // Route directly to checkout for the accepted offer
     navigation.navigate('Checkout', { itemId: '1' });
   };
 
   const handleDeclineOffer = (msgId: string) => {
+    haptic.light();
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, offer: { ...m.offer!, status: 'declined' } } : m));
   };
 
@@ -530,7 +535,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           layout={layoutAnimation}
           style={styles.dateLabel}
         >
-          <Text style={styles.dateLabelText}>{msg.date}</Text>
+          <Caption color={Colors.textMuted} style={styles.dateLabelText}>{msg.date}</Caption>
         </Reanimated.View>
       );
     }
@@ -541,18 +546,23 @@ export default function ChatScreen({ navigation, route }: Props) {
           key={msg.id}
           entering={reducedMotionEnabled ? undefined : FadeIn.delay(200)}
           layout={layoutAnimation}
-          style={styles.statusBlock}
+          style={styles.statusBlockWrap}
         >
-          <Text style={styles.statusTitle}>{lines[0]}</Text>
-          <Text style={styles.statusBody}>{lines.slice(1).join('\n')}</Text>
-          <AnimatedPressable
-            onPress={() => navigation.navigate('OrderDetail', { orderId: CHAT_ORDER_ID })}
-            accessibilityRole="button"
-            accessibilityLabel="Open tracking information"
-            accessibilityHint="Opens the related order details and shipment tracking"
-          >
-            <Text style={styles.accentLink}>Tracking information</Text>
-          </AnimatedPressable>
+          <ChatCard variant="surface">
+            <BodyEmphasis style={styles.statusTitle}>{lines[0]}</BodyEmphasis>
+            <Caption color={Colors.textSecondary} style={styles.statusBody}>{lines.slice(1).join('\n')}</Caption>
+            <AnimatedPressable
+              onPress={() => navigation.navigate('OrderDetail', { orderId: CHAT_ORDER_ID })}
+              accessibilityRole="button"
+              accessibilityLabel="Open tracking information"
+              accessibilityHint="Opens the related order details and shipment tracking"
+              activeOpacity={0.7}
+              scaleValue={0.98}
+              hapticFeedback="light"
+            >
+              <Caption color={Colors.brand} style={styles.accentLink}>Tracking information</Caption>
+            </AnimatedPressable>
+          </ChatCard>
         </Reanimated.View>
       );
     }
@@ -567,15 +577,15 @@ export default function ChatScreen({ navigation, route }: Props) {
           layout={layoutAnimation}
           style={[styles.msgRow, isMe && styles.msgRowRight]}
         >
-          <View style={[styles.offerBubble, isMe && styles.offerBubbleMe]}>
+          <ChatCard variant={isMe ? 'tint' : 'surface'} style={[styles.offerBubble, isMe && styles.offerBubbleMe]}>
             {isGroup && !isMe && msg.senderLabel ? (
-              <Text style={styles.groupSenderLabel}>{msg.senderLabel}</Text>
+              <Meta color={Colors.textMuted} style={styles.groupSenderLabel}>{msg.senderLabel}</Meta>
             ) : null}
             <View style={styles.offerTextRow}>
               <Text style={styles.offerPrice}>{formatFromFiat(msg.offer!.price, 'GBP', { displayMode: 'fiat' })}</Text>
-              <Text style={styles.offerOriginal}>
+              <Caption color={Colors.textMuted} style={styles.offerOriginal}>
                 <Text style={styles.strikethrough}>{formatFromFiat(msg.offer!.originalPrice, 'GBP', { displayMode: 'fiat' })}</Text>
-              </Text>
+              </Caption>
             </View>
 
             {/* Context / Status */}
@@ -612,7 +622,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                   variant="secondary"
                   size="sm"
                   align="center"
-                  icon={<Ionicons name="close-outline" size={15} color={TEXT} />}
+                  icon={<Ionicons name="close-outline" size={15} color={Colors.textPrimary} />}
                   iconContainerStyle={styles.actionIconWrap}
                   title="Pass"
                   titleStyle={styles.offerDeclineText}
@@ -634,7 +644,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 />
               </View>
             )}
-          </View>
+          </ChatCard>
         </Reanimated.View>
       );
     }
@@ -653,95 +663,70 @@ export default function ChatScreen({ navigation, route }: Props) {
         layout={layoutAnimation}
         style={[styles.msgRow, isMe && styles.msgRowRight]}
       >
-        <View style={[styles.textBubble, isMe && styles.textBubbleMe]}>
-          {isGroup && !isMe && msg.senderLabel ? (
-            <Text style={styles.groupSenderLabel}>{msg.senderLabel}</Text>
-          ) : null}
-          <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{msg.text}</Text>
-        </View>
+        <MessageBubble
+          text={msg.text}
+          isMe={isMe}
+          senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
+          timestamp={msg.date || 'just now'}
+          status={isMe ? 'sent' : undefined}
+        />
       </Reanimated.View>
     );
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      {/* Editorial Header */}
-      <View style={styles.header}>
-        <AnimatedPressable
-          style={styles.headerIconBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to the previous screen"
-        >
-          <Ionicons name="arrow-back" size={24} color={TEXT} />
-        </AnimatedPressable>
-
-        {isGroup ? (
-          <View style={styles.headerIdentityStatic}>
-            <Text style={styles.headerHandle} numberOfLines={1}>{conversation?.title ?? 'Group chat'}</Text>
-            <Text style={styles.headerMetaText} numberOfLines={1}>
-              {(conversation?.participantIds?.length ?? 0)} members
-            </Text>
-          </View>
-        ) : (
-          <AnimatedPressable
-            style={styles.headerIdentityBtn}
-            onPress={() => {
-              if (resolvedPartnerId) {
-                navigation.navigate('UserProfile', { userId: resolvedPartnerId });
+      <ChatHeader
+        variant={isGroup ? 'group' : 'dm'}
+        onBack={() => navigation.goBack()}
+        title={isGroup ? (conversation?.title ?? 'Group chat') : `@${sellerHandle}`}
+        subtitle={
+          isGroup
+            ? `${conversation?.participantIds?.length ?? 0} members`
+            : `${sellerLocation} | Last seen ${sellerLastSeen}`
+        }
+        avatarUrl={isGroup ? null : sellerUser?.avatar ?? null}
+        onTitlePress={
+          isGroup
+            ? undefined
+            : () => {
+                if (resolvedPartnerId) {
+                  navigation.navigate('UserProfile', { userId: resolvedPartnerId });
+                }
               }
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Open seller profile"
-            accessibilityHint="Opens seller profile and trust details"
-          >
-            {sellerUser?.avatar ? (
-              <CachedImage
-                uri={sellerUser.avatar}
-                style={styles.headerIdentityAvatar}
-                containerStyle={styles.headerIdentityAvatarWrap}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={styles.headerIdentityAvatarFallback}>
-                <Ionicons name="person" size={16} color={MUTED} />
-              </View>
-            )}
-
-            <View style={styles.headerIdentityCopy}>
-              <Text style={styles.headerHandle} numberOfLines={1}>@{sellerHandle}</Text>
-              <Text style={styles.headerMetaText} numberOfLines={1}>
-                {sellerLocation} | Last seen {sellerLastSeen}
-              </Text>
-            </View>
-          </AnimatedPressable>
-        )}
-
-        {isGroup ? (
-          <AnimatedPressable
-            style={styles.headerIconBtn}
-            onPress={() => navigation.navigate('GroupBotDirectory', { conversationId })}
-            accessibilityRole="button"
-            accessibilityLabel="Open group bot directory"
-            accessibilityHint="Manage bots available in this group chat"
-          >
-            <Ionicons name="hardware-chip-outline" size={22} color={TEXT} />
-          </AnimatedPressable>
-        ) : (
-          <AnimatedPressable
-            style={styles.headerIconBtn}
-            onPress={() => setShowControls((prev) => !prev)}
-            accessibilityRole="button"
-            accessibilityLabel={showControls ? 'Hide conversation tools' : 'Show conversation tools'}
-            accessibilityHint="Shows or hides conversation-level controls"
-          >
-            <Ionicons name={showControls ? 'close-outline' : 'information-circle-outline'} size={24} color={TEXT} />
-          </AnimatedPressable>
-        )}
-      </View>
+        }
+        rightAction={
+          isGroup ? (
+            <AnimatedPressable
+              style={styles.headerIconBtn}
+              onPress={() => navigation.navigate('GroupBotDirectory', { conversationId })}
+              accessibilityRole="button"
+              accessibilityLabel="Open group bot directory"
+              accessibilityHint="Manage bots available in this group chat"
+              activeOpacity={0.7}
+              scaleValue={0.9}
+              hapticFeedback="light"
+            >
+              <Ionicons name="hardware-chip-outline" size={22} color={Colors.textPrimary} />
+            </AnimatedPressable>
+          ) : (
+            <AnimatedPressable
+              style={styles.headerIconBtn}
+              onPress={() => setShowControls((prev) => !prev)}
+              accessibilityRole="button"
+              accessibilityLabel={showControls ? 'Hide conversation tools' : 'Show conversation tools'}
+              accessibilityHint="Shows or hides conversation-level controls"
+              activeOpacity={0.7}
+              scaleValue={0.9}
+              hapticFeedback="light"
+            >
+              <Ionicons name={showControls ? 'close-outline' : 'information-circle-outline'} size={24} color={Colors.textPrimary} />
+            </AnimatedPressable>
+          )
+        }
+      />
 
       <View style={styles.primaryFilterWrap}>
         <AppSegmentControl
@@ -760,35 +745,35 @@ export default function ChatScreen({ navigation, route }: Props) {
       {/* Floating Context Cards (No Dividers) */}
       {isGroup ? (
         <View style={styles.contextGallery}>
-          <View style={styles.groupSummaryCard}>
+          <ChatCard variant="elevated" style={styles.groupSummaryCard}>
             <View style={styles.itemThumb}>
-              <Ionicons name="people-outline" size={24} color={MUTED} />
+              <Ionicons name="people-outline" size={24} color={Colors.textMuted} />
             </View>
             <View style={styles.itemInfo}>
-              <Text style={styles.itemTitle}>{conversation?.title ?? 'Group chat'}</Text>
-              <Text style={styles.itemPrice}>{(conversation?.participantIds?.length ?? 0)} members</Text>
-              <Text style={styles.itemProtection}>
+              <BodyEmphasis>{conversation?.title ?? 'Group chat'}</BodyEmphasis>
+              <Caption color={Colors.textSecondary}>{(conversation?.participantIds?.length ?? 0)} members</Caption>
+              <Caption color={Colors.textSecondary}>
                 {groupMemberLabels.length ? `Members: ${groupMemberLabels.join(', ')}` : 'No members yet'}
-              </Text>
+              </Caption>
             </View>
-          </View>
+          </ChatCard>
 
-          <View style={styles.groupBotRow}>
-            <Text style={styles.groupBotLabel}>DEPLOYED BOTS</Text>
+          <ChatCard variant="surface">
+            <Meta color={Colors.textMuted} style={styles.groupBotLabel}>DEPLOYED BOTS</Meta>
             {deployedBotNames.length ? (
               <View style={styles.groupBotChipWrap}>
                 {deployedBotNames.map((botName) => (
                   <View key={botName} style={styles.groupBotChip}>
-                    <Text style={styles.groupBotChipText}>{botName}</Text>
+                    <Caption color={Colors.textPrimary} style={styles.groupBotChipText}>{botName}</Caption>
                   </View>
                 ))}
               </View>
             ) : (
-              <Text style={styles.groupBotEmpty}>No bots deployed yet.</Text>
+              <Caption color={Colors.textMuted}>No bots deployed yet.</Caption>
             )}
 
             <View style={styles.groupInviteRow}>
-              <Text style={styles.groupInviteLabel}>INVITES</Text>
+              <Meta color={Colors.textMuted} style={styles.groupInviteLabel}>INVITES</Meta>
               <AnimatedPressable
                 style={[styles.groupInviteBtn, isCreatingInvite && styles.groupInviteBtnDisabled]}
                 onPress={() => {
@@ -800,14 +785,16 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityLabel={isCreatingInvite ? 'Creating invite link' : 'Share invite link'}
                 accessibilityHint="Generates and shares a new group invite link"
               >
-                <Ionicons name="share-social-outline" size={14} color={TEXT} />
-                <Text style={styles.groupInviteBtnText}>{isCreatingInvite ? 'Creating...' : 'Share Invite Link'}</Text>
+                <Ionicons name="share-social-outline" size={14} color={Colors.textPrimary} />
+                <Caption color={Colors.textPrimary} style={styles.groupInviteBtnText}>
+                  {isCreatingInvite ? 'Creating...' : 'Share Invite Link'}
+                </Caption>
               </AnimatedPressable>
             </View>
 
-            {latestInviteLink ? <Text style={styles.groupInviteLink}>{latestInviteLink}</Text> : null}
-            {latestInviteMeta ? <Text style={styles.groupInviteMeta}>{latestInviteMeta}</Text> : null}
-          </View>
+            {latestInviteLink ? <Caption color={Colors.textPrimary}>{latestInviteLink}</Caption> : null}
+            {latestInviteMeta ? <Caption color={Colors.textMuted}>{latestInviteMeta}</Caption> : null}
+          </ChatCard>
         </View>
       ) : (
         <TaggedItemCard
@@ -819,11 +806,11 @@ export default function ChatScreen({ navigation, route }: Props) {
 
       <View style={styles.opsContainer}>
         {inboxFocusQuery ? (
-          <View style={styles.inboxScopeCard}>
-            <Ionicons name="search-outline" size={16} color={MUTED} />
+          <ChatCard variant="surface" style={styles.inboxScopeCard}>
+            <Ionicons name="search-outline" size={16} color={Colors.textMuted} />
             <View style={styles.inboxScopeCopy}>
-              <Text style={styles.inboxScopeLabel}>Inbox search scope</Text>
-              <Text style={styles.inboxScopeValue} numberOfLines={1}>{inboxFocusQuery}</Text>
+              <Meta color={Colors.textMuted}>Inbox search scope</Meta>
+              <Caption color={Colors.textPrimary} numberOfLines={1}>{inboxFocusQuery}</Caption>
             </View>
             <AnimatedPressable
               style={styles.inboxScopeClearBtn}
@@ -831,32 +818,37 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Clear inbox search scope"
               accessibilityHint="Shows the full conversation again"
+              activeOpacity={0.7}
+              scaleValue={0.9}
+              hapticFeedback="light"
             >
-              <Text style={styles.inboxScopeClearText}>Clear</Text>
+              <Caption color={Colors.textPrimary} style={styles.inboxScopeClearText}>Clear</Caption>
             </AnimatedPressable>
-          </View>
+          </ChatCard>
         ) : (
-          <Text style={styles.inboxScopeHelper}>Use Inbox search to scan across all conversations. Filters here apply only to this thread.</Text>
+          <Caption color={Colors.textMuted} style={styles.inboxScopeHelper}>
+            Use Inbox search to scan across all conversations. Filters here apply only to this thread.
+          </Caption>
         )}
 
         <View style={styles.opsCommandRow}>
-          <View style={styles.opsSummaryCard}>
-            <Ionicons name="analytics-outline" size={16} color={MUTED} />
+          <ChatCard variant="surface" style={styles.opsSummaryCard}>
+            <Ionicons name="analytics-outline" size={16} color={Colors.textMuted} />
             <View style={styles.opsSummaryBody}>
-              <Text style={styles.opsSummaryLabel}>Conversation overview</Text>
-              <Text style={styles.opsSummaryValue}>
+              <Meta color={Colors.textMuted}>Conversation overview</Meta>
+              <Caption color={Colors.textPrimary}>
                 {messageTelemetry.total} msgs | {messageTelemetry.offerCount} offers | {messageTelemetry.systemUpdateCount} updates
-              </Text>
+              </Caption>
             </View>
-          </View>
+          </ChatCard>
         </View>
 
         {showControls ? (
-          <View style={styles.controlPanel}>
+          <ChatCard variant="surface">
             <View style={styles.controlRow}>
               <View>
-                <Text style={styles.controlTitle}>Notification Scope</Text>
-                <Text style={styles.controlValue}>{notificationMode}</Text>
+                <Meta color={Colors.textMuted}>Notification Scope</Meta>
+                <Caption color={Colors.textPrimary} style={styles.controlValue}>{notificationMode}</Caption>
               </View>
               <AnimatedPressable
                 style={styles.controlPickerBtn}
@@ -864,15 +856,18 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Change notification scope"
                 accessibilityHint="Opens notification options"
+                activeOpacity={0.7}
+                scaleValue={0.95}
+                hapticFeedback="light"
               >
-                <Text style={styles.controlPickerText}>Change</Text>
+                <Caption color={Colors.textPrimary} style={styles.controlPickerText}>Change</Caption>
               </AnimatedPressable>
             </View>
 
             <View style={styles.controlRow}>
               <View>
-                <Text style={styles.controlTitle}>Retention Policy</Text>
-                <Text style={styles.controlValue}>{retentionMode}</Text>
+                <Meta color={Colors.textMuted}>Retention Policy</Meta>
+                <Caption color={Colors.textPrimary} style={styles.controlValue}>{retentionMode}</Caption>
               </View>
               <AnimatedPressable
                 style={styles.controlPickerBtn}
@@ -880,38 +875,41 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Adjust retention policy"
                 accessibilityHint="Opens message retention options"
+                activeOpacity={0.7}
+                scaleValue={0.95}
+                hapticFeedback="light"
               >
-                <Text style={styles.controlPickerText}>Adjust</Text>
+                <Caption color={Colors.textPrimary} style={styles.controlPickerText}>Adjust</Caption>
               </AnimatedPressable>
             </View>
 
             <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Read Receipts</Text>
+              <Caption color={Colors.textPrimary} style={styles.switchLabel}>Read Receipts</Caption>
               <Switch
                 value={readReceiptsEnabled}
                 onValueChange={setReadReceiptsEnabled}
-                trackColor={{ false: BORDER, true: Colors.brand }}
-                thumbColor={readReceiptsEnabled ? Colors.background : '#f4f4f4'}
+                trackColor={{ false: Colors.border, true: Colors.brand }}
+                thumbColor={readReceiptsEnabled ? Colors.background : Colors.surfaceAlt}
               />
             </View>
 
             <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Credential Safety Guard</Text>
+              <Caption color={Colors.textPrimary} style={styles.switchLabel}>Credential Safety Guard</Caption>
               <Switch
                 value={safetyGuardEnabled}
                 onValueChange={setSafetyGuardEnabled}
-                trackColor={{ false: BORDER, true: Colors.brand }}
-                thumbColor={safetyGuardEnabled ? Colors.background : '#f4f4f4'}
+                trackColor={{ false: Colors.border, true: Colors.brand }}
+                thumbColor={safetyGuardEnabled ? Colors.background : Colors.surfaceAlt}
               />
             </View>
 
             <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Composer Assist</Text>
+              <Caption color={Colors.textPrimary} style={styles.switchLabel}>Composer Assist</Caption>
               <Switch
                 value={composerAssistEnabled}
                 onValueChange={setComposerAssistEnabled}
-                trackColor={{ false: BORDER, true: Colors.brand }}
-                thumbColor={composerAssistEnabled ? Colors.background : '#f4f4f4'}
+                trackColor={{ false: Colors.border, true: Colors.brand }}
+                thumbColor={composerAssistEnabled ? Colors.background : Colors.surfaceAlt}
               />
             </View>
 
@@ -921,7 +919,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 variant="secondary"
                 size="sm"
                 align="center"
-                icon={<Ionicons name="document-text-outline" size={16} color={TEXT} />}
+                icon={<Ionicons name="document-text-outline" size={16} color={Colors.textPrimary} />}
                 iconContainerStyle={styles.actionIconWrap}
                 title="Export Summary"
                 titleStyle={styles.secondaryControlText}
@@ -933,7 +931,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 variant="secondary"
                 size="sm"
                 align="center"
-                icon={<Ionicons name="trash-outline" size={16} color={TEXT} />}
+                icon={<Ionicons name="trash-outline" size={16} color={Colors.textPrimary} />}
                 iconContainerStyle={styles.actionIconWrap}
                 title="Clear Visible"
                 titleStyle={styles.secondaryControlText}
@@ -941,7 +939,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityLabel="Clear visible messages"
               />
             </View>
-          </View>
+          </ChatCard>
         ) : null}
       </View>
 
@@ -964,13 +962,13 @@ export default function ChatScreen({ navigation, route }: Props) {
           />
         ) : (
           <View style={styles.emptySearchState}>
-            <Ionicons name="search-outline" size={24} color={MUTED} />
-            <Text style={styles.emptySearchTitle}>No messages in this scope</Text>
-            <Text style={styles.emptySearchSubtitle}>
+            <Ionicons name="search-outline" size={24} color={Colors.textMuted} />
+            <BodyEmphasis style={styles.emptySearchTitle}>No messages in this scope</BodyEmphasis>
+            <Caption color={Colors.textMuted} style={styles.emptySearchSubtitle}>
               {inboxFocusQuery
                 ? 'No timeline entries matched your Inbox search scope. Clear scope to view the full thread.'
                 : 'Try another filter.'}
-            </Text>
+            </Caption>
           </View>
         )}
 
@@ -984,39 +982,23 @@ export default function ChatScreen({ navigation, route }: Props) {
                   style={styles.templateChip}
                   onPress={() => sendTemplateMessage(template)}
                   activeOpacity={0.85}
+                  scaleValue={0.95}
+                  hapticFeedback="light"
                 >
-                  <Text style={styles.templateChipText}>{template}</Text>
+                  <Caption color={Colors.textPrimary} style={styles.templateChipText}>{template}</Caption>
                 </AnimatedPressable>
               ))}
             </ScrollView>
           ) : null}
 
-          <View style={styles.inputFloatingPill}>
-            <AnimatedPressable style={styles.cameraBtn} onPress={handleAttachPhoto} accessibilityLabel="Attach photo">
-              <Ionicons name="camera-outline" size={22} color={MUTED} />
-            </AnimatedPressable>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Write a message..."
-              placeholderTextColor={MUTED}
-              value={input}
-              onChangeText={setInput}
-              onSubmitEditing={sendMessage}
-              returnKeyType="send"
-              selectionColor={Colors.brand}
-            />
-            {input.length > 0 && (
-              <AnimatedPressable
-                onPress={sendMessage}
-                style={styles.sendBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Send message"
-                accessibilityHint="Sends the current message"
-              >
-                <Ionicons name="arrow-up" size={20} color={Colors.background} />
-              </AnimatedPressable>
-            )}
-          </View>
+          <ComposerInput
+            value={input}
+            onChangeText={setInput}
+            onSend={sendMessage}
+            onCameraPress={handleAttachPhoto}
+            placeholder="Write a message..."
+            returnKeyType="send"
+          />
         </View>
       </KeyboardAvoidingView>
 
@@ -1048,202 +1030,99 @@ export default function ChatScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: Colors.background },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
-    backgroundColor: HEADER_BG,
-    zIndex: 10,
-  },
   headerIconBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerIdentityBtn: {
-    flex: 1,
-    marginHorizontal: 10,
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  headerIdentityStatic: {
-    flex: 1,
-    marginHorizontal: 10,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  headerIdentityAvatarWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  headerIdentityAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  headerIdentityAvatarFallback: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerIdentityCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  headerHandle: {
-    fontSize: 19,
-    fontFamily: 'Inter_700Bold',
-    color: TEXT,
-    letterSpacing: -0.3,
-  },
-  headerMetaText: {
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-    color: MUTED,
   },
 
   primaryFilterWrap: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm + 4,
+    paddingBottom: Space.xs,
   },
 
   contextGallery: {
-    paddingHorizontal: 16,
-    gap: 12,
-    paddingBottom: 16,
+    paddingHorizontal: Space.md,
+    gap: Space.sm + 4,
+    paddingBottom: Space.md,
   },
   itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 20,
-    padding: 16,
-    gap: 14,
+    gap: Space.sm + 6,
   },
   groupSummaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 20,
-    padding: 16,
-    gap: 14,
+    gap: Space.sm + 6,
   },
   groupBotRow: {
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: Space.sm,
+    paddingHorizontal: Space.md - 2,
+    paddingVertical: Space.sm + 2,
   },
   groupBotLabel: {
-    color: MUTED,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 0.8,
-    marginBottom: 8,
+    marginBottom: Space.xs,
   },
   groupBotChipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: Space.xs + 4,
   },
   groupBotChip: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
   },
   groupBotChipText: {
-    color: TEXT,
-    fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
   },
-  groupBotEmpty: {
-    color: MUTED,
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-  },
   groupInviteRow: {
-    marginTop: 12,
+    marginTop: Space.sm + 4,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: Space.sm + 2,
   },
   groupInviteLabel: {
-    color: MUTED,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 0.8,
+    marginBottom: Space.xs,
   },
   groupInviteBtn: {
-    borderRadius: 14,
+    borderRadius: Radius.md + 2,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 10,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: Space.sm + 2,
     height: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   groupInviteBtnDisabled: {
     opacity: 0.5,
   },
   groupInviteBtnText: {
-    color: TEXT,
-    fontSize: 11,
     fontFamily: 'Inter_700Bold',
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  groupInviteLink: {
-    marginTop: 8,
-    color: Colors.textPrimary,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
-  groupInviteMeta: {
-    marginTop: 4,
-    color: MUTED,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
   },
   itemThumb: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: Radius.lg + 4,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -1251,77 +1130,71 @@ const styles = StyleSheet.create({
   itemThumbImage: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: Radius.lg + 4,
   },
   itemInfo: { flex: 1 },
-  itemTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: TEXT, marginBottom: 4 },
-  itemPrice: { fontSize: 15, fontFamily: 'Inter_400Regular', color: MUTED, marginBottom: 2 },
-  itemProtection: { fontSize: 12, fontFamily: 'Inter_500Medium', color: ACCENT },
 
   opsContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 10,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm + 4,
+    gap: Space.sm + 2,
   },
   inboxScopeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 14,
-    backgroundColor: CARD,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    gap: Space.sm + 2,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm,
   },
   inboxScopeCopy: {
     flex: 1,
     gap: 2,
   },
-  inboxScopeLabel: {
-    color: MUTED,
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  inboxScopeValue: {
-    color: TEXT,
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-  },
   inboxScopeClearBtn: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 10,
     height: 28,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: Space.sm + 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   inboxScopeClearText: {
-    color: TEXT,
-    fontSize: 11,
     fontFamily: 'Inter_700Bold',
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
   },
   inboxScopeHelper: {
-    color: MUTED,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    marginTop: Space.xs,
+  },
+  opsCommandRow: {
+    flexDirection: 'row',
+    gap: Space.sm + 2,
+  },
+  opsSummaryCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm,
+  },
+  opsSummaryBody: {
+    flex: 1,
+  },
+  opsSummaryLabel: {
+    marginBottom: 2,
   },
   opsFilterStrip: {
     marginTop: 0,
   },
   opsFilterChip: {
     height: 30,
-    borderRadius: 15,
-    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.sm + 4,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1330,8 +1203,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.brand,
   },
   opsFilterChipText: {
-    color: MUTED,
-    fontSize: 11,
+    color: Colors.textMuted,
+    fontSize: Type.meta.size,
     fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
@@ -1339,97 +1212,32 @@ const styles = StyleSheet.create({
   opsFilterChipTextActive: {
     color: Colors.background,
   },
-  opsCommandRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  opsSummaryCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: CARD,
-  },
-  opsSummaryBody: {
-    flex: 1,
-  },
-  opsSummaryLabel: {
-    color: MUTED,
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  opsSummaryValue: {
-    color: TEXT,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  opsActionBtn: {
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: CARD,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  opsActionText: {
-    color: TEXT,
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.2,
-  },
-  controlPanel: {
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 16,
-    backgroundColor: CARD,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 10,
-  },
   controlRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: BORDER,
-    paddingBottom: 8,
+    borderBottomColor: Colors.border,
+    paddingBottom: Space.sm,
+    paddingTop: Space.xs + 2,
   },
   controlTitle: {
-    color: MUTED,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
     marginBottom: 2,
   },
   controlValue: {
-    color: TEXT,
-    fontSize: 13,
     fontFamily: 'Inter_700Bold',
   },
   controlPickerBtn: {
     height: 30,
-    borderRadius: 15,
+    borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 12,
+    borderColor: Colors.border,
+    paddingHorizontal: Space.sm + 4,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: CARD_ALT,
+    backgroundColor: Colors.surfaceAlt,
   },
   controlPickerText: {
-    color: TEXT,
-    fontSize: 11,
     fontFamily: 'Inter_700Bold',
     textTransform: 'uppercase',
   },
@@ -1437,31 +1245,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: Space.xs + 2,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   switchLabel: {
-    color: TEXT,
-    fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
   },
   controlActionRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Space.sm + 2,
+    paddingTop: Space.sm,
   },
   secondaryControlBtn: {
     flex: 1,
     height: 38,
-    borderRadius: 19,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   actionIconWrap: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.sm,
     backgroundColor: 'transparent',
   },
   secondaryControlText: {
-    color: TEXT,
-    fontSize: 11,
+    color: Colors.textPrimary,
+    fontSize: Type.meta.size,
     fontFamily: 'Inter_700Bold',
     textTransform: 'uppercase',
   },
@@ -1470,158 +1280,118 @@ const styles = StyleSheet.create({
   emptySearchState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
-    gap: 6,
+    paddingVertical: Space.xl + 8,
+    gap: Space.xs + 2,
   },
   emptySearchTitle: {
-    color: TEXT,
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
   },
   emptySearchSubtitle: {
-    color: MUTED,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    color: Colors.textMuted,
   },
-  dateLabel: { alignItems: 'center', marginVertical: 12 },
-  dateLabelText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: MUTED, textTransform: 'uppercase', letterSpacing: 1 },
-
-  statusBlock: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 20,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: BORDER,
+  dateLabel: { alignItems: 'center', marginVertical: Space.sm + 4 },
+  dateLabelText: {
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  statusTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', color: TEXT, marginBottom: 8 },
-  statusBody: { fontSize: 14, fontFamily: 'Inter_400Regular', color: MUTED, lineHeight: 22 },
-  accentLink: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: ACCENT, marginTop: 12 },
 
-  msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  statusBlockWrap: {
+    marginVertical: Space.xs + 4,
+    paddingHorizontal: Space.md,
+  },
+  statusTitle: { marginBottom: Space.xs + 4 },
+  statusBody: { lineHeight: 22 },
+  accentLink: { marginTop: Space.sm + 4 },
+
+  msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Space.sm + 2 },
   msgRowRight: { flexDirection: 'row-reverse' },
 
   textBubble: {
-    backgroundColor: CARD,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 24,
-    borderBottomLeftRadius: 6,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    borderBottomLeftRadius: Space.xs,
+    paddingHorizontal: Space.md - 2,
+    paddingVertical: Space.sm + 2,
     maxWidth: '80%',
   },
   textBubbleMe: {
     backgroundColor: Colors.brand,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 6,
+    borderBottomLeftRadius: Radius.xl,
+    borderBottomRightRadius: Space.xs,
   },
-  bubbleText: { fontSize: 15, fontFamily: 'Inter_500Medium', color: TEXT, lineHeight: 22 },
-  bubbleTextMe: { color: Colors.background },
+  bubbleText: { fontSize: Type.body.size, fontFamily: 'Inter_500Medium', color: Colors.textPrimary, lineHeight: 22 },
+  bubbleTextMe: { color: Colors.textInverse },
   groupSenderLabel: {
-    color: MUTED,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
     marginBottom: 6,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
 
   offerBubble: {
-    backgroundColor: CARD,
-    borderRadius: 24,
-    borderBottomLeftRadius: 6,
-    padding: 20,
+    borderRadius: Radius.xl,
+    borderBottomLeftRadius: Space.xs,
+    padding: Space.md + 4,
     maxWidth: '85%',
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: Colors.border,
   },
-  offerBubbleMe: { borderBottomLeftRadius: 24, borderBottomRightRadius: 6 },
-  offerTextRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 4 },
-  offerPrice: { fontSize: 28, fontFamily: 'Inter_700Bold', color: TEXT, letterSpacing: -1 },
-  offerOriginal: { fontSize: 16, fontFamily: 'Inter_500Medium', color: MUTED },
+  offerBubbleMe: { borderBottomLeftRadius: Radius.xl, borderBottomRightRadius: Space.xs },
+  offerTextRow: { flexDirection: 'row', alignItems: 'baseline', gap: Space.sm + 2, marginBottom: 4 },
+  offerPrice: { fontSize: Type.priceLarge.size, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, letterSpacing: -1 },
+  offerOriginal: { fontSize: Type.caption.size, fontFamily: 'Inter_500Medium', color: Colors.textMuted },
   strikethrough: { textDecorationLine: 'line-through' },
 
   offerStatusPill: {
-    marginTop: 8,
+    marginTop: Space.xs + 4,
     alignSelf: 'flex-start',
   },
 
   offerActionRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
+    gap: Space.sm + 2,
+    marginTop: Space.sm + 6,
   },
   offerDeclineBtn: {
     flex: 1,
     height: 44,
-    borderRadius: 16,
+    borderRadius: Radius.lg + 4,
     backgroundColor: 'transparent',
   },
-  offerDeclineText: { color: TEXT, fontSize: 13, fontFamily: 'Inter_700Bold', letterSpacing: 0.2 },
+  offerDeclineText: { color: Colors.textPrimary, fontSize: Type.meta.size, fontFamily: 'Inter_700Bold', letterSpacing: 0.2 },
   offerAcceptBtn: {
     flex: 1,
     height: 44,
-    borderRadius: 16,
+    borderRadius: Radius.lg + 4,
     backgroundColor: 'transparent',
   },
-  offerAcceptText: { color: Colors.background, fontSize: 13, fontFamily: 'Inter_700Bold', letterSpacing: 0.2 },
+  offerAcceptText: { color: Colors.textInverse, fontSize: Type.meta.size, fontFamily: 'Inter_700Bold', letterSpacing: 0.2 },
 
   inputContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    paddingBottom: Platform.OS === 'ios' ? Space.xl + 2 : Space.md + 4,
     borderTopWidth: 1,
-    borderTopColor: BORDER,
-    backgroundColor: FOOTER_BG,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
   },
   templateStrip: {
-    gap: 8,
-    paddingBottom: 10,
-    paddingRight: 8,
+    gap: Space.xs + 4,
+    paddingBottom: Space.sm + 2,
+    paddingRight: Space.xs,
   },
   templateChip: {
     height: 30,
-    borderRadius: 15,
+    borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: Space.sm + 4,
   },
   templateChipText: {
-    color: TEXT,
-    fontSize: 11,
     fontFamily: 'Inter_600SemiBold',
   },
-  inputFloatingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 30,
-    paddingLeft: 6,
-    paddingRight: 6,
-    height: 56,
-  },
-  cameraBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  textInput: {
-    flex: 1,
-    paddingHorizontal: 8,
-    fontSize: 15,
-    fontFamily: 'Inter_500Medium',
-    color: TEXT,
-  },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });
-
-

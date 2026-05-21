@@ -40,12 +40,11 @@ import { isVideoUri } from '../utils/media';
 
 type Props = StackScreenProps<RootStackParamList, 'UserProfile'>;
 
-const IS_LIGHT = ActiveTheme === 'light';
-const ACCENT = IS_LIGHT ? '#2f251b' : Colors.brand;
+const ACCENT = Colors.brand;
 const BG = Colors.background;
-const CARD = IS_LIGHT ? '#ffffff' : '#111111';
-const CARD_ALT = IS_LIGHT ? '#f3eee7' : '#1a1a1a';
-const BORDER = IS_LIGHT ? '#d8d1c6' : '#2a2a2a';
+const CARD = Colors.surface;
+const CARD_ALT = Colors.surfaceAlt;
+const BORDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
 const { width } = Dimensions.get('window');
@@ -715,7 +714,7 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     marginBottom: 28,
     shadowColor: Colors.textPrimary,
-    shadowOpacity: IS_LIGHT ? 0.04 : 0,
+    shadowOpacity: 0.04,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 4 },
   },
@@ -843,7 +842,7 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 16,
     shadowColor: Colors.textPrimary,
-    shadowOpacity: IS_LIGHT ? 0.03 : 0,
+    shadowOpacity: 0.03,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 4 },
   },
@@ -874,7 +873,7 @@ const styles = StyleSheet.create({
     padding: 28,
     marginBottom: 20,
     shadowColor: Colors.textPrimary,
-    shadowOpacity: IS_LIGHT ? 0.03 : 0,
+    shadowOpacity: 0.03,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 4 },
   },

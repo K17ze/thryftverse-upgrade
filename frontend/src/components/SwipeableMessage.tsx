@@ -1,13 +1,18 @@
-import React, { useRef, useCallback } from 'react';
-import {
-  View,
-  StyleSheet,
-  Animated,
-  PanResponder,
-  TouchableOpacity,
-} from 'react-native';
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  interpolate,
+  Extrapolation,
+  runOnJS,
+} from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
+import { Radius } from '../theme/designTokens';
+import { useHaptic } from '../hooks/useHaptic';
 
 interface SwipeableMessageProps {
   children: React.ReactNode;
@@ -17,6 +22,11 @@ interface SwipeableMessageProps {
   replyThreshold?: number;
 }
 
+const SWIPE_SPRING = {
+  damping: 15,
+  stiffness: 150,
+};
+
 export function SwipeableMessage({
   children,
   isMe,
@@ -24,84 +34,90 @@ export function SwipeableMessage({
   onActions,
   replyThreshold = 80,
 }: SwipeableMessageProps) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const isSwiping = useRef(false);
+  const translateX = useSharedValue(0);
+  const haptic = useHaptic();
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 10;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        const { dx } = gestureState;
-        
-        // Only allow swipe in specific directions based on sender
-        // Reply swipe: Right for others' messages, Left for my messages
-        if (!isMe && dx > 0) {
-          // Swipe right to reply to others' messages
-          translateX.setValue(Math.min(dx, replyThreshold + 20));
-        } else if (isMe && dx < 0) {
-          // Swipe left for actions on my messages
-          translateX.setValue(Math.max(dx, -(replyThreshold + 20)));
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const { dx } = gestureState;
-        
-        if (!isMe && dx > replyThreshold) {
-          // Trigger reply
-          onReply?.();
-        } else if (isMe && dx < -replyThreshold) {
-          // Trigger actions
-          onActions?.();
-        }
-        
-        // Spring back to original position
-        Animated.spring(translateX, {
-          toValue: 0,
-          useNativeDriver: true,
-          friction: 8,
-          tension: 40,
-        }).start();
-      },
+  const triggerReply = React.useCallback(() => {
+    onReply?.();
+    haptic.light();
+  }, [onReply, haptic]);
+
+  const triggerActions = React.useCallback(() => {
+    onActions?.();
+    haptic.light();
+  }, [onActions, haptic]);
+
+  const gesture = Gesture.Pan()
+    .activeOffsetX([-10, 10])
+    .onUpdate((event) => {
+      const { translationX } = event;
+
+      if (!isMe && translationX > 0) {
+        // Swipe right to reply to others' messages
+        translateX.value = Math.min(translationX, replyThreshold + 20);
+      } else if (isMe && translationX < 0) {
+        // Swipe left for actions on my messages
+        translateX.value = Math.max(translationX, -(replyThreshold + 20));
+      }
     })
-  ).current;
+    .onEnd((event) => {
+      const { translationX } = event;
 
-  const backgroundIconOpacity = translateX.interpolate({
-    inputRange: isMe ? [-100, -replyThreshold, 0] : [0, replyThreshold, 100],
-    outputRange: isMe ? [1, 0.5, 0] : [0, 0.5, 1],
-    extrapolate: 'clamp',
+      if (!isMe && translationX > replyThreshold) {
+        runOnJS(triggerReply)();
+      } else if (isMe && translationX < -replyThreshold) {
+        runOnJS(triggerActions)();
+      }
+
+      // Spring back to original position
+      translateX.value = withSpring(0, SWIPE_SPRING);
+    });
+
+  const foregroundStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const backgroundIconOpacity = useAnimatedStyle(() => {
+    const inputRange = isMe
+      ? [-100, -replyThreshold, 0]
+      : [0, replyThreshold, 100];
+    const outputRange = isMe ? [1, 0.5, 0] : [0, 0.5, 1];
+
+    return {
+      opacity: interpolate(
+        translateX.value,
+        inputRange,
+        outputRange,
+        Extrapolation.CLAMP
+      ),
+    };
   });
 
   return (
-    <View style={styles.container}>
-      {/* Background Layer with Icons */}
-      <View style={[
-        styles.backgroundLayer,
-        isMe ? styles.backgroundLeft : styles.backgroundRight,
-      ]}>
-        <Animated.View style={{ opacity: backgroundIconOpacity }}>
-          <View style={styles.actionIcon}>
-            <Ionicons
-              name={isMe ? 'ellipsis-horizontal' : 'arrow-undo'}
-              size={24}
-              color="#FFFFFF"
-            />
-          </View>
-        </Animated.View>
-      </View>
+    <GestureDetector gesture={gesture}>
+      <View style={styles.container}>
+        {/* Background Layer with Icons */}
+        <View style={[
+          styles.backgroundLayer,
+          isMe ? styles.backgroundLeft : styles.backgroundRight,
+        ]}>
+          <Reanimated.View style={[styles.actionIconWrap, backgroundIconOpacity]}>
+            <View style={styles.actionIcon}>
+              <Ionicons
+                name={isMe ? 'ellipsis-horizontal' : 'arrow-undo'}
+                size={24}
+                color={Colors.textInverse}
+              />
+            </View>
+          </Reanimated.View>
+        </View>
 
-      {/* Foreground Message */}
-      <Animated.View
-        style={[
-          styles.messageContainer,
-          { transform: [{ translateX }] },
-        ]}
-        {...panResponder.panHandlers}
-      >
-        {children}
-      </Animated.View>
-    </View>
+        {/* Foreground Message */}
+        <Reanimated.View style={[styles.messageContainer, foregroundStyle]}>
+          {children}
+        </Reanimated.View>
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -120,19 +136,23 @@ const styles = StyleSheet.create({
   backgroundLeft: {
     left: 0,
     backgroundColor: `${Colors.textMuted}30`,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+    borderTopLeftRadius: Radius.lg,
+    borderBottomLeftRadius: Radius.lg,
   },
   backgroundRight: {
     right: 0,
     backgroundColor: `${Colors.brand}30`,
-    borderTopRightRadius: 16,
-    borderBottomRightRadius: 16,
+    borderTopRightRadius: Radius.lg,
+    borderBottomRightRadius: Radius.lg,
+  },
+  actionIconWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   actionIcon: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',

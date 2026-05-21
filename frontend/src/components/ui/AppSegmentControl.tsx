@@ -3,6 +3,7 @@ import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-n
 import { Colors } from '../../constants/colors';
 // Typography using direct font names
 import { AnimatedPressable } from '../AnimatedPressable';
+import { Typography } from '../../constants/typography';
 
 export interface AppSegmentOption<T extends string> {
   value: T;
@@ -105,7 +106,7 @@ const styles = StyleSheet.create({
   optionText: {
     color: Colors.textSecondary,
     fontSize: 11,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   optionTextActive: {
     color: Colors.brand,

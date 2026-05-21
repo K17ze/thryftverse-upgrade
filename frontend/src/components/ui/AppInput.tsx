@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import {
   KeyboardTypeOptions,
   StyleProp,
@@ -10,8 +10,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { ActiveTheme, Colors } from '../../constants/colors';
-import { Typography } from '../../constants/typography';
+import { Colors } from '../../constants/colors';
 
 interface AppInputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -27,27 +26,28 @@ interface AppInputProps extends Omit<TextInputProps, 'style'> {
   keyboardType?: KeyboardTypeOptions;
 }
 
-const IS_LIGHT = ActiveTheme === 'light';
-
-export function AppInput({
-  label,
-  helperText,
-  errorText,
-  containerStyle,
-  inputContainerStyle,
-  inputStyle,
-  labelStyle,
-  helperStyle,
-  prefix,
-  suffix,
-  value,
-  placeholder,
-  placeholderTextColor,
-  keyboardType,
-  onChangeText,
-  editable = true,
-  ...rest
-}: AppInputProps) {
+export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
+  {
+    label,
+    helperText,
+    errorText,
+    containerStyle,
+    inputContainerStyle,
+    inputStyle,
+    labelStyle,
+    helperStyle,
+    prefix,
+    suffix,
+    value,
+    placeholder,
+    placeholderTextColor,
+    keyboardType,
+    onChangeText,
+    editable = true,
+    ...rest
+  },
+  ref
+) {
   const hasError = Boolean(errorText);
 
   return (
@@ -64,6 +64,7 @@ export function AppInput({
         {typeof prefix === 'string' ? <Text style={styles.prefixText}>{prefix}</Text> : null}
         {prefix && typeof prefix !== 'string' ? <View style={styles.prefixNode}>{prefix}</View> : null}
         <TextInput
+          ref={ref}
           {...rest}
           value={value}
           editable={editable}
@@ -79,14 +80,14 @@ export function AppInput({
       {!errorText && helperText ? <Text style={[styles.helperText, helperStyle]}>{helperText}</Text> : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   label: {
     marginBottom: 6,
     color: Colors.textSecondary,
     fontSize: 12,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
@@ -103,7 +104,7 @@ const styles = StyleSheet.create({
   },
   inputWrapError: {
     borderColor: Colors.danger,
-    backgroundColor: IS_LIGHT ? 'rgba(182,66,66,0.08)' : 'rgba(255,77,77,0.12)',
+    backgroundColor: Colors.background,
   },
   inputWrapDisabled: {
     opacity: 0.6,
@@ -111,7 +112,7 @@ const styles = StyleSheet.create({
   prefixText: {
     color: Colors.textMuted,
     fontSize: 12,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
   },
   prefixNode: {
     alignItems: 'center',
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textPrimary,
     fontSize: 14,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     paddingVertical: 10,
   },
   helperText: {
@@ -129,13 +130,13 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 11,
     lineHeight: 16,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
   },
   errorText: {
     marginTop: 7,
     color: Colors.danger,
     fontSize: 11,
     lineHeight: 16,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
   },
 });

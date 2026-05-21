@@ -1,3 +1,4 @@
+import { Typography } from '../constants/typography';
 import React from 'react';
 import { View, Text, StyleSheet, StatusBar, LayoutChangeEvent } from 'react-native';
 import Reanimated, {
@@ -154,7 +155,7 @@ const styles = StyleSheet.create({
   tabText: {
     color: Colors.textSecondary,
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },

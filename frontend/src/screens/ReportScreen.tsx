@@ -12,6 +12,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
+import { Typography } from '../constants/typography';
 
 const REASONS = [
   "Spam or misleading",
@@ -111,12 +112,12 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, textTransform: 'capitalize' },
+  headerTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: Colors.textPrimary, textTransform: 'capitalize' },
   
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
   form: { flex: 1 },
   
-  promptText: { fontSize: 18, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 24 },
+  promptText: { fontSize: 18, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 24 },
   
   reasonsList: { gap: 12 },
   reasonRow: {
@@ -134,13 +135,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.brand,
     borderColor: Colors.brand,
   },
-  reasonText: { fontSize: 15, fontFamily: 'Inter_500Medium', color: Colors.textPrimary },
-  selectedText: { color: Colors.textInverse, fontFamily: 'Inter_700Bold' },
+  reasonText: { fontSize: 15, fontFamily: Typography.family.medium, color: Colors.textPrimary },
+  selectedText: { color: Colors.textInverse, fontFamily: Typography.family.bold },
   
   footer: { flex: 1, justifyContent: 'flex-end', paddingBottom: 40 },
   primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   disabledBtn: { opacity: 0.5 },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: 'Inter_700Bold' },
+  primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold },
 
   successState: {
     flex: 1,
@@ -150,14 +151,14 @@ const styles = StyleSheet.create({
   },
   successTitle: {
     fontSize: 24,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     marginTop: 24,
   },
   successText: {
     fontSize: 16,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     textAlign: 'center',
     marginVertical: 16,
     lineHeight: 24,

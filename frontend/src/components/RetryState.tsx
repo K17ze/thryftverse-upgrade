@@ -5,6 +5,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Typography } from '../constants/typography';
 
 interface RetryStateProps {
   onRetry: () => void;
@@ -69,13 +70,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     marginBottom: 12,
   },
   subtext: {
     fontSize: 16,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     textAlign: 'center',
     marginBottom: 40,
@@ -90,6 +91,6 @@ const styles = StyleSheet.create({
   retryBtnText: {
     color: Colors.background,
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
 });

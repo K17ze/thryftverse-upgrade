@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { Typography } from '../../constants/typography';
 
 export type ScreenHeaderVariant = 'standard' | 'large' | 'minimal';
 
@@ -15,6 +16,7 @@ interface ScreenHeaderProps {
   style?: ViewStyle;
   showBackButton?: boolean;
   backButtonColor?: string;
+  backIcon?: React.ComponentProps<typeof Ionicons>['name'];
 }
 
 export function ScreenHeader({
@@ -25,9 +27,10 @@ export function ScreenHeader({
   style,
   showBackButton = true,
   backButtonColor = Colors.textPrimary,
+  backIcon = 'arrow-back',
 }: ScreenHeaderProps) {
   const titleSize = variant === 'large' ? Type.title.size : Type.subtitle.size;
-  const titleFamily = variant === 'large' ? 'Inter_700Bold' : 'Inter_600SemiBold';
+  const titleFamily = variant === 'large' ? Typography.family.bold : Typography.family.semibold;
   const titleLineHeight = variant === 'large' ? Type.title.lineHeight : Type.subtitle.lineHeight;
 
   return (
@@ -42,7 +45,7 @@ export function ScreenHeader({
           scaleValue={0.92}
           hapticFeedback="light"
         >
-          <Ionicons name="arrow-back" size={24} color={backButtonColor} />
+          <Ionicons name={backIcon} size={24} color={backButtonColor} />
         </AnimatedPressable>
       ) : (
         <View style={styles.backBtnPlaceholder} />

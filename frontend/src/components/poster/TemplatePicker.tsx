@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { POSTER_TEMPLATES, PosterTemplate } from '../../data/posters';
+import { Typography } from '../../constants/typography';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.45;
@@ -143,7 +144,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: '#fff',
     textAlign: 'center',
     marginBottom: 12,
@@ -165,7 +166,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: 'rgba(255,255,255,0.6)',
   },
   tabTextActive: {
@@ -210,7 +211,7 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
   },

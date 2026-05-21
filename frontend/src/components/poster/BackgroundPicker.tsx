@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Pressable, Text, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Typography } from '../../constants/typography';
 
 interface BackgroundPickerProps {
   visible: boolean;
@@ -120,14 +121,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: '#fff',
     textAlign: 'center',
     marginBottom: 4,
   },
   sectionLabel: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: 'rgba(255,255,255,0.5)',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
   },
   gradientLabel: {
     fontSize: 10,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowRadius: 4,

@@ -23,6 +23,8 @@ import { OnezeCoinIcon } from '../components/icons/OnezeCoinIcon';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
 import { AppButton } from '../components/ui/AppButton';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { Type } from '../theme/designTokens';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import {
   confirmPaymentIntent,
@@ -39,10 +41,10 @@ type TxFilter = 'all' | 'sale' | 'purchase' | 'withdrawal';
 const TX_FILTERS: TxFilter[] = ['all', 'sale', 'purchase', 'withdrawal'];
 const LOAD_IZE_FEE_RATE = 0.01;
 const CONVERT_FEE_RATE = 0.005; // 0.5% fee for converting 1ze to fiat
-const IS_LIGHT = ActiveTheme === 'light';
-const TINT_CARD_BG = IS_LIGHT ? '#f1ede6' : '#1b1712';
-const TINT_CARD_BORDER = IS_LIGHT ? '#d9d3c9' : '#3a342b';
-const TINT_TEXT = IS_LIGHT ? '#2f251b' : '#d7b98f';
+
+const TINT_CARD_BG = Colors.surfaceAlt;
+const TINT_CARD_BORDER = Colors.border;
+const TINT_TEXT = Colors.brand;
 
 export default function BalanceScreen({ navigation }: Props) {
   const [activeTxFilter, setActiveTxFilter] = useState<TxFilter>('all');
@@ -269,17 +271,11 @@ export default function BalanceScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <View style={styles.header}>
-        <AnimatedPressable
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to the previous screen."
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.hugeTitle}>1ze wallet</Text>
-      </View>
+      <ScreenHeader
+        title="1ze wallet"
+        onBack={() => navigation.goBack()}
+        variant="large"
+      />
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.pegInfoCard}>
@@ -561,15 +557,6 @@ export default function BalanceScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16, gap: 12 },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  hugeTitle: {
-    fontSize: 32,
-    lineHeight: 36,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.42,
-  },
   content: { paddingHorizontal: 20, paddingBottom: 34 },
 
   pegInfoCard: {
@@ -589,12 +576,12 @@ const styles = StyleSheet.create({
     color: TINT_TEXT,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
 
   heroGroup: { marginBottom: 22, gap: 12 },
   balanceHero: { backgroundColor: Colors.surface, borderRadius: 28, borderWidth: 1, borderColor: Colors.border, paddingTop: 22, paddingBottom: 18, alignItems: 'center' },
-  balanceLabel: { fontSize: 10, fontFamily: 'Inter_300Light', color: Colors.textMuted, letterSpacing: 0.92, marginBottom: 12, textTransform: 'uppercase' },
+  balanceLabel: { fontSize: 10, fontFamily: Typography.family.light, color: Colors.textMuted, letterSpacing: 0.92, marginBottom: 12, textTransform: 'uppercase' },
   balanceAmount: {
     fontSize: 96,
     lineHeight: 98,
@@ -614,18 +601,18 @@ const styles = StyleSheet.create({
   balanceActions: { flexDirection: 'row', gap: 14, marginTop: 4 },
   actionBtn: { alignItems: 'center', gap: 8 },
   actionCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  actionText: { fontSize: 11, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
+  actionText: { fontSize: 11, fontFamily: Typography.family.medium, color: Colors.textSecondary },
 
   pendingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, padding: 18 },
-  pendingTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.textSecondary },
-  pendingAmount: { fontSize: 24, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
+  pendingTitle: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textSecondary },
+  pendingAmount: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   pendingAmountCol: { alignItems: 'flex-end' },
-  pendingIze: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textSecondary, marginTop: 3 },
+  pendingIze: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textSecondary, marginTop: 3 },
 
   loadCard: { backgroundColor: Colors.surface, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, padding: 18, marginBottom: 22 },
-  loadTitle: { color: Colors.textPrimary, fontSize: 18, fontFamily: 'Inter_700Bold' },
-  loadHint: { marginTop: 4, color: Colors.textSecondary, fontSize: 13, fontFamily: 'Inter_500Medium', marginBottom: 12, lineHeight: 18 },
-  loadInputLabel: { color: Colors.textMuted, fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  loadTitle: { color: Colors.textPrimary, fontSize: 18, fontFamily: Typography.family.bold },
+  loadHint: { marginTop: 4, color: Colors.textSecondary, fontSize: 13, fontFamily: Typography.family.medium, marginBottom: 12, lineHeight: 18 },
+  loadInputLabel: { color: Colors.textMuted, fontSize: 11, fontFamily: Typography.family.bold, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   loadInput: {
     borderRadius: 12,
     borderWidth: 1,
@@ -633,17 +620,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     color: Colors.textPrimary,
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 10,
   },
   loadSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, gap: 10 },
-  loadSummaryLabel: { color: Colors.textMuted, fontSize: 13, fontFamily: 'Inter_500Medium' },
-  loadSummaryValue: { color: Colors.textPrimary, fontSize: 13, fontFamily: 'Inter_700Bold', textAlign: 'right', maxWidth: '70%' },
+  loadSummaryLabel: { color: Colors.textMuted, fontSize: 13, fontFamily: Typography.family.medium },
+  loadSummaryValue: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.bold, textAlign: 'right', maxWidth: '70%' },
   loadSummaryRowTotal: { marginTop: 4, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 9 },
-  loadSummaryTotalLabel: { color: Colors.textPrimary, fontSize: 14, fontFamily: 'Inter_700Bold' },
-  loadSummaryTotalValue: { color: Colors.textPrimary, fontSize: 13, fontFamily: 'Inter_700Bold', textAlign: 'right', maxWidth: '70%' },
+  loadSummaryTotalLabel: { color: Colors.textPrimary, fontSize: 14, fontFamily: Typography.family.bold },
+  loadSummaryTotalValue: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.bold, textAlign: 'right', maxWidth: '70%' },
   loadBtn: {
     marginTop: 12,
     borderRadius: 999,
@@ -652,7 +639,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   loadBtnDisabled: { opacity: 0.55 },
-  loadBtnText: { color: Colors.background, fontSize: 13, fontFamily: 'Inter_700Bold' },
+  loadBtnText: { color: Colors.background, fontSize: 13, fontFamily: Typography.family.bold },
 
   // Tab styles
   tabContainer: {
@@ -676,7 +663,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
   },
   tabTextActive: {
@@ -685,8 +672,8 @@ const styles = StyleSheet.create({
 
   historyCard: { backgroundColor: Colors.surface, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, padding: 18, marginBottom: 22 },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12 },
-  historyTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
-  historyDate: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary },
+  historyTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
+  historyDate: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
   historyLinkRow: {
     borderRadius: 14,
     borderWidth: 0,
@@ -701,21 +688,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 
-  sectionTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginLeft: 6, marginBottom: 12 },
+  sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginLeft: 6, marginBottom: 12 },
   filterRow: { flexDirection: 'row', gap: 8, marginBottom: 10, paddingHorizontal: 6 },
   filterChip: { borderRadius: 999, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, paddingHorizontal: 10, paddingVertical: 6 },
   filterChipActive: { borderColor: Colors.brand, backgroundColor: Colors.brand },
-  filterChipText: { color: Colors.textSecondary, fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 0.4 },
+  filterChipText: { color: Colors.textSecondary, fontSize: 11, fontFamily: Typography.family.bold, letterSpacing: 0.4 },
   filterChipTextActive: { color: Colors.background },
 
   cardGroup: { backgroundColor: Colors.surface, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, paddingVertical: 12, paddingHorizontal: 16 },
   transactionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   txLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 16 },
   iconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
-  txTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4, lineHeight: 18 },
-  txDate: { fontSize: 12, color: Colors.textSecondary, fontFamily: 'Inter_400Regular', textTransform: 'capitalize', lineHeight: 16 },
+  txTitle: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4, lineHeight: 18 },
+  txDate: { fontSize: 12, color: Colors.textSecondary, fontFamily: Typography.family.regular, textTransform: 'capitalize', lineHeight: 16 },
   txStatusPending: { color: Colors.brand },
   txStatusCompleted: { color: Colors.textSecondary },
-  txAmount: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
+  txAmount: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary },
 });
 

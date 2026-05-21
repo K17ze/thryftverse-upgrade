@@ -52,7 +52,7 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
     <View style={[styles.container, { top: topInset }]}>
       <Reanimated.View style={animStyle}>
         <View style={styles.circle}>
-          <Text style={{ fontFamily: 'Inter_700Bold', color: '#111', fontSize: 16, marginTop: -2 }}>T</Text>
+          <Text style={{ fontFamily: Typography.family.bold, color: '#111', fontSize: 16, marginTop: -2 }}>T</Text>
         </View>
       </Reanimated.View>
     </View>
@@ -60,6 +60,7 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
 }
 
 import { Text } from 'react-native';
+import { Typography } from '../constants/typography';
 
 const styles = StyleSheet.create({
   container: {

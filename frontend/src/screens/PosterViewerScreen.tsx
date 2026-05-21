@@ -22,6 +22,7 @@ import { getFreshPosters } from '../data/posters';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { SharedTransitionView } from '../components/SharedTransitionView';
+import { Typography } from '../constants/typography';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const AUTO_ADVANCE_MS = 5000;
@@ -330,12 +331,12 @@ const styles = StyleSheet.create({
   authorName: {
     color: '#fff',
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   postedTime: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     marginLeft: 4,
   },
   topControlRow: {
@@ -378,7 +379,7 @@ const styles = StyleSheet.create({
   deleteBtnText: {
     color: '#ffd4d4',
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   bottomMetaWrap: {
     marginTop: 'auto',
@@ -404,7 +405,7 @@ const styles = StyleSheet.create({
   storyOverlayText: {
     fontSize: 24,
     lineHeight: 30,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.65)',
     textShadowRadius: 8,
@@ -423,13 +424,13 @@ const styles = StyleSheet.create({
   sharedFromText: {
     color: '#d7b98f',
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   captionText: {
     color: '#fff',
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowRadius: 8,
   },
@@ -452,7 +453,7 @@ const styles = StyleSheet.create({
   expiryText: {
     color: '#fff',
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   viewListingBtn: {
     flexDirection: 'row',
@@ -467,7 +468,7 @@ const styles = StyleSheet.create({
   viewListingText: {
     color: '#fff',
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   tapLayer: {
     position: 'absolute',

@@ -23,6 +23,7 @@ import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { RadioButton } from '../components/settings/RadioButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'Postage'>;
 
@@ -178,7 +179,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.brand,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -188,7 +189,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: Type.meta.letterSpacing,
@@ -197,7 +198,7 @@ const styles = StyleSheet.create({
   },
   scopeLabel: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     marginLeft: Space.xs,
     marginBottom: Space.sm,
@@ -218,20 +219,20 @@ const styles = StyleSheet.create({
   },
   carrierLabel: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     marginBottom: 2,
     letterSpacing: Type.body.letterSpacing,
   },
   carrierPrice: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
   },
   footerNote: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     paddingHorizontal: Space.xs,

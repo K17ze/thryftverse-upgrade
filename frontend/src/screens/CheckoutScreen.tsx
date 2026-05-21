@@ -1,3 +1,4 @@
+import { Typography } from '../constants/typography';
 import React, { useEffect, useState } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
@@ -38,16 +39,16 @@ import { CapabilityCarrier, getUserCountryCapabilities, UserCountryCapabilities 
 import { CachedImage } from '../components/CachedImage';
 import { AppButton } from '../components/ui/AppButton';
 import { AppCard } from '../components/ui/AppCard';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { getListingCoverUri } from '../utils/media';
 import { t } from '../i18n';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
-const IS_LIGHT = ActiveTheme === 'light';
-const BRAND = IS_LIGHT ? '#2f251b' : '#d7b98f';
+const BRAND = Colors.brand;
 const PANEL_BG = Colors.surface;
-const PANEL_SOFT_BG = IS_LIGHT ? '#f7f4ef' : '#161616';
+const PANEL_SOFT_BG = Colors.surfaceAlt;
 const PANEL_BORDER = Colors.border;
-const FOOTER_BG = IS_LIGHT ? 'rgba(236,234,230,0.97)' : 'rgba(10,10,10,0.95)';
+const FOOTER_BG = Colors.background;
 
 interface CheckoutPostageOption {
   carrierId: string | null;
@@ -391,13 +392,11 @@ export default function CheckoutScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} accessibilityLabel={t('checkout.a11y.close')}>
-          <Ionicons name="close" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>{t('checkout.header.title')}</Text>
-        <View style={{ width: 44 }} />
-      </View>
+      <ScreenHeader
+        title={t('checkout.header.title')}
+        onBack={() => navigation.goBack()}
+        backIcon="close"
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
@@ -611,16 +610,13 @@ function SummaryRow({ label, value, bold, info }: { label: string; value: string
 const summaryStyles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
   labelRow: { flexDirection: 'row', alignItems: 'center' },
-  label: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.textSecondary },
-  value: { fontSize: 14, fontFamily: 'Inter_500Medium', color: Colors.textPrimary },
-  bold: { fontSize: 16, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
+  label: { fontSize: 14, fontFamily: Typography.family.regular, color: Colors.textSecondary },
+  value: { fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textPrimary },
+  bold: { fontSize: 16, fontFamily: Typography.family.bold, color: Colors.textPrimary },
 });
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
-  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
-  headerTitle: { fontSize: 17, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
 
   scrollContent: { paddingHorizontal: 20, paddingTop: 16 },
 
@@ -637,7 +633,7 @@ const styles = StyleSheet.create({
   },
   itemThumb: { width: 64, height: 64, borderRadius: 12 },
   itemInfo: { flex: 1, justifyContent: 'center' },
-  itemTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
+  itemTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
   itemSellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -667,7 +663,7 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
   },
-  itemSeller: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
+  itemSeller: { flex: 1, fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textSecondary },
   sellerMessageBtn: {
     width: 30,
     height: 30,
@@ -678,7 +674,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemPrice: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
+  itemPrice: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary },
 
   readinessCard: {
     backgroundColor: PANEL_BG,
@@ -698,7 +694,7 @@ const styles = StyleSheet.create({
   readinessTitle: {
     color: Colors.textPrimary,
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   readinessChipsRow: {
     marginTop: 10,
@@ -714,8 +710,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   readinessChipReady: {
-    backgroundColor: IS_LIGHT ? '#ece4d8' : '#1b2e23',
-    borderColor: IS_LIGHT ? '#cdbc9f' : '#335444',
+    backgroundColor: Colors.surfaceAlt,
+    borderColor: Colors.border,
   },
   readinessChipPending: {
     backgroundColor: PANEL_SOFT_BG,
@@ -723,7 +719,7 @@ const styles = StyleSheet.create({
   },
   readinessChipText: {
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
   },
   readinessChipTextReady: {
@@ -733,10 +729,10 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
 
-  sectionTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
+  sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
   policyHint: {
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     marginBottom: 10,
     marginLeft: 4,
@@ -755,25 +751,25 @@ const styles = StyleSheet.create({
   },
   blockLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   blockTextCol: { justifyContent: 'center' },
-  blockTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
-  blockSub: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary },
-  blockRightPrice: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
+  blockTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
+  blockSub: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
+  blockRightPrice: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
 
   summaryCard: { backgroundColor: PANEL_BG, borderWidth: 1, borderColor: PANEL_BORDER, padding: 24, borderRadius: 20, marginBottom: 24 },
   divider: { height: 1, backgroundColor: PANEL_BORDER, marginVertical: 12 },
 
-  termsText: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.textMuted, lineHeight: 18, textAlign: 'center', paddingHorizontal: 16 },
+  termsText: { fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted, lineHeight: 18, textAlign: 'center', paddingHorizontal: 16 },
   requirementText: {
     marginTop: 12,
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.danger,
     textAlign: 'center',
   },
   syncText: {
     marginTop: 10,
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     textAlign: 'center',
   },
@@ -787,8 +783,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 20, paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
   footerPriceCol: { flex: 1 },
-  footerTotalLabel: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary },
-  footerTotalPrice: { fontSize: 24, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
+  footerTotalLabel: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
+  footerTotalPrice: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   payBtn: { minWidth: 186, marginLeft: 16 },
 });
 

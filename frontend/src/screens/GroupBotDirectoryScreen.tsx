@@ -13,18 +13,27 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { EmptyState } from '../components/EmptyState';
 import { useToast } from '../context/ToastContext';
+import { EmptyState } from '../components/EmptyState';
 import { deployBotToConversationOnApi, undeployBotFromConversationOnApi } from '../services/chatApi';
+import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { AppButton } from '../components/ui/AppButton';
+import { ChatCard } from '../components/chat/ChatCard';
+import { Space, Radius, Type } from '../theme/designTokens';
+import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
+import { Typography } from '../constants/typography';
+import { Motion } from '../constants/motion';
 
 type Props = StackScreenProps<RootStackParamList, 'GroupBotDirectory'>;
-
-const PANEL = Colors.surface;
-const BORDER = Colors.border;
 
 export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
   const { show } = useToast();
+  const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
   const [pendingBotId, setPendingBotId] = useState<string | null>(null);
 
   const conversations = useStore((state) => state.conversations);
@@ -52,12 +61,14 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
         await undeployBotFromConversationOnApi(conversation.id, botId);
         undeployBotFromConversation(conversation.id, botId);
         show('Bot removed from group.', 'info');
+        haptic.light();
         return;
       }
 
       await deployBotToConversationOnApi(conversation.id, botId);
       deployBotToConversation(conversation.id, botId);
       show('Bot deployed to group.', 'success');
+      haptic.success();
       return;
     } catch {
       if (isDeployed) {
@@ -80,20 +91,10 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
         backgroundColor={Colors.background}
       />
 
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.headerBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
-        </AnimatedPressable>
-
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>Group Bots</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {conversation?.title ?? 'Conversation'}
-          </Text>
-        </View>
-
-        <View style={styles.headerSpacer} />
-      </View>
+      <SettingsHeader
+        title="Group Bots"
+        onBack={() => navigation.goBack()}
+      />
 
       {!conversation || conversation.type !== 'group' ? (
         <EmptyState
@@ -106,46 +107,57 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
           data={bots}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-          renderItem={({ item }) => {
+          ItemSeparatorComponent={() => <View style={{ height: Space.sm + 2 }} />}
+          renderItem={({ item, index }) => {
             const deployed = deployedBotIds.includes(item.id);
             const isPending = pendingBotId === item.id;
 
             return (
-              <View style={styles.botCard}>
-                <View style={styles.botHeadRow}>
-                  <View style={styles.botIconWrap}>
-                    <Ionicons
-                      name={item.category === 'moderation' ? 'shield-checkmark-outline' : item.category === 'commerce' ? 'trending-up-outline' : 'flash-outline'}
-                      size={20}
-                      color={Colors.textPrimary}
+              <Reanimated.View
+                entering={
+                  reducedMotionEnabled
+                    ? undefined
+                    : FadeInDown
+                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+                      .duration(Motion.list.enterDuration)
+                }
+              >
+                <ChatCard variant="surface">
+                  <View style={styles.botHeadRow}>
+                    <View style={styles.botIconWrap}>
+                      <Ionicons
+                        name={item.category === 'moderation' ? 'shield-checkmark-outline' : item.category === 'commerce' ? 'trending-up-outline' : 'flash-outline'}
+                        size={20}
+                        color={Colors.textPrimary}
+                      />
+                    </View>
+
+                    <View style={styles.botTextWrap}>
+                      <BodyEmphasis>{item.name}</BodyEmphasis>
+                      <Meta>{item.category.toUpperCase()}</Meta>
+                    </View>
+
+                    <AppButton
+                      style={[styles.deployBtn, deployed && styles.deployBtnActive]}
+                      variant={deployed ? 'primary' : 'secondary'}
+                      size="sm"
+                      title={isPending ? 'Syncing...' : deployed ? 'Remove' : 'Deploy'}
+                      onPress={() => {
+                        void handleToggleBot(item.id, deployed);
+                      }}
+                      disabled={isPending}
+                      accessibilityLabel={isPending ? 'Syncing bot' : deployed ? 'Remove bot' : 'Deploy bot'}
+                      accessibilityRole="button"
+                      accessibilityHint={deployed ? 'Removes this bot from the group' : 'Deploys this bot to the group'}
                     />
                   </View>
 
-                  <View style={styles.botTextWrap}>
-                    <Text style={styles.botName}>{item.name}</Text>
-                    <Text style={styles.botCategory}>{item.category.toUpperCase()}</Text>
+                  <Caption color={Colors.textSecondary} style={styles.botDescription}>{item.description}</Caption>
+                  <View style={styles.commandPill}>
+                    <Caption color={Colors.textPrimary} style={styles.commandText}>{item.commandHint}</Caption>
                   </View>
-
-                  <AnimatedPressable
-                    style={[styles.deployBtn, deployed && styles.deployBtnActive]}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      void handleToggleBot(item.id, deployed);
-                    }}
-                    disabled={isPending}
-                  >
-                    <Text style={[styles.deployBtnText, deployed && styles.deployBtnTextActive]}>
-                      {isPending ? 'Syncing...' : deployed ? 'Remove' : 'Deploy'}
-                    </Text>
-                  </AnimatedPressable>
-                </View>
-
-                <Text style={styles.botDescription}>{item.description}</Text>
-                <View style={styles.commandPill}>
-                  <Text style={styles.commandText}>{item.commandHint}</Text>
-                </View>
-              </View>
+                </ChatCard>
+              </Reanimated.View>
             );
           }}
         />
@@ -156,121 +168,49 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: PANEL,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  headerTextWrap: { alignItems: 'center', flex: 1 },
-  headerTitle: {
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-  },
-  headerSubtitle: {
-    marginTop: 2,
-    color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    maxWidth: 220,
-  },
-  headerSpacer: { width: 44, height: 44 },
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  botCard: {
-    backgroundColor: PANEL,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 14,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xxl,
   },
   botHeadRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
   },
   botIconWrap: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: Colors.border,
   },
   botTextWrap: { flex: 1 },
-  botName: {
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-  },
-  botCategory: {
-    color: Colors.textMuted,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    letterSpacing: 0.8,
-    marginTop: 2,
-  },
   deployBtn: {
     minWidth: 80,
     height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.sm + 4,
   },
   deployBtnActive: {
     borderColor: Colors.brand,
     backgroundColor: Colors.brand,
   },
-  deployBtnText: {
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-  },
-  deployBtnTextActive: {
-    color: Colors.textInverse,
-    fontFamily: 'Inter_700Bold',
-  },
   botDescription: {
-    color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    marginTop: 10,
+    marginTop: Space.sm + 4,
     lineHeight: 19,
   },
   commandPill: {
-    marginTop: 10,
+    marginTop: Space.sm + 4,
     alignSelf: 'flex-start',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
     backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 2,
   },
   commandText: {
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
+    fontFamily: Typography.family.semibold,
   },
 });

@@ -21,12 +21,11 @@ import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'InviteFriends'>;
 
-const IS_LIGHT = ActiveTheme === 'light';
-const ACCENT = IS_LIGHT ? '#2f251b' : '#d7b98f';
+const ACCENT = Colors.brand;
 const BG = Colors.background;
-const CARD = IS_LIGHT ? '#ffffff' : '#111111';
-const CARD_ALT = IS_LIGHT ? '#f3eee7' : '#151515';
-const BORDER = IS_LIGHT ? '#d8d1c6' : '#1c1c1c';
+const CARD = Colors.surface;
+const CARD_ALT = Colors.surfaceAlt;
+const BORDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
 

@@ -17,6 +17,7 @@ import type { Poster } from '../../data/posters';
 import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
+import { Typography } from '../../constants/typography';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.75;
@@ -325,19 +326,19 @@ const styles = StyleSheet.create({
   },
   modePillText: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textMuted,
   },
   modePillTextActive: {
     color: Colors.brand,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   section: {
     gap: 8,
   },
   sectionLabel: {
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -367,7 +368,7 @@ const styles = StyleSheet.create({
   },
   listingTitle: {
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   selectedBadge: {
@@ -383,7 +384,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     paddingVertical: 20,
   },
@@ -406,12 +407,12 @@ const styles = StyleSheet.create({
   },
   expiryPillText: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
   },
   expiryPillTextActive: {
     color: Colors.brand,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   captionInput: {
     minHeight: 80,
@@ -421,13 +422,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     color: Colors.textPrimary,
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     paddingHorizontal: 12,
     paddingTop: 12,
   },
   charCount: {
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     textAlign: 'right',
   },
@@ -447,6 +448,6 @@ const styles = StyleSheet.create({
   publishBtnText: {
     color: '#fff',
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
 });

@@ -55,6 +55,7 @@ import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Elevation } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
+import { Typography } from '../constants/typography';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -866,7 +867,7 @@ const styles = StyleSheet.create({
   },
   brandTitle: {
     fontSize: 26, // Slightly reduced
-    fontFamily: 'Inter_700Bold', // Changed from ExtraBold for elegance
+    fontFamily: Typography.family.bold, // Changed from ExtraBold for elegance
     letterSpacing: 2, // Luxury spacing (ELEVATED)
     color: Colors.textPrimary,
     lineHeight: 30,
@@ -875,7 +876,7 @@ const styles = StyleSheet.create({
   brandSubtitle: {
     marginTop: 2,
     fontSize: 11,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     letterSpacing: 0.25,
     color: Colors.textSecondary,
   },
@@ -922,7 +923,7 @@ const styles = StyleSheet.create({
   },
   newListingsBannerText: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.background,
     letterSpacing: 0.2,
   },
@@ -936,13 +937,13 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     letterSpacing: -0.1,
   },
   sectionHint: {
     fontSize: 11,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     letterSpacing: 0.22,
   },
@@ -1015,7 +1016,7 @@ const styles = StyleSheet.create({
   },
   storyName: {
     fontSize: 10,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     width: 66,
     textAlign: 'center',
@@ -1023,7 +1024,7 @@ const styles = StyleSheet.create({
   storyStatus: {
     marginTop: 2,
     fontSize: 9,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     width: 66,
     textAlign: 'center',
@@ -1099,19 +1100,19 @@ const styles = StyleSheet.create({
   lookOwnerName: {
     color: '#fff',
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   lookTitle: {
     color: '#fff',
     fontSize: 21,
-    fontFamily: 'Inter_800ExtraBold',
+    fontFamily: Typography.family.extrabold,
     letterSpacing: -0.4,
     lineHeight: 24,
   },
   lookDescription: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     marginTop: 2,
   },
   lookMetaRow: {
@@ -1132,12 +1133,12 @@ const styles = StyleSheet.create({
   lookMetaText: {
     color: '#fff',
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   lookTime: {
     color: 'rgba(255,255,255,0.82)',
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     marginLeft: 'auto',
   },
 
@@ -1229,7 +1230,7 @@ const styles = StyleSheet.create({
   posterCreateLabel: {
     color: Colors.background,
     fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     textAlign: 'center',
   },
   posterTopRow: {
@@ -1265,7 +1266,7 @@ const styles = StyleSheet.create({
   posterOwnerName: {
     color: '#fff',
     fontSize: 8,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     flex: 1,
   },
   posterExpiryPill: {
@@ -1280,7 +1281,7 @@ const styles = StyleSheet.create({
   posterExpiryText: {
     color: '#fff',
     fontSize: 9,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   posterBottomOverlay: {
     position: 'absolute',
@@ -1295,7 +1296,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 9,
     lineHeight: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   posterCardMetaRow: {
     flexDirection: 'row',
@@ -1304,17 +1305,17 @@ const styles = StyleSheet.create({
   },
   posterUserName: {
     fontSize: 9,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   posterFreshMeta: {
     fontSize: 9,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.brand,
   },
   posterSeenMeta: {
     fontSize: 9,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
   },
 
@@ -1368,7 +1369,7 @@ const styles = StyleSheet.create({
   exploreTagText: {
     color: '#fff',
     fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.14,
   },
   exploreSellerRow: {
@@ -1415,7 +1416,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textSecondary,
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.1,
   },
   exploreMessageBtn: {
@@ -1486,14 +1487,14 @@ const styles = StyleSheet.create({
   },
   peekTitle: {
     fontSize: 19,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.2,
   },
   peekSubtitle: {
     marginTop: 4,
     fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
   },
   peekActionsRow: {
@@ -1509,7 +1510,7 @@ const styles = StyleSheet.create({
   },
   peekGhostText: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   peekPrimaryBtn: {
@@ -1526,7 +1527,7 @@ const styles = StyleSheet.create({
   },
   peekPrimaryText: {
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.background,
   },
 });

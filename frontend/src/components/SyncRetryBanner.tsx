@@ -3,6 +3,7 @@ import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-n
 import { Colors } from '../constants/colors';
 import { AnimatedPressable } from './AnimatedPressable';
 import { trackTelemetryEvent } from '../lib/telemetry';
+import { Typography } from '../constants/typography';
 
 interface SyncRetryBannerProps {
   message: string;
@@ -94,7 +95,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 11,
     lineHeight: 15,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   actionBtn: {
     borderRadius: 12,
@@ -107,6 +108,6 @@ const styles = StyleSheet.create({
   actionText: {
     color: Colors.textPrimary,
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
 });

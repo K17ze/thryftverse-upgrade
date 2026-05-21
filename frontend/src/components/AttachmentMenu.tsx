@@ -1,15 +1,17 @@
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   Modal,
   Animated,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { Space, Radius, Type } from '../theme/designTokens';
+import { AnimatedPressable } from './AnimatedPressable';
+import { Typography } from '../constants/typography';
+import { Caption, Headline } from './ui/Text';
 
 interface AttachmentOption {
   id: string;
@@ -81,12 +83,12 @@ export function AttachmentMenu({
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.backdrop}
           onPress={onClose}
           activeOpacity={1}
         />
-        
+
         <Animated.View
           style={[
             styles.container,
@@ -94,19 +96,22 @@ export function AttachmentMenu({
             style,
           ]}
         >
-          {/* Handle */}
           <View style={styles.handle} />
-          
-          {/* Title */}
-          <Text style={styles.title}>Add Attachment</Text>
-          
-          {/* Options Grid */}
+
+          <Headline style={styles.title}>Add Attachment</Headline>
+
           <View style={styles.optionsGrid}>
             {ATTACHMENT_OPTIONS.map((option) => (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={option.id}
                 style={styles.optionButton}
                 onPress={() => handleOptionPress(option)}
+                accessibilityRole="button"
+                accessibilityLabel={option.label}
+                accessibilityHint={`Select ${option.label} attachment`}
+                activeOpacity={0.7}
+                scaleValue={0.95}
+                hapticFeedback="light"
               >
                 <View
                   style={[
@@ -120,15 +125,22 @@ export function AttachmentMenu({
                     color={option.color}
                   />
                 </View>
-                <Text style={styles.optionLabel}>{option.label}</Text>
-              </TouchableOpacity>
+                <Caption color={Colors.textPrimary} style={styles.optionLabel}>{option.label}</Caption>
+              </AnimatedPressable>
             ))}
           </View>
-          
-          {/* Cancel Button */}
-          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
+
+          <AnimatedPressable
+            style={styles.cancelButton}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            activeOpacity={0.7}
+            scaleValue={0.98}
+            hapticFeedback="light"
+          >
+            <Caption color={Colors.danger} style={styles.cancelText}>Cancel</Caption>
+          </AnimatedPressable>
         </Animated.View>
       </View>
     </Modal>
@@ -146,11 +158,11 @@ const styles = StyleSheet.create({
   },
   container: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-    paddingTop: 12,
+    borderTopLeftRadius: Radius.xl + 8,
+    borderTopRightRadius: Radius.xl + 8,
+    paddingHorizontal: Space.lg - 4,
+    paddingBottom: Space.xl + 14,
+    paddingTop: Space.sm + 4,
   },
   handle: {
     width: 40,
@@ -158,48 +170,41 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: Space.lg - 4,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.textPrimary,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: Space.lg - 4,
   },
   optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: Space.lg - 4,
   },
   optionButton: {
     width: '30%',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: Space.md + 4,
   },
   iconContainer: {
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   optionLabel: {
-    fontSize: 13,
-    color: Colors.textPrimary,
-    fontWeight: '500',
+    fontFamily: Typography.family.medium,
   },
   cancelButton: {
     backgroundColor: Colors.background,
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: Space.md,
+    borderRadius: Radius.lg,
     alignItems: 'center',
   },
   cancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.danger,
+    fontFamily: Typography.family.semibold,
   },
 });

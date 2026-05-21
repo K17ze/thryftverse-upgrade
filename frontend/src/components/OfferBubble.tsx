@@ -3,12 +3,17 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  Image,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { Space, Radius, Type } from '../theme/designTokens';
+import { CachedImage } from './CachedImage';
+import { AppButton } from './ui/AppButton';
+import { ChatCard } from './chat/ChatCard';
+import { Caption, BodyEmphasis, Meta } from './ui/Text';
+import { Typography } from '../constants/typography';
+import { AnimatedPressable } from './AnimatedPressable';
 
 export type OfferType = 'offer' | 'counter' | 'accept' | 'decline' | 'expired';
 
@@ -95,34 +100,43 @@ export function OfferBubble({
   const showActions = type === 'offer' && status === 'pending' && !isMe;
 
   return (
-    <View style={[styles.container, isMe ? styles.containerMe : styles.containerThem, style]}>
+    <ChatCard
+      variant={isMe ? 'tint' : 'surface'}
+      style={[styles.container, isMe && styles.containerMe, style]}
+    >
       {/* Header */}
       <View style={[styles.header, { backgroundColor: typeConfig.bgColor }]}>
         <Ionicons name={typeConfig.icon as any} size={18} color={typeConfig.color} />
-        <Text style={[styles.typeLabel, { color: typeConfig.color }]}>
+        <Caption color={typeConfig.color} style={styles.typeLabel}>
           {typeConfig.label}
-        </Text>
+        </Caption>
       </View>
 
       {/* Content */}
       <View style={styles.content}>
         {/* Item Preview */}
         {itemName && (
-          <TouchableOpacity style={styles.itemRow} onPress={onViewItem}>
+          <AnimatedPressable
+            style={styles.itemRow}
+            onPress={onViewItem}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${itemName}`}
+            activeOpacity={0.7}
+            scaleValue={0.98}
+            hapticFeedback="light"
+          >
             {itemImage && (
-              <Image source={{ uri: itemImage }} style={styles.itemImage} />
+              <CachedImage uri={itemImage} style={styles.itemImage} contentFit="cover" />
             )}
             <View style={styles.itemInfo}>
-              <Text style={styles.itemName} numberOfLines={1}>
-                {itemName}
-              </Text>
+              <BodyEmphasis numberOfLines={1}>{itemName}</BodyEmphasis>
               {originalPrice && (
-                <Text style={styles.originalPrice}>
+                <Caption color={Colors.textMuted} style={styles.originalPrice}>
                   Listed: {currency}{originalPrice.toLocaleString()}
-                </Text>
+                </Caption>
               )}
             </View>
-          </TouchableOpacity>
+          </AnimatedPressable>
         )}
 
         {/* Offer Amount */}
@@ -132,7 +146,7 @@ export function OfferBubble({
           </Text>
           {discountPercent > 0 && type === 'offer' && (
             <View style={styles.discountBadge}>
-              <Text style={styles.discountText}>-{discountPercent}%</Text>
+              <Caption color={Colors.textInverse} style={styles.discountText}>-{discountPercent}%</Caption>
             </View>
           )}
         </View>
@@ -157,206 +171,171 @@ export function OfferBubble({
                   : Colors.textMuted
               }
             />
-            <Text
-              style={[
-                styles.statusText,
-                {
-                  color:
-                    status === 'accepted'
-                      ? Colors.success
-                      : status === 'declined'
-                      ? Colors.danger
-                      : Colors.textMuted,
-                },
-              ]}
+            <Caption
+              color={
+                status === 'accepted'
+                  ? Colors.success
+                  : status === 'declined'
+                  ? Colors.danger
+                  : Colors.textMuted
+              }
+              style={styles.statusText}
             >
               {status === 'accepted'
                 ? 'This offer was accepted'
                 : status === 'declined'
                 ? 'This offer was declined'
                 : 'This offer has expired'}
-            </Text>
+            </Caption>
           </View>
         )}
 
         {/* Action Buttons */}
         {showActions && (
           <View style={styles.actions}>
-            <TouchableOpacity
+            <AppButton
               style={[styles.actionButton, styles.declineButton]}
+              variant="secondary"
+              size="sm"
+              title="Decline"
               onPress={onDecline}
-            >
-              <Text style={styles.declineText}>Decline</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+              accessibilityLabel="Decline offer"
+              accessibilityRole="button"
+            />
+            <AppButton
               style={[styles.actionButton, styles.counterButton]}
+              variant="secondary"
+              size="sm"
+              title="Counter"
               onPress={onCounter}
-            >
-              <Text style={styles.counterText}>Counter</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+              accessibilityLabel="Counter offer"
+              accessibilityRole="button"
+            />
+            <AppButton
               style={[styles.actionButton, styles.acceptButton]}
+              variant="primary"
+              size="sm"
+              title="Accept"
               onPress={onAccept}
-            >
-              <Text style={styles.acceptText}>Accept</Text>
-            </TouchableOpacity>
+              accessibilityLabel="Accept offer"
+              accessibilityRole="button"
+            />
           </View>
         )}
       </View>
 
       {/* Footer */}
       <View style={styles.footer}>
-        <Text style={styles.timestamp}>{timestamp}</Text>
+        <Caption color={Colors.textMuted}>{timestamp}</Caption>
         {senderName && (
-          <Text style={styles.senderName}>• {senderName}</Text>
+          <Caption color={Colors.textMuted}> \u00b7 {senderName}</Caption>
         )}
       </View>
-    </View>
+    </ChatCard>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     maxWidth: 300,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
-    marginVertical: 4,
+    marginVertical: Space.xs,
   },
   containerMe: {
-    backgroundColor: Colors.brand,
     alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
-  },
-  containerThem: {
-    backgroundColor: Colors.surface,
-    alignSelf: 'flex-start',
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderBottomRightRadius: Space.xs,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.sm,
   },
   typeLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
   },
   content: {
-    padding: 12,
-    paddingTop: 8,
+    padding: Space.sm + 4,
+    paddingTop: Space.sm,
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 12,
+    gap: Space.sm + 2,
+    backgroundColor: `${Colors.textPrimary}08`,
+    padding: Space.sm,
+    borderRadius: Radius.md,
+    marginBottom: Space.sm + 4,
   },
   itemImage: {
     width: 40,
     height: 40,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   itemInfo: {
     flex: 1,
   },
-  itemName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 2,
-  },
   originalPrice: {
-    fontSize: 12,
-    color: Colors.textMuted,
     textDecorationLine: 'line-through',
   },
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
+    gap: Space.sm + 2,
+    marginBottom: Space.xs + 4,
   },
   amount: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: Type.priceLarge.size,
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
+    letterSpacing: -1,
   },
   discountBadge: {
     backgroundColor: Colors.success,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.full,
   },
   discountText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: Typography.family.bold,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 12,
+    marginBottom: Space.xs + 4,
   },
   statusText: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontFamily: Typography.family.medium,
   },
   actions: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
+    gap: Space.sm + 2,
+    marginTop: Space.sm + 4,
   },
   actionButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
+    height: 38,
+    borderRadius: Radius.md,
   },
   declineButton: {
-    backgroundColor: Colors.background,
-  },
-  declineText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textPrimary,
+    backgroundColor: Colors.surfaceAlt,
   },
   counterButton: {
-    backgroundColor: `${Colors.brand}20`,
-  },
-  counterText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.brand,
+    backgroundColor: Colors.surfaceAlt,
   },
   acceptButton: {
-    backgroundColor: Colors.success,
-  },
-  acceptText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    backgroundColor: Colors.brand,
   },
   footer: {
     flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-    paddingTop: 4,
-    opacity: 0.7,
-  },
-  timestamp: {
-    fontSize: 11,
-    color: Colors.textMuted,
-  },
-  senderName: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    alignItems: 'center',
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
 });
+

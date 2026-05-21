@@ -21,15 +21,23 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 const IS_LIGHT = ActiveTheme === 'light';
 const RING_BG = IS_LIGHT ? '#f0ebe3' : '#151515';
 
+interface SuggestedAction {
+  label: string;
+  onPress: () => void;
+}
+
 interface Props {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
   ctaLabel?: string;
   onCtaPress?: () => void;
+  secondaryCtaLabel?: string;
+  onSecondaryCtaPress?: () => void;
+  suggestedActions?: SuggestedAction[];
   iconColor?: string;
 }
-export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, iconColor = Colors.brand }: Props) {
+export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor = Colors.brand }: Props) {
   const reducedMotionEnabled = useReducedMotion();
 
   // Floating animation on the icon ring
@@ -116,6 +124,33 @@ export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, iconCo
           </AnimatedPressable>
         </Reanimated.View>
       )}
+
+      {secondaryCtaLabel && onSecondaryCtaPress && (
+        <Reanimated.View entering={ctaEnterAnimation}>
+          <AnimatedPressable style={styles.ctaSecondary} onPress={onSecondaryCtaPress} activeOpacity={0.8} hapticFeedback="light">
+            <Text style={styles.ctaSecondaryText}>{secondaryCtaLabel}</Text>
+          </AnimatedPressable>
+        </Reanimated.View>
+      )}
+
+      {suggestedActions && suggestedActions.length > 0 && (
+        <Reanimated.View entering={ctaEnterAnimation} style={styles.suggestedWrap}>
+          <Text style={styles.suggestedLabel}>Suggested</Text>
+          <View style={styles.chipRow}>
+            {suggestedActions.map((action, i) => (
+              <AnimatedPressable
+                key={i}
+                style={styles.chip}
+                onPress={action.onPress}
+                activeOpacity={0.8}
+                hapticFeedback="light"
+              >
+                <Text style={styles.chipText}>{action.label}</Text>
+              </AnimatedPressable>
+            ))}
+          </View>
+        </Reanimated.View>
+      )}
     </View>
   );
 }
@@ -139,7 +174,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
-    ...Elevation.card, // ELEVATED: Better shadow
+    ...Elevation.card,
   },
   title: {
     fontSize: 20,
@@ -159,11 +194,11 @@ const styles = StyleSheet.create({
   },
   cta: {
     marginTop: 20,
-    backgroundColor: Colors.textPrimary, // ELEVATED: Use textPrimary for high contrast
+    backgroundColor: Colors.textPrimary,
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 24,
-    ...Elevation.floating, // ELEVATED: Use design system
+    ...Elevation.floating,
   },
   ctaText: {
     fontSize: 15,
@@ -171,5 +206,49 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     color: Colors.background,
   },
+  ctaSecondary: {
+    marginTop: 10,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  ctaSecondaryText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  suggestedWrap: {
+    marginTop: 20,
+    alignItems: 'center',
+    gap: 10,
+  },
+  suggestedLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  chipText: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
 });
-

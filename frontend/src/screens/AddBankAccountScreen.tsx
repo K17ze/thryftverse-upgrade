@@ -27,7 +27,6 @@ import { parseApiError } from '../lib/apiClient';
 
 type Props = StackScreenProps<RootStackParamList, 'AddBankAccount'>;
 
-const IS_LIGHT = ActiveTheme === 'light';
 const BG = Colors.background;
 const CARD = Colors.surface;
 const CARD_SOFT = Colors.surfaceAlt;
@@ -35,7 +34,7 @@ const BORDER = Colors.border;
 const DIVIDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
-const BRAND = IS_LIGHT ? '#2f251b' : '#d7b98f';
+const BRAND = Colors.brand;
 
 export default function AddBankAccountScreen({ navigation }: Props) {
   const [accountName, setAccountName] = useState('');

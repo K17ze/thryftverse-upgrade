@@ -7,6 +7,7 @@ import {
   RefreshControl,
   Alert,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
@@ -35,6 +36,9 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
+import { Typography } from '../constants/typography';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { SharedTransitionView } from '../components/SharedTransitionView';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 180;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -44,6 +48,7 @@ export default function CollectionDetailScreen() {
   const route = useRoute<any>();
   const haptic = useHaptic();
   const { show } = useToast();
+  const { formatFromFiat } = useFormattedPrice();
   const [refreshing, setRefreshing] = useState(false);
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
@@ -255,6 +260,10 @@ export default function CollectionDetailScreen() {
             onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
           />
         )}
+
+        {/* More like this */}
+        <MoreLikeThisRow collectionItems={collectionItems} listings={listings} navigation={navigation} formatFromFiat={formatFromFiat} />
+
         <View style={{ height: 120 }} />
       </Reanimated.ScrollView>
 
@@ -267,6 +276,62 @@ export default function CollectionDetailScreen() {
         onCancel={() => setRenameModalVisible(false)}
       />
     </SafeAreaView>
+  );
+}
+
+// ============================================================================
+// More Like This Row
+// ============================================================================
+function MoreLikeThisRow({
+  collectionItems,
+  listings,
+  navigation,
+  formatFromFiat,
+}: {
+  collectionItems: any[];
+  listings: any[];
+  navigation: any;
+  formatFromFiat: any;
+}) {
+  const similarItems = React.useMemo(() => {
+    if (collectionItems.length === 0) return [];
+    const brands = new Set(collectionItems.map((i) => i.brand?.toLowerCase()));
+    const cats = new Set(collectionItems.map((i) => i.category?.toLowerCase()));
+    return listings
+      .filter((l) => !collectionItems.some((c) => c.id === l.id))
+      .filter((l) => brands.has(l.brand?.toLowerCase()) || cats.has(l.category?.toLowerCase()))
+      .slice(0, 10);
+  }, [collectionItems, listings]);
+
+  if (similarItems.length === 0) return null;
+
+  return (
+    <View style={{ marginTop: 32, paddingBottom: 8 }}>
+      <Text style={styles.moreTitle}>More like this</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
+        {similarItems.map((item) => (
+          <AnimatedPressable
+            key={item.id}
+            style={styles.moreCard}
+            onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
+            activeOpacity={0.9}
+          >
+            <SharedTransitionView
+              style={styles.moreMediaWrap}
+              sharedTransitionTag={"image-"+item.id+"-0"}
+            >
+              <CachedImage
+                uri={item.images[0]}
+                style={styles.moreImg}
+                containerStyle={{ width: '100%', height: '100%', borderRadius: 12 }}
+                contentFit="cover"
+              />
+            </SharedTransitionView>
+            <Text style={styles.morePrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+          </AnimatedPressable>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -331,7 +396,7 @@ const renameStyles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     marginBottom: Space.md,
   },
@@ -367,7 +432,7 @@ const styles = StyleSheet.create({
   floatingTitle: {
     flex: 1,
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     textAlign: 'center',
   },
@@ -409,7 +474,7 @@ const styles = StyleSheet.create({
   },
   coverTitle: {
     fontSize: 24,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
@@ -417,7 +482,7 @@ const styles = StyleSheet.create({
   },
   coverMeta: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.85)',
     marginTop: 4,
   },
@@ -450,12 +515,12 @@ const styles = StyleSheet.create({
   },
   noCoverTitle: {
     fontSize: 22,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
   noCoverMeta: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     marginTop: 2,
   },
@@ -471,5 +536,32 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 120,
+  },
+  moreTitle: {
+    fontSize: 16,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    marginBottom: 14,
+    paddingHorizontal: Space.md,
+  },
+  moreCard: {
+    width: 140,
+    paddingLeft: Space.md,
+  },
+  moreMediaWrap: {
+    width: 140,
+    height: 180,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  moreImg: {
+    width: '100%',
+    height: '100%',
+  },
+  morePrice: {
+    fontSize: 14,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
 });

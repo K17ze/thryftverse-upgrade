@@ -21,6 +21,7 @@ import { AppInput } from '../components/ui/AppInput';
 import { SettingsHeader } from '../components/settings/SettingsHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar';
+import { Typography } from '../constants/typography';
 
 export default function ChangePasswordScreen() {
   const navigation = useNavigation();
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: Type.meta.letterSpacing,

@@ -12,6 +12,7 @@ import { createUserPaymentMethod } from '../../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../../services/capabilitiesApi';
 import { parseApiError } from '../../lib/apiClient';
 import * as Haptics from 'expo-haptics';
+import { Typography } from '../../constants/typography';
 
 const IS_LIGHT = ActiveTheme === 'light';
 const BG = Colors.background;
@@ -276,7 +277,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
 }
 
 const styles = StyleSheet.create({
-  sheetTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', color: TEXT, marginBottom: 20 },
+  sheetTitle: { fontSize: 20, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 20 },
   policyLabel: { fontSize: 12, color: MUTED, textAlign: 'center', marginTop: -8, marginBottom: 12 },
   content: { paddingBottom: 40 },
   blockedCard: {

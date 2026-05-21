@@ -23,6 +23,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { SettingsHeader } from '../components/settings/SettingsHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
+import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
 
@@ -306,12 +307,12 @@ const styles = StyleSheet.create({
   quickLabel: {
     fontSize: Type.caption.size,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: Type.caption.letterSpacing,
   },
   sectionTitle: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: Type.meta.letterSpacing,
@@ -333,7 +334,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: Type.body.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     paddingVertical: 0,
@@ -344,7 +345,7 @@ const styles = StyleSheet.create({
   },
   emptyFaqsText: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
   },
   faqRow: {
@@ -355,7 +356,7 @@ const styles = StyleSheet.create({
   faqQ: {
     flex: 1,
     fontSize: Type.body.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     lineHeight: Type.body.lineHeight,
     letterSpacing: Type.body.letterSpacing,
@@ -363,7 +364,7 @@ const styles = StyleSheet.create({
   },
   faqA: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     paddingBottom: Space.sm,
@@ -378,7 +379,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     minHeight: 100,
     marginBottom: Space.sm,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     lineHeight: Type.body.lineHeight,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -395,7 +396,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     letterSpacing: Type.body.letterSpacing,
   },
   version: {
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: 'center',
     marginTop: Space.sm,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     letterSpacing: Type.meta.letterSpacing,
   },
 });

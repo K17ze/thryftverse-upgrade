@@ -3,12 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Animated,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { Space, Radius, Type } from '../theme/designTokens';
+import { AnimatedPressable } from './AnimatedPressable';
+import { Typography } from '../constants/typography';
+import { Caption, Meta } from './ui/Text';
 
 interface VoiceMessagePlayerProps {
   duration: number; // in seconds
@@ -37,6 +40,7 @@ export function VoiceMessagePlayer({
 }: VoiceMessagePlayerProps) {
   const [localPlaying, setLocalPlaying] = useState(isPlaying);
   const [localSpeed, setLocalSpeed] = useState<1 | 1.5 | 2>(playbackSpeed);
+  const [waveformWidth, setWaveformWidth] = useState(200);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -73,35 +77,43 @@ export function VoiceMessagePlayer({
 
   const handleWaveformPress = (event: any) => {
     const { locationX } = event.nativeEvent;
-    const width = 200; // Approximate width of waveform area
-    const progress = Math.min(Math.max(locationX / width, 0), 1);
+    const progress = Math.min(Math.max(locationX / waveformWidth, 0), 1);
     const seekTime = progress * duration;
     onSeek?.(seekTime);
   };
 
-  const interpolatedColor = progressAnim.interpolate({
-    inputRange: [0, 100],
-    outputRange: ['rgba(255,255,255,0.3)', 'rgba(255,255,255,1)'],
-  });
+  const handleLayout = (event: any) => {
+    setWaveformWidth(event.nativeEvent.layout.width);
+  };
 
   return (
     <View style={[styles.container, isMe ? styles.containerMe : styles.containerThem, style]}>
-      {/* Play/Pause Button */}
-      <TouchableOpacity style={styles.playButton} onPress={handlePlayPause}>
+      <AnimatedPressable
+        style={styles.playButton}
+        onPress={handlePlayPause}
+        accessibilityRole="button"
+        accessibilityLabel={localPlaying ? 'Pause voice message' : 'Play voice message'}
+        activeOpacity={0.7}
+        scaleValue={0.9}
+        hapticFeedback="light"
+      >
         <Ionicons
           name={localPlaying ? 'pause' : 'play'}
           size={24}
-          color={isMe ? '#FFFFFF' : Colors.brand}
+          color={isMe ? Colors.textInverse : Colors.brand}
           style={!localPlaying && { marginLeft: 2 }}
         />
-      </TouchableOpacity>
+      </AnimatedPressable>
 
-      {/* Waveform */}
-      <TouchableOpacity style={styles.waveformContainer} onPress={handleWaveformPress} activeOpacity={0.8}>
+      <AnimatedPressable
+        style={styles.waveformContainer}
+        onPress={handleWaveformPress}
+        activeOpacity={0.8}
+        onLayout={handleLayout}
+      >
         <View style={styles.waveform}>
           {waveform.map((amplitude, index) => {
             const isPlayed = (index / waveform.length) <= (currentTime / duration);
-            
             return (
               <Animated.View
                 key={index}
@@ -110,28 +122,33 @@ export function VoiceMessagePlayer({
                   {
                     height: `${Math.max(amplitude * 100, 10)}%`,
                     backgroundColor: isPlayed
-                      ? (isMe ? '#FFFFFF' : Colors.brand)
-                      : (isMe ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)'),
+                      ? (isMe ? Colors.textInverse : Colors.brand)
+                      : (isMe ? `${Colors.textInverse}30` : `${Colors.textMuted}30`),
                   },
-                  localPlaying && isPlayed && styles.activeBar,
                 ]}
               />
             );
           })}
         </View>
-      </TouchableOpacity>
+      </AnimatedPressable>
 
-      {/* Duration */}
-      <Text style={[styles.duration, isMe ? styles.durationMe : styles.durationThem]}>
+      <Caption color={isMe ? Colors.textInverse : Colors.textMuted} style={styles.duration}>
         {formatTime(duration - currentTime)}
-      </Text>
+      </Caption>
 
-      {/* Speed Toggle */}
-      <TouchableOpacity style={styles.speedButton} onPress={cycleSpeed}>
-        <Text style={[styles.speedText, isMe ? styles.speedTextMe : styles.speedTextThem]}>
+      <AnimatedPressable
+        style={styles.speedButton}
+        onPress={cycleSpeed}
+        accessibilityRole="button"
+        accessibilityLabel={`Playback speed ${localSpeed}x`}
+        activeOpacity={0.7}
+        scaleValue={0.9}
+        hapticFeedback="light"
+      >
+        <Meta color={isMe ? Colors.textInverse : Colors.brand} style={styles.speedText}>
           {localSpeed}x
-        </Text>
-      </TouchableOpacity>
+        </Meta>
+      </AnimatedPressable>
     </View>
   );
 }
@@ -140,8 +157,8 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 20,
+    padding: Space.sm + 2,
+    borderRadius: Radius.xl + 4,
     minWidth: 240,
     maxWidth: 300,
   },
@@ -156,16 +173,16 @@ const styles = StyleSheet.create({
   playButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: `${Colors.textInverse}20`,
   },
   waveformContainer: {
     flex: 1,
     height: 40,
     justifyContent: 'center',
-    marginHorizontal: 8,
+    marginHorizontal: Space.sm + 2,
   },
   waveform: {
     flexDirection: 'row',
@@ -178,36 +195,17 @@ const styles = StyleSheet.create({
     width: 3,
     borderRadius: 1.5,
   },
-  activeBar: {
-    // Add animation style for playing state
-  },
   duration: {
-    fontSize: 12,
-    fontWeight: '500',
     minWidth: 35,
   },
-  durationMe: {
-    color: '#FFFFFF',
-    opacity: 0.9,
-  },
-  durationThem: {
-    color: Colors.textMuted,
-  },
   speedButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    marginLeft: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.sm,
+    backgroundColor: `${Colors.textInverse}20`,
+    marginLeft: Space.xs,
   },
   speedText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  speedTextMe: {
-    color: '#FFFFFF',
-  },
-  speedTextThem: {
-    color: Colors.brand,
+    fontFamily: Typography.family.bold,
   },
 });

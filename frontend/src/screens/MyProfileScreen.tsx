@@ -55,7 +55,6 @@ const AVATAR_SIZE = 108;
 const HERO_MEDIA_GAP = 6;
 const HERO_MEDIA_TILE = (SCREEN_WIDTH - 40 - HERO_MEDIA_GAP * 2) / 3;
 // Phase 3: Simplified to use new 5-core palette
-const IS_LIGHT = ActiveTheme === 'light';
 const BRAND = Colors.brand;
 const PANEL_BG = Colors.surface;
 const PANEL_SOFT = Colors.surfaceAlt;
@@ -286,21 +285,21 @@ export default function MyProfileScreen() {
         label: 'Closet',
         route: 'Closet',
         value: `${savedCount + wishlistCount} items`,
-        color: IS_LIGHT ? '#6a4f2f' : '#d8c6a2',
+        color: Colors.textSecondary,
       },
       {
         icon: 'wallet-outline',
         label: 'Wallet',
         route: 'Wallet',
         value: formatFromFiat(120.5, 'GBP', { displayMode: 'fiat' }),
-        color: IS_LIGHT ? '#5c4830' : '#ccb893',
+        color: Colors.textSecondary,
       },
       {
         icon: 'pie-chart-outline',
         label: 'Co-Own',
         route: 'Portfolio',
         value: `${coOwnHoldings.length} assets`,
-        color: IS_LIGHT ? '#4a3a28' : '#bba882',
+        color: Colors.textSecondary,
       },
     ],
     [formatFromFiat, coOwnHoldings.length, savedCount, wishlistCount]
@@ -710,7 +709,7 @@ const styles = StyleSheet.create({
   coverImage: { width: '100%', height: '100%', backgroundColor: Colors.border },
   coverGradient: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: IS_LIGHT ? 'rgba(236,234,230,0.25)' : 'rgba(9,9,9,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
   },
   coverActionLayer: {
     position: 'absolute',
@@ -758,7 +757,7 @@ const styles = StyleSheet.create({
   topUtilityPillText: {
     color: '#fff',
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
   },
 
@@ -776,7 +775,7 @@ const styles = StyleSheet.create({
   },
   floatingHeaderTitle: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -876,7 +875,7 @@ const styles = StyleSheet.create({
   heroName: {
     fontSize: 18,
     lineHeight: 22,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     marginBottom: 2,
     alignSelf: 'center',
@@ -894,7 +893,7 @@ const styles = StyleSheet.create({
   heroHandle: {
     fontSize: 11,
     lineHeight: 14,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     marginBottom: 6,
     letterSpacing: 0.12,
@@ -902,7 +901,7 @@ const styles = StyleSheet.create({
   heroBio: {
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
     textAlign: 'center',
     marginBottom: 6,
@@ -910,7 +909,7 @@ const styles = StyleSheet.create({
   },
   heroMeta: {
     fontSize: 11,
-    fontFamily: 'Inter_300Light',
+    fontFamily: Typography.family.light,
     color: Colors.textMuted,
     alignSelf: 'center',
     marginBottom: 12,
@@ -931,7 +930,7 @@ const styles = StyleSheet.create({
   profileActionPrimaryText: {
     color: Colors.background,
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.15,
   },
   profileActionSecondary: {
@@ -942,7 +941,7 @@ const styles = StyleSheet.create({
   profileActionSecondaryText: {
     color: Colors.textPrimary,
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.18,
   },
   profileActionIcon: {
@@ -990,7 +989,7 @@ const styles = StyleSheet.create({
   mediaTilePriceText: {
     color: '#fff',
     fontSize: 9,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.08,
   },
 
@@ -1005,13 +1004,13 @@ const styles = StyleSheet.create({
   statsTitle: {
     color: Colors.textPrimary,
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
   },
   statsHint: {
     color: Colors.textMuted,
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -1037,13 +1036,13 @@ const styles = StyleSheet.create({
   },
   statNumber: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textMuted,
     letterSpacing: 0.55,
   },
@@ -1069,7 +1068,7 @@ const styles = StyleSheet.create({
   },
   quickAccessTitle: {
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   quickAccessHint: {
@@ -1111,7 +1110,7 @@ const styles = StyleSheet.create({
   },
   quickLabel: {
     fontSize: 10,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 12,
@@ -1119,7 +1118,7 @@ const styles = StyleSheet.create({
   },
   quickValue: {
     fontSize: 8,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.brand,
     marginTop: 1,
     letterSpacing: 0.06,
@@ -1141,7 +1140,7 @@ const styles = StyleSheet.create({
   },
   portfolioSummaryLabel: {
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.brand,
     letterSpacing: 0.9,
   },
@@ -1152,12 +1151,12 @@ const styles = StyleSheet.create({
   },
   portfolioSummaryLinkText: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.brand,
   },
   portfolioSummaryValue: {
     fontSize: 26,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.35,
   },
@@ -1170,13 +1169,13 @@ const styles = StyleSheet.create({
   },
   portfolioSummaryMeta: {
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     letterSpacing: 0.1,
   },
   portfolioSummaryPnl: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   portfolioPnlUp: { color: Colors.brand },
   portfolioPnlDown: { color: '#ff9d9d' },
@@ -1194,7 +1193,7 @@ const styles = StyleSheet.create({
   portfolioSummaryCtaText: {
     color: Colors.background,
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.16,
   },
 
@@ -1211,14 +1210,14 @@ const styles = StyleSheet.create({
   },
   wardrobeSectionLabel: {
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.brand,
     letterSpacing: 1,
     marginBottom: 4,
   },
   heroNameLinkedIn: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.3,
     textAlign: 'center',
@@ -1226,14 +1225,14 @@ const styles = StyleSheet.create({
   },
   heroHandleLinkedIn: {
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     textAlign: 'center',
     marginTop: 2,
   },
   wardrobeTitle: {
     fontSize: 20,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.25,
   },
@@ -1244,7 +1243,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.brand,
     letterSpacing: 0.16,
   },
@@ -1273,12 +1272,12 @@ const styles = StyleSheet.create({
   },
   wardrobePrice: {
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   wardrobeBrand: {
     fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
     marginTop: 2,
     letterSpacing: 0.08,
@@ -1297,7 +1296,7 @@ const styles = StyleSheet.create({
   },
   wardrobeLikeCount: {
     fontSize: 10,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
   },
   wardrobeEmptyState: {
@@ -1322,12 +1321,12 @@ const styles = StyleSheet.create({
   },
   wardrobeEmptyTitle: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   wardrobeEmptySubtitle: {
     fontSize: 11,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
   },
 
@@ -1341,14 +1340,14 @@ const styles = StyleSheet.create({
   },
   badgesSectionLabel: {
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.brand,
     letterSpacing: 1,
     marginBottom: 4,
   },
   badgesTitle: {
     fontSize: 20,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     marginBottom: 14,
     letterSpacing: -0.2,
@@ -1370,7 +1369,7 @@ const styles = StyleSheet.create({
   badgeLabel: {
     fontSize: 11,
     color: Colors.textMuted,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textAlign: 'center',
     maxWidth: 64,
   },

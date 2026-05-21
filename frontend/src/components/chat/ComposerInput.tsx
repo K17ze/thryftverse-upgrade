@@ -1,0 +1,131 @@
+import React from 'react';
+import { View, StyleSheet, ViewStyle, KeyboardTypeOptions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../constants/colors';
+import { Space, Radius, Type } from '../../theme/designTokens';
+import { AnimatedPressable } from '../AnimatedPressable';
+import { AppInput } from '../ui/AppInput';
+
+interface ComposerInputProps {
+  value: string;
+  onChangeText: (text: string) => void;
+  onSend: () => void;
+  onCameraPress?: () => void;
+  placeholder?: string;
+  returnKeyType?: 'send' | 'default';
+  style?: ViewStyle;
+  inputContainerStyle?: ViewStyle;
+}
+
+export function ComposerInput({
+  value,
+  onChangeText,
+  onSend,
+  onCameraPress,
+  placeholder = 'Write a message...',
+  returnKeyType = 'send',
+  style,
+  inputContainerStyle,
+}: ComposerInputProps) {
+  const canSend = value.trim().length > 0;
+
+  return (
+    <View style={[styles.container, style]}>
+      <View style={[styles.pill, inputContainerStyle]}>
+        {onCameraPress && (
+          <AnimatedPressable
+            style={styles.cameraBtn}
+            onPress={onCameraPress}
+            accessibilityRole="button"
+            accessibilityLabel="Attach photo"
+            accessibilityHint="Opens camera or photo picker"
+            activeOpacity={0.7}
+            scaleValue={0.9}
+            hapticFeedback="light"
+          >
+            <Ionicons name="camera-outline" size={22} color={Colors.textSecondary} />
+          </AnimatedPressable>
+        )}
+
+        <AppInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={Colors.textMuted}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={canSend ? onSend : undefined}
+          inputContainerStyle={styles.inputWrap}
+          inputStyle={styles.input}
+          accessibilityLabel="Message input"
+          accessibilityHint="Type your message here"
+        />
+
+        <AnimatedPressable
+          style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+          onPress={onSend}
+          disabled={!canSend}
+          accessibilityRole="button"
+          accessibilityLabel="Send message"
+          accessibilityHint="Sends the current message"
+          activeOpacity={0.7}
+          scaleValue={0.9}
+          hapticFeedback="light"
+        >
+          <Ionicons name="arrow-up" size={20} color={Colors.background} />
+        </AnimatedPressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    paddingBottom: Space.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    paddingLeft: Space.xs,
+    paddingRight: Space.xs,
+    minHeight: 56,
+  },
+  cameraBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inputWrap: {
+    flex: 1,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    minHeight: 44,
+    paddingHorizontal: Space.xs,
+  },
+  input: {
+    fontSize: Type.body.size,
+    color: Colors.textPrimary,
+    paddingVertical: 0,
+  },
+  sendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.brand,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendBtnDisabled: {
+    backgroundColor: Colors.surfaceAlt,
+  },
+});

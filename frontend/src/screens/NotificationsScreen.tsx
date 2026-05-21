@@ -1,3 +1,4 @@
+import { Typography } from '../constants/typography';
 import React from 'react';
 import {
   View,
@@ -23,7 +24,8 @@ import { useStore } from '../store/useStore';
 import { NotificationEvent, listNotificationEvents } from '../services/notificationsApi';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Type } from '../theme/designTokens';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { MOCK_USERS } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
 
@@ -42,24 +44,23 @@ type NotificationCard = {
   payload: Record<string, unknown>;
 };
 
-const IS_LIGHT = ActiveTheme === 'light';
 const PANEL_BG = Colors.surface;
-const PANEL_ALT = IS_LIGHT ? '#f7f4ef' : '#161616';
+const PANEL_ALT = Colors.surfaceAlt;
 const PANEL_BORDER = Colors.border;
-const BRAND = IS_LIGHT ? '#2f251b' : '#d7b98f';
+const BRAND = Colors.brand;
 
 function getNotifIcon(type: NotificationCardType): { name: string; color: string; bg: string } {
   switch (type) {
     case 'new_item':
-      return { name: 'shirt-outline', color: IS_LIGHT ? '#5c4830' : '#d8c6a2', bg: IS_LIGHT ? '#f0e9df' : '#1f1a14' };
+      return { name: 'shirt-outline', color: Colors.textSecondary, bg: Colors.surfaceAlt };
     case 'like':
-      return { name: 'heart', color: '#e74c3c', bg: IS_LIGHT ? '#fdf0ef' : '#1f1212' };
+      return { name: 'heart', color: '#e74c3c', bg: Colors.surfaceAlt };
     case 'review':
-      return { name: 'star', color: '#FFD700', bg: IS_LIGHT ? '#fdf8e8' : '#1f1c0e' };
+      return { name: 'star', color: '#FFD700', bg: Colors.surfaceAlt };
     case 'order':
-      return { name: 'cube-outline', color: IS_LIGHT ? '#2d7d46' : '#5dd47a', bg: IS_LIGHT ? '#ecf7ef' : '#0f1f14' };
+      return { name: 'cube-outline', color: Colors.success, bg: Colors.surfaceAlt };
     case 'price':
-      return { name: 'pricetag-outline', color: BRAND, bg: IS_LIGHT ? '#f4efe7' : '#171412' };
+      return { name: 'pricetag-outline', color: BRAND, bg: Colors.surfaceAlt };
     default:
       return { name: 'notifications-outline', color: Colors.textMuted, bg: PANEL_ALT };
   }
@@ -304,20 +305,15 @@ export default function NotificationsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        <AnimatedPressable style={styles.backBtn} onPress={handleMarkAllAsRead} accessibilityLabel={hasUnread ? 'Mark all notifications as read' : 'All caught up'}>
-          <Ionicons
-            name="checkmark-done-outline"
-            size={22}
-            color={hasUnread ? Colors.textPrimary : Colors.textMuted}
-          />
-        </AnimatedPressable>
-      </View>
+      <ScreenHeader
+        title="Notifications"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          <AnimatedPressable onPress={handleMarkAllAsRead} accessibilityLabel={hasUnread ? 'Mark all notifications as read' : 'All caught up'}>
+            <Ionicons name="checkmark-done-outline" size={22} color={hasUnread ? Colors.textPrimary : Colors.textMuted} />
+          </AnimatedPressable>
+        }
+      />
 
       <SectionList
         sections={sections}
@@ -446,32 +442,12 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: PANEL_BORDER,
-  },
-  backBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: PANEL_BG,
-    borderWidth: 1, borderColor: PANEL_BORDER,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.textPrimary,
-  },
 
   listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 120 },
 
   sectionTitle: {
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
@@ -494,8 +470,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   notifCardUnread: {
-    backgroundColor: IS_LIGHT ? '#f9f6f0' : '#141210',
-    borderColor: IS_LIGHT ? '#d4c9b5' : '#332e26',
+    backgroundColor: Colors.surfaceAlt,
+    borderColor: Colors.border,
   },
 
   unreadDot: {
@@ -522,17 +498,17 @@ const styles = StyleSheet.create({
 
   notifBody: { flex: 1 },
   notifText: {
-    color: Colors.textSecondary, fontSize: 14, fontFamily: 'Inter_400Regular',
+    color: Colors.textSecondary, fontSize: 14, fontFamily: Typography.family.regular,
     lineHeight: 20, marginBottom: 8,
   },
-  notifTextUnread: { color: Colors.textPrimary, fontFamily: 'Inter_500Medium' },
+  notifTextUnread: { color: Colors.textPrimary, fontFamily: Typography.family.medium },
 
   notifMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   notifTypeIcon: {
     width: 22, height: 22, borderRadius: 11,
     alignItems: 'center', justifyContent: 'center',
   },
-  notifTime: { fontSize: 12, color: Colors.textMuted, fontFamily: 'Inter_400Regular' },
+  notifTime: { fontSize: 12, color: Colors.textMuted, fontFamily: Typography.family.regular },
   notifActionRow: {
     marginTop: 4,
     marginHorizontal: 16,
@@ -580,7 +556,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textSecondary,
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   notifMessageBtn: {
     width: 28,
@@ -601,7 +577,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
   },
 });

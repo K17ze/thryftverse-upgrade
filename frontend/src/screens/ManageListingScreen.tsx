@@ -29,16 +29,16 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Typography } from '../constants/typography';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const IS_LIGHT = ActiveTheme === 'light';
 const CARD_BG = Colors.surface;
 const CARD_BORDER = Colors.border;
 const SUCCESS_TEXT = '#34C759';
 const DANGER_TEXT = '#FF3B30';
-const BRAND_TINT = IS_LIGHT ? 'rgba(198,166,108,0.18)' : 'rgba(215,185,143,0.22)';
+const BRAND_TINT = Colors.surfaceAlt;
 const WARN_TINT = 'rgba(245,166,35,0.12)';
-const ICON_BG = IS_LIGHT ? '#f4f1eb' : '#1a1a1a';
+const ICON_BG = Colors.surfaceAlt;
 
 type RouteT = RouteProp<RootStackParamList, 'ManageListing'>;
 
@@ -66,7 +66,7 @@ export default function ManageListingScreen() {
 
   const headerBgStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
-    return { backgroundColor: IS_LIGHT ? `rgba(247,245,241,${opacity})` : `rgba(10,10,10,${opacity})` };
+    return { backgroundColor: `rgba(10,10,10,${opacity})` };
   });
 
   const headerTitleStyle = useAnimatedStyle(() => {
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
   },
   hdrTitle: {
     fontSize: 17,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     maxWidth: SCREEN_W * 0.5,
   },
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   statusPillText: {
     color: '#fff',
     fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: 0.3,
   },
   dotRow: {
@@ -376,14 +376,14 @@ const styles = StyleSheet.create({
   },
   infoTitle: {
     fontSize: 20,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     lineHeight: 28,
     marginBottom: 6,
   },
   infoPrice: {
     fontSize: 26,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.brand,
     letterSpacing: -0.5,
     marginBottom: 14,
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   },
   attrChip: {
     flex: 1,
-    backgroundColor: IS_LIGHT ? '#f4f1eb' : '#1a1a1a',
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 10,
@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
   },
   attrLabel: {
     fontSize: 10,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
   },
   attrValue: {
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
 
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
   },
   editBtnText: {
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.background,
   },
 
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
   },
   iconActionLabel: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
   },
 
@@ -486,12 +486,12 @@ const styles = StyleSheet.create({
   },
   toggleTitle: {
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
   toggleSub: {
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     marginTop: 2,
   },
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
   },
   deleteText: {
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: DANGER_TEXT,
   },
 });

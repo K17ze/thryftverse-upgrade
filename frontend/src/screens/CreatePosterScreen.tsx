@@ -9,6 +9,7 @@ import {
   Text,
   PanResponder,
   PanResponderGestureState,
+  GestureResponderEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +40,7 @@ import FilterStrip, { ImageFilter, getFilterOverlay } from '../components/poster
 import GLFilterView from '../components/poster/GLFilterView';
 import MultiPhotoCollage from '../components/poster/MultiPhotoCollage';
 import TemplatePicker from '../components/poster/TemplatePicker';
+import { Typography } from '../constants/typography';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -50,19 +52,14 @@ function useCountdownLabel(targetDate?: string): string {
       setLabel('');
       return;
     }
-
     const update = () => {
       const diff = new Date(targetDate).getTime() - Date.now();
-      if (diff <= 0) {
-        setLabel('Ended');
-        return;
-      }
+      if (diff <= 0) { setLabel('Ended'); return; }
       const h = Math.floor(diff / (1000 * 60 * 60));
       const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const s = Math.floor((diff % (1000 * 60)) / 1000);
       setLabel(`${h}h ${m}m ${s}s`);
     };
-
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
@@ -87,8 +84,8 @@ export default function CreatePosterScreen() {
   );
 
   // ── State ──
-  const [captureMode, setCaptureMode] = React.useState<CaptureMode>('poster');
   const [posterMode, setPosterMode] = React.useState<PosterMode>('marketplace');
+  const [captureMode, setCaptureMode] = React.useState<CaptureMode>('poster');
   const [selectedImageUri, setSelectedImageUri] = React.useState<string | null>(null);
   const [blankBackgroundColor, setBlankBackgroundColor] = React.useState<string | null>(null);
   const [isVideo, setIsVideo] = React.useState(false);
@@ -112,6 +109,11 @@ export default function CreatePosterScreen() {
 
   const [canvasSize, setCanvasSize] = React.useState({ width: SCREEN_W, height: SCREEN_H });
 
+  // Image transform state (pan / zoom)
+  const [imgScale, setImgScale] = React.useState(1);
+  const [imgTranslateX, setImgTranslateX] = React.useState(0);
+  const [imgTranslateY, setImgTranslateY] = React.useState(0);
+
   // Creative state
   const [stickers, setStickers] = React.useState<StickerItem[]>([]);
   const [drawings, setDrawings] = React.useState<BrushStroke[]>([]);
@@ -120,6 +122,12 @@ export default function CreatePosterScreen() {
   const [showFilterStrip, setShowFilterStrip] = React.useState(false);
   const [collagePhotos, setCollagePhotos] = React.useState<string[]>([]);
   const [activeTemplateId, setActiveTemplateId] = React.useState<string | undefined>();
+
+  // Pinch tracking refs
+  const initialPinchDistRef = React.useRef(0);
+  const initialScaleRef = React.useRef(1);
+  const initialTranslateRef = React.useRef({ x: 0, y: 0 });
+  const activePointersRef = React.useRef(0);
 
   // ── Init listing selection ──
   React.useEffect(() => {
@@ -176,7 +184,6 @@ export default function CreatePosterScreen() {
       setFilter(template.filter as ImageFilter);
     }
 
-    // Apply text layers
     if (template.textLayers) {
       const layers: TextLayer[] = template.textLayers.map((tl, i) => ({
         id: `tpl_text_${i}_${Date.now()}`,
@@ -193,7 +200,6 @@ export default function CreatePosterScreen() {
       setTextLayers(layers);
     }
 
-    // Apply stickers
     if (template.stickers) {
       const stickerItems: StickerItem[] = template.stickers.map((s, i) => ({
         id: `tpl_sticker_${i}_${Date.now()}`,
@@ -206,6 +212,81 @@ export default function CreatePosterScreen() {
       setStickers(stickerItems);
     }
   };
+
+  // ── Image transform helpers ──
+  const clampTranslate = (scale: number, tx: number, ty: number) => {
+    const maxW = Math.max(0, (scale - 1) * canvasSize.width * 0.5);
+    const maxH = Math.max(0, (scale - 1) * canvasSize.height * 0.5);
+    return {
+      x: Math.min(Math.max(tx, -maxW), maxW),
+      y: Math.min(Math.max(ty, -maxH), maxH),
+    };
+  };
+
+  const getDistance = (touches: { pageX: number; pageY: number }[]) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].pageX - touches[1].pageX;
+    const dy = touches[0].pageY - touches[1].pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const imagePanResponder = React.useMemo(() =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !!selectedImageUri && layout === 'single',
+      onMoveShouldSetPanResponder: (_evt, gesture) => {
+        if (!selectedImageUri || layout !== 'single') return false;
+        return activePointersRef.current >= 2 || Math.abs(gesture.dx) > 3 || Math.abs(gesture.dy) > 3;
+      },
+      onPanResponderGrant: (evt: GestureResponderEvent) => {
+        const touches = evt.nativeEvent.changedTouches;
+        activePointersRef.current = touches.length;
+
+        if (touches.length >= 2) {
+          initialPinchDistRef.current = getDistance(touches as any);
+          initialScaleRef.current = imgScale;
+          initialTranslateRef.current = { x: imgTranslateX, y: imgTranslateY };
+        } else {
+          initialTranslateRef.current = { x: imgTranslateX, y: imgTranslateY };
+        }
+      },
+      onPanResponderMove: (evt: GestureResponderEvent, gesture: PanResponderGestureState) => {
+        const touches = evt.nativeEvent.changedTouches;
+        activePointersRef.current = touches.length;
+
+        if (touches.length >= 2) {
+          const dist = getDistance(touches as any);
+          if (initialPinchDistRef.current > 0) {
+            const ratio = dist / initialPinchDistRef.current;
+            const nextScale = Math.min(Math.max(initialScaleRef.current * ratio, 1), 4);
+            const clamped = clampTranslate(nextScale, imgTranslateX, imgTranslateY);
+            setImgScale(nextScale);
+            setImgTranslateX(clamped.x);
+            setImgTranslateY(clamped.y);
+          }
+        } else if (touches.length === 1) {
+          const nextX = initialTranslateRef.current.x + gesture.dx;
+          const nextY = initialTranslateRef.current.y + gesture.dy;
+          const clamped = clampTranslate(imgScale, nextX, nextY);
+          setImgTranslateX(clamped.x);
+          setImgTranslateY(clamped.y);
+        }
+      },
+      onPanResponderRelease: () => {
+        activePointersRef.current = 0;
+      },
+      onPanResponderTerminate: () => {
+        activePointersRef.current = 0;
+      },
+    }),
+    [selectedImageUri, layout, imgScale, imgTranslateX, imgTranslateY, canvasSize.width, canvasSize.height]
+  );
+
+  // Reset transform when image changes
+  React.useEffect(() => {
+    setImgScale(1);
+    setImgTranslateX(0);
+    setImgTranslateY(0);
+  }, [selectedImageUri]);
 
   // ── Capture handlers ──
   const handlePhotoCapture = (uri: string) => {
@@ -253,8 +334,6 @@ export default function CreatePosterScreen() {
     setCollagePhotos([uri]);
     setLayout('single');
   };
-
-  const handleFlipCamera = () => { /* handled inside CameraCapture */ };
 
   // ── Sticker handlers ──
   const handleStickerSelect = (sticker: StickerItem) => {
@@ -365,6 +444,9 @@ export default function CreatePosterScreen() {
       setLayout('single');
       setCollagePhotos([]);
       setActiveTemplateId(undefined);
+      setImgScale(1);
+      setImgTranslateX(0);
+      setImgTranslateY(0);
     } else {
       navigation.goBack();
     }
@@ -414,7 +496,21 @@ export default function CreatePosterScreen() {
         ) : selectedImageUri && filter !== 'normal' && !isVideo ? (
           <GLFilterView uri={selectedImageUri} filter={filter} style={StyleSheet.absoluteFillObject} />
         ) : (
-          <Image source={{ uri: selectedImageUri || undefined }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+          <View style={StyleSheet.absoluteFillObject} {...imagePanResponder.panHandlers}>
+            <Image
+              source={{ uri: selectedImageUri || undefined }}
+              style={{
+                width: '100%',
+                height: '100%',
+                transform: [
+                  { scale: imgScale },
+                  { translateX: imgTranslateX },
+                  { translateY: imgTranslateY },
+                ],
+              }}
+              resizeMode="cover"
+            />
+          </View>
         )}
 
         {hasCanvas && filterOverlay.opacity > 0 && filterOverlay.color && (isCollage || isVideo) && (
@@ -518,7 +614,7 @@ export default function CreatePosterScreen() {
           mode={captureMode}
           onModeChange={setCaptureMode}
           onGalleryPress={handleGalleryPress}
-          onFlipCamera={handleFlipCamera}
+          onFlipCamera={() => {}}
           recentPhotos={recentPhotos}
           onRecentPhotoPress={handleRecentPhotoPress}
           showCameraControls={!hasCanvas}
@@ -762,7 +858,7 @@ const styles = StyleSheet.create({
   stickerText: {
     color: '#fff',
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowRadius: 4,
   },

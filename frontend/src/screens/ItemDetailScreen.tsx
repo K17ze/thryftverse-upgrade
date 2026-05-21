@@ -1,3 +1,4 @@
+import { Typography } from '../constants/typography';
 import React, { useState, useCallback } from 'react';
 import {
   AnimatedPressable
@@ -48,11 +49,10 @@ import { Space, Radius } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 
 const { width, height } = Dimensions.get('window');
-const IS_LIGHT = ActiveTheme === 'light';
 const PANEL_BG = Colors.surface;
 const PANEL_ALT_BG = Colors.background;
 const PANEL_BORDER = Colors.border;
-const TOP_SCRIM_BG = IS_LIGHT ? 'rgba(236,234,230,0.42)' : 'rgba(0,0,0,0.34)';
+const TOP_SCRIM_BG = 'rgba(0,0,0,0.2)';
 
 export default function ItemDetailScreen() {
   const route = useRoute<any>();
@@ -400,22 +400,22 @@ const styles = StyleSheet.create({
   heroTopScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 132, backgroundColor: TOP_SCRIM_BG },
   heroImage: { width: width, height: '100%' },
   soldOverlay: { position: 'absolute', bottom: 32, left: 20, backgroundColor: Colors.success, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  soldText: { color: Colors.background, fontSize: 16, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
+  soldText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold, letterSpacing: 1 },
   floatingHeader: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, zIndex: 10 },
   headerRight: { flexDirection: 'row', gap: 12 },
   blurBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   detailsContainer: { paddingHorizontal: 20, paddingTop: 24 },
-  price: { fontSize: 38, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, letterSpacing: -0.9, marginBottom: 2 },
-  brand: { fontSize: 15, fontFamily: 'Inter_300Light', color: Colors.textSecondary, letterSpacing: 0.34, marginBottom: 8 },
+  price: { fontSize: 38, fontFamily: Typography.family.semibold, color: Colors.textPrimary, letterSpacing: -0.9, marginBottom: 2 },
+  brand: { fontSize: 15, fontFamily: Typography.family.light, color: Colors.textSecondary, letterSpacing: 0.34, marginBottom: 8 },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 10,
     marginBottom: 8,
   },
-  protectionText: { fontSize: 13, color: Colors.textMuted, fontFamily: 'Inter_500Medium' },
-  title: { fontSize: 22, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 6, lineHeight: 30 },
-  sizeCondition: { fontSize: 15, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
+  protectionText: { fontSize: 13, color: Colors.textMuted, fontFamily: Typography.family.medium },
+  title: { fontSize: 22, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 6, lineHeight: 30 },
+  sizeCondition: { fontSize: 15, fontFamily: Typography.family.medium, color: Colors.textSecondary },
   syncStatusCard: {
     marginTop: 14,
     borderRadius: 14,
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   syncRetryBanner: {
     marginTop: Space.md - Space.xs,
@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
   },
   attributeLabel: {
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     marginBottom: 4,
     textTransform: 'uppercase',
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
   },
   attributeValue: {
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   descriptionBox: {
@@ -492,10 +492,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: PANEL_BORDER,
   },
-  description: { fontSize: 15, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, lineHeight: 24 },
-  timePosted: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 12 },
+  description: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, lineHeight: 24 },
+  timePosted: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted, marginTop: 12 },
   statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-  statsText: { fontSize: 12, color: Colors.textSecondary, marginLeft: 6, fontFamily: 'Inter_500Medium' },
+  statsText: { fontSize: 12, color: Colors.textSecondary, marginLeft: 6, fontFamily: Typography.family.medium },
   sellerCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -516,10 +516,10 @@ const styles = StyleSheet.create({
   },
   sellerAvatar: { width: 52, height: 52, borderRadius: 26 },
   sellerInfo: { flex: 1 },
-  sellerName: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
+  sellerName: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
   sellerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  sellerStats: { fontSize: 13, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
-  sellerLastSeen: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.textMuted, marginTop: 2 },
+  sellerStats: { fontSize: 13, fontFamily: Typography.family.medium, color: Colors.textSecondary },
+  sellerLastSeen: { fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: 2 },
   messageSellerBtn: {
     minHeight: 38,
     paddingHorizontal: 16,
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     borderColor: PANEL_BORDER,
     backgroundColor: Colors.background,
   },
-  messageSellerBtnText: { color: Colors.textPrimary, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  messageSellerBtnText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
   sellerItemsSection: { marginTop: 28, paddingBottom: 8 },
   sectionHeader: {
     flexDirection: 'row',
@@ -537,12 +537,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     paddingRight: 4,
   },
-  sectionTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
-  sectionLink: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.brand },
+  sectionTitle: { fontSize: 16, fontFamily: Typography.family.bold, color: Colors.textPrimary },
+  sectionLink: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.brand },
   sellerItemCard: { width: 140 },
   sellerItemMediaWrap: { width: 140, height: 180, borderRadius: 14, overflow: 'hidden', marginBottom: 8 },
   sellerItemImg: { width: '100%', height: '100%' },
-  sellerItemPrice: { fontSize: 14, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
+  sellerItemPrice: { fontSize: 14, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   floatingBuyBar: {
     position: 'absolute',
     bottom: 0,

@@ -1,3 +1,4 @@
+import { Typography } from '../constants/typography';
 import React, { useState } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
@@ -28,6 +29,8 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { AppButton } from '../components/ui/AppButton';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { Type } from '../theme/designTokens';
 
 const { width } = Dimensions.get('window');
 
@@ -221,18 +224,11 @@ export default function MyOrdersScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
       
-      <View style={styles.header}>
-        <AnimatedPressable
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to the previous screen"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.hugeTitle}>My Orders</Text>
-      </View>
+      <ScreenHeader
+        title="My Orders"
+        onBack={() => navigation.goBack()}
+        variant="large"
+      />
 
       {/* Restored Custom Tabs */}
       <AppSegmentControl
@@ -389,26 +385,23 @@ export default function MyOrdersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16, gap: 12 },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  hugeTitle: { fontSize: 34, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, letterSpacing: -0.5 },
   
   tabsContainer: { marginHorizontal: 20, backgroundColor: Colors.surface, borderRadius: 24, padding: 4, marginBottom: 16 },
   tabBtn: { flex: 1, paddingVertical: 12, borderRadius: 20, borderWidth: 0, backgroundColor: 'transparent' },
-  activeTabBtn: { backgroundColor: 'rgba(99, 102, 241, 0.12)' },
-  tabText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted },
+  activeTabBtn: { backgroundColor: Colors.surfaceAlt },
+  tabText: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textMuted },
   activeTabText: { color: Colors.textPrimary },
 
   filterStrip: { marginBottom: 16, marginHorizontal: 20, gap: 10 },
   filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   activeFilterPill: { backgroundColor: Colors.textPrimary, borderColor: Colors.textPrimary },
-  filterText: { fontSize: 13, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
-  activeFilterText: { color: Colors.background, fontFamily: 'Inter_700Bold' },
+  filterText: { fontSize: 13, fontFamily: Typography.family.medium, color: Colors.textSecondary },
+  activeFilterText: { color: Colors.background, fontFamily: Typography.family.bold },
 
   content: { paddingHorizontal: 20, paddingBottom: 40 },
   emptyState: { alignItems: 'center', justifyContent: 'center', marginTop: 60, paddingHorizontal: 40 },
-  emptyTitle: { fontSize: 18, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginTop: 16 },
-  emptySub: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, textAlign: 'center', marginTop: 8 },
+  emptyTitle: { fontSize: 18, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: 16 },
+  emptySub: { fontSize: 14, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', marginTop: 8 },
 
   cardGroup: { backgroundColor: Colors.surface, borderRadius: 24, padding: 16, marginBottom: 16 },
   orderSummaryTap: {
@@ -418,12 +411,12 @@ const styles = StyleSheet.create({
   orderThumb: { width: 70, height: 70, borderRadius: 16 },
   orderInfo: { flex: 1, justifyContent: 'center' },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  orderStatus: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
-  orderStatusDone: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
-  orderTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
-  orderTracking: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginBottom: 4 },
-  orderPrice: { fontSize: 14, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
-  buyerText: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.textMuted },
+  orderStatus: { fontSize: 12, fontFamily: Typography.family.bold, letterSpacing: 0.5 },
+  orderStatusDone: { fontSize: 12, fontFamily: Typography.family.bold, letterSpacing: 0.5 },
+  orderTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
+  orderTracking: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted, marginBottom: 4 },
+  orderPrice: { fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary },
+  buyerText: { fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted },
   counterpartyRow: {
     marginTop: 12,
     paddingTop: 10,
@@ -444,7 +437,7 @@ const styles = StyleSheet.create({
   counterpartyText: {
     flex: 1,
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   counterpartyMessageBtn: {
@@ -457,7 +450,7 @@ const styles = StyleSheet.create({
   },
   counterpartyMessageBtnText: {
     fontSize: 11,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
 });

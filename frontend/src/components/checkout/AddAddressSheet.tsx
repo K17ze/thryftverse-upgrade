@@ -290,11 +290,11 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
   },
-  sheetTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, marginBottom: 20 },
+  sheetTitle: { fontSize: 20, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 20 },
   content: { paddingTop: 10, paddingBottom: 40 },
   heroCopy: {
     fontSize: 28,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -1,
     lineHeight: 34,
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   formGroup: { marginBottom: 24 },
   label: {
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   },
   input: {
     fontSize: 16,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
   },
   row: { flexDirection: 'row', gap: 16 },
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   },
   defaultToggleText: {
     fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   defaultToggleTextMuted: {
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: Colors.background,
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   saveBtnTextDisabled: {
     color: Colors.textMuted,

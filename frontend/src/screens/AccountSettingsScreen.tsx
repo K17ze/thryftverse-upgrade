@@ -28,6 +28,7 @@ import { SettingsHeader } from '../components/settings/SettingsHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { MY_USER } from '../data/mockData';
+import { Typography } from '../constants/typography';
 
 export default function AccountSettingsScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -447,7 +448,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
     marginLeft: Space.xs,
     marginTop: Space.lg,
@@ -507,13 +508,13 @@ const styles = StyleSheet.create({
   },
   footerActionTitle: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
   footerActionSubtitle: {
     marginTop: 2,
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
   },
   actionDisabled: {
@@ -529,13 +530,13 @@ const styles = StyleSheet.create({
   dangerText: {
     color: Colors.danger,
     fontSize: Type.body.size,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   dangerSubtext: {
     marginTop: 2,
     color: Colors.textMuted,
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   modalOverlay: {
     flex: 1,
@@ -551,13 +552,13 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
   },
   modalCopy: {
     color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     marginBottom: Space.xs,
@@ -584,7 +585,7 @@ const styles = StyleSheet.create({
   },
   modalBtnMutedText: {
     color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
   },
   modalBtnDanger: {
@@ -592,7 +593,7 @@ const styles = StyleSheet.create({
   },
   modalBtnDangerText: {
     color: Colors.background,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     fontSize: Type.body.size,
   },
 });

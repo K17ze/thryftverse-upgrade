@@ -33,6 +33,7 @@ import {
   setStoredUserCoverForUser,
 } from '../preferences/profileMediaPreferences';
 import { persistProfileMediaUri } from '../utils/profileMediaAsset';
+import { Typography } from '../constants/typography';
 
 const GENDER_OPTIONS = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
 
@@ -366,7 +367,7 @@ const styles = StyleSheet.create({
   changeText: {
     marginTop: Space.sm,
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     letterSpacing: Type.caption.letterSpacing,
   },
@@ -376,7 +377,7 @@ const styles = StyleSheet.create({
   charCount: {
     alignSelf: 'flex-end',
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     marginTop: -Space.xs,
     marginBottom: Space.sm,

@@ -22,10 +22,10 @@ import { CachedImage } from '../components/CachedImage';
 import { MY_USER, MOCK_USERS } from '../data/mockData';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { useToast } from '../context/ToastContext';
+import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
 
-const IS_LIGHT = ActiveTheme === 'light';
 const PANEL_BG = Colors.surface;
 const PANEL_ALT_BG = Colors.surfaceAlt;
 const PANEL_BORDER = Colors.border;
@@ -239,14 +239,14 @@ const styles = StyleSheet.create({
   heroBigText: {
     fontSize: 72,
     lineHeight: 74,
-    fontFamily: 'Inter_800ExtraBold',
+    fontFamily: Typography.family.extrabold,
     color: Colors.textPrimary,
     letterSpacing: -2.8,
     marginBottom: 6,
   },
   heroSubText: {
     fontSize: 14,
-    fontFamily: 'Inter_300Light',
+    fontFamily: Typography.family.light,
     color: Colors.textMuted,
     letterSpacing: 0.14,
   },
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 12,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   syncCard: {
     marginBottom: 18,
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   syncRetryBanner: {
     marginTop: 10,
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textPrimary,
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   supportMessageBtn: {
     width: 32,
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
   summaryLabel: {
     color: Colors.textMuted,
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -370,13 +370,13 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 15,
     lineHeight: 20,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   summaryMeta: {
     marginTop: 6,
     color: Colors.textSecondary,
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
 
   promoCard: {
@@ -398,9 +398,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 16,
   },
-  promoBadgeText: { fontSize: 12, fontFamily: 'Inter_700Bold', color: BADGE_TEXT, textTransform: 'uppercase', letterSpacing: 0.5 },
-  promoTitle: { fontSize: 24, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, marginBottom: 8, letterSpacing: -0.5 },
-  promoDesc: { fontSize: 14, fontFamily: 'Inter_500Medium', color: Colors.textSecondary, lineHeight: 22, marginBottom: 24 },
+  promoBadgeText: { fontSize: 12, fontFamily: Typography.family.bold, color: BADGE_TEXT, textTransform: 'uppercase', letterSpacing: 0.5 },
+  promoTitle: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 8, letterSpacing: -0.5 },
+  promoDesc: { fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary, lineHeight: 22, marginBottom: 24 },
   
   bumpBtn: {
     backgroundColor: Colors.textPrimary,
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   bumpBtnText: {
     color: Colors.background,
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
 
   actionRowBtn: {
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
 });

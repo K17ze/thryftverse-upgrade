@@ -17,11 +17,10 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = StackScreenProps<RootStackParamList, 'BalanceHistory'>;
 
-const IS_LIGHT = ActiveTheme === 'light';
-const ACCENT = IS_LIGHT ? '#2f251b' : '#d7b98f';
+const ACCENT = Colors.brand;
 const BG = Colors.background;
-const CARD = IS_LIGHT ? '#ffffff' : '#111111';
-const BORDER = IS_LIGHT ? '#d8d1c6' : '#1c1c1c';
+const CARD = Colors.surface;
+const BORDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
 

@@ -11,6 +11,7 @@ import { signupWithPassword } from '../services/authApi';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Typography } from '../constants/typography';
 
 export default function SignUpScreen() {
   const navigation = useNavigation<any>();
@@ -211,15 +212,15 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
   },
-  title: { fontSize: Type.title.size + 8, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, lineHeight: Type.title.lineHeight + 8, letterSpacing: Type.title.letterSpacing - 0.4, marginBottom: Space.xl + 8 },
+  title: { fontSize: Type.title.size + 8, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: Type.title.lineHeight + 8, letterSpacing: Type.title.letterSpacing - 0.4, marginBottom: Space.xl + 8 },
 
   form: { marginBottom: Space.lg + 6 },
   inputGroup: { marginBottom: Space.lg - 2 },
 
   footer: { paddingBottom: Space.sm, position: 'relative' },
-  termsText: { fontSize: Type.caption.size, fontFamily: 'Inter_400Regular', color: Colors.textMuted, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
-  errorText: { color: Colors.danger, fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center', marginBottom: Space.md - 4 },
+  termsText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
+  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: Colors.background, fontSize: Type.body.size + 2, fontFamily: 'Inter_700Bold' },
+  primaryText: { color: Colors.background, fontSize: Type.body.size + 2, fontFamily: Typography.family.bold },
 });

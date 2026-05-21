@@ -945,3 +945,375 @@ Standardized card for messaging surfaces:
 10. `OfferBubble` uses `CachedImage` and `AppButton` instead of `Image` and `TouchableOpacity`.
 11. Accessibility labels/roles/hints pass a screen-reader walkthrough on all messaging surfaces.
 12. Entrance animations use `FadeInDown` / `FadeIn` with `reducedMotionEnabled` guards consistently.
+
+---
+
+---
+
+# ThryftVerse — Flagship Messaging UI/UX Upgrade Plan
+
+## 1. Flagship App Benchmark Analysis
+
+### Apps Analyzed
+- **WhatsApp** — Context menus, reactions, replies, forwards, status stories, pinned chats, link previews, voice recording, selection mode, scroll-to-bottom FAB, encryption badges
+- **iMessage** — Blur headers, bubble tails, typing indicators, tapback reactions, link previews, message effects, read receipts, draft indicators
+- **Telegram** — Reply chains, reactions, pinned messages, polls, mentions, formatting, selection mode, context menus, animated stickers, blur headers
+- **Instagram DMs** — Vanish mode, reactions, story replies, quick camera, link previews, typing indicators, message requests
+- **Signal** — Message requests, reactions, forwards, link previews, disappearing messages, verified badges
+
+### Key Differentiators Missing from ThryftVerse
+
+#### A. Visual Polish & Atmosphere
+1. **No blur/glass header** — Flagship apps use `UIBlurEffect` / `BlurView` on headers for depth
+2. **Flat message bubbles** — No shadow depth, no refined tail shapes, no "floating" feel
+3. **No message grouping** — Messages from same sender within 2 min should stack without repeated avatars
+4. **No animated online indicator** — Static green dot vs. pulsing/animated presence ring
+5. **No skeleton/shimmer loading** — Chat shows nothing while loading; flagship apps show shimmer placeholders
+6. **No gradient accents** — Luxury apps use subtle gold gradients on brand surfaces
+7. **No wallpaper/background texture** — Chat background is flat; flagship apps have subtle patterns
+
+#### B. Core Interactions
+1. **No message context menu** — Long-press on a message does nothing; flagship apps open action sheets
+2. **No emoji reactions** — WhatsApp/iMessage/Telegram all have quick emoji reactions on every message
+3. **No reply-to / quote** — Cannot reply to a specific message; Telegram/WhatsApp have threaded replies
+4. **No message forwarding** — Cannot forward messages to other conversations
+5. **No message deletion/unsend** — Cannot delete sent messages
+6. **No message copy** — Cannot copy text from messages
+7. **No message selection mode** — Cannot bulk-select messages for delete/forward
+8. **No scroll-to-bottom FAB** — When scrolled up, no way to quickly jump to latest message
+
+#### C. Smart UX Patterns
+1. **No link previews** — URLs in messages render as plain text; flagship apps show rich preview cards
+2. **No mention highlighting** — `@username` is plain text; should be highlighted and tappable
+3. **No draft indicator in inbox** — Drafts exist but inbox row doesn't show "Draft: ..." preview
+4. **No pinned conversations** — Cannot pin important chats to top of inbox
+5. **No "New messages" separator** — When reopening a chat, no indicator of where new messages begin
+6. **No typing indicator in header** — Shows static "Last seen" instead of "typing..." when active
+7. **No message info** — Cannot see who read/delivered a message
+8. **No conversation info screen** — No detailed chat info (shared media, encryption status, block/report)
+
+#### D. Input & Composer
+1. **No voice message recording UI** — Camera button exists but no voice message flow
+2. **No quick camera capture** — No inline camera for instant photo messages
+3. **No contact/location sharing** — Attachment menu has options but no actual implementation
+4. **No message scheduling** — Cannot schedule messages for later
+5. **No disappearing messages toggle** — Retention policy exists but no quick UI toggle
+6. **No AI/smart suggestions** — No "Smart Reply" or composer assistance beyond templates
+
+---
+
+## 2. Upgrade Plan
+
+### Phase A — Core Interactions (Highest User Impact)
+
+#### A.1 Blur/Glass ChatHeader
+- Wrap `ChatHeader` background with `BlurView` from `expo-blur` (intensity 60-80)
+- Add subtle bottom border with `Colors.border` at 0.3 opacity
+- Animate header opacity on scroll (0.95 → 1.0)
+- Add online status ring around avatar (animated pulse for active users)
+
+#### A.2 Message Context Menu
+- New `MessageContextMenu` component — bottom sheet that appears on long-press
+- Actions: Copy text, Reply, React, Forward, Delete, Message Info
+- Uses `BottomSheetPicker` or custom animated sheet
+- Haptic on long-press trigger
+
+#### A.3 Emoji Reactions
+- New `EmojiReactionsBar` component — horizontal strip of 6 default emojis + "+" for more
+- Appears above context menu or inline below message on tap
+- Reactions stored per-message in conversation store
+- Show reaction count + avatars of reactors below message bubble
+
+#### A.4 Reply-to / Quote
+- New `ReplyQuote` component — shows quoted message preview above composer
+- Quote preview shows sender name + truncated text + original message indicator
+- Tapping quoted message scrolls to original message
+- Reply messages show a vertical brand-colored bar on left side
+
+#### A.5 Scroll-to-Bottom FAB + New Message Separator
+- New `ScrollToBottomFAB` — appears when scrolled up, shows unread count badge
+- New `NewMessagesSeparator` — "New messages" pill divider between old and new messages
+- FAB uses `AnimatedPressable` with haptic, scrolls to end with spring animation
+
+### Phase B — Inbox & Smart UX
+
+#### B.1 Pinned Conversations + Draft Indicators
+- Add `pinnedIds` to conversation store
+- Pinned conversations render as horizontal scroll at top of inbox (like Instagram stories)
+- Draft text shown in inbox row with "Draft:" prefix in muted + italic style
+- Pin/unpin action in swipe menu and context menu
+
+#### B.2 Link Previews + Mentions
+- New `LinkPreviewCard` component — extracts first URL from message, shows title/image/description
+- Uses regex to detect URLs, renders below message bubble
+- New `MentionHighlight` component — regex `@\w+`, wraps in brand-colored tappable span
+- Tapping mention navigates to user profile
+
+#### B.3 Skeleton Loaders + Refined Shadows
+- New `SkeletonChatLoader` — shimmer placeholder rows for loading state
+- Add `Elevation.message` to design tokens — subtle shadow for message bubbles
+- Refine `MessageBubble` with asymmetric tail shape and soft shadow
+- Add `BlurView` to composer background for glass effect
+
+#### B.4 Message Selection Mode
+- New `MessageSelectionBar` — appears at top when selection mode active
+- Shows count + Delete + Forward actions
+- Checkbox appears on left of each message on enter selection mode
+- Long-press enters selection mode; tap toggles selection
+
+---
+
+## 3. Files to Create / Modify
+
+### New Components
+- `frontend/src/components/chat/MessageContextMenu.tsx` — Long-press action sheet for messages
+- `frontend/src/components/chat/EmojiReactionsBar.tsx` — Quick emoji reactions strip
+- `frontend/src/components/chat/ReplyQuote.tsx` — Quoted reply preview above composer
+- `frontend/src/components/chat/ScrollToBottomFAB.tsx` — FAB with unread count
+- `frontend/src/components/chat/NewMessagesSeparator.tsx` — New messages divider pill
+- `frontend/src/components/chat/LinkPreviewCard.tsx` — URL preview card
+- `frontend/src/components/chat/MentionHighlight.tsx` — @username highlighted text
+- `frontend/src/components/chat/SkeletonChatLoader.tsx` — Shimmer loading placeholder
+- `frontend/src/components/chat/MessageSelectionBar.tsx` — Bulk selection top bar
+
+### Modified Components
+- `frontend/src/components/chat/ChatHeader.tsx` — Add BlurView, online ring animation
+- `frontend/src/components/chat/MessageBubble.tsx` — Add shadow, tail shape, reactions slot
+- `frontend/src/components/chat/ComposerInput.tsx` — Add reply quote preview slot
+- `frontend/src/components/chat/ChatCard.tsx` — No changes needed
+
+### Modified Screens
+- `frontend/src/screens/InboxScreen.tsx` — Add pinned section, draft indicators, selection mode
+- `frontend/src/screens/ChatScreen.tsx` — Integrate context menu, reactions, reply, FAB, separator, link previews, mentions, selection mode
+
+### Store Updates
+- `frontend/src/store/useStore.ts` — Add `togglePinConversation`, `addMessageReaction`, `removeMessageReaction`, `draftMessages` map
+
+---
+
+## 4. Success Criteria
+
+1. Long-pressing a message opens a context menu with Copy, Reply, React, Forward, Delete.
+2. Tapping a reaction emoji adds/removes it from a message with haptic feedback.
+3. Reply-to shows a quote preview above the composer and renders with a brand-colored left bar.
+4. ChatHeader uses `BlurView` for a glass effect with animated online status ring.
+5. Scroll-to-bottom FAB appears when scrolled up with unread count badge.
+6. "New messages" separator appears between previously read and new messages.
+7. Pinned conversations appear as a horizontal scroll rail at the top of Inbox.
+8. Draft text appears in inbox rows with "Draft:" prefix styling.
+9. URLs in messages render with `LinkPreviewCard` showing title and image.
+10. `@username` mentions are highlighted in brand color and tappable.
+11. Message bubbles have subtle shadow/elevation and refined tail shapes.
+12. Skeleton shimmer placeholders appear during message loading.
+13. Message selection mode allows bulk delete/forward with top action bar.
+14. All new components use `Type`, `Space`, `Radius`, `Colors` design tokens.
+15. TypeScript passes with zero errors.
+
+---
+
+## 6. Implementation Status: COMPLETED (Baseline)
+
+All baseline messaging files upgraded. TypeScript passes with zero errors.
+
+### New Components Created
+- `frontend/src/components/chat/ChatHeader.tsx` — unified header for all messaging subpages (DM + Group modes)
+- `frontend/src/components/chat/MessageBubble.tsx` — standardized message bubble with Type tokens, integrated status indicator
+- `frontend/src/components/chat/ComposerInput.tsx` — AppInput-based chat composer with camera prefix, send suffix, template strip support
+- `frontend/src/components/chat/ChatCard.tsx` — standardized card wrapper for messaging surfaces (wraps AppCard)
+
+### Screens Rewritten
+- `frontend/src/screens/InboxScreen.tsx` — Type tokens, ChatCard conversation rows, AppInput search, centralized colors (no hardcoded `#4caf50` / `#FF3B30`), haptic on swipe actions, Space/Radius tokens
+- `frontend/src/screens/ChatScreen.tsx` — removed all inline theme color constants (`IS_LIGHT`, `CARD`, `CARD_ALT`, `BORDER`, `HEADER_BG`, `FOOTER_BG`), adopted ChatHeader, ChatCard context cards, ComposerInput, Type tokens, haptic feedback throughout
+- `frontend/src/screens/CreateGroupChatScreen.tsx` — SettingsHeader, AppInput, ChatCard, Type tokens, FadeInDown animations, haptic on member selection
+- `frontend/src/screens/GroupBotDirectoryScreen.tsx` — SettingsHeader, ChatCard, AppButton deploy/remove, Type tokens, FadeInDown animations, haptic feedback
+
+### Components Upgraded
+- `frontend/src/components/ChatMessageItem.tsx` — migrated to Type tokens, CachedImage avatar support, replaced Typography.family.regular
+- `frontend/src/components/SwipeableMessage.tsx` — migrated from PanResponder + Animated.Value to Reanimated useSharedValue + GestureDetector, haptic on swipe trigger
+- `frontend/src/components/VoiceMessagePlayer.tsx` — replaced TouchableOpacity with AnimatedPressable, theme-aware colors, onLayout waveform measurement, Type tokens
+- `frontend/src/components/AttachmentMenu.tsx` — replaced TouchableOpacity with AnimatedPressable, Type tokens, Radius tokens, accessibility props
+- `frontend/src/components/OfferBubble.tsx` — replaced Image with CachedImage, AppButton for actions, Type tokens, ChatCard container
+- `frontend/src/components/MessageStatusIndicator.tsx` — Type.caption for timestamp, Space tokens for gaps
+- `frontend/src/components/ChatMessageList.tsx` — Space tokens in styles
+
+---
+
+# ThryftVerse — SellScreen (Upload/Listing Creation) UI/UX Upgrade Plan
+
+## 1. Current State Audit
+
+### Screen Analyzed
+- `SellScreen.tsx` — Main listing creation / upload flow
+
+### Design System in Use (App-wide)
+- **Colors**: `Colors.background`, `Colors.surface`, `Colors.surfaceAlt`, `Colors.brand`, `Colors.textPrimary/Secondary/Muted`, `Colors.border`, `Colors.danger`, `Colors.success`
+- **Spacing**: `Space.xs/sm/md/lg/xl/xxl`
+- **Radius**: `Radius.sm/md/lg/xl/full`
+- **Typography**: `Type.title/subtitle/body/price/caption/meta/priceLarge`
+- **Components**: `AppButton`, `AppCard`, `AppInput`, `AppSegmentControl`, `AnimatedPressable`, `T` (text primitive)
+
+---
+
+## 2. Critical Inconsistencies Found
+
+### A. Raw TextInput Abandonment
+Every text field in SellScreen used raw `<TextInput>` instead of the existing `AppInput` primitive:
+- Title input
+- Description textarea
+- Price input
+- Co-Own share count / share price inputs
+- Auction starting bid input
+
+**Problem**: No helper text, error states, prefix/suffix support, or unified visual style.
+
+### B. Card / Surface Style Drift
+Custom inline card styles existed for every form section:
+- `pillInputBox` (20px radius, custom border)
+- `cardGroup` (20px radius, custom border)
+- `coOwnCard` (20px radius, custom border)
+- `pricePillBox` (20px radius, custom border)
+
+**Problem**: None used `AppCard`. Inconsistent radii (20px vs design system 12/16px).
+
+### C. Typography Token Abandonment
+Raw font sizes and families were used throughout:
+- `headerTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' }` → should use `Type.subtitle`
+- `inputLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' }` → should use `T.Meta` or `Type.meta`
+- `textInput: { fontSize: 16, fontFamily: 'Inter_500Medium' }` → should use `AppInput`
+- `pickerLabel: { fontSize: 16, fontFamily: 'Inter_600SemiBold' }` → should use `Type.subtitle`
+- `priceInputContent: { fontSize: 32, fontFamily: 'Inter_700Bold' }` → should use `Type.priceLarge`
+
+### D. Hardcoded Colors in SortablePhotoStrip
+- `backgroundColor: '#222'` → should be `Colors.surfaceAlt`
+- `borderColor: '#333'` → should be `Colors.border`
+- `coverBadge: backgroundColor: 'rgba(78,205,196,0.9)'` → should be `Colors.brand`
+
+### E. Missing Motion & Feedback
+- No `Reanimated` entrance animations on form sections
+- No haptic feedback on picker row presses, listing type changes, or photo capture
+- No visual progress indicator for readiness state
+
+### F. UX / Information Architecture Issues
+1. **Basic photo empty state**: The upload placeholder was a plain box with small icon and text
+2. **Readiness chips were basic**: No visual progress bar, just text chips
+3. **Section labels were raw Text**: No standardized section header primitive
+
+---
+
+## 3. Upgrade Plan
+
+### Phase 1 — Foundational Primitives
+
+#### 1.1 Migrate All Inputs to `AppInput`
+Replace every inline `TextInput` in SellScreen with `AppInput`:
+- Title → `AppInput` with label="Title"
+- Description → `AppInput` multiline with character counter helper
+- Price → `AppInput` with `prefix={currencySymbol}` and large input style
+- Co-Own share count / price → `AppInput` with labels and helper text
+- Auction starting bid → `AppInput` with prefix
+
+#### 1.2 Adopt `AppCard` for All Form Surfaces
+Replace all custom card styles with `AppCard variant='surface'` or `'elevated'`:
+- Photo upload empty state → `AppCard variant='surface'`
+- Item details form → `AppCard variant='surface'`
+- Picker group → `AppCard variant='surface'` with overflow hidden
+- Price card → `AppCard variant='surface'`
+- Co-Own / Auction cards → `AppCard variant='elevated'`
+- Readiness card → `AppCard variant='surface'`
+
+#### 1.3 Centralize Theme Colors in SortablePhotoStrip
+Remove all hardcoded hex colors and replace with `Colors.*` tokens.
+
+### Phase 2 — Visual & UX Polish
+
+#### 2.1 Add `ReadinessBar` Component
+Animated linear progress bar showing completion ratio of listing requirements:
+- Uses `Reanimated` `useSharedValue` + `withSpring`
+- Color transitions from `Colors.textSecondary` to `Colors.brand` when complete
+- Label shows "X/Y" count
+
+#### 2.2 Add Entrance Animations
+Wrap each section in `Reanimated.View` entering with `FadeInDown` staggered by index:
+- Header delay 0ms
+- Photo area delay 0ms
+- Listing type delay 60ms
+- Item details delay 120ms
+- Pickers delay 180ms
+- Pricing delay 240ms
+- Co-Own/Auction delay 300ms
+- Readiness delay 360ms
+
+#### 2.3 Haptic Feedback Throughout
+- Light haptic on picker row press
+- Medium haptic on listing type change
+- Success haptic on photo capture
+- Error haptic on validation failure
+
+### Phase 3 — Polish
+
+#### 3.1 Photo Upload Empty State
+- Larger icon circle (64px) with `Colors.textPrimary` background
+- Better typography using `T.BodyEmphasis` + `T.Caption`
+- Primary + secondary button pair (Camera + Gallery)
+- `AppCard` wrapper with `Radius.xl`
+
+#### 3.2 Unified Section Headers
+Reuse `SettingsSectionHeader` from `SettingsCell.tsx` for consistent uppercase meta labels.
+
+#### 3.3 Picker Rows
+Extract `PickerRow` component with:
+- `AnimatedPressable` wrapper
+- `T.Body` for label
+- `T.Body` with muted color for value/placeholder
+- Chevron icon
+- Haptic on press
+- Accessibility roles/labels
+
+---
+
+## 4. Files to Create / Modify
+
+### Modified Screens
+- `frontend/src/screens/SellScreen.tsx` — complete rewrite with design system primitives
+
+### Modified Components
+- `frontend/src/components/SortablePhotoStrip.tsx` — theme-aware colors, haptic on add button
+
+---
+
+## 5. Success Criteria
+
+1. All text inputs use `AppInput` with labels and helper text.
+2. All card surfaces use `AppCard` with `variant='surface'` or `'elevated'`.
+3. No hardcoded hex colors remain in `SortablePhotoStrip`.
+4. All typography uses `Type` or `T` design tokens.
+5. All form sections use `FadeInDown` staggered entrance animations.
+6. All interactive elements provide haptic feedback.
+7. Readiness state shows animated linear progress bar.
+8. Photo upload empty state uses `AppCard` and `T` primitives.
+9. Accessibility labels/hints on all picker rows and buttons.
+10. TypeScript passes with zero errors.
+
+---
+
+## 6. Implementation Status: COMPLETED
+
+All SellScreen and SortablePhotoStrip files have been upgraded. TypeScript passes with zero errors.
+
+### Components Upgraded
+- `frontend/src/components/SortablePhotoStrip.tsx` — migrated to `Colors.surfaceAlt`, `Colors.border`, `Colors.brand`, `Colors.background`, added haptic on add button
+
+### Screen Rewritten
+- `frontend/src/screens/SellScreen.tsx` — complete rewrite:
+  - All `TextInput` replaced with `AppInput` (title, description, price, co-own fields, auction fields)
+  - All card surfaces use `AppCard` (surface/elevated variants) with `Radius.lg/xl`
+  - All typography uses `T` primitives (`T.Headline`, `T.Body`, `T.BodyEmphasis`, `T.Caption`, `T.Meta`) and `Type` tokens
+  - Added `ReadinessBar` animated progress indicator with `Reanimated`
+  - Added `FadeInDown` staggered entrance animations on all sections
+  - Added haptic feedback on all interactive elements (pickers, listing type, photo capture, publish)
+  - Polished photo upload empty state with `AppCard`, larger icon, and `T` typography
+  - Extracted `PickerRow` helper with `AnimatedPressable`, `T.Body`, and accessibility props
+  - Reused `SettingsSectionHeader` for consistent section labels
+  - Sticky publish footer uses `AppButton` with proper variant switching (primary/secondary)
+  - All spacing uses `Space` tokens
+  - All radii use `Radius` tokens

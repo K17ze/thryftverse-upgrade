@@ -12,6 +12,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SettingsHeader } from '../components/settings/SettingsHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
+import { Typography } from '../constants/typography';
 
 type PreferencePickerMode = 'categories' | 'brands' | 'members' | null;
 
@@ -189,7 +190,7 @@ const styles = StyleSheet.create({
   },
   heroLine: {
     fontSize: Type.title.size,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     marginBottom: Space.xs,
     letterSpacing: Type.title.letterSpacing,
@@ -197,7 +198,7 @@ const styles = StyleSheet.create({
   },
   heroSubtitle: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
     lineHeight: Type.body.lineHeight,
     marginBottom: Space.lg,
@@ -223,17 +224,17 @@ const styles = StyleSheet.create({
   },
   genderPillText: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     letterSpacing: Type.body.letterSpacing,
   },
   genderPillTextActive: {
     color: Colors.brand,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   sectionTitle: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: Type.meta.letterSpacing,
@@ -256,7 +257,7 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     color: Colors.textSecondary,
     lineHeight: Type.caption.lineHeight,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
   },
 });

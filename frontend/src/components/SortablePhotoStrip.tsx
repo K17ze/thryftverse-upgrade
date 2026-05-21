@@ -15,6 +15,8 @@ import { Colors } from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from './AnimatedPressable';
 import { isVideoUri } from '../utils/media';
+import { haptics } from '../utils/haptics';
+import { Typography } from '../constants/typography';
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = 80;
@@ -52,7 +54,11 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto }: Props) {
           {/* Add more button */}
           <AnimatedPressable
             style={[styles.addBtn, { left: photos.length * TOTAL_SIZE }]}
-            onPress={onAddPhoto}
+            onPress={() => {
+              haptics.tap();
+              onAddPhoto();
+            }}
+            hapticFeedback="light"
           >
             <Ionicons name="add" size={28} color={Colors.background} />
           </AnimatedPressable>
@@ -167,7 +173,7 @@ const styles = StyleSheet.create({
     width: ITEM_SIZE,
     height: ITEM_SIZE,
     borderRadius: 16,
-    backgroundColor: '#222',
+    backgroundColor: Colors.surfaceAlt,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -184,7 +190,7 @@ const styles = StyleSheet.create({
     height: ITEM_SIZE,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#333',
+    borderColor: Colors.border,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -205,19 +211,19 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(78,205,196,0.9)',
+    backgroundColor: Colors.brand,
     paddingVertical: 2,
     alignItems: 'center',
   },
   coverText: {
-    color: '#000',
+    color: Colors.background,
     fontSize: 10,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   hintText: {
     color: Colors.textMuted,
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textAlign: 'center',
     marginTop: 16,
   },

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
+import { Typography } from '../../constants/typography';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.7;
@@ -429,7 +430,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: 'rgba(255,255,255,0.6)',
   },
   tabTextActive: {
@@ -442,7 +443,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: 'rgba(255,255,255,0.5)',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -493,13 +494,13 @@ const styles = StyleSheet.create({
   },
   inputPrefix: {
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: '#fff',
   },
   input: {
     flex: 1,
     fontSize: 15,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: '#fff',
     padding: 0,
   },
@@ -518,7 +519,7 @@ const styles = StyleSheet.create({
   },
   pollQ: {
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: '#fff',
   },
   pollOptions: {
@@ -534,7 +535,7 @@ const styles = StyleSheet.create({
   },
   pollOptionText: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: '#fff',
   },
   questionCard: {
@@ -548,7 +549,7 @@ const styles = StyleSheet.create({
   },
   questionText: {
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: '#fff',
   },
   countdownRow: {
@@ -568,7 +569,7 @@ const styles = StyleSheet.create({
   },
   countdownText: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: '#ff3b30',
   },
   productList: {
@@ -592,17 +593,17 @@ const styles = StyleSheet.create({
   productText: {
     flex: 1,
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: '#fff',
   },
   productPrice: {
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: '#4cd964',
   },
   emptyText: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.4)',
     marginTop: 8,
   },
@@ -614,7 +615,7 @@ const styles = StyleSheet.create({
   },
   quizQ: {
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: '#fff',
   },
   quizOptions: {
@@ -630,7 +631,7 @@ const styles = StyleSheet.create({
   },
   quizOptionText: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: '#5ac8fa',
   },
   sliderCard: {
@@ -644,7 +645,7 @@ const styles = StyleSheet.create({
   },
   sliderText: {
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: '#fff',
   },
 });

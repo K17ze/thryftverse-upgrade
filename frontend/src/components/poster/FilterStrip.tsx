@@ -1,4 +1,5 @@
 import React from 'react';
+import { Typography } from '../../constants/typography';
 import {
   View,
   StyleSheet,
@@ -149,11 +150,11 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.65)',
   },
   filterLabelActive: {
     color: '#fff',
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
 });

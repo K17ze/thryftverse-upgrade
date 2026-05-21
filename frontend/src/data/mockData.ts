@@ -45,6 +45,7 @@ export interface Listing {
   size: string;
   condition: 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
   price: number;
+  originalPrice?: number;
   priceWithProtection: number;
   images: string[];
   likes: number;
@@ -76,6 +77,11 @@ export interface User {
   website?: string;
 }
 
+export interface MessageReaction {
+  emoji: string;
+  userIds: string[];
+}
+
 export interface Message {
   id: string;
   senderId: string;
@@ -90,6 +96,8 @@ export interface Message {
   type?: 'text' | 'offer' | 'system';
   sender?: 'me' | 'other' | 'system';
   offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' };
+  reactions?: MessageReaction[];
+  replyToMessageId?: string;
 }
 
 export type ConversationType = 'dm' | 'group';
@@ -117,6 +125,8 @@ export interface Conversation {
   lastMessageTime: string;
   unread: boolean;
   messages: Message[];
+  isPinned?: boolean;
+  draftText?: string;
 }
 
 export interface Notification {

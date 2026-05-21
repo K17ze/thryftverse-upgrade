@@ -25,6 +25,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { SettingsHeader } from '../components/settings/SettingsHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
+import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'Payments'>;
 
@@ -284,7 +285,7 @@ const styles = StyleSheet.create({
   },
   policyLabel: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     marginTop: Space.xs,
     marginBottom: Space.sm,
@@ -300,13 +301,13 @@ const styles = StyleSheet.create({
   },
   syncingText: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
   },
   sectionTitle: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: Type.meta.letterSpacing,
@@ -336,14 +337,14 @@ const styles = StyleSheet.create({
   },
   paymentTitle: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     marginBottom: 4,
     letterSpacing: Type.body.letterSpacing,
   },
   paymentSub: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
     paddingRight: 10,
     letterSpacing: Type.caption.letterSpacing,
@@ -359,7 +360,7 @@ const styles = StyleSheet.create({
   },
   defaultText: {
     fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     letterSpacing: Type.meta.letterSpacing,
   },
@@ -379,7 +380,7 @@ const styles = StyleSheet.create({
   },
   addText: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
 });

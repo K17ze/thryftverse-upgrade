@@ -75,50 +75,99 @@ const BG_OPTIONS = [
 
 export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, isActive }: TextOverlayCanvasProps) {
   const [editingId, setEditingId] = React.useState<string | null>(null);
-  const [showControls, setShowControls] = React.useState(true);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const inputRef = React.useRef<TextInput>(null);
+  const dragLayerIdRef = React.useRef<string | null>(null);
   const dragStartRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const layerStartRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const lastTapRef = React.useRef<number>(0);
 
   const activeLayer = layers.find((l) => l.id === editingId);
 
   const updateLayer = (id: string, patch: Partial<TextLayer>) => {
-    onLayersChange(
-      layers.map((l) => (l.id === id ? { ...l, ...patch } : l))
-    );
+    onLayersChange(layers.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   };
 
-  const createPanResponder = (layerId: string) => {
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        const layer = layers.find((l) => l.id === layerId);
-        if (layer) {
-          dragStartRef.current = { x: 0, y: 0 };
-          layerStartRef.current = { x: layer.x, y: layer.y };
-          setEditingId(layerId);
-        }
-      },
-      onPanResponderMove: (_evt: GestureResponderEvent, gesture: PanResponderGestureState) => {
-        const layer = layers.find((l) => l.id === layerId);
-        if (!layer) return;
-        const maxX = Math.max(0, canvasSize.width - 120);
-        const maxY = Math.max(0, canvasSize.height - 48);
-        const nextX = Math.min(Math.max(layerStartRef.current.x + gesture.dx, 0), maxX);
-        const nextY = Math.min(Math.max(layerStartRef.current.y + gesture.dy, 0), maxY);
-        updateLayer(layerId, { x: nextX, y: nextY });
-      },
-      onPanResponderRelease: () => {
-        // done dragging
-      },
-    });
+  const findLayerAtPoint = (px: number, py: number): string | null => {
+    // Search from top (last rendered) to bottom so top layers catch touches first
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const l = layers[i];
+      const w = Math.min(l.text.length * l.fontSize * 0.6 + 24, SCREEN_W - 40);
+      const h = l.fontSize + 24;
+      if (px >= l.x && px <= l.x + w && py >= l.y && py <= l.y + h) {
+        return l.id;
+      }
+    }
+    return null;
   };
+
+  const handleTapLayer = (layerId: string) => {
+    const now = Date.now();
+    const isDoubleTap = now - lastTapRef.current < 350;
+    lastTapRef.current = now;
+
+    if (isDoubleTap) {
+      setEditingId(layerId);
+      setSelectedId(layerId);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    } else {
+      setSelectedId(layerId);
+    }
+  };
+
+  const panResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_evt, gesture) => {
+          return Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2;
+        },
+        onPanResponderGrant: (evt: GestureResponderEvent) => {
+          const { pageX, pageY } = evt.nativeEvent;
+          const hitLayerId = findLayerAtPoint(pageX, pageY);
+
+          if (hitLayerId) {
+            dragLayerIdRef.current = hitLayerId;
+            const layer = layers.find((l) => l.id === hitLayerId);
+            if (layer) {
+              layerStartRef.current = { x: layer.x, y: layer.y };
+              setSelectedId(hitLayerId);
+            }
+          } else {
+            dragLayerIdRef.current = null;
+            // Tapped empty canvas - deselect
+            setSelectedId(null);
+            setEditingId(null);
+          }
+        },
+        onPanResponderMove: (_evt: GestureResponderEvent, gesture: PanResponderGestureState) => {
+          const layerId = dragLayerIdRef.current;
+          if (!layerId) return;
+
+          const maxX = Math.max(0, canvasSize.width - 80);
+          const maxY = Math.max(0, canvasSize.height - 40);
+          const nextX = Math.min(Math.max(layerStartRef.current.x + gesture.dx, 0), maxX);
+          const nextY = Math.min(Math.max(layerStartRef.current.y + gesture.dy, 0), maxY);
+          updateLayer(layerId, { x: nextX, y: nextY });
+        },
+        onPanResponderRelease: (_evt: GestureResponderEvent) => {
+          const layerId = dragLayerIdRef.current;
+          if (layerId) {
+            handleTapLayer(layerId);
+          }
+          dragLayerIdRef.current = null;
+        },
+        onPanResponderTerminate: () => {
+          dragLayerIdRef.current = null;
+        },
+      }),
+    [layers, canvasSize.width, canvasSize.height]
+  );
 
   const addLayer = () => {
     const newLayer: TextLayer = {
       id: `text_${Date.now()}`,
-      text: 'Tap to edit',
+      text: 'Tap twice to edit',
       color: '#ffffff',
       fontFamily: 'bold',
       fontSize: 24,
@@ -128,13 +177,13 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
       rotation: 0,
     };
     onLayersChange([...layers, newLayer]);
-    setEditingId(newLayer.id);
-    setTimeout(() => inputRef.current?.focus(), 100);
+    setSelectedId(newLayer.id);
   };
 
   const removeLayer = (id: string) => {
     onLayersChange(layers.filter((l) => l.id !== id));
     if (editingId === id) setEditingId(null);
+    if (selectedId === id) setSelectedId(null);
   };
 
   const adjustFontSize = (delta: number) => {
@@ -144,48 +193,15 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
     });
   };
 
-  if (!isActive) {
-    return (
-      <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
-        {layers.map((layer) => (
-          <View
-            key={layer.id}
-            style={[
-              styles.textBubble,
-              {
-                left: layer.x,
-                top: layer.y,
-                backgroundColor: layer.backgroundColor,
-                transform: [{ rotate: `${layer.rotation}deg` }],
-              },
-            ]}
-            pointerEvents="none"
-          >
-            <Text
-              style={[
-                styles.layerText,
-                {
-                  color: layer.color,
-                  fontFamily: FONT_MAP[layer.fontFamily],
-                  fontSize: layer.fontSize,
-                  textAlign: layer.alignment,
-                },
-              ]}
-            >
-              {layer.text}
-            </Text>
-          </View>
-        ))}
-      </View>
-    );
-  }
-
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+      {/* Touch capture surface for dragging */}
+      <View style={StyleSheet.absoluteFillObject} {...panResponder.panHandlers} pointerEvents="auto" />
+
       {/* Rendered text layers */}
       {layers.map((layer) => {
-        const pan = createPanResponder(layer.id);
         const isEditing = editingId === layer.id;
+        const isSelected = selectedId === layer.id;
         return (
           <View
             key={layer.id}
@@ -195,51 +211,50 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                 left: layer.x,
                 top: layer.y,
                 backgroundColor: layer.backgroundColor,
-                borderColor: isEditing ? '#fff' : 'transparent',
-                borderWidth: isEditing ? 1.5 : 0,
+                borderColor: isEditing ? '#fff' : isSelected ? 'rgba(255,255,255,0.5)' : 'transparent',
+                borderWidth: isEditing ? 2 : isSelected ? 1.5 : 0,
                 transform: [{ rotate: `${layer.rotation}deg` }],
               },
             ]}
-            pointerEvents="box-none"
+            pointerEvents="none"
           >
-            <View {...pan.panHandlers} pointerEvents="auto" style={styles.dragArea}>
-              {isEditing ? (
-                <TextInput
-                  ref={inputRef}
-                  style={[
-                    styles.layerInput,
-                    {
-                      color: layer.color,
-                      fontFamily: FONT_MAP[layer.fontFamily],
-                      fontSize: layer.fontSize,
-                      textAlign: layer.alignment,
-                    },
-                  ]}
-                  value={layer.text}
-                  onChangeText={(t) => updateLayer(layer.id, { text: t })}
-                  maxLength={120}
-                  multiline
-                  autoFocus
-                  scrollEnabled={false}
-                />
-              ) : (
-                <Text
-                  style={[
-                    styles.layerText,
-                    {
-                      color: layer.color,
-                      fontFamily: FONT_MAP[layer.fontFamily],
-                      fontSize: layer.fontSize,
-                      textAlign: layer.alignment,
-                    },
-                  ]}
-                >
-                  {layer.text || ' '}
-                </Text>
-              )}
-            </View>
+            {isEditing ? (
+              <TextInput
+                ref={inputRef}
+                style={[
+                  styles.layerInput,
+                  {
+                    color: layer.color,
+                    fontFamily: FONT_MAP[layer.fontFamily],
+                    fontSize: layer.fontSize,
+                    textAlign: layer.alignment,
+                  },
+                ]}
+                value={layer.text}
+                onChangeText={(t) => updateLayer(layer.id, { text: t })}
+                maxLength={120}
+                multiline
+                autoFocus
+                scrollEnabled={false}
+              />
+            ) : (
+              <Text
+                style={[
+                  styles.layerText,
+                  {
+                    color: layer.color,
+                    fontFamily: FONT_MAP[layer.fontFamily],
+                    fontSize: layer.fontSize,
+                    textAlign: layer.alignment,
+                  },
+                ]}
+              >
+                {layer.text || ' '}
+              </Text>
+            )}
 
-            {isEditing && (
+            {/* Delete button shows on selected layer */}
+            {(isSelected || isEditing) && (
               <Pressable
                 style={styles.deleteLayerBtn}
                 onPress={() => removeLayer(layer.id)}
@@ -252,16 +267,16 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
         );
       })}
 
-      {/* Add text button */}
-      {!editingId && (
+      {/* Add text button (only when text tool active) */}
+      {isActive && (
         <Pressable style={styles.addTextBtn} onPress={addLayer} hitSlop={12}>
           <Ionicons name="add" size={20} color="#fff" />
           <Text style={styles.addTextLabel}>Add Text</Text>
         </Pressable>
       )}
 
-      {/* Controls panel */}
-      {showControls && editingId && activeLayer && (
+      {/* Controls panel (only when text tool active + editing) */}
+      {isActive && editingId && activeLayer && (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.controlsWrap}
@@ -273,10 +288,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
               {FONT_OPTIONS.map((f) => (
                 <Pressable
                   key={f.key}
-                  style={[
-                    styles.fontPill,
-                    activeLayer.fontFamily === f.key && styles.fontPillActive,
-                  ]}
+                  style={[styles.fontPill, activeLayer.fontFamily === f.key && styles.fontPillActive]}
                   onPress={() => updateLayer(activeLayer.id, { fontFamily: f.key })}
                 >
                   <Text
@@ -323,11 +335,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
               {COLOR_OPTIONS.map((c) => (
                 <Pressable
                   key={c}
-                  style={[
-                    styles.colorOrb,
-                    { backgroundColor: c },
-                    activeLayer.color === c && styles.colorOrbActive,
-                  ]}
+                  style={[styles.colorOrb, { backgroundColor: c }, activeLayer.color === c && styles.colorOrbActive]}
                   onPress={() => updateLayer(activeLayer.id, { color: c })}
                 >
                   {activeLayer.color === c && (
@@ -377,10 +385,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     maxWidth: SCREEN_W - 40,
     alignItems: 'center',
-  },
-  dragArea: {
-    minWidth: 40,
-    minHeight: 24,
   },
   layerText: {
     textShadowColor: 'rgba(0,0,0,0.5)',
@@ -501,6 +505,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     paddingBottom: 4,
+    paddingTop: 4,
   },
   colorOrb: {
     width: 32,

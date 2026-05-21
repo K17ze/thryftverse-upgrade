@@ -1,4 +1,5 @@
 import React from 'react';
+import { Typography } from '../../constants/typography';
 import {
   View,
   StyleSheet,
@@ -174,7 +175,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: '#fff',
     textAlign: 'center',
     marginBottom: 16,
@@ -210,7 +211,7 @@ const styles = StyleSheet.create({
   },
   layoutLabel: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: 'rgba(255,255,255,0.6)',
   },
   layoutLabelActive: {

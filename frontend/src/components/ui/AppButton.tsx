@@ -3,6 +3,7 @@ import { AccessibilityRole, StyleProp, StyleSheet, Text, TextStyle, View, ViewSt
 import { Colors } from '../../constants/colors';
 import { Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { Typography } from '../../constants/typography';
 
 // ============================================================================
 // SIMPLIFIED BUTTON COMPONENT (Phase 2 Cleanup)
@@ -231,13 +232,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Type.body.size,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: -0.1,
   },
   subtitle: {
     marginTop: 1,
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     letterSpacing: 0.2,
   },
 });

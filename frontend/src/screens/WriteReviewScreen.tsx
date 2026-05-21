@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { useToast } from '../context/ToastContext';
+import { Typography } from '../constants/typography';
 
 export default function WriteReviewScreen() {
   const navigation = useNavigation<any>();
@@ -99,16 +100,16 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: Colors.textPrimary },
+  headerTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
   form: { flex: 1 },
   
-  promptText: { fontSize: 22, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, textAlign: 'center', marginBottom: 24 },
+  promptText: { fontSize: 22, fontFamily: Typography.family.semibold, color: Colors.textPrimary, textAlign: 'center', marginBottom: 24 },
   starsContainer: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 40 },
   
   inputGroup: { flex: 1 },
-  label: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.textSecondary, marginBottom: 12 },
+  label: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textSecondary, marginBottom: 12 },
   input: { 
     flex: 1,
     maxHeight: 200,
@@ -119,11 +120,11 @@ const styles = StyleSheet.create({
     padding: 16,
     color: Colors.textPrimary, 
     fontSize: 15, 
-    fontFamily: 'Inter_400Regular' 
+    fontFamily: Typography.family.regular 
   },
   
   footer: { paddingBottom: 40 },
   primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   disabledBtn: { opacity: 0.5 },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: 'Inter_700Bold' },
+  primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold },
 });

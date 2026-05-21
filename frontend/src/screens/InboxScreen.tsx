@@ -1,14 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import {
-  AnimatedPressable
-} from '../components/AnimatedPressable';
-import {
-  View,
-  Text,
-  StyleSheet,
-  StatusBar,
-  RefreshControl,
-} from 'react-native';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { View, Text, StyleSheet, StatusBar, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { CachedImage } from '../components/CachedImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,12 +25,14 @@ import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
 import { Motion } from '../constants/motion';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Type } from '../theme/designTokens';
+import { ChatCard } from '../components/chat/ChatCard';
+import { Typography } from '../constants/typography';
+import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 
 type NavT = StackNavigationProp<RootStackParamList>;
-const ACCENT = Colors.brand;
-const PANEL_BG = Colors.surface;
 
 type ConvoItem = Conversation;
 type InboxSegment = 'all' | 'unread' | 'groups' | 'direct';
@@ -58,6 +52,7 @@ const SEGMENT_OPTIONS: Array<{ value: InboxSegment; label: string; accessibility
 export default function InboxScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
+  const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
   const { listings, refreshListings } = useBackendData();
   const currentUser = useStore((state) => state.currentUser);
@@ -228,14 +223,16 @@ export default function InboxScreen() {
   );
 
   const handleDelete = useCallback((id: string) => {
+    haptic.medium();
     deleteConversation(id);
     show('Conversation deleted', 'error');
-  }, [deleteConversation, show]);
+  }, [deleteConversation, show, haptic]);
 
   const handleArchive = useCallback((id: string) => {
+    haptic.light();
     archiveConversation(id);
     show('Conversation archived', 'info');
-  }, [archiveConversation, show]);
+  }, [archiveConversation, show, haptic]);
 
   const renderRightActions = (id: string) => (
     <AnimatedPressable
@@ -244,8 +241,11 @@ export default function InboxScreen() {
       accessibilityLabel="Delete conversation"
       accessibilityRole="button"
       accessibilityHint="Deletes this conversation thread"
+      activeOpacity={0.7}
+      scaleValue={0.95}
+      hapticFeedback="medium"
     >
-      <Ionicons name="trash-outline" size={22} color="#fff" />
+      <Ionicons name="trash-outline" size={22} color={Colors.textInverse} />
       <Text style={styles.swipeActionText}>Delete</Text>
     </AnimatedPressable>
   );
@@ -257,8 +257,11 @@ export default function InboxScreen() {
       accessibilityLabel="Archive conversation"
       accessibilityRole="button"
       accessibilityHint="Moves this conversation to archived threads"
+      activeOpacity={0.7}
+      scaleValue={0.95}
+      hapticFeedback="light"
     >
-      <Ionicons name="archive-outline" size={22} color="#fff" />
+      <Ionicons name="archive-outline" size={22} color={Colors.textInverse} />
       <Text style={styles.swipeActionText}>Archive</Text>
     </AnimatedPressable>
   );
@@ -302,6 +305,8 @@ export default function InboxScreen() {
               });
             }}
             activeOpacity={0.85}
+            scaleValue={0.98}
+            hapticFeedback="light"
             accessibilityLabel={`${displayTitle}${item.unread ? ', unread' : ''}, ${item.lastMessage}`}
             accessibilityRole="button"
             accessibilityHint="Opens the conversation thread"
@@ -313,7 +318,7 @@ export default function InboxScreen() {
                 </View>
               ) : (
                 <>
-                  <CachedImage uri={seller?.avatar ?? ''} style={styles.avatar} containerStyle={{ width: 48, height: 48, borderRadius: 24 }} contentFit="cover" />
+                  <CachedImage uri={seller?.avatar ?? ''} style={styles.avatar} containerStyle={styles.avatarContainer} contentFit="cover" />
                   <View style={styles.onlineDot} />
                 </>
               )}
@@ -321,19 +326,19 @@ export default function InboxScreen() {
 
             <View style={styles.messageBody}>
               <View style={styles.messageTop}>
-                <Text style={styles.senderName}>{displayTitle}</Text>
-                <Text style={styles.time}>{item.lastMessageTime}</Text>
+                <BodyEmphasis>{displayTitle}</BodyEmphasis>
+                <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
               </View>
 
               {isGroup ? (
                 <View style={styles.groupMetaRow}>
-                  <Text style={styles.groupMetaText}>{memberCount} members</Text>
+                  <Meta>{memberCount} members</Meta>
                   {deployedBotCount > 0 ? (
-                    <Text style={styles.groupMetaText}>{deployedBotCount} bot{deployedBotCount === 1 ? '' : 's'}</Text>
+                    <Meta>{deployedBotCount} bot{deployedBotCount === 1 ? '' : 's'}</Meta>
                   ) : null}
                 </View>
               ) : (
-                <Text style={styles.groupMetaText}>Direct message</Text>
+                <Meta>Direct message</Meta>
               )}
 
               {item.unread ? (
@@ -347,17 +352,17 @@ export default function InboxScreen() {
               {searchQuery.trim().length > 0 && searchInsight ? (
                 <View style={styles.searchHitRow}>
                   <Ionicons name="sparkles-outline" size={12} color={Colors.textMuted} />
-                  <Text style={styles.searchHitText} numberOfLines={1}>
+                  <Caption color={Colors.textMuted} numberOfLines={1}>
                     Matched {searchInsight.matchedField}: {searchInsight.preview}
-                  </Text>
+                  </Caption>
                 </View>
               ) : null}
 
               {!isGroup && listing && (
                 <View style={styles.itemPreview}>
-                  <CachedImage uri={listing.images[0]} style={styles.itemThumb} containerStyle={{ width: 42, height: 42, borderRadius: 8 }} contentFit="cover" />
-                  <Text style={styles.itemName} numberOfLines={1}>{listing.title}</Text>
-                  <Text style={styles.itemPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                  <CachedImage uri={listing.images[0]} style={styles.itemThumb} containerStyle={styles.itemThumbContainer} contentFit="cover" />
+                  <Caption color={Colors.textSecondary} style={styles.itemName} numberOfLines={1}>{listing.title}</Caption>
+                  <BodyEmphasis>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</BodyEmphasis>
                 </View>
               )}
             </View>
@@ -377,7 +382,7 @@ export default function InboxScreen() {
         <View style={styles.headerRow}>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.hugeTitle}>Inbox</Text>
-            <Text style={styles.headerSubtitle} numberOfLines={1}>Offers, groups & buyer updates</Text>
+            <Caption color={Colors.textSecondary} numberOfLines={1}>Offers, groups & buyer updates</Caption>
           </View>
           <View style={styles.headerActions}>
             <AppButton
@@ -396,6 +401,8 @@ export default function InboxScreen() {
               style={styles.policiesBtn}
               onPress={() => navigation.navigate('Settings')}
               activeOpacity={0.85}
+              scaleValue={0.9}
+              hapticFeedback="light"
               accessibilityLabel="Chat settings and policies"
               accessibilityRole="button"
               accessibilityHint="Opens messaging and safety settings"
@@ -423,6 +430,9 @@ export default function InboxScreen() {
               accessibilityLabel="Clear inbox search"
               accessibilityRole="button"
               accessibilityHint="Clears search query"
+              activeOpacity={0.7}
+              scaleValue={0.9}
+              hapticFeedback="light"
             >
               <Ionicons name="close" size={16} color={Colors.textSecondary} />
             </AnimatedPressable>
@@ -447,6 +457,9 @@ export default function InboxScreen() {
             onPress={() => setSegment('unread')}
             accessibilityRole="button"
             accessibilityLabel="Show unread conversations"
+            activeOpacity={0.85}
+            scaleValue={0.95}
+            hapticFeedback="light"
           >
             <Ionicons name="mail-unread-outline" size={14} color={segment === 'unread' ? Colors.background : Colors.textSecondary} />
             <Text style={[styles.quickChipText, segment === 'unread' && styles.quickChipTextActive]}>Unread {unreadCount}</Text>
@@ -457,6 +470,9 @@ export default function InboxScreen() {
             onPress={() => setSearchQuery('offer')}
             accessibilityRole="button"
             accessibilityLabel="Find offer conversations"
+            activeOpacity={0.85}
+            scaleValue={0.95}
+            hapticFeedback="light"
           >
             <Ionicons name="pricetag-outline" size={14} color={Colors.textSecondary} />
             <Text style={styles.quickChipText}>Offers {offerThreadCount}</Text>
@@ -467,19 +483,22 @@ export default function InboxScreen() {
             onPress={() => setSegment('groups')}
             accessibilityRole="button"
             accessibilityLabel="Show group conversations"
+            activeOpacity={0.85}
+            scaleValue={0.95}
+            hapticFeedback="light"
           >
             <Ionicons name="people-outline" size={14} color={segment === 'groups' ? Colors.background : Colors.textSecondary} />
             <Text style={[styles.quickChipText, segment === 'groups' && styles.quickChipTextActive]}>Groups {groupCount}</Text>
           </AnimatedPressable>
         </View>
 
-        <Text style={styles.listMeta}>
+        <Caption color={Colors.textMuted}>
           {searchQuery.trim().length > 0
             ? `${visibleConversations.length} matched thread${visibleConversations.length === 1 ? '' : 's'}`
             : `${visibleConversations.length} conversation${visibleConversations.length === 1 ? '' : 's'}`}
           {' | '}
           {unreadCount} unread
-        </Text>
+        </Caption>
       </View>
 
       <View style={{ flex: 1 }}>
@@ -490,7 +509,7 @@ export default function InboxScreen() {
           keyExtractor={(c: any) => c.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          ItemSeparatorComponent={() => <View style={{ height: Space.sm + 4 }} />}
           renderItem={renderItem as any}
           onScroll={scrollHandler}
           scrollEventThrottle={16}
@@ -524,47 +543,42 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
   header: {
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 18,
+    paddingHorizontal: Space.md + 2,
+    paddingTop: Space.sm + 2,
+    paddingBottom: Space.md + 2,
     backgroundColor: Colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   hugeTitle: {
-    fontSize: 30,
-    fontFamily: 'Inter_700Bold',
+    fontSize: Type.title.size,
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    letterSpacing: -1,
-  },
-  headerSubtitle: {
-    marginTop: 3,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.textSecondary,
+    letterSpacing: Type.title.letterSpacing,
+    lineHeight: Type.title.lineHeight,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
+    gap: Space.sm + 2,
+    marginBottom: Space.md - 2,
   },
   headerTitleWrap: {
     flex: 1,
     flexShrink: 1,
-    paddingRight: 8,
+    paddingRight: Space.sm,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     flexShrink: 0,
   },
   addGroupBtn: {
-    borderRadius: 18,
+    borderRadius: Radius.full,
     minHeight: 38,
-    paddingHorizontal: 14,
+    paddingHorizontal: Space.sm + 6,
     borderWidth: 1,
     backgroundColor: Colors.surface,
     borderColor: Colors.border,
@@ -580,14 +594,14 @@ const styles = StyleSheet.create({
   },
   addGroupBtnText: {
     color: Colors.textPrimary,
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
   },
   policiesBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.surface,
@@ -596,44 +610,44 @@ const styles = StyleSheet.create({
   },
   searchWrap: {
     height: 46,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: Colors.borderLight,
     backgroundColor: Colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 10,
-    marginBottom: 12,
+    paddingHorizontal: Space.sm + 4,
+    gap: Space.sm + 2,
+    marginBottom: Space.sm + 4,
   },
   searchInput: {
     flex: 1,
     color: Colors.textPrimary,
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
     paddingVertical: 0,
   },
   clearSearchBtn: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.background,
   },
   segmentStrip: {
     marginTop: 2,
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   segmentChip: {
     height: 34,
-    borderRadius: 17,
+    borderRadius: Radius.full,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: Space.sm + 6,
   },
   segmentChipActive: {
     borderColor: Colors.brand,
@@ -641,8 +655,8 @@ const styles = StyleSheet.create({
   },
   segmentChipText: {
     color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
   },
   segmentChipTextActive: {
@@ -650,8 +664,8 @@ const styles = StyleSheet.create({
   },
   quickRail: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
+    gap: Space.sm,
+    marginBottom: Space.sm + 2,
   },
   quickChip: {
     flex: 1,
@@ -660,7 +674,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 5,
     height: 30,
-    borderRadius: 15,
+    borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
@@ -671,45 +685,44 @@ const styles = StyleSheet.create({
   },
   quickChipText: {
     color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
   },
   quickChipTextActive: {
     color: Colors.background,
   },
-  listMeta: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    letterSpacing: 0.2,
-  },
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 120,
+    paddingHorizontal: Space.md + 4,
+    paddingBottom: Space.xxl + 24,
     flexGrow: 1,
   },
 
   messageCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 22,
+    borderRadius: Radius.xl + 6,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 16,
+    padding: Space.md,
     flexDirection: 'row',
-    gap: 14,
+    gap: Space.sm + 6,
     alignItems: 'flex-start',
   },
   avatarWrap: { position: 'relative' },
   avatar: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: Radius.full,
     backgroundColor: Colors.surface,
+  },
+  avatarContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: Radius.full,
   },
   groupAvatar: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: Radius.full,
     backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
@@ -720,101 +733,107 @@ const styles = StyleSheet.create({
     right: 1,
     width: 14,
     height: 14,
-    borderRadius: 7,
-    backgroundColor: '#4caf50',
+    borderRadius: Radius.full,
+    backgroundColor: Colors.success,
     borderWidth: 3,
-    borderColor: PANEL_BG,
+    borderColor: Colors.surface,
   },
   messageBody: { flex: 1 },
-  messageTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  messageTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+    alignItems: 'center',
+  },
   unreadBadge: {
     borderRadius: Radius.sm,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     backgroundColor: Colors.brand,
     alignSelf: 'flex-start',
-    marginBottom: 8,
+    marginBottom: Space.xs + 4,
   },
   unreadBadgeText: {
     color: Colors.background,
     fontSize: 10,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: 0.7,
   },
-  senderName: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
-  time: { fontSize: 11, color: Colors.textMuted, fontFamily: 'Inter_400Regular' },
   groupMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     marginBottom: Space.xs + 2,
   },
-  groupMetaText: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-    letterSpacing: 0.2,
-    marginBottom: Space.sm,
+  snippet: {
+    color: Colors.textSecondary,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.body.lineHeight,
+    marginBottom: Space.sm + 2,
   },
-  snippet: { color: Colors.textSecondary, fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 20, marginBottom: 10 },
   searchHitRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     marginBottom: Space.sm,
   },
-  searchHitText: {
-    flex: 1,
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
 
   itemPreview: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 8,
-    gap: 10,
+    padding: Space.sm,
+    gap: Space.sm + 2,
   },
-  itemThumb: { width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.surface },
-  itemName: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
-  itemPrice: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary },
+  itemThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+  },
+  itemThumbContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
+  },
+  itemName: {
+    flex: 1,
+  },
 
   unreadDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: ACCENT,
+    backgroundColor: Colors.brand,
     marginTop: 6,
   },
 
   // Swipe actions
   swipeDelete: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.danger,
     justifyContent: 'center',
     alignItems: 'center',
     width: 90,
-    borderRadius: 16,
-    marginLeft: 8,
+    borderRadius: Radius.xl + 2,
+    marginLeft: Space.sm,
     gap: 4,
   },
   swipeArchive: {
-    backgroundColor: ACCENT,
+    backgroundColor: Colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
     width: 90,
-    borderRadius: 16,
-    marginRight: 8,
+    borderRadius: Radius.xl + 2,
+    marginRight: Space.sm,
     gap: 4,
   },
   swipeActionText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textInverse,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
   },
 });
-

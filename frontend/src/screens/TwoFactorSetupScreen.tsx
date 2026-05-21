@@ -20,6 +20,7 @@ import { ActiveTheme, Colors } from '../constants/colors';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { requestTwoFactorEnrollment, verifyTwoFactorEnrollment } from '../services/authApi';
+import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'TwoFactorSetup'>;
 const PANEL_BG = Colors.surface;
@@ -168,7 +169,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 17,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
   content: {
@@ -177,14 +178,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 30,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     marginBottom: 12,
     letterSpacing: -0.8,
   },
   subtitle: {
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
     lineHeight: 22,
     marginBottom: 24,
@@ -203,19 +204,19 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: Colors.textMuted,
     fontSize: 11,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     textAlign: 'center',
   },
   manualKeyText: {
     marginTop: 10,
     color: Colors.textSecondary,
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textAlign: 'center',
   },
   inputLabel: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
     marginBottom: 10,
     textTransform: 'uppercase',
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
     color: Colors.textPrimary,
     fontSize: 24,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: 6,
     paddingHorizontal: 2,
     marginBottom: 8,
@@ -235,7 +236,7 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.danger,
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     marginBottom: 16,
   },
   secondaryBtn: {
@@ -246,7 +247,7 @@ const styles = StyleSheet.create({
   secondaryBtnText: {
     color: Colors.textSecondary,
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textDecorationLine: 'underline',
   },
   primaryBtn: {
@@ -262,6 +263,6 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: Colors.background,
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
 });
