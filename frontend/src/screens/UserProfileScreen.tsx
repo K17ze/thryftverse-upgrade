@@ -53,7 +53,7 @@ const { width } = Dimensions.get('window');
 const GRID_SPACING = 16;
 const ITEM_SIZE = (width - 40 - GRID_SPACING) / 2;
 const COVER_HEIGHT = 200;
-const AVATAR_SIZE = 120;
+const AVATAR_SIZE = 108;
 const COVER_IMAGE = 'https://picsum.photos/seed/profilecoverdefault/1200/800';
 
 type Tab = 'Listings' | 'Reviews' | 'About';
@@ -228,7 +228,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       {/* Floating Translucent Header Layer */}
       <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]}>
          <View style={{ flex: 1 }} />
-        <Text style={styles.floatingHeaderTitle}>{displayUsername}</Text>
+        <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{displayUsername}</Text>
          <View style={{ flex: 1 }} />
       </Reanimated.View>
       
@@ -434,9 +434,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           {activeTab === 'Reviews' && (
             <View style={styles.reviewsContent}>
               <View style={styles.ratingHero}>
-                <Text style={styles.ratingBigNumber}>4.8</Text>
+                <Text style={styles.ratingBigNumber}>{(MOCK_REVIEWS.reduce((sum, r) => sum + r.rating, 0) / MOCK_REVIEWS.length).toFixed(1)}</Text>
                 <StarRating rating={5} size={28} />
-                <Text style={styles.ratingTotalText}>Based on 54 reviews</Text>
+                <Text style={styles.ratingTotalText}>Based on {MOCK_REVIEWS.length} reviews</Text>
               </View>
 
               <View style={styles.reviewsFilterRow}>
@@ -520,7 +520,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       {/* Flagship Bottom Sheet Overrides */}
       <BottomSheet visible={actionSheetVisible} onDismiss={() => setActionSheetVisible(false)} snapPoint={0.3}>
         <View style={{ paddingVertical: 10 }}>
-          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: TEXT, marginBottom: 20 }}>User Actions</Text>
+          <Text style={{ fontSize: 18, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 20 }}>User Actions</Text>
 
           <AnimatedPressable
             style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center', gap: 12 }}
@@ -533,7 +533,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             accessibilityHint="Opens report flow for this user"
           >
             <Ionicons name="flag-outline" size={20} color={TEXT} />
-            <Text style={{ fontSize: 16, fontFamily: 'Inter_500Medium', color: TEXT }}>Report user</Text>
+            <Text style={{ fontSize: 16, fontFamily: Typography.family.medium, color: TEXT }}>Report user</Text>
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -554,7 +554,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             accessibilityHint="Blocks this user and disables future messages"
           >
             <Ionicons name="ban-outline" size={20} color={Colors.danger} />
-            <Text style={{ fontSize: 16, fontFamily: 'Inter_500Medium', color: Colors.danger }}>Block user</Text>
+            <Text style={{ fontSize: 16, fontFamily: Typography.family.medium, color: Colors.danger }}>Block user</Text>
           </AnimatedPressable>
         </View>
       </BottomSheet>
@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
   },
-  floatingHeaderTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: TEXT, textTransform: 'uppercase', letterSpacing: 1 },
+  floatingHeaderTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: TEXT, textTransform: 'uppercase', letterSpacing: 1 },
   
   floatingHeaderActions: {
     position: 'absolute', left: 0, right: 0,
@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
   heroInfo: { flex: 1 },
   heroNameLinkedIn: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: TEXT,
     letterSpacing: -0.3,
     textAlign: 'center',
@@ -700,13 +700,13 @@ const styles = StyleSheet.create({
   },
   heroHandleLinkedIn: {
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: MUTED,
     textAlign: 'center',
     marginTop: 2,
   },
   heroRatingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroReviewCount: { fontSize: 14, fontFamily: 'Inter_500Medium', color: MUTED },
+  heroReviewCount: { fontSize: 14, fontFamily: Typography.family.medium, color: MUTED },
   
   statsCard: {
     flexDirection: 'row',
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
   },
   heroActionPrimaryText: {
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.background,
     letterSpacing: 0.15,
   },
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
   },
   heroActionSecondaryText: {
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: TEXT,
     letterSpacing: 0.15,
   },

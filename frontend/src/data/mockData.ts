@@ -73,6 +73,7 @@ export interface User {
   lastSeen: string;
   listingCount: number;
   bio?: string;
+  website?: string;
 }
 
 export interface Message {

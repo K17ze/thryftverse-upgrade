@@ -132,6 +132,16 @@ export default function CoOwnOrderHistoryScreen() {
   const viewerId = currentUser?.id ?? 'u1';
   const reducedMotionEnabled = useReducedMotion();
 
+  const assetIssuerMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const asset of getCoOwnMarket(customCoOwns)) {
+      map.set(asset.id, asset.issuerId);
+    }
+    return map;
+  }, [customCoOwns]);
+
+  const supportUser = MOCK_USERS[0];
+
   const [sideFilter, setSideFilter] = React.useState<SideFilter>('all');
   const [dateFilter, setDateFilter] = React.useState<DateFilter>('all');
   const [assetFilter, setAssetFilter] = React.useState<string>('all');
@@ -245,6 +255,10 @@ export default function CoOwnOrderHistoryScreen() {
         onEndReachedThreshold={0.5}
         renderItem={({ item, index }) => {
           const asset = customCoOwns.find((a) => a.id === item.assetId);
+          const issuerId = assetIssuerMap.get(item.assetId) ?? supportUser.id;
+          const issuerUser = MOCK_USERS.find((user) => user.id === issuerId);
+          const issuerHandle = issuerUser?.username ?? issuerId;
+          const canMessageIssuer = issuerId !== viewerId;
           return (
             <Reanimated.View
               entering={
@@ -266,6 +280,17 @@ export default function CoOwnOrderHistoryScreen() {
                 status={item.status}
                 timestamp={item.createdAt}
                 onPress={() => navigation.navigate('AssetDetail', { assetId: item.assetId })}
+                issuerHandle={issuerHandle}
+                issuerAvatar={issuerUser?.avatar}
+                canMessageIssuer={canMessageIssuer}
+                onPressIssuer={() => navigation.navigate('UserProfile', { userId: issuerId })}
+                onMessageIssuer={() =>
+                  navigation.navigate('Chat', {
+                    conversationId: `${issuerId}_${item.assetId}`,
+                    focusQuery: issuerHandle,
+                    partnerUserId: issuerId,
+                  })
+                }
               />
             </Reanimated.View>
           );
@@ -288,6 +313,8 @@ export default function CoOwnOrderHistoryScreen() {
               icon="receipt-outline"
               title="No orders yet"
               subtitle="Your co-own trade history will appear here."
+              ctaLabel="Open Hub"
+              onCtaPress={() => navigation.navigate('CoOwnHub')}
             />
           )
         }

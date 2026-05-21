@@ -24,6 +24,7 @@ import {
   CoOwnAssetCard,
 } from '../components/trade';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -163,6 +164,20 @@ export default function PortfolioScreen() {
               columns={3}
             />
 
+            <View style={styles.sectionRow}>
+              <Meta style={styles.sectionLabel}>HOLDINGS</Meta>
+              <AnimatedPressable
+                style={styles.sectionLinkWrap}
+                onPress={() => navigation.navigate('AssetLeaderboard')}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Open asset leaderboards"
+                accessibilityHint="Shows top performing co-own assets"
+              >
+                <Meta style={styles.sectionLink}>Leaderboards</Meta>
+              </AnimatedPressable>
+            </View>
+
             {portfolioBars.length > 0 && (
               <View style={styles.allocationWrap}>
                 <Meta style={styles.sectionLabel}>ALLOCATION</Meta>
@@ -204,6 +219,21 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: Space.xl,
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    marginTop: Space.sm,
+  },
+  sectionLinkWrap: {
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  sectionLink: {
+    color: Colors.brand,
   },
   allocationWrap: {
     marginHorizontal: Space.md,

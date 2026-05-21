@@ -1,8 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  AnimatedPressable
-} from '../components/AnimatedPressable';
-import {
   View,
   Text,
   StyleSheet,
@@ -34,7 +31,14 @@ import { CachedImage } from '../components/CachedImage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { MOCK_USERS } from '../data/mockData';
+
+/* ── New Discover Components ── */
+import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
+import { EditorialSection } from '../components/discover/EditorialSection';
+import { FeaturedBoardCard, FeaturedBoard } from '../components/discover/FeaturedBoardCard';
+import { EditorialImageRow, EditorialImage } from '../components/discover/EditorialImageRow';
 
 type Props = StackScreenProps<RootStackParamList, 'GlobalSearch'>;
 
@@ -78,18 +82,127 @@ const TOP_SEARCH_CARDS = [
   { label: 'Minimal', color: '#E8DAEF', textColor: '#4A235A', image: 'https://images.unsplash.com/photo-1434389677669-e08b4a3a7a5e?w=300&q=80' },
 ];
 
+/* ── Editorial seed data ── */
+const HERO_ITEMS: HeroItem[] = [
+  {
+    id: 'hero1',
+    type: 'video',
+    uri: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    posterUri: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800&q=80',
+    sponsor: 'H&M',
+    title: 'H&M Summer 2026',
+    ctaLabel: 'Visit',
+  },
+  {
+    id: 'hero2',
+    type: 'image',
+    uri: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=80',
+    title: 'Escape to Indian Hills',
+    ctaLabel: 'Explore',
+  },
+  {
+    id: 'hero3',
+    type: 'image',
+    uri: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80',
+    sponsor: 'Nike',
+    title: 'Streetwear Essentials',
+    ctaLabel: 'Shop',
+  },
+];
+
+const FEATURED_BOARDS: FeaturedBoard[] = [
+  {
+    id: 'board1',
+    title: 'Escape to Indian hills',
+    subtitle: 'Pinterest India',
+    meta: '41 Pins \u2022 11mo',
+    isVerified: true,
+    images: [
+      'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=400&q=80',
+      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&q=80',
+      'https://images.unsplash.com/photo-1433086966358-a548c30072b5?w=400&q=80',
+    ],
+  },
+  {
+    id: 'board2',
+    title: 'Gaming room inspo',
+    subtitle: 'Pinterest Man',
+    meta: '65 Pins \u2022 5mo',
+    isVerified: true,
+    images: [
+      'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400&q=80',
+      'https://images.unsplash.com/photo-1593305841991-05c29736f97c?w=400&q=80',
+      'https://images.unsplash.com/photo-1616499370260-485b3e5ed653?w=400&q=80',
+    ],
+  },
+  {
+    id: 'board3',
+    title: 'Streetwear essentials',
+    subtitle: 'Editors Pick',
+    meta: '28 Pins \u2022 Hot',
+    isVerified: false,
+    images: [
+      'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=400&q=80',
+      'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=400&q=80',
+      'https://images.unsplash.com/photo-1485231183945-ef89e404cf89?w=400&q=80',
+    ],
+  },
+];
+
+const EDITORIAL_SECTIONS: { id: string; kicker: string; title: string; images: EditorialImage[] }[] = [
+  {
+    id: 'sec1',
+    kicker: 'Ideas for you',
+    title: 'Shirt dress outfit',
+    images: [
+      { id: 'e1-1', uri: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&q=80', aspectRatio: 1.4 },
+      { id: 'e1-2', uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=80', aspectRatio: 1.2 },
+      { id: 'e1-3', uri: 'https://images.unsplash.com/photo-1581044777550-4cfa60707efb?w=400&q=80', aspectRatio: 1.5 },
+      { id: 'e1-4', uri: 'https://images.unsplash.com/photo-1434389677669-e08b4a3a7a5e?w=400&q=80', aspectRatio: 1.1 },
+    ],
+  },
+  {
+    id: 'sec2',
+    kicker: 'Ideas for you',
+    title: 'YSL runway',
+    images: [
+      { id: 'e2-1', uri: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=400&q=80', aspectRatio: 1.3 },
+      { id: 'e2-2', uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=80', aspectRatio: 1.1 },
+      { id: 'e2-3', uri: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=400&q=80', aspectRatio: 1.4 },
+      { id: 'e2-4', uri: 'https://images.unsplash.com/photo-1485231183945-ef89e404cf89?w=400&q=80', aspectRatio: 1.2 },
+    ],
+  },
+  {
+    id: 'sec3',
+    kicker: 'Ideas for you',
+    title: "Men's formal style",
+    images: [
+      { id: 'e3-1', uri: 'https://images.unsplash.com/photo-1507679799987-c73779b96318?w=400&q=80', aspectRatio: 1.35 },
+      { id: 'e3-2', uri: 'https://images.unsplash.com/photo-1593030761757-11f489f2c6f9?w=400&q=80', aspectRatio: 1.15 },
+      { id: 'e3-3', uri: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&q=80', aspectRatio: 1.25 },
+      { id: 'e3-4', uri: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&q=80', aspectRatio: 1.45 },
+    ],
+  },
+  {
+    id: 'sec4',
+    kicker: 'Ideas for you',
+    title: 'Tom ford suit',
+    images: [
+      { id: 'e4-1', uri: 'https://images.unsplash.com/photo-1507679799987-c73779b96318?w=400&q=80', aspectRatio: 1.2 },
+      { id: 'e4-2', uri: 'https://images.unsplash.com/photo-1593030761757-11f489f2c6f9?w=400&q=80', aspectRatio: 1.4 },
+      { id: 'e4-3', uri: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&q=80', aspectRatio: 1.1 },
+      { id: 'e4-4', uri: 'https://images.unsplash.com/photo-1507679799987-c73779b96318?w=400&q=80', aspectRatio: 1.3 },
+    ],
+  },
+];
+
 function buildAffinitySet(values: string[]) {
   const counts = new Map<string, number>();
-
   values.forEach((value) => {
     const normalized = value.trim().toLowerCase();
-    if (!normalized) {
-      return;
-    }
-
+    if (!normalized) return;
     counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
   });
-
   return new Set(
     [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -99,15 +212,9 @@ function buildAffinitySet(values: string[]) {
 }
 
 function getRecencyBoost(createdAt?: string) {
-  if (!createdAt) {
-    return 0;
-  }
-
+  if (!createdAt) return 0;
   const createdTs = Date.parse(createdAt);
-  if (Number.isNaN(createdTs)) {
-    return 0;
-  }
-
+  if (Number.isNaN(createdTs)) return 0;
   const ageHours = (Date.now() - createdTs) / (1000 * 60 * 60);
   return Math.max(0, 16 - ageHours / 8);
 }
@@ -155,19 +262,16 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
         let score = Math.min(listing.likes, 120) * 0.22;
         score += getRecencyBoost(listing.createdAt);
-
         const reasons: string[] = [];
 
         if (affinityProfile.brandSet.has(brand)) {
           score += 16;
           reasons.push('Matches brands you save often');
         }
-
         if (affinityProfile.categorySet.has(category)) {
           score += 11;
           reasons.push('Aligned with your closet categories');
         }
-
         if (affinityProfile.subcategorySet.has(subcategory)) {
           score += 8;
           reasons.push('Close to items in your wishlist');
@@ -206,10 +310,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
         };
       })
       .filter((listing) => {
-        if (!queryTokens.length) {
-          return true;
-        }
-
+        if (!queryTokens.length) return true;
         return listing.score > 0;
       })
       .sort((a, b) => b.score - a.score)
@@ -233,7 +334,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     const selectedBrands = new Set(browseFilters.brands.map((brand) => brand.toLowerCase()));
     const selectedSizes = new Set(browseFilters.sizes.map((size) => size.toLowerCase()));
 
-    // When no query, show ALL listings (not just ranked subset) so every user product appears
     const sourceListings = normalizedQuery ? rankedListings : listings.map((listing) => ({
       id: listing.id,
       title: listing.title,
@@ -250,18 +350,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     }));
 
     const filtered = sourceListings.filter((listing) => {
-      if (selectedBrands.size > 0 && !selectedBrands.has(listing.brand.toLowerCase())) {
-        return false;
-      }
-
-      if (selectedSizes.size > 0 && !selectedSizes.has(listing.size.toLowerCase())) {
-        return false;
-      }
-
-      if (browseFilters.condition !== 'Any' && listing.condition !== browseFilters.condition) {
-        return false;
-      }
-
+      if (selectedBrands.size > 0 && !selectedBrands.has(listing.brand.toLowerCase())) return false;
+      if (selectedSizes.size > 0 && !selectedSizes.has(listing.size.toLowerCase())) return false;
+      if (browseFilters.condition !== 'Any' && listing.condition !== browseFilters.condition) return false;
       return true;
     });
 
@@ -286,35 +377,16 @@ export default function GlobalSearchScreen({ navigation }: Props) {
         break;
     }
 
-    // Only cap results when a query is active; otherwise show everything
     return normalizedQuery ? sorted.slice(0, 16) : sorted;
   }, [browseFilters.brands, browseFilters.condition, browseFilters.sizes, browseFilters.sort, rankedListings, listings, normalizedQuery]);
-
-  // Auto-focus the search bar when the screen mounts
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
-    return () => clearTimeout(timeout);
-  }, []);
 
   useEffect(() => {
     focusProgress.value = withTiming(isSearchFocused ? 1 : 0, { duration: Motion.timing.focus });
   }, [focusProgress, isSearchFocused]);
 
   const animatedSearchShellStyle = useAnimatedStyle(() => {
-    const borderColor = interpolateColor(
-      focusProgress.value,
-      [0, 1],
-      [Colors.border, Colors.brand],
-    );
-
-    const backgroundColor = interpolateColor(
-      focusProgress.value,
-      [0, 1],
-      [Colors.surface, Colors.background],
-    );
-
+    const borderColor = interpolateColor(focusProgress.value, [0, 1], [Colors.border, Colors.brand]);
+    const backgroundColor = interpolateColor(focusProgress.value, [0, 1], [Colors.surface, Colors.background]);
     return {
       borderColor,
       backgroundColor,
@@ -325,11 +397,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const handleSearchSubmit = () => {
     const trimmedQuery = query.trim();
     if (!trimmedQuery) return;
-
-    updateBrowseFilters({
-      query: trimmedQuery,
-    });
-
+    updateBrowseFilters({ query: trimmedQuery });
     navigation.navigate('Browse', {
       categoryId: 'search',
       title: `Search: "${trimmedQuery}"`,
@@ -340,11 +408,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const handlePillPress = (tag: string) => {
     const normalizedTag = tag.trim();
     if (!normalizedTag) return;
-
-    updateBrowseFilters({
-      query: normalizedTag,
-    });
-
+    updateBrowseFilters({ query: normalizedTag });
     navigation.navigate('Browse', {
       categoryId: 'search',
       title: `Search: "${normalizedTag}"`,
@@ -417,7 +481,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           ))}
         </View>
       </View>
-
       <View style={styles.loadingSection}>
         <SkeletonLoader width="44%" height={14} borderRadius={7} style={{ marginBottom: 14 }} />
         {Array.from({ length: 4 }).map((_, index) => (
@@ -432,6 +495,21 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
   const masonryColumn1 = discoverListings.filter((_, i) => i % 2 === 0);
   const masonryColumn2 = discoverListings.filter((_, i) => i % 2 === 1);
+
+  /* ── Editorial helpers ── */
+  const handleEditorialImagePress = (id: string) => {
+    navigation.push('ItemDetail', { itemId: id });
+  };
+
+  const handleBoardPress = (boardId: string) => {
+    const board = FEATURED_BOARDS.find((b) => b.id === boardId);
+    if (board) {
+      setQuery(board.title.split(' ')[0]);
+      handleSearchSubmit();
+    }
+  };
+
+  const isDiscoverLanding = !normalizedQuery;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -470,222 +548,290 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       </View>
 
       {query.length > 0 && (
-        <View style={styles.statusRow}>
-          <Text style={styles.statusMeta}>{listings.length} listings indexed</Text>
-          <SyncStatusPill tone={searchStatus.tone} label={searchStatus.label} compact />
+        <View style={styles.statusPillWrap}>
+          <SyncStatusPill {...searchStatus} />
         </View>
       )}
 
-      {lastError ? (
-        <SyncRetryBanner
-          message="Search indexing is delayed. Results may be stale."
-          onRetry={() => void refreshListings()}
-          isRetrying={isSyncing}
-          telemetryContext="global_search_sync"
-          containerStyle={styles.syncRetryBanner}
-        />
-      ) : null}
-
-      {query.length > 0 && (
-        <View style={styles.controlRail}>
-          <AppButton
-            title={`Sort: ${browseFilters.sort}`}
-            icon={<Ionicons name="swap-vertical-outline" size={14} color={Colors.textPrimary} />}
-            variant="secondary"
-            size="sm"
-            style={styles.controlBtn}
-            iconContainerStyle={styles.controlBtnIconWrap}
-            titleStyle={styles.controlBtnText}
-            onPress={handleCycleSort}
-          />
-          <AppButton
-            title={hasActiveDiscoverFilters ? `Filter (${activeFilterCount})` : 'Filter'}
-            icon={<Ionicons name="options-outline" size={14} color={Colors.textPrimary} />}
-            variant="secondary"
-            size="sm"
-            style={styles.controlBtn}
-            iconContainerStyle={styles.controlBtnIconWrap}
-            titleStyle={styles.controlBtnText}
-            onPress={handleOpenFilter}
-          />
-        </View>
-      )}
-
-      {hasActiveDiscoverFilters && query.length > 0 ? (
-        <View style={styles.controlMetaRow}>
-          <Text style={styles.controlMetaText}>Active filters: {activeFilterCount}</Text>
-          <AppButton
-            title="Clear"
-            variant="secondary"
-            size="sm"
-            style={styles.controlClearBtn}
-            titleStyle={styles.controlClearText}
-            onPress={handleClearDiscoverFilters}
-          />
-        </View>
-      ) : null}
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
         {showSearchLoadingSkeleton ? (
           renderSearchLoadingState()
         ) : (
           <>
-            {/* Recent Searches - Pill Style */}
-            {!normalizedQuery && (
-              <Reanimated.View entering={FadeInDown.delay(100).duration(400)} style={styles.sectionWrap}>
-                <Text style={styles.sectionTitle}>Recent searches</Text>
-                <View style={styles.recentPillsWrap}>
-                  {RECENT_SEARCHES.map((term, idx) => (
-                    <AnimatedPressable key={idx} style={styles.recentPill} activeOpacity={0.8} onPress={() => handlePillPress(term)}>
-                      <Text style={styles.recentPillText}>{term}</Text>
-                    </AnimatedPressable>
-                  ))}
-                </View>
-              </Reanimated.View>
-            )}
+            {/* ═══════ DISCOVER LANDING (no query) ═══════ */}
+            {isDiscoverLanding && (
+              <>
+                {/* Hero Carousel */}
+                <HeroCarousel items={HERO_ITEMS} autoPlayInterval={6000} />
 
-            {/* Top Searches - Colorful Cards */}
-            {!normalizedQuery && (
-              <Reanimated.View entering={FadeInDown.delay(150).duration(400)} style={styles.sectionWrap}>
-                <Text style={styles.sectionTitle}>Top searches</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topSearchesScroll}>
-                  {TOP_SEARCH_CARDS.map((card, idx) => (
-                    <AnimatedPressable
-                      key={idx}
-                      style={[styles.topSearchCard, { backgroundColor: card.color }]}
-                      activeOpacity={0.85}
-                      onPress={() => handlePillPress(card.label)}
-                    >
-                      <CachedImage uri={card.image} style={styles.topSearchCardImage} contentFit="cover" />
-                      <View style={styles.topSearchCardOverlay}>
-                        <Text style={[styles.topSearchCardText, { color: card.textColor }]}>{card.label}</Text>
+                {/* Explore featured boards */}
+                <EditorialSection
+                  kicker="Explore featured boards"
+                  title="Ideas you might like"
+                  style={{ marginTop: 12 }}
+                >
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.boardsScroll}
+                  >
+                    {FEATURED_BOARDS.map((board) => (
+                      <FeaturedBoardCard
+                        key={board.id}
+                        board={{
+                          ...board,
+                          onPress: () => handleBoardPress(board.id),
+                        }}
+                      />
+                    ))}
+                  </ScrollView>
+                </EditorialSection>
+
+                {/* Recent searches */}
+                <EditorialSection kicker="Your history" title="Recent searches">
+                  <View style={styles.recentPillsWrap}>
+                    {RECENT_SEARCHES.map((term, idx) => (
+                      <AnimatedPressable
+                        key={idx}
+                        style={styles.recentPill}
+                        activeOpacity={0.8}
+                        onPress={() => handlePillPress(term)}
+                      >
+                        <Text style={styles.recentPillText}>{term}</Text>
+                      </AnimatedPressable>
+                    ))}
+                  </View>
+                </EditorialSection>
+
+                {/* Top searches - colorful cards */}
+                <EditorialSection title="Top searches">
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topSearchesScroll}>
+                    {TOP_SEARCH_CARDS.map((card, idx) => (
+                      <AnimatedPressable
+                        key={idx}
+                        style={[styles.topSearchCard, { backgroundColor: card.color }]}
+                        activeOpacity={0.85}
+                        onPress={() => handlePillPress(card.label)}
+                      >
+                        <CachedImage uri={card.image} style={styles.topSearchCardImage} contentFit="cover" />
+                        <View style={styles.topSearchCardOverlay}>
+                          <Text style={[styles.topSearchCardText, { color: card.textColor }]}>{card.label}</Text>
+                        </View>
+                      </AnimatedPressable>
+                    ))}
+                  </ScrollView>
+                </EditorialSection>
+
+                {/* Trending */}
+                <EditorialSection title="Trending now">
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
+                    {trendingTags.map((tag, idx) => (
+                      <AnimatedPressable key={idx} style={styles.trendingPill} activeOpacity={0.8} onPress={() => handlePillPress(tag)}>
+                        <Text style={styles.trendingPillText}>{tag}</Text>
+                      </AnimatedPressable>
+                    ))}
+                  </ScrollView>
+                </EditorialSection>
+
+                {/* Editorial image rows (Pinterest-style 4-col sections) */}
+                {EDITORIAL_SECTIONS.map((section) => (
+                  <EditorialSection
+                    key={section.id}
+                    kicker={section.kicker}
+                    title={section.title}
+                    onSearchPress={() => {
+                      setQuery(section.title);
+                      handleSearchSubmit();
+                    }}
+                  >
+                    <EditorialImageRow
+                      images={section.images}
+                      onPressImage={handleEditorialImagePress}
+                      sharedTransitionPrefix={`editorial-${section.id}`}
+                    />
+                  </EditorialSection>
+                ))}
+
+                {/* Discover masonry grid at bottom of landing */}
+                <EditorialSection
+                  kicker="Ideas for you"
+                  title="Discover"
+                  onSearchPress={handleSearchSubmit}
+                >
+                  {discoverListings.length > 0 ? (
+                    <View style={styles.masonryGrid}>
+                      <View style={styles.masonryColumn}>
+                        {masonryColumn1.map((listing, i) => (
+                          <AnimatedPressable
+                            key={listing.id}
+                            style={styles.masonryItemWrap}
+                            activeOpacity={0.9}
+                            onPress={() => handleOpenRecommendation(listing.id)}
+                          >
+                            <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
+                              <CachedImage
+                                uri={listing.image}
+                                style={[styles.masonryImg, { height: [260, 340, 200, 300][i % 4] }]}
+                                contentFit="cover"
+                              />
+                            </SharedTransitionView>
+                          </AnimatedPressable>
+                        ))}
                       </View>
-                    </AnimatedPressable>
-                  ))}
-                </ScrollView>
-              </Reanimated.View>
+                      <View style={styles.masonryColumn}>
+                        {masonryColumn2.map((listing, i) => (
+                          <AnimatedPressable
+                            key={listing.id}
+                            style={styles.masonryItemWrap}
+                            activeOpacity={0.9}
+                            onPress={() => handleOpenRecommendation(listing.id)}
+                          >
+                            <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
+                              <CachedImage
+                                uri={listing.image}
+                                style={[styles.masonryImg, { height: [340, 200, 280, 240][i % 4] }]}
+                                contentFit="cover"
+                              />
+                            </SharedTransitionView>
+                          </AnimatedPressable>
+                        ))}
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.recoEmptyState}>
+                      <Ionicons name="sparkles-outline" size={18} color={Colors.textMuted} />
+                      <Text style={styles.recoEmptyText}>
+                        {hasActiveDiscoverFilters
+                          ? 'No picks match your current filters. Adjust or clear them.'
+                          : 'No ranked results yet. Try a shorter keyword.'}
+                      </Text>
+                    </View>
+                  )}
+                </EditorialSection>
+              </>
             )}
 
-            {/* Trending Tags */}
-            {!normalizedQuery && (
-              <Reanimated.View entering={FadeInDown.delay(200).duration(400)} style={styles.sectionWrap}>
-                <Text style={styles.sectionTitle}>Trending</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
-                  {trendingTags.map((tag, idx) => (
-                    <AnimatedPressable key={idx} style={styles.trendingPill} activeOpacity={0.8} onPress={() => handlePillPress(tag)}>
-                      <Text style={styles.trendingPillText}>{tag}</Text>
-                    </AnimatedPressable>
-                  ))}
-                </ScrollView>
-              </Reanimated.View>
-            )}
+            {/* ═══════ SEARCH RESULTS (query entered) ═══════ */}
+            {!isDiscoverLanding && (
+              <>
+                {lastError ? (
+                  <SyncRetryBanner
+                    message="Search index is delayed. Showing cached results."
+                    onRetry={() => void refreshListings()}
+                    isRetrying={isSyncing}
+                    telemetryContext="global_search_sync"
+                    containerStyle={{ marginHorizontal: 20, marginBottom: 12 }}
+                  />
+                ) : null}
 
-            {/* Explore Featured Boards */}
-            {!normalizedQuery && (
-              <Reanimated.View entering={FadeInDown.delay(250).duration(400)} style={[styles.sectionWrap, { marginBottom: 32 }]}>
-                <Text style={styles.sectionTitle}>Ideas you might like</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.boardsScroll}>
-                  {[
-                    { title: 'Escape to Indian hills', subtitle: 'Curated Picks', meta: '41 Items \u2022 Trending' },
-                    { title: 'Gaming room inspo', subtitle: 'Community', meta: '65 Items \u2022 New' },
-                    { title: 'Streetwear essentials', subtitle: 'Editors Pick', meta: '28 Items \u2022 Hot' }
-                  ].map((board, idx) => {
-                    const startIdx = idx * 3;
-                    const imgs = [
-                      discoverListings[startIdx % discoverListings.length]?.image || `https://picsum.photos/seed/${idx}1/400/500`,
-                      discoverListings[(startIdx + 1) % discoverListings.length]?.image || `https://picsum.photos/seed/${idx}2/400/500`,
-                      discoverListings[(startIdx + 2) % discoverListings.length]?.image || `https://picsum.photos/seed/${idx}3/400/500`,
-                    ];
-                    
-                    return (
-                      <AnimatedPressable key={idx} style={styles.boardCard} activeOpacity={0.9} onPress={() => setQuery(board.title.split(' ')[0])}>
-                        <View style={styles.boardImageGrid}>
-                          <CachedImage uri={imgs[0]} style={styles.boardImageMain} contentFit="cover" />
-                          <View style={styles.boardImageSide}>
-                            <CachedImage uri={imgs[1]} style={styles.boardImageSmall} contentFit="cover" />
-                            <CachedImage uri={imgs[2]} style={styles.boardImageSmall} contentFit="cover" />
-                          </View>
-                        </View>
-                        <Text style={styles.boardTitle}>{board.title}</Text>
-                        <View style={styles.boardMetaRow}>
-                          <Text style={styles.boardSubtitle}>{board.subtitle}</Text>
-                          {idx < 2 && <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />}
-                        </View>
-                        <Text style={styles.boardMeta}>{board.meta}</Text>
-                      </AnimatedPressable>
-                    );
-                  })}
-                </ScrollView>
-              </Reanimated.View>
-            )}
-
-            {/* Discover / Masonry Grid */}
-            <Reanimated.View entering={FadeInDown.delay(300).duration(400)} style={styles.sectionWrap}>
-              {!normalizedQuery && <Text style={styles.sectionSupertitle}>Ideas for you</Text>}
-              <View style={styles.recoHeaderRow}>
-                <Text style={styles.recoHeaderTitle}>
-                  {normalizedQuery ? `Search: ${normalizedQuery}` : 'Discover'}
-                </Text>
-                {!normalizedQuery && (
-                  <AnimatedPressable style={styles.topicSearchBtn} activeOpacity={0.8} onPress={handleSearchSubmit}>
-                    <Ionicons name="search" size={18} color={Colors.textPrimary} />
+                {/* Sort + Filter bar */}
+                <View style={styles.filterBar}>
+                  <AnimatedPressable style={styles.sortChip} onPress={handleCycleSort} activeOpacity={0.8}>
+                    <Ionicons name="swap-vertical" size={16} color={Colors.textSecondary} />
+                    <Text style={styles.sortChipText}>{browseFilters.sort}</Text>
                   </AnimatedPressable>
-                )}
-              </View>
 
-              {discoverListings.length > 0 ? (
-                <View style={styles.masonryGrid}>
-                  <View style={styles.masonryColumn}>
-                    {masonryColumn1.map((listing, i) => (
-                      <AnimatedPressable
-                        key={listing.id}
-                        style={styles.masonryItemWrap}
-                        activeOpacity={0.9}
-                        onPress={() => handleOpenRecommendation(listing.id)}
-                      >
-                        <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
-                          <CachedImage
-                            uri={listing.image}
-                            style={[styles.masonryImg, { height: [260, 340, 200, 300][i % 4] }]}
-                            contentFit="cover"
-                          />
-                        </SharedTransitionView>
-                      </AnimatedPressable>
-                    ))}
-                  </View>
-                  <View style={styles.masonryColumn}>
-                    {masonryColumn2.map((listing, i) => (
-                      <AnimatedPressable
-                        key={listing.id}
-                        style={styles.masonryItemWrap}
-                        activeOpacity={0.9}
-                        onPress={() => handleOpenRecommendation(listing.id)}
-                      >
-                        <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
-                          <CachedImage
-                            uri={listing.image}
-                            style={[styles.masonryImg, { height: [340, 200, 280, 240][i % 4] }]}
-                            contentFit="cover"
-                          />
-                        </SharedTransitionView>
-                      </AnimatedPressable>
-                    ))}
-                  </View>
+                  <AnimatedPressable style={styles.filterChip} onPress={handleOpenFilter} activeOpacity={0.8}>
+                    <Ionicons name="options-outline" size={16} color={Colors.textSecondary} />
+                    <Text style={styles.filterChipText}>Filter</Text>
+                    {activeFilterCount > 0 && (
+                      <View style={styles.filterBadge}>
+                        <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                      </View>
+                    )}
+                  </AnimatedPressable>
+
+                  {hasActiveDiscoverFilters && (
+                    <AnimatedPressable style={styles.clearChip} onPress={handleClearDiscoverFilters} activeOpacity={0.8}>
+                      <Ionicons name="close-circle" size={16} color={Colors.danger} />
+                      <Text style={styles.clearChipText}>Clear</Text>
+                    </AnimatedPressable>
+                  )}
                 </View>
-              ) : (
-                <View style={styles.recoEmptyState}>
-                  <Ionicons name="sparkles-outline" size={18} color={Colors.textMuted} />
-                  <Text style={styles.recoEmptyText}>
-                    {hasActiveDiscoverFilters
-                      ? 'No picks match your current filters. Adjust or clear them.'
-                      : 'No ranked results yet. Try a shorter keyword.'}
-                  </Text>
-                </View>
-              )}
-            </Reanimated.View>
+
+                {/* Recommendation text */}
+                <Reanimated.View entering={FadeInDown.delay(100).duration(400)} style={styles.sectionWrap}>
+                  <Text style={styles.sectionSupertitle}>Results</Text>
+                  <View style={styles.recoHeaderRow}>
+                    <Text style={styles.recoHeaderTitle}>
+                      {normalizedQuery ? `Search: ${normalizedQuery}` : 'Discover'}
+                    </Text>
+                    {!normalizedQuery && (
+                      <AnimatedPressable style={styles.topicSearchBtn} activeOpacity={0.8} onPress={handleSearchSubmit}>
+                        <Ionicons name="search" size={18} color={Colors.textPrimary} />
+                      </AnimatedPressable>
+                    )}
+                  </View>
+                </Reanimated.View>
+
+                {/* Masonry grid */}
+                <Reanimated.View entering={FadeInDown.delay(200).duration(400)} style={styles.sectionWrap}>
+                  {discoverListings.length > 0 ? (
+                    <View style={styles.masonryGrid}>
+                      <View style={styles.masonryColumn}>
+                        {masonryColumn1.map((listing, i) => (
+                          <AnimatedPressable
+                            key={listing.id}
+                            style={styles.masonryItemWrap}
+                            activeOpacity={0.9}
+                            onPress={() => handleOpenRecommendation(listing.id)}
+                          >
+                            <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
+                              <CachedImage
+                                uri={listing.image}
+                                style={[styles.masonryImg, { height: [260, 340, 200, 300][i % 4] }]}
+                                contentFit="cover"
+                              />
+                            </SharedTransitionView>
+                            <View style={styles.resultOverlay}>
+                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                              <Text style={styles.resultReason} numberOfLines={1}>{listing.reason}</Text>
+                            </View>
+                          </AnimatedPressable>
+                        ))}
+                      </View>
+                      <View style={styles.masonryColumn}>
+                        {masonryColumn2.map((listing, i) => (
+                          <AnimatedPressable
+                            key={listing.id}
+                            style={styles.masonryItemWrap}
+                            activeOpacity={0.9}
+                            onPress={() => handleOpenRecommendation(listing.id)}
+                          >
+                            <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
+                              <CachedImage
+                                uri={listing.image}
+                                style={[styles.masonryImg, { height: [340, 200, 280, 240][i % 4] }]}
+                                contentFit="cover"
+                              />
+                            </SharedTransitionView>
+                            <View style={styles.resultOverlay}>
+                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                              <Text style={styles.resultReason} numberOfLines={1}>{listing.reason}</Text>
+                            </View>
+                          </AnimatedPressable>
+                        ))}
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.recoEmptyState}>
+                      <Ionicons name="sparkles-outline" size={18} color={Colors.textMuted} />
+                      <Text style={styles.recoEmptyText}>
+                        {hasActiveDiscoverFilters
+                          ? 'No picks match your current filters. Adjust or clear them.'
+                          : 'No ranked results yet. Try a shorter keyword.'}
+                      </Text>
+                    </View>
+                  )}
+                </Reanimated.View>
+              </>
+            )}
           </>
         )}
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -697,153 +843,74 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
 
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
-    gap: 12,
+    paddingTop: 8,
+    paddingBottom: 12,
+    gap: 10,
   },
   backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
   },
   inputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 28,
-    paddingHorizontal: 18,
-    height: 52,
+    borderRadius: 30,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   searchInput: {
     flex: 1,
-    fontSize: 17,
-    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
     color: Colors.textPrimary,
-    marginLeft: 8,
+    fontFamily: 'Inter_500Medium',
+    letterSpacing: 0.08,
   },
   clearBtn: {
-    padding: 4,
-    marginLeft: 8,
+    padding: 2,
+  },
+  statusPillWrap: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
   },
 
-  content: {
-    paddingTop: 8,
-    paddingBottom: 40,
-  },
-  statusRow: {
-    paddingHorizontal: 20,
-    marginTop: -4,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  statusMeta: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
-  syncRetryBanner: {
-    marginHorizontal: 20,
-    marginBottom: 14,
-  },
-  controlRail: {
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 8,
-  },
-  controlBtn: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: 14,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  controlBtnIconWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: 'transparent',
-  },
-  controlBtnText: {
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.textPrimary,
-    letterSpacing: 0.2,
-  },
-  controlMetaRow: {
-    marginHorizontal: 20,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  controlMetaText: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  controlClearBtn: {
-    minHeight: 30,
-    borderRadius: 14,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 10,
-  },
-  controlClearText: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-  },
+  // Loading
   loadingStateWrap: {
+    paddingTop: 16,
     paddingHorizontal: 20,
-    gap: 26,
   },
   loadingSection: {
-    gap: 8,
+    marginBottom: 28,
   },
   loadingTagsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
   loadingRecentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingBottom: 12,
-    marginBottom: 2,
+    marginBottom: 12,
   },
 
+  // Sections
   sectionWrap: {
-    marginBottom: 28,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
     paddingHorizontal: 20,
-    marginBottom: 14,
+    marginBottom: 28,
   },
   sectionSupertitle: {
     color: Colors.textMuted,
     fontSize: 13,
     fontFamily: 'Inter_500Medium',
-    paddingHorizontal: 20,
     marginBottom: 4,
   },
 
@@ -851,7 +918,7 @@ const styles = StyleSheet.create({
   recentPillsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     gap: 10,
   },
   recentPill: {
@@ -868,7 +935,7 @@ const styles = StyleSheet.create({
 
   // Top searches cards
   topSearchesScroll: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     gap: 12,
   },
   topSearchCard: {
@@ -895,7 +962,7 @@ const styles = StyleSheet.create({
 
   // Trending
   trendingScroll: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     gap: 10,
   },
   trendingPill: {
@@ -912,65 +979,93 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
 
-  // Boards / Ideas you might like
+  // Featured boards
   boardsScroll: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     gap: 14,
   },
-  boardCard: {
-    width: 260,
-  },
-  boardImageGrid: {
-    flexDirection: 'row',
-    height: 150,
-    borderRadius: 20,
-    overflow: 'hidden',
-    gap: 3,
-    marginBottom: 12,
-  },
-  boardImageMain: {
-    flex: 3,
-    height: '100%',
-    borderRadius: 20,
-  },
-  boardImageSide: {
-    flex: 2,
-    gap: 3,
-  },
-  boardImageSmall: {
-    flex: 1,
-    width: '100%',
-    borderRadius: 12,
-  },
-  boardTitle: {
-    color: Colors.textPrimary,
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-    marginBottom: 2,
-  },
-  boardMetaRow: {
+
+  // Filter bar
+  filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
-  boardSubtitle: {
-    color: Colors.textSecondary,
+  sortChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  sortChipText: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    color: Colors.textPrimary,
   },
-  boardMeta: {
-    color: Colors.textMuted,
-    fontSize: 12,
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    position: 'relative',
+  },
+  filterChipText: {
     fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: Colors.textPrimary,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    color: Colors.textInverse,
+  },
+  clearChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+  },
+  clearChipText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: Colors.danger,
   },
 
-  // Masonry / Discover
+  // Masonry
   recoHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
-    paddingHorizontal: 20,
     gap: 8,
   },
   recoHeaderTitle: {
@@ -983,11 +1078,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
   masonryGrid: {
     flexDirection: 'row',
@@ -1006,6 +1099,31 @@ const styles = StyleSheet.create({
   masonryImg: {
     width: '100%',
     borderRadius: 16,
+  },
+  resultOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+  },
+  resultPrice: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  resultReason: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
   },
   recoEmptyState: {
     borderWidth: StyleSheet.hairlineWidth,

@@ -14,6 +14,7 @@ interface AuctionCardProps {
   title: string;
   image: string;
   sellerName?: string;
+  sellerId?: string;
   currentBid: string;
   bidCount: number;
   timeRemaining: string;
@@ -25,6 +26,8 @@ interface AuctionCardProps {
   onBid?: () => void;
   onBuyNow?: () => void;
   onToggleWatch?: () => void;
+  onPressSeller?: () => void;
+  onMessageSeller?: () => void;
   isBuyNowLoading?: boolean;
   isBidSubmitting?: boolean;
 }
@@ -33,6 +36,7 @@ export function AuctionCard({
   title,
   image,
   sellerName,
+  sellerId,
   currentBid,
   bidCount,
   timeRemaining,
@@ -44,6 +48,8 @@ export function AuctionCard({
   onBid,
   onBuyNow,
   onToggleWatch,
+  onPressSeller,
+  onMessageSeller,
   isBuyNowLoading = false,
   isBidSubmitting = false,
 }: AuctionCardProps) {
@@ -87,7 +93,30 @@ export function AuctionCard({
         </View>
 
         {sellerName && (
-          <Meta style={styles.seller}>by {sellerName}</Meta>
+          <View style={styles.sellerRow}>
+            <AnimatedPressable
+              style={styles.sellerIdentity}
+              onPress={onPressSeller}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${sellerName} profile`}
+              accessibilityHint="Shows seller profile details"
+            >
+              <Meta style={styles.seller}>by {sellerName}</Meta>
+            </AnimatedPressable>
+            {onMessageSeller && sellerId && (
+              <AnimatedPressable
+                style={styles.sellerMessageBtn}
+                onPress={onMessageSeller}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Message ${sellerName}`}
+                accessibilityHint="Opens chat with this seller"
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={14} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            )}
+          </View>
         )}
 
         <View style={styles.bidRow}>
@@ -208,8 +237,26 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: Space.sm,
   },
-  seller: {
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: Space.sm,
+  },
+  sellerIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  seller: {
+    color: Colors.textSecondary,
+  },
+  sellerMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bidRow: {
     flexDirection: 'row',

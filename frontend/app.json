@@ -36,6 +36,22 @@
       "expo-notifications",
       "expo-secure-store",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to capture photos and videos for posters.",
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for video posters.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to select images for posters.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save poster photos to your library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
         "@sentry/react-native/expo",
         {
           "organization": "thryftverse",

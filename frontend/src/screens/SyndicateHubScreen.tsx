@@ -28,6 +28,8 @@ import {
 } from '../components/trade';
 import { AppInput } from '../components/ui/AppInput';
 import { Meta, BodyEmphasis } from '../components/ui/Text';
+import { CachedImage } from '../components/CachedImage';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -99,7 +101,50 @@ export default function CoOwnHubScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <TradeHeader title="Co-Own Hub" onBack={handleBack} />
+      <TradeHeader
+        title="Co-Own Hub"
+        onBack={handleBack}
+        rightAction={(
+          <AnimatedPressable
+            style={styles.headerActionBtn}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('MarketLedger')}
+            accessibilityRole="button"
+            accessibilityLabel="Open market ledger"
+            accessibilityHint="Shows recent trading events and settlement activity"
+          >
+            <Ionicons name="pulse-outline" size={18} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        )}
+      />
+
+      <View style={styles.supportRow}>
+        <AnimatedPressable
+          style={styles.supportIdentity}
+          onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Open @${supportUser.username} profile`}
+          accessibilityHint="Shows co-own support profile"
+        >
+          <CachedImage
+            uri={supportUser.avatar}
+            style={styles.supportAvatar}
+            containerStyle={styles.supportAvatarContainer}
+          />
+          <Meta style={styles.supportText}>Support: @{supportUser.username}</Meta>
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.supportMessageBtn}
+          onPress={handleOpenCoOwnSupport}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Message co-own support"
+          accessibilityHint="Opens support chat"
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={14} color={Colors.textPrimary} />
+        </AnimatedPressable>
+      </View>
 
       <View style={styles.searchWrap}>
         <AppInput
@@ -118,6 +163,50 @@ export default function CoOwnHubScreen() {
           { label: 'Assets', value: String(marketAssets.length) },
         ]}
         columns={3}
+      />
+
+      <View style={styles.quickActionsWrap}>
+        <AppButton
+          style={styles.quickActionBtn}
+          variant="gold"
+          size="sm"
+          align="center"
+          icon={<Ionicons name="pie-chart-outline" size={14} color={Colors.textInverse} />}
+          title="Portfolio"
+          onPress={() => navigation.navigate('Portfolio')}
+          accessibilityLabel="Open co-own portfolio"
+        />
+        <AppButton
+          style={styles.quickActionBtn}
+          variant="gold"
+          size="sm"
+          align="center"
+          icon={<Ionicons name="list-outline" size={14} color={Colors.textInverse} />}
+          title="My Listings"
+          onPress={() => navigation.navigate('MyListings', { type: 'coown' })}
+          accessibilityLabel="View my co-own listings"
+        />
+        <AppButton
+          style={styles.quickActionBtn}
+          variant="gold"
+          size="sm"
+          align="center"
+          icon={<Ionicons name="time-outline" size={14} color={Colors.textInverse} />}
+          title="Orders"
+          onPress={() => navigation.navigate('CoOwnOrderHistory')}
+          accessibilityLabel="Open co-own order history"
+        />
+      </View>
+
+      <AppButton
+        style={styles.issueBtn}
+        variant="secondary"
+        size="sm"
+        align="center"
+        icon={<Ionicons name="add" size={16} color={Colors.textPrimary} />}
+        title="Issue New Co-Own"
+        onPress={() => navigation.navigate('CreateCoOwn')}
+        accessibilityLabel="Issue new co-own asset"
       />
 
       <View style={styles.sortWrap}>
@@ -209,5 +298,68 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: Space.xl,
+  },
+  headerActionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  supportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 10,
+  },
+  supportIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportAvatarContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  supportAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.full,
+  },
+  supportText: {
+    color: Colors.textSecondary,
+  },
+  supportMessageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionsWrap: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+  },
+  quickActionBtn: {
+    flex: 1,
+  },
+  issueBtn: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
   },
 });

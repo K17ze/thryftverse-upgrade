@@ -19,6 +19,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { t } from '../i18n';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius } from '../theme/designTokens';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
 import { MetricGrid } from '../components/trade';
@@ -145,10 +146,17 @@ export default function TradeHubScreen() {
           <Ionicons name="sparkles-outline" size={18} color={Colors.brand} />
         </View>
 
-        <View style={styles.ledgerShortcutBtn}>
+        <AnimatedPressable
+          style={styles.ledgerShortcutBtn}
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('MarketLedger')}
+          accessibilityRole="button"
+          accessibilityLabel="Open market ledger"
+          accessibilityHint="Shows recent trading events and settlement activity"
+        >
           <Ionicons name="pulse-outline" size={15} color={Colors.brand} />
           <Meta style={styles.ledgerShortcutText}>{t('tradeHub.ledger.label')}</Meta>
-        </View>
+        </AnimatedPressable>
       </View>
 
       <MetricGrid
@@ -184,10 +192,18 @@ export default function TradeHubScreen() {
         <Meta style={styles.guidanceText}>{marketGuidance}</Meta>
       </View>
 
-      <View style={styles.activityWrap}>
+      <AnimatedPressable
+        style={styles.activityWrap}
+        activeOpacity={0.92}
+        onPress={() => navigation.navigate('MarketLedger')}
+        accessibilityRole="button"
+        accessibilityLabel="Open market activity"
+        accessibilityHint="Shows detailed market ledger events"
+      >
         <Ionicons name="pulse-outline" size={14} color={Colors.brand} />
         <Meta style={styles.activityText}>{latestActivityText}</Meta>
-      </View>
+        <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+      </AnimatedPressable>
 
       {activeTab === 'AUCTIONS' ? <AuctionsScreen /> : <CoOwnScreen />}
     </SafeAreaView>

@@ -1,11 +1,8 @@
 ﻿import React from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
   View,
   Text,
   StyleSheet,
-  Switch,
   ScrollView,
   StatusBar,
   Platform,
@@ -15,27 +12,23 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
-import {
-  PUSH_NOTIFICATION_DEFINITIONS,
-} from '../preferences/settingsPreferences';
+import { Space, Radius, Type } from '../theme/designTokens';
+import { PUSH_NOTIFICATION_DEFINITIONS } from '../preferences/settingsPreferences';
 import { useToast } from '../context/ToastContext';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
 import { deactivateNotificationDevice, registerNotificationDevice } from '../services/notificationsApi';
+import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { SettingsCard } from '../components/settings/SettingsCard';
+import { SettingsCell } from '../components/SettingsCell';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 
 type Props = StackScreenProps<RootStackParamList, 'PushNotifications'>;
-
-const IS_LIGHT = ActiveTheme === 'light';
-const ACCENT = IS_LIGHT ? '#2f251b' : '#d7b98f';
-const BG = Colors.background;
-const CARD = Colors.surface;
-const BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
 
 const NOTIFICATIONS = PUSH_NOTIFICATION_DEFINITIONS;
 
@@ -54,14 +47,8 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const [isDeviceRegistered, setIsDeviceRegistered] = React.useState(false);
 
   const resolvePushPlatform = React.useCallback((): 'ios' | 'android' | 'web' => {
-    if (Platform.OS === 'ios') {
-      return 'ios';
-    }
-
-    if (Platform.OS === 'android') {
-      return 'android';
-    }
-
+    if (Platform.OS === 'ios') return 'ios';
+    if (Platform.OS === 'android') return 'android';
     return 'web';
   }, []);
 
@@ -77,38 +64,30 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       show('Please sign in to enable push notifications.', 'error');
       return;
     }
-
     setIsSyncingDevice(true);
     try {
       const permission = await Notifications.getPermissionsAsync();
       let finalStatus = permission.status;
-
       if (finalStatus !== 'granted') {
         const request = await Notifications.requestPermissionsAsync();
         finalStatus = request.status;
       }
-
       if (finalStatus !== 'granted') {
         show('Push permissions were denied on this device.', 'error');
         return;
       }
-
       const projectId = resolveProjectId();
       const tokenResponse = projectId
         ? await Notifications.getExpoPushTokenAsync({ projectId })
         : await Notifications.getExpoPushTokenAsync();
       const token = tokenResponse.data;
-
       await registerNotificationDevice({
         userId: currentUser.id,
         token,
         platform: resolvePushPlatform(),
         appVersion: (Constants.expoConfig as { version?: string } | null)?.version,
-        metadata: {
-          enabledNotificationTypes: enabledCount,
-        },
+        metadata: { enabledNotificationTypes: enabledCount },
       });
-
       setRegisteredToken(token);
       setIsDeviceRegistered(true);
       show('This device is now registered for push delivery.', 'success');
@@ -126,7 +105,6 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       show('This device is already not registered for push delivery.', 'info');
       return;
     }
-
     setIsSyncingDevice(true);
     try {
       await deactivateNotificationDevice(registeredToken);
@@ -144,12 +122,10 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const toggle = async (key: string) => {
     const nextEnabled = !toggles[key];
     setPushNotificationToggle(key, nextEnabled);
-
     const nextCount = nextEnabled ? enabledCount + 1 : enabledCount - 1;
     if (nextCount === 1 && nextEnabled && !isDeviceRegistered) {
       await ensureDeviceRegistration();
     }
-
     if (nextCount === 0 && !nextEnabled && isDeviceRegistered) {
       await disableDeviceRegistration();
     }
@@ -158,15 +134,12 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const handleToggleAll = React.useCallback(async () => {
     const shouldEnableAll = enabledCount !== pushTotalCount;
     setAllPushNotificationToggles(shouldEnableAll);
-
     if (shouldEnableAll && !isDeviceRegistered) {
       await ensureDeviceRegistration();
     }
-
     if (!shouldEnableAll && isDeviceRegistered) {
       await disableDeviceRegistration();
     }
-
     show(
       shouldEnableAll ? 'All push notifications enabled' : 'All push notifications paused',
       shouldEnableAll ? 'success' : 'info'
@@ -181,137 +154,138 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     show,
   ]);
 
+  const allEnabled = enabledCount === pushTotalCount;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
-      <View style={styles.header}>
-        <AnimatedPressable onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={TEXT} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Push notifications</Text>
-        <AnimatedPressable onPress={() => void handleToggleAll()} disabled={isSyncingDevice}>
-          <Ionicons
-            name={enabledCount === pushTotalCount ? 'notifications-off-outline' : 'notifications-outline'}
-            size={22}
-            color={TEXT}
-          />
-        </AnimatedPressable>
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar
+        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        backgroundColor={Colors.background}
+      />
+
+      <SettingsHeader
+        title="Push Notifications"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          <AnimatedPressable
+            onPress={() => void handleToggleAll()}
+            disabled={isSyncingDevice}
+            accessibilityLabel={allEnabled ? 'Disable all push notifications' : 'Enable all push notifications'}
+            hapticFeedback="medium"
+          >
+            {isSyncingDevice ? (
+              <ActivityIndicator size="small" color={Colors.textPrimary} />
+            ) : (
+              <Ionicons
+                name={allEnabled ? 'notifications-off-outline' : 'notifications-outline'}
+                size={22}
+                color={Colors.textPrimary}
+              />
+            )}
+          </AnimatedPressable>
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>NOTIFICATION TYPES</Text>
-        <View style={styles.card}>
-          {NOTIFICATIONS.map((item, idx) => (
-            <View key={item.key}>
-              <View style={styles.row}>
-                <View style={styles.rowText}>
-                  <Text style={styles.rowLabel}>{item.label}</Text>
-                  <Text style={styles.rowSubtitle}>{item.subtitle}</Text>
-                </View>
-                <Switch
-                  value={toggles[item.key]}
-                  onValueChange={() => void toggle(item.key)}
-                  trackColor={{ false: BORDER, true: ACCENT }}
-                  thumbColor={Colors.textInverse}
-                />
-              </View>
-              {idx < NOTIFICATIONS.length - 1 && <View style={styles.divider} />}
+        {/* Progress indicator */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+          <View style={styles.progressRow}>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%` },
+                ]}
+              />
             </View>
-          ))}
-        </View>
+            <Text style={styles.progressLabel}>
+              {enabledCount}/{pushTotalCount} enabled
+            </Text>
+          </View>
+        </Reanimated.View>
 
-        {/* Device delivery section removed - unnecessary complexity */}
+        {/* Notification types */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          <Text style={styles.sectionTitle}>Notification Types</Text>
+          <SettingsCard>
+            {NOTIFICATIONS.map((item, idx) => (
+              <SettingsCell
+                key={item.key}
+                title={item.label}
+                subtitle={item.subtitle}
+                variant="toggle"
+                toggleValue={toggles[item.key]}
+                onToggle={() => void toggle(item.key)}
+                isFirst={idx === 0}
+                isLast={idx === NOTIFICATIONS.length - 1}
+              />
+            ))}
+          </SettingsCard>
+        </Reanimated.View>
 
-        <Text style={styles.footerNote}>
-          You can also manage push notifications from your device Settings app.
-        </Text>
-        <Text style={styles.footerMeta}>{enabledCount}/{pushTotalCount} notification types enabled</Text>
+        {/* Footer note */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+          <Text style={styles.footerNote}>
+            You can also manage push notifications from your device Settings app.
+          </Text>
+        </Reanimated.View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  header: {
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  content: {
+    padding: Space.md,
+    paddingBottom: Space.xl,
+  },
+  progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    gap: Space.sm,
+    marginBottom: Space.md,
+    marginHorizontal: Space.xs,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: TEXT },
-  content: { padding: 20 },
-  sectionLabel: {
-    fontSize: 11,
-    color: MUTED,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-    marginLeft: 4,
-  },
-  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-  },
-  rowText: { flex: 1, marginRight: 12 },
-  rowLabel: { fontSize: 15, fontWeight: '600', color: TEXT, marginBottom: 2 },
-  rowSubtitle: { fontSize: 12, color: MUTED },
-  divider: { height: 1, backgroundColor: BORDER, marginHorizontal: 18 },
-  deviceCard: {
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginBottom: 18,
-    gap: 12,
-  },
-  deviceHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  deviceTitle: { fontSize: 15, fontWeight: '700', color: TEXT },
-  deviceBadge: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+  progressTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.border,
     overflow: 'hidden',
   },
-  deviceBadgeActive: {
-    color: Colors.background,
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
     backgroundColor: Colors.brand,
   },
-  deviceBadgeMuted: {
-    color: MUTED,
-    backgroundColor: Colors.surfaceAlt,
+  progressLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textSecondary,
+    letterSpacing: Type.caption.letterSpacing,
+    minWidth: 60,
+    textAlign: 'right',
   },
-  deviceCopy: { fontSize: 12, color: MUTED, lineHeight: 18 },
-  deviceActionBtn: {
-    backgroundColor: Colors.brand,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 42,
+  sectionTitle: {
+    fontSize: Type.meta.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textSecondary,
+    marginLeft: Space.xs,
+    marginBottom: Space.sm,
+    textTransform: 'uppercase',
+    letterSpacing: Type.meta.letterSpacing,
   },
-  deviceActionBtnDisabled: {
-    opacity: 0.55,
+  footerNote: {
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.textMuted,
+    lineHeight: Type.caption.lineHeight,
+    marginTop: Space.sm,
+    marginHorizontal: Space.xs,
+    letterSpacing: Type.caption.letterSpacing,
   },
-  deviceActionText: {
-    color: Colors.background,
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  footerNote: { fontSize: 12, color: MUTED, textAlign: 'center', lineHeight: 18, paddingHorizontal: 10 },
-  footerMeta: { marginTop: 10, fontSize: 12, color: MUTED, textAlign: 'center' },
 });
-
-

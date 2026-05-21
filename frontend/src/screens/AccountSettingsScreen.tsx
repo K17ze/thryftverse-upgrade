@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import { View,
+  View,
   Text,
   StyleSheet,
-  TextInput,
   StatusBar,
   ScrollView,
-  Switch,
   Alert,
   ActivityIndicator,
-  Modal
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { ActiveTheme, Colors } from '../constants/colors';
+import { Space, Radius, Type } from '../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -24,6 +23,11 @@ import { parseApiError } from '../lib/apiClient';
 import { requestMyDataExport, deleteMyAccount } from '../services/accountApi';
 import { disableTwoFactor, logoutFromSession } from '../services/authApi';
 import { AppButton } from '../components/ui/AppButton';
+import { AppInput } from '../components/ui/AppInput';
+import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { SettingsCard } from '../components/settings/SettingsCard';
+import { SettingsCell } from '../components/SettingsCell';
+import { MY_USER } from '../data/mockData';
 
 export default function AccountSettingsScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -33,15 +37,24 @@ export default function AccountSettingsScreen() {
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
   const { show } = useToast();
 
-  // Expanded Data States restored
-  const [email, setEmail] = useState('user@example.com');
-  const [phone, setPhone] = useState('+44 7700 900077');
-  const [fullName, setFullName] = useState('John Doe');
-  const [birthday, setBirthday] = useState('14/05/1996');
+  const user = currentUser ?? MY_USER;
+
+  // Personal details (User type extensions are cast for settings forms)
+  const userAny = user as any;
+  const [email, setEmail] = useState(userAny?.email ?? '');
+  const [phone, setPhone] = useState(userAny?.phone ?? '');
+  const [fullName, setFullName] = useState(userAny?.fullName ?? user?.username ?? '');
+  const [birthday, setBirthday] = useState(userAny?.birthday ?? '');
+
+  // Preferences
   const [holidayMode, setHolidayMode] = useState(false);
   const [privateProfile, setPrivateProfile] = useState(false);
+
+  // Linked accounts
   const facebookLinked = false;
   const googleLinked = false;
+
+  // Async states
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTogglingTwoFactor, setIsTogglingTwoFactor] = useState(false);
@@ -50,25 +63,18 @@ export default function AccountSettingsScreen() {
   const [disableTwoFactorRecoveryCode, setDisableTwoFactorRecoveryCode] = useState('');
 
   const handleToggleTwoFactor = async (enabled: boolean) => {
-    if (isTogglingTwoFactor) {
-      return;
-    }
-
+    if (isTogglingTwoFactor) return;
     if (enabled) {
       navigation.navigate('TwoFactorSetup');
       return;
     }
-
     setDisableTwoFactorCode('');
     setDisableTwoFactorRecoveryCode('');
     setDisableTwoFactorModalVisible(true);
   };
 
   const closeDisableTwoFactorModal = () => {
-    if (isTogglingTwoFactor) {
-      return;
-    }
-
+    if (isTogglingTwoFactor) return;
     setDisableTwoFactorModalVisible(false);
   };
 
@@ -111,7 +117,6 @@ export default function AccountSettingsScreen() {
       show('Please sign in before requesting a data export.', 'error');
       return;
     }
-
     setIsExporting(true);
     try {
       const result = await requestMyDataExport();
@@ -135,7 +140,6 @@ export default function AccountSettingsScreen() {
       show('Please sign in before deleting your account.', 'error');
       return;
     }
-
     setIsDeleting(true);
     try {
       const result = await deleteMyAccount('User initiated account deletion from mobile settings');
@@ -155,211 +159,214 @@ export default function AccountSettingsScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert('Delete account', 'This action cannot be undone. Do you want to delete this account now?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Contact support', style: 'default', onPress: handleDeleteAccountSupport },
-      { text: 'Delete now', style: 'destructive', onPress: () => void confirmDeleteAccount() },
-    ]);
+    Alert.alert(
+      'Delete account',
+      'This action cannot be undone. Do you want to delete this account now?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Contact support', style: 'default', onPress: handleDeleteAccountSupport },
+        { text: 'Delete now', style: 'destructive', onPress: () => void confirmDeleteAccount() },
+      ]
+    );
   };
 
   const handleSaveChanges = () => {
     show('Account details saved', 'success');
   };
 
+  const isBusy = isExporting || isDeleting;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-      
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.hugeTitle}>Account</Text>
-      </View>
+      <StatusBar
+        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        backgroundColor={Colors.background}
+      />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        
-        {/* Profile Inputs */}
-        <Text style={styles.sectionTitle}>Personal Details</Text>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email Address</Text>
-          <View style={styles.pillInput}>
-            <TextInput style={styles.inputText} value={email} onChangeText={setEmail} keyboardType="email-address" />
-          </View>
-        </View>
+      <SettingsHeader title="Account" onBack={() => navigation.goBack()} />
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Full Name</Text>
-          <View style={styles.pillInput}>
-            <TextInput style={styles.inputText} value={fullName} onChangeText={setFullName} />
-          </View>
-          <Text style={styles.helperText}>Used for shipping labels. Not public.</Text>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Phone Number</Text>
-          <View style={styles.pillInput}>
-            <TextInput style={styles.inputText} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Date of Birth</Text>
-          <View style={styles.pillInput}>
-            <TextInput style={styles.inputText} value={birthday} onChangeText={setBirthday} />
-            <Ionicons name="calendar-outline" size={20} color={Colors.textMuted} />
-          </View>
-        </View>
-
-        {/* Restored Switches / Options */}
-        <Text style={styles.sectionTitle}>Preferences</Text>
-        <View style={styles.cardGroup}>
-          <View style={styles.actionRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>Holiday Mode</Text>
-              <Text style={styles.rowSub}>Hide your items for up to 90 days</Text>
-            </View>
-            <Switch 
-              value={holidayMode} 
-              onValueChange={setHolidayMode}
-              trackColor={{ false: Colors.border, true: Colors.success }}
-              thumbColor="#fff"
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Personal Details */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+          <Text style={styles.sectionTitle}>Personal Details</Text>
+          <SettingsCard>
+            <AppInput
+              label="Email Address"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              containerStyle={styles.inputSpacing}
             />
-          </View>
-          <View style={[styles.actionRow, { paddingBottom: 0 }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>Private Profile</Text>
-              <Text style={styles.rowSub}>Only followers can see your items</Text>
-            </View>
-            <Switch 
-              value={privateProfile} 
-              onValueChange={setPrivateProfile}
-              trackColor={{ false: Colors.border, true: Colors.success }}
-              thumbColor="#fff"
+            <AppInput
+              label="Full Name"
+              value={fullName}
+              onChangeText={setFullName}
+              helperText="Used for shipping labels. Not public."
+              containerStyle={styles.inputSpacing}
             />
-          </View>
-        </View>
+            <AppInput
+              label="Phone Number"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              containerStyle={styles.inputSpacing}
+            />
+            <AppInput
+              label="Date of Birth"
+              value={birthday}
+              onChangeText={setBirthday}
+              suffix={<Ionicons name="calendar-outline" size={20} color={Colors.textMuted} />}
+            />
+          </SettingsCard>
+        </Reanimated.View>
+
+        {/* Preferences */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          <Text style={styles.sectionTitle}>Preferences</Text>
+          <SettingsCard>
+            <SettingsCell
+              icon="sunny-outline"
+              iconColor={Colors.brand}
+              title="Holiday Mode"
+              subtitle="Hide your items for up to 90 days"
+              variant="toggle"
+              toggleValue={holidayMode}
+              onToggle={setHolidayMode}
+              isFirst
+            />
+            <SettingsCell
+              icon="eye-off-outline"
+              iconColor={Colors.brand}
+              title="Private Profile"
+              subtitle="Only followers can see your items"
+              variant="toggle"
+              toggleValue={privateProfile}
+              onToggle={setPrivateProfile}
+              isLast
+            />
+          </SettingsCard>
+        </Reanimated.View>
 
         {/* Security */}
-        <Text style={styles.sectionTitle}>Security</Text>
-        <View style={styles.cardGroup}>
-          <AnimatedPressable style={styles.actionRow} onPress={() => navigation.navigate('ChangePassword')}>
-            <View>
-              <Text style={styles.rowTitle}>Password</Text>
-              <Text style={styles.rowSub}>Last changed 2 months ago</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-          </AnimatedPressable>
-          <View style={[styles.actionRow, { paddingBottom: 0 }]}>
-            <View>
-              <Text style={styles.rowTitle}>Two-Factor Authentication</Text>
-              <Text style={styles.rowSub}>Authenticator app verification</Text>
-            </View>
-            <Switch 
-              value={twoFactorEnabled} 
-              onValueChange={(value) => void handleToggleTwoFactor(value)}
-              trackColor={{ false: Colors.border, true: Colors.success }}
-              thumbColor="#fff"
-              disabled={isTogglingTwoFactor}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+          <Text style={styles.sectionTitle}>Security</Text>
+          <SettingsCard>
+            <SettingsCell
+              icon="key-outline"
+              iconColor={Colors.textSecondary}
+              title="Password"
+              subtitle="Last changed 2 months ago"
+              isFirst
+              onPress={() => navigation.navigate('ChangePassword')}
             />
-          </View>
-        </View>
+            <SettingsCell
+              icon="shield-checkmark-outline"
+              iconColor={Colors.success}
+              title="Two-Factor Authentication"
+              subtitle="Authenticator app verification"
+              variant="toggle"
+              toggleValue={twoFactorEnabled}
+              onToggle={(value) => void handleToggleTwoFactor(value)}
+              isLast
+            />
+          </SettingsCard>
+        </Reanimated.View>
 
         {/* Linked Accounts */}
-        <Text style={styles.sectionTitle}>Linked Accounts</Text>
-        <View style={styles.cardGroup}>
-          <AnimatedPressable style={styles.actionRow} onPress={handleFacebookLink} activeOpacity={0.8}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Ionicons name="logo-facebook" size={24} color={Colors.textPrimary} />
-              <Text style={styles.rowTitle}>Facebook</Text>
-            </View>
-            {facebookLinked ? (
-              <View style={styles.linkBadgeActive}>
-                <Text style={styles.linkBadgeTextActive}>Linked</Text>
-              </View>
-            ) : (
-              <View style={styles.linkBadge}>
-                <Text style={styles.linkBadgeText}>Link</Text>
-              </View>
-            )}
-          </AnimatedPressable>
-          <AnimatedPressable style={[styles.actionRow, { paddingBottom: 0 }]} onPress={handleGoogleLink} activeOpacity={0.8}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Ionicons name="logo-google" size={24} color={Colors.textPrimary} />
-              <Text style={styles.rowTitle}>Google</Text>
-            </View>
-            {googleLinked ? (
-              <View style={styles.linkBadgeActive}>
-                <Text style={styles.linkBadgeTextActive}>Linked</Text>
-              </View>
-            ) : (
-              <View style={styles.linkBadge}>
-                <Text style={styles.linkBadgeText}>Link</Text>
-              </View>
-            )}
-          </AnimatedPressable>
-        </View>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+          <Text style={styles.sectionTitle}>Linked Accounts</Text>
+          <SettingsCard>
+            <SettingsCell
+              icon="logo-facebook"
+              iconColor="#1877F2"
+              title="Facebook"
+              value={facebookLinked ? 'Linked' : 'Link'}
+              isFirst
+              onPress={handleFacebookLink}
+            />
+            <SettingsCell
+              icon="logo-google"
+              iconColor="#EA4335"
+              title="Google"
+              value={googleLinked ? 'Linked' : 'Link'}
+              isLast
+              onPress={handleGoogleLink}
+            />
+          </SettingsCard>
+        </Reanimated.View>
 
-        <AppButton
-          title="Save Changes"
-          onPress={handleSaveChanges}
-          variant="primary"
-          size="md"
-          style={styles.saveBtn}
-          titleStyle={styles.saveBtnText}
-          accessibilityLabel="Save account settings"
-        />
+        {/* Save */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(320)}>
+          <AppButton
+            title="Save Changes"
+            onPress={handleSaveChanges}
+            variant="primary"
+            size="md"
+            style={styles.saveBtn}
+            accessibilityLabel="Save account settings"
+          />
+        </Reanimated.View>
 
         {/* Footer Actions */}
-        <AppButton
-          title={isExporting ? 'Preparing export...' : 'Download my data'}
-          subtitle={isExporting ? undefined : 'Get a machine-readable account export.'}
-          icon={
-            isExporting ? (
-              <ActivityIndicator color={Colors.textPrimary} size="small" />
-            ) : (
-              <Ionicons name="download-outline" size={18} color={Colors.textPrimary} />
-            )
-          }
-          trailingIcon={!isExporting ? <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} /> : undefined}
-          onPress={() => void handleDownloadData()}
-          disabled={isExporting || isDeleting}
-          variant="secondary"
-          size="lg"
-          align="start"
-          style={[styles.supportActionBtn, (isExporting || isDeleting) && styles.actionDisabled]}
-          titleStyle={styles.footerActionTitle}
-          subtitleStyle={styles.footerActionSubtitle}
-          iconContainerStyle={styles.footerActionIconWrap}
-          trailingIconContainerStyle={styles.footerActionChevronWrap}
-          accessibilityLabel="Download my account data"
-        />
+        <Reanimated.View entering={FadeInDown.duration(300).delay(400)}>
+          <AppButton
+            title={isExporting ? 'Preparing export...' : 'Download my data'}
+            subtitle={isExporting ? undefined : 'Get a machine-readable account export.'}
+            icon={
+              isExporting ? (
+                <ActivityIndicator color={Colors.textPrimary} size="small" />
+              ) : (
+                <Ionicons name="download-outline" size={18} color={Colors.textPrimary} />
+              )
+            }
+            trailingIcon={
+              !isExporting ? <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} /> : undefined
+            }
+            onPress={() => void handleDownloadData()}
+            disabled={isBusy}
+            variant="secondary"
+            size="lg"
+            align="start"
+            style={[styles.footerActionBtn, isBusy && styles.actionDisabled]}
+            titleStyle={styles.footerActionTitle}
+            subtitleStyle={styles.footerActionSubtitle}
+            iconContainerStyle={styles.footerActionIconWrap}
+            trailingIconContainerStyle={styles.footerActionChevronWrap}
+            accessibilityLabel="Download my account data"
+          />
+        </Reanimated.View>
 
-        <AppButton
-          title={isDeleting ? 'Deleting account...' : 'Delete Account'}
-          subtitle={isDeleting ? undefined : 'Permanently removes your profile and listing history.'}
-          icon={
-            isDeleting ? (
-              <ActivityIndicator color={Colors.danger} size="small" />
-            ) : (
-              <Ionicons name="trash-outline" size={18} color={Colors.danger} />
-            )
-          }
-          trailingIcon={!isDeleting ? <Ionicons name="chevron-forward" size={18} color={Colors.danger} /> : undefined}
-          onPress={handleDeleteAccount}
-          disabled={isDeleting || isExporting}
-          variant="secondary"
-          size="lg"
-          align="start"
-          style={[styles.dangerActionBtn, (isDeleting || isExporting) && styles.actionDisabled]}
-          titleStyle={styles.dangerText}
-          subtitleStyle={styles.dangerSubtext}
-          iconContainerStyle={styles.footerActionIconWrapDanger}
-          trailingIconContainerStyle={styles.footerActionChevronWrapDanger}
-          accessibilityLabel="Delete account"
-        />
+        <Reanimated.View entering={FadeInDown.duration(300).delay(480)}>
+          <AppButton
+            title={isDeleting ? 'Deleting account...' : 'Delete Account'}
+            subtitle={isDeleting ? undefined : 'Permanently removes your profile and listing history.'}
+            icon={
+              isDeleting ? (
+                <ActivityIndicator color={Colors.danger} size="small" />
+              ) : (
+                <Ionicons name="trash-outline" size={18} color={Colors.danger} />
+              )
+            }
+            trailingIcon={
+              !isDeleting ? <Ionicons name="chevron-forward" size={18} color={Colors.danger} /> : undefined
+            }
+            onPress={handleDeleteAccount}
+            disabled={isBusy}
+            variant="secondary"
+            size="lg"
+            align="start"
+            style={[styles.dangerActionBtn, isBusy && styles.actionDisabled]}
+            titleStyle={styles.dangerText}
+            subtitleStyle={styles.dangerSubtext}
+            iconContainerStyle={styles.footerActionIconWrapDanger}
+            trailingIconContainerStyle={styles.footerActionChevronWrapDanger}
+            accessibilityLabel="Delete account"
+          />
+        </Reanimated.View>
       </ScrollView>
 
+      {/* Disable 2FA Modal */}
       <Modal
         visible={disableTwoFactorModalVisible}
         transparent
@@ -373,33 +380,27 @@ export default function AccountSettingsScreen() {
               Confirm with your authenticator code or a recovery code.
             </Text>
 
-            <View style={styles.modalInputWrap}>
-              <Text style={styles.modalLabel}>Authenticator code</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={disableTwoFactorCode}
-                onChangeText={setDisableTwoFactorCode}
-                keyboardType="number-pad"
-                placeholder="123456"
-                placeholderTextColor={Colors.textMuted}
-                editable={!isTogglingTwoFactor}
-                maxLength={12}
-              />
-            </View>
+            <AppInput
+              label="Authenticator code"
+              value={disableTwoFactorCode}
+              onChangeText={setDisableTwoFactorCode}
+              keyboardType="number-pad"
+              placeholder="123456"
+              editable={!isTogglingTwoFactor}
+              maxLength={12}
+              containerStyle={styles.modalInputSpacing}
+            />
 
-            <View style={styles.modalInputWrap}>
-              <Text style={styles.modalLabel}>Recovery code</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={disableTwoFactorRecoveryCode}
-                onChangeText={setDisableTwoFactorRecoveryCode}
-                autoCapitalize="characters"
-                placeholder="ABCD-EFGH"
-                placeholderTextColor={Colors.textMuted}
-                editable={!isTogglingTwoFactor}
-                maxLength={32}
-              />
-            </View>
+            <AppInput
+              label="Recovery code"
+              value={disableTwoFactorRecoveryCode}
+              onChangeText={setDisableTwoFactorRecoveryCode}
+              autoCapitalize="characters"
+              placeholder="ABCD-EFGH"
+              editable={!isTogglingTwoFactor}
+              maxLength={32}
+              containerStyle={styles.modalInputSpacing}
+            />
 
             <View style={styles.modalActionRow}>
               <AppButton
@@ -412,65 +413,59 @@ export default function AccountSettingsScreen() {
                 titleStyle={styles.modalBtnMutedText}
                 accessibilityLabel="Cancel disabling two-factor authentication"
               />
-
               <AppButton
                 title={isTogglingTwoFactor ? 'Disabling...' : 'Disable'}
-                icon={isTogglingTwoFactor ? <ActivityIndicator color={Colors.background} size="small" /> : undefined}
+                icon={
+                  isTogglingTwoFactor ? (
+                    <ActivityIndicator color={Colors.background} size="small" />
+                  ) : undefined
+                }
                 onPress={() => void confirmDisableTwoFactor()}
                 disabled={isTogglingTwoFactor}
-                variant="secondary"
+                variant="primary"
                 size="sm"
-                style={[styles.modalBtn, styles.modalBtnDanger, isTogglingTwoFactor && styles.actionDisabled]}
+                style={[styles.modalBtn, styles.modalBtnDanger]}
                 titleStyle={styles.modalBtnDangerText}
-                iconContainerStyle={styles.modalDangerIconWrap}
-                accessibilityLabel="Disable two-factor authentication"
+                accessibilityLabel="Confirm disable two-factor authentication"
               />
             </View>
           </View>
         </View>
       </Modal>
-
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20, gap: 12 },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  hugeTitle: { fontSize: 34, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, letterSpacing: -0.5 },
-  content: { paddingHorizontal: 20, paddingBottom: 40 },
-
-  sectionTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textSecondary, marginLeft: 6, marginTop: 24, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 },
-  
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textSecondary, marginBottom: 8, marginLeft: 6, textTransform: 'uppercase', letterSpacing: 1 },
-  pillInput: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderRadius: 24, paddingHorizontal: 20, height: 56 },
-  inputText: { flex: 1, color: Colors.textPrimary, fontFamily: 'Inter_500Medium', fontSize: 16 },
-  helperText: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.textMuted, marginLeft: 6, marginTop: 6 },
-
-  cardGroup: { backgroundColor: Colors.surface, borderRadius: 24, paddingVertical: 16, paddingHorizontal: 20 },
-  actionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 24 },
-  rowTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: Colors.textPrimary, marginBottom: 4 },
-  rowSub: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textSecondary, paddingRight: 10 },
-  linkBadge: { backgroundColor: 'transparent', borderWidth: 1, borderColor: Colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 6 },
-  linkBadgeText: { color: Colors.textPrimary, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
-  linkBadgeActive: { backgroundColor: Colors.surfaceAlt, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 6 },
-  linkBadgeTextActive: { color: Colors.textSecondary, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
-
-  saveBtn: {
-    marginTop: 24,
-    backgroundColor: Colors.brand,
-    borderRadius: 30,
-    minHeight: 56,
-    borderWidth: 0,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
-  saveBtnText: { color: Colors.textInverse, fontSize: 16, fontFamily: 'Inter_700Bold' },
-
-  supportActionBtn: {
-    marginTop: 16,
+  content: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xl,
+  },
+  sectionTitle: {
+    fontSize: Type.meta.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textSecondary,
+    marginLeft: Space.xs,
+    marginTop: Space.lg,
+    marginBottom: Space.sm,
+    textTransform: 'uppercase',
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  inputSpacing: {
+    marginBottom: Space.sm,
+  },
+  saveBtn: {
+    marginTop: Space.lg,
+    borderRadius: Radius.xl,
+  },
+  footerActionBtn: {
+    marginTop: Space.md,
     backgroundColor: Colors.surface,
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -511,70 +506,74 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   footerActionTitle: {
-    fontSize: 15,
+    fontSize: Type.body.size,
     fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
   },
   footerActionSubtitle: {
     marginTop: 2,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: 'Inter_500Medium',
     color: Colors.textMuted,
   },
-  actionDisabled: { opacity: 0.55 },
-
+  actionDisabled: {
+    opacity: 0.55,
+  },
+  dangerActionBtn: {
+    borderWidth: 1,
+    borderColor: 'rgba(255, 77, 77, 0.26)',
+    backgroundColor: 'rgba(255, 77, 77, 0.1)',
+    borderRadius: Radius.lg,
+    marginTop: Space.md,
+  },
+  dangerText: {
+    color: Colors.danger,
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_700Bold',
+  },
+  dangerSubtext: {
+    marginTop: 2,
+    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_500Medium',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: Space.md,
   },
   modalCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: 18,
-    gap: 10,
+    borderRadius: Radius.xl,
+    padding: Space.md,
+    gap: Space.sm,
   },
   modalTitle: {
     color: Colors.textPrimary,
     fontFamily: 'Inter_700Bold',
-    fontSize: 20,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
   },
   modalCopy: {
     color: Colors.textSecondary,
     fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    marginBottom: Space.xs,
   },
-  modalInputWrap: {
-    marginTop: 4,
-  },
-  modalLabel: {
-    color: Colors.textSecondary,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  modalInput: {
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: Colors.background,
-    color: Colors.textPrimary,
-    paddingHorizontal: 14,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 16,
+  modalInputSpacing: {
+    marginBottom: Space.xs,
   },
   modalActionRow: {
-    marginTop: 6,
+    marginTop: Space.xs,
     flexDirection: 'row',
-    gap: 10,
+    gap: Space.sm,
   },
   modalBtn: {
     flex: 1,
     height: 46,
-    borderRadius: 14,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -586,35 +585,14 @@ const styles = StyleSheet.create({
   modalBtnMutedText: {
     color: Colors.textPrimary,
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
+    fontSize: Type.body.size,
   },
   modalBtnDanger: {
     backgroundColor: Colors.danger,
   },
-  modalDangerIconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'transparent',
-  },
   modalBtnDangerText: {
     color: Colors.background,
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-  },
-
-  dangerActionBtn: {
-    borderWidth: 1,
-    borderColor: 'rgba(255, 77, 77, 0.26)',
-    backgroundColor: 'rgba(255, 77, 77, 0.1)',
-    borderRadius: 18,
-    marginTop: 16,
-  },
-  dangerText: { color: Colors.danger, fontSize: 15, fontFamily: 'Inter_700Bold' },
-  dangerSubtext: {
-    marginTop: 2,
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontSize: Type.body.size,
   },
 });

@@ -1,33 +1,30 @@
 ﻿import React, { useEffect, useState } from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
   View,
   Text,
   StyleSheet,
   Switch,
   ScrollView,
-  StatusBar
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
+import { Space, Radius, Type } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { formatCountryPolicyScope } from '../utils/capabilityPolicy';
 import { CapabilityCarrier, getUserCountryCapabilities } from '../services/capabilitiesApi';
-type Props = StackScreenProps<RootStackParamList, 'Postage'>;
+import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { SettingsCard } from '../components/settings/SettingsCard';
+import { SettingsCell } from '../components/SettingsCell';
+import { RadioButton } from '../components/settings/RadioButton';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 
-const IS_LIGHT = ActiveTheme === 'light';
-const BG = Colors.background;
-const CARD = IS_LIGHT ? '#ffffff' : '#111111';
-const BORDER = IS_LIGHT ? '#d8d1c6' : '#2a2a2a';
-const DIVIDER = IS_LIGHT ? '#e4ded3' : '#1c1c1c';
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const BRAND = IS_LIGHT ? '#2f251b' : '#d7b98f';
+type Props = StackScreenProps<RootStackParamList, 'Postage'>;
 
 const CARRIERS = [
   { key: 'evri', label: 'Evri', priceFromGBP: 2.89, selected: true },
@@ -55,24 +52,19 @@ export default function PostageScreen({ navigation }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-
     const hydrateCountryCarriers = async () => {
       if (!currentUser?.id) {
         setCarriers(CARRIERS);
         setCarrierScopeLabel(null);
         return;
       }
-
       try {
         const capabilities = await getUserCountryCapabilities(currentUser.id);
-        if (cancelled) {
-          return;
-        }
-
-        const nextCarriers = capabilities.postage.carriers.length > 0
-          ? mapCapabilityCarriers(capabilities.postage.carriers)
-          : CARRIERS;
-
+        if (cancelled) return;
+        const nextCarriers =
+          capabilities.postage.carriers.length > 0
+            ? mapCapabilityCarriers(capabilities.postage.carriers)
+            : CARRIERS;
         setCarriers(nextCarriers);
         setCarrierScopeLabel(formatCountryPolicyScope(capabilities));
       } catch {
@@ -82,139 +74,168 @@ export default function PostageScreen({ navigation }: Props) {
         }
       }
     };
-
     void hydrateCountryCarriers();
-
     return () => {
       cancelled = true;
     };
   }, [currentUser?.id]);
 
   const selectCarrier = (key: string) =>
-    setCarriers(prev => prev.map(c => ({ ...c, selected: c.key === key })));
+    setCarriers((prev) => prev.map((c) => ({ ...c, selected: c.key === key })));
+
+  const selectedCarrier = carriers.find((c) => c.selected);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
-      <View style={styles.header}>
-        <AnimatedPressable onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={TEXT} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Postage</Text>
-        <AnimatedPressable onPress={() => navigation.goBack()}>
-          <Text style={styles.saveBtn}>Save</Text>
-        </AnimatedPressable>
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar
+        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        backgroundColor={Colors.background}
+      />
+
+      <SettingsHeader
+        title="Postage"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          <AnimatedPressable onPress={() => navigation.goBack()} hapticFeedback="light">
+            <Text style={styles.saveBtn}>Save</Text>
+          </AnimatedPressable>
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>DEFAULT CARRIER</Text>
-        {carrierScopeLabel ? (
-          <Text style={styles.scopeLabel}>Region policy: {carrierScopeLabel}</Text>
-        ) : null}
-        <View style={styles.card}>
-          {carriers.map((c, idx) => (
-            <View key={c.key}>
-              <AnimatedPressable style={styles.row} onPress={() => selectCarrier(c.key)}>
-                <View style={styles.rowText}>
-                  <Text style={styles.rowLabel}>{c.label}</Text>
-                  <Text style={styles.rowSubtitle}>from {formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}</Text>
+        {/* Default Carrier */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+          <Text style={styles.sectionTitle}>Default Carrier</Text>
+          {carrierScopeLabel ? (
+            <Text style={styles.scopeLabel}>Region policy: {carrierScopeLabel}</Text>
+          ) : null}
+          <SettingsCard>
+            {carriers.map((c, idx) => (
+              <AnimatedPressable
+                key={c.key}
+                style={[styles.carrierRow, idx < carriers.length - 1 && styles.carrierRowBorder]}
+                onPress={() => selectCarrier(c.key)}
+                hapticFeedback="light"
+                accessibilityRole="radio"
+                accessibilityState={{ checked: c.selected }}
+                accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}`}
+              >
+                <View style={styles.carrierText}>
+                  <Text style={styles.carrierLabel}>{c.label}</Text>
+                  <Text style={styles.carrierPrice}>
+                    from {formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}
+                  </Text>
                 </View>
-                <View style={[styles.radio, c.selected && styles.radioSelected]}>
-                  {c.selected && <View style={styles.radioDot} />}
-                </View>
+                <RadioButton selected={c.selected} />
               </AnimatedPressable>
-              {idx < carriers.length - 1 && <View style={styles.divider} />}
-            </View>
-          ))}
-        </View>
+            ))}
+          </SettingsCard>
+        </Reanimated.View>
 
-        <Text style={styles.sectionLabel}>SHIPPING OPTIONS</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowLabel}>Offer free shipping</Text>
-              <Text style={styles.rowSubtitle}>You'll cover the postage cost for buyers</Text>
-            </View>
-            <Switch
-              value={freeShipping}
-              onValueChange={setFreeShipping}
-              trackColor={{ false: BORDER, true: BRAND }}
-              thumbColor={Colors.textInverse}
+        {/* Shipping Options */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          <Text style={styles.sectionTitle}>Shipping Options</Text>
+          <SettingsCard>
+            <SettingsCell
+              icon="gift-outline"
+              iconColor={Colors.brand}
+              title="Offer free shipping"
+              subtitle="You'll cover the postage cost for buyers"
+              variant="toggle"
+              toggleValue={freeShipping}
+              onToggle={setFreeShipping}
+              isFirst
             />
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowLabel}>Bundle discount on postage</Text>
-              <Text style={styles.rowSubtitle}>Buyers save when buying multiple items</Text>
-            </View>
-            <Switch
-              value={bundleDiscount}
-              onValueChange={setBundleDiscount}
-              trackColor={{ false: BORDER, true: BRAND }}
-              thumbColor={Colors.textInverse}
+            <SettingsCell
+              icon="cube-outline"
+              iconColor={Colors.brand}
+              title="Bundle discount on postage"
+              subtitle="Buyers save when buying multiple items"
+              variant="toggle"
+              toggleValue={bundleDiscount}
+              onToggle={setBundleDiscount}
+              isLast
             />
-          </View>
-        </View>
+          </SettingsCard>
+        </Reanimated.View>
 
-        <Text style={styles.footerNote}>
-          These are your default settings. You can override postage for individual items when listing.
-        </Text>
+        {/* Footer note */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+          <Text style={styles.footerNote}>
+            These are your default settings. You can override postage for individual items when
+            listing.
+          </Text>
+        </Reanimated.View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: TEXT },
-  saveBtn: { fontSize: 15, fontWeight: '600', color: BRAND },
-  content: { padding: 20 },
-  sectionLabel: {
-    fontSize: 11,
-    color: MUTED,
-    letterSpacing: 1.2,
+  saveBtn: {
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.brand,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  content: {
+    padding: Space.md,
+    paddingBottom: Space.xl,
+  },
+  sectionTitle: {
+    fontSize: Type.meta.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textSecondary,
     textTransform: 'uppercase',
-    marginBottom: 10,
-    marginLeft: 4,
+    letterSpacing: Type.meta.letterSpacing,
+    marginBottom: Space.sm,
+    marginLeft: Space.xs,
   },
   scopeLabel: {
-    fontSize: 12,
-    color: MUTED,
-    marginLeft: 4,
-    marginBottom: 10,
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.textMuted,
+    marginLeft: Space.xs,
+    marginBottom: Space.sm,
+    letterSpacing: Type.caption.letterSpacing,
   },
-  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 24 },
-  row: {
+  carrierRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    paddingVertical: Space.md - Space.xs,
   },
-  rowText: { flex: 1, marginRight: 12 },
-  rowLabel: { fontSize: 15, fontWeight: '600', color: TEXT, marginBottom: 2 },
-  rowSubtitle: { fontSize: 12, color: MUTED },
-  divider: { height: 1, backgroundColor: DIVIDER, marginHorizontal: 18 },
-  radio: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: MUTED,
-    alignItems: 'center',
-    justifyContent: 'center',
+  carrierRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  radioSelected: { borderColor: BRAND },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: BRAND },
-  footerNote: { fontSize: 12, color: MUTED, lineHeight: 18, paddingHorizontal: 4 },
+  carrierText: {
+    flex: 1,
+    marginRight: Space.sm,
+  },
+  carrierLabel: {
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textPrimary,
+    marginBottom: 2,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  carrierPrice: {
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.textMuted,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  footerNote: {
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.textMuted,
+    lineHeight: Type.caption.lineHeight,
+    paddingHorizontal: Space.xs,
+    marginTop: Space.sm,
+    letterSpacing: Type.caption.letterSpacing,
+  },
 });
-

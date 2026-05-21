@@ -1,18 +1,31 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform, ScrollView, StatusBar } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  StatusBar,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { ActiveTheme, Colors } from '../constants/colors';
+import { Space, Radius, Type } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-
-const FOOTER_BG = ActiveTheme === 'light' ? 'rgba(236, 234, 230, 0.96)' : 'rgba(10, 10, 10, 0.95)';
+import { AppButton } from '../components/ui/AppButton';
+import { AppInput } from '../components/ui/AppInput';
+import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { SettingsCard } from '../components/settings/SettingsCard';
+import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar';
 
 export default function ChangePasswordScreen() {
   const navigation = useNavigation();
   const { show } = useToast();
-  
+
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -41,114 +54,99 @@ export default function ChangePasswordScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-      
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.hugeTitle}>Change Password</Text>
-      </View>
+      <StatusBar
+        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        backgroundColor={Colors.background}
+      />
 
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+      <SettingsHeader title="Change Password" onBack={() => navigation.goBack()} />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          
-          <Text style={styles.sectionTitle}>Security</Text>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Current Password</Text>
-            <View style={styles.pillInput}>
-              <TextInput 
-                style={styles.inputText} 
-                value={currentPassword} 
-                onChangeText={setCurrentPassword} 
+          <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+            <Text style={styles.sectionTitle}>Security</Text>
+            <SettingsCard>
+              <AppInput
+                label="Current Password"
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
                 secureTextEntry={isSecure}
                 placeholder="Enter current password"
-                placeholderTextColor={Colors.textMuted}
+                containerStyle={styles.inputSpacing}
+                suffix={
+                  <AnimatedPressable onPress={() => setIsSecure(!isSecure)} hitSlop={10}>
+                    <Ionicons
+                      name={isSecure ? 'eye-off-outline' : 'eye-outline'}
+                      size={20}
+                      color={Colors.textSecondary}
+                    />
+                  </AnimatedPressable>
+                }
               />
-              <AnimatedPressable onPress={() => setIsSecure(!isSecure)} hitSlop={10}>
-                <Ionicons name={isSecure ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.textSecondary} />
-              </AnimatedPressable>
-            </View>
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>New Password</Text>
-            <View style={styles.pillInput}>
-              <TextInput 
-                style={styles.inputText} 
-                value={newPassword} 
-                onChangeText={setNewPassword} 
+              <AppInput
+                label="New Password"
+                value={newPassword}
+                onChangeText={setNewPassword}
                 secureTextEntry={isSecure}
                 placeholder="Enter new password"
-                placeholderTextColor={Colors.textMuted}
+                containerStyle={styles.inputSpacing}
               />
-            </View>
-            <Text style={styles.helperText}>Must be at least 8 characters</Text>
-          </View>
+              <PasswordStrengthBar password={newPassword} />
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Confirm New Password</Text>
-            <View style={styles.pillInput}>
-              <TextInput 
-                style={styles.inputText} 
-                value={confirmPassword} 
-                onChangeText={setConfirmPassword} 
+              <AppInput
+                label="Confirm New Password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
                 secureTextEntry={isSecure}
-                placeholder="Confirm new password"
-                placeholderTextColor={Colors.textMuted}
+                placeholder="Re-enter new password"
+                containerStyle={styles.inputSpacing}
               />
-            </View>
-          </View>
+            </SettingsCard>
+          </Reanimated.View>
 
+          <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+            <AppButton
+              title="Update Password"
+              onPress={handleUpdate}
+              variant="primary"
+              size="md"
+              style={styles.updateBtn}
+              accessibilityLabel="Update password"
+            />
+          </Reanimated.View>
         </ScrollView>
-
-        <View style={styles.footer}>
-          <AnimatedPressable style={styles.saveBtn} onPress={handleUpdate}>
-            <Text style={styles.saveBtnText}>Update Password</Text>
-          </AnimatedPressable>
-        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20, gap: 12 },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  hugeTitle: { fontSize: 28, fontFamily: 'Inter_700Bold', color: Colors.textPrimary, letterSpacing: -0.5 },
-  content: { paddingHorizontal: 20, paddingBottom: 40 },
-  
-  sectionTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textSecondary, marginLeft: 6, marginTop: 24, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1 },
-  
-  inputGroup: { marginBottom: 20 },
-  label: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.textSecondary, marginBottom: 8, marginLeft: 6, textTransform: 'uppercase', letterSpacing: 1 },
-  pillInput: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderRadius: 24, paddingHorizontal: 20, height: 56 },
-  inputText: { flex: 1, color: Colors.textPrimary, fontFamily: 'Inter_500Medium', fontSize: 16 },
-  helperText: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.textMuted, marginLeft: 6, marginTop: 6 },
-
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
-    backgroundColor: FOOTER_BG,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
-  saveBtn: {
-    backgroundColor: Colors.brand,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+  content: {
+    padding: Space.md,
+    paddingBottom: Space.xl,
   },
-  saveBtnText: {
-    color: Colors.textInverse,
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+  sectionTitle: {
+    fontSize: Type.meta.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: Type.meta.letterSpacing,
+    marginLeft: Space.xs,
+    marginBottom: Space.sm,
+  },
+  inputSpacing: {
+    marginBottom: Space.sm,
+  },
+  updateBtn: {
+    marginTop: Space.lg,
+    borderRadius: Radius.xl,
   },
 });

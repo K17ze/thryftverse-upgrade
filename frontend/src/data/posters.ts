@@ -1,6 +1,32 @@
 import { MOCK_LISTINGS, MOCK_USERS, User } from './mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
+export interface PosterStoryOverlay {
+  text: string;
+  color: string;
+  position: 'top' | 'center' | 'bottom';
+  fontFamily?: string;
+  fontSize?: number;
+  backgroundColor?: string;
+  alignment?: 'left' | 'center' | 'right';
+}
+
+export interface PosterSticker {
+  id: string;
+  type: 'mention' | 'hashtag' | 'poll' | 'question' | 'emoji' | 'shape';
+  content: string;
+  color?: string;
+  x?: number;
+  y?: number;
+}
+
+export interface PosterDrawingStroke {
+  id: string;
+  points: { x: number; y: number }[];
+  color: string;
+  width: number;
+}
+
 export interface Poster {
   id: string;
   uploaderId: string;
@@ -10,11 +36,12 @@ export interface Poster {
   createdAt: string;
   expiryHours: number;
   sharedFromUserId?: string;
-  storyOverlay?: {
-    text: string;
-    color: string;
-    position: 'top' | 'center' | 'bottom';
-  };
+  storyOverlay?: PosterStoryOverlay;
+  textLayers?: PosterStoryOverlay[];
+  stickers?: PosterSticker[];
+  drawings?: PosterDrawingStroke[];
+  layout?: string;
+  filter?: string;
 }
 
 export interface PosterViewModel extends Poster {

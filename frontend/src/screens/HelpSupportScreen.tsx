@@ -1,6 +1,4 @@
-﻿import React, { useRef, useState } from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
+﻿import React, { useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,26 +12,25 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
+import { Space, Radius, Type } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppButton } from '../components/ui/AppButton';
+import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { SettingsCard } from '../components/settings/SettingsCard';
 
 type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
-
-const IS_LIGHT = ActiveTheme === 'light';
-const ACCENT = IS_LIGHT ? '#2f251b' : '#d7b98f';
-const BG = Colors.background;
-const CARD = Colors.surface;
-const BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
 
 export default function HelpSupportScreen({ navigation }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [faqSearch, setFaqSearch] = useState('');
   const scrollRef = useRef<ScrollView>(null);
   const messageInputRef = useRef<TextInput>(null);
   const { show } = useToast();
@@ -42,9 +39,9 @@ export default function HelpSupportScreen({ navigation }: Props) {
     try {
       await Linking.openURL(url);
     } catch {
-      // Silently fail - user can try again
+      // Silently fail
     }
-  }, [show]);
+  }, []);
 
   const handleOpenLiveChat = React.useCallback(() => {
     navigation.navigate('Chat', {
@@ -65,24 +62,22 @@ export default function HelpSupportScreen({ navigation }: Props) {
   }, [show]);
 
   const handleSendMessage = React.useCallback(() => {
-    if (!message.trim()) {
-      return;
-    }
-
+    if (!message.trim()) return;
     setMessage('');
     show('Support message sent. We usually reply within 2 hours.', 'success');
   }, [message, show]);
 
   const fixedFeeLabel = formatFromFiat(0.7, 'GBP', { displayMode: 'fiat' });
-  const faqs = React.useMemo(
+
+  const allFaqs = useMemo(
     () => [
       {
         q: 'How does the platform charge work?',
-        a: 'Thryftverse applies a platform charge to each checkout. It funds secure payments, delivery issue handling, and buyer support if an item doesn\'t arrive or is significantly misdescribed. File a claim within 2 days of delivery.',
+        a: "Thryftverse applies a platform charge to each checkout. It funds secure payments, delivery issue handling, and buyer support if an item doesn't arrive or is significantly misdescribed. File a claim within 2 days of delivery.",
       },
       {
         q: 'How do I withdraw my balance?',
-        a: 'Go to Profile -> Balance -> Withdraw. Add a bank account first if you haven\'t already. Withdrawals typically take 1-3 business days.',
+        a: "Go to Profile -> Balance -> Withdraw. Add a bank account first if you haven't already. Withdrawals typically take 1-3 business days.",
       },
       {
         q: 'What fees does Thryftverse charge?',
@@ -100,173 +95,315 @@ export default function HelpSupportScreen({ navigation }: Props) {
     [fixedFeeLabel]
   );
 
+  const filteredFaqs = useMemo(() => {
+    if (!faqSearch.trim()) return allFaqs;
+    const query = faqSearch.toLowerCase();
+    return allFaqs.filter((f) => f.q.toLowerCase().includes(query) || f.a.toLowerCase().includes(query));
+  }, [allFaqs, faqSearch]);
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
-      <View style={styles.header}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to the previous screen."
-        >
-          <Ionicons name="arrow-back" size={24} color={TEXT} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Help & Support</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar
+        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        backgroundColor={Colors.background}
+      />
 
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Quick Actions */}
-        <View style={styles.quickRow}>
-          {[
-            {
-              icon: 'chatbubble-outline',
-              label: 'Live Chat',
-              onPress: handleOpenLiveChat,
-              accessibilityLabel: 'Open live chat support',
-              accessibilityHint: 'Starts a support conversation in chat.',
-            },
-            {
-              icon: 'mail-outline',
-              label: 'Email Us',
-              onPress: handleOpenEmail,
-              accessibilityLabel: 'Email support',
-              accessibilityHint: 'Opens your email app with a prefilled support address.',
-            },
-            {
-              icon: 'document-text-outline',
-              label: 'My Tickets',
-              onPress: handleOpenTickets,
-              accessibilityLabel: 'View support tickets',
-              accessibilityHint: 'Scrolls to the message form to create a new support ticket.',
-            },
-          ].map(a => (
-            <AnimatedPressable
-              key={a.label}
-              style={styles.quickBtn}
-              onPress={a.onPress}
-              accessibilityLabel={a.accessibilityLabel}
-              accessibilityHint={a.accessibilityHint}
-            >
-              <View style={styles.quickIcon}>
-                <Ionicons name={a.icon as any} size={22} color={ACCENT} />
-              </View>
-              <Text style={styles.quickLabel}>{a.label}</Text>
-            </AnimatedPressable>
-          ))}
-        </View>
+      <SettingsHeader title="Help & Support" onBack={() => navigation.goBack()} />
 
-        {/* FAQs */}
-        <Text style={styles.sectionLabel}>FREQUENTLY ASKED</Text>
-        <View style={styles.faqCard}>
-          {faqs.map((faq, idx) => (
-            <View key={faq.q}>
-              <AnimatedPressable
-                style={styles.faqRow}
-                onPress={() => setExpanded(prev => prev === faq.q ? null : faq.q)}
-                accessibilityLabel={`FAQ: ${faq.q}`}
-                accessibilityHint={expanded === faq.q ? 'Collapses this answer.' : 'Expands this answer.'}
-                accessibilityState={{ expanded: expanded === faq.q }}
-              >
-                <Text style={styles.faqQ}>{faq.q}</Text>
-                <Ionicons
-                  name={expanded === faq.q ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color={MUTED}
-                />
-              </AnimatedPressable>
-              {expanded === faq.q && (
-                <Text style={styles.faqA}>{faq.a}</Text>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+          {/* Quick Actions */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+            <View style={styles.quickRow}>
+              {[
+                {
+                  icon: 'chatbubble-outline',
+                  label: 'Live Chat',
+                  onPress: handleOpenLiveChat,
+                  accessibilityLabel: 'Open live chat support',
+                  accessibilityHint: 'Starts a support conversation in chat.',
+                },
+                {
+                  icon: 'mail-outline',
+                  label: 'Email Us',
+                  onPress: handleOpenEmail,
+                  accessibilityLabel: 'Email support',
+                  accessibilityHint: 'Opens your email app with a prefilled support address.',
+                },
+                {
+                  icon: 'document-text-outline',
+                  label: 'My Tickets',
+                  onPress: handleOpenTickets,
+                  accessibilityLabel: 'View support tickets',
+                  accessibilityHint: 'Scrolls to the message form to create a new support ticket.',
+                },
+              ].map((a) => (
+                <AnimatedPressable
+                  key={a.label}
+                  style={styles.quickBtn}
+                  onPress={a.onPress}
+                  accessibilityLabel={a.accessibilityLabel}
+                  accessibilityHint={a.accessibilityHint}
+                  hapticFeedback="light"
+                  scaleValue={0.95}
+                >
+                  <View style={styles.quickIcon}>
+                    <Ionicons name={a.icon as any} size={22} color={Colors.brand} />
+                  </View>
+                  <Text style={styles.quickLabel}>{a.label}</Text>
+                </AnimatedPressable>
+              ))}
+            </View>
+          </Reanimated.View>
+
+          {/* FAQs */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+            <Text style={styles.sectionTitle}>Frequently Asked</Text>
+
+            {/* FAQ Search */}
+            <View style={styles.searchRow}>
+              <Ionicons name="search-outline" size={16} color={Colors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search FAQs..."
+                placeholderTextColor={Colors.textMuted}
+                value={faqSearch}
+                onChangeText={setFaqSearch}
+                accessibilityLabel="Search FAQs"
+              />
+              {faqSearch.length > 0 && (
+                <AnimatedPressable onPress={() => setFaqSearch('')} hapticFeedback="light">
+                  <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+                </AnimatedPressable>
               )}
-              {idx < faqs.length - 1 && <View style={styles.divider} />}
             </View>
-          ))}
-        </View>
 
-        {/* Contact form */}
-        <Text style={styles.sectionLabel}>SEND A MESSAGE</Text>
-        <View style={styles.contactCard}>
-          <TextInput
-            ref={messageInputRef}
-            style={styles.messageInput}
-            value={message}
-            onChangeText={setMessage}
-            placeholder="Describe your issue in detail..."
-            placeholderTextColor={MUTED}
-            multiline
-            numberOfLines={5}
-            textAlignVertical="top"
-            selectionColor={Colors.brand}
-            accessibilityLabel="Support message"
-            accessibilityHint="Type details about your issue so support can help you."
-          />
-          <AnimatedPressable
-            style={[styles.sendBtn, !message.trim() && { opacity: 0.4 }]}
-            disabled={!message.trim()}
-            onPress={handleSendMessage}
-            accessibilityLabel="Send support message"
-            accessibilityHint="Sends your message to the support team."
-          >
-            <Ionicons name="send" size={16} color={Colors.textInverse} />
-            <Text style={styles.sendBtnText}>Send message</Text>
-          </AnimatedPressable>
-        </View>
+            <SettingsCard>
+              {filteredFaqs.length === 0 ? (
+                <View style={styles.emptyFaqs}>
+                  <Text style={styles.emptyFaqsText}>No FAQs match your search</Text>
+                </View>
+              ) : (
+                filteredFaqs.map((faq, idx) => (
+                  <View key={faq.q}>
+                    <AnimatedPressable
+                      style={styles.faqRow}
+                      onPress={() => setExpanded((prev) => (prev === faq.q ? null : faq.q))}
+                      accessibilityLabel={`FAQ: ${faq.q}`}
+                      accessibilityHint={expanded === faq.q ? 'Collapses this answer.' : 'Expands this answer.'}
+                      accessibilityState={{ expanded: expanded === faq.q }}
+                      hapticFeedback="light"
+                    >
+                      <Text style={styles.faqQ}>{faq.q}</Text>
+                      <Ionicons
+                        name={expanded === faq.q ? 'chevron-up' : 'chevron-down'}
+                        size={18}
+                        color={Colors.textMuted}
+                      />
+                    </AnimatedPressable>
+                    {expanded === faq.q && <Text style={styles.faqA}>{faq.a}</Text>}
+                    {idx < filteredFaqs.length - 1 && <View style={styles.divider} />}
+                  </View>
+                ))
+              )}
+            </SettingsCard>
+          </Reanimated.View>
 
-        {/* Links */}
-        <View style={styles.linksCard}>
-          {[
-            { icon: 'document-text-outline', label: 'Terms & Conditions', url: 'https://thryftverse.app/terms' },
-            { icon: 'shield-checkmark-outline', label: 'Privacy Policy', url: 'https://thryftverse.app/privacy' },
-            { icon: 'globe-outline', label: 'Thryftverse Blog', url: 'https://thryftverse.app/blog' },
-          ].map((l, idx) => (
-            <View key={l.label}>
-              <AnimatedPressable
-                style={styles.linkRow}
-                onPress={() => void handleOpenExternal(l.url)}
-                accessibilityLabel={`Open ${l.label}`}
-                accessibilityHint="Opens this link in your browser."
-              >
-                <Ionicons name={l.icon as any} size={18} color={MUTED} />
-                <Text style={styles.linkText}>{l.label}</Text>
-                <Ionicons name="open-outline" size={14} color={MUTED} />
-              </AnimatedPressable>
-              {idx < 2 && <View style={styles.divider} />}
-            </View>
-          ))}
-        </View>
+          {/* Contact form */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+            <Text style={styles.sectionTitle}>Send a Message</Text>
+            <SettingsCard>
+              <TextInput
+                ref={messageInputRef}
+                style={styles.messageInput}
+                value={message}
+                onChangeText={setMessage}
+                placeholder="Describe your issue in detail..."
+                placeholderTextColor={Colors.textMuted}
+                multiline
+                numberOfLines={5}
+                textAlignVertical="top"
+                selectionColor={Colors.brand}
+                accessibilityLabel="Support message"
+                accessibilityHint="Type details about your issue so support can help you."
+              />
+              <AppButton
+                title="Send message"
+                icon={<Ionicons name="send" size={16} color={Colors.textInverse} />}
+                onPress={handleSendMessage}
+                disabled={!message.trim()}
+                variant="primary"
+                size="sm"
+                style={[!message.trim() && styles.sendBtnDisabled]}
+                accessibilityLabel="Send support message"
+                accessibilityHint="Sends your message to the support team."
+              />
+            </SettingsCard>
+          </Reanimated.View>
 
-        <Text style={styles.version}>Thryftverse v1.0.0 | response time ~2 hours</Text>
-      </ScrollView>
+          {/* Links */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+            <SettingsCard>
+              {[
+                { icon: 'document-text-outline', label: 'Terms of Service', url: 'https://thryftverse.app/terms' },
+                { icon: 'shield-checkmark-outline', label: 'Privacy Policy', url: 'https://thryftverse.app/privacy' },
+                { icon: 'globe-outline', label: 'Thryftverse Blog', url: 'https://thryftverse.app/blog' },
+              ].map((l, idx) => (
+                <View key={l.label}>
+                  <AnimatedPressable
+                    style={styles.linkRow}
+                    onPress={() => void handleOpenExternal(l.url)}
+                    accessibilityLabel={`Open ${l.label}`}
+                    accessibilityHint="Opens this link in your browser."
+                    hapticFeedback="light"
+                  >
+                    <Ionicons name={l.icon as any} size={18} color={Colors.textMuted} />
+                    <Text style={styles.linkText}>{l.label}</Text>
+                    <Ionicons name="open-outline" size={14} color={Colors.textMuted} />
+                  </AnimatedPressable>
+                  {idx < 2 && <View style={styles.divider} />}
+                </View>
+              ))}
+            </SettingsCard>
+          </Reanimated.View>
+
+          <Text style={styles.version}>Thryftverse v1.0.0 | response time ~2 hours</Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: BORDER,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: TEXT },
-  content: { padding: 20, paddingBottom: 60 },
-  quickRow: { flexDirection: 'row', gap: 12, marginBottom: 28 },
-  quickBtn: { flex: 1, alignItems: 'center', gap: 8 },
-  quickIcon: { width: 58, height: 58, borderRadius: 18, backgroundColor: CARD, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: BORDER },
-  quickLabel: { fontSize: 12, color: TEXT, fontWeight: '600' },
-  sectionLabel: { fontSize: 11, color: MUTED, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 },
-  faqCard: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 24 },
-  faqRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 16 },
-  faqQ: { flex: 1, fontSize: 14, fontWeight: '600', color: TEXT, lineHeight: 20 },
-  faqA: { fontSize: 13, color: MUTED, lineHeight: 20, paddingHorizontal: 18, paddingBottom: 16 },
-  divider: { height: 1, backgroundColor: BORDER, marginHorizontal: 18 },
-  contactCard: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, padding: 16, marginBottom: 24 },
-  messageInput: { fontSize: 14, color: TEXT, minHeight: 100, marginBottom: 14 },
-  sendBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.brand, borderRadius: 24, paddingVertical: 12, justifyContent: 'center' },
-  sendBtnText: { fontSize: 14, fontWeight: '700', color: Colors.textInverse },
-  linksCard: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
-  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 16 },
-  linkText: { flex: 1, fontSize: 14, color: TEXT },
-  version: { fontSize: 11, color: MUTED, textAlign: 'center' },
+  content: {
+    padding: Space.md,
+    paddingBottom: Space.xl,
+  },
+  quickRow: {
+    flexDirection: 'row',
+    gap: Space.sm + Space.xs,
+    marginBottom: Space.lg,
+  },
+  quickBtn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  quickIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  quickLabel: {
+    fontSize: Type.caption.size,
+    color: Colors.textPrimary,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  sectionTitle: {
+    fontSize: Type.meta.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: Type.meta.letterSpacing,
+    marginBottom: Space.sm,
+    marginLeft: Space.xs,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Space.sm + Space.xs,
+    paddingVertical: Space.sm,
+    gap: Space.xs + Space.xs,
+    marginBottom: Space.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+    paddingVertical: 0,
+  },
+  emptyFaqs: {
+    paddingVertical: Space.lg,
+    alignItems: 'center',
+  },
+  emptyFaqsText: {
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textSecondary,
+  },
+  faqRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Space.md - Space.xs,
+  },
+  faqQ: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textPrimary,
+    lineHeight: Type.body.lineHeight,
+    letterSpacing: Type.body.letterSpacing,
+    paddingRight: Space.sm,
+  },
+  faqA: {
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.textMuted,
+    lineHeight: Type.caption.lineHeight,
+    paddingBottom: Space.sm,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  messageInput: {
+    fontSize: Type.body.size,
+    color: Colors.textPrimary,
+    minHeight: 100,
+    marginBottom: Space.sm,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: Type.body.lineHeight,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  sendBtnDisabled: {
+    opacity: 0.4,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + Space.xs,
+    paddingVertical: Space.md - Space.xs,
+  },
+  linkText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    color: Colors.textPrimary,
+    fontFamily: 'Inter_400Regular',
+    letterSpacing: Type.body.letterSpacing,
+  },
+  version: {
+    fontSize: Type.meta.size,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: Space.sm,
+    fontFamily: 'Inter_400Regular',
+    letterSpacing: Type.meta.letterSpacing,
+  },
 });
-
-

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
+import { AccessibilityRole, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -34,6 +34,7 @@ interface AppButtonProps {
   hapticFeedback?: AppButtonHapticFeedback;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  accessibilityRole?: AccessibilityRole;
 }
 
 type VariantTokens = {
@@ -114,6 +115,7 @@ export function AppButton({
   hapticFeedback = 'none',
   accessibilityLabel,
   accessibilityHint,
+  accessibilityRole,
 }: AppButtonProps) {
   const tokens = resolveVariantTokens(variant);
   const resolvedAlign = align ?? (subtitle ? 'start' : 'center');
@@ -139,6 +141,7 @@ export function AppButton({
       hapticFeedback={hapticFeedback}
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityHint={accessibilityHint}
+      accessibilityRole={accessibilityRole}
     >
       <View style={[styles.contentRow, resolvedAlign === 'center' && styles.contentCentered, contentStyle]}>
         {icon ? (

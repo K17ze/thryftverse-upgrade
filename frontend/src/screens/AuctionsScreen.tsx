@@ -303,16 +303,29 @@ export default function AuctionsScreen() {
           <BodyEmphasis style={styles.launchTitle}>{t('auctions.cta.createAuction')}</BodyEmphasis>
           <Meta style={styles.launchHint}>Schedule a 6-hour drop</Meta>
         </View>
-        <AppButton
-          title="Create"
-          icon={<Ionicons name="add" size={15} color={Colors.background} />}
-          style={styles.launchBtn}
-          variant="primary"
-          size="sm"
-          onPress={() => navigation.navigate('CreateAuction')}
-          hapticFeedback="medium"
-          accessibilityLabel="Create auction"
-        />
+        <View style={styles.actionBtnRow}>
+          <AnimatedPressable
+            style={styles.myBidsBtn}
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('MyBids')}
+            accessibilityRole="button"
+            accessibilityLabel="My Bids"
+            accessibilityHint="View your active bids"
+          >
+            <Ionicons name="list-outline" size={15} color={Colors.brand} />
+            <Meta style={styles.myBidsBtnText}>My Bids</Meta>
+          </AnimatedPressable>
+          <AppButton
+            title="Create"
+            icon={<Ionicons name="add" size={15} color={Colors.background} />}
+            style={styles.launchBtn}
+            variant="primary"
+            size="sm"
+            onPress={() => navigation.navigate('CreateAuction')}
+            hapticFeedback="medium"
+            accessibilityLabel="Create auction"
+          />
+        </View>
       </View>
 
       {syncError ? (
@@ -434,6 +447,7 @@ export default function AuctionsScreen() {
                 title={item.title}
                 image={item.image}
                 sellerName={sellerLabel}
+                sellerId={item.sellerId}
                 currentBid={formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}
                 bidCount={item.bidCount}
                 timeRemaining={formatCountdown(item.msToEnd ?? 0)}
@@ -445,6 +459,14 @@ export default function AuctionsScreen() {
                 onBid={() => openBidComposer(item)}
                 onBuyNow={() => void handleBuyNow(item)}
                 onToggleWatch={() => handleToggleWatch(item)}
+                onPressSeller={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
+                onMessageSeller={() =>
+                  navigation.navigate('Chat', {
+                    conversationId: `${item.sellerId}_${item.listingId}`,
+                    focusQuery: sellerLabel,
+                    partnerUserId: item.sellerId,
+                  })
+                }
                 isBuyNowLoading={buyNowAuctionId === item.id}
                 isBidSubmitting={isSubmittingBid}
               />
@@ -519,6 +541,25 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     minHeight: 34,
     paddingHorizontal: 12,
+  },
+  actionBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  myBidsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  myBidsBtnText: {
+    color: Colors.brand,
   },
   syncBanner: {
     marginHorizontal: Space.md,

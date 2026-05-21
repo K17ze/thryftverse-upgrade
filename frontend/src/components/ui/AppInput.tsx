@@ -11,6 +11,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { ActiveTheme, Colors } from '../../constants/colors';
+import { Typography } from '../../constants/typography';
 
 interface AppInputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -85,7 +86,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     color: Colors.textSecondary,
     fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
@@ -110,7 +111,7 @@ const styles = StyleSheet.create({
   prefixText: {
     color: Colors.textMuted,
     fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   prefixNode: {
     alignItems: 'center',
@@ -120,7 +121,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textPrimary,
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     paddingVertical: 10,
   },
   helperText: {
@@ -128,13 +129,13 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 11,
     lineHeight: 16,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   errorText: {
     marginTop: 7,
     color: Colors.danger,
     fontSize: 11,
     lineHeight: 16,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
 });

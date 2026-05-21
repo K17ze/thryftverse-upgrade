@@ -5,14 +5,14 @@
  */
 
 import React from 'react';
-import { Text as RNText, TextProps as RNTextProps, StyleSheet, TextStyle } from 'react-native';
+import { Text as RNText, TextProps as RNTextProps, StyleSheet, StyleProp, TextStyle } from 'react-native';
 import { Type } from '../../theme/designTokens';
 import { Colors } from '../../constants/colors';
 
 interface TextComponentProps extends RNTextProps {
   children: React.ReactNode;
   color?: string;
-  style?: TextStyle;
+  style?: StyleProp<TextStyle>;
   numberOfLines?: number;
 }
 

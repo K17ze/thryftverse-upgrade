@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
 import { Meta, BodyEmphasis, Body } from '../ui/Text';
 
@@ -22,6 +23,11 @@ interface OrderHistoryRowProps {
   status: OrderStatus;
   timestamp: string;
   onPress?: () => void;
+  issuerHandle?: string;
+  issuerAvatar?: string;
+  canMessageIssuer?: boolean;
+  onPressIssuer?: () => void;
+  onMessageIssuer?: () => void;
 }
 
 function resolveSideIcon(side: OrderSide): keyof typeof Ionicons.glyphMap {
@@ -57,6 +63,11 @@ export function OrderHistoryRow({
   status,
   timestamp,
   onPress,
+  issuerHandle,
+  issuerAvatar,
+  canMessageIssuer = false,
+  onPressIssuer,
+  onMessageIssuer,
 }: OrderHistoryRowProps) {
   return (
     <AnimatedPressable
@@ -100,6 +111,41 @@ export function OrderHistoryRow({
           <Body style={styles.price}>{pricePerShare} / share</Body>
           <BodyEmphasis style={styles.total}>{totalAmount}</BodyEmphasis>
         </View>
+
+        {issuerHandle && onPressIssuer && (
+          <View style={styles.issuerRow}>
+            <AnimatedPressable
+              style={styles.issuerChip}
+              onPress={onPressIssuer}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Open @${issuerHandle} profile`}
+              accessibilityHint="Shows issuer profile details"
+            >
+              {issuerAvatar ? (
+                <CachedImage uri={issuerAvatar} style={styles.issuerAvatar} containerStyle={styles.issuerAvatarWrap} contentFit="cover" />
+              ) : (
+                <View style={styles.issuerAvatarPlaceholder}>
+                  <Ionicons name="person-outline" size={12} color={Colors.textMuted} />
+                </View>
+              )}
+              <Meta style={styles.issuerText} numberOfLines={1}>@{issuerHandle}</Meta>
+            </AnimatedPressable>
+            {onMessageIssuer && (
+              <AnimatedPressable
+                style={[styles.messageBtn, !canMessageIssuer && styles.messageBtnDisabled]}
+                onPress={onMessageIssuer}
+                disabled={!canMessageIssuer}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={canMessageIssuer ? `Message @${issuerHandle}` : 'Issuer is you'}
+                accessibilityHint={canMessageIssuer ? 'Opens chat with issuer' : 'Messaging yourself is disabled'}
+              >
+                <Ionicons name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'} size={12} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            )}
+          </View>
+        )}
       </View>
     </AnimatedPressable>
   );
@@ -156,5 +202,52 @@ const styles = StyleSheet.create({
   },
   total: {
     fontVariant: ['tabular-nums'],
+  },
+  issuerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Space.sm,
+    paddingTop: Space.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  issuerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  issuerAvatarWrap: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  issuerAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+  },
+  issuerAvatarPlaceholder: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  issuerText: {
+    color: Colors.textSecondary,
+  },
+  messageBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messageBtnDisabled: {
+    opacity: 0.5,
   },
 });

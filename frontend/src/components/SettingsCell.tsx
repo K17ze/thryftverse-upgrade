@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { Type, Space, Radius } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 
 export type SettingsCellVariant = 'default' | 'value' | 'toggle' | 'button' | 'destructive' | 'custom';
@@ -29,6 +30,7 @@ interface SettingsCellProps {
   isFirst?: boolean;
   isLast?: boolean;
   style?: ViewStyle;
+  accessibilityHint?: string;
 }
 
 export function SettingsCell({
@@ -47,13 +49,14 @@ export function SettingsCell({
   isFirst = false,
   isLast = false,
   style,
+  accessibilityHint,
 }: SettingsCellProps) {
   // Determine border radius based on position in group
   const borderRadiusStyle = {
-    borderTopLeftRadius: isFirst ? 12 : 0,
-    borderTopRightRadius: isFirst ? 12 : 0,
-    borderBottomLeftRadius: isLast ? 12 : 0,
-    borderBottomRightRadius: isLast ? 12 : 0,
+    borderTopLeftRadius: isFirst ? Radius.lg : 0,
+    borderTopRightRadius: isFirst ? Radius.lg : 0,
+    borderBottomLeftRadius: isLast ? Radius.lg : 0,
+    borderBottomRightRadius: isLast ? Radius.lg : 0,
   };
 
   // Determine if we show chevron
@@ -186,36 +189,38 @@ export function SettingsGroup({ children, style }: SettingsGroupProps) {
 
 const styles = StyleSheet.create({
   group: {
-    marginHorizontal: 16,
-    marginBottom: 24,
+    marginHorizontal: Space.md,
+    marginBottom: Space.lg,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: Space.sm + Space.xs,
+    paddingHorizontal: Space.md,
     minHeight: 52,
     backgroundColor: Colors.surface,
   },
   iconContainer: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: Space.sm,
   },
   textContainer: {
     flex: 1,
     justifyContent: 'center',
   },
   title: {
-    fontSize: 16,
-    fontWeight: '400',
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_500Medium',
     color: Colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+    lineHeight: Type.body.lineHeight,
   },
   destructiveTitle: {
     color: Colors.danger,
@@ -226,20 +231,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
     marginTop: 2,
-    lineHeight: 18,
+    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
   },
   rightContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.xs + Space.xs,
   },
   valueText: {
-    fontSize: 16,
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
     maxWidth: 150,
+    letterSpacing: Type.body.letterSpacing,
   },
   chevron: {
     marginLeft: 4,
@@ -254,25 +263,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_600SemiBold',
     color: '#FFFFFF',
+    letterSpacing: Type.caption.letterSpacing,
   },
   sectionHeader: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: Type.meta.size,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.textMuted,
-    marginHorizontal: 32,
-    marginTop: 32,
-    marginBottom: 8,
-    letterSpacing: 0.5,
+    marginHorizontal: Space.md + Space.md,
+    marginTop: Space.lg + Space.sm,
+    marginBottom: Space.xs + Space.xs,
+    letterSpacing: Type.meta.letterSpacing,
   },
   sectionFooter: {
-    fontSize: 13,
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
-    marginHorizontal: 32,
-    marginTop: 8,
-    marginBottom: 24,
-    lineHeight: 18,
+    marginHorizontal: Space.md + Space.md,
+    marginTop: Space.xs + Space.xs,
+    marginBottom: Space.lg,
+    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });
