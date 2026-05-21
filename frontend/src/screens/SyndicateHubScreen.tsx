@@ -1,14 +1,5 @@
 import React from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Image,
-  StatusBar
-} from 'react-native';
+import { View, StyleSheet, StatusBar } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +20,14 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { useToast } from '../context/ToastContext';
 import { MOCK_USERS } from '../data/mockData';
+import { Space, Radius } from '../theme/designTokens';
+import {
+  TradeHeader,
+  MetricGrid,
+  CoOwnAssetCard,
+} from '../components/trade';
+import { AppInput } from '../components/ui/AppInput';
+import { Meta, BodyEmphasis } from '../components/ui/Text';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -38,14 +37,6 @@ const SORT_OPTIONS: Array<{ value: HubSort; label: string; accessibilityLabel: s
   { value: 'movers', label: 'MOVERS', accessibilityLabel: 'Sort by price movers' },
   { value: 'latest', label: 'LATEST', accessibilityLabel: 'Sort by latest listings' },
 ];
-const IS_LIGHT = ActiveTheme === 'light';
-const TRADE_ACCENT = Colors.brand;
-const PANEL_BG = Colors.surface;
-const PANEL_BORDER = Colors.border;
-const SEARCH_BG = Colors.surfaceAlt;
-const METRIC_BG = IS_LIGHT ? '#f0ede7' : '#10161c';
-const METRIC_BORDER = IS_LIGHT ? '#d7d1c8' : '#24313b';
-const SORT_ACTIVE_BG = IS_LIGHT ? '#ede4d3' : '#17302b';
 
 export default function CoOwnHubScreen() {
   const navigation = useNavigation<NavT>();
@@ -61,11 +52,7 @@ export default function CoOwnHubScreen() {
   const [sortBy, setSortBy] = React.useState<HubSort>('value');
 
   const handleBack = React.useCallback(() => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-      return;
-    }
-
+    if (navigation.canGoBack()) { navigation.goBack(); return; }
     navigation.navigate('MainTabs');
   }, [navigation]);
 
@@ -78,24 +65,14 @@ export default function CoOwnHubScreen() {
 
   const filteredAssets = React.useMemo(() => {
     const normalized = query.trim().toLowerCase();
-
     const filtered = marketAssets.filter((asset) => {
-      if (!normalized) {
-        return true;
-      }
-
+      if (!normalized) return true;
       return [asset.title, asset.id, asset.issuerId].join(' ').toLowerCase().includes(normalized);
     });
-
     const sorted = [...filtered];
-    if (sortBy === 'movers') {
-      sorted.sort((a, b) => b.marketMovePct24h - a.marketMovePct24h);
-    } else if (sortBy === 'latest') {
-      sorted.sort((a, b) => Number(b.id.localeCompare(a.id)));
-    } else {
-      sorted.sort((a, b) => b.totalUnits * b.unitPriceGBP - a.totalUnits * a.unitPriceGBP);
-    }
-
+    if (sortBy === 'movers') sorted.sort((a, b) => b.marketMovePct24h - a.marketMovePct24h);
+    else if (sortBy === 'latest') sorted.sort((a, b) => Number(b.id.localeCompare(a.id)));
+    else sorted.sort((a, b) => b.totalUnits * b.unitPriceGBP - a.totalUnits * a.unitPriceGBP);
     return sorted;
   }, [marketAssets, query, sortBy]);
 
@@ -118,278 +95,100 @@ export default function CoOwnHubScreen() {
     show('Opening support chat for co-own market help.', 'info');
   }, [navigation, show, supportUser.id]);
 
-  const renderAsset = ({ item, index }: { item: CoOwnAsset; index: number }) => {
-    const isPositive = item.marketMovePct24h >= 0;
-    const marketValue = item.totalUnits * item.unitPriceGBP;
-    const openValue = item.availableUnits * item.unitPriceGBP;
-    const issuerUser = MOCK_USERS.find((user) => user.id === item.issuerId);
-    const issuerHandle = issuerUser?.username ?? item.issuerId;
-    const canMessageIssuer = currentUser?.id !== item.issuerId;
-
-    return (
-      <Reanimated.View
-        entering={
-          reducedMotionEnabled
-            ? undefined
-            : FadeInDown
-                .duration(Motion.list.enterDuration)
-                .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-        }
-      >
-        <View style={styles.assetCard}>
-          <AnimatedPressable
-            style={styles.assetPrimaryTap}
-            activeOpacity={0.92}
-            onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${item.title} details`}
-            accessibilityHint="Shows issuer, chart, and order book details"
-          >
-            <Image source={{ uri: item.image }} style={styles.assetImage} />
-
-            <View style={styles.assetBody}>
-              <View style={styles.assetTopRow}>
-                <Text style={styles.assetTitle} numberOfLines={1}>{item.title}</Text>
-                <AppStatusPill
-                  tone={isPositive ? 'positive' : 'negative'}
-                  iconName={isPositive ? 'trending-up-outline' : 'trending-down-outline'}
-                  label={`${isPositive ? '+' : ''}${item.marketMovePct24h.toFixed(1)}%`}
-                />
-              </View>
-
-              <Text style={styles.assetMeta}>{item.availableUnits} / {item.totalUnits} shares available</Text>
-
-              <View style={styles.assetStatsRow}>
-                <View>
-                  <Text style={styles.assetStatLabel}>Share Price</Text>
-                  <Text style={styles.assetStatValue}>{formatFromFiat(item.unitPriceGBP, 'GBP')}</Text>
-                </View>
-                <View>
-                  <Text style={styles.assetStatLabel}>Market Value</Text>
-                  <Text style={styles.assetStatValue}>{formatFromFiat(marketValue, 'GBP', { displayMode: 'fiat' })}</Text>
-                </View>
-                <View>
-                  <Text style={styles.assetStatLabel}>Open Value</Text>
-                  <Text style={styles.assetStatValue}>{formatFromFiat(openValue, 'GBP', { displayMode: 'fiat' })}</Text>
-                </View>
-              </View>
-            </View>
-          </AnimatedPressable>
-
-          <View style={styles.assetFooter}>
-            <View style={styles.assetIssuerRow}>
-              <AnimatedPressable
-                style={styles.assetIssuerChip}
-                onPress={() => navigation.navigate('UserProfile', { userId: item.issuerId })}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Open @${issuerHandle} profile`}
-                accessibilityHint="Shows issuer profile"
-              >
-                <Image
-                  source={{ uri: issuerUser?.avatar ?? 'https://picsum.photos/seed/co-own-issuer-fallback/80/80' }}
-                  style={styles.assetIssuerAvatar}
-                />
-                <Text style={styles.assetIssuerText} numberOfLines={1}>Issuer @{issuerHandle}</Text>
-              </AnimatedPressable>
-
-              <AnimatedPressable
-                style={[styles.assetMessageBtn, !canMessageIssuer && styles.assetMessageBtnDisabled]}
-                onPress={() => {
-                  if (!canMessageIssuer) {
-                    return;
-                  }
-
-                  navigation.navigate('Chat', {
-                    conversationId: `${item.issuerId}_${item.listingId}`,
-                    focusQuery: issuerHandle,
-                    partnerUserId: item.issuerId,
-                  });
-                }}
-                disabled={!canMessageIssuer}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={canMessageIssuer ? `Message @${issuerHandle}` : 'Issuer is you'}
-                accessibilityHint={canMessageIssuer ? 'Opens chat with issuer' : 'Messaging yourself is disabled'}
-              >
-                <Ionicons name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'} size={12} color={Colors.textPrimary} />
-              </AnimatedPressable>
-            </View>
-
-            <View style={styles.assetActionRow}>
-              <AppButton
-                style={styles.tradeBtn}
-                variant="gold"
-                size="sm"
-                align="center"
-                title="Buy"
-                onPress={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
-                accessibilityLabel={`Buy shares of ${item.title}`}
-              />
-
-              <AppButton
-                style={[styles.tradeBtn, styles.tradeBtnOutline]}
-                variant="secondary"
-                size="sm"
-                align="center"
-                title="Sell"
-                onPress={() => navigation.navigate('Trade', { assetId: item.id, side: 'sell' })}
-                accessibilityLabel={`Sell shares of ${item.title}`}
-              />
-            </View>
-          </View>
-        </View>
-      </Reanimated.View>
-    );
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
+      <TradeHeader title="Co-Own Hub" onBack={handleBack} />
+
+      <View style={styles.searchWrap}>
+        <AppInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search assets..."
+          prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
+          accessibilityLabel="Search co-own assets"
+        />
+      </View>
+
+      <MetricGrid
+        metrics={[
+          { label: 'Open Value', value: formatFromFiat(totalOpenValue, 'GBP', { displayMode: 'fiat' }) },
+          { label: 'Market Cap', value: formatFromFiat(totalMarketValue, 'GBP', { displayMode: 'fiat' }) },
+          { label: 'Assets', value: String(marketAssets.length) },
+        ]}
+        columns={3}
+      />
+
+      <View style={styles.sortWrap}>
+        <AppSegmentControl
+          options={SORT_OPTIONS}
+          value={sortBy}
+          onChange={setSortBy}
+          fullWidth
+        />
+      </View>
+
       <FlashList
         data={filteredAssets}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={
-          <View style={styles.headerBlock}>
-            <View style={styles.headerNavRow}>
-              <AnimatedPressable style={styles.backBtn} activeOpacity={0.84} onPress={handleBack}>
-                <Ionicons name="chevron-back" size={16} color={Colors.textPrimary} />
-                <Text style={styles.backBtnText}>Back</Text>
-              </AnimatedPressable>
+        renderItem={({ item, index }) => {
+          const issuerUser = MOCK_USERS.find((user) => user.id === item.issuerId);
+          const issuerHandle = issuerUser?.username ?? item.issuerId;
+          const canMessageIssuer = currentUser?.id !== item.issuerId;
+          const marketValue = item.totalUnits * item.unitPriceGBP;
+          const openValue = item.availableUnits * item.unitPriceGBP;
 
-              <AnimatedPressable
-                style={styles.backBtn}
-                activeOpacity={0.84}
-                onPress={() => navigation.navigate('MarketLedger')}
-              >
-                <Ionicons name="pulse-outline" size={15} color={Colors.textPrimary} />
-                <Text style={styles.backBtnText}>Activity</Text>
-              </AnimatedPressable>
-            </View>
-
-            <Text style={styles.headerLabel}>CO-OWN MARKET</Text>
-            <Text style={styles.headerTitle}>Co-Own Hub</Text>
-
-            <View style={styles.supportRow}>
-              <AnimatedPressable
-                style={styles.supportIdentity}
-                onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Open @${supportUser.username} profile`}
-                accessibilityHint="Shows co-own support profile"
-              >
-                <Image source={{ uri: supportUser.avatar }} style={styles.supportAvatar} />
-                <Text style={styles.supportText}>Support: @{supportUser.username}</Text>
-              </AnimatedPressable>
-
-              <AnimatedPressable
-                style={styles.supportMessageBtn}
-                onPress={handleOpenCoOwnSupport}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Message co-own support"
-                accessibilityHint="Opens support chat"
-              >
-                <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-              </AnimatedPressable>
-            </View>
-
-            <View style={styles.searchWrap}>
-              <Ionicons name="search" size={18} color={Colors.textMuted} />
-              <TextInput
-                style={styles.searchInput}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search assets or issuers"
-                placeholderTextColor={Colors.textMuted}
+          return (
+            <Reanimated.View
+              entering={
+                reducedMotionEnabled
+                  ? undefined
+                  : FadeInDown
+                      .duration(Motion.list.enterDuration)
+                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+              }
+            >
+              <CoOwnAssetCard
+                id={item.id}
+                title={item.title}
+                image={item.image}
+                unitPrice={formatFromFiat(item.unitPriceGBP, 'GBP')}
+                marketValue={formatFromFiat(marketValue, 'GBP', { displayMode: 'fiat' })}
+                openValue={formatFromFiat(openValue, 'GBP', { displayMode: 'fiat' })}
+                availableUnits={item.availableUnits}
+                totalUnits={item.totalUnits}
+                marketMovePct24h={item.marketMovePct24h}
+                issuerHandle={issuerHandle}
+                issuerAvatar={issuerUser?.avatar}
+                yourUnits={item.yourUnits}
+                isOpen={item.isOpen}
+                onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
+                onBuy={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
+                onSell={() => navigation.navigate('Trade', { assetId: item.id, side: 'sell' })}
+                onDetails={() => navigation.navigate('AssetDetail', { assetId: item.id })}
+                onMessageIssuer={() =>
+                  navigation.navigate('Chat', {
+                    conversationId: `${item.issuerId}_${item.listingId}`,
+                    focusQuery: issuerHandle,
+                    partnerUserId: item.issuerId,
+                  })
+                }
+                onViewIssuer={() => navigation.navigate('UserProfile', { userId: item.issuerId })}
+                canMessageIssuer={canMessageIssuer}
               />
-            </View>
-
-            <View style={styles.metricRow}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricValue}>{marketAssets.length}</Text>
-                <Text style={styles.metricLabel}>Assets</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricValue}>{formatFromFiat(totalOpenValue, 'GBP', { displayMode: 'fiat' })}</Text>
-                <Text style={styles.metricLabel}>Open Value</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricValue}>{formatFromFiat(totalMarketValue, 'GBP', { displayMode: 'fiat' })}</Text>
-                <Text style={styles.metricLabel}>Market Value</Text>
-              </View>
-            </View>
-
-            <View style={styles.actionRow}>
-              <AppButton
-                style={styles.quickBtn}
-                variant="gold"
-                size="sm"
-                align="center"
-                icon={<Ionicons name="pie-chart-outline" size={15} color={Colors.textInverse} />}
-                title="Portfolio"
-                onPress={() => navigation.navigate('Portfolio')}
-                accessibilityLabel="Open co-own portfolio"
-              />
-              <AppButton
-                style={styles.quickBtn}
-                variant="gold"
-                size="sm"
-                align="center"
-                icon={<Ionicons name="list-outline" size={15} color={Colors.textInverse} />}
-                title="My Listings"
-                onPress={() => navigation.navigate('MyListings', { type: 'coown' })}
-                accessibilityLabel="View my co-own listings"
-              />
-              <AppButton
-                style={styles.quickBtn}
-                variant="gold"
-                size="sm"
-                align="center"
-                icon={<Ionicons name="time-outline" size={15} color={Colors.textInverse} />}
-                title="Orders"
-                onPress={() => navigation.navigate('CoOwnOrderHistory')}
-                accessibilityLabel="Open co-own order history"
-              />
-            </View>
-
-            <AppSegmentControl
-              style={styles.sortRow}
-              options={SORT_OPTIONS}
-              value={sortBy}
-              onChange={setSortBy}
-              optionStyle={styles.sortChip}
-              optionActiveStyle={styles.sortChipActive}
-              optionTextStyle={styles.sortChipText}
-              optionTextActiveStyle={styles.sortChipTextActive}
-            />
-
-            <AppButton
-              style={styles.issueBtn}
-              variant="secondary"
-              size="sm"
-              align="center"
-              icon={<Ionicons name="add" size={16} color={Colors.textPrimary} />}
-              title="Issue New Co-Own"
-              onPress={() => navigation.navigate('CreateCoOwn')}
-              accessibilityLabel="Issue new co-own asset"
-            />
-          </View>
-        }
-        contentContainerStyle={styles.contentContainer}
-        renderItem={renderAsset}
-        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            </Reanimated.View>
+          );
+        }}
         ListEmptyComponent={
           <EmptyState
-            icon="search-outline"
-            title="No assets found"
-            subtitle="Try another search keyword or clear the query."
-            ctaLabel="Clear"
-            onCtaPress={() => setQuery('')}
+            icon="pie-chart-outline"
+            title="No co-own assets"
+            subtitle="Assets will appear here once pools are issued."
           />
         }
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
   );
@@ -400,293 +199,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  contentContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 28,
-  },
-  headerBlock: {
-    paddingTop: 8,
-    paddingBottom: 14,
-  },
-  headerNavRow: {
-    marginBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  backBtnText: {
-    color: Colors.textPrimary,
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.3,
-  },
-  headerLabel: {
-    color: TRADE_ACCENT,
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 1,
-  },
-  headerTitle: {
-    marginTop: 4,
-    color: Colors.textPrimary,
-    fontSize: 32,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: -0.7,
-  },
-  supportRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  supportIdentity: {
-    flex: 1,
-    minHeight: 34,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  supportAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  supportText: {
-    flex: 1,
-    color: Colors.textPrimary,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  supportMessageBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerSubtitle: {
-    marginTop: 6,
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    lineHeight: 19,
-  },
   searchWrap: {
-    marginTop: 14,
-    borderRadius: 14,
-    backgroundColor: SEARCH_BG,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
   },
-  searchInput: {
-    flex: 1,
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-    paddingVertical: 0,
+  sortWrap: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
   },
-  metricRow: {
-    marginTop: 14,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  metricCard: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: METRIC_BORDER,
-    backgroundColor: METRIC_BG,
-    paddingVertical: 10,
-    paddingHorizontal: 9,
-  },
-  metricValue: {
-    color: Colors.textPrimary,
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
-  },
-  metricLabel: {
-    marginTop: 4,
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 0.4,
-  },
-  actionRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  quickBtn: {
-    flex: 1,
-  },
-  sortRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  sortChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  sortChipActive: {
-    borderColor: TRADE_ACCENT,
-    backgroundColor: SORT_ACTIVE_BG,
-  },
-  sortChipText: {
-    color: Colors.textSecondary,
-    fontSize: 10,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.5,
-  },
-  sortChipTextActive: {
-    color: TRADE_ACCENT,
-  },
-  issueBtn: {
-    marginTop: 12,
-  },
-  assetCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    overflow: 'hidden',
-  },
-  assetPrimaryTap: {
-    width: '100%',
-  },
-  assetImage: {
-    width: '100%',
-    height: 180,
-    backgroundColor: Colors.surface,
-  },
-  assetBody: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  assetTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  assetTitle: {
-    flex: 1,
-    color: Colors.textPrimary,
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
-  },
-  assetMeta: {
-    marginTop: 4,
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
-  assetStatsRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  assetStatLabel: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  assetStatValue: {
-    marginTop: 2,
-    color: Colors.textPrimary,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-  },
-  assetFooter: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: PANEL_BORDER,
-    paddingHorizontal: 12,
-    paddingTop: 9,
-    paddingBottom: 12,
-  },
-  assetIssuerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  assetIssuerChip: {
-    flex: 1,
-    minHeight: 30,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: SEARCH_BG,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  assetIssuerAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  assetIssuerText: {
-    flex: 1,
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  assetMessageBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: SEARCH_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  assetMessageBtnDisabled: {
-    opacity: 0.55,
-  },
-  assetActionRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  tradeBtn: {
-    flex: 1,
-  },
-  tradeBtnOutline: {
-    backgroundColor: 'transparent',
+  listContent: {
+    paddingBottom: Space.xl,
   },
 });
-

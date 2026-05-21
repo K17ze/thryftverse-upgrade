@@ -1,18 +1,11 @@
 import React from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
-  View,
-  Text,
-  StyleSheet,
-  StatusBar,
-  TextInput,
-} from 'react-native';
+import { View, StyleSheet, StatusBar, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { MOCK_LISTINGS, MOCK_USERS, Listing } from '../data/mockData';
@@ -25,6 +18,14 @@ import { toFiat, toIze } from '../utils/currency';
 import { useBackendData } from '../context/BackendDataContext';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
+import { AppButton } from '../components/ui/AppButton';
+import { AppInput } from '../components/ui/AppInput';
+import { TradeHeader, TradeCard } from '../components/trade';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { Space, Radius } from '../theme/designTokens';
+import { Motion } from '../constants/motion';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -35,13 +36,6 @@ const START_WINDOWS = [
   { label: '1h', minutes: 60 },
   { label: '3h', minutes: 180 },
 ];
-const IS_LIGHT = ActiveTheme === 'light';
-const PANEL_BG = IS_LIGHT ? '#ffffff' : '#121212';
-const PANEL_ALT_BG = IS_LIGHT ? '#f7f4ef' : '#141414';
-const PANEL_BORDER = IS_LIGHT ? '#d8d1c6' : '#2d2d2d';
-const INPUT_BG = IS_LIGHT ? '#ffffff' : '#111111';
-const ACTIVE_SURFACE = IS_LIGHT ? '#efe5d5' : '#162523';
-const PREVIEW_META_TEXT = IS_LIGHT ? '#f2e8d9' : '#d7b98f';
 
 export default function CreateAuctionScreen() {
   const navigation = useNavigation<NavT>();
@@ -49,6 +43,7 @@ export default function CreateAuctionScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { listings } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
 
   const currentUser = useStore((state) => state.currentUser);
   const addAuction = useStore((state) => state.addAuction);
@@ -69,9 +64,7 @@ export default function CreateAuctionScreen() {
 
   const fromGbpToDisplay = React.useCallback(
     (amountGbp: number) => {
-      if (currencyCode === 'GBP') {
-        return amountGbp;
-      }
+      if (currencyCode === 'GBP') return amountGbp;
       const amountIze = toIze(amountGbp, 'GBP', goldRates);
       return toFiat(amountIze, currencyCode, goldRates);
     },
@@ -80,9 +73,7 @@ export default function CreateAuctionScreen() {
 
   const fromDisplayToGbp = React.useCallback(
     (amountDisplay: number) => {
-      if (currencyCode === 'GBP') {
-        return amountDisplay;
-      }
+      if (currencyCode === 'GBP') return amountDisplay;
       const amountIze = toIze(amountDisplay, currencyCode, goldRates);
       return toFiat(amountIze, 'GBP', goldRates);
     },
@@ -90,14 +81,11 @@ export default function CreateAuctionScreen() {
   );
 
   React.useEffect(() => {
-    if (!sellerListings.length) {
-      return;
-    }
-
+    if (!sellerListings.length) return;
     if (!sellerListings.some((item) => item.id === selectedListingId)) {
       setSelectedListingId(sellerListings[0].id);
     }
-  }, [selectedListingId, sellerListings]);
+  }, [sellerListings, selectedListingId]);
 
   const selectedListing = React.useMemo(
     () => sellerListings.find((item) => item.id === selectedListingId),
@@ -105,16 +93,12 @@ export default function CreateAuctionScreen() {
   );
 
   React.useEffect(() => {
-    if (!selectedListing) {
-      return;
-    }
-
+    if (!selectedListing) return;
     if (!startingBidInput) {
       const defaultStartingBid = Math.max(1, Math.round(selectedListing.price * 0.8));
       const defaultStartingBidDisplay = fromGbpToDisplay(defaultStartingBid);
       setStartingBidInput((Number.isFinite(defaultStartingBidDisplay) ? defaultStartingBidDisplay : defaultStartingBid).toFixed(2));
     }
-
     if (!buyNowInput) {
       const buyNowDisplay = fromGbpToDisplay(selectedListing.price);
       setBuyNowInput((Number.isFinite(buyNowDisplay) ? buyNowDisplay : selectedListing.price).toFixed(2));
@@ -168,27 +152,32 @@ export default function CreateAuctionScreen() {
 
   const renderListingCard = ({ item }: { item: Listing }) => {
     const selected = item.id === selectedListingId;
-
     return (
       <AnimatedPressable
         style={[styles.listingCard, selected && styles.listingCardSelected]}
         onPress={() => setSelectedListingId(item.id)}
         activeOpacity={0.9}
+        disableAnimation={false}
+        scaleValue={0.97}
         accessibilityRole="button"
         accessibilityState={{ selected }}
         accessibilityLabel={`Select listing ${item.title}`}
-        accessibilityHint="Attaches this listing to the auction"
       >
-        <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/listing-auction-fallback/300/400')} style={styles.listingImage} contentFit="cover" />
+        <CachedImage
+          uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/listing-auction-fallback/300/400')}
+          style={styles.listingImage}
+          containerStyle={styles.listingImageContainer}
+          contentFit="cover"
+        />
         <View style={styles.listingMeta}>
-          <Text style={styles.listingTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.listingPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+          <BodyEmphasis style={styles.listingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
+          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Meta>
         </View>
-        {selected ? (
+        {selected && (
           <View style={styles.selectedTick}>
             <Ionicons name="checkmark" size={12} color={Colors.textInverse} />
           </View>
-        ) : null}
+        )}
       </AnimatedPressable>
     );
   };
@@ -201,129 +190,149 @@ export default function CreateAuctionScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.closeBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}
-          accessibilityLabel="Close"
-          accessibilityRole="button"
-        >
-          <Ionicons name="close" size={20} color={Colors.textPrimary} />
-        </AnimatedPressable>
-
-        <View>
-          <Text style={styles.headerTitle}>Launch Auction</Text>
-        </View>
-
-        <AnimatedPressable style={styles.launchBtn} onPress={launchAuction} activeOpacity={0.9}
-          accessibilityLabel="Launch auction"
-          accessibilityRole="button"
-        >
-          <Text style={styles.launchBtnText}>Launch</Text>
-        </AnimatedPressable>
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.previewCard}>
-          <CachedImage uri={previewImage} style={styles.previewImage} contentFit="cover" />
-          <View style={styles.previewOverlay}>
-            <Text style={styles.previewTitle} numberOfLines={1}>{selectedListing?.title ?? 'Select listing'}</Text>
-            <Text style={styles.previewMeta}>Window: {AUCTION_WINDOW_HOURS}h</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Auction Start</Text>
-          <View style={styles.windowRow}>
-            {START_WINDOWS.map((window) => {
-              const active = startInMinutes === window.minutes;
-              return (
-                <AnimatedPressable
-                  key={window.label}
-                  style={[styles.windowChip, active && styles.windowChipActive]}
-                  activeOpacity={0.9}
-                  onPress={() => setStartInMinutes(window.minutes)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={`Start auction in ${window.label}`}
-                  accessibilityHint="Sets auction start delay"
-                >
-                  <Text style={[styles.windowChipText, active && styles.windowChipTextActive]}>{window.label}</Text>
-                </AnimatedPressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pricing</Text>
-          <Text style={styles.inputLabel}>Starting Bid ({currencyCode})</Text>
-          <TextInput
-            style={styles.input}
-            value={startingBidInput}
-            onChangeText={setStartingBidInput}
-            keyboardType="decimal-pad"
-            placeholder="0.00"
-            placeholderTextColor={Colors.textMuted}
-            accessibilityLabel="Starting bid"
+      <TradeHeader
+        title="Launch Auction"
+        showClose
+        onClose={() => navigation.goBack()}
+        rightAction={
+          <AppButton
+            title="Launch"
+            onPress={launchAuction}
+            variant="primary"
+            size="sm"
+            style={styles.headerLaunchBtn}
+            hapticFeedback="medium"
+            accessibilityLabel="Launch auction"
           />
+        }
+      />
 
-          <View style={styles.buyNowRow}>
-            <Text style={styles.inputLabel}>Enable Buy Now</Text>
-            <View style={styles.toggleWrap}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}
+        >
+          <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
+        </Reanimated.View>
+
+        <FlashList
+          data={sellerListings}
+          horizontal
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.listingListContent}
+          renderItem={renderListingCard}
+        />
+
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}
+        >
+          <TradeCard variant="elevated" style={styles.previewCard}>
+            <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
+            <View style={styles.previewMeta}>
+              <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
+                {selectedListing?.title ?? 'Select a listing'}
+              </BodyEmphasis>
+              <Meta style={styles.previewPrice}>
+                {selectedListing ? formatFromFiat(selectedListing.price, 'GBP', { displayMode: 'fiat' }) : '—'}
+              </Meta>
+            </View>
+          </TradeCard>
+        </Reanimated.View>
+
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}
+        >
+          <TradeCard style={styles.formCard}>
+            <Meta style={styles.sectionLabel}>START WINDOW</Meta>
+            <View style={styles.windowRow}>
+              {START_WINDOWS.map((win) => (
+                <AnimatedPressable
+                  key={win.minutes}
+                  style={[
+                    styles.windowChip,
+                    startInMinutes === win.minutes && styles.windowChipActive,
+                  ]}
+                  onPress={() => setStartInMinutes(win.minutes)}
+                  activeOpacity={0.9}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: startInMinutes === win.minutes }}
+                  accessibilityLabel={`Start ${win.label}`}
+                >
+                  <Body style={[styles.windowChipText, startInMinutes === win.minutes && styles.windowChipTextActive]}>
+                    {win.label}
+                  </Body>
+                </AnimatedPressable>
+              ))}
+            </View>
+          </TradeCard>
+        </Reanimated.View>
+
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}
+        >
+          <TradeCard style={styles.formCard}>
+            <Meta style={styles.sectionLabel}>STARTING BID</Meta>
+            <AppInput
+              value={startingBidInput}
+              onChangeText={setStartingBidInput}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              prefix={currencyCode}
+              accessibilityLabel="Starting bid"
+              containerStyle={styles.input}
+            />
+          </TradeCard>
+        </Reanimated.View>
+
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}
+        >
+          <TradeCard style={styles.formCard}>
+            <View style={styles.buyNowRow}>
+              <Meta style={styles.sectionLabel}>BUY NOW PRICE</Meta>
               <AnimatedPressable
-                style={[styles.toggleBtn, buyNowEnabled && styles.toggleBtnActive]}
-                onPress={() => setBuyNowEnabled(true)}
+                style={[styles.toggleChip, buyNowEnabled && styles.toggleChipActive]}
+                onPress={() => setBuyNowEnabled((v) => !v)}
                 activeOpacity={0.9}
-                accessibilityRole="button"
-                accessibilityState={{ selected: buyNowEnabled }}
-                accessibilityLabel="Buy now on"
+                hapticFeedback="light"
+                accessibilityRole="switch"
+                accessibilityState={{ checked: buyNowEnabled }}
               >
-                <Text style={[styles.toggleText, buyNowEnabled && styles.toggleTextActive]}>On</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={[styles.toggleBtn, !buyNowEnabled && styles.toggleBtnActive]}
-                onPress={() => setBuyNowEnabled(false)}
-                activeOpacity={0.9}
-                accessibilityRole="button"
-                accessibilityState={{ selected: !buyNowEnabled }}
-                accessibilityLabel="Buy now off"
-              >
-                <Text style={[styles.toggleText, !buyNowEnabled && styles.toggleTextActive]}>Off</Text>
+                <Body style={[styles.toggleText, buyNowEnabled && styles.toggleTextActive]}>
+                  {buyNowEnabled ? 'ON' : 'OFF'}
+                </Body>
               </AnimatedPressable>
             </View>
-          </View>
-
-          {buyNowEnabled ? (
-            <>
-              <Text style={styles.inputLabel}>Buy Now Price ({currencyCode})</Text>
-              <TextInput
-                style={styles.input}
+            {buyNowEnabled && (
+              <AppInput
                 value={buyNowInput}
                 onChangeText={setBuyNowInput}
                 keyboardType="decimal-pad"
                 placeholder="0.00"
-                placeholderTextColor={Colors.textMuted}
+                prefix={currencyCode}
                 accessibilityLabel="Buy now price"
+                containerStyle={styles.input}
               />
-            </>
-          ) : null}
-        </View>
+            )}
+          </TradeCard>
+        </Reanimated.View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Attach Listing</Text>
-            <Text style={styles.sectionHint}>{sellerListings.length} available</Text>
-          </View>
-
-          <FlashList
-            data={sellerListings}
-            horizontal
-            keyExtractor={(item) => item.id}
-            renderItem={renderListingCard}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.listingsContent}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}
+        >
+          <AppButton
+            title="Launch Auction"
+            icon={<Ionicons name="flash-outline" size={16} color={Colors.background} />}
+            onPress={launchAuction}
+            variant="primary"
+            size="md"
+            style={styles.launchBtn}
+            hapticFeedback="medium"
+            accessibilityLabel="Launch auction"
           />
-        </View>
-      </View>
+        </Reanimated.View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -333,223 +342,141 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: PANEL_ALT_BG,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PANEL_BORDER,
-  },
-  headerLabel: {
-    color: '#d7b98f',
-    fontSize: 10,
-    letterSpacing: 1,
-    fontFamily: 'Inter_600SemiBold',
-    textAlign: 'center',
-  },
-  headerTitle: {
-    color: Colors.textPrimary,
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    textAlign: 'center',
-  },
-  launchBtn: {
-    backgroundColor: Colors.brand,
-    borderRadius: 16,
+  headerLaunchBtn: {
+    borderRadius: 12,
+    minHeight: 34,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  launchBtnText: {
-    color: Colors.textInverse,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
   },
   content: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingBottom: Space.xl,
+  },
+  sectionLabel: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    marginTop: Space.md,
+  },
+  listingListContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+    paddingBottom: Space.sm,
+  },
+  listingCard: {
+    width: 120,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  listingCardSelected: {
+    borderColor: Colors.brand,
+    borderWidth: 2,
+  },
+  listingImageContainer: {
+    width: '100%',
+    height: 140,
+    borderTopLeftRadius: Radius.md,
+    borderTopRightRadius: Radius.md,
+  },
+  listingImage: {
+    width: '100%',
+    height: '100%',
+  },
+  listingMeta: {
+    padding: 8,
+  },
+  listingTitle: {
+    marginBottom: 2,
+  },
+  listingPrice: {},
+  selectedTick: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   previewCard: {
-    height: 188,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    marginBottom: 16,
-    backgroundColor: PANEL_BG,
+    marginTop: Space.sm,
+    padding: Space.sm,
+  },
+  previewImageContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: Radius.md,
   },
   previewImage: {
     width: '100%',
     height: '100%',
   },
-  previewOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(0,0,0,0.56)',
-  },
-  previewTitle: {
-    color: '#fff',
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
   previewMeta: {
-    marginTop: 3,
-    color: PREVIEW_META_TEXT,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    marginTop: Space.sm,
   },
-  section: {
-    marginBottom: 15,
+  previewTitle: {},
+  previewPrice: {
+    marginTop: 2,
   },
-  sectionHeaderRow: {
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sectionTitle: {
-    color: Colors.textPrimary,
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 8,
-  },
-  sectionHint: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+  formCard: {
+    marginTop: Space.sm,
   },
   windowRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Space.sm,
+    marginTop: Space.xs,
   },
   windowChip: {
-    borderRadius: 14,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: PANEL_ALT_BG,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingVertical: 10,
+    minHeight: 40,
   },
   windowChipActive: {
+    backgroundColor: Colors.brand,
     borderColor: Colors.brand,
-    backgroundColor: ACTIVE_SURFACE,
   },
   windowChipText: {
     color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
   },
   windowChipTextActive: {
-    color: Colors.brand,
-  },
-  inputLabel: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-    marginBottom: 6,
+    color: Colors.textInverse,
   },
   input: {
-    height: 42,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-    backgroundColor: INPUT_BG,
-    marginBottom: 10,
+    marginTop: Space.xs,
   },
   buyNowRow: {
-    marginTop: 2,
-    marginBottom: 8,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  toggleWrap: {
-    flexDirection: 'row',
+  toggleChip: {
+    borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    borderRadius: 12,
-    overflow: 'hidden',
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  toggleBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: PANEL_ALT_BG,
-  },
-  toggleBtnActive: {
+  toggleChipActive: {
     backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
   },
   toggleText: {
     color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
   },
   toggleTextActive: {
-    color: Colors.background,
+    color: Colors.textInverse,
   },
-  listingsContent: {
-    gap: 8,
-  },
-  listingCard: {
-    width: 156,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-  },
-  listingCardSelected: {
-    borderColor: Colors.brand,
-    backgroundColor: ACTIVE_SURFACE,
-  },
-  listingImage: {
-    width: '100%',
-    height: 92,
-  },
-  listingMeta: {
-    paddingHorizontal: 9,
-    paddingVertical: 8,
-  },
-  listingTitle: {
-    color: Colors.textPrimary,
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  listingPrice: {
-    marginTop: 2,
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
-  selectedTick: {
-    position: 'absolute',
-    right: 8,
-    top: 8,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.brand,
+  launchBtn: {
+    marginHorizontal: Space.md,
+    marginTop: Space.lg,
   },
 });
-

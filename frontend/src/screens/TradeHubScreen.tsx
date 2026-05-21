@@ -1,5 +1,4 @@
 import React from 'react';
-import { AnimatedPressable } from '../components/AnimatedPressable';
 import { View, Text, StyleSheet, StatusBar, LayoutChangeEvent } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -10,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
 import AuctionsScreen from './AuctionsScreen';
 import CoOwnScreen from './SyndicateScreen';
 import { useStore } from '../store/useStore';
@@ -20,15 +18,13 @@ import { AnimatedCounter } from '../components/AnimatedCounter';
 import { AppButton } from '../components/ui/AppButton';
 import { t } from '../i18n';
 import { useToast } from '../context/ToastContext';
-import { MOCK_USERS } from '../data/mockData';
 import { CachedImage } from '../components/CachedImage';
+import { Space, Radius } from '../theme/designTokens';
+import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { MetricGrid } from '../components/trade';
 
 type TradeHubTab = 'AUCTIONS' | 'CO-OWN';
 type NavT = StackNavigationProp<RootStackParamList>;
-const BRAND = Colors.brand;
-const PANEL_TINT_BG = Colors.background;
-const PANEL_BORDER = Colors.border;
-const PANEL_BORDER_STRONG = Colors.borderLight;
 
 export default function TradeHubScreen() {
   const navigation = useNavigation<NavT>();
@@ -40,7 +36,6 @@ export default function TradeHubScreen() {
   const customCoOwns = useStore((state) => state.customCoOwns);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
 
-  // ── Animated tab slider ──
   const tabLayouts = React.useRef<{ [key: string]: { x: number; width: number } }>({});
   const indicatorX = useSharedValue(4);
   const indicatorWidth = useSharedValue(0);
@@ -70,9 +65,7 @@ export default function TradeHubScreen() {
   const latestActivity = marketLedger[0];
 
   const latestActivityText = React.useMemo(() => {
-    if (!latestActivity) {
-      return t('tradeHub.activity.empty');
-    }
+    if (!latestActivity) return t('tradeHub.activity.empty');
     if (latestActivity.channel === 'auction' && latestActivity.action === 'bid') {
       return t('tradeHub.activity.bid', {
         amount: formatFromFiat(latestActivity.amountGBP, 'GBP', { displayMode: 'fiat' }),
@@ -103,7 +96,6 @@ export default function TradeHubScreen() {
 
   const marketSnapshot = React.useMemo(() => {
     const nowTs = Date.now();
-
     const liveAuctions = customAuctions.filter((auction) => {
       const startsAtMs = new Date(auction.startsAt).getTime();
       const endsAtMs = new Date(auction.endsAt).getTime();
@@ -119,64 +111,24 @@ export default function TradeHubScreen() {
       return sum + units * unitPrice;
     }, 0);
 
-    return {
-      liveAuctions,
-      openPools,
-      holdingsValue,
-    };
+    return { liveAuctions, openPools, holdingsValue };
   }, [customAuctions, customCoOwns, coOwnRuntime]);
 
   const quickActions = React.useMemo(() => {
     if (activeTab === 'AUCTIONS') {
       return [
-        {
-          key: 'create-auction',
-          label: 'Create Auction',
-          icon: 'hammer-outline' as const,
-          onPress: () => navigation.navigate('CreateAuction'),
-        },
-        {
-          key: 'my-listings',
-          label: 'My Listings',
-          icon: 'list-outline' as const,
-          onPress: () => show('Auction listings coming soon', 'info'),
-        },
-        {
-          key: 'auction-posters',
-          label: 'Promote Drop',
-          icon: 'megaphone-outline' as const,
-          onPress: () => navigation.navigate('CreatePoster'),
-        },
+        { key: 'create-auction', label: 'Create Auction', icon: 'hammer-outline' as const, onPress: () => navigation.navigate('CreateAuction') },
+        { key: 'my-listings', label: 'My Listings', icon: 'list-outline' as const, onPress: () => show('Auction listings coming soon', 'info') },
+        { key: 'auction-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => navigation.navigate('CreatePoster') },
       ];
     }
-
     return [
-      {
-        key: 'create-coown',
-        label: 'Create Co-Own',
-        icon: 'people-outline' as const,
-        onPress: () => navigation.navigate('CreateCoOwn'),
-      },
-      {
-        key: 'my-listings',
-        label: 'My Listings',
-        icon: 'list-outline' as const,
-        onPress: () => show('Co-Own listings coming soon', 'info'),
-      },
-      {
-        key: 'coown-posters',
-        label: 'Promote Drop',
-        icon: 'megaphone-outline' as const,
-        onPress: () => navigation.navigate('CreatePoster'),
-      },
-      {
-        key: 'open-portfolio',
-        label: 'Portfolio',
-        icon: 'wallet-outline' as const,
-        onPress: () => navigation.navigate('Portfolio'),
-      },
+      { key: 'create-coown', label: 'Create Co-Own', icon: 'people-outline' as const, onPress: () => navigation.navigate('CreateCoOwn') },
+      { key: 'my-listings', label: 'My Listings', icon: 'list-outline' as const, onPress: () => show('Co-Own listings coming soon', 'info') },
+      { key: 'coown-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => navigation.navigate('CreatePoster') },
+      { key: 'open-portfolio', label: 'Portfolio', icon: 'wallet-outline' as const, onPress: () => navigation.navigate('Portfolio') },
     ];
-  }, [activeTab, navigation]);
+  }, [activeTab, navigation, show]);
 
   const marketGuidance = activeTab === 'CO-OWN'
     ? 'Co-Own settles in 1ze only, with local fiat shown as price reference.'
@@ -187,123 +139,57 @@ export default function TradeHubScreen() {
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
       <View style={styles.headerWrap}>
-        <View>
-          <View style={styles.titleRow}>
-            <View style={styles.liveDot} />
-            <Text style={styles.headerTitle}>{t('tradeHub.header.title')}</Text>
-            <Ionicons name="sparkles-outline" size={18} color={BRAND} />
-          </View>
+        <View style={styles.titleRow}>
+          <View style={styles.liveDot} />
+          <BodyEmphasis style={styles.headerTitle}>{t('tradeHub.header.title')}</BodyEmphasis>
+          <Ionicons name="sparkles-outline" size={18} color={Colors.brand} />
         </View>
 
-        <AnimatedPressable
-          style={styles.ledgerShortcutBtn}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('MarketLedger')}
-          accessibilityRole="button"
-          accessibilityLabel="Open market ledger"
-          accessibilityHint="Shows recent trading events and settlement activity"
-        >
-          <Ionicons name="pulse-outline" size={15} color={BRAND} />
-          <Text style={styles.ledgerShortcutText}>{t('tradeHub.ledger.label')}</Text>
-        </AnimatedPressable>
+        <View style={styles.ledgerShortcutBtn}>
+          <Ionicons name="pulse-outline" size={15} color={Colors.brand} />
+          <Meta style={styles.ledgerShortcutText}>{t('tradeHub.ledger.label')}</Meta>
+        </View>
       </View>
 
-      {/* Primary mode switch is kept close to top context */}
+      <MetricGrid
+        metrics={[
+          { label: 'Live Auctions', value: String(marketSnapshot.liveAuctions) },
+          { label: 'Open Pools', value: String(marketSnapshot.openPools) },
+          { label: 'Holdings', value: formatFromFiat(marketSnapshot.holdingsValue, 'GBP', { displayMode: 'fiat' }) },
+        ]}
+        columns={3}
+        style={{ marginBottom: Space.sm }}
+      />
+
       <View style={styles.tabSwitcher}>
         <Reanimated.View style={[styles.tabIndicator, indicatorStyle]} />
         {(['AUCTIONS', 'CO-OWN'] as const).map((tab) => (
-          <AnimatedPressable
-            key={tab}
-            style={styles.tabBtn}
-            onPress={() => setActiveTab(tab)}
-            activeOpacity={0.9}
-            onLayout={(e: LayoutChangeEvent) => handleTabLayout(tab, e)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeTab === tab }}
-            accessibilityLabel={tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
-            accessibilityHint="Switches the active trade hub view"
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
-            </Text>
-          </AnimatedPressable>
-        ))}
-      </View>
-
-      <View style={styles.snapshotCard}>
-        <View style={styles.snapshotMetric}>
-          <AnimatedCounter value={marketSnapshot.liveAuctions} style={styles.snapshotValue} duration={700} />
-          <Text style={styles.snapshotLabel}>{t('tradeHub.snapshot.auctions')}</Text>
-        </View>
-
-        <View style={styles.snapshotDivider} />
-
-        <View style={styles.snapshotMetric}>
-          <AnimatedCounter value={marketSnapshot.openPools} style={styles.snapshotValue} duration={700} />
-          <Text style={styles.snapshotLabel}>{t('tradeHub.snapshot.openPools')}</Text>
-        </View>
-
-        <View style={styles.snapshotDivider} />
-
-        <View style={styles.snapshotMetricWide}>
-          <Text style={styles.snapshotValueMoney} numberOfLines={1}>
-            {formatFromFiat(marketSnapshot.holdingsValue, 'GBP', { displayMode: 'fiat' })}
-          </Text>
-          <Text style={styles.snapshotLabel}>{t('tradeHub.snapshot.coOwnValue')}</Text>
-        </View>
-      </View>
-
-      <View style={styles.quickActionRow}>
-        {quickActions.map((action) => (
-          <AppButton
-            key={action.key}
-            title={action.label}
-            icon={<Ionicons name={action.icon} size={14} color={Colors.textSecondary} />}
-            variant="secondary"
-            size="sm"
-            style={styles.quickActionBtn}
-            titleStyle={styles.quickActionBtnText}
-            iconContainerStyle={styles.quickActionIconWrap}
-            onPress={action.onPress}
-            accessibilityLabel={action.label}
-          />
-        ))}
-      </View>
-
-      <View style={styles.guidanceCard}>
-        <Ionicons name={activeTab === 'CO-OWN' ? 'shield-checkmark-outline' : 'flash-outline'} size={15} color={BRAND} />
-        <Text style={styles.guidanceText}>{marketGuidance}</Text>
-      </View>
-
-      <AnimatedPressable
-        style={styles.activityCard}
-        activeOpacity={0.92}
-        onPress={() => navigation.navigate('MarketLedger')}
-        accessibilityRole="button"
-        accessibilityLabel="Open market activity"
-        accessibilityHint="Shows detailed market ledger events"
-      >
-        <View style={styles.activityTopRow}>
-          <View style={styles.activityLabelRow}>
-            <View style={styles.tapeDot} />
-            <Text style={styles.activityLabel}>{t('tradeHub.activity.label')}</Text>
-          </View>
-          <View style={styles.activityRightWrap}>
-            <AnimatedCounter
-              value={marketLedger.length}
-              style={styles.activityCount}
-              duration={600}
-              suffix={t('tradeHub.activity.eventsSuffix')}
+          <View key={tab} style={{ flex: 1 }} onLayout={(e: LayoutChangeEvent) => handleTabLayout(tab, e)}>
+            <AppButton
+              title={tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
+              style={styles.tabBtn}
+              titleStyle={styles.tabBtnText}
+              variant="secondary"
+              size="sm"
+              onPress={() => setActiveTab(tab)}
+              accessibilityLabel={`${tab} tab${activeTab === tab ? ' selected' : ''}`}
+              hapticFeedback="light"
             />
-            <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
           </View>
-        </View>
-        <Text style={styles.activityText} numberOfLines={2}>{latestActivityText}</Text>
-      </AnimatedPressable>
-
-      <View style={styles.contentWrap}>
-        {activeTab === 'AUCTIONS' ? <AuctionsScreen /> : <CoOwnScreen />}
+        ))}
       </View>
+
+      <View style={styles.guidanceWrap}>
+        <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+        <Meta style={styles.guidanceText}>{marketGuidance}</Meta>
+      </View>
+
+      <View style={styles.activityWrap}>
+        <Ionicons name="pulse-outline" size={14} color={Colors.brand} />
+        <Meta style={styles.activityText}>{latestActivityText}</Meta>
+      </View>
+
+      {activeTab === 'AUCTIONS' ? <AuctionsScreen /> : <CoOwnScreen />}
     </SafeAreaView>
   );
 }
@@ -314,318 +200,89 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   headerWrap: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
-  },
-  headerLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: Colors.success,
-  },
-  headerLabel: {
-    color: BRAND,
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 1.3,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  headerTitle: {
-    color: Colors.textPrimary,
-    fontSize: 28,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ff4444',
   },
-  headerSubtitle: {
-    marginTop: 4,
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
-  },
+  headerTitle: {},
   ledgerShortcutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_TINT_BG,
+    gap: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   ledgerShortcutText: {
-    color: BRAND,
-    fontSize: 12,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
+    color: Colors.brand,
   },
-  snapshotCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_TINT_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  snapshotMetric: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  snapshotMetricWide: {
-    flex: 1.3,
-    alignItems: 'center',
-  },
-  snapshotDivider: {
-    width: 1,
-    alignSelf: 'stretch',
-    backgroundColor: PANEL_BORDER,
-    marginHorizontal: 8,
-  },
-  snapshotValue: {
-    color: Colors.textPrimary,
-    fontSize: 20,
-    fontFamily: Typography.family.bold,
-  },
-  snapshotValueMoney: {
-    color: Colors.textPrimary,
-    fontSize: 15,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.15,
-  },
-  snapshotLabel: {
-    marginTop: 2,
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
-  },
-  quickActionRow: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  quickActionBtn: {
-    flex: 1,
-    minHeight: 36,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_TINT_BG,
-  },
-  quickActionIconWrap: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-  },
-  quickActionBtnText: {
-    color: Colors.textPrimary,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
-  },
-  guidanceCard: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_TINT_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  guidanceText: {
-    flex: 1,
-    color: Colors.textSecondary,
-    fontSize: 11,
-    lineHeight: 16,
-    fontFamily: Typography.family.medium,
-  },
-  supportRow: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  supportIdentity: {
-    flex: 1,
-    minHeight: 34,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_TINT_BG,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  supportAvatarWrap: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  supportAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  supportText: {
-    flex: 1,
-    color: Colors.textPrimary,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-  supportMessageBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_TINT_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Animated tab switcher
   tabSwitcher: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: PANEL_TINT_BG,
-    borderRadius: 26,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PANEL_BORDER,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
     padding: 4,
     flexDirection: 'row',
-    gap: 6,
     position: 'relative',
   },
   tabIndicator: {
     position: 'absolute',
     top: 4,
     bottom: 4,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     backgroundColor: Colors.brand,
-    zIndex: 0,
   },
   tabBtn: {
     flex: 1,
-    borderRadius: 22,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    zIndex: 1,
+    borderRadius: Radius.full,
+    minHeight: 34,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
   },
-  tabText: {
+  tabBtnText: {
     color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
   },
-  tabTextActive: {
-    color: Colors.background,
-  },
-
-  // Mode card
-  modeCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER_STRONG,
-    backgroundColor: PANEL_TINT_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  guidanceWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 8,
   },
-  modeCardText: {
+  guidanceText: {
     flex: 1,
-    color: BRAND,
-    fontSize: 12,
-    lineHeight: 17,
-    fontFamily: Typography.family.semibold,
   },
-
-  // Activity / market tape card
-  activityCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_TINT_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  activityTopRow: {
+  activityWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  activityLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  tapeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.brand,
-  },
-  activityRightWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  activityLabel: {
-    color: BRAND,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
-  },
-  activityCount: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontFamily: Typography.family.medium,
+    gap: 6,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
   },
   activityText: {
-    marginTop: 6,
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
-    lineHeight: 18,
-  },
-
-  contentWrap: {
     flex: 1,
+    color: Colors.textSecondary,
   },
 });

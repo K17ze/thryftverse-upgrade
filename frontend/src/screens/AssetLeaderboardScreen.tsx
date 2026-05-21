@@ -1,14 +1,5 @@
 import React from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
-  View,
-  Text,
-  StyleSheet,
-  StatusBar,
-  ScrollView,
-  Image
-} from 'react-native';
+import { View, StyleSheet, StatusBar, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -22,12 +13,13 @@ import { resolveAssetMarketState } from '../data/mockSyndicateData';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
+import { Space, Radius } from '../theme/designTokens';
+import { TradeHeader, TradeCard } from '../components/trade';
+import { CachedImage } from '../components/CachedImage';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { Meta, BodyEmphasis } from '../components/ui/Text';
 
 type NavT = StackNavigationProp<RootStackParamList>;
-const IS_LIGHT = ActiveTheme === 'light';
-const PANEL_BG = IS_LIGHT ? '#ffffff' : '#111111';
-const PANEL_BORDER = IS_LIGHT ? '#d8d1c6' : '#2a2a2a';
-const CONTROL_BG = IS_LIGHT ? '#f7f4ef' : '#121212';
 
 export default function AssetLeaderboardScreen() {
   const navigation = useNavigation<NavT>();
@@ -37,7 +29,6 @@ export default function AssetLeaderboardScreen() {
   const reducedMotionEnabled = useReducedMotion();
 
   const baseAssets = React.useMemo(() => getCoOwnMarket(customCoOwns), [customCoOwns]);
-
   const marketAssets = React.useMemo(
     () => baseAssets.map((asset) => resolveAssetMarketState(asset, coOwnRuntime[asset.id])),
     [baseAssets, coOwnRuntime]
@@ -51,10 +42,10 @@ export default function AssetLeaderboardScreen() {
   const topHolders = React.useMemo(() => [...marketAssets].sort((a, b) => b.holders - a.holders).slice(0, 5), [marketAssets]);
 
   const renderList = (title: string, icon: keyof typeof Ionicons.glyphMap, data: CoOwnAsset[], metric: (asset: CoOwnAsset) => string) => (
-    <View style={styles.sectionCard}>
+    <TradeCard style={styles.sectionCard}>
       <View style={styles.sectionHeader}>
-        <Ionicons name={icon} size={16} color="#d7b98f" />
-        <Text style={styles.sectionTitle}>{title}</Text>
+        <Ionicons name={icon} size={16} color={Colors.brand} />
+        <BodyEmphasis style={styles.sectionTitle}>{title}</BodyEmphasis>
       </View>
 
       {data.map((asset, idx) => (
@@ -72,31 +63,27 @@ export default function AssetLeaderboardScreen() {
             style={styles.row}
             activeOpacity={0.92}
             onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+            disableAnimation={false}
+            scaleValue={0.985}
           >
-            <Text style={styles.rank}>{idx + 1}</Text>
-            <Image source={{ uri: asset.image }} style={styles.thumb} />
+            <BodyEmphasis style={styles.rank}>{idx + 1}</BodyEmphasis>
+            <CachedImage uri={asset.image} style={styles.thumb} containerStyle={styles.thumbContainer} contentFit="cover" />
             <View style={styles.rowBody}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{asset.title}</Text>
-              <Text style={styles.rowSub}>{formatFromFiat(asset.unitPriceGBP, 'GBP')}</Text>
+              <BodyEmphasis style={styles.rowTitle} numberOfLines={1}>{asset.title}</BodyEmphasis>
+              <Meta style={styles.rowSub}>{formatFromFiat(asset.unitPriceGBP, 'GBP')}</Meta>
             </View>
-            <Text style={styles.metric}>{metric(asset)}</Text>
+            <BodyEmphasis style={styles.metric}>{metric(asset)}</BodyEmphasis>
           </AnimatedPressable>
         </Reanimated.View>
       ))}
-    </View>
+    </TradeCard>
   );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Asset Leaderboard</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <TradeHeader title="Asset Leaderboard" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {renderList('Top Movers', 'trending-up-outline', topMovers, (asset) => `${asset.marketMovePct24h >= 0 ? '+' : ''}${asset.marketMovePct24h.toFixed(1)}%`)}
@@ -112,41 +99,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: CONTROL_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    color: Colors.textPrimary,
-    fontSize: 17,
-    fontFamily: 'Inter_700Bold',
-  },
   content: {
-    paddingHorizontal: 16,
-    paddingBottom: 22,
-    gap: 10,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xl,
+    gap: Space.sm,
   },
   sectionCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    padding: Space.sm,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -154,11 +113,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 7,
   },
-  sectionTitle: {
-    color: Colors.textPrimary,
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
-  },
+  sectionTitle: {},
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -168,32 +123,24 @@ const styles = StyleSheet.create({
   rank: {
     width: 18,
     color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
   },
-  thumb: {
+  thumbContainer: {
     width: 34,
     height: 34,
     borderRadius: 9,
+  },
+  thumb: {
+    width: '100%',
+    height: '100%',
   },
   rowBody: {
     flex: 1,
   },
   rowTitle: {
-    color: Colors.textPrimary,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    marginBottom: 2,
   },
-  rowSub: {
-    marginTop: 2,
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
+  rowSub: {},
   metric: {
-    color: '#d7b98f',
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
+    color: Colors.brand,
   },
 });
-

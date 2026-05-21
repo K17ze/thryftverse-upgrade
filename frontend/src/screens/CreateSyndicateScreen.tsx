@@ -1,19 +1,11 @@
 import React from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
-  View,
-  Text,
-  StyleSheet,
-  StatusBar,
-  TextInput,
-  ScrollView
-} from 'react-native';
+import { View, StyleSheet, StatusBar, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { MOCK_LISTINGS, MOCK_USERS, Listing } from '../data/mockData';
@@ -24,23 +16,22 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { toFiat, toIze } from '../utils/currency';
 import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAuthoringFlows';
+import { formatIzeAmount } from '../utils/currency';
 import { getCreateCoOwnInitialState } from '../utils/syndicatePrefill';
 import { useBackendData } from '../context/BackendDataContext';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
+import { AppInput } from '../components/ui/AppInput';
+import { TradeHeader, TradeCard } from '../components/trade';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { Space, Radius } from '../theme/designTokens';
+import { Motion } from '../constants/motion';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'CreateCoOwn'>;
-
-const STABLE_COIN = '1ze';
-const IS_LIGHT = ActiveTheme === 'light';
-const BRAND = IS_LIGHT ? '#2f251b' : Colors.brand;
-const PANEL_BG = IS_LIGHT ? '#ffffff' : '#121212';
-const PANEL_SOFT_BG = IS_LIGHT ? '#f7f4ef' : '#151515';
-const PANEL_BORDER = IS_LIGHT ? '#d8d1c6' : '#2d2d2d';
-const PANEL_TINT_BG = IS_LIGHT ? '#ece4d8' : '#152520';
-const PANEL_TINT_BORDER = IS_LIGHT ? '#d0c3af' : '#2f4944';
 
 export default function CreateCoOwnScreen() {
   const navigation = useNavigation<NavT>();
@@ -49,6 +40,7 @@ export default function CreateCoOwnScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { listings } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
 
   const prefill = route.params;
 
@@ -74,25 +66,15 @@ export default function CreateCoOwnScreen() {
 
   const handleTotalUnitsChange = React.useCallback((value: string) => {
     const sanitized = sanitizeIntegerInput(value);
-    if (!sanitized) {
-      setTotalUnitsInput('');
-      return;
-    }
-
+    if (!sanitized) { setTotalUnitsInput(''); return; }
     const parsed = Math.floor(Number(sanitized));
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      setTotalUnitsInput('1');
-      return;
-    }
-
+    if (!Number.isFinite(parsed) || parsed <= 0) { setTotalUnitsInput('1'); return; }
     setTotalUnitsInput(String(Math.min(20, parsed)));
   }, []);
 
   const fromDisplayToGbp = React.useCallback(
     (amountDisplay: number) => {
-      if (currencyCode === 'GBP') {
-        return amountDisplay;
-      }
+      if (currencyCode === 'GBP') return amountDisplay;
       const amountIze = toIze(amountDisplay, currencyCode, goldRates);
       return toFiat(amountIze, 'GBP', goldRates);
     },
@@ -100,10 +82,7 @@ export default function CreateCoOwnScreen() {
   );
 
   React.useEffect(() => {
-    if (!issuerListings.length) {
-      return;
-    }
-
+    if (!issuerListings.length) return;
     if (!issuerListings.some((item) => item.id === selectedListingId)) {
       setSelectedListingId(issuerListings[0].id);
     }
@@ -139,7 +118,6 @@ export default function CreateCoOwnScreen() {
     }
 
     const now = Date.now();
-
     const newAsset: CoOwnAsset = {
       id: `s_user_${now}`,
       listingId: selectedListing.id,
@@ -169,11 +147,7 @@ export default function CreateCoOwnScreen() {
   const estimatedValue = React.useMemo(() => {
     const units = Number(totalUnitsInput);
     const unitPrice = fromDisplayToGbp(Number(unitPriceInput));
-
-    if (!Number.isFinite(units) || !Number.isFinite(unitPrice)) {
-      return 0;
-    }
-
+    if (!Number.isFinite(units) || !Number.isFinite(unitPrice)) return 0;
     return units * unitPrice;
   }, [fromDisplayToGbp, totalUnitsInput, unitPriceInput]);
 
@@ -184,32 +158,35 @@ export default function CreateCoOwnScreen() {
 
   const unitPriceStablePreview = React.useMemo(() => {
     const unitPriceGBP = fromDisplayToGbp(Number(unitPriceInput));
-    if (!Number.isFinite(unitPriceGBP) || unitPriceGBP <= 0) {
-      return 0;
-    }
-
+    if (!Number.isFinite(unitPriceGBP) || unitPriceGBP <= 0) return 0;
     return toIze(unitPriceGBP, 'GBP', goldRates);
-  }, [currencyCode, fromDisplayToGbp, goldRates, unitPriceInput]);
+  }, [fromDisplayToGbp, goldRates, unitPriceInput]);
 
   const renderListingCard = ({ item }: { item: Listing }) => {
     const selected = item.id === selectedListingId;
-
     return (
       <AnimatedPressable
         style={[styles.listingCard, selected && styles.listingCardSelected]}
         onPress={() => setSelectedListingId(item.id)}
         activeOpacity={0.9}
+        disableAnimation={false}
+        scaleValue={0.97}
       >
-        <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/listing-co-own-fallback/300/400')} style={styles.listingImage} contentFit="cover" />
+        <CachedImage
+          uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/listing-co-own-fallback/300/400')}
+          style={styles.listingImage}
+          containerStyle={styles.listingImageContainer}
+          contentFit="cover"
+        />
         <View style={styles.listingMeta}>
-          <Text style={styles.listingTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.listingPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+          <BodyEmphasis style={styles.listingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
+          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Meta>
         </View>
-        {selected ? (
+        {selected && (
           <View style={styles.selectedTick}>
-            <Ionicons name="checkmark" size={12} color={Colors.background} />
+            <Ionicons name="checkmark" size={12} color={Colors.textInverse} />
           </View>
-        ) : null}
+        )}
       </AnimatedPressable>
     );
   };
@@ -222,102 +199,115 @@ export default function CreateCoOwnScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.closeBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}
-          accessibilityLabel="Close co-own creation"
-          accessibilityRole="button"
-        >
-          <Ionicons name="close" size={20} color={Colors.textPrimary} />
-        </AnimatedPressable>
+      <TradeHeader
+        title="Issue Co-Own"
+        showClose
+        onClose={() => navigation.goBack()}
+        rightAction={
+          <AppButton
+            title="Issue"
+            onPress={issueCoOwn}
+            variant="primary"
+            size="sm"
+            style={styles.headerIssueBtn}
+            hapticFeedback="medium"
+            accessibilityLabel="Issue co-own"
+          />
+        }
+      />
 
-        <View>
-          <Text style={styles.headerLabel}>ISSUER CONSOLE</Text>
-          <Text style={styles.headerTitle}>Create Co-Own</Text>
-        </View>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+          <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
+        </Reanimated.View>
 
-        <AppButton
-          title="Issue"
-          style={styles.issueBtn}
-          titleStyle={styles.issueBtnText}
-          variant="primary"
-          size="sm"
-          onPress={issueCoOwn}
-          accessibilityLabel="Issue co-own asset"
+        <FlashList
+          data={issuerListings}
+          horizontal
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.listingListContent}
+          renderItem={renderListingCard}
+
         />
-      </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-        <View style={styles.previewCard}>
-          <CachedImage uri={previewImage} style={styles.previewImage} contentFit="cover" />
-          <View style={styles.previewOverlay}>
-            <Text style={styles.previewTitle} numberOfLines={1}>{selectedListing?.title ?? 'Select listing'}</Text>
-            <Text style={styles.previewMeta}>
-              Est. cap {formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' })} | {estimatedValueIze.toFixed(4)} {STABLE_COIN}
-            </Text>
-          </View>
-        </View>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
+          <TradeCard variant="elevated" style={styles.previewCard}>
+            <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
+            <View style={styles.previewMeta}>
+              <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
+                {selectedListing?.title ?? 'Select a listing'}
+              </BodyEmphasis>
+              <Meta style={styles.previewPrice}>
+                {selectedListing ? formatFromFiat(selectedListing.price, 'GBP', { displayMode: 'fiat' }) : '—'}
+              </Meta>
+            </View>
+          </TradeCard>
+        </Reanimated.View>
 
-        {prefill?.offeringWindowHours ? (
-          <View style={styles.prefillBanner}>
-            <Ionicons name="sparkles-outline" size={14} color={BRAND} />
-            <Text style={styles.prefillBannerText}>
-              Imported from Sell flow | {prefill.offeringWindowHours}h offer window | {prefill.authPhotos?.length ?? 0} auth photos
-            </Text>
-          </View>
-        ) : null}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+          <TradeCard style={styles.formCard}>
+            <Meta style={styles.sectionLabel}>TOTAL UNITS (MAX 20)</Meta>
+            <AppInput
+              value={totalUnitsInput}
+              onChangeText={handleTotalUnitsChange}
+              keyboardType="number-pad"
+              placeholder="1"
+              accessibilityLabel="Total units"
+              containerStyle={styles.input}
+            />
+          </TradeCard>
+        </Reanimated.View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Token Split ({STABLE_COIN} only)</Text>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
+          <TradeCard style={styles.formCard}>
+            <Meta style={styles.sectionLabel}>UNIT PRICE ({currencyCode})</Meta>
+            <AppInput
+              value={unitPriceInput}
+              onChangeText={(value) => setUnitPriceInput(sanitizeDecimalInput(value))}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              prefix={currencyCode}
+              accessibilityLabel="Unit price"
+              containerStyle={styles.input}
+            />
+          </TradeCard>
+        </Reanimated.View>
 
-          <View style={styles.referenceBanner}>
-            <Ionicons name="information-circle-outline" size={14} color={BRAND} />
-            <Text style={styles.referenceBannerText}>
-              Co-Own settles strictly in {STABLE_COIN}. Local currency is shown as reference only.
-            </Text>
-          </View>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
+          <TradeCard style={styles.formCard}>
+            <Meta style={styles.sectionLabel}>ESTIMATED VALUE</Meta>
+            <View style={styles.estimatedRow}>
+              <View>
+                <BodyEmphasis style={styles.estimatedValue}>
+                  {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
+                </BodyEmphasis>
+                <Meta style={styles.estimatedSub}>
+                  {estimatedValueIze > 0 ? `${formatIzeAmount(estimatedValueIze)} 1ze` : ''}
+                </Meta>
+              </View>
+              <View style={styles.stablePreview}>
+                <Meta style={styles.stableLabel}>1ze / unit</Meta>
+                <Body style={styles.stableValue}>
+                  {unitPriceStablePreview > 0 ? formatIzeAmount(unitPriceStablePreview) : '—'}
+                </Body>
+              </View>
+            </View>
+          </TradeCard>
+        </Reanimated.View>
 
-          <Text style={styles.inputLabel}>Total Units</Text>
-          <TextInput
-            style={styles.input}
-            value={totalUnitsInput}
-            onChangeText={handleTotalUnitsChange}
-            keyboardType="number-pad"
-            placeholder="20"
-            placeholderTextColor={Colors.textMuted}
-            selectionColor={Colors.brand}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}>
+          <AppButton
+            title="Issue Co-Own"
+            icon={<Ionicons name="flash-outline" size={16} color={Colors.background} />}
+            onPress={issueCoOwn}
+            variant="primary"
+            size="md"
+            style={styles.issueBtn}
+            hapticFeedback="medium"
+            accessibilityLabel="Issue co-own"
           />
-          <Text style={styles.inputHint}>Maximum 20 units per asset</Text>
-
-          <Text style={styles.inputLabel}>Unit Price Reference ({currencyCode})</Text>
-          <TextInput
-            style={styles.input}
-            value={unitPriceInput}
-            onChangeText={(value) => setUnitPriceInput(sanitizeDecimalInput(value))}
-            keyboardType="decimal-pad"
-            placeholder="0.00"
-            placeholderTextColor={Colors.textMuted}
-            selectionColor={Colors.brand}
-          />
-          <Text style={styles.inputHint}>
-            Settlement value: {unitPriceStablePreview.toFixed(4)} {STABLE_COIN} / unit
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Attach Listing</Text>
-            <Text style={styles.sectionHint}>{issuerListings.length} available</Text>
-          </View>
-
-          <FlashList
-            data={issuerListings}
-            horizontal
-            keyExtractor={(item) => item.id}
-            renderItem={renderListingCard}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.listingsContent}
-          />
-        </View>
+        </Reanimated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -328,242 +318,112 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: PANEL_BORDER,
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: PANEL_SOFT_BG,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-  },
-  headerLabel: {
-    color: BRAND,
-    fontSize: 10,
-    letterSpacing: 1,
-    fontFamily: 'Inter_600SemiBold',
-    textAlign: 'center',
-  },
-  headerTitle: {
-    color: Colors.textPrimary,
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    textAlign: 'center',
-  },
-  issueBtn: {
-    backgroundColor: Colors.brand,
-    borderRadius: 16,
-    minHeight: 36,
+  headerIssueBtn: {
+    borderRadius: 12,
+    minHeight: 34,
     paddingHorizontal: 12,
-    borderWidth: 0,
-  },
-  issueBtnText: {
-    color: Colors.background,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
   },
   content: {
-    flex: 1,
+    paddingBottom: Space.xl,
   },
-  contentContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 28,
+  sectionLabel: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    marginTop: Space.md,
+  },
+  listingListContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+    paddingBottom: Space.sm,
+  },
+  listingCard: {
+    width: 120,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  listingCardSelected: {
+    borderColor: Colors.brand,
+    borderWidth: 2,
+  },
+  listingImageContainer: {
+    width: '100%',
+    height: 140,
+    borderTopLeftRadius: Radius.md,
+    borderTopRightRadius: Radius.md,
+  },
+  listingImage: {
+    width: '100%',
+    height: '100%',
+  },
+  listingMeta: {
+    padding: 8,
+  },
+  listingTitle: {
+    marginBottom: 2,
+  },
+  listingPrice: {},
+  selectedTick: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   previewCard: {
-    height: 188,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    marginBottom: 16,
-    backgroundColor: PANEL_BG,
+    marginTop: Space.sm,
+    padding: Space.sm,
+  },
+  previewImageContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: Radius.md,
   },
   previewImage: {
     width: '100%',
     height: '100%',
   },
-  previewOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(0,0,0,0.56)',
-  },
-  previewTitle: {
-    color: '#fff',
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
   previewMeta: {
-    marginTop: 3,
-    color: BRAND,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    marginTop: Space.sm,
   },
-  prefillBanner: {
-    marginBottom: 12,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: PANEL_TINT_BORDER,
-    backgroundColor: PANEL_TINT_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  previewTitle: {},
+  previewPrice: {
+    marginTop: 2,
   },
-  prefillBannerText: {
-    flex: 1,
-    color: BRAND,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  referenceBanner: {
-    marginBottom: 10,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: PANEL_TINT_BORDER,
-    backgroundColor: PANEL_TINT_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  referenceBannerText: {
-    flex: 1,
-    color: BRAND,
-    fontSize: 11,
-    lineHeight: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  section: {
-    marginBottom: 15,
-  },
-  sectionHeaderRow: {
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sectionTitle: {
-    color: Colors.textPrimary,
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 8,
-  },
-  sectionHint: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
-  rowWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 10,
-  },
-  chipBtn: {
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_SOFT_BG,
-    minHeight: 32,
-    paddingHorizontal: 10,
-  },
-  chipBtnActive: {
-    borderColor: BRAND,
-    backgroundColor: PANEL_TINT_BG,
-  },
-  chipBtnText: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-  },
-  chipBtnTextActive: {
-    color: BRAND,
-  },
-  inputLabel: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-    marginBottom: 6,
-  },
-  inputHint: {
-    marginTop: -4,
-    marginBottom: 10,
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+  formCard: {
+    marginTop: Space.sm,
   },
   input: {
-    height: 42,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-    backgroundColor: PANEL_BG,
-    marginBottom: 10,
+    marginTop: Space.xs,
   },
-  listingsContent: {
-    gap: 8,
-  },
-  listingCard: {
-    width: 156,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-  },
-  listingCardSelected: {
-    borderColor: BRAND,
-    backgroundColor: PANEL_TINT_BG,
-  },
-  listingImage: {
-    width: '100%',
-    height: 92,
-  },
-  listingMeta: {
-    paddingHorizontal: 9,
-    paddingVertical: 8,
-  },
-  listingTitle: {
-    color: Colors.textPrimary,
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  listingPrice: {
-    marginTop: 2,
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
-  selectedTick: {
-    position: 'absolute',
-    right: 8,
-    top: 8,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+  estimatedRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.brand,
+    marginTop: Space.xs,
+  },
+  estimatedValue: {
+    color: Colors.brand,
+  },
+  estimatedSub: {
+    marginTop: 2,
+  },
+  stablePreview: {
+    alignItems: 'flex-end',
+  },
+  stableLabel: {},
+  stableValue: {
+    color: Colors.textPrimary,
+    marginTop: 2,
+  },
+  issueBtn: {
+    marginHorizontal: Space.md,
+    marginTop: Space.lg,
   },
 });

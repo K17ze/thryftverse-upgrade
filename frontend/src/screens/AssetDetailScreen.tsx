@@ -1,18 +1,10 @@
 import React from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Image,
-  StatusBar
-} from 'react-native';
+import { View, StyleSheet, ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { getCoOwnMarket, getUserLabel } from '../data/tradeHub';
@@ -23,31 +15,32 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
 import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
+import { AppCard } from '../components/ui/AppCard';
+import { CachedImage } from '../components/CachedImage';
+import { TradeHeader, TradeCard } from '../components/trade';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { Space, Radius } from '../theme/designTokens';
+import { Motion } from '../constants/motion';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = StackNavigationProp<RootStackParamList>;
 
 const RANGE_OPTIONS: ChartRange[] = ['1H', '1D', '1W', '1M', 'ALL'];
-const RANGE_SEGMENT_OPTIONS: Array<{ value: ChartRange; label: string; accessibilityLabel: string }> = RANGE_OPTIONS.map((option) => ({
-  value: option,
-  label: option,
-  accessibilityLabel: `Set chart range to ${option}`,
-}));
-const IS_LIGHT = ActiveTheme === 'light';
-const BRAND = IS_LIGHT ? '#2f251b' : '#d7b98f';
-const PANEL_BG = IS_LIGHT ? '#ffffff' : '#121212';
-const PANEL_SOFT_BG = IS_LIGHT ? '#f7f4ef' : '#161616';
-const PANEL_BORDER = IS_LIGHT ? '#d8d1c6' : '#2a2a2a';
-const PANEL_TINT_BG = IS_LIGHT ? '#ece4d8' : '#17302b';
-const PANEL_TINT_BORDER = IS_LIGHT ? '#d0c3af' : '#35574d';
-const CHART_BG = IS_LIGHT ? '#f1ede6' : '#10171d';
-const CHART_BORDER = IS_LIGHT ? '#d6cec1' : '#26343f';
-const FOOTER_BG = IS_LIGHT ? 'rgba(236,234,230,0.97)' : 'rgba(10,10,10,0.95)';
+const RANGE_SEGMENT_OPTIONS: Array<{ value: ChartRange; label: string; accessibilityLabel: string }> =
+  RANGE_OPTIONS.map((option) => ({
+    value: option,
+    label: option,
+    accessibilityLabel: `Set chart range to ${option}`,
+  }));
 
 export default function AssetDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const insets = useSafeAreaInsets();
+  const reducedMotionEnabled = useReducedMotion();
+
   const customCoOwns = useStore((state) => state.customCoOwns);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const currentUser = useStore((state) => state.currentUser);
@@ -63,39 +56,18 @@ export default function AssetDetailScreen() {
 
   const asset = marketAssets.find((item) => item.id === route.params.assetId);
 
-  const series = React.useMemo(() => {
-    if (!asset) {
-      return [];
-    }
-
-    return getPriceSeries(asset.id, range);
-  }, [asset, range]);
-
-  const orderBook = React.useMemo(() => {
-    if (!asset) {
-      return [];
-    }
-
-    return getOrderBookSnapshot(asset.id);
-  }, [asset]);
+  const series = React.useMemo(() => (asset ? getPriceSeries(asset.id, range) : []), [asset, range]);
+  const orderBook = React.useMemo(() => (asset ? getOrderBookSnapshot(asset.id) : []), [asset]);
 
   const chartPoints = React.useMemo(() => {
-    if (series.length === 0) {
-      return [];
-    }
-
+    if (series.length === 0) return [];
     const sampleSize = 28;
     const step = Math.max(1, Math.floor(series.length / sampleSize));
     const closes = series.filter((_, idx) => idx % step === 0).map((point) => point.close);
-
     const min = Math.min(...closes);
     const max = Math.max(...closes);
     const spread = max - min || 1;
-
-    return closes.map((close) => ({
-      value: close,
-      level: (close - min) / spread,
-    }));
+    return closes.map((close) => ({ value: close, level: (close - min) / spread }));
   }, [series]);
 
   const currentPoint = series[series.length - 1];
@@ -107,11 +79,7 @@ export default function AssetDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={styles.fallbackHeader}>
-          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
+        <TradeHeader title="Asset Detail" onBack={() => navigation.goBack()} />
         <EmptyState
           icon="analytics-outline"
           title="Asset not found"
@@ -127,6 +95,7 @@ export default function AssetDetailScreen() {
   const asks = orderBook.filter((entry) => entry.side === 'ask').sort((a, b) => a.price - b.price);
   const marketValue = asset.totalUnits * asset.unitPriceGBP;
   const circulatingValue = Math.max(0, asset.totalUnits - asset.availableUnits) * asset.unitPriceGBP;
+
   const issuerUser = MOCK_USERS.find((user) => user.id === asset.issuerId);
   const issuerHandle = issuerUser?.username ?? getUserLabel(asset.issuerId).replace(/^@/, 'seller');
   const canMessageIssuer = currentUser?.id !== asset.issuerId;
@@ -138,7 +107,6 @@ export default function AssetDetailScreen() {
     role: 'Issuer treasury',
     units: Math.max(0, asset.availableUnits),
   });
-
   if (asset.yourUnits > 0) {
     ownerAccounts.push({
       id: 'you',
@@ -147,7 +115,6 @@ export default function AssetDetailScreen() {
       units: asset.yourUnits,
     });
   }
-
   const allocatedUnits = ownerAccounts.reduce((sum, account) => sum + account.units, 0);
   let remainingUnits = Math.max(0, asset.totalUnits - allocatedUnits);
   const syntheticOwners = Math.max(0, Math.min(3, asset.holders - (asset.yourUnits > 0 ? 1 : 0)));
@@ -157,14 +124,8 @@ export default function AssetDetailScreen() {
 
   for (let index = 0; index < syntheticOwners; index += 1) {
     const slotsLeft = syntheticOwners - index;
-    const units = slotsLeft === 1
-      ? remainingUnits
-      : Math.max(1, Math.floor(remainingUnits / slotsLeft));
-
-    if (units <= 0) {
-      break;
-    }
-
+    const units = slotsLeft === 1 ? remainingUnits : Math.max(1, Math.floor(remainingUnits / slotsLeft));
+    if (units <= 0) break;
     remainingUnits = Math.max(0, remainingUnits - units);
     ownerAccounts.push({
       id: `owner_${index + 1}`,
@@ -178,198 +139,187 @@ export default function AssetDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Asset Detail</Text>
-        <AnimatedPressable style={styles.iconBtn} onPress={() => navigation.navigate('CoOwnOrderHistory')}>
-          <Ionicons name="time-outline" size={20} color={Colors.textPrimary} />
-        </AnimatedPressable>
-      </View>
+      <TradeHeader
+        title="Asset Detail"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          <AnimatedPressable
+            style={styles.iconBtn}
+            onPress={() => navigation.navigate('CoOwnOrderHistory')}
+            accessibilityRole="button"
+            accessibilityLabel="View order history"
+          >
+            <Ionicons name="time-outline" size={20} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Image source={{ uri: asset.image }} style={styles.heroImage} />
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+          <CachedImage uri={asset.image} style={styles.heroImage} containerStyle={styles.heroImageContainer} contentFit="cover" />
+        </Reanimated.View>
 
-        <Text style={styles.assetTitle}>{asset.title}</Text>
-        <Text style={styles.assetSub}>Asset ID {asset.id.toUpperCase()} | Issuer {asset.issuerId}</Text>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(50)}>
+          <BodyEmphasis style={styles.assetTitle}>{asset.title}</BodyEmphasis>
+          <Meta style={styles.assetSub}>Asset ID {asset.id.toUpperCase()} | Issuer {asset.issuerId}</Meta>
+        </Reanimated.View>
 
-        <View style={styles.issuerActionRow}>
-          <AnimatedPressable
-            style={styles.issuerIdentityChip}
-            onPress={() => navigation.navigate('UserProfile', { userId: asset.issuerId })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Open @${issuerHandle} profile`}
-            accessibilityHint="Shows issuer profile details"
-          >
-            {issuerUser?.avatar ? (
-              <Image source={{ uri: issuerUser.avatar }} style={styles.issuerAvatar} />
-            ) : (
-              <View style={styles.issuerAvatarFallback}>
-                <Ionicons name="person" size={11} color={Colors.textMuted} />
-              </View>
-            )}
-            <Text style={styles.issuerHandle} numberOfLines={1}>Issuer @{issuerHandle}</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={[styles.issuerMessageBtn, !canMessageIssuer && styles.issuerMessageBtnDisabled]}
-            onPress={() => {
-              if (!canMessageIssuer) {
-                return;
-              }
-
-              navigation.navigate('Chat', {
-                conversationId: `${asset.issuerId}_${asset.listingId}`,
-                focusQuery: issuerHandle,
-                partnerUserId: asset.issuerId,
-              });
-            }}
-            disabled={!canMessageIssuer}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={canMessageIssuer ? `Message @${issuerHandle}` : 'Issuer is you'}
-            accessibilityHint={canMessageIssuer ? 'Opens chat with issuer' : 'Messaging yourself is disabled'}
-          >
-            <Ionicons name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'} size={12} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
-
-        <View style={styles.priceRow}>
-          <Text style={styles.pricePrimary}>{formatFromFiat(asset.unitPriceGBP, 'GBP')}</Text>
-          <Text style={[styles.deltaText, delta >= 0 ? styles.deltaUp : styles.deltaDown]}>
-            {delta >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%
-          </Text>
-        </View>
-
-        <AppSegmentControl
-          style={styles.rangeRow}
-          options={RANGE_SEGMENT_OPTIONS}
-          value={range}
-          onChange={setRange}
-          optionStyle={styles.rangeChip}
-          optionActiveStyle={styles.rangeChipActive}
-          optionTextStyle={styles.rangeChipText}
-          optionTextActiveStyle={styles.rangeChipTextActive}
-        />
-
-        <View style={styles.chartCard}>
-          <View style={styles.chartBarsRow}>
-            {chartPoints.map((point, index) => (
-              <View
-                key={`${point.value}_${index}`}
-                style={[
-                  styles.chartBar,
-                  {
-                    height: 24 + point.level * 68,
-                    backgroundColor: delta >= 0 ? BRAND : Colors.danger,
-                    opacity: 0.32 + point.level * 0.68,
-                  },
-                ]}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
+          <View style={styles.issuerActionRow}>
+            <AnimatedPressable
+              style={styles.issuerChip}
+              onPress={() => navigation.navigate('UserProfile', { userId: asset.issuerId })}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Open @${issuerHandle} profile`}
+            >
+              <CachedImage
+                uri={issuerUser?.avatar ?? 'https://picsum.photos/seed/co-own-issuer-fallback/80/80'}
+                style={styles.issuerAvatar}
+                containerStyle={styles.issuerAvatarContainer}
               />
-            ))}
-          </View>
-          <View style={styles.chartFooter}>
-            <Text style={styles.chartFooterText}>Open {formatFromFiat(series[0]?.open ?? asset.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}</Text>
-            <Text style={styles.chartFooterText}>High {formatFromFiat(currentPoint?.high ?? asset.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}</Text>
-            <Text style={styles.chartFooterText}>Low {formatFromFiat(currentPoint?.low ?? asset.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}</Text>
-          </View>
-        </View>
+              <BodyEmphasis style={styles.issuerHandle}>@{issuerHandle}</BodyEmphasis>
+              <Meta style={styles.issuerRole}>Issuer</Meta>
+            </AnimatedPressable>
 
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Market Value</Text>
-            <Text style={styles.statValue}>{formatFromFiat(marketValue, 'GBP', { displayMode: 'fiat' })}</Text>
+            <AnimatedPressable
+              style={[styles.messageBtn, !canMessageIssuer && styles.messageBtnDisabled]}
+              onPress={() => {
+                if (!canMessageIssuer) return;
+                navigation.navigate('Chat', {
+                  conversationId: `${asset.issuerId}_${asset.listingId}`,
+                  focusQuery: issuerHandle,
+                  partnerUserId: asset.issuerId,
+                });
+              }}
+              disabled={!canMessageIssuer}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+            >
+              <Ionicons name={canMessageIssuer ? 'chatbubble-outline' : 'checkmark'} size={16} color={Colors.textPrimary} />
+            </AnimatedPressable>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Circulating Value</Text>
-            <Text style={styles.statValue}>{formatFromFiat(circulatingValue, 'GBP', { displayMode: 'fiat' })}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Holders</Text>
-            <Text style={styles.statValue}>{asset.holders}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Available Shares</Text>
-            <Text style={styles.statValue}>{asset.availableUnits}</Text>
-          </View>
-        </View>
+        </Reanimated.View>
 
-        <View style={styles.orderBookCard}>
-          <Text style={styles.orderBookTitle}>Order Book</Text>
-          <View style={styles.orderHeaderRow}>
-            <Text style={styles.orderHead}>Bid</Text>
-            <Text style={styles.orderHead}>Qty</Text>
-            <Text style={styles.orderHead}>Ask</Text>
-            <Text style={styles.orderHead}>Qty</Text>
-          </View>
-          {Array.from({ length: Math.max(bids.length, asks.length) }).map((_, idx) => {
-            const bid = bids[idx];
-            const ask = asks[idx];
-            return (
-              <View style={styles.orderRow} key={`row_${idx}`}>
-                <Text style={[styles.orderCell, styles.orderBid]}>{bid ? formatFromFiat(bid.price, 'GBP', { displayMode: 'fiat' }) : '-'}</Text>
-                <Text style={styles.orderCell}>{bid ? bid.quantity : '-'}</Text>
-                <Text style={[styles.orderCell, styles.orderAsk]}>{ask ? formatFromFiat(ask.price, 'GBP', { displayMode: 'fiat' }) : '-'}</Text>
-                <Text style={styles.orderCell}>{ask ? ask.quantity : '-'}</Text>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+          <TradeCard>
+            <View style={styles.priceRow}>
+              <View>
+                <Meta>Current Price</Meta>
+                <BodyEmphasis style={styles.priceValue}>{formatFromFiat(asset.unitPriceGBP, 'GBP')}</BodyEmphasis>
               </View>
-            );
-          })}
-        </View>
+              <View style={[styles.deltaPill, delta >= 0 ? styles.deltaUp : styles.deltaDown]}>
+                <Ionicons name={delta >= 0 ? 'trending-up-outline' : 'trending-down-outline'} size={14} color={delta >= 0 ? Colors.success : Colors.danger} />
+                <Body style={[styles.deltaText, { color: delta >= 0 ? Colors.success : Colors.danger }]}>
+                  {delta >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%
+                </Body>
+              </View>
+            </View>
+          </TradeCard>
+        </Reanimated.View>
 
-        <View style={styles.ownersCard}>
-          <Text style={styles.ownersTitle}>Owner Accounts</Text>
-          {ownerAccounts
-            .filter((account) => account.units > 0)
-            .slice(0, 5)
-            .map((account) => (
-              <View key={account.id} style={styles.ownerRow}>
-                <View>
-                  <Text style={styles.ownerHandle}>{account.handle}</Text>
-                  <Text style={styles.ownerRole}>{account.role}</Text>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
+          <TradeCard>
+            <Meta style={styles.sectionLabel}>PRICE CHART</Meta>
+            <AppSegmentControl
+              options={RANGE_SEGMENT_OPTIONS}
+              value={range}
+              onChange={setRange}
+              style={styles.rangeControl}
+            />
+            <View style={styles.chartContainer}>
+              {chartPoints.length === 0 ? (
+                <Meta style={styles.chartEmpty}>No price data available.</Meta>
+              ) : (
+                <View style={styles.chartBarRow}>
+                  {chartPoints.map((point, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.chartBar,
+                        {
+                          height: `${Math.max(10, point.level * 100)}%`,
+                          backgroundColor: point.value >= (chartPoints[0]?.value ?? 0) ? Colors.success : Colors.danger,
+                        },
+                      ]}
+                    />
+                  ))}
                 </View>
-                <Text style={styles.ownerUnits}>{account.units} units</Text>
+              )}
+            </View>
+          </TradeCard>
+        </Reanimated.View>
+
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
+          <TradeCard>
+            <Meta style={styles.sectionLabel}>ORDER BOOK</Meta>
+            <View style={styles.orderBookGrid}>
+              <View style={styles.orderBookCol}>
+                <Meta style={styles.orderBookHeader}>BIDS</Meta>
+                {bids.slice(0, 5).map((entry, i) => (
+                  <View key={`bid-${i}`} style={styles.orderBookRow}>
+                    <Body style={styles.orderBookPrice}>{formatFromFiat(entry.price, 'GBP')}</Body>
+                    <Meta>{entry.quantity}u</Meta>
+                  </View>
+                ))}
+                {bids.length === 0 && <Meta style={styles.orderBookEmpty}>No bids</Meta>}
+              </View>
+              <View style={styles.orderBookCol}>
+                <Meta style={styles.orderBookHeader}>ASKS</Meta>
+                {asks.slice(0, 5).map((entry, i) => (
+                  <View key={`ask-${i}`} style={styles.orderBookRow}>
+                    <Body style={styles.orderBookPrice}>{formatFromFiat(entry.price, 'GBP')}</Body>
+                    <Meta>{entry.quantity}u</Meta>
+                  </View>
+                ))}
+                {asks.length === 0 && <Meta style={styles.orderBookEmpty}>No asks</Meta>}
+              </View>
+            </View>
+          </TradeCard>
+        </Reanimated.View>
+
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}>
+          <TradeCard>
+            <Meta style={styles.sectionLabel}>OWNERSHIP BREAKDOWN</Meta>
+            {ownerAccounts.map((account) => (
+              <View key={account.id} style={styles.ownerRow}>
+                <View style={styles.ownerInfo}>
+                  <BodyEmphasis style={styles.ownerHandle} numberOfLines={1}>{account.handle}</BodyEmphasis>
+                  <Meta style={styles.ownerRole}>{account.role}</Meta>
+                </View>
+                <BodyEmphasis style={styles.ownerUnits}>{account.units}u</BodyEmphasis>
               </View>
             ))}
-        </View>
+            <View style={[styles.ownerRow, styles.totalRow]}>
+              <BodyEmphasis>Total</BodyEmphasis>
+              <BodyEmphasis>{asset.totalUnits}u</BodyEmphasis>
+            </View>
+          </TradeCard>
+        </Reanimated.View>
 
-        <View style={{ height: 120 }} />
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(350)}>
+          <View style={styles.actionRow}>
+            <AppButton
+              title="Trade"
+              icon={<Ionicons name="swap-horizontal-outline" size={16} color={Colors.background} />}
+              onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' })}
+              variant="primary"
+              size="md"
+              style={styles.actionBtn}
+              hapticFeedback="medium"
+            />
+            <AppButton
+              title="Buyout"
+              icon={<Ionicons name="diamond-outline" size={16} color={Colors.brand} />}
+              onPress={() => navigation.navigate('Buyout', { assetId: asset.id })}
+              variant="secondary"
+              size="md"
+              style={styles.actionBtn}
+              hapticFeedback="medium"
+            />
+          </View>
+        </Reanimated.View>
       </ScrollView>
-
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-        <AppButton
-          style={[styles.ctaBtn, styles.ctaBuy]}
-          variant="gold"
-          size="sm"
-          align="center"
-          title="Buy"
-          onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' })}
-          accessibilityLabel={`Buy shares of ${asset.title}`}
-          accessibilityHint="Opens the trade ticket with buy selected."
-        />
-        <AppButton
-          style={[styles.ctaBtn, styles.ctaSell]}
-          variant="secondary"
-          size="sm"
-          align="center"
-          title="Sell"
-          onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'sell' })}
-          accessibilityLabel={`Sell shares of ${asset.title}`}
-          accessibilityHint="Opens the trade ticket with sell selected."
-        />
-        <AppButton
-          style={[styles.ctaBtn, styles.ctaBuyout]}
-          variant="secondary"
-          size="sm"
-          align="center"
-          title="Buyout"
-          icon={<Ionicons name="diamond-outline" size={15} color={Colors.textPrimary} />}
-          onPress={() => navigation.navigate('Buyout', { assetId: asset.id })}
-          accessibilityLabel={`Start buyout flow for ${asset.title}`}
-          accessibilityHint="Opens buyout request and terms for this asset."
-        />
-      </View>
     </SafeAreaView>
   );
 }
@@ -379,324 +329,195 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  fallbackHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: PANEL_SOFT_BG,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: PANEL_SOFT_BG,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerTitle: {
-    color: Colors.textPrimary,
-    fontSize: 17,
-    fontFamily: 'Inter_700Bold',
   },
   content: {
-    paddingHorizontal: 16,
-    paddingBottom: 28,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xl,
+  },
+  heroImageContainer: {
+    width: '100%',
+    height: 240,
+    borderRadius: Radius.lg,
+    marginBottom: Space.md,
   },
   heroImage: {
     width: '100%',
-    height: 250,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
+    height: '100%',
   },
   assetTitle: {
-    marginTop: 12,
-    color: Colors.textPrimary,
-    fontSize: 24,
-    fontFamily: 'Inter_700Bold',
+    marginBottom: 4,
   },
   assetSub: {
-    marginTop: 4,
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    marginBottom: Space.md,
   },
   issuerActionRow: {
-    marginTop: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    marginBottom: Space.md,
+    gap: Space.sm,
   },
-  issuerIdentityChip: {
+  issuerChip: {
     flex: 1,
-    minHeight: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_SOFT_BG,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    paddingHorizontal: 10,
+    gap: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+  },
+  issuerAvatarContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   issuerAvatar: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  issuerAvatarFallback: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: PANEL_BG,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   issuerHandle: {
     flex: 1,
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
   },
-  issuerMessageBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  issuerRole: {
+    marginLeft: 'auto',
+  },
+  messageBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_SOFT_BG,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  issuerMessageBtnDisabled: {
-    opacity: 0.55,
+  messageBtnDisabled: {
+    opacity: 0.4,
   },
   priceRow: {
-    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  priceValue: {
+    marginTop: 4,
+    color: Colors.brand,
+  },
+  deltaPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pricePrimary: {
-    color: Colors.textPrimary,
-    fontSize: 30,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: -0.8,
-  },
-  deltaText: {
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
+    gap: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   deltaUp: {
-    color: BRAND,
+    backgroundColor: Colors.success + '12',
+    borderColor: Colors.success + '30',
   },
   deltaDown: {
-    color: Colors.danger,
+    backgroundColor: Colors.danger + '12',
+    borderColor: Colors.danger + '30',
   },
-  rangeRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    gap: 8,
+  deltaText: {
+    fontSize: 12,
   },
-  rangeChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  sectionLabel: {
+    marginBottom: Space.sm,
   },
-  rangeChipActive: {
-    borderColor: PANEL_TINT_BORDER,
-    backgroundColor: PANEL_TINT_BG,
+  rangeControl: {
+    marginBottom: Space.sm,
   },
-  rangeChipText: {
-    color: Colors.textSecondary,
-    fontSize: 10,
-    fontFamily: 'Inter_700Bold',
+  chartContainer: {
+    height: 120,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space.sm,
   },
-  rangeChipTextActive: {
-    color: BRAND,
+  chartEmpty: {
+    color: Colors.textMuted,
   },
-  chartCard: {
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: CHART_BORDER,
-    backgroundColor: CHART_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-  },
-  chartBarsRow: {
-    height: 100,
+  chartBarRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: 4,
+    width: '100%',
+    height: '80%',
+    gap: 2,
   },
   chartBar: {
     flex: 1,
-    borderRadius: 4,
+    borderRadius: 2,
+    minWidth: 4,
   },
-  chartFooter: {
-    marginTop: 9,
+  orderBookGrid: {
+    flexDirection: 'row',
+    gap: Space.md,
+  },
+  orderBookCol: {
+    flex: 1,
+  },
+  orderBookHeader: {
+    marginBottom: Space.sm,
+    textAlign: 'center',
+  },
+  orderBookRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingVertical: 4,
   },
-  chartFooterText: {
+  orderBookPrice: {
+    fontVariant: ['tabular-nums'],
+  },
+  orderBookEmpty: {
+    textAlign: 'center',
     color: Colors.textMuted,
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  statsGrid: {
-    marginTop: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  statCard: {
-    width: '48.8%',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  statLabel: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  statValue: {
-    marginTop: 4,
-    color: Colors.textPrimary,
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
-  orderBookCard: {
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  orderBookTitle: {
-    color: Colors.textPrimary,
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 10,
-  },
-  orderHeaderRow: {
-    flexDirection: 'row',
-  },
-  orderHead: {
-    flex: 1,
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
-    textTransform: 'uppercase',
-  },
-  orderRow: {
-    flexDirection: 'row',
-    paddingTop: 7,
-  },
-  orderCell: {
-    flex: 1,
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  orderBid: {
-    color: BRAND,
-  },
-  orderAsk: {
-    color: Colors.danger,
-  },
-  ownersCard: {
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  ownersTitle: {
-    color: Colors.textPrimary,
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 8,
+    marginTop: Space.sm,
   },
   ownerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 7,
-    borderTopWidth: 1,
-    borderTopColor: PANEL_BORDER,
+    alignItems: 'center',
+    paddingVertical: 6,
   },
-  ownerHandle: {
-    color: Colors.textPrimary,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-  },
-  ownerRole: {
-    marginTop: 2,
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontFamily: 'Inter_500Medium',
-  },
-  ownerUnits: {
-    color: BRAND,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderTopColor: PANEL_BORDER,
-    backgroundColor: FOOTER_BG,
-  },
-  ctaBtn: {
+  ownerInfo: {
     flex: 1,
   },
-  ctaBuy: {
-    backgroundColor: 'transparent',
+  ownerHandle: {
+    marginBottom: 2,
   },
-  ctaSell: {
-    backgroundColor: 'transparent',
+  ownerRole: {},
+  ownerUnits: {
+    fontVariant: ['tabular-nums'],
   },
-  ctaBuyout: {
-    backgroundColor: 'transparent',
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    marginTop: Space.xs,
+    paddingTop: Space.sm,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.md,
+  },
+  actionBtn: {
+    flex: 1,
   },
 });
-

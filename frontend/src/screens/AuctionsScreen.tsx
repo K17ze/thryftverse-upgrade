@@ -1,20 +1,10 @@
 import React from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
-  View,
-  Text,
-  StyleSheet,
-  RefreshControl,
-  Modal,
-  TextInput
-} from 'react-native';
+import { View, StyleSheet, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { CachedImage } from '../components/CachedImage';
-import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import {
@@ -37,7 +27,6 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { parseApiError } from '../lib/apiClient';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import { AppStatusPill } from '../components/ui/AppStatusPill';
 import {
   convertDisplayToGbpAmount,
   getSuggestedBidDisplayAmount,
@@ -45,17 +34,20 @@ import {
 } from '../utils/currencyAuthoringFlows';
 import { listAuctions, placeAuctionBid as placeAuctionBidRemote } from '../services/marketApi';
 import { t } from '../i18n';
+import { Motion } from '../constants/motion';
+import { Space, Radius } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import {
+  MetricGrid,
+  AuctionCard,
+  BidComposer,
+} from '../components/trade';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { CachedImage } from '../components/CachedImage';
+import { SharedTransitionView } from '../components/SharedTransitionView';
+import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
 
 type NavT = StackNavigationProp<RootStackParamList>;
-const IS_LIGHT = ActiveTheme === 'light';
-const BRAND = IS_LIGHT ? '#2f251b' : '#d7b98f';
-const PANEL_BG = IS_LIGHT ? '#ffffff' : '#111111';
-const PANEL_SOFT_BG = IS_LIGHT ? '#f7f4ef' : '#161616';
-const PANEL_MUTED_BG = IS_LIGHT ? '#f1ede6' : '#151515';
-const PANEL_BORDER = IS_LIGHT ? '#d8d1c6' : '#2f2f2f';
-const PANEL_BORDER_STRONG = IS_LIGHT ? '#cec5b8' : '#3a342b';
-const PANEL_TINT_BG = IS_LIGHT ? '#ece4d8' : '#1b1712';
-const PANEL_TINT_BORDER = IS_LIGHT ? '#d0c3af' : '#4f4638';
 
 export default function AuctionsScreen() {
   const navigation = useNavigation<NavT>();
@@ -67,6 +59,7 @@ export default function AuctionsScreen() {
   const customAuctions = useStore((state) => state.customAuctions);
   const auctionRuntime = useStore((state) => state.auctionRuntime);
   const settleExpiredAuctions = useStore((state) => state.settleExpiredAuctions);
+  const reducedMotionEnabled = useReducedMotion();
 
   const actingUserId = currentUser?.id ?? 'u1';
 
@@ -81,6 +74,7 @@ export default function AuctionsScreen() {
   const [isSubmittingBid, setIsSubmittingBid] = React.useState(false);
   const [buyNowAuctionId, setBuyNowAuctionId] = React.useState<string | null>(null);
   const [watchedAuctionIds, setWatchedAuctionIds] = React.useState<Set<string>>(() => new Set());
+  const [searchQuery, setSearchQuery] = React.useState('');
 
   const syncAuctions = React.useCallback(async () => {
     setIsSyncingAuctions(true);
@@ -103,7 +97,6 @@ export default function AuctionsScreen() {
       setSyncError(null);
     } catch (error) {
       setSyncError((error as Error).message || t('auctions.sync.unable'));
-      // Keep local market state when backend sync is unavailable.
     } finally {
       setIsSyncingAuctions(false);
     }
@@ -127,62 +120,42 @@ export default function AuctionsScreen() {
 
   const baseAuctions = React.useMemo(() => {
     const merged = new Map<string, AuctionMarketItem>();
-
     for (const item of remoteAuctions) {
       merged.set(item.id, item);
     }
-
     for (const item of customAuctions) {
-      if (item.sellerId !== actingUserId) {
-        continue;
-      }
+      if (item.sellerId !== actingUserId) continue;
       merged.set(item.id, item);
     }
-
     return [...merged.values()];
   }, [actingUserId, customAuctions, remoteAuctions]);
 
   const marketAuctions = React.useMemo(() => getAuctionMarket(nowTs, baseAuctions), [baseAuctions, nowTs]);
 
-  const auctions = React.useMemo(
-    () =>
-      marketAuctions.map((item) => {
-        const runtime = auctionRuntime[item.id];
-        if (!runtime) {
-          return item;
-        }
-
-        const isClosed = !!runtime.closedAtMs;
-        return {
-          ...item,
-          lifecycle: isClosed ? 'ended' : item.lifecycle,
-          msToEnd: isClosed ? 0 : item.msToEnd,
-          progress: isClosed ? 1 : item.progress,
-          currentBid: runtime.currentBid,
-          bidCount: runtime.bidCount,
-        };
-      }),
-    [auctionRuntime, marketAuctions]
-  );
+  const auctions = React.useMemo(() => {
+    return marketAuctions.map((item) => {
+      const runtime = auctionRuntime[item.id];
+      if (!runtime) return item;
+      const isClosed = !!runtime.closedAtMs;
+      return {
+        ...item,
+        lifecycle: isClosed ? 'ended' : item.lifecycle,
+        msToEnd: isClosed ? 0 : item.msToEnd,
+        progress: isClosed ? 1 : item.progress,
+        currentBid: runtime.currentBid,
+        bidCount: runtime.bidCount,
+      };
+    });
+  }, [auctionRuntime, marketAuctions]);
 
   React.useEffect(() => {
     settleExpiredAuctions(auctions);
   }, [auctions, settleExpiredAuctions]);
 
-  const liveAuctions = React.useMemo(
-    () => auctions.filter((item) => item.lifecycle === 'live'),
-    [auctions]
-  );
+  const liveAuctions = React.useMemo(() => auctions.filter((item) => item.lifecycle === 'live'), [auctions]);
+  const upcomingAuctions = React.useMemo(() => auctions.filter((item) => item.lifecycle === 'upcoming'), [auctions]);
 
-  const upcomingAuctions = React.useMemo(
-    () => auctions.filter((item) => item.lifecycle === 'upcoming'),
-    [auctions]
-  );
-
-  const totalLiveBids = React.useMemo(
-    () => liveAuctions.reduce((sum, item) => sum + item.bidCount, 0),
-    [liveAuctions]
-  );
+  const totalLiveBids = React.useMemo(() => liveAuctions.reduce((sum, item) => sum + item.bidCount, 0), [liveAuctions]);
 
   const adPosters = React.useMemo(() => {
     const upcomingListingIds = new Set(upcomingAuctions.map((item) => item.listingId));
@@ -190,46 +163,21 @@ export default function AuctionsScreen() {
   }, [customPosters, nowTs, upcomingAuctions]);
 
   const marketStatus = React.useMemo(() => {
-    if (isSyncingAuctions) {
-      return {
-        tone: 'syncing' as const,
-        label: t('auctions.status.syncing'),
-      };
-    }
-
-    if (syncError) {
-      return {
-        tone: 'offline' as const,
-        label: t('auctions.status.reconnecting'),
-      };
-    }
-
-    if (remoteAuctions.length > 0) {
-      return {
-        tone: 'live' as const,
-        label: t('auctions.status.synced'),
-      };
-    }
-
-    if (auctions.length > 0) {
-      return {
-        tone: 'offline' as const,
-        label: t('auctions.status.localMode'),
-      };
-    }
-
-    return {
-      tone: 'offline' as const,
-      label: t('auctions.status.none'),
-    };
+    if (isSyncingAuctions) return { tone: 'syncing' as const, label: t('auctions.status.syncing') };
+    if (syncError) return { tone: 'offline' as const, label: t('auctions.status.reconnecting') };
+    if (remoteAuctions.length > 0) return { tone: 'live' as const, label: t('auctions.status.synced') };
+    if (auctions.length > 0) return { tone: 'offline' as const, label: t('auctions.status.localMode') };
+    return { tone: 'offline' as const, label: t('auctions.status.none') };
   }, [auctions.length, isSyncingAuctions, remoteAuctions.length, syncError]);
 
+  const filteredLiveAuctions = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return liveAuctions;
+    return liveAuctions.filter((item) => item.title.toLowerCase().includes(q));
+  }, [liveAuctions, searchQuery]);
+
   const openBidComposer = (auction: AuctionViewModel) => {
-    const suggestedDisplayBid = getSuggestedBidDisplayAmount(
-      auction.currentBid,
-      currencyCode,
-      goldRates
-    );
+    const suggestedDisplayBid = getSuggestedBidDisplayAmount(auction.currentBid, currencyCode, goldRates);
     setSelectedBidAuction(auction);
     setBidInput(suggestedDisplayBid.toFixed(2));
     setBidComposerVisible(true);
@@ -239,14 +187,10 @@ export default function AuctionsScreen() {
     const isWatching = watchedAuctionIds.has(auction.id);
     setWatchedAuctionIds((current) => {
       const next = new Set(current);
-      if (next.has(auction.id)) {
-        next.delete(auction.id);
-      } else {
-        next.add(auction.id);
-      }
+      if (next.has(auction.id)) next.delete(auction.id);
+      else next.add(auction.id);
       return next;
     });
-
     show(
       isWatching
         ? t('auctions.watch.removed', { title: auction.title })
@@ -262,10 +206,7 @@ export default function AuctionsScreen() {
   };
 
   const bumpBid = (pct: number) => {
-    if (!selectedBidAuction) {
-      return;
-    }
-
+    if (!selectedBidAuction) return;
     const base = Number(bidInput);
     const current = Number.isFinite(base) && base > 0 ? base : selectedBidAuction.currentBid;
     const nextValue = Number((current * (1 + pct)).toFixed(2));
@@ -273,13 +214,8 @@ export default function AuctionsScreen() {
   };
 
   const submitBid = async () => {
-    if (!selectedBidAuction) {
-      return;
-    }
-
-    if (isSubmittingBid) {
-      return;
-    }
+    if (!selectedBidAuction) return;
+    if (isSubmittingBid) return;
 
     const amount = Number(bidInput);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -294,12 +230,7 @@ export default function AuctionsScreen() {
     }
 
     if (amountInGbp <= selectedBidAuction.currentBid) {
-      show(
-        t('auctions.bid.error.mustBeAbove', {
-          amount: formatFromFiat(selectedBidAuction.currentBid, 'GBP', { displayMode: 'fiat' }),
-        }),
-        'error'
-      );
+      show(t('auctions.bid.error.mustBeAbove', { amount: formatFromFiat(selectedBidAuction.currentBid, 'GBP', { displayMode: 'fiat' }) }), 'error');
       return;
     }
 
@@ -311,21 +242,10 @@ export default function AuctionsScreen() {
         bidderId: actingUserId,
         amountGbp: roundedAmount,
       });
-
       await syncAuctions();
       setNowTs(Date.now());
-      show(
-        t('auctions.bid.success.placed', {
-          title: selectedBidAuction.title,
-          amount: formatFromFiat(roundedAmount, 'GBP', { displayMode: 'fiat' }),
-        }),
-        'success'
-      );
-
-      if (remoteResult.aml?.alertId) {
-        show(t('auctions.bid.info.aml'), 'info');
-      }
-
+      show(t('auctions.bid.success.placed', { title: selectedBidAuction.title, amount: formatFromFiat(roundedAmount, 'GBP', { displayMode: 'fiat' }) }), 'success');
+      if (remoteResult.aml?.alertId) show(t('auctions.bid.info.aml'), 'info');
       closeBidComposer();
     } catch (error) {
       const parsedError = parseApiError(error, t('auctions.bid.error.unablePlace'));
@@ -336,10 +256,7 @@ export default function AuctionsScreen() {
   };
 
   const handleBuyNow = async (auction: AuctionViewModel) => {
-    if (!auction.buyNowPrice || buyNowAuctionId) {
-      return;
-    }
-
+    if (!auction.buyNowPrice || buyNowAuctionId) return;
     setBuyNowAuctionId(auction.id);
 
     try {
@@ -347,14 +264,9 @@ export default function AuctionsScreen() {
         bidderId: actingUserId,
         amountGbp: Number(auction.buyNowPrice.toFixed(2)),
       });
-
       await syncAuctions();
       show(t('auctions.buy.success.won', { title: auction.title }), 'success');
-
-      if (remoteResult.aml?.alertId) {
-        show(t('auctions.buy.info.aml'), 'info');
-      }
-
+      if (remoteResult.aml?.alertId) show(t('auctions.buy.info.aml'), 'info');
       navigation.navigate('Checkout', { itemId: auction.listingId });
     } catch (error) {
       const parsedError = parseApiError(error, t('auctions.buy.error.unableComplete'));
@@ -364,135 +276,43 @@ export default function AuctionsScreen() {
     }
   };
 
-  const renderPosterAds = () => {
-    if (!adPosters.length) {
-      return null;
-    }
-
-    return (
-      <View style={styles.sectionWrap}>
-        <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>{t('auctions.section.upcomingPosters')}</Text>
-        </View>
-
-        <FlashList
-          data={adPosters}
-          horizontal
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.posterListContent}
-          renderItem={({ item }) => (
-            <AnimatedPressable
-              style={styles.posterCard}
-              activeOpacity={0.9}
-              onPress={() => navigation.navigate('PosterViewer', { posterId: item.id })}
-              accessibilityRole="button"
-              accessibilityLabel={`Open poster from @${item.uploader?.username ?? t('auctions.poster.unknownSeller')}`}
-              accessibilityHint="Opens upcoming auction poster details"
-            >
-              <CachedImage uri={item.image} style={styles.posterImage} containerStyle={{ width: 56, height: 56, borderRadius: 10 }} contentFit="cover" />
-              <View style={styles.posterOverlay}>
-                <Text style={styles.posterSeller} numberOfLines={1}>
-                  @{item.uploader?.username ?? t('auctions.poster.unknownSeller')}
-                </Text>
-                <Text style={styles.posterTime}>{item.remainingHours}h</Text>
-              </View>
-            </AnimatedPressable>
-          )}
-        />
-      </View>
-    );
-  };
-
-  const renderUpcomingStrip = () => {
-    if (!upcomingAuctions.length) {
-      return null;
-    }
-
-    return (
-      <View style={styles.sectionWrap}>
-        <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>{t('auctions.section.startingSoon')}</Text>
-        </View>
-
-        <FlashList
-          data={upcomingAuctions}
-          horizontal
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.upcomingListContent}
-          renderItem={({ item }) => (
-            <AnimatedPressable
-              style={styles.upcomingCard}
-              activeOpacity={0.9}
-              onPress={() => navigation.push('ItemDetail', { itemId: item.listingId })}
-              accessibilityRole="button"
-              accessibilityLabel={`Open upcoming auction ${item.title}`}
-              accessibilityHint="Opens listing details before auction starts"
-            >
-              <SharedTransitionView
-                style={styles.upcomingImageFrame}
-                sharedTransitionTag={`image-${item.listingId}-0`}
-              >
-                <CachedImage uri={item.image} style={styles.upcomingImage} containerStyle={{ width: '100%', height: 120, borderRadius: 14 }} contentFit="cover" />
-              </SharedTransitionView>
-              <View style={styles.upcomingMeta}>
-                <Text style={styles.upcomingTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.upcomingTimer}>
-                  {t('auctions.upcoming.startsIn', { countdown: formatCountdown(item.msToStart) })}
-                </Text>
-                <Text style={styles.upcomingBid}>
-                  {t('auctions.upcoming.startingBid', {
-                    amount: formatFromFiat(item.startingBid, 'GBP', { displayMode: 'fiat' }),
-                  })}
-                </Text>
-              </View>
-            </AnimatedPressable>
-          )}
-        />
-      </View>
-    );
-  };
-
   const renderHeader = () => (
     <View>
-      <View style={styles.heroCard}>
-        <View style={styles.heroTitleRow}>
-          <Ionicons name="flash-outline" size={16} color={BRAND} />
-          <Text style={styles.heroTitle}>{t('auctions.header.myAuctions')}</Text>
-        </View>
+      <MetricGrid
+        metrics={[
+          { label: 'Live Auctions', value: String(liveAuctions.length) },
+          { label: 'Active Bids', value: String(totalLiveBids) },
+          { label: 'Watchlist', value: String(watchedAuctionIds.size) },
+        ]}
+        columns={3}
+        style={{ marginTop: Space.sm }}
+      />
+
+      <View style={styles.searchWrap}>
+        <AppInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search auctions..."
+          prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
+          accessibilityLabel="Search auctions"
+        />
       </View>
 
       <View style={styles.launchRow}>
         <View>
-          <Text style={styles.launchTitle}>{t('auctions.cta.createAuction')}</Text>
+          <BodyEmphasis style={styles.launchTitle}>{t('auctions.cta.createAuction')}</BodyEmphasis>
+          <Meta style={styles.launchHint}>Schedule a 6-hour drop</Meta>
         </View>
-
-        <View style={styles.actionBtnRow}>
-          <AnimatedPressable
-            style={styles.myBidsBtn}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('MyBids')}
-            accessibilityRole="button"
-            accessibilityLabel="My Bids"
-            accessibilityHint="View your active bids"
-          >
-            <Ionicons name="list-outline" size={15} color={Colors.brand} />
-            <Text style={styles.myBidsBtnText}>My Bids</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={styles.launchBtn}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('CreateAuction')}
-            accessibilityRole="button"
-            accessibilityLabel={t('auctions.cta.launch')}
-            accessibilityHint="Opens auction creation flow"
-          >
-            <Ionicons name="add" size={15} color={Colors.background} />
-            <Text style={styles.launchBtnText}>{t('auctions.cta.launch')}</Text>
-          </AnimatedPressable>
-        </View>
+        <AppButton
+          title="Create"
+          icon={<Ionicons name="add" size={15} color={Colors.background} />}
+          style={styles.launchBtn}
+          variant="primary"
+          size="sm"
+          onPress={() => navigation.navigate('CreateAuction')}
+          hapticFeedback="medium"
+          accessibilityLabel="Create auction"
+        />
       </View>
 
       {syncError ? (
@@ -500,254 +320,140 @@ export default function AuctionsScreen() {
           message={t('auctions.sync.delayed')}
           onRetry={() => void syncAuctions()}
           isRetrying={isSyncingAuctions}
-          telemetryContext="auctions_market_sync"
+          telemetryContext="auction_market_sync"
           containerStyle={styles.syncBanner}
-          actionStyle={styles.syncBannerBtn}
         />
       ) : null}
 
-      {renderPosterAds()}
-      {renderUpcomingStrip()}
+      {upcomingAuctions.length > 0 && (
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionTitleRow}>
+            <BodyEmphasis style={styles.sectionTitle}>{t('auctions.section.startingSoon')}</BodyEmphasis>
+          </View>
+          <FlashList
+            data={upcomingAuctions}
+            horizontal
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContent}
+            renderItem={({ item }) => (
+              <AnimatedPressable
+                style={styles.upcomingCard}
+                activeOpacity={0.9}
+                onPress={() => navigation.push('ItemDetail', { itemId: item.listingId })}
+                accessibilityRole="button"
+                accessibilityLabel={`Open upcoming auction ${item.title}`}
+              >
+                <SharedTransitionView style={styles.upcomingImageFrame} sharedTransitionTag={`image-${item.listingId}-0`}>
+                  <CachedImage uri={item.image} style={styles.upcomingImage} containerStyle={styles.upcomingImageContainer} contentFit="cover" />
+                </SharedTransitionView>
+                <View style={styles.upcomingMeta}>
+                  <BodyEmphasis style={styles.upcomingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
+                  <Body style={styles.upcomingTimer}>{t('auctions.upcoming.startsIn', { countdown: formatCountdown(item.msToStart) })}</Body>
+                  <Meta style={styles.upcomingBid}>{t('auctions.upcoming.startingBid', { amount: formatFromFiat(item.startingBid, 'GBP', { displayMode: 'fiat' }) })}</Meta>
+                </View>
+              </AnimatedPressable>
+            )}
+          />
+        </View>
+      )}
 
-      <View style={styles.sectionTitleRow}>
-        <Text style={styles.sectionTitle}>{t('auctions.header.myAuctions')}</Text>
-        <SyncStatusPill tone={marketStatus.tone} label={marketStatus.label} compact />
-      </View>
+      {adPosters.length > 0 && (
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionTitleRow}>
+            <BodyEmphasis style={styles.sectionTitle}>{t('auctions.section.upcomingPosters')}</BodyEmphasis>
+          </View>
+          <FlashList
+            data={adPosters}
+            horizontal
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContent}
+            renderItem={({ item }) => (
+              <AnimatedPressable
+                style={styles.posterCard}
+                activeOpacity={0.9}
+                onPress={() => navigation.navigate('PosterViewer', { posterId: item.id })}
+                accessibilityRole="button"
+              >
+                <CachedImage uri={item.image} style={styles.posterImage} containerStyle={styles.posterImageContainer} contentFit="cover" />
+                <View style={styles.posterOverlay}>
+                  <Meta style={styles.posterSeller} numberOfLines={1}>@{item.uploader?.username ?? t('auctions.poster.unknownSeller')}</Meta>
+                  <Body style={styles.posterTime}>{item.remainingHours}h</Body>
+                </View>
+              </AnimatedPressable>
+            )}
+          />
+        </View>
+      )}
+
+      {liveAuctions.length > 0 && (
+        <View style={styles.sectionTitleRow}>
+          <BodyEmphasis style={styles.sectionTitle}>Live Auctions</BodyEmphasis>
+          <SyncStatusPill tone={marketStatus.tone} label={marketStatus.label} compact />
+        </View>
+      )}
     </View>
   );
 
   const renderLoadingState = () => (
-    <View style={styles.loadingStateWrap}>
-      {Array.from({ length: 3 }).map((_, index) => (
-        <View key={`auction_loading_${index}`} style={styles.loadingCard}>
-          <SkeletonLoader width="100%" height={160} borderRadius={14} />
-          <View style={styles.loadingCardBody}>
-            <SkeletonLoader width="55%" height={14} borderRadius={7} />
-            <SkeletonLoader width="35%" height={11} borderRadius={6} style={{ marginTop: 8 }} />
-            <SkeletonLoader width="40%" height={18} borderRadius={9} style={{ marginTop: 12 }} />
-            <SkeletonLoader width="100%" height={5} borderRadius={4} style={{ marginTop: 10 }} />
+    <View style={styles.loadingWrap}>
+      {[0, 1, 2].map((i) => (
+        <View key={i} style={styles.loadingCard}>
+          <SkeletonLoader width="100%" height={172} borderRadius={12} />
+          <View style={{ padding: 12 }}>
+            <SkeletonLoader width="70%" height={16} borderRadius={8} style={{ marginBottom: 8 }} />
+            <SkeletonLoader width="40%" height={12} borderRadius={6} style={{ marginBottom: 8 }} />
+            <SkeletonLoader width="100%" height={40} borderRadius={10} />
           </View>
         </View>
       ))}
     </View>
   );
 
-  const renderLiveAuction = ({ item }: { item: AuctionViewModel }) => {
-    const isWatching = watchedAuctionIds.has(item.id);
-
-    return (
-    <AnimatedPressable
-      style={styles.liveCard}
-      activeOpacity={0.95}
-      onPress={() => navigation.push('ItemDetail', { itemId: item.listingId })}
-      accessibilityRole="button"
-      accessibilityLabel={`Open live auction ${item.title}`}
-      accessibilityHint="Opens listing details and auction context"
-    >
-      <SharedTransitionView
-        style={styles.liveImageFrame}
-        sharedTransitionTag={`image-${item.listingId}-0`}
-      >
-        <CachedImage uri={item.image} style={styles.liveImage} containerStyle={{ width: '100%', height: 160, borderTopLeftRadius: 18, borderTopRightRadius: 18 }} contentFit="cover" />
-      </SharedTransitionView>
-
-      <View style={styles.liveBody}>
-        <View style={styles.liveTopRow}>
-          <AppStatusPill tone="accent" iconName="flash-outline" label={t('auctions.lifecycle.open')} />
-          <Text style={styles.timerText}>{formatCountdown(item.msToEnd)}</Text>
-        </View>
-
-        <Text style={styles.liveTitle} numberOfLines={1}>{item.title}</Text>
-        <View style={styles.liveSellerRow}>
-          <AnimatedPressable
-            style={styles.liveSellerIdentity}
-            onPress={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${getUserLabel(item.sellerId)} profile`}
-            accessibilityHint="Shows seller profile details"
-          >
-            <Text style={styles.liveSeller}>{t('auctions.seller.by', { seller: getUserLabel(item.sellerId) })}</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={styles.liveSellerMessageBtn}
-            onPress={() =>
-              navigation.navigate('Chat', {
-                conversationId: `${item.sellerId}_${item.listingId}`,
-                focusQuery: getUserLabel(item.sellerId),
-                partnerUserId: item.sellerId,
-              })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Message ${getUserLabel(item.sellerId)}`}
-            accessibilityHint="Opens chat with this seller"
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
-
-        <View style={styles.bidRow}>
-          <Text style={styles.bidLabel}>{t('auctions.bid.current')}</Text>
-          <Text style={styles.bidValue}>{formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}</Text>
-        </View>
-
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${Math.max(6, item.progress * 100)}%` }]} />
-        </View>
-
-        <View style={styles.bidRow}>
-          <Text style={styles.bidMeta}>{t('auctions.bid.count', { count: item.bidCount })}</Text>
-          {item.buyNowPrice ? (
-            <Text style={styles.buyNowMeta}>
-              {t('auctions.buy.nowLabel', {
-                amount: formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }),
-              })}
-            </Text>
-          ) : null}
-        </View>
-
-        <View style={styles.actionRow}>
-          <AppButton
-            style={[styles.bidBtn, (isSubmittingBid || !!buyNowAuctionId) && styles.actionBtnDisabled]}
-            onPress={() => openBidComposer(item)}
-            disabled={isSubmittingBid || !!buyNowAuctionId}
-            variant="primary"
-            size="sm"
-            align="center"
-            icon={<Ionicons name="hammer-outline" size={14} color={Colors.background} />}
-            title={t('auctions.cta.placeBid')}
-            accessibilityLabel={t('auctions.cta.placeBid')}
-            accessibilityHint="Opens bid composer for this auction"
-          />
-
-          {item.buyNowPrice ? (
-            <AppButton
-              style={[styles.buyBtn, buyNowAuctionId === item.id && styles.actionBtnDisabled]}
-              onPress={() => void handleBuyNow(item)}
-              disabled={buyNowAuctionId === item.id || isSubmittingBid}
-              variant="primary"
-              size="sm"
-              align="center"
-              title={buyNowAuctionId === item.id ? t('auctions.cta.buying') : t('auctions.cta.buyNow')}
-              accessibilityLabel={buyNowAuctionId === item.id ? t('auctions.cta.buying') : t('auctions.cta.buyNow')}
-              accessibilityHint="Purchases the item instantly at buy now price"
-            />
-          ) : (
-            <AppButton
-              style={[styles.watchBtn, isWatching && styles.watchBtnActive]}
-              onPress={() => handleToggleWatch(item)}
-              variant="secondary"
-              size="sm"
-              align="center"
-              title={isWatching ? t('auctions.cta.watching') : t('auctions.cta.watch')}
-              titleStyle={[styles.watchBtnText, isWatching && styles.watchBtnTextActive]}
-              accessibilityLabel={isWatching ? t('auctions.cta.watching') : t('auctions.cta.watch')}
-              accessibilityHint={isWatching ? 'Removes this auction from watchlist' : 'Adds this auction to watchlist'}
-            />
-          )}
-        </View>
-      </View>
-    </AnimatedPressable>
-    );
-  };
-
-  const renderBidComposer = () => {
-    if (!selectedBidAuction) {
-      return null;
-    }
-
-    return (
-      <Modal
-        visible={bidComposerVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeBidComposer}
-      >
-        <View style={styles.bidModalOverlay}>
-          <AnimatedPressable
-            style={styles.bidModalDismissLayer}
-            activeOpacity={1}
-            onPress={closeBidComposer}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss bid composer"
-            accessibilityHint="Closes bid modal without submitting"
-          />
-
-          <View style={styles.bidModalCard}>
-            <Text style={styles.bidModalTitle} numberOfLines={1}>{selectedBidAuction.title}</Text>
-
-            <AppInput
-              value={bidInput}
-              onChangeText={(value) => setBidInput(sanitizeDecimalInput(value))}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              prefix={currencyCode}
-              accessibilityLabel="Bid amount"
-              accessibilityHint="Enter your bid amount"
-              inputContainerStyle={styles.bidInputWrap}
-              inputStyle={styles.bidInput}
-            />
-
-            <View style={styles.bumpRow}>
-              {[0.01, 0.03, 0.05].map((pct) => (
-                <AnimatedPressable
-                  key={pct}
-                  style={styles.bumpChip}
-                  onPress={() => bumpBid(pct)}
-                  activeOpacity={0.9}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Increase bid by ${Math.round(pct * 100)} percent`}
-                  accessibilityHint="Applies quick bid increment"
-                >
-                  <Text style={styles.bumpChipText}>+{Math.round(pct * 100)}%</Text>
-                </AnimatedPressable>
-              ))}
-            </View>
-
-            <View style={styles.bidModalActions}>
-              <AppButton
-                style={styles.bidCancelBtn}
-                onPress={closeBidComposer}
-                variant="secondary"
-                size="sm"
-                align="center"
-                title={t('auctions.modal.cancel')}
-                titleStyle={styles.bidCancelText}
-                accessibilityLabel={t('auctions.modal.cancel')}
-                accessibilityHint="Closes bid composer"
-              />
-
-              <AppButton
-                style={[styles.bidSubmitBtn, isSubmittingBid && styles.actionBtnDisabled]}
-                onPress={() => void submitBid()}
-                disabled={isSubmittingBid}
-                variant="primary"
-                size="sm"
-                align="center"
-                title={isSubmittingBid ? t('auctions.modal.submitting') : t('auctions.modal.submitBid')}
-                titleStyle={styles.bidSubmitText}
-                accessibilityLabel={isSubmittingBid ? t('auctions.modal.submitting') : t('auctions.modal.submitBid')}
-                accessibilityHint="Submits your bid"
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
-    );
-  };
-
   return (
     <>
       <FlashList
-        data={liveAuctions}
+        data={filteredLiveAuctions}
         keyExtractor={(item) => item.id}
-        renderItem={renderLiveAuction}
+        renderItem={({ item, index }) => {
+          const isWatching = watchedAuctionIds.has(item.id);
+          const sellerLabel = getUserLabel(item.sellerId);
+          return (
+            <Reanimated.View
+              entering={
+                reducedMotionEnabled
+                  ? undefined
+                  : FadeInDown
+                      .duration(Motion.list.enterDuration)
+                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+              }
+            >
+              <AuctionCard
+                id={item.id}
+                title={item.title}
+                image={item.image}
+                sellerName={sellerLabel}
+                currentBid={formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}
+                bidCount={item.bidCount}
+                timeRemaining={formatCountdown(item.msToEnd ?? 0)}
+                progress={item.progress ?? 0}
+                isLive={item.lifecycle === 'live'}
+                isWatching={isWatching}
+                buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }) : undefined}
+                onPress={() => navigation.push('ItemDetail', { itemId: item.listingId })}
+                onBid={() => openBidComposer(item)}
+                onBuyNow={() => void handleBuyNow(item)}
+                onToggleWatch={() => handleToggleWatch(item)}
+                isBuyNowLoading={buyNowAuctionId === item.id}
+                isBidSubmitting={isSubmittingBid}
+              />
+            </Reanimated.View>
+          );
+        }}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
-          isSyncingAuctions ? (
-            renderLoadingState()
-          ) : (
+          isSyncingAuctions ? renderLoadingState() : (
             <EmptyState
               icon="hourglass-outline"
               title={t('auctions.empty.noActive')}
@@ -756,18 +462,29 @@ export default function AuctionsScreen() {
         }
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={styles.liveSeparator} />}
+        ItemSeparatorComponent={() => <View style={{ height: Space.sm }} />}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={BRAND}
-            colors={[BRAND]}
-            progressBackgroundColor={PANEL_SOFT_BG}
+            tintColor={Colors.brand}
+            colors={[Colors.brand]}
+            progressBackgroundColor={Colors.surfaceAlt}
           />
         }
       />
-      {renderBidComposer()}
+
+      <BidComposer
+        visible={bidComposerVisible}
+        auctionTitle={selectedBidAuction?.title ?? ''}
+        bidInput={bidInput}
+        currencyCode={currencyCode}
+        isSubmitting={isSubmittingBid}
+        onBidChange={(value) => setBidInput(sanitizeDecimalInput(value))}
+        onBump={bumpBid}
+        onCancel={closeBidComposer}
+        onSubmit={() => void submitBid()}
+      />
     </>
   );
 }
@@ -775,183 +492,98 @@ export default function AuctionsScreen() {
 const styles = StyleSheet.create({
   contentContainer: {
     paddingBottom: 130,
+    paddingTop: Space.sm,
   },
-  heroCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER_STRONG,
-    backgroundColor: PANEL_TINT_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  heroTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  heroTitle: {
-    color: Colors.textPrimary,
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.15,
-  },
-  heroSubtitle: {
-    marginTop: 6,
-    color: Colors.textSecondary,
-    fontSize: 12,
-    lineHeight: 17,
-    fontFamily: 'Inter_500Medium',
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: PANEL_BG,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-  },
-  metricValue: {
-    color: Colors.textPrimary,
-    fontSize: 20,
-    fontFamily: 'Inter_700Bold',
-  },
-  metricLabel: {
-    marginTop: 2,
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
-  rulesCard: {
-    marginHorizontal: 16,
-    marginBottom: 14,
-    backgroundColor: PANEL_TINT_BG,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PANEL_TINT_BORDER,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  rulesText: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    flex: 1,
-    lineHeight: 17,
+  searchWrap: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
   },
   launchRow: {
-    marginHorizontal: 16,
-    marginBottom: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  launchTitle: {
-    color: Colors.textPrimary,
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
-  launchHint: {
-    marginTop: 2,
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
-  launchBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 14,
-    backgroundColor: Colors.brand,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  launchBtnText: {
-    color: Colors.background,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-  },
-  actionBtnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  myBidsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 14,
-    backgroundColor: Colors.surface,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  myBidsBtnText: {
-    color: Colors.brand,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+  launchTitle: {},
+  launchHint: {
+    marginTop: 2,
+  },
+  launchBtn: {
+    borderRadius: 14,
+    minHeight: 34,
+    paddingHorizontal: 12,
   },
   syncBanner: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderColor: PANEL_BORDER,
-    backgroundColor: IS_LIGHT ? '#f5ece2' : '#1a1a1a',
-  },
-  syncBannerBtn: {
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
   },
   sectionWrap: {
-    marginBottom: 14,
+    marginBottom: Space.sm,
   },
   sectionTitleRow: {
-    paddingHorizontal: 16,
-    marginBottom: 8,
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  sectionTitle: {
-    color: Colors.textPrimary,
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+  sectionTitle: {},
+  horizontalListContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
   },
-  sectionHint: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+  upcomingCard: {
+    width: 208,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  posterListContent: {
-    paddingHorizontal: 16,
-    gap: 8,
+  upcomingImageFrame: {
+    width: '100%',
+    height: 120,
   },
+  upcomingImageContainer: {
+    width: '100%',
+    height: 120,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+  },
+  upcomingImage: {
+    width: '100%',
+    height: '100%',
+  },
+  upcomingMeta: {
+    padding: Space.sm + 2,
+  },
+  upcomingTitle: {
+    marginBottom: 4,
+  },
+  upcomingTimer: {
+    color: Colors.brand,
+    marginBottom: 2,
+  },
+  upcomingBid: {},
   posterCard: {
     width: 96,
     height: 126,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
+    borderColor: Colors.border,
+  },
+  posterImageContainer: {
+    width: '100%',
+    height: '100%',
   },
   posterImage: {
     width: '100%',
@@ -968,292 +600,21 @@ const styles = StyleSheet.create({
   },
   posterSeller: {
     color: '#fff',
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
   },
   posterTime: {
+    color: Colors.brand,
     marginTop: 2,
-    color: BRAND,
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
   },
-  upcomingListContent: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  upcomingCard: {
-    width: 208,
-    backgroundColor: PANEL_BG,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-  },
-  upcomingImage: {
-    width: '100%',
-    height: 110,
-  },
-  upcomingImageFrame: {
-    width: '100%',
-    height: 120,
-  },
-  upcomingMeta: {
-    padding: 10,
-  },
-  upcomingTitle: {
-    color: Colors.textPrimary,
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  upcomingTimer: {
-    marginTop: 6,
-    color: BRAND,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-  },
-  upcomingBid: {
-    marginTop: 4,
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
-  liveSeparator: {
-    height: 10,
-  },
-  loadingStateWrap: {
-    paddingHorizontal: 16,
-    gap: 10,
+  loadingWrap: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
   },
   loadingCard: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     overflow: 'hidden',
-  },
-  loadingCardBody: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  liveCard: {
-    marginHorizontal: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-  },
-  liveImage: {
-    width: '100%',
-    height: 172,
-  },
-  liveImageFrame: {
-    width: '100%',
-    height: 160,
-  },
-  liveBody: {
-    padding: 12,
-  },
-  liveTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  timerText: {
-    color: Colors.textPrimary,
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
-  liveTitle: {
-    color: Colors.textPrimary,
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
-  },
-  liveSeller: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
-  liveSellerRow: {
-    marginTop: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  liveSellerIdentity: {
-    flex: 1,
-    minHeight: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_MUTED_BG,
-    paddingHorizontal: 10,
-    justifyContent: 'center',
-  },
-  liveSellerMessageBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_MUTED_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bidRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  bidLabel: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
-  bidValue: {
-    color: Colors.textPrimary,
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-  },
-  progressTrack: {
-    marginTop: 8,
-    height: 5,
-    borderRadius: 4,
-    backgroundColor: IS_LIGHT ? '#ddd4c7' : '#1e1e1e',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: BRAND,
-  },
-  bidMeta: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
-  buyNowMeta: {
-    color: BRAND,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  actionRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  actionBtnDisabled: {
-    opacity: 0.5,
-  },
-  bidBtn: {
-    flex: 1,
-  },
-  buyBtn: {
-    flex: 1,
-  },
-  watchBtn: {
-    flex: 1,
-  },
-  watchBtnActive: {
-    backgroundColor: PANEL_TINT_BG,
-    borderColor: PANEL_TINT_BORDER,
-  },
-  watchBtnText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  watchBtnTextActive: {
-    color: BRAND,
-    fontFamily: 'Inter_700Bold',
-  },
-  bidModalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  bidModalDismissLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  bidModalCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  bidModalLabel: {
-    color: BRAND,
-    fontSize: 10,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.8,
-  },
-  bidModalTitle: {
-    marginTop: 5,
-    color: Colors.textPrimary,
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
-  },
-  bidModalHint: {
-    marginTop: 3,
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
-  bidInputWrap: {
-    marginTop: 12,
-    height: 44,
-    backgroundColor: PANEL_SOFT_BG,
-  },
-  bidInput: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-    paddingVertical: 8,
-  },
-  bumpRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  bumpChip: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PANEL_TINT_BORDER,
-    backgroundColor: PANEL_TINT_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  bumpChipText: {
-    color: BRAND,
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-  },
-  bidModalActions: {
-    marginTop: 14,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  bidCancelBtn: {
-    flex: 1,
-  },
-  bidCancelText: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-  },
-  bidSubmitBtn: {
-    flex: 1,
-  },
-  bidSubmitText: {
-    color: Colors.background,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    marginBottom: Space.sm,
   },
 });
-
