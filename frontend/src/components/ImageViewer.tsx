@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import { View, Dimensions, StyleSheet } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,

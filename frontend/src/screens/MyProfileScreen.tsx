@@ -8,7 +8,7 @@ import {
   Dimensions,
   Share,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode } from '../components/compat/Video';
 import * as ImagePicker from 'expo-image-picker';
 import Reanimated, {
   useSharedValue,

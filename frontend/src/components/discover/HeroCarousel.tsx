@@ -7,7 +7,7 @@ import {
   FlatList,
   ViewToken,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode } from '../compat/Video';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';

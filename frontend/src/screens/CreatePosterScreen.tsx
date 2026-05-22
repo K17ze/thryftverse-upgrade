@@ -37,7 +37,8 @@ import StickerPicker, { StickerItem } from '../components/poster/StickerPicker';
 import DrawingCanvas, { BrushStroke } from '../components/poster/DrawingCanvas';
 import LayoutPicker, { LayoutType } from '../components/poster/LayoutPicker';
 import FilterStrip, { ImageFilter, getFilterOverlay } from '../components/poster/FilterStrip';
-import GLFilterView from '../components/poster/GLFilterView';
+// GLFilterView removed — expo-gl isn't available in Expo Go SDK 54.
+// Filter rendering falls back to a regular <Image> with CSS overlay below.
 import MultiPhotoCollage from '../components/poster/MultiPhotoCollage';
 import TemplatePicker from '../components/poster/TemplatePicker';
 import { Typography } from '../constants/typography';
@@ -493,8 +494,6 @@ export default function CreatePosterScreen() {
             onPhotosChange={setCollagePhotos}
             canvasSize={canvasSize}
           />
-        ) : selectedImageUri && filter !== 'normal' && !isVideo ? (
-          <GLFilterView uri={selectedImageUri} filter={filter} style={StyleSheet.absoluteFillObject} />
         ) : (
           <View style={StyleSheet.absoluteFillObject} {...imagePanResponder.panHandlers}>
             <Image

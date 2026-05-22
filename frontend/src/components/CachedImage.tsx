@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ViewStyle, StyleProp, ImageStyle, Image as NativeImage } from 'react-native';
 import { Image as ExpoImage, ImageContentFit } from 'expo-image';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
   cancelAnimation,
   useSharedValue,
