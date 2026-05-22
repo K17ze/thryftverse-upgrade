@@ -10,7 +10,6 @@ import {
   ScrollView,
   StatusBar,
   Dimensions,
-  Share,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { BlurView } from 'expo-blur';
@@ -44,6 +43,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { AppButton } from '../components/ui/AppButton';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
+import { ShareSheet } from '../components/ShareSheet';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Space, Radius } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
@@ -60,6 +60,7 @@ export default function ItemDetailScreen() {
   const insets = useSafeAreaInsets();
   // Collection modal state
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
+  const [shareVisible, setShareVisible] = useState(false);
   const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
 
   const isFav = useStore(state => state.isWishlisted(route.params?.itemId));
@@ -99,14 +100,8 @@ export default function ItemDetailScreen() {
     }
   };
 
-  const handleShare = async () => {
-    try {
-      await Share.share({
-        message: `Check out ${item.title} on Thryftverse for ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}.`,
-      });
-    } catch {
-      // Silently fail - user can try again
-    }
+  const handleShare = () => {
+    setShareVisible(true);
   };
 
   const scrollY = useSharedValue(0);
@@ -383,6 +378,14 @@ export default function ItemDetailScreen() {
         visible={collectionModalVisible}
         itemId={item?.id}
         onClose={() => setCollectionModalVisible(false)}
+      />
+
+      <ShareSheet
+        visible={shareVisible}
+        onDismiss={() => setShareVisible(false)}
+        url={`https://thryftverse.com/item/${item?.id}`}
+        title={item?.title ?? 'Check out this listing'}
+        imageUri={item?.images?.[0]}
       />
     </View>
   );

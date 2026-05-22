@@ -9,6 +9,7 @@ import {
   Text,
   ScrollView,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '../../constants/typography';
 
@@ -35,11 +36,20 @@ const BRUSH_COLORS = [
 
 const BRUSH_WIDTHS = [3, 6, 10, 16];
 
+function pointsToSvgPath(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    d += ` L ${points[i].x} ${points[i].y}`;
+  }
+  return d;
+}
+
 export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, isActive, onClose }: DrawingCanvasProps) {
   const [currentStroke, setCurrentStroke] = React.useState<BrushStroke | null>(null);
   const [brushColor, setBrushColor] = React.useState('#ff3b30');
   const [brushWidth, setBrushWidth] = React.useState(6);
-  const [showControls, setShowControls] = React.useState(true);
 
   const panResponder = React.useMemo(
     () =>
@@ -60,11 +70,10 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
         onPanResponderMove: (evt: GestureResponderEvent, gestureState: PanResponderGestureState) => {
           if (!isActive || !currentStroke) return;
           const { locationX, locationY } = evt.nativeEvent;
-          // Debounce: only add point if moved enough
           const last = currentStroke.points[currentStroke.points.length - 1];
           const dx = locationX - last.x;
           const dy = locationY - last.y;
-          if (dx * dx + dy * dy > 9) {
+          if (dx * dx + dy * dy > 4) {
             setCurrentStroke({
               ...currentStroke,
               points: [...currentStroke.points, { x: locationX, y: locationY }],
@@ -95,28 +104,26 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
 
   const allStrokes = currentStroke ? [...strokes, currentStroke] : strokes;
 
+  const renderSvg = (
+    <Svg width={canvasSize.width} height={canvasSize.height} style={StyleSheet.absoluteFillObject}>
+      {allStrokes.map((stroke) => (
+        <Path
+          key={stroke.id}
+          d={pointsToSvgPath(stroke.points)}
+          stroke={stroke.color}
+          strokeWidth={stroke.width}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      ))}
+    </Svg>
+  );
+
   if (!isActive) {
-    // Render existing strokes passively (no controls, no drawing)
     return (
       <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-        {allStrokes.map((stroke) => (
-          <View key={stroke.id} style={StyleSheet.absoluteFillObject}>
-            {stroke.points.map((point, index) => (
-              <View
-                key={`${stroke.id}_${index}`}
-                style={{
-                  position: 'absolute',
-                  left: point.x - stroke.width / 2,
-                  top: point.y - stroke.width / 2,
-                  width: stroke.width,
-                  height: stroke.width,
-                  borderRadius: stroke.width / 2,
-                  backgroundColor: stroke.color,
-                }}
-              />
-            ))}
-          </View>
-        ))}
+        {renderSvg}
       </View>
     );
   }
@@ -127,24 +134,9 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
       <View style={StyleSheet.absoluteFillObject} {...panResponder.panHandlers} pointerEvents="auto" />
 
       {/* Rendered strokes */}
-      {allStrokes.map((stroke) => (
-        <View key={stroke.id} style={StyleSheet.absoluteFillObject} pointerEvents="none">
-          {stroke.points.map((point, index) => (
-            <View
-              key={`${stroke.id}_${index}`}
-              style={{
-                position: 'absolute',
-                left: point.x - stroke.width / 2,
-                top: point.y - stroke.width / 2,
-                width: stroke.width,
-                height: stroke.width,
-                borderRadius: stroke.width / 2,
-                backgroundColor: stroke.color,
-              }}
-            />
-          ))}
-        </View>
-      ))}
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        {renderSvg}
+      </View>
 
       {/* Top bar for drawing */}
       <View style={styles.drawTopBar} pointerEvents="box-none">
@@ -162,56 +154,54 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
       </View>
 
       {/* Bottom controls */}
-      {showControls && (
-        <View style={styles.drawControls} pointerEvents="box-none">
-          {/* Brush widths */}
-          <View style={styles.widthRow}>
-            {BRUSH_WIDTHS.map((w) => (
-              <Pressable
-                key={w}
-                style={[styles.widthBtn, brushWidth === w && styles.widthBtnActive]}
-                onPress={() => setBrushWidth(w)}
-              >
-                <View
-                  style={{
-                    width: w,
-                    height: w,
-                    borderRadius: w / 2,
-                    backgroundColor: brushColor,
-                  }}
-                />
-              </Pressable>
-            ))}
-          </View>
-
-          {/* Colors */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.drawColorRow}>
-            {BRUSH_COLORS.map((c) => (
-              <Pressable
-                key={c}
-                style={[
-                  styles.drawColorOrb,
-                  { backgroundColor: c },
-                  brushColor === c && styles.drawColorOrbActive,
-                ]}
-                onPress={() => setBrushColor(c)}
-              >
-                {brushColor === c && (
-                  <Ionicons
-                    name="checkmark"
-                    size={12}
-                    color={c === '#ffffff' || c === '#c7c7cc' || c === '#e2d5c2' || c === '#ffd9b5' || c === '#d6f5de' || c === '#ffccda' ? '#000' : '#fff'}
-                  />
-                )}
-              </Pressable>
-            ))}
-          </ScrollView>
-
-          <Pressable style={styles.doneDrawBtn} onPress={onClose}>
-            <Text style={styles.doneDrawText}>Done</Text>
-          </Pressable>
+      <View style={styles.drawControls} pointerEvents="box-none">
+        {/* Brush widths */}
+        <View style={styles.widthRow}>
+          {BRUSH_WIDTHS.map((w) => (
+            <Pressable
+              key={w}
+              style={[styles.widthBtn, brushWidth === w && styles.widthBtnActive]}
+              onPress={() => setBrushWidth(w)}
+            >
+              <View
+                style={{
+                  width: w,
+                  height: w,
+                  borderRadius: w / 2,
+                  backgroundColor: brushColor,
+                }}
+              />
+            </Pressable>
+          ))}
         </View>
-      )}
+
+        {/* Colors */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.drawColorRow}>
+          {BRUSH_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              style={[
+                styles.drawColorOrb,
+                { backgroundColor: c },
+                brushColor === c && styles.drawColorOrbActive,
+              ]}
+              onPress={() => setBrushColor(c)}
+            >
+              {brushColor === c && (
+                <Ionicons
+                  name="checkmark"
+                  size={12}
+                  color={c === '#ffffff' || c === '#c7c7cc' || c === '#e2d5c2' || c === '#ffd9b5' || c === '#d6f5de' || c === '#ffccda' ? '#000' : '#fff'}
+                />
+              )}
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <Pressable style={styles.doneDrawBtn} onPress={onClose}>
+          <Text style={styles.doneDrawText}>Done</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -247,42 +237,43 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    paddingHorizontal: 16,
+    paddingBottom: 28,
+    paddingTop: 12,
+    gap: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 28,
-    gap: 14,
-    zIndex: 30,
+    zIndex: 20,
   },
   widthRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 20,
+    gap: 16,
   },
   widthBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   widthBtnActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   drawColorRow: {
     flexDirection: 'row',
     gap: 10,
     paddingBottom: 4,
+    paddingTop: 4,
   },
   drawColorOrb: {
     width: 32,
     height: 32,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -294,12 +285,12 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     backgroundColor: '#fff',
     borderRadius: 14,
-    paddingHorizontal: 40,
-    paddingVertical: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 10,
   },
   doneDrawText: {
     color: '#000',
-    fontSize: 15,
-    fontFamily: Typography.family.bold,
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
   },
 });

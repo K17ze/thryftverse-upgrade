@@ -28,6 +28,9 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken } from '../services/authApi';
+import { AmbientGradientMesh } from '../components/ui/AmbientGradient';
+import { GlassCard } from '../components/ui/GlassSurface';
+import { GlowSurface } from '../components/ui/GlowSurface';
 
 const { width, height } = Dimensions.get('window');
 
@@ -229,7 +232,14 @@ export default function AuthLandingScreen() {
         priority="high"
       />
 
-      {/* Gradient overlay */}
+      {/* Animated ambient gradient overlay for atmosphere */}
+      <AmbientGradientMesh
+        colors={[Colors.brand, Colors.surfaceAlt, Colors.surface, 'transparent']}
+        speed={18}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Dark gradient overlay for text readability */}
       <LinearGradient
         colors={['rgba(9,9,9,0.15)', 'rgba(9,9,9,0.50)', 'rgba(9,9,9,0.92)', '#090909']}
         locations={[0, 0.4, 0.7, 1]}
@@ -266,7 +276,7 @@ export default function AuthLandingScreen() {
           </Reanimated.Text>
         </View>
 
-        {/* Bottom - CTAs */}
+        {/* Bottom - CTAs in glass cards */}
         <Reanimated.View
           entering={
             reducedMotionEnabled
@@ -275,21 +285,25 @@ export default function AuthLandingScreen() {
           }
           style={styles.footer}
         >
-          <AnimatedPressable
-            style={styles.primaryBtn}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('SignUp')}
-          >
-            <Text style={styles.primaryText}>create account</Text>
-          </AnimatedPressable>
+          <GlowSurface intensity={0.15} spread={1.1} animated>
+            <AnimatedPressable
+              style={styles.primaryBtn}
+              activeOpacity={0.9}
+              onPress={() => navigation.navigate('SignUp')}
+            >
+              <Text style={styles.primaryText}>create account</Text>
+            </AnimatedPressable>
+          </GlowSurface>
 
-          <AnimatedPressable
-            style={styles.secondaryBtn}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('Login')}
-          >
-            <Text style={styles.secondaryText}>i already have an account</Text>
-          </AnimatedPressable>
+          <GlassCard intensity={25} style={styles.glassCard}>
+            <AnimatedPressable
+              style={styles.secondaryBtnGlass}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('Login')}
+            >
+              <Text style={styles.secondaryText}>i already have an account</Text>
+            </AnimatedPressable>
+          </GlassCard>
 
           {/* Social login row */}
           <View style={styles.socialRow}>
@@ -400,6 +414,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
+  },
+  glassCard: {
+    marginHorizontal: 0,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  secondaryBtnGlass: {
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
   secondaryBtn: {
     backgroundColor: 'rgba(255,255,255,0.06)',

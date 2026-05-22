@@ -15,17 +15,19 @@ interface CreativeToolbarProps {
   activeTool: CreativeTool;
   onToolSelect: (tool: CreativeTool) => void;
   visible: boolean;
+  onFilterToggle?: () => void;
+  filterActive?: boolean;
 }
 
 const TOOLS: { key: CreativeTool; icon: string; label: string }[] = [
-  { key: 'text', icon: 'text-outline', label: 'Aa' },
+  { key: 'text', icon: 'text-outline', label: 'Text' },
   { key: 'layout', icon: 'grid-outline', label: 'Layout' },
-  { key: 'background', icon: 'ellipse-outline', label: 'BG' },
+  { key: 'background', icon: 'ellipse-outline', label: 'Background' },
   { key: 'stickers', icon: 'happy-outline', label: 'Stickers' },
   { key: 'draw', icon: 'pencil-outline', label: 'Draw' },
 ];
 
-export default function CreativeToolbar({ activeTool, onToolSelect, visible }: CreativeToolbarProps) {
+export default function CreativeToolbar({ activeTool, onToolSelect, visible, onFilterToggle, filterActive }: CreativeToolbarProps) {
   if (!visible) return null;
 
   return (
@@ -40,24 +42,35 @@ export default function CreativeToolbar({ activeTool, onToolSelect, visible }: C
               onPress={() => onToolSelect(isActive ? null : tool.key)}
               hitSlop={8}
             >
-              <Text
-                style={[
-                  styles.toolLabel,
-                  isActive && styles.toolLabelActive,
-                ]}
-              >
-                {tool.label === 'Aa' ? 'Aa' : undefined}
+              <Ionicons
+                name={tool.icon as any}
+                size={20}
+                color={isActive ? '#000' : 'rgba(255,255,255,0.9)'}
+              />
+              <Text style={[styles.toolLabel, isActive && styles.toolLabelActive]}>
+                {tool.label}
               </Text>
-              {tool.label !== 'Aa' && (
-                <Ionicons
-                  name={tool.icon as any}
-                  size={22}
-                  color={isActive ? '#fff' : 'rgba(255,255,255,0.85)'}
-                />
-              )}
             </Pressable>
           );
         })}
+
+        {/* Filter toggle (inline in toolbar) */}
+        {onFilterToggle && (
+          <Pressable
+            style={[styles.toolBtn, filterActive && styles.toolBtnActive]}
+            onPress={onFilterToggle}
+            hitSlop={8}
+          >
+            <Ionicons
+              name="color-wand-outline"
+              size={20}
+              color={filterActive ? '#000' : 'rgba(255,255,255,0.9)'}
+            />
+            <Text style={[styles.toolLabel, filterActive && styles.toolLabelActive]}>
+              Filters
+            </Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -66,35 +79,42 @@ export default function CreativeToolbar({ activeTool, onToolSelect, visible }: C
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    left: 12,
-    top: 110,
-    bottom: 200,
-    justifyContent: 'center',
-    zIndex: 10,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 24,
+    paddingHorizontal: 12,
+    zIndex: 15,
   },
   toolbar: {
-    gap: 14,
-    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignSelf: 'center',
   },
   toolBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 3,
+    minWidth: 52,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   toolBtnActive: {
     backgroundColor: '#fff',
   },
   toolLabel: {
-    fontSize: 18,
-    fontFamily: Typography.family.bold,
-    color: 'rgba(255,255,255,0.85)',
-    includeFontPadding: false,
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+    color: 'rgba(255,255,255,0.75)',
   },
   toolLabelActive: {
     color: '#000',
+    fontFamily: Typography.family.bold,
   },
-
 });

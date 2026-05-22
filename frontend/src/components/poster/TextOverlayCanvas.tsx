@@ -78,7 +78,6 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const inputRef = React.useRef<TextInput>(null);
   const dragLayerIdRef = React.useRef<string | null>(null);
-  const dragStartRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const layerStartRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastTapRef = React.useRef<number>(0);
 
@@ -89,7 +88,6 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
   };
 
   const findLayerAtPoint = (px: number, py: number): string | null => {
-    // Search from top (last rendered) to bottom so top layers catch touches first
     for (let i = layers.length - 1; i >= 0; i--) {
       const l = layers[i];
       const w = Math.min(l.text.length * l.fontSize * 0.6 + 24, SCREEN_W - 40);
@@ -135,7 +133,6 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
             }
           } else {
             dragLayerIdRef.current = null;
-            // Tapped empty canvas - deselect
             setSelectedId(null);
             setEditingId(null);
           }
@@ -253,7 +250,6 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
               </Text>
             )}
 
-            {/* Delete button shows on selected layer */}
             {(isSelected || isEditing) && (
               <Pressable
                 style={styles.deleteLayerBtn}

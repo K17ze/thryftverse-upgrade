@@ -3,18 +3,13 @@ import {
   View,
   StyleSheet,
   Pressable,
-  Text,
   ScrollView,
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
 
-export type CaptureMode = 'poster' | 'reel' | 'live';
-
 interface BottomControlBarProps {
-  mode: CaptureMode;
-  onModeChange: (mode: CaptureMode) => void;
   onGalleryPress: () => void;
   onFlipCamera: () => void;
   recentPhotos: MediaLibrary.Asset[];
@@ -23,15 +18,7 @@ interface BottomControlBarProps {
   onRotateCamera?: () => void;
 }
 
-const MODES: { key: CaptureMode; label: string }[] = [
-  { key: 'poster', label: 'POSTER' },
-  { key: 'reel', label: 'REEL' },
-  { key: 'live', label: 'LIVE' },
-];
-
 export default function BottomControlBar({
-  mode,
-  onModeChange,
   onGalleryPress,
   onFlipCamera,
   recentPhotos,
@@ -41,28 +28,6 @@ export default function BottomControlBar({
 }: BottomControlBarProps) {
   return (
     <View style={styles.container} pointerEvents="box-none">
-      {/* Mode tabs */}
-      <View style={styles.modeRow}>
-        {MODES.map((m) => (
-          <Pressable
-            key={m.key}
-            style={styles.modePill}
-            onPress={() => onModeChange(m.key)}
-            hitSlop={8}
-          >
-            <Text
-              style={[
-                styles.modeText,
-                mode === m.key && styles.modeTextActive,
-                m.key !== 'poster' && styles.modeTextStub,
-              ]}
-            >
-              {m.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
       {/* Gallery strip + camera flip */}
       <View style={styles.bottomRow}>
         <Pressable style={styles.galleryThumb} onPress={onGalleryPress} hitSlop={12}>
@@ -118,28 +83,6 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 16,
     gap: 12,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-    marginBottom: 4,
-  },
-  modePill: {
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-  },
-  modeText: {
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-    color: 'rgba(255,255,255,0.55)',
-    letterSpacing: 1.5,
-  },
-  modeTextActive: {
-    color: '#fff',
-  },
-  modeTextStub: {
-    opacity: 0.4,
   },
   bottomRow: {
     flexDirection: 'row',

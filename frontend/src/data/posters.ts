@@ -13,7 +13,7 @@ export interface PosterStoryOverlay {
 
 export interface PosterSticker {
   id: string;
-  type: 'mention' | 'hashtag' | 'poll' | 'question' | 'emoji' | 'shape' | 'countdown' | 'productTag' | 'quiz' | 'slider';
+  type: 'mention' | 'hashtag' | 'poll' | 'question' | 'emoji' | 'shape' | 'countdown';
   content: string;
   color?: string;
   x?: number;

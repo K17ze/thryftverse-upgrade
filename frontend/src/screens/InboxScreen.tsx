@@ -60,6 +60,7 @@ export default function InboxScreen() {
   const upsertConversation = useStore((state) => state.upsertConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
   const archiveConversation = useStore((state) => state.archiveConversation);
+  const toggleConversationPinned = useStore((state) => state.toggleConversationPinned);
   const markConversationRead = useStore((state) => state.markConversationRead);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -188,6 +189,11 @@ export default function InboxScreen() {
 
     const orderedConversations = [...scopedConversations];
     orderedConversations.sort((a, b) => {
+      const pinDiff = Number(b.isPinned) - Number(a.isPinned);
+      if (pinDiff !== 0) {
+        return pinDiff;
+      }
+
       const unreadDiff = Number(b.unread) - Number(a.unread);
       if (unreadDiff !== 0) {
         return unreadDiff;
@@ -228,11 +234,11 @@ export default function InboxScreen() {
     show('Conversation deleted', 'error');
   }, [deleteConversation, show, haptic]);
 
-  const handleArchive = useCallback((id: string) => {
-    haptic.light();
-    archiveConversation(id);
-    show('Conversation archived', 'info');
-  }, [archiveConversation, show, haptic]);
+  const handlePin = useCallback((id: string) => {
+    haptic.medium();
+    toggleConversationPinned(id);
+    show('Conversation pinned', 'success');
+  }, [toggleConversationPinned, show, haptic]);
 
   const renderRightActions = (id: string) => (
     <AnimatedPressable
@@ -252,17 +258,17 @@ export default function InboxScreen() {
 
   const renderLeftActions = (id: string) => (
     <AnimatedPressable
-      style={styles.swipeArchive}
-      onPress={() => handleArchive(id)}
-      accessibilityLabel="Archive conversation"
+      style={styles.swipePin}
+      onPress={() => handlePin(id)}
+      accessibilityLabel="Pin conversation"
       accessibilityRole="button"
-      accessibilityHint="Moves this conversation to archived threads"
+      accessibilityHint="Pins this conversation to the top"
       activeOpacity={0.7}
       scaleValue={0.95}
       hapticFeedback="light"
     >
-      <Ionicons name="archive-outline" size={22} color={Colors.textInverse} />
-      <Text style={styles.swipeActionText}>Archive</Text>
+      <Ionicons name="pin-outline" size={22} color={Colors.textInverse} />
+      <Text style={styles.swipeActionText}>Pin</Text>
     </AnimatedPressable>
   );
 
@@ -326,7 +332,10 @@ export default function InboxScreen() {
 
             <View style={styles.messageBody}>
               <View style={styles.messageTop}>
-                <BodyEmphasis>{displayTitle}</BodyEmphasis>
+                <View style={styles.titleRow}>
+                  <BodyEmphasis>{displayTitle}</BodyEmphasis>
+                  {item.isPinned ? <Ionicons name="pin" size={14} color={Colors.brand} style={styles.pinIcon} /> : null}
+                </View>
                 <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
               </View>
 
@@ -347,7 +356,14 @@ export default function InboxScreen() {
                 </View>
               ) : null}
 
-              <Text style={styles.snippet} numberOfLines={2}>{item.lastMessage}</Text>
+              <Text style={styles.snippet} numberOfLines={2}>
+                  {item.draftText ? (
+                    <Text>
+                      <Text style={styles.draftLabel}>Draft: </Text>
+                      {item.draftText}
+                    </Text>
+                  ) : item.lastMessage}
+                </Text>
 
               {searchQuery.trim().length > 0 && searchInsight ? (
                 <View style={styles.searchHitRow}>
@@ -552,7 +568,7 @@ const styles = StyleSheet.create({
   },
   hugeTitle: {
     fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
     lineHeight: Type.title.lineHeight,
@@ -595,7 +611,7 @@ const styles = StyleSheet.create({
   addGroupBtnText: {
     color: Colors.textPrimary,
     fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.2,
   },
   policiesBtn: {
@@ -624,7 +640,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textPrimary,
     fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     paddingVertical: 0,
   },
   clearSearchBtn: {
@@ -656,7 +672,7 @@ const styles = StyleSheet.create({
   segmentChipText: {
     color: Colors.textSecondary,
     fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.2,
   },
   segmentChipTextActive: {
@@ -686,7 +702,7 @@ const styles = StyleSheet.create({
   quickChipText: {
     color: Colors.textSecondary,
     fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
   },
   quickChipTextActive: {
     color: Colors.background,
@@ -756,7 +772,7 @@ const styles = StyleSheet.create({
   unreadBadgeText: {
     color: Colors.background,
     fontSize: 10,
-    fontFamily: Typography.family.bold,
+    fontFamily: 'Inter_700Bold',
     letterSpacing: 0.7,
   },
   groupMetaRow: {
@@ -765,10 +781,22 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     marginBottom: Space.xs + 2,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  pinIcon: {
+    marginLeft: 2,
+  },
+  draftLabel: {
+    color: Colors.brand,
+    fontFamily: 'Inter_600SemiBold',
+  },
   snippet: {
     color: Colors.textSecondary,
     fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
     lineHeight: Type.body.lineHeight,
     marginBottom: Space.sm + 2,
   },
@@ -822,7 +850,7 @@ const styles = StyleSheet.create({
     marginLeft: Space.sm,
     gap: 4,
   },
-  swipeArchive: {
+  swipePin: {
     backgroundColor: Colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
@@ -834,6 +862,6 @@ const styles = StyleSheet.create({
   swipeActionText: {
     color: Colors.textInverse,
     fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
   },
 });

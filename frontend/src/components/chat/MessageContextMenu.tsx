@@ -12,7 +12,7 @@ import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'forward' | 'delete' | 'info';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'forward' | 'delete' | 'info' | 'select';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -28,6 +28,7 @@ const ACTIONS: Array<{
   color?: string;
   destructive?: boolean;
 }> = [
+  { id: 'select', label: 'Select', icon: 'checkbox-outline' },
   { id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' },
   { id: 'react', label: 'React', icon: 'happy-outline' },
   { id: 'copy', label: 'Copy', icon: 'copy-outline' },

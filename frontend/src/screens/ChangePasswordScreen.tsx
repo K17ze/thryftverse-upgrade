@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
+import { changePassword } from '../services/authApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
@@ -32,7 +33,9 @@ export default function ChangePasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSecure, setIsSecure] = useState(true);
 
-  const handleUpdate = () => {
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleUpdate = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       show('Please fill in all fields', 'error');
       return;
@@ -49,8 +52,16 @@ export default function ChangePasswordScreen() {
       show('New passwords do not match', 'error');
       return;
     }
-    show('Password updated successfully', 'success');
-    navigation.goBack();
+    setIsUpdating(true);
+    try {
+      await changePassword({ currentPassword, newPassword });
+      show('Password updated successfully', 'success');
+      navigation.goBack();
+    } catch (error: any) {
+      show(error.message || 'Unable to change password', 'error');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   return (
@@ -116,6 +127,7 @@ export default function ChangePasswordScreen() {
               variant="primary"
               size="md"
               style={styles.updateBtn}
+              disabled={isUpdating}
               accessibilityLabel="Update password"
             />
           </Reanimated.View>

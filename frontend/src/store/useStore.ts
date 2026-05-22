@@ -7,7 +7,7 @@ import type { ChatBot, Conversation, Message as ConversationMessage } from '../d
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS, MY_USER } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
-interface User {
+export interface User {
   id: string;
   username: string;
   avatar: string;
@@ -15,6 +15,10 @@ interface User {
   location?: string;
   gender?: string;
   website?: string;
+  email?: string;
+  phone?: string;
+  fullName?: string;
+  birthday?: string;
 }
 
 interface ProfileMediaOverride {
@@ -89,6 +93,28 @@ type TradeActionResult = {
   deliveryTriggered?: boolean;
   deliveryListingId?: string;
 };
+
+interface AccountPreferences {
+  holidayMode: boolean;
+  privateProfile: boolean;
+}
+
+interface PaymentPreferences {
+  useBalance: boolean;
+}
+
+interface PostagePreferences {
+  carrierKey: string;
+  freeShipping: boolean;
+  bundleDiscount: boolean;
+}
+
+interface PersonalisationPreferences {
+  genderFilter: string[];
+  categoriesAndSizesPref: string;
+  brandsPref: string;
+  membersPref: string;
+}
 
 interface AuctionRuntimeState {
   currentBid: number;
@@ -231,6 +257,16 @@ interface StoreState {
   twoFactorEnabled: boolean;
   setTwoFactorEnabled: (enabled: boolean) => void;
 
+  // Settings preferences
+  accountPreferences: AccountPreferences;
+  updateAccountPreferences: (updates: Partial<AccountPreferences>) => void;
+  paymentPreferences: PaymentPreferences;
+  updatePaymentPreferences: (updates: Partial<PaymentPreferences>) => void;
+  postagePreferences: PostagePreferences;
+  updatePostagePreferences: (updates: Partial<PostagePreferences>) => void;
+  personalisationPreferences: PersonalisationPreferences;
+  updatePersonalisationPreferences: (updates: Partial<PersonalisationPreferences>) => void;
+
   // Notifications
   notificationCount: number;
   setNotificationCount: (count: number) => void;
@@ -247,11 +283,15 @@ interface StoreState {
   markConversationRead: (id: string) => void;
   archiveConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
+  toggleConversationPinned: (id: string) => void;
   createGroupConversation: (input: CreateGroupConversationInput) => string;
   deployBotToConversation: (conversationId: string, botId: string) => void;
   undeployBotFromConversation: (conversationId: string, botId: string) => void;
   appendConversationMessage: (conversationId: string, message: ConversationMessage) => void;
   replaceConversationMessages: (conversationId: string, messages: ConversationMessage[]) => void;
+  setConversationDraft: (conversationId: string, draft: string) => void;
+  addMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
+  removeMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
 
   // Profile Uploads
   userAvatar: string | null;
@@ -748,6 +788,35 @@ export const useStore = create<StoreState>()(
     persistLocalAuthSnapshot(get().currentUser, enabled);
   },
 
+  accountPreferences: { holidayMode: false, privateProfile: false },
+  updateAccountPreferences: (updates) =>
+    set((state) => ({
+      accountPreferences: { ...state.accountPreferences, ...updates },
+    })),
+
+  paymentPreferences: { useBalance: true },
+  updatePaymentPreferences: (updates) =>
+    set((state) => ({
+      paymentPreferences: { ...state.paymentPreferences, ...updates },
+    })),
+
+  postagePreferences: { carrierKey: 'evri', freeShipping: false, bundleDiscount: true },
+  updatePostagePreferences: (updates) =>
+    set((state) => ({
+      postagePreferences: { ...state.postagePreferences, ...updates },
+    })),
+
+  personalisationPreferences: {
+    genderFilter: ['Women', 'Men'],
+    categoriesAndSizesPref: 'Balanced',
+    brandsPref: 'Any',
+    membersPref: 'Everyone',
+  },
+  updatePersonalisationPreferences: (updates) =>
+    set((state) => ({
+      personalisationPreferences: { ...state.personalisationPreferences, ...updates },
+    })),
+
   notificationCount: ENABLE_RUNTIME_MOCKS ? 3 : 0,
   setNotificationCount: (count) => set({ notificationCount: count }),
 
@@ -795,6 +864,18 @@ export const useStore = create<StoreState>()(
   deleteConversation: (id) =>
     set((state) => ({
       conversations: state.conversations.filter((c) => c.id !== id),
+    })),
+  toggleConversationPinned: (id) =>
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === id ? { ...c, isPinned: !c.isPinned } : c
+      ),
+    })),
+  setConversationDraft: (conversationId, draft) =>
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === conversationId ? { ...c, draftText: draft || undefined } : c
+      ),
     })),
   createGroupConversation: ({ title, memberIds, creatorId }) => {
     const creator = creatorId ?? get().currentUser?.id ?? 'me';
@@ -949,6 +1030,52 @@ export const useStore = create<StoreState>()(
         };
       }),
     })),
+  addMessageReaction: (conversationId, messageId, reaction) =>
+    set((state) => ({
+      conversations: state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        return {
+          ...conversation,
+          messages: conversation.messages.map((msg) => {
+            if (msg.id !== messageId) return msg;
+            const reactions = msg.reactions ? [...msg.reactions] : [];
+            const existing = reactions.find((r) => r.emoji === reaction);
+            const currentUserId = state.currentUser?.id ?? 'me';
+            if (existing) {
+              if (!existing.userIds.includes(currentUserId)) {
+                existing.userIds.push(currentUserId);
+              }
+            } else {
+              reactions.push({ emoji: reaction, userIds: [currentUserId] });
+            }
+            return { ...msg, reactions };
+          }),
+        };
+      }),
+    })),
+  removeMessageReaction: (conversationId, messageId, reaction) =>
+    set((state) => ({
+      conversations: state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        return {
+          ...conversation,
+          messages: conversation.messages.map((msg) => {
+            if (msg.id !== messageId || !msg.reactions) return msg;
+            const currentUserId = state.currentUser?.id ?? 'me';
+            return {
+              ...msg,
+              reactions: msg.reactions
+                .map((r) =>
+                  r.emoji === reaction
+                    ? { ...r, userIds: r.userIds.filter((id) => id !== currentUserId) }
+                    : r
+                )
+                .filter((r) => r.userIds.length > 0),
+            };
+          }),
+        };
+      }),
+    })),
 
   userAvatar: null,
   userCover: null,
@@ -1042,6 +1169,10 @@ export const useStore = create<StoreState>()(
         userCover: state.userCover,
         profileMediaOverrides: state.profileMediaOverrides,
         sellDraft: state.sellDraft,
+        accountPreferences: state.accountPreferences,
+        paymentPreferences: state.paymentPreferences,
+        postagePreferences: state.postagePreferences,
+        personalisationPreferences: state.personalisationPreferences,
       }),
     },
   ),

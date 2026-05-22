@@ -16,6 +16,7 @@ import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
+import { useToast } from '../context/ToastContext';
 import { formatCountryPolicyScope } from '../utils/capabilityPolicy';
 import { CapabilityCarrier, getUserCountryCapabilities } from '../services/capabilitiesApi';
 import { SettingsHeader } from '../components/settings/SettingsHeader';
@@ -45,10 +46,11 @@ function mapCapabilityCarriers(carriers: CapabilityCarrier[]) {
 
 export default function PostageScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
+  const { show } = useToast();
+  const postagePreferences = useStore((state) => state.postagePreferences);
+  const updatePostagePreferences = useStore((state) => state.updatePostagePreferences);
   const { formatFromFiat } = useFormattedPrice();
   const [carriers, setCarriers] = useState(CARRIERS);
-  const [freeShipping, setFreeShipping] = useState(false);
-  const [bundleDiscount, setBundleDiscount] = useState(true);
   const [carrierScopeLabel, setCarrierScopeLabel] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,11 +68,11 @@ export default function PostageScreen({ navigation }: Props) {
           capabilities.postage.carriers.length > 0
             ? mapCapabilityCarriers(capabilities.postage.carriers)
             : CARRIERS;
-        setCarriers(nextCarriers);
+        setCarriers(nextCarriers.map((c) => ({ ...c, selected: c.key === postagePreferences.carrierKey })));
         setCarrierScopeLabel(formatCountryPolicyScope(capabilities));
       } catch {
         if (!cancelled) {
-          setCarriers(CARRIERS);
+          setCarriers(CARRIERS.map((c) => ({ ...c, selected: c.key === postagePreferences.carrierKey })));
           setCarrierScopeLabel(null);
         }
       }
@@ -81,9 +83,13 @@ export default function PostageScreen({ navigation }: Props) {
     };
   }, [currentUser?.id]);
 
-  const selectCarrier = (key: string) =>
+  const selectCarrier = (key: string) => {
     setCarriers((prev) => prev.map((c) => ({ ...c, selected: c.key === key })));
+    updatePostagePreferences({ carrierKey: key });
+  };
 
+  const freeShipping = postagePreferences.freeShipping;
+  const bundleDiscount = postagePreferences.bundleDiscount;
   const selectedCarrier = carriers.find((c) => c.selected);
 
   return (
@@ -97,7 +103,7 @@ export default function PostageScreen({ navigation }: Props) {
         title="Postage"
         onBack={() => navigation.goBack()}
         rightAction={
-          <AnimatedPressable onPress={() => navigation.goBack()} hapticFeedback="light">
+          <AnimatedPressable onPress={() => { show('Postage preferences saved', 'success'); navigation.goBack(); }} hapticFeedback="light">
             <Text style={styles.saveBtn}>Save</Text>
           </AnimatedPressable>
         }
@@ -144,7 +150,7 @@ export default function PostageScreen({ navigation }: Props) {
               subtitle="You'll cover the postage cost for buyers"
               variant="toggle"
               toggleValue={freeShipping}
-              onToggle={setFreeShipping}
+              onToggle={(v) => updatePostagePreferences({ freeShipping: v })}
               isFirst
             />
             <SettingsCell
@@ -154,7 +160,7 @@ export default function PostageScreen({ navigation }: Props) {
               subtitle="Buyers save when buying multiple items"
               variant="toggle"
               toggleValue={bundleDiscount}
-              onToggle={setBundleDiscount}
+              onToggle={(v) => updatePostagePreferences({ bundleDiscount: v })}
               isLast
             />
           </SettingsCard>

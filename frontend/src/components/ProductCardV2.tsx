@@ -21,6 +21,7 @@ import { Listing, MOCK_USERS } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
 import { isVideoUri } from '../utils/media';
 import { Typography } from '../constants/typography';
+import { StaggeredItem } from './StaggeredGridEntrance';
 
 const ASPECT_RATIOS = [0.75, 1.0, 1.25, 1.5]; // Masonry varied heights
 
@@ -31,9 +32,11 @@ interface ProductCardV2Props {
   showSeller?: boolean;
   showSaveButton?: boolean;
   visualOnly?: boolean;
+  /** Enable staggered entrance animation (default true) */
+  enableEntranceAnimation?: boolean;
 }
 
-export function ProductCardV2({ item, onPress, index = 0, showSeller = false, showSaveButton = false, visualOnly = false }: ProductCardV2Props) {
+export function ProductCardV2({ item, onPress, index = 0, showSeller = false, showSaveButton = false, visualOnly = false, enableEntranceAnimation = true }: ProductCardV2Props) {
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
   const isSaved = useStore((state) => state.isSavedProduct(item.id));
@@ -68,7 +71,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
     ? Math.round(((item.originalPrice! - item.price) / item.originalPrice!) * 100)
     : 0;
 
-  return (
+  const cardContent = (
     <View style={styles.container}>
       {/* Image - Full bleed, no border radius */}
       <AnimatedPressable onPress={onPress} style={styles.imageWrap}>
@@ -187,6 +190,16 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
       )}
     </View>
   );
+
+  if (!enableEntranceAnimation) {
+    return cardContent;
+  }
+
+  return (
+    <StaggeredItem index={index} animation="fadeDown" staggerMs={40}>
+      {cardContent}
+    </StaggeredItem>
+  );
 }
 
 // ============================================================================
@@ -203,25 +216,26 @@ interface MasonryGridProps {
 }
 
 export function MasonryGrid({ items, onPressItem, numColumns = 2, showSeller = false, showSaveButton = false, visualOnly = false }: MasonryGridProps) {
-  // Split items into columns for masonry effect
-  const columns: Listing[][] = Array.from({ length: numColumns }, () => []);
+  // Split items into columns for masonry effect, tracking original indices
+  const columns: { item: Listing; originalIndex: number }[][] = Array.from({ length: numColumns }, () => []);
   items.forEach((item, index) => {
-    columns[index % numColumns].push(item);
+    columns[index % numColumns].push({ item, originalIndex: index });
   });
 
   return (
     <View style={styles.grid}>
       {columns.map((columnItems, colIndex) => (
         <View key={colIndex} style={styles.column}>
-          {columnItems.map((item, index) => (
+          {columnItems.map(({ item, originalIndex }) => (
             <ProductCardV2
               key={item.id}
               item={item}
               onPress={() => onPressItem(item)}
-              index={colIndex * items.length + index}
+              index={originalIndex}
               showSeller={showSeller}
               showSaveButton={showSaveButton}
               visualOnly={visualOnly}
+              enableEntranceAnimation={true}
             />
           ))}
         </View>

@@ -8,6 +8,7 @@ import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
+import { useStore } from '../store/useStore';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SettingsHeader } from '../components/settings/SettingsHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
@@ -22,19 +23,20 @@ const MEMBER_OPTIONS = ['Everyone', 'Verified sellers first', 'People I follow f
 
 export default function PersonalisationScreen() {
   const navigation = useNavigation<any>();
-  const [genderFilter, setGenderFilter] = useState<string[]>(['Women', 'Men']);
-  const [categoriesAndSizesPref, setCategoriesAndSizesPref] = useState('Balanced');
-  const [brandsPref, setBrandsPref] = useState('Any');
-  const [membersPref, setMembersPref] = useState('Everyone');
+  const personalisationPreferences = useStore((state) => state.personalisationPreferences);
+  const updatePersonalisationPreferences = useStore((state) => state.updatePersonalisationPreferences);
+  const genderFilter = personalisationPreferences.genderFilter;
+  const categoriesAndSizesPref = personalisationPreferences.categoriesAndSizesPref;
+  const brandsPref = personalisationPreferences.brandsPref;
+  const membersPref = personalisationPreferences.membersPref;
   const [pickerMode, setPickerMode] = useState<PreferencePickerMode>(null);
   const { show } = useToast();
 
   const genderOptions = ['Women', 'Men', 'Kids', 'All'];
 
   const toggleGender = (g: string) => {
-    setGenderFilter((prev) =>
-      prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]
-    );
+    const next = genderFilter.includes(g) ? genderFilter.filter((x) => x !== g) : [...genderFilter, g];
+    updatePersonalisationPreferences({ genderFilter: next });
   };
 
   const pickerTitle =
@@ -66,17 +68,17 @@ export default function PersonalisationScreen() {
 
   const handleSelectPreference = (value: string) => {
     if (pickerMode === 'categories') {
-      setCategoriesAndSizesPref(value);
+      updatePersonalisationPreferences({ categoriesAndSizesPref: value });
       show('Categories and sizes preference updated.', 'success');
       return;
     }
     if (pickerMode === 'brands') {
-      setBrandsPref(value);
+      updatePersonalisationPreferences({ brandsPref: value });
       show('Brand preference updated.', 'success');
       return;
     }
     if (pickerMode === 'members') {
-      setMembersPref(value);
+      updatePersonalisationPreferences({ membersPref: value });
       show('Member preference updated.', 'success');
     }
   };

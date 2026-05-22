@@ -29,7 +29,7 @@ import { useBackendData } from '../context/BackendDataContext';
 
 import CameraCapture from '../components/poster/CameraCapture';
 import CreativeToolbar, { CreativeTool } from '../components/poster/CreativeToolbar';
-import BottomControlBar, { CaptureMode } from '../components/poster/BottomControlBar';
+import BottomControlBar from '../components/poster/BottomControlBar';
 import TextOverlayCanvas, { TextLayer } from '../components/poster/TextOverlayCanvas';
 import DetailsDrawer, { PosterMode } from '../components/poster/DetailsDrawer';
 import BackgroundPicker from '../components/poster/BackgroundPicker';
@@ -37,8 +37,6 @@ import StickerPicker, { StickerItem } from '../components/poster/StickerPicker';
 import DrawingCanvas, { BrushStroke } from '../components/poster/DrawingCanvas';
 import LayoutPicker, { LayoutType } from '../components/poster/LayoutPicker';
 import FilterStrip, { ImageFilter, getFilterOverlay } from '../components/poster/FilterStrip';
-// GLFilterView removed — expo-gl isn't available in Expo Go SDK 54.
-// Filter rendering falls back to a regular <Image> with CSS overlay below.
 import MultiPhotoCollage from '../components/poster/MultiPhotoCollage';
 import TemplatePicker from '../components/poster/TemplatePicker';
 import { Typography } from '../constants/typography';
@@ -86,10 +84,8 @@ export default function CreatePosterScreen() {
 
   // ── State ──
   const [posterMode, setPosterMode] = React.useState<PosterMode>('marketplace');
-  const [captureMode, setCaptureMode] = React.useState<CaptureMode>('poster');
   const [selectedImageUri, setSelectedImageUri] = React.useState<string | null>(null);
   const [blankBackgroundColor, setBlankBackgroundColor] = React.useState<string | null>(null);
-  const [isVideo, setIsVideo] = React.useState(false);
 
   const [textLayers, setTextLayers] = React.useState<TextLayer[]>([]);
   const [activeTool, setActiveTool] = React.useState<CreativeTool>(null);
@@ -145,7 +141,7 @@ export default function CreatePosterScreen() {
     const load = async () => {
       try {
         const result = await MediaLibrary.getAssetsAsync({
-          mediaType: ['photo', 'video'],
+          mediaType: ['photo'],
           first: 15,
           sortBy: MediaLibrary.SortBy.creationTime,
         });
@@ -292,15 +288,6 @@ export default function CreatePosterScreen() {
   // ── Capture handlers ──
   const handlePhotoCapture = (uri: string) => {
     setSelectedImageUri(uri);
-    setIsVideo(false);
-    setBlankBackgroundColor(null);
-    setCollagePhotos([uri]);
-    setLayout('single');
-  };
-
-  const handleVideoCapture = (uri: string) => {
-    setSelectedImageUri(uri);
-    setIsVideo(true);
     setBlankBackgroundColor(null);
     setCollagePhotos([uri]);
     setLayout('single');
@@ -313,7 +300,7 @@ export default function CreatePosterScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 5],
       quality: 0.92,
@@ -321,7 +308,6 @@ export default function CreatePosterScreen() {
     if (!result.canceled && result.assets?.[0]?.uri) {
       const asset = result.assets[0];
       setSelectedImageUri(asset.uri);
-      setIsVideo(asset.type === 'video');
       setBlankBackgroundColor(null);
       setCollagePhotos([asset.uri]);
       setLayout('single');
@@ -330,7 +316,6 @@ export default function CreatePosterScreen() {
 
   const handleRecentPhotoPress = (uri: string) => {
     setSelectedImageUri(uri);
-    setIsVideo(false);
     setBlankBackgroundColor(null);
     setCollagePhotos([uri]);
     setLayout('single');
@@ -458,15 +443,6 @@ export default function CreatePosterScreen() {
   const isCollage = layout !== 'single';
   const filterOverlay = getFilterOverlay(filter);
 
-  const stickerListings = React.useMemo(() =>
-    allListingOptions.slice(0, 10).map((l) => ({
-      id: l.id,
-      title: l.title,
-      price: l.price,
-    })),
-    [allListingOptions]
-  );
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -482,7 +458,6 @@ export default function CreatePosterScreen() {
         {!hasCanvas ? (
           <CameraCapture
             onPhotoCapture={handlePhotoCapture}
-            onVideoCapture={handleVideoCapture}
             onClose={handleClose}
           />
         ) : isBlankMode && blankBackgroundColor ? (
@@ -512,7 +487,8 @@ export default function CreatePosterScreen() {
           </View>
         )}
 
-        {hasCanvas && filterOverlay.opacity > 0 && filterOverlay.color && (isCollage || isVideo) && (
+        {/* Filter overlay (simple, reliable) */}
+        {hasCanvas && filterOverlay.opacity > 0 && filterOverlay.color && (
           <View style={[StyleSheet.absoluteFillObject, { backgroundColor: filterOverlay.color, opacity: filterOverlay.opacity }]} pointerEvents="none" />
         )}
 
@@ -534,12 +510,6 @@ export default function CreatePosterScreen() {
               <Ionicons name="albums-outline" size={16} color="#fff" />
             </Pressable>
             <Pressable
-              style={[styles.topActionPill, showFilterStrip && styles.topActionPillActive]}
-              onPress={() => setShowFilterStrip((prev) => !prev)}
-            >
-              <Ionicons name="color-wand-outline" size={16} color="#fff" />
-            </Pressable>
-            <Pressable
               style={[styles.topActionPill, showDetails && styles.topActionPillActive]}
               onPress={() => setShowDetails(true)}
             >
@@ -549,12 +519,14 @@ export default function CreatePosterScreen() {
         </SafeAreaView>
       )}
 
-      {/* Creative Toolbar */}
+      {/* Creative Toolbar (bottom) */}
       {hasCanvas && activeTool !== 'draw' && (
         <CreativeToolbar
           activeTool={activeTool}
           onToolSelect={setActiveTool}
           visible={!showDetails && !showBackgroundPicker && !showStickerPicker && !showLayoutPicker && !showTemplatePicker}
+          onFilterToggle={() => setShowFilterStrip((prev) => !prev)}
+          filterActive={showFilterStrip}
         />
       )}
 
@@ -610,8 +582,6 @@ export default function CreatePosterScreen() {
       {/* Bottom Control Bar */}
       {!hasCanvas && (
         <BottomControlBar
-          mode={captureMode}
-          onModeChange={setCaptureMode}
           onGalleryPress={handleGalleryPress}
           onFlipCamera={() => {}}
           recentPhotos={recentPhotos}
@@ -635,7 +605,6 @@ export default function CreatePosterScreen() {
         visible={showStickerPicker}
         onClose={() => setShowStickerPicker(false)}
         onStickerSelect={handleStickerSelect}
-        listings={stickerListings}
       />
 
       <LayoutPicker
@@ -710,9 +679,6 @@ function StickerOverlay({
     sticker.type === 'question' && styles.questionBubble,
     sticker.type === 'shape' && { backgroundColor: sticker.color || '#ff2d55' },
     sticker.type === 'countdown' && styles.countdownBubble,
-    sticker.type === 'productTag' && styles.productTagBubble,
-    sticker.type === 'quiz' && styles.quizBubble,
-    sticker.type === 'slider' && styles.sliderBubble,
   ];
 
   const displayContent = sticker.type === 'countdown' && countdownLabel
@@ -724,15 +690,6 @@ function StickerOverlay({
       <View {...panHandlers} pointerEvents="auto" style={styles.stickerDragArea}>
         {sticker.type === 'countdown' && (
           <Ionicons name="timer-outline" size={14} color="#ff3b30" style={{ marginRight: 4 }} />
-        )}
-        {sticker.type === 'productTag' && (
-          <Ionicons name="pricetag-outline" size={14} color="#4cd964" style={{ marginRight: 4 }} />
-        )}
-        {sticker.type === 'quiz' && (
-          <Ionicons name="help-circle-outline" size={14} color="#5ac8fa" style={{ marginRight: 4 }} />
-        )}
-        {sticker.type === 'slider' && (
-          <Ionicons name="swap-horizontal-outline" size={14} color="#ff9500" style={{ marginRight: 4 }} />
         )}
         <Text style={styles.stickerText} numberOfLines={3}>
           {displayContent}
@@ -831,21 +788,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,59,48,0.25)',
     borderWidth: 1,
     borderColor: 'rgba(255,59,48,0.5)',
-  },
-  productTagBubble: {
-    backgroundColor: 'rgba(77,201,100,0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(77,201,100,0.5)',
-  },
-  quizBubble: {
-    backgroundColor: 'rgba(90,200,250,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(90,200,250,0.4)',
-  },
-  sliderBubble: {
-    backgroundColor: 'rgba(255,149,0,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,149,0,0.4)',
   },
   stickerDragArea: {
     minWidth: 30,

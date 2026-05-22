@@ -30,7 +30,9 @@ import { Typography } from '../constants/typography';
 type Props = StackScreenProps<RootStackParamList, 'Payments'>;
 
 export default function PaymentsScreen({ navigation }: Props) {
-  const [useBalance, setUseBalance] = useState(true);
+  const paymentPreferences = useStore((state) => state.paymentPreferences);
+  const updatePaymentPreferences = useStore((state) => state.updatePaymentPreferences);
+  const useBalance = paymentPreferences.useBalance;
   const [backendPaymentMethods, setBackendPaymentMethods] = useState<CommercePaymentMethod[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [addCardSheetVisible, setAddCardSheetVisible] = useState(false);
@@ -189,7 +191,7 @@ export default function PaymentsScreen({ navigation }: Props) {
               subtitle={`Automatically apply ${formatFromFiat(120.5, 'GBP', { displayMode: 'fiat' })} to purchases`}
               variant="toggle"
               toggleValue={useBalance}
-              onToggle={setUseBalance}
+              onToggle={(v) => updatePaymentPreferences({ useBalance: v })}
               isFirst
               isLast
             />

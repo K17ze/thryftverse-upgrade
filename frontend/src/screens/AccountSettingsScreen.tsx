@@ -17,7 +17,7 @@ import { Space, Radius, Type } from '../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { useStore } from '../store/useStore';
+import { useStore, User } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { parseApiError } from '../lib/apiClient';
 import { requestMyDataExport, deleteMyAccount } from '../services/accountApi';
@@ -36,6 +36,9 @@ export default function AccountSettingsScreen() {
   const logout = useStore((state) => state.logout);
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
+  const accountPreferences = useStore((state) => state.accountPreferences);
+  const updateAccountPreferences = useStore((state) => state.updateAccountPreferences);
+  const updateUserProfile = useStore((state) => state.updateUserProfile);
   const { show } = useToast();
 
   const user = currentUser ?? MY_USER;
@@ -48,8 +51,8 @@ export default function AccountSettingsScreen() {
   const [birthday, setBirthday] = useState(userAny?.birthday ?? '');
 
   // Preferences
-  const [holidayMode, setHolidayMode] = useState(false);
-  const [privateProfile, setPrivateProfile] = useState(false);
+  const holidayMode = accountPreferences.holidayMode;
+  const privateProfile = accountPreferences.privateProfile;
 
   // Linked accounts
   const facebookLinked = false;
@@ -172,6 +175,7 @@ export default function AccountSettingsScreen() {
   };
 
   const handleSaveChanges = () => {
+    updateUserProfile({ email, phone, fullName, birthday });
     show('Account details saved', 'success');
   };
 
@@ -233,7 +237,7 @@ export default function AccountSettingsScreen() {
               subtitle="Hide your items for up to 90 days"
               variant="toggle"
               toggleValue={holidayMode}
-              onToggle={setHolidayMode}
+              onToggle={((v: boolean) => updateAccountPreferences({ holidayMode: v }))}
               isFirst
             />
             <SettingsCell
@@ -243,7 +247,7 @@ export default function AccountSettingsScreen() {
               subtitle="Only followers can see your items"
               variant="toggle"
               toggleValue={privateProfile}
-              onToggle={setPrivateProfile}
+              onToggle={((v: boolean) => updateAccountPreferences({ privateProfile: v }))}
               isLast
             />
           </SettingsCard>

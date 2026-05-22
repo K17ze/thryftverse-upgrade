@@ -50,6 +50,7 @@ import { ThryftCartIcon } from '../components/icons/ThryftCartIcon';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { MasonryGrid, ProductCardV2 } from '../components/ProductCardV2';
 import { DoubleTapHeart } from '../components/DoubleTapHeart';
+import { StaggeredItem } from '../components/StaggeredGridEntrance';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
@@ -357,6 +358,16 @@ export default function HomeScreen() {
     };
   });
 
+  const headerShadowStyle = useAnimatedStyle(() => {
+    const shadowOpacity = interpolate(scrollY.value, [0, 60], [0, 0.12], Extrapolation.CLAMP);
+    const shadowRadius = interpolate(scrollY.value, [0, 60], [0, 12], Extrapolation.CLAMP);
+    return {
+      shadowOpacity,
+      shadowRadius,
+      elevation: interpolate(scrollY.value, [0, 60], [0, 6], Extrapolation.CLAMP),
+    };
+  });
+
   React.useEffect(() => {
     if (!seededKnownListingIdsRef.current) {
       if (listings.length === 0) {
@@ -483,13 +494,13 @@ export default function HomeScreen() {
   const feedGridData = showFeedLoadingSkeleton ? [] : exploreData;
 
   const masonryColumns = React.useMemo(() => {
-    const columns: [ExploreTile[], ExploreTile[]] = [[], []];
+    const columns: [Array<{ tile: ExploreTile; originalIndex: number }>, Array<{ tile: ExploreTile; originalIndex: number }>] = [[], []];
     const columnHeights = [0, 0];
 
-    feedGridData.forEach((tile) => {
+    feedGridData.forEach((tile, originalIndex) => {
       const tileHeight = Math.round(gridTileWidth * tile.aspectRatio) + (tile.sellerId && tile.routeId ? 38 : 0);
       const targetIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
-      columns[targetIndex].push(tile);
+      columns[targetIndex].push({ tile, originalIndex });
       columnHeights[targetIndex] += tileHeight + GRID_GAP;
     });
 
@@ -681,7 +692,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <Reanimated.View style={[styles.floatingHeaderShell, headerHeightStyle]}>
+      <Reanimated.View style={[styles.floatingHeaderShell, headerHeightStyle, headerShadowStyle]}>
         <BlurView
           intensity={IS_LIGHT ? 74 : 58}
           tint={IS_LIGHT ? 'light' : 'dark'}
@@ -740,31 +751,33 @@ export default function HomeScreen() {
         ) : (
           <View style={styles.masonryGrid}>
             <View style={styles.masonryColumn}>
-              {masonryColumns[0].map((item) => (
-                <ExploreGridItem
-                  key={item.id}
-                  item={item}
-                  tileWidth={gridTileWidth}
-                  formatPrice={formatFromFiat}
-                  onPress={handleTilePress}
-                  onLongPress={handleTileLongPress}
-                  onPressSellerProfile={handleSellerProfilePress}
-                  onPressSellerMessage={handleSellerMessagePress}
-                />
+              {masonryColumns[0].map(({ tile: item, originalIndex }) => (
+                <StaggeredItem key={item.id} index={originalIndex} animation="fadeDown" staggerMs={40}>
+                  <ExploreGridItem
+                    item={item}
+                    tileWidth={gridTileWidth}
+                    formatPrice={formatFromFiat}
+                    onPress={handleTilePress}
+                    onLongPress={handleTileLongPress}
+                    onPressSellerProfile={handleSellerProfilePress}
+                    onPressSellerMessage={handleSellerMessagePress}
+                  />
+                </StaggeredItem>
               ))}
             </View>
             <View style={styles.masonryColumn}>
-              {masonryColumns[1].map((item) => (
-                <ExploreGridItem
-                  key={item.id}
-                  item={item}
-                  tileWidth={gridTileWidth}
-                  formatPrice={formatFromFiat}
-                  onPress={handleTilePress}
-                  onLongPress={handleTileLongPress}
-                  onPressSellerProfile={handleSellerProfilePress}
-                  onPressSellerMessage={handleSellerMessagePress}
-                />
+              {masonryColumns[1].map(({ tile: item, originalIndex }) => (
+                <StaggeredItem key={item.id} index={originalIndex} animation="fadeDown" staggerMs={40}>
+                  <ExploreGridItem
+                    item={item}
+                    tileWidth={gridTileWidth}
+                    formatPrice={formatFromFiat}
+                    onPress={handleTilePress}
+                    onLongPress={handleTileLongPress}
+                    onPressSellerProfile={handleSellerProfilePress}
+                    onPressSellerMessage={handleSellerMessagePress}
+                  />
+                </StaggeredItem>
               ))}
             </View>
           </View>

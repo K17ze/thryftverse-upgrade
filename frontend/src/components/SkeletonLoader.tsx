@@ -6,17 +6,25 @@ import Reanimated, {
   withRepeat,
   withSequence,
   withTiming,
+  withDelay,
   Easing,
+  interpolate,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ActiveTheme, Colors } from '../constants/colors';
 
-// ELEVATED: Refined shimmer colors for premium feel
+// ELEVATED: Flagship shimmer with brand tint
 const IS_LIGHT = ActiveTheme === 'light';
 const BASE_BG = IS_LIGHT ? '#f0ede8' : '#1c1c1c';
-const SHIMMER_COLOR = IS_LIGHT 
-  ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.5)', 'rgba(255,255,255,0)'] 
-  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0)'];
+
+// Multi-layer shimmer: white sweep + subtle brand glow
+const SHIMMER_WAVE = IS_LIGHT
+  ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.45)', 'rgba(255,255,255,0)']
+  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)'];
+
+const BRAND_TINT = IS_LIGHT
+  ? ['rgba(201,162,39,0)', 'rgba(201,162,39,0.08)', 'rgba(201,162,39,0)']
+  : ['rgba(212,168,83,0)', 'rgba(212,168,83,0.06)', 'rgba(212,168,83,0)'];
 
 interface SkeletonProps {
   width: number | `${number}%`;
@@ -26,25 +34,45 @@ interface SkeletonProps {
 }
 
 export function SkeletonLoader({ width, height, borderRadius = 8, style }: SkeletonProps) {
-  const translateX = useSharedValue(-300);
+  const translateX = useSharedValue(-400);
+  const breathe = useSharedValue(1);
 
   useEffect(() => {
+    // Primary wave sweep
     translateX.value = withRepeat(
       withSequence(
-        withTiming(400, { duration: 1400, easing: Easing.inOut(Easing.ease) }), // ELEVATED: Slower, smoother
-        withTiming(-300, { duration: 0 })
+        withTiming(500, { duration: 1600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-400, { duration: 0 })
       ),
       -1,
       false,
     );
-  }, [translateX]);
 
-  const animStyle = useAnimatedStyle(() => ({
+    // Subtle breathing pulse on the base
+    breathe.value = withRepeat(
+      withSequence(
+        withTiming(1.02, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.98, { duration: 1800, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true,
+    );
+  }, [translateX, breathe]);
+
+  const waveStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
   }));
 
+  const brandWaveStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: withDelay(200, translateX.value) }],
+  }));
+
+  const breatheStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(breathe.value, [0.98, 1.02], [0.92, 1]),
+  }));
+
   return (
-    <View
+    <Reanimated.View
       style={[
         {
           width: width as any,
@@ -53,18 +81,30 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style }: Skele
           backgroundColor: BASE_BG,
           overflow: 'hidden',
         },
+        breatheStyle,
         style,
       ]}
     >
-      <Reanimated.View style={[StyleSheet.absoluteFill, animStyle]}>
+      {/* Primary white shimmer wave */}
+      <Reanimated.View style={[StyleSheet.absoluteFill, waveStyle]}>
         <LinearGradient
-          colors={SHIMMER_COLOR as [string, string, string]}
+          colors={SHIMMER_WAVE as [string, string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={{ width: 240, height: '100%' }} // ELEVATED: Wider gradient for smoother effect
+          style={{ width: 280, height: '100%' }}
         />
       </Reanimated.View>
-    </View>
+
+      {/* Secondary brand-tinted wave (slightly delayed for depth) */}
+      <Reanimated.View style={[StyleSheet.absoluteFill, brandWaveStyle]}>
+        <LinearGradient
+          colors={BRAND_TINT as [string, string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: 200, height: '100%' }}
+        />
+      </Reanimated.View>
+    </Reanimated.View>
   );
 }
 

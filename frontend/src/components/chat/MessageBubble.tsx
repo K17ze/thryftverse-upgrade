@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle, Pressable } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
 import { Space, Radius } from '../../theme/designTokens';
 import { Body, Meta, Caption } from '../ui/Text';
+import { MessageReactionsSummary, EmojiReaction } from './EmojiReactionsBar';
+import { MentionHighlight } from './MentionHighlight';
 import { MessageStatusIndicator, MessageStatus } from '../MessageStatusIndicator';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -14,6 +16,8 @@ interface MessageBubbleProps {
   timestamp?: string;
   status?: MessageStatus;
   style?: ViewStyle;
+  onLongPress?: () => void;
+  reactions?: EmojiReaction[];
 }
 
 export function MessageBubble({
@@ -23,10 +27,12 @@ export function MessageBubble({
   timestamp,
   status,
   style,
+  onLongPress,
+  reactions,
 }: MessageBubbleProps) {
   const reducedMotionEnabled = useReducedMotion();
 
-  return (
+  const bubble = (
     <Reanimated.View
       entering={reducedMotionEnabled ? undefined : FadeIn.duration(150)}
       style={[styles.container, isMe && styles.containerRight, style]}
@@ -40,7 +46,10 @@ export function MessageBubble({
 
         <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
           <Body color={isMe ? Colors.textInverse : Colors.textPrimary}>
-            {text}
+            <MentionHighlight
+              text={text}
+              color={isMe ? Colors.textInverse : Colors.brand}
+            />
           </Body>
         </View>
 
@@ -55,9 +64,26 @@ export function MessageBubble({
             {timestamp}
           </Caption>
         ) : null}
+
+        {reactions && reactions.length > 0 ? (
+          <MessageReactionsSummary
+            reactions={reactions}
+            style={isMe ? styles.reactionsMe : styles.reactionsThem}
+          />
+        ) : null}
       </View>
     </Reanimated.View>
   );
+
+  if (onLongPress) {
+    return (
+      <Pressable onLongPress={onLongPress}>
+        {bubble}
+      </Pressable>
+    );
+  }
+
+  return bubble;
 }
 
 const styles = StyleSheet.create({
@@ -100,6 +126,14 @@ const styles = StyleSheet.create({
   },
   incomingTimestamp: {
     marginTop: 2,
+    marginLeft: Space.xs,
+  },
+  reactionsMe: {
+    alignSelf: 'flex-end',
+    marginRight: Space.xs,
+  },
+  reactionsThem: {
+    alignSelf: 'flex-start',
     marginLeft: Space.xs,
   },
 });

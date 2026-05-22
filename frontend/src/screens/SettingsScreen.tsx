@@ -22,6 +22,7 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { logoutFromSession } from '../services/authApi';
+import { clearImageCache } from '../utils/imagePreloader';
 import { CURRENCIES, SupportedCurrencyCode } from '../constants/currencies';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -59,6 +60,9 @@ export default function SettingsScreen({ navigation }: Props) {
   const logout = useStore((state) => state.logout);
   const currentUser = useStore((state) => state.currentUser);
   const userAvatar = useStore((state) => state.userAvatar);
+  const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
+  const savedPaymentMethod = useStore((state) => state.savedPaymentMethod);
+  const savedAddress = useStore((state) => state.savedAddress);
   const { show } = useToast();
 
   const {
@@ -165,8 +169,13 @@ export default function SettingsScreen({ navigation }: Props) {
     navigation.replace('AuthLanding');
   }, [logout, navigation]);
 
-  const handleClearCache = React.useCallback(() => {
-    show('Cache cleared', 'success');
+  const handleClearCache = React.useCallback(async () => {
+    try {
+      await clearImageCache();
+      show('Cache cleared', 'success');
+    } catch {
+      show('Failed to clear cache', 'error');
+    }
   }, [show]);
 
   // Profile preview data
@@ -207,16 +216,16 @@ export default function SettingsScreen({ navigation }: Props) {
           icon="card-outline"
           iconColor="#4CAF50"
           title="Payment Methods"
-          value="2 cards"
+          value={savedPaymentMethod ? '1 saved' : 'None'}
           onPress={() => navigation.navigate('Payments')}
         />
         <SettingsCell
           icon="location-outline"
           iconColor="#FF9800"
           title="Addresses"
-          value="3 saved"
+          value={savedAddress ? '1 saved' : 'None'}
           isLast
-          onPress={() => navigation.navigate('AddAddress')}
+          onPress={() => navigation.navigate('AccountSettings')}
         />
       </SettingsGroup>
     );
@@ -339,7 +348,7 @@ export default function SettingsScreen({ navigation }: Props) {
           icon="lock-closed-outline"
           iconColor={Colors.success}
           title="Two-Factor Authentication"
-          value="Off"
+          value={twoFactorEnabled ? 'On' : 'Off'}
           isFirst
           onPress={() => navigation.navigate('TwoFactorSetup')}
         />
@@ -347,7 +356,7 @@ export default function SettingsScreen({ navigation }: Props) {
           icon="phone-portrait-outline"
           iconColor={Colors.brand}
           title="Active Devices"
-          value="3 devices"
+          value="Manage"
           isLast
           onPress={() => navigation.navigate('AccountSettings')}
         />
@@ -370,13 +379,13 @@ export default function SettingsScreen({ navigation }: Props) {
           iconColor={Colors.brand}
           title="Manage Downloads"
           isFirst
-          onPress={() => {}}
+          onPress={() => show('Downloads managed automatically', 'info')}
         />
         <SettingsCell
           icon="trash-outline"
           iconColor={Colors.danger}
           title="Clear Cache"
-          value="180 MB"
+          value="Auto"
           isLast
           onPress={handleClearCache}
         />

@@ -14,11 +14,11 @@ import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 
 const { height: SCREEN_H } = Dimensions.get('window');
-const DRAWER_HEIGHT = SCREEN_H * 0.7;
+const DRAWER_HEIGHT = SCREEN_H * 0.6;
 
 export interface StickerItem {
   id: string;
-  type: 'mention' | 'hashtag' | 'poll' | 'question' | 'emoji' | 'shape' | 'countdown' | 'productTag' | 'quiz' | 'slider';
+  type: 'mention' | 'hashtag' | 'poll' | 'question' | 'emoji' | 'shape' | 'countdown';
   content: string;
   color?: string;
   x?: number;
@@ -33,10 +33,9 @@ interface StickerPickerProps {
   visible: boolean;
   onClose: () => void;
   onStickerSelect: (sticker: StickerItem) => void;
-  listings?: { id: string; title: string; price: number }[];
 }
 
-const EMOJIS = ['🔥', '❤️', '😂', '😍', '👀', '✨', '🎉', '💯', '🙌', '🔥', '⚡', '🌟', '💥', '🏷️', '📌'];
+const EMOJIS = ['🔥', '❤️', '😂', '😍', '👀', '✨', '🎉', '💯', '🙌', '⚡', '🌟', '💥', '🏷️', '📌', '🚀', '💎'];
 
 const SHAPES = [
   { icon: 'heart', label: 'Heart', color: '#ff2d55' },
@@ -69,23 +68,10 @@ const COUNTDOWN_PRESETS = [
   { label: '1 Week', hours: 168 },
 ];
 
-const QUIZ_PRESETS = [
-  { q: 'Real or fake?', o1: 'Real', o2: 'Fake' },
-  { q: 'Keep or resell?', o1: 'Keep', o2: 'Resell' },
-  { q: 'Dress up or down?', o1: 'Up', o2: 'Down' },
-];
-
-const SLIDER_PRESETS = [
-  'Rate this fit',
-  'How rare is this?',
-  'Cop or drop?',
-];
-
-export default function StickerPicker({ visible, onClose, onStickerSelect, listings }: StickerPickerProps) {
-  const [tab, setTab] = React.useState<'popular' | 'mentions' | 'polls' | 'questions' | 'interactive'>('popular');
+export default function StickerPicker({ visible, onClose, onStickerSelect }: StickerPickerProps) {
+  const [tab, setTab] = React.useState<'emoji' | 'text' | 'shapes'>('emoji');
   const [mentionInput, setMentionInput] = React.useState('');
   const [hashtagInput, setHashtagInput] = React.useState('');
-  const [selectedListingId, setSelectedListingId] = React.useState('');
   const translateY = React.useRef(new Animated.Value(DRAWER_HEIGHT)).current;
   const backdropOpacity = React.useRef(new Animated.Value(0)).current;
 
@@ -133,38 +119,6 @@ export default function StickerPicker({ visible, onClose, onStickerSelect, listi
     onClose();
   };
 
-  const handleProductTagSelect = (listingId: string, title: string) => {
-    onStickerSelect({
-      id: `product_${Date.now()}`,
-      type: 'productTag',
-      content: title,
-      color: '#4cd964',
-      listingId,
-    });
-    onClose();
-  };
-
-  const handleQuizSelect = (q: string, o1: string, o2: string) => {
-    onStickerSelect({
-      id: `quiz_${Date.now()}`,
-      type: 'quiz',
-      content: q,
-      options: [o1, o2],
-      votes: [0, 0],
-    });
-    onClose();
-  };
-
-  const handleSliderSelect = (q: string) => {
-    onStickerSelect({
-      id: `slider_${Date.now()}`,
-      type: 'slider',
-      content: q,
-      votes: [0],
-    });
-    onClose();
-  };
-
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents={visible ? 'auto' : 'none'}>
       <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} pointerEvents={visible ? 'auto' : 'none'}>
@@ -178,10 +132,10 @@ export default function StickerPicker({ visible, onClose, onStickerSelect, listi
 
         {/* Tabs */}
         <View style={styles.tabRow}>
-          {(['popular', 'mentions', 'polls', 'questions', 'interactive'] as const).map((t) => (
+          {(['emoji', 'text', 'shapes'] as const).map((t) => (
             <Pressable key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)}>
               <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
+                {t === 'text' ? 'Text' : t === 'emoji' ? 'Emoji' : 'Shapes'}
               </Text>
             </Pressable>
           ))}
@@ -189,45 +143,27 @@ export default function StickerPicker({ visible, onClose, onStickerSelect, listi
 
         {/* Content */}
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          {tab === 'popular' && (
-            <>
-              <Text style={styles.sectionLabel}>Emoji</Text>
-              <View style={styles.emojiGrid}>
-                {EMOJIS.map((emoji) => (
-                  <Pressable
-                    key={emoji}
-                    style={styles.emojiBtn}
-                    onPress={() => {
-                      onStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
-                      onClose();
-                    }}
-                  >
-                    <Text style={styles.emojiText}>{emoji}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <Text style={styles.sectionLabel}>Shapes</Text>
-              <View style={styles.shapeRow}>
-                {SHAPES.map((shape) => (
-                  <Pressable
-                    key={shape.icon}
-                    style={[styles.shapeBtn, { backgroundColor: shape.color }]}
-                    onPress={() => {
-                      onStickerSelect({ id: `shape_${Date.now()}`, type: 'shape', content: shape.icon, color: shape.color });
-                      onClose();
-                    }}
-                  >
-                    <Ionicons name={shape.icon as any} size={22} color="#fff" />
-                  </Pressable>
-                ))}
-              </View>
-            </>
+          {tab === 'emoji' && (
+            <View style={styles.emojiGrid}>
+              {EMOJIS.map((emoji) => (
+                <Pressable
+                  key={emoji}
+                  style={styles.emojiBtn}
+                  onPress={() => {
+                    onStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
+                    onClose();
+                  }}
+                >
+                  <Text style={styles.emojiText}>{emoji}</Text>
+                </Pressable>
+              ))}
+            </View>
           )}
 
-          {tab === 'mentions' && (
+          {tab === 'text' && (
             <View style={styles.inputSection}>
-              <Text style={styles.sectionLabel}>Mention User</Text>
+              {/* Mention */}
+              <Text style={styles.sectionLabel}>Mention</Text>
               <View style={styles.inputRow}>
                 <Text style={styles.inputPrefix}>@</Text>
                 <TextInput
@@ -242,10 +178,11 @@ export default function StickerPicker({ visible, onClose, onStickerSelect, listi
                   returnKeyType="done"
                 />
                 <Pressable style={styles.inputAction} onPress={handleMentionSubmit}>
-                  <Ionicons name="add-circle" size={28} color="#fff" />
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
                 </Pressable>
               </View>
 
+              {/* Hashtag */}
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Hashtag</Text>
               <View style={styles.inputRow}>
                 <Text style={styles.inputPrefix}>#</Text>
@@ -253,7 +190,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect, listi
                   style={styles.input}
                   value={hashtagInput}
                   onChangeText={setHashtagInput}
-                  placeholder="hashtag"
+                  placeholder="thriftfind"
                   placeholderTextColor="rgba(255,255,255,0.35)"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -261,121 +198,81 @@ export default function StickerPicker({ visible, onClose, onStickerSelect, listi
                   returnKeyType="done"
                 />
                 <Pressable style={styles.inputAction} onPress={handleHashtagSubmit}>
-                  <Ionicons name="add-circle" size={28} color="#fff" />
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
                 </Pressable>
               </View>
-            </View>
-          )}
 
-          {tab === 'polls' && (
-            <View style={styles.presetSection}>
-              {PRESET_POLLS.map((poll) => (
+              {/* Polls */}
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Polls</Text>
+              {PRESET_POLLS.map((p) => (
                 <Pressable
-                  key={poll.q}
-                  style={styles.pollCard}
+                  key={p.q}
+                  style={styles.presetCard}
                   onPress={() => {
                     onStickerSelect({
                       id: `poll_${Date.now()}`,
                       type: 'poll',
-                      content: `${poll.q}\n${poll.o1}  |  ${poll.o2}`,
+                      content: p.q,
+                      options: [p.o1, p.o2],
+                      votes: [0, 0],
                     });
                     onClose();
                   }}
                 >
-                  <Text style={styles.pollQ}>{poll.q}</Text>
-                  <View style={styles.pollOptions}>
-                    <View style={styles.pollOption}><Text style={styles.pollOptionText}>{poll.o1}</Text></View>
-                    <View style={styles.pollOption}><Text style={styles.pollOptionText}>{poll.o2}</Text></View>
+                  <Text style={styles.presetText}>{p.q}</Text>
+                  <View style={styles.pillRow}>
+                    <View style={styles.pill}><Text style={styles.pillText}>{p.o1}</Text></View>
+                    <View style={styles.pill}><Text style={styles.pillText}>{p.o2}</Text></View>
                   </View>
                 </Pressable>
               ))}
-            </View>
-          )}
 
-          {tab === 'questions' && (
-            <View style={styles.presetSection}>
-              {PRESET_QUESTIONS.map((q) => (
-                <Pressable
-                  key={q}
-                  style={styles.questionCard}
-                  onPress={() => {
-                    onStickerSelect({ id: `question_${Date.now()}`, type: 'question', content: q });
-                    onClose();
-                  }}
-                >
-                  <Ionicons name="help-circle" size={20} color="#ff9500" />
-                  <Text style={styles.questionText}>{q}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-
-          {tab === 'interactive' && (
-            <View style={styles.presetSection}>
-              {/* Countdown */}
-              <Text style={styles.sectionLabel}>Countdown</Text>
-              <View style={styles.countdownRow}>
-                {COUNTDOWN_PRESETS.map((c) => (
+              {/* Questions */}
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Questions</Text>
+              <View style={styles.pillRowWrap}>
+                {PRESET_QUESTIONS.map((q) => (
                   <Pressable
-                    key={c.label}
-                    style={styles.countdownBtn}
-                    onPress={() => handleCountdownSelect(c.hours)}
+                    key={q}
+                    style={styles.pillBtn}
+                    onPress={() => {
+                      onStickerSelect({ id: `question_${Date.now()}`, type: 'question', content: q });
+                      onClose();
+                    }}
                   >
-                    <Ionicons name="timer-outline" size={16} color="#ff3b30" />
-                    <Text style={styles.countdownText}>{c.label}</Text>
+                    <Text style={styles.pillBtnText}>{q}</Text>
                   </Pressable>
                 ))}
               </View>
 
-              {/* Product Tags */}
-              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Product Tag</Text>
-              {listings && listings.length > 0 ? (
-                <View style={styles.productList}>
-                  {listings.slice(0, 6).map((l) => (
-                    <Pressable
-                      key={l.id}
-                      style={[styles.productRow, selectedListingId === l.id && styles.productRowActive]}
-                      onPress={() => {
-                        setSelectedListingId(l.id);
-                        handleProductTagSelect(l.id, l.title);
-                      }}
-                    >
-                      <Ionicons name="pricetag-outline" size={16} color="#4cd964" />
-                      <Text style={styles.productText} numberOfLines={1}>{l.title}</Text>
-                      <Text style={styles.productPrice}>£{l.price}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.emptyText}>No listings available to tag</Text>
-              )}
+              {/* Countdown */}
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Countdown</Text>
+              <View style={styles.pillRowWrap}>
+                {COUNTDOWN_PRESETS.map((c) => (
+                  <Pressable
+                    key={c.label}
+                    style={styles.pillBtn}
+                    onPress={() => handleCountdownSelect(c.hours)}
+                  >
+                    <Text style={styles.pillBtnText}>{c.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
 
-              {/* Quiz */}
-              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Quiz</Text>
-              {QUIZ_PRESETS.map((q) => (
+          {tab === 'shapes' && (
+            <View style={styles.shapeGrid}>
+              {SHAPES.map((shape) => (
                 <Pressable
-                  key={q.q}
-                  style={styles.quizCard}
-                  onPress={() => handleQuizSelect(q.q, q.o1, q.o2)}
+                  key={shape.icon}
+                  style={[styles.shapeBtn, { backgroundColor: shape.color }]}
+                  onPress={() => {
+                    onStickerSelect({ id: `shape_${Date.now()}`, type: 'shape', content: shape.icon, color: shape.color });
+                    onClose();
+                  }}
                 >
-                  <Text style={styles.quizQ}>{q.q}</Text>
-                  <View style={styles.quizOptions}>
-                    <View style={styles.quizOption}><Text style={styles.quizOptionText}>{q.o1}</Text></View>
-                    <View style={styles.quizOption}><Text style={styles.quizOptionText}>{q.o2}</Text></View>
-                  </View>
-                </Pressable>
-              ))}
-
-              {/* Slider */}
-              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Slider</Text>
-              {SLIDER_PRESETS.map((q) => (
-                <Pressable
-                  key={q}
-                  style={styles.sliderCard}
-                  onPress={() => handleSliderSelect(q)}
-                >
-                  <Ionicons name="swap-horizontal-outline" size={18} color="#5ac8fa" />
-                  <Text style={styles.sliderText}>{q}</Text>
+                  <Ionicons name={shape.icon as any} size={28} color="#fff" />
+                  <Text style={styles.shapeLabel}>{shape.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -389,7 +286,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect, listi
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   drawer: {
     position: 'absolute',
@@ -401,6 +298,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',
+    paddingBottom: 24,
   },
   handleRow: {
     alignItems: 'center',
@@ -415,12 +313,13 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: 'row',
-    paddingHorizontal: 12,
+    justifyContent: 'center',
     gap: 8,
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
   },
   tab: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.06)',
@@ -438,214 +337,128 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 32,
-    gap: 16,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontFamily: Typography.family.bold,
-    color: 'rgba(255,255,255,0.5)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginTop: 8,
+    paddingBottom: 24,
   },
   emojiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 8,
+    gap: 8,
+    paddingTop: 8,
   },
   emojiBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   emojiText: {
     fontSize: 24,
   },
-  shapeRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-  },
-  shapeBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   inputSection: {
-    gap: 8,
-    marginTop: 8,
+    paddingTop: 8,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: 'rgba(255,255,255,0.5)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 6,
+    height: 44,
   },
   inputPrefix: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: 'rgba(255,255,255,0.5)',
+    marginRight: 6,
   },
   input: {
     flex: 1,
-    fontSize: 15,
-    fontFamily: Typography.family.medium,
     color: '#fff',
+    fontSize: 15,
+    fontFamily: Typography.family.regular,
     padding: 0,
   },
   inputAction: {
-    padding: 2,
-  },
-  presetSection: {
-    gap: 10,
-    marginTop: 8,
-  },
-  pollCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    width: 32,
+    height: 32,
     borderRadius: 16,
-    padding: 14,
-    gap: 10,
-  },
-  pollQ: {
-    fontSize: 15,
-    fontFamily: Typography.family.bold,
-    color: '#fff',
-  },
-  pollOptions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  pollOption: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 10,
-    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  pollOptionText: {
-    fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
-  },
-  questionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  presetCard: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    padding: 14,
+    marginBottom: 10,
   },
-  questionText: {
+  presetText: {
+    color: '#fff',
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    marginBottom: 10,
   },
-  countdownRow: {
+  pillRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  pillRowWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 6,
   },
-  countdownBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,59,48,0.15)',
+  pill: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  countdownText: {
-    fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: '#ff3b30',
-  },
-  productList: {
-    gap: 6,
-    marginTop: 6,
-  },
-  productRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  productRowActive: {
-    backgroundColor: 'rgba(77,201,100,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(77,201,100,0.4)',
-  },
-  productText: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
-  },
-  productPrice: {
-    fontSize: 13,
-    fontFamily: Typography.family.bold,
-    color: '#4cd964',
-  },
-  emptyText: {
-    fontSize: 13,
+  pillText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: 'rgba(255,255,255,0.4)',
-    marginTop: 8,
   },
-  quizCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 16,
-    padding: 14,
-    gap: 10,
-  },
-  quizQ: {
-    fontSize: 15,
-    fontFamily: Typography.family.bold,
-    color: '#fff',
-  },
-  quizOptions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  quizOption: {
-    flex: 1,
-    backgroundColor: 'rgba(90,200,250,0.15)',
+  pillBtn: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  quizOptionText: {
-    fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: '#5ac8fa',
-  },
-  sliderCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
-  sliderText: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
+  pillBtnText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+  },
+  shapeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingTop: 8,
+    justifyContent: 'center',
+  },
+  shapeBtn: {
+    width: 90,
+    height: 90,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  shapeLabel: {
     color: '#fff',
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowRadius: 4,
   },
 });

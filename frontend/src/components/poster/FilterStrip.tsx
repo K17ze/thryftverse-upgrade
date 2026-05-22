@@ -121,7 +121,7 @@ export function getFilterOverlay(filter: ImageFilter): { color?: string; opacity
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 90,
+    bottom: 96,
     left: 0,
     right: 0,
     zIndex: 25,

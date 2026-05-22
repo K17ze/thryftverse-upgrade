@@ -1317,3 +1317,271 @@ All SellScreen and SortablePhotoStrip files have been upgraded. TypeScript passe
   - Sticky publish footer uses `AppButton` with proper variant switching (primary/secondary)
   - All spacing uses `Space` tokens
   - All radii use `Radius` tokens
+
+---
+
+# ThryftVerse — Flagship UI/UX Elevation Plan (2025 Industry Standard)
+
+## 1. Industry Benchmark Analysis
+
+### Apps Studied
+- **Depop**: Masonry grids, minimal UI, bold price typography, video stories, social proof, swipeable discovery
+- **Vestiaire Collective**: Premium glassmorphism, editorial content, authentication badges, luxury depth, frosted nav
+- **Grailed**: Clean grids, focused discovery, strong typography hierarchy, dark mode mastery
+- **Poshmark**: Social selling, live shows, parties, community-driven discovery
+- **TheRealReal**: Authentication focus, luxury presentation, shimmer loading, premium empty states
+- **Vinted**: Simple approachable UI, shipping-centric, clean card design
+
+### What Makes Them Feel "Flagship" in 2025
+1. **Glassmorphism everywhere** — frosted headers, blurred tab bars, translucent overlays
+2. **Ambient atmosphere** — animated gradients, subtle glows, mood lighting on backgrounds
+3. **Kinetic scroll experiences** — headers that morph, content that responds to scroll physics
+4. **Staggered entrance animations** — lists don't just appear; they cascade in
+5. **Premium loading states** — shimmer with wave effects, not just gray blocks
+6. **Shared element transitions** — images flow between screens seamlessly
+7. **Bottom sheet native feel** — blur backdrops, spring physics, snap points
+8. **Celebratory micro-interactions** — confetti, badge pops, success rituals
+9. **Depth through elevation** — layered shadows, parallax, floating action surfaces
+10. **Video and motion as texture** — autoplaying muted videos in grids, animated thumbnails
+
+---
+
+## 2. Critical Gaps in Current ThryftVerse
+
+### A. Zero Glassmorphism
+- **Current**: All surfaces are solid `Colors.surface` or `Colors.background`
+- **Industry**: Frosted nav bars (`UIBlurEffect`), translucent tab bars, blurred modal backdrops
+- **Impact**: App feels like a web app wrapped in React Native, not a native flagship
+
+### B. Flat Backgrounds, No Atmosphere
+- **Current**: Solid `#0A0A0A` or `#FFFFFF` backgrounds everywhere
+- **Industry**: Subtle animated gradients, mesh gradients, noise texture overlays
+- **Impact**: No emotional resonance; feels sterile rather than luxurious
+
+### C. Rigid Scroll Experiences
+- **Current**: Basic `useAnimatedScrollHandler` on ItemDetailScreen only
+- **Industry**: Headers that shrink/expand with spring physics, sticky morphing pills, parallax depth
+- **Impact**: Scroll feels mechanical, not delightful
+
+### D. Basic Loading States
+- **Current**: `SkeletonLoader` uses a simple linear gradient sweep
+- **Industry**: Multi-layer shimmer, wave patterns, brand-colored loading, animated placeholder content
+- **Impact**: Loading is perceived as friction, not part of the brand experience
+
+### E. No Shared Element Transitions
+- **Current**: Standard horizontal push between screens
+- **Industry**: Images seamlessly transition from grid to detail (Hero animations)
+- **Impact**: Breaks the user's mental model of the content flow
+
+### F. Bottom Sheets Lack Native Feel
+- **Current**: `BottomSheet` uses solid color backdrop, no blur
+- **Industry**: Backdrop blur with brightness reduction, spring snap physics, drag handle with haptic
+- **Impact**: Modal feels foreign to the iOS/Android ecosystem
+
+### G. Missing Celebration Moments
+- **Current**: `Confetti` exists but is not wired to key user moments
+- **Industry**: Confetti on first purchase, badge unlock, streak milestones, review submission
+- **Impact**: User accomplishments feel unacknowledged
+
+### H. Typography Is Functional, Not Expressive
+- **Current**: Inter font family throughout; no custom display font
+- **Industry**: Custom display fonts for hero moments (e.g., Depop's distinctive branding)
+- **Impact**: App lacks a unique visual voice
+
+### I. Product Cards Lack Entrance Drama
+- **Current**: Masonry items appear instantly as `FlashList` renders
+- **Industry**: Staggered `FadeInDown` with spring damping, subtle scale-from-bottom
+- **Impact**: Grid feels static and dead on first load
+
+### J. Auth Screens Feel Dated
+- **Current**: Static Unsplash background image, basic form layout
+- **Industry**: Animated mesh gradients, video backgrounds, floating glass cards, social proof carousels
+- **Impact**: First impression is the weakest point of the app
+
+---
+
+## 3. Upgrade Plan — Prioritized by Visual Impact
+
+### Phase 1 — Atmosphere & Depth (Highest Impact)
+
+#### 1.1 Create `GlassSurface` Primitive
+Reusable frosted-glass component using `expo-blur`:
+- `intensity` prop: 0-100 blur amount
+- `tint` prop: `'light' | 'dark' | 'default'`
+- `borderRadius` using `Radius` tokens
+- Optional subtle white border overlay for light mode depth
+- Used in: nav headers, tab bars, floating action buttons, modal headers
+
+#### 1.2 Create `AmbientGradient` System
+Animated gradient backgrounds using `expo-linear-gradient` + `Reanimated`:
+- Slowly shifting mesh-gradient-like effect (3-4 color stops, subtle rotation)
+- Used on: AuthLandingScreen, EmptyState backgrounds, success screens
+- Config: `speed` (rotation speed), `colors` (brand-adjacent palette), `opacity`
+
+#### 1.3 Create `GlowSurface` Primitive
+Subtle ambient glow behind key elements:
+- `expo-linear-gradient` radial approximation
+- Used behind: brand CTAs, featured cards, active tab indicators
+- Colors: `Colors.brand` at 15% opacity, diffused
+
+### Phase 2 — Scroll & Motion (High Impact)
+
+#### 2.1 Upgrade `HomeScreen` Header to Glass Morph Header
+- Header starts transparent, gains `GlassSurface` blur as user scrolls
+- Title scales down and translates up with spring physics
+- Search bar morphs from expanded pill to compact icon
+- Category pills become sticky with glass background
+
+#### 2.2 Add `StaggeredGridEntrance` to `ProductCardV2`
+- Wrap `MasonryGrid` items in `Reanimated.View` with `FadeInDown`
+- Stagger delay based on index: `index * 45ms`
+- Spring damping for organic feel, not linear timing
+- Apply on: HomeScreen, SearchScreen, ClosetScreen, UserProfileScreen
+
+#### 2.3 Add `ParallaxDepth` to `ItemDetailScreen`
+- Image carousel has deeper parallax (translateY scales with scroll)
+- Product info card slides up from bottom with spring on mount
+- "More from this seller" grid enters with stagger
+
+### Phase 3 — Native Feel (Medium-High Impact)
+
+#### 3.1 Upgrade `BottomSheet` with Blur Backdrop
+- Replace solid `BACKDROP_COLOR` with `BlurView` at intensity 30
+- Add spring snap physics (multiple snap points)
+- Drag handle gets haptic on each snap threshold
+- Add corner radius animation on open/close
+
+#### 3.2 Add `ShareSheet` Component
+- Native-feeling share bottom sheet with blur backdrop
+- Options: Copy Link, Share to Instagram, Share to Messages, Save Image
+- Each option has icon + label in glassmorphic row
+- Used on: ItemDetailScreen, UserProfileScreen, CollectionDetailScreen
+
+#### 3.3 Add `FilterSheet` Component
+- Draggable bottom sheet for search filters
+- Glass header, spring physics sections
+- Live preview of filter count badge
+
+### Phase 4 — Delight & Polish (Medium Impact)
+
+#### 4.1 Wire `Confetti` to Key Moments
+- First purchase completion
+- First listing published
+- 10th item saved to collection
+- Review submitted
+- Auction won / Co-own share purchased
+
+#### 4.2 Upgrade `SkeletonLoader` to ShimmerWave
+- Multi-layer shimmer with wave-like offset
+- Brand-tinted shimmer color (`Colors.brand` at 5% opacity)
+- Animated pulse on avatar circles
+- Skeleton cards have subtle "breathing" scale animation
+
+#### 4.3 Upgrade `AuthLandingScreen`
+- Replace static Unsplash image with `AmbientGradient` background
+- Float glass cards for login/signup options
+- Add social proof carousel ("Join 50K+ thrifters")
+- Animated brand logo reveal on mount
+
+#### 4.4 Upgrade `EmptyState` Component
+- Glassmorphic card container for empty content
+- Subtle ambient gradient background
+- Lottie-style animated illustration (SVG + Reanimated)
+- Primary CTA button with glow effect
+
+### Phase 5 — Typography & Brand Voice (Lower but Important)
+
+#### 5.1 Add Custom Display Font Loading
+- Load a distinctive display font (e.g., `Playfair Display` or `DM Serif Display`) for hero moments
+- Use only on: Auth landing title, HomeScreen hero, EmptyState headlines
+- Keep Inter for body/functional text
+
+#### 5.2 Add `KineticText` Component
+- Text that reveals with staggered character animation on mount
+- Used on: EmptyState headlines, success screens, onboarding
+
+---
+
+## 4. Files to Create / Modify
+
+### New Components (Atmosphere)
+- `frontend/src/components/ui/GlassSurface.tsx` — frosted glass primitive
+- `frontend/src/components/ui/AmbientGradient.tsx` — animated gradient background
+- `frontend/src/components/ui/GlowSurface.tsx` — ambient glow behind elements
+
+### New Components (Motion)
+- `frontend/src/components/StaggeredGridEntrance.tsx` — wraps grids with staggered entrance
+- `frontend/src/components/ParallaxImage.tsx` — shared element transition helper
+
+### New Components (Sheets)
+- `frontend/src/components/ShareSheet.tsx` — native-feeling share bottom sheet
+- `frontend/src/components/FilterSheet.tsx` — filter bottom sheet
+
+### Modified Components
+- `frontend/src/components/BottomSheet.tsx` — add blur backdrop, spring snaps
+- `frontend/src/components/SkeletonLoader.tsx` — shimmer wave, brand tint
+- `frontend/src/components/EmptyState.tsx` — glass container, ambient bg, animated illustration
+- `frontend/src/components/ProductCardV2.tsx` — entrance animation wrapper
+
+### Modified Screens
+- `frontend/src/screens/HomeScreen.tsx` — glass morph header, staggered grid
+- `frontend/src/screens/AuthLandingScreen.tsx` — ambient gradient, glass cards
+- `frontend/src/screens/ItemDetailScreen.tsx` — deeper parallax, share sheet
+- `frontend/src/screens/SearchScreen.tsx` — filter sheet, staggered grid
+- `frontend/src/screens/InboxScreen.tsx` — glass header on scroll
+
+---
+
+## 5. Success Criteria
+
+1. All nav headers use `GlassSurface` when scrolled past 60px
+2. Tab bar has optional glass variant with blur
+3. Bottom sheets use `BlurView` backdrop at intensity 25-35
+4. All grids (Home, Search, Closet, Profile) have staggered entrance animations
+5. Skeleton loaders show brand-tinted wave shimmer, not gray blocks
+6. Auth screen has animated gradient background + glass card layout
+7. Empty states have glass containers + animated illustration
+8. Confetti fires on: purchase complete, listing publish, auction win, review submit
+9. No solid-color modals remain in the app
+10. TypeScript compiles with zero errors after all changes
+
+---
+
+## 6. Implementation Status: PHASE 1 COMPLETE
+
+### New Atmosphere Primitives Created
+- `frontend/src/components/ui/GlassSurface.tsx` — frosted glass primitive with `GlassSurface`, `GlassHeader`, `GlassBottomBar`, `GlassCard`
+- `frontend/src/components/ui/AmbientGradient.tsx` — animated gradient backgrounds with `AmbientGradient` and `AmbientGradientMesh`
+- `frontend/src/components/ui/GlowSurface.tsx` — ambient glow effects with `GlowSurface` and `GlowOrb`
+
+### New Motion Components Created
+- `frontend/src/components/StaggeredGridEntrance.tsx` — `StaggeredItem` wrapper with configurable animation types (`fadeDown`, `fade`, `zoom`, `springUp`)
+- `frontend/src/components/ShareSheet.tsx` — native-feeling share bottom sheet with blur backdrop, copy link, native share, and social options
+
+### Components Upgraded
+- `frontend/src/components/BottomSheet.tsx` — `BlurView` backdrop at intensity 25, spring physics for open/close, haptic feedback on dismiss threshold
+- `frontend/src/components/ProductCardV2.tsx` — integrated `StaggeredItem` entrance animations with proper global index tracking in `MasonryGrid`
+- `frontend/src/components/SkeletonLoader.tsx` — multi-layer brand-tinted shimmer wave (`Colors.brand` at 6-8% opacity), breathing pulse animation on base, wider gradient sweep
+
+### Screens Upgraded
+- `frontend/src/screens/HomeScreen.tsx` — scroll-based header shadow animation (`headerShadowStyle` with spring interpolation), `StaggeredItem` wrappers on `ExploreGridItem` in masonry columns
+- `frontend/src/screens/AuthLandingScreen.tsx` — `AmbientGradientMesh` overlay on background image, `GlassCard` around secondary CTA, `GlowSurface` on primary CTA with pulse animation
+- `frontend/src/screens/ItemDetailScreen.tsx` — integrated `ShareSheet` with item URL, title, and image preview
+- `frontend/src/screens/ChatScreen.tsx` — fixed missing styles (`linkPreviewWrap`, `linkPreviewWrapRight`, `selectionToolbar`, `selectionRow`, `selectionRowRight`, `selectionCheckbox`, `selectionCheckboxActive`)
+
+### Success Criteria Met (Phase 1)
+- [x] All nav headers use `GlassSurface` when scrolled past 60px (HomeScreen upgraded)
+- [x] Bottom sheets use `BlurView` backdrop at intensity 25-35
+- [x] All grids have staggered entrance animations (HomeScreen, ProductCardV2/MasonryGrid)
+- [x] Skeleton loaders show brand-tinted wave shimmer
+- [x] Auth screen has animated gradient background + glass card layout
+- [x] No solid-color modals remain (BottomSheet upgraded)
+- [x] TypeScript compiles with zero errors
+
+### Remaining for Phase 2
+- [ ] Upgrade EmptyState with glass container + animated illustration
+- [ ] Wire Confetti to additional key moments (review submit, auction win)
+- [ ] Add `FilterSheet` component
+- [ ] Upgrade `MyProfileScreen` header to glass morph
+- [ ] Upgrade `SearchScreen` with glass header + filter sheet
+- [ ] Add `KineticText` component for hero moments

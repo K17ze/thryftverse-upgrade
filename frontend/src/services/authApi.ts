@@ -442,6 +442,22 @@ export async function restoreAuthSession() {
   }
 }
 
+export async function changePassword(input: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ ok: boolean; message: string }> {
+  try {
+    const payload = await fetchJson<{ ok: boolean; message: string }>('/auth/password/change', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    return payload;
+  } catch (error) {
+    throw new Error(toFriendlyError(error, 'Unable to change password right now.'));
+  }
+}
+
 export async function logoutFromSession() {
   try {
     const session = await getAuthSession();

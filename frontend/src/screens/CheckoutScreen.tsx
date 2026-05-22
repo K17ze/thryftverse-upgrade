@@ -40,6 +40,10 @@ import { CachedImage } from '../components/CachedImage';
 import { AppButton } from '../components/ui/AppButton';
 import { AppCard } from '../components/ui/AppCard';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { Body, Caption, Meta, Headline } from '../components/ui/Text';
+import { haptics } from '../utils/haptics';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getListingCoverUri } from '../utils/media';
 import { t } from '../i18n';
 
@@ -146,6 +150,7 @@ export default function CheckoutScreen() {
   const [addAddressSheetVisible, setAddAddressSheetVisible] = useState(false);
   const [postageOption, setPostageOption] = useState<CheckoutPostageOption>(DEFAULT_POSTAGE_OPTION);
   const [checkoutCapabilities, setCheckoutCapabilities] = useState<UserCountryCapabilities | null>(null);
+  const reducedMotionEnabled = useReducedMotion();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
 
@@ -401,6 +406,7 @@ export default function CheckoutScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
         {/* Item Summary Card */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
         <AppCard style={styles.itemCard}>
           <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/checkout-item-fallback/300/400')} style={styles.itemThumb} contentFit="cover" />
           <View style={styles.itemInfo}>
@@ -408,7 +414,7 @@ export default function CheckoutScreen() {
             <View style={styles.itemSellerRow}>
               <AnimatedPressable
                 style={styles.sellerIdentityChip}
-                onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
+                onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: seller.id }); }}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={`Open @${seller.username} profile`}
@@ -425,7 +431,7 @@ export default function CheckoutScreen() {
 
               <AnimatedPressable
                 style={styles.sellerMessageBtn}
-                onPress={handleMessageSeller}
+                onPress={() => { haptics.tap(); handleMessageSeller(); }}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel="Message seller"
@@ -437,7 +443,9 @@ export default function CheckoutScreen() {
             <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP')}</Text>
           </View>
         </AppCard>
+        </Reanimated.View>
 
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(60)}>
         <AppCard style={styles.readinessCard}>
           <View style={styles.readinessTopRow}>
             <Text style={styles.readinessTitle}>{t('checkout.readiness.title')}</Text>
@@ -462,7 +470,9 @@ export default function CheckoutScreen() {
             </View>
           </View>
         </AppCard>
+        </Reanimated.View>
 
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}>
         <Text style={styles.sectionTitle}>{t('checkout.section.delivery')}</Text>
         <AnimatedPressable
           style={styles.blockBtn}
@@ -502,7 +512,9 @@ export default function CheckoutScreen() {
           </View>
           <Text style={styles.blockRightPrice}>{formatFromFiat(POSTAGE_FEE, 'GBP')}</Text>
         </AnimatedPressable>
+        </Reanimated.View>
 
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}>
         <Text style={styles.sectionTitle}>{t('checkout.section.payment')}</Text>
         {paymentPolicyLabel ? (
           <Text style={styles.policyHint}>{t('checkout.payment.policyScope', { scope: paymentPolicyLabel })}</Text>
@@ -533,7 +545,9 @@ export default function CheckoutScreen() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
         </AnimatedPressable>
+        </Reanimated.View>
 
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}>
         <Text style={styles.sectionTitle}>{t('checkout.section.orderSummary')}</Text>
         <AppCard style={styles.summaryCard}>
           <SummaryRow label={t('checkout.summary.itemPrice')} value={formatFromFiat(item.price, 'GBP')} />
@@ -549,6 +563,7 @@ export default function CheckoutScreen() {
           <View style={styles.divider} />
           <SummaryRow label={t('checkout.summary.total')} value={formatFromFiat(TOTAL, 'GBP')} bold />
         </AppCard>
+        </Reanimated.View>
 
         <Text style={styles.termsText}>
           {t('checkout.terms')}
@@ -576,7 +591,7 @@ export default function CheckoutScreen() {
           size="md"
           align="center"
           title={isSubmittingPayment ? t('checkout.cta.processing') : t('checkout.cta.paySecurely')}
-          onPress={handlePay}
+          onPress={() => { haptics.press(); handlePay(); }}
           disabled={!checkoutReady || isSubmittingPayment}
           accessibilityLabel={isSubmittingPayment
             ? t('checkout.a11y.processing')

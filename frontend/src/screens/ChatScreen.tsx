@@ -10,6 +10,7 @@ import {
   Platform,
   Switch,
   Share,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
@@ -25,6 +26,7 @@ import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { MOCK_USERS, MOCK_LISTINGS } from '../data/mockData';
+import type { Message as ConversationMessage } from '../data/mockData';
 import { mockArrayOrEmpty, mockFind } from '../utils/mockGate';
 import { useBackendData } from '../context/BackendDataContext';
 import { getListingCoverUri } from '../utils/media';
@@ -40,7 +42,6 @@ import { parseApiError } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AppButton } from '../components/ui/AppButton';
-import { SimpleChatMessageList } from '../components/ChatMessageList';
 import { AppStatusPill } from '../components/ui/AppStatusPill';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
@@ -56,6 +57,7 @@ import { ReplyQuote } from '../components/chat/ReplyQuote';
 import { ScrollToBottomFAB } from '../components/chat/ScrollToBottomFAB';
 import { NewMessagesSeparator } from '../components/chat/NewMessagesSeparator';
 import { LinkPreviewCard, extractFirstUrl } from '../components/chat/LinkPreviewCard';
+import { SkeletonChatLoader } from '../components/chat/SkeletonChatLoader';
 import { MentionHighlight } from '../components/chat/MentionHighlight';
 import * as Clipboard from 'expo-clipboard';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
@@ -88,6 +90,8 @@ interface Message {
   text?: string;
   offer?: { price: number; originalPrice: number; status?: 'pending' | 'declined' | 'countered' | 'accepted' };
   date?: string;
+  replyToMessageId?: string;
+  reactions?: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
 }
 
 const INITIAL_MESSAGES: Message[] = [
@@ -190,6 +194,9 @@ export default function ChatScreen({ navigation, route }: Props) {
   const appendConversationMessage = useStore((state) => state.appendConversationMessage);
   const replaceConversationMessages = useStore((state) => state.replaceConversationMessages);
   const markConversationRead = useStore((state) => state.markConversationRead);
+  const setConversationDraft = useStore((state) => state.setConversationDraft);
+  const addMessageReaction = useStore((state) => state.addMessageReaction);
+  const removeMessageReaction = useStore((state) => state.removeMessageReaction);
   const { show } = useToast();
   const haptic = useHaptic();
   const conversation = useMemo(
@@ -255,6 +262,11 @@ export default function ChatScreen({ navigation, route }: Props) {
         senderLabel,
         text: entry.text ?? entry.systemTitle ?? '',
         date: entry.timestamp,
+        reactions: entry.reactions?.map((r) => ({
+          emoji: r.emoji,
+          count: r.userIds.length,
+          reactedByMe: r.userIds.includes(currentUser?.id ?? 'me'),
+        })),
       };
     });
   }, [botLookup, conversation?.messages, currentUser?.id, userLookup]);
@@ -274,6 +286,18 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
   const [latestInviteLink, setLatestInviteLink] = useState<string | null>(null);
   const [latestInviteMeta, setLatestInviteMeta] = useState<string | null>(null);
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+  const [contextMessage, setContextMessage] = useState<ConversationMessage | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [reactingToMessage, setReactingToMessage] = useState<Message | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const [newMessagesIndex, setNewMessagesIndex] = useState<number | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const listRef = React.useRef<FlatList>(null);
   const { formatFromFiat } = useFormattedPrice();
 
   const messageTelemetry = useMemo(() => {
@@ -323,9 +347,14 @@ export default function ChatScreen({ navigation, route }: Props) {
   }, [conversationId, markConversationRead]);
 
   useEffect(() => {
+    setConversationDraft(conversationId, input);
+  }, [input, conversationId, setConversationDraft]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const syncMessagesFromApi = async () => {
+      setIsSyncing(true);
       try {
         const syncedMessages = await fetchConversationMessagesFromApi(conversationId);
         if (cancelled || !syncedMessages.length) {
@@ -335,6 +364,10 @@ export default function ChatScreen({ navigation, route }: Props) {
         replaceConversationMessages(conversationId, syncedMessages);
       } catch {
         // Keep local message timeline when backend sync is unavailable.
+      } finally {
+        if (!cancelled) {
+          setIsSyncing(false);
+        }
       }
     };
 
@@ -524,6 +557,49 @@ export default function ChatScreen({ navigation, route }: Props) {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, offer: { ...m.offer!, status: 'declined' } } : m));
   };
 
+  const handleMessageLongPress = (msg: Message) => {
+    if (selectionMode) {
+      toggleMessageSelection(msg.id);
+      return;
+    }
+    setSelectedMessage(msg);
+    setContextMenuVisible(true);
+    haptic.medium();
+  };
+
+  const toggleMessageSelection = (msgId: string) => {
+    setSelectedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(msgId)) {
+        next.delete(msgId);
+      } else {
+        next.add(msgId);
+      }
+      if (next.size === 0) {
+        setSelectionMode(false);
+      }
+      return next;
+    });
+  };
+
+  const enterSelectionMode = (msgId: string) => {
+    setSelectionMode(true);
+    setSelectedMessageIds(new Set([msgId]));
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedMessageIds(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    haptic.medium();
+    const idsToDelete = new Set(selectedMessageIds);
+    setMessages((prev) => prev.filter((m) => !idsToDelete.has(m.id)));
+    show(`Deleted ${idsToDelete.size} message${idsToDelete.size === 1 ? '' : 's'}`, 'info');
+    exitSelectionMode();
+  };
+
   const renderMessage = (msg: Message) => {
     const layoutAnimation = reducedMotionEnabled ? undefined : Layout.springify();
 
@@ -651,27 +727,65 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (!msg.text) return null;
     const isMe = msg.sender === 'me';
     return (
-      <Reanimated.View
-        key={msg.id}
-        entering={
-          reducedMotionEnabled
-            ? undefined
-            : isMe
-              ? SlideInRight.springify()
-              : SlideInLeft.springify()
-        }
-        layout={layoutAnimation}
-        style={[styles.msgRow, isMe && styles.msgRowRight]}
-      >
-        <MessageBubble
-          text={msg.text}
-          isMe={isMe}
-          senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
-          timestamp={msg.date || 'just now'}
-          status={isMe ? 'sent' : undefined}
-        />
-      </Reanimated.View>
+<View style={[styles.selectionRow, isMe && styles.selectionRowRight]}>
+        {selectionMode ? (
+          <AnimatedPressable
+            style={[
+              styles.selectionCheckbox,
+              selectedMessageIds.has(msg.id) && styles.selectionCheckboxActive,
+            ]}
+            onPress={() => toggleMessageSelection(msg.id)}
+            activeOpacity={0.7}
+            hapticFeedback="light"
+          >
+            {selectedMessageIds.has(msg.id) ? (
+              <Ionicons name="checkmark" size={16} color={Colors.textInverse} />
+            ) : null}
+          </AnimatedPressable>
+        ) : null}
+        <Reanimated.View
+          key={msg.id}
+          entering={
+            reducedMotionEnabled
+              ? undefined
+              : isMe
+                ? SlideInRight.springify()
+                : SlideInLeft.springify()
+          }
+          layout={layoutAnimation}
+          style={[styles.msgRow, isMe && styles.msgRowRight]}
+        >
+          <MessageBubble
+            text={msg.text}
+            isMe={isMe}
+            senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
+            timestamp={msg.date || 'just now'}
+            status={isMe ? 'sent' : undefined}
+            onLongPress={() => handleMessageLongPress(msg)}
+            reactions={msg.reactions}
+          />
+          {(() => {
+            const url = extractFirstUrl(msg.text ?? '');
+            return url ? (
+              <View style={[styles.linkPreviewWrap, isMe && styles.linkPreviewWrapRight]}>
+                <LinkPreviewCard url={url} />
+              </View>
+            ) : null;
+          })()}
+        </Reanimated.View>
+      </View>
     );
+  };
+
+  const scrollToBottom = () => {
+    listRef.current?.scrollToEnd({ animated: true });
+    setShowScrollToBottom(false);
+  };
+
+  const handleDeleteMessage = (msg: Message) => {
+    haptic.medium();
+    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    show('Message deleted', 'info');
   };
 
   return (
@@ -688,6 +802,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             : `${sellerLocation} | Last seen ${sellerLastSeen}`
         }
         avatarUrl={isGroup ? null : sellerUser?.avatar ?? null}
+        isOnline={!isGroup}
         onTitlePress={
           isGroup
             ? undefined
@@ -727,6 +842,31 @@ export default function ChatScreen({ navigation, route }: Props) {
           )
         }
       />
+
+      {selectionMode ? (
+        <View style={styles.selectionToolbar}>
+          <AnimatedPressable
+            onPress={exitSelectionMode}
+            activeOpacity={0.7}
+            scaleValue={0.92}
+            hapticFeedback="light"
+          >
+            <Ionicons name="close-outline" size={24} color={Colors.textPrimary} />
+          </AnimatedPressable>
+          <Caption color={Colors.textMuted}>
+            {selectedMessageIds.size} selected
+          </Caption>
+          <AnimatedPressable
+            onPress={handleBulkDelete}
+            activeOpacity={0.7}
+            scaleValue={0.92}
+            hapticFeedback="medium"
+            accessibilityLabel="Delete selected messages"
+          >
+            <Ionicons name="trash-outline" size={22} color={Colors.danger} />
+          </AnimatedPressable>
+        </View>
+      ) : null}
 
       <View style={styles.primaryFilterWrap}>
         <AppSegmentControl
@@ -947,18 +1087,24 @@ export default function ChatScreen({ navigation, route }: Props) {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {visibleMessages.length ? (
-          <SimpleChatMessageList
-            messages={visibleMessages.map((msg) => ({
-              id: msg.id,
-              text: msg.text || (msg.offer ? `Offer: $${msg.offer.price}` : ''),
-              sender: msg.sender,
-              senderLabel: msg.senderLabel,
-              timestamp: msg.date || 'just now',
-              status: msg.sender === 'me' ? 'sent' : undefined,
-              type: msg.type,
-            }))}
-            isGroup={isGroup}
+        {isSyncing ? (
+          <SkeletonChatLoader count={6} />
+        ) : visibleMessages.length ? (
+          <FlatList
+            ref={listRef}
+            data={visibleMessages}
+            renderItem={({ item }) => renderMessage(item)}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingVertical: Space.sm }}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            onScroll={(e) => {
+              const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+              const isNearBottom = contentSize.height - contentOffset.y - layoutMeasurement.height < 120;
+              setShowScrollToBottom(!isNearBottom);
+            }}
+            scrollEventThrottle={200}
           />
         ) : (
           <View style={styles.emptySearchState}>
@@ -991,6 +1137,26 @@ export default function ChatScreen({ navigation, route }: Props) {
             </ScrollView>
           ) : null}
 
+          {reactingToMessage ? (
+            <EmojiReactionsBar
+              reactions={reactingToMessage.reactions ?? []}
+              onReact={(emoji) => {
+                if (reactingToMessage) {
+                  addMessageReaction(conversationId, reactingToMessage.id, emoji);
+                }
+                setReactingToMessage(null);
+              }}
+              onShowMore={() => setReactingToMessage(null)}
+            />
+          ) : null}
+
+          {replyTo ? (
+            <ReplyQuote
+              senderName={replyTo.senderLabel ?? 'Unknown'}
+              text={replyTo.text ?? ''}
+              onClose={() => setReplyTo(null)}
+            />
+          ) : null}
           <ComposerInput
             value={input}
             onChangeText={setInput}
@@ -1002,6 +1168,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         </View>
       </KeyboardAvoidingView>
 
+      <ScrollToBottomFAB visible={showScrollToBottom} onPress={scrollToBottom} />
       <BottomSheetPicker
         visible={showNotificationPicker}
         onClose={() => setShowNotificationPicker(false)}
@@ -1025,10 +1192,42 @@ export default function ChatScreen({ navigation, route }: Props) {
           show(`Retention policy set to ${value}`, 'info');
         }}
       />
+          <MessageContextMenu
+        visible={contextMenuVisible}
+        onClose={() => setContextMenuVisible(false)}
+        onAction={(action) => {
+          if (!selectedMessage) return;
+          switch (action) {
+            case 'copy': {
+              const text = selectedMessage.text ?? '';
+              Clipboard.setString(text);
+              show('Copied to clipboard', 'success');
+              break;
+            }
+            case 'reply':
+              setReplyTo(selectedMessage);
+              break;
+            case 'select':
+              enterSelectionMode(selectedMessage.id);
+              break;
+            case 'react':
+              setReactingToMessage(selectedMessage);
+              break;
+            case 'forward':
+              show(`Forwarded: ${selectedMessage.text?.slice(0, 20) ?? ''}`, 'info');
+              break;
+            case 'delete':
+              handleDeleteMessage(selectedMessage);
+              break;
+            default:
+              break;
+          }
+        }}
+        messageText={selectedMessage?.text ?? undefined}
+      />
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
@@ -1306,6 +1505,16 @@ const styles = StyleSheet.create({
   msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Space.sm + 2 },
   msgRowRight: { flexDirection: 'row-reverse' },
 
+  linkPreviewWrap: {
+    marginTop: Space.xs,
+    marginHorizontal: Space.md,
+    maxWidth: '80%',
+    alignSelf: 'flex-start',
+  },
+  linkPreviewWrapRight: {
+    alignSelf: 'flex-end',
+  },
+
   textBubble: {
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -1393,5 +1602,38 @@ const styles = StyleSheet.create({
   },
   templateChipText: {
     fontFamily: 'Inter_600SemiBold',
+  },
+  selectionToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  selectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+  },
+  selectionRowRight: {
+    flexDirection: 'row-reverse',
+  },
+  selectionCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectionCheckboxActive: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
   },
 });
