@@ -7,7 +7,7 @@ import { Typography } from '../../constants/typography';
 
 // ============================================================================
 // SIMPLIFIED BUTTON COMPONENT (Phase 2 Cleanup)
-// 2 variants only: primary | secondary
+// 5 variants: primary | secondary | gold | contrast | danger
 // Uses 5-core color palette
 // ============================================================================
 
