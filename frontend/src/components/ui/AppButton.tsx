@@ -1,5 +1,5 @@
 import React from 'react';
-import { AccessibilityRole, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
+import { AccessibilityRole, ActivityIndicator, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -11,7 +11,7 @@ import { Typography } from '../../constants/typography';
 // Uses 5-core color palette
 // ============================================================================
 
-export type AppButtonVariant = 'primary' | 'secondary' | 'gold' | 'contrast';
+export type AppButtonVariant = 'primary' | 'secondary' | 'gold' | 'contrast' | 'danger';
 export type AppButtonSize = 'sm' | 'md' | 'lg';
 type AppButtonHapticFeedback = 'none' | 'light' | 'medium' | 'heavy' | 'selection';
 
@@ -22,6 +22,7 @@ interface AppButtonProps {
   trailingIcon?: React.ReactNode;
   onPress?: () => void;
   disabled?: boolean;
+  loading?: boolean;
   variant?: AppButtonVariant;
   size?: AppButtonSize;
   style?: StyleProp<ViewStyle>;
@@ -72,6 +73,14 @@ function resolveVariantTokens(variant: AppButtonVariant): VariantTokens {
         subtitleColor: Colors.background,
         iconBackgroundColor: 'rgba(255,255,255,0.15)',
       };
+    case 'danger':
+      return {
+        backgroundColor: Colors.danger,
+        borderColor: Colors.danger,
+        titleColor: Colors.background,
+        subtitleColor: Colors.background,
+        iconBackgroundColor: 'rgba(0,0,0,0.15)',
+      };
     case 'primary':
     default:
       return {
@@ -103,6 +112,7 @@ export function AppButton({
   trailingIcon,
   onPress,
   disabled,
+  loading,
   variant = 'primary',
   size = 'md',
   style,
@@ -135,7 +145,7 @@ export function AppButton({
         style,
       ]}
       onPress={onPress}
-      disabled={disabled}
+      disabled={disabled || loading}
       activeOpacity={activeOpacity}
       disableAnimation={false}
       scaleValue={0.985}
@@ -145,38 +155,44 @@ export function AppButton({
       accessibilityRole={accessibilityRole}
     >
       <View style={[styles.contentRow, resolvedAlign === 'center' && styles.contentCentered, contentStyle]}>
-        {icon ? (
-          <View
-            style={[
-              styles.iconWrap,
-              {
-                backgroundColor: tokens.iconBackgroundColor,
-              },
-              iconContainerStyle,
-            ]}
-          >
-            {icon}
-          </View>
-        ) : null}
-        <View style={[styles.textCol, resolvedAlign === 'center' && styles.textColCentered]}>
-          <Text style={[styles.title, { color: tokens.titleColor }, titleStyle]}>{title}</Text>
-          {subtitle ? (
-            <Text style={[styles.subtitle, { color: tokens.subtitleColor }, subtitleStyle]}>{subtitle}</Text>
-          ) : null}
-        </View>
-        {trailingIcon ? (
-          <View
-            style={[
-              styles.iconWrap,
-              {
-                backgroundColor: tokens.iconBackgroundColor,
-              },
-              trailingIconContainerStyle,
-            ]}
-          >
-            {trailingIcon}
-          </View>
-        ) : null}
+        {loading ? (
+          <ActivityIndicator size="small" color={tokens.titleColor} />
+        ) : (
+          <>
+            {icon ? (
+              <View
+                style={[
+                  styles.iconWrap,
+                  {
+                    backgroundColor: tokens.iconBackgroundColor,
+                  },
+                  iconContainerStyle,
+                ]}
+              >
+                {icon}
+              </View>
+            ) : null}
+            <View style={[styles.textCol, resolvedAlign === 'center' && styles.textColCentered]}>
+              <Text style={[styles.title, { color: tokens.titleColor }, titleStyle]}>{title}</Text>
+              {subtitle ? (
+                <Text style={[styles.subtitle, { color: tokens.subtitleColor }, subtitleStyle]}>{subtitle}</Text>
+              ) : null}
+            </View>
+            {trailingIcon ? (
+              <View
+                style={[
+                  styles.iconWrap,
+                  {
+                    backgroundColor: tokens.iconBackgroundColor,
+                  },
+                  trailingIconContainerStyle,
+                ]}
+              >
+                {trailingIcon}
+              </View>
+            ) : null}
+          </>
+        )}
       </View>
     </AnimatedPressable>
   );

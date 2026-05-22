@@ -419,10 +419,11 @@ export default function LoginScreen() {
                     style={[styles.otpVerifyBtn, !canVerifyOtp && styles.primaryBtnDisabled]}
                     titleStyle={styles.otpVerifyText}
                     variant="primary"
-                    size="sm"
+                    size="md"
                     onPress={handleVerifyOtp}
                     disabled={!canVerifyOtp}
                     accessibilityLabel="Verify OTP and log in"
+                    hapticFeedback="medium"
                   />
                 </View>
               )}
@@ -462,6 +463,7 @@ export default function LoginScreen() {
                 onPress={handleLogin}
                 disabled={!canSubmit}
                 accessibilityLabel="Log in"
+                hapticFeedback="medium"
               />
             </Reanimated.View>
 

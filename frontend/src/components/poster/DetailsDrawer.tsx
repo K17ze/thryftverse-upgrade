@@ -13,22 +13,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import type { Poster } from '../../data/posters';
 import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
 import { Typography } from '../../constants/typography';
 
 const { height: SCREEN_H } = Dimensions.get('window');
-const DRAWER_HEIGHT = SCREEN_H * 0.75;
-
-export type PosterMode = 'marketplace' | 'co-own' | 'auction' | 'blank';
+const DRAWER_HEIGHT = SCREEN_H * 0.55;
 
 interface DetailsDrawerProps {
   visible: boolean;
   onClose: () => void;
-  mode: PosterMode;
-  onModeChange: (mode: PosterMode) => void;
   caption: string;
   onCaptionChange: (caption: string) => void;
   expiryHours: number;
@@ -41,20 +36,11 @@ interface DetailsDrawerProps {
   currentUserId: string;
 }
 
-const MODES: { key: PosterMode; label: string; icon: string }[] = [
-  { key: 'marketplace', label: 'Marketplace', icon: 'pricetag-outline' },
-  { key: 'co-own', label: 'Co-Own', icon: 'people-outline' },
-  { key: 'auction', label: 'Auction', icon: 'hammer-outline' },
-  { key: 'blank', label: 'Blank', icon: 'color-palette-outline' },
-];
-
 const EXPIRY_OPTIONS = [6, 12, 24, 48] as const;
 
 export default function DetailsDrawer({
   visible,
   onClose,
-  mode,
-  onModeChange,
   caption,
   onCaptionChange,
   expiryHours,
@@ -69,15 +55,10 @@ export default function DetailsDrawer({
   const translateY = React.useRef(new Animated.Value(DRAWER_HEIGHT)).current;
   const backdropOpacity = React.useRef(new Animated.Value(0)).current;
 
-  const myListings = React.useMemo(
-    () => listings.filter((l) => l.sellerId === currentUserId),
-    [listings, currentUserId]
-  );
   const marketplaceListings = React.useMemo(
     () => listings.filter((l) => l.sellerId !== currentUserId),
     [listings, currentUserId]
   );
-  const activeListings = mode === 'blank' ? [] : (mode === 'co-own' ? myListings : marketplaceListings);
 
   React.useEffect(() => {
     if (visible) {
@@ -164,45 +145,16 @@ export default function DetailsDrawer({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Mode selector */}
-            <View style={styles.modeRow}>
-              {MODES.map((m) => (
-                <Pressable
-                  key={m.key}
-                  style={[styles.modePill, mode === m.key && styles.modePillActive]}
-                  onPress={() => onModeChange(m.key)}
-                >
-                  <Ionicons
-                    name={m.icon as any}
-                    size={16}
-                    color={mode === m.key ? Colors.brand : Colors.textMuted}
-                  />
-                  <Text
-                    style={[
-                      styles.modePillText,
-                      mode === m.key && styles.modePillTextActive,
-                    ]}
-                  >
-                    {m.label}
-                  </Text>
-                </Pressable>
-              ))}
+            {/* Listings */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Tag a Listing</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.listingRow}>
+                {marketplaceListings.slice(0, 12).map(renderListingCard)}
+                {marketplaceListings.length === 0 && (
+                  <Text style={styles.emptyText}>No listings available</Text>
+                )}
+              </ScrollView>
             </View>
-
-            {/* Listings (non-blank) */}
-            {mode !== 'blank' && (
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>
-                  {mode === 'co-own' ? 'Your Listings' : 'Marketplace'}
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.listingRow}>
-                  {activeListings.slice(0, 12).map(renderListingCard)}
-                  {activeListings.length === 0 && (
-                    <Text style={styles.emptyText}>No listings available</Text>
-                  )}
-                </ScrollView>
-              </View>
-            )}
 
             {/* Expiry */}
             <View style={styles.section}>
@@ -257,7 +209,7 @@ export default function DetailsDrawer({
               ) : (
                 <>
                   <Ionicons name="paper-plane" size={18} color="#fff" />
-                  <Text style={styles.publishBtnText}>Publish Poster</Text>
+                  <Text style={styles.publishBtnText}>Publish</Text>
                 </>
               )}
             </Pressable>
@@ -302,36 +254,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 32,
     gap: 16,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  modePill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    paddingVertical: 10,
-  },
-  modePillActive: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.surface,
-  },
-  modePillText: {
-    fontSize: 12,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-  },
-  modePillTextActive: {
-    color: Colors.brand,
-    fontFamily: Typography.family.bold,
   },
   section: {
     gap: 8,

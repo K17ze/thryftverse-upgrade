@@ -22,7 +22,7 @@ export function ComposerInput({
   onChangeText,
   onSend,
   onCameraPress,
-  placeholder = 'Write a message...',
+  placeholder = 'Message...',
   returnKeyType = 'send',
   style,
   inputContainerStyle,
@@ -38,7 +38,6 @@ export function ComposerInput({
             onPress={onCameraPress}
             accessibilityRole="button"
             accessibilityLabel="Attach photo"
-            accessibilityHint="Opens camera or photo picker"
             activeOpacity={0.7}
             scaleValue={0.9}
             hapticFeedback="light"
@@ -66,7 +65,6 @@ export function ComposerInput({
           disabled={!canSend}
           accessibilityRole="button"
           accessibilityLabel="Send message"
-          accessibilityHint="Sends the current message"
           activeOpacity={0.7}
           scaleValue={0.9}
           hapticFeedback="light"
@@ -80,27 +78,20 @@ export function ComposerInput({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    paddingBottom: Space.md,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
+    paddingVertical: Space.sm + 2,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: Radius.full,
-    paddingLeft: Space.xs,
+    paddingLeft: Space.sm,
     paddingRight: Space.xs,
-    minHeight: 56,
+    minHeight: 48,
   },
   cameraBtn: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -109,7 +100,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 0,
     backgroundColor: 'transparent',
-    minHeight: 44,
+    minHeight: 40,
     paddingHorizontal: Space.xs,
   },
   input: {
@@ -118,12 +109,13 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   sendBtn: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     borderRadius: Radius.full,
     backgroundColor: Colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: Space.xs,
   },
   sendBtnDisabled: {
     backgroundColor: Colors.surfaceAlt,

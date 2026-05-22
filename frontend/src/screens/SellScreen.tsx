@@ -1057,27 +1057,27 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   uploadActionBtn: {
-    borderRadius: Radius.full,
-    minHeight: 36,
-    minWidth: 100,
+    borderRadius: Radius.lg,
+    minHeight: 44,
+    minWidth: 120,
   },
   uploadActionContent: {
     gap: 6,
   },
   uploadActionIconWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: 'transparent',
   },
   uploadActionBtnText: {
     color: Colors.background,
-    fontSize: Type.caption.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
   uploadActionBtnTextSecondary: {
     color: Colors.textPrimary,
-    fontSize: Type.caption.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
 

@@ -537,15 +537,11 @@ const styles = StyleSheet.create({
   filterBar: { paddingBottom: 20 },
   filterRow: { paddingHorizontal: 20, gap: 10 },
   filterPill: { 
-    minHeight: 40,
     paddingHorizontal: 16,
-    borderRadius: 24, 
   },
   filterPillTextActive: { color: Colors.background, fontSize: 13, fontFamily: Typography.family.bold },
   filterPillOutline: {
-    minHeight: 40,
     paddingHorizontal: 16,
-    borderRadius: 24, 
   },
   filterPillText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
   syncRetryBanner: {

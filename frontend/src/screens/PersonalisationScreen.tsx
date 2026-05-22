@@ -157,6 +157,19 @@ export default function PersonalisationScreen() {
           </SettingsCard>
         </Reanimated.View>
 
+        {/* Personalisation Info Card */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
+          <SettingsCard variant="tint" style={styles.personalisationInfoCard}>
+            <View style={styles.infoCardRow}>
+              <Ionicons name="sparkles-outline" size={20} color={Colors.brand} />
+              <Text style={styles.infoText}>
+                Personalisation helps us surface items you'll love. Your choices
+                update your feed, search, and recommendations instantly.
+              </Text>
+            </View>
+          </SettingsCard>
+        </Reanimated.View>
+
         {/* Info Card */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
           <View style={styles.infoCard}>
@@ -221,17 +234,22 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   genderPillActive: {
-    backgroundColor: `${Colors.brand}22`,
+    backgroundColor: Colors.brand,
     borderColor: Colors.brand,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   genderPillText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     letterSpacing: Type.body.letterSpacing,
   },
   genderPillTextActive: {
-    color: Colors.brand,
+    color: Colors.textInverse,
     fontFamily: Typography.family.semibold,
   },
   sectionTitle: {
@@ -242,6 +260,14 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
+  },
+  personalisationInfoCard: {
+    padding: Space.md,
+  },
+  infoCardRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
   },
   infoCard: {
     flexDirection: 'row',

@@ -14,6 +14,7 @@ import Reanimated, {
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
+import { hapticForScale, triggerHaptic, HapticType } from '../utils/haptics';
 
 type HapticFeedbackStyle = 'none' | 'light' | 'medium' | 'heavy' | 'selection';
 
@@ -24,6 +25,8 @@ interface Props extends Omit<PressableProps, 'style' | 'children'> {
   activeOpacity?: number;
   disableAnimation?: boolean;
   hapticFeedback?: HapticFeedbackStyle;
+  /** When true, automatically selects haptic intensity based on scaleValue. Overrides hapticFeedback. */
+  autoHaptic?: boolean;
   accessibilityLabel?: string;
   accessibilityHint?: string;
 }
@@ -42,6 +45,7 @@ export function AnimatedPressable({
   disabled = false,
   activeOpacity,
   hapticFeedback = 'none',
+  autoHaptic = false,
   accessibilityState,
   accessibilityRole,
   ...rest
@@ -51,7 +55,12 @@ export function AnimatedPressable({
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
 
-  const triggerHaptic = React.useCallback(() => {
+  const triggerHapticFeedback = React.useCallback(() => {
+    if (autoHaptic && scaleValue < 1) {
+      triggerHaptic(hapticForScale(scaleValue));
+      return;
+    }
+
     if (hapticFeedback === 'none') {
       return;
     }
@@ -72,7 +81,7 @@ export function AnimatedPressable({
     }
 
     haptic.light();
-  }, [haptic, hapticFeedback]);
+  }, [haptic, hapticFeedback, autoHaptic, scaleValue]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -109,7 +118,7 @@ export function AnimatedPressable({
           }
         }
         if (!disabled) {
-          triggerHaptic();
+          triggerHapticFeedback();
         }
         if (onPressIn) {
           onPressIn(event);

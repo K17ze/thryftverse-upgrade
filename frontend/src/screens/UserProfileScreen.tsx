@@ -321,8 +321,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               variant={following && !isSelfProfile ? 'secondary' : 'primary'}
               size="sm"
               align="center"
-              style={[styles.heroActionPrimary, following && !isSelfProfile && styles.heroActionPrimaryActive]}
-              titleStyle={[styles.heroActionPrimaryText, following && !isSelfProfile && styles.heroActionPrimaryTextActive]}
+              style={styles.heroActionPrimary}
+              titleStyle={styles.heroActionPrimaryText}
               onPress={() => {
                 if (isSelfProfile) {
                   navigation.navigate('EditProfile');

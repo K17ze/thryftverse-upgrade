@@ -22,31 +22,22 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { fetchConversationsFromApi } from '../services/chatApi';
 import { AppInput } from '../components/ui/AppInput';
-import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { Motion } from '../constants/motion';
 import { Space, Radius, Type } from '../theme/designTokens';
-import { ChatCard } from '../components/chat/ChatCard';
-import { Typography } from '../constants/typography';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
 type ConvoItem = Conversation;
-type InboxSegment = 'all' | 'unread' | 'groups' | 'direct';
-type ConversationSearchInsight = {
-  score: number;
-  matchedField: string;
-  preview: string;
-};
+type InboxSegment = 'all' | 'unread' | 'groups';
 
 const SEGMENT_OPTIONS: Array<{ value: InboxSegment; label: string; accessibilityLabel: string }> = [
-  { value: 'direct', label: 'Direct', accessibilityLabel: 'Filter direct messages' },
+  { value: 'all', label: 'All', accessibilityLabel: 'Show all conversations' },
   { value: 'unread', label: 'Unread', accessibilityLabel: 'Filter unread conversations' },
   { value: 'groups', label: 'Groups', accessibilityLabel: 'Filter group conversations' },
-  { value: 'all', label: 'All', accessibilityLabel: 'Show all conversations' },
 ];
 
 export default function InboxScreen() {
@@ -59,12 +50,11 @@ export default function InboxScreen() {
   const conversations = useStore((state) => state.conversations);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
-  const archiveConversation = useStore((state) => state.archiveConversation);
   const toggleConversationPinned = useStore((state) => state.toggleConversationPinned);
   const markConversationRead = useStore((state) => state.markConversationRead);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [segment, setSegment] = useState<InboxSegment>('direct');
+  const [segment, setSegment] = useState<InboxSegment>('all');
   const reducedMotionEnabled = useReducedMotion();
 
   const scrollY = useSharedValue(0);
@@ -77,7 +67,6 @@ export default function InboxScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshListings();
-
     try {
       const remoteConversations = await fetchConversationsFromApi();
       for (const conversation of remoteConversations) {
@@ -86,7 +75,6 @@ export default function InboxScreen() {
     } catch {
       // Keep existing local conversations when backend sync is unavailable.
     }
-
     setTimeout(() => setRefreshing(false), 400);
   };
 
@@ -104,129 +92,39 @@ export default function InboxScreen() {
     return map;
   }, [currentUser?.id, currentUser?.username]);
 
-  const { visibleConversations, searchInsights } = useMemo(() => {
+  const visibleConversations = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
-    const nextSearchInsights = new Map<string, ConversationSearchInsight>();
+    const scoped = conversations.filter((conversation) => {
+      if (segment === 'unread' && !conversation.unread) return false;
+      if (segment === 'groups' && conversation.type !== 'group') return false;
+      if (!normalizedQuery) return true;
 
-    const scopedConversations = conversations.filter((conversation) => {
-      if (segment === 'unread' && !conversation.unread) {
-        return false;
-      }
-
-      if (segment === 'groups' && conversation.type !== 'group') {
-        return false;
-      }
-
-      if (segment === 'direct' && conversation.type !== 'dm') {
-        return false;
-      }
-
-      if (!normalizedQuery) {
-        return true;
-      }
-
-      const listing = listings.find((item) => item.id === conversation.itemId)
-        || mockFind(MOCK_LISTINGS, (item) => item.id === conversation.itemId);
       const seller = mockFind(MOCK_USERS, (user) => user.id === conversation.sellerId);
       const counterpartyId = conversation.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
       const title = conversation.type === 'group'
         ? conversation.title ?? 'group chat'
         : seller?.username ?? (counterpartyId ? participantNameLookup.get(counterpartyId) ?? counterpartyId : 'direct message');
 
-      const participantLabels = (conversation.participantIds ?? [])
-        .map((participantId) => participantNameLookup.get(participantId) ?? participantId)
-        .join(' ');
+      const corpus = [
+        title,
+        conversation.lastMessage,
+        ...conversation.messages.slice(-10).map((m) => m.text ?? m.systemTitle ?? ''),
+      ].join(' ').toLowerCase();
 
-      const messageCorpus = conversation.messages
-        .slice(-14)
-        .map((message) => `${message.text ?? message.systemTitle ?? ''}`)
-        .join(' ');
-
-      const candidates: Array<{ field: string; value: string; weight: number }> = [
-        { field: 'title', value: title, weight: 14 },
-        { field: 'last message', value: conversation.lastMessage, weight: 12 },
-        { field: 'participants', value: participantLabels, weight: 10 },
-        { field: 'message history', value: messageCorpus, weight: 9 },
-        { field: 'listing title', value: listing?.title ?? '', weight: 8 },
-        { field: 'listing brand', value: listing?.brand ?? '', weight: 6 },
-        { field: 'listing category', value: `${listing?.category ?? ''} ${listing?.subcategory ?? ''}`, weight: 5 },
-      ];
-
-      let bestMatch: ConversationSearchInsight | null = null;
-
-      for (const candidate of candidates) {
-        const normalizedCandidate = candidate.value.toLowerCase();
-        if (!normalizedCandidate) {
-          continue;
-        }
-
-        const directMatch = normalizedCandidate.includes(normalizedQuery);
-        const tokenMatch = queryTokens.length > 1 && queryTokens.every((token) => normalizedCandidate.includes(token));
-        if (!directMatch && !tokenMatch) {
-          continue;
-        }
-
-        const baseScore = directMatch ? candidate.weight : Math.max(candidate.weight - 2, 1);
-        const score = baseScore + (tokenMatch ? queryTokens.length : 0);
-
-        if (!bestMatch || score > bestMatch.score) {
-          bestMatch = {
-            score,
-            matchedField: candidate.field,
-            preview: candidate.value,
-          };
-        }
-      }
-
-      if (bestMatch) {
-        nextSearchInsights.set(conversation.id, bestMatch);
-        return true;
-      }
-
-      return false;
+      return corpus.includes(normalizedQuery);
     });
 
-    const orderedConversations = [...scopedConversations];
-    orderedConversations.sort((a, b) => {
+    const ordered = [...scoped];
+    ordered.sort((a, b) => {
       const pinDiff = Number(b.isPinned) - Number(a.isPinned);
-      if (pinDiff !== 0) {
-        return pinDiff;
-      }
-
+      if (pinDiff !== 0) return pinDiff;
       const unreadDiff = Number(b.unread) - Number(a.unread);
-      if (unreadDiff !== 0) {
-        return unreadDiff;
-      }
-
-      const scoreDiff = (nextSearchInsights.get(b.id)?.score ?? 0) - (nextSearchInsights.get(a.id)?.score ?? 0);
-      if (scoreDiff !== 0) {
-        return scoreDiff;
-      }
-
+      if (unreadDiff !== 0) return unreadDiff;
       return b.lastMessageTime.localeCompare(a.lastMessageTime);
     });
 
-    return {
-      visibleConversations: orderedConversations,
-      searchInsights: nextSearchInsights,
-    };
-  }, [conversations, listings, searchQuery, segment, currentUser?.id, participantNameLookup]);
-
-  const unreadCount = useMemo(
-    () => conversations.filter((item) => item.unread).length,
-    [conversations],
-  );
-
-  const groupCount = useMemo(
-    () => conversations.filter((item) => item.type === 'group').length,
-    [conversations],
-  );
-
-  const offerThreadCount = useMemo(
-    () => conversations.filter((item) => item.messages.some((message) => message.offerPrice !== undefined)).length,
-    [conversations],
-  );
+    return ordered;
+  }, [conversations, searchQuery, segment, currentUser?.id, participantNameLookup]);
 
   const handleDelete = useCallback((id: string) => {
     haptic.medium();
@@ -246,13 +144,11 @@ export default function InboxScreen() {
       onPress={() => handleDelete(id)}
       accessibilityLabel="Delete conversation"
       accessibilityRole="button"
-      accessibilityHint="Deletes this conversation thread"
       activeOpacity={0.7}
       scaleValue={0.95}
       hapticFeedback="medium"
     >
-      <Ionicons name="trash-outline" size={22} color={Colors.textInverse} />
-      <Text style={styles.swipeActionText}>Delete</Text>
+      <Ionicons name="trash-outline" size={20} color={Colors.textInverse} />
     </AnimatedPressable>
   );
 
@@ -262,13 +158,11 @@ export default function InboxScreen() {
       onPress={() => handlePin(id)}
       accessibilityLabel="Pin conversation"
       accessibilityRole="button"
-      accessibilityHint="Pins this conversation to the top"
       activeOpacity={0.7}
       scaleValue={0.95}
       hapticFeedback="light"
     >
-      <Ionicons name="pin-outline" size={22} color={Colors.textInverse} />
-      <Text style={styles.swipeActionText}>Pin</Text>
+      <Ionicons name="pin-outline" size={20} color={Colors.textInverse} />
     </AnimatedPressable>
   );
 
@@ -280,9 +174,6 @@ export default function InboxScreen() {
     const displayTitle = isGroup
       ? item.title ?? 'Untitled Group'
       : seller?.username ?? (counterpartyId ? participantNameLookup.get(counterpartyId) ?? counterpartyId : 'Unknown user');
-    const memberCount = item.participantIds?.length ?? 0;
-    const deployedBotCount = item.botIds?.length ?? 0;
-    const searchInsight = searchInsights.get(item.id);
 
     return (
       <Reanimated.View
@@ -333,30 +224,14 @@ export default function InboxScreen() {
             <View style={styles.messageBody}>
               <View style={styles.messageTop}>
                 <View style={styles.titleRow}>
-                  <BodyEmphasis>{displayTitle}</BodyEmphasis>
-                  {item.isPinned ? <Ionicons name="pin" size={14} color={Colors.brand} style={styles.pinIcon} /> : null}
+                  <BodyEmphasis style={item.unread ? styles.titleUnread : undefined}>{displayTitle}</BodyEmphasis>
+                  {item.isPinned ? <Ionicons name="pin" size={12} color={Colors.brand} style={styles.pinIcon} /> : null}
                 </View>
-                <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
+                <Caption color={item.unread ? Colors.textPrimary : Colors.textMuted}>{item.lastMessageTime}</Caption>
               </View>
 
-              {isGroup ? (
-                <View style={styles.groupMetaRow}>
-                  <Meta>{memberCount} members</Meta>
-                  {deployedBotCount > 0 ? (
-                    <Meta>{deployedBotCount} bot{deployedBotCount === 1 ? '' : 's'}</Meta>
-                  ) : null}
-                </View>
-              ) : (
-                <Meta>Direct message</Meta>
-              )}
-
-              {item.unread ? (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>Unread</Text>
-                </View>
-              ) : null}
-
-              <Text style={styles.snippet} numberOfLines={2}>
+              <View style={styles.snippetRow}>
+                <Text style={[styles.snippet, item.unread && styles.snippetUnread]} numberOfLines={2}>
                   {item.draftText ? (
                     <Text>
                       <Text style={styles.draftLabel}>Draft: </Text>
@@ -364,26 +239,17 @@ export default function InboxScreen() {
                     </Text>
                   ) : item.lastMessage}
                 </Text>
-
-              {searchQuery.trim().length > 0 && searchInsight ? (
-                <View style={styles.searchHitRow}>
-                  <Ionicons name="sparkles-outline" size={12} color={Colors.textMuted} />
-                  <Caption color={Colors.textMuted} numberOfLines={1}>
-                    Matched {searchInsight.matchedField}: {searchInsight.preview}
-                  </Caption>
-                </View>
-              ) : null}
+                {item.unread ? <View style={styles.unreadDot} /> : null}
+              </View>
 
               {!isGroup && listing && (
                 <View style={styles.itemPreview}>
                   <CachedImage uri={listing.images[0]} style={styles.itemThumb} containerStyle={styles.itemThumbContainer} contentFit="cover" />
                   <Caption color={Colors.textSecondary} style={styles.itemName} numberOfLines={1}>{listing.title}</Caption>
-                  <BodyEmphasis>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</BodyEmphasis>
+                  <BodyEmphasis style={styles.itemPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</BodyEmphasis>
                 </View>
               )}
             </View>
-
-            {item.unread && <View style={styles.unreadDot} />}
           </AnimatedPressable>
         </Swipeable>
       </Reanimated.View>
@@ -396,34 +262,29 @@ export default function InboxScreen() {
 
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <View style={styles.headerTitleWrap}>
-            <Text style={styles.hugeTitle}>Inbox</Text>
-            <Caption color={Colors.textSecondary} numberOfLines={1}>Offers, groups & buyer updates</Caption>
-          </View>
+          <Text style={styles.title}>Inbox</Text>
           <View style={styles.headerActions}>
-            <AppButton
-              title="New Group"
-              icon={<Ionicons name="people-outline" size={15} color={Colors.textPrimary} />}
-              onPress={() => navigation.navigate('CreateGroupChat')}
-              variant="secondary"
-              size="sm"
-              style={styles.addGroupBtn}
-              titleStyle={styles.addGroupBtnText}
-              iconContainerStyle={styles.addGroupIconWrap}
-              accessibilityLabel="Create new group chat"
-              accessibilityHint="Opens group chat creation"
-            />
             <AnimatedPressable
-              style={styles.policiesBtn}
-              onPress={() => navigation.navigate('Settings')}
-              activeOpacity={0.85}
+              style={styles.iconBtn}
+              onPress={() => navigation.navigate('CreateGroupChat')}
+              activeOpacity={0.7}
               scaleValue={0.9}
               hapticFeedback="light"
-              accessibilityLabel="Chat settings and policies"
+              accessibilityLabel="Create new group chat"
               accessibilityRole="button"
-              accessibilityHint="Opens messaging and safety settings"
             >
-              <Ionicons name="shield-checkmark-outline" size={18} color={Colors.textPrimary} />
+              <Ionicons name="people-outline" size={20} color={Colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.iconBtn}
+              onPress={() => navigation.navigate('Settings')}
+              activeOpacity={0.7}
+              scaleValue={0.9}
+              hapticFeedback="light"
+              accessibilityLabel="Settings"
+              accessibilityRole="button"
+            >
+              <Ionicons name="cog-outline" size={20} color={Colors.textPrimary} />
             </AnimatedPressable>
           </View>
         </View>
@@ -431,11 +292,10 @@ export default function InboxScreen() {
         <AppInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search conversations, messages, members, listings"
+          placeholder="Search"
           autoCapitalize="none"
           autoCorrect={false}
           accessibilityLabel="Search conversations"
-          accessibilityHint="Searches across conversations, participants, listings, and message history"
           inputContainerStyle={styles.searchWrap}
           inputStyle={styles.searchInput}
           prefix={<Ionicons name="search" size={18} color={Colors.textMuted} />}
@@ -443,9 +303,8 @@ export default function InboxScreen() {
             <AnimatedPressable
               onPress={() => setSearchQuery('')}
               style={styles.clearSearchBtn}
-              accessibilityLabel="Clear inbox search"
+              accessibilityLabel="Clear search"
               accessibilityRole="button"
-              accessibilityHint="Clears search query"
               activeOpacity={0.7}
               scaleValue={0.9}
               hapticFeedback="light"
@@ -460,61 +319,11 @@ export default function InboxScreen() {
           options={SEGMENT_OPTIONS}
           value={segment}
           onChange={setSegment}
-          fullWidth
           optionStyle={styles.segmentChip}
           optionActiveStyle={styles.segmentChipActive}
           optionTextStyle={styles.segmentChipText}
           optionTextActiveStyle={styles.segmentChipTextActive}
         />
-
-        <View style={styles.quickRail}>
-          <AnimatedPressable
-            style={[styles.quickChip, segment === 'unread' && styles.quickChipActive]}
-            onPress={() => setSegment('unread')}
-            accessibilityRole="button"
-            accessibilityLabel="Show unread conversations"
-            activeOpacity={0.85}
-            scaleValue={0.95}
-            hapticFeedback="light"
-          >
-            <Ionicons name="mail-unread-outline" size={14} color={segment === 'unread' ? Colors.background : Colors.textSecondary} />
-            <Text style={[styles.quickChipText, segment === 'unread' && styles.quickChipTextActive]}>Unread {unreadCount}</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={styles.quickChip}
-            onPress={() => setSearchQuery('offer')}
-            accessibilityRole="button"
-            accessibilityLabel="Find offer conversations"
-            activeOpacity={0.85}
-            scaleValue={0.95}
-            hapticFeedback="light"
-          >
-            <Ionicons name="pricetag-outline" size={14} color={Colors.textSecondary} />
-            <Text style={styles.quickChipText}>Offers {offerThreadCount}</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={[styles.quickChip, segment === 'groups' && styles.quickChipActive]}
-            onPress={() => setSegment('groups')}
-            accessibilityRole="button"
-            accessibilityLabel="Show group conversations"
-            activeOpacity={0.85}
-            scaleValue={0.95}
-            hapticFeedback="light"
-          >
-            <Ionicons name="people-outline" size={14} color={segment === 'groups' ? Colors.background : Colors.textSecondary} />
-            <Text style={[styles.quickChipText, segment === 'groups' && styles.quickChipTextActive]}>Groups {groupCount}</Text>
-          </AnimatedPressable>
-        </View>
-
-        <Caption color={Colors.textMuted}>
-          {searchQuery.trim().length > 0
-            ? `${visibleConversations.length} matched thread${visibleConversations.length === 1 ? '' : 's'}`
-            : `${visibleConversations.length} conversation${visibleConversations.length === 1 ? '' : 's'}`}
-          {' | '}
-          {unreadCount} unread
-        </Caption>
       </View>
 
       <View style={{ flex: 1 }}>
@@ -525,7 +334,7 @@ export default function InboxScreen() {
           keyExtractor={(c: any) => c.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={{ height: Space.sm + 4 }} />}
+          ItemSeparatorComponent={() => <View style={{ height: Space.sm + 2 }} />}
           renderItem={renderItem as any}
           onScroll={scrollHandler}
           scrollEventThrottle={16}
@@ -541,8 +350,8 @@ export default function InboxScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="chatbubbles-outline"
-              title={searchQuery || segment !== 'direct' ? 'No matching conversations' : 'No conversations yet'}
-              subtitle={searchQuery || segment !== 'direct'
+              title={searchQuery || segment !== 'all' ? 'No matching conversations' : 'No conversations yet'}
+              subtitle={searchQuery || segment !== 'all'
                 ? 'Try another keyword or filter.'
                 : 'Message a seller to start a chat.'}
               ctaLabel="Browse listings"
@@ -566,66 +375,37 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
-  hugeTitle: {
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Space.md - 2,
+  },
+  title: {
     fontSize: Type.title.size,
     fontFamily: 'Inter_700Bold',
     color: Colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
     lineHeight: Type.title.lineHeight,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Space.sm + 2,
-    marginBottom: Space.md - 2,
-  },
-  headerTitleWrap: {
-    flex: 1,
-    flexShrink: 1,
-    paddingRight: Space.sm,
-  },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexShrink: 0,
   },
-  addGroupBtn: {
-    borderRadius: Radius.full,
-    minHeight: 38,
-    paddingHorizontal: Space.sm + 6,
-    borderWidth: 1,
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  addGroupIconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'transparent',
-  },
-  addGroupBtnText: {
-    color: Colors.textPrimary,
-    fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 0.2,
-  },
-  policiesBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.md,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+
   searchWrap: {
-    height: 46,
+    height: 40,
     borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: Colors.borderLight,
@@ -644,19 +424,19 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   clearSearchBtn: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.background,
   },
+
   segmentStrip: {
     marginTop: 2,
-    marginBottom: Space.sm,
   },
   segmentChip: {
-    height: 34,
+    height: 30,
     borderRadius: Radius.full,
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -678,35 +458,7 @@ const styles = StyleSheet.create({
   segmentChipTextActive: {
     color: Colors.background,
   },
-  quickRail: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginBottom: Space.sm + 2,
-  },
-  quickChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    height: 30,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  quickChipActive: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.brand,
-  },
-  quickChipText: {
-    color: Colors.textSecondary,
-    fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  quickChipTextActive: {
-    color: Colors.background,
-  },
+
   listContent: {
     paddingHorizontal: Space.md + 4,
     paddingBottom: Space.xxl + 24,
@@ -754,68 +506,63 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: Colors.surface,
   },
+
   messageBody: { flex: 1 },
   messageTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 4,
     alignItems: 'center',
-  },
-  unreadBadge: {
-    borderRadius: Radius.sm,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    backgroundColor: Colors.brand,
-    alignSelf: 'flex-start',
-    marginBottom: Space.xs + 4,
-  },
-  unreadBadgeText: {
-    color: Colors.background,
-    fontSize: 10,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.7,
-  },
-  groupMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginBottom: Space.xs + 2,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
   },
+  titleUnread: {
+    fontFamily: 'Inter_700Bold',
+  },
   pinIcon: {
     marginLeft: 2,
   },
-  draftLabel: {
-    color: Colors.brand,
-    fontFamily: 'Inter_600SemiBold',
+
+  snippetRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: Space.sm,
   },
   snippet: {
     color: Colors.textSecondary,
     fontSize: Type.body.size,
     fontFamily: 'Inter_400Regular',
     lineHeight: Type.body.lineHeight,
-    marginBottom: Space.sm + 2,
+    flex: 1,
   },
-  searchHitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    marginBottom: Space.sm,
+  snippetUnread: {
+    color: Colors.textPrimary,
+    fontFamily: 'Inter_500Medium',
+  },
+  draftLabel: {
+    color: Colors.brand,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.brand,
+    marginTop: 4,
   },
 
   itemPreview: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.background,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
     padding: Space.sm,
     gap: Space.sm + 2,
+    marginTop: Space.sm,
   },
   itemThumb: {
     width: 36,
@@ -831,37 +578,24 @@ const styles = StyleSheet.create({
   itemName: {
     flex: 1,
   },
-
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.brand,
-    marginTop: 6,
+  itemPrice: {
+    fontSize: Type.caption.size,
   },
 
-  // Swipe actions
   swipeDelete: {
     backgroundColor: Colors.danger,
     justifyContent: 'center',
     alignItems: 'center',
-    width: 90,
+    width: 80,
     borderRadius: Radius.xl + 2,
     marginLeft: Space.sm,
-    gap: 4,
   },
   swipePin: {
     backgroundColor: Colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
-    width: 90,
+    width: 80,
     borderRadius: Radius.xl + 2,
     marginRight: Space.sm,
-    gap: 4,
-  },
-  swipeActionText: {
-    color: Colors.textInverse,
-    fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
   },
 });

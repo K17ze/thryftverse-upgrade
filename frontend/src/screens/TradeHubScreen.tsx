@@ -57,13 +57,13 @@ export default function TradeHubScreen() {
     if (activeTab === 'AUCTIONS') {
       return [
         { key: 'create-auction', label: 'Create Auction', icon: 'hammer-outline' as const, onPress: () => navigation.navigate('CreateAuction') },
-        { key: 'my-listings', label: 'My Listings', icon: 'list-outline' as const, onPress: () => show('Auction listings coming soon', 'info') },
+
         { key: 'auction-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => navigation.navigate('CreatePoster') },
       ];
     }
     return [
       { key: 'create-coown', label: 'Create Co-Own', icon: 'people-outline' as const, onPress: () => navigation.navigate('CreateCoOwn') },
-      { key: 'my-listings', label: 'My Listings', icon: 'list-outline' as const, onPress: () => show('Co-Own listings coming soon', 'info') },
+
       { key: 'coown-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => navigation.navigate('CreatePoster') },
       { key: 'open-portfolio', label: 'Portfolio', icon: 'wallet-outline' as const, onPress: () => navigation.navigate('Portfolio') },
     ];

@@ -33,7 +33,7 @@ export interface FilterConfig {
   contrast?: number;
 }
 
-const FILTERS: FilterConfig[] = [
+export const FILTERS: FilterConfig[] = [
   { name: 'normal', label: 'Normal' },
   { name: 'clarendon', label: 'Clarendon', overlayColor: '#4a90d9', overlayOpacity: 0.12, contrast: 1.1 },
   { name: 'gingham', label: 'Gingham', overlayColor: '#e8d5b5', overlayOpacity: 0.2, saturation: 0.85 },

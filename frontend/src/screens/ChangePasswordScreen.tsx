@@ -7,11 +7,14 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
@@ -25,7 +28,7 @@ import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar'
 import { Typography } from '../constants/typography';
 
 export default function ChangePasswordScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { show } = useToast();
 
   const [currentPassword, setCurrentPassword] = useState('');
@@ -81,6 +84,7 @@ export default function ChangePasswordScreen() {
           <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
             <Text style={styles.sectionTitle}>Security</Text>
             <SettingsCard>
+              <Text style={styles.infoText}>Enter your current password to confirm your identity.</Text>
               <AppInput
                 label="Current Password"
                 value={currentPassword}
@@ -107,7 +111,9 @@ export default function ChangePasswordScreen() {
                 placeholder="Enter new password"
                 containerStyle={styles.inputSpacing}
               />
-              <PasswordStrengthBar password={newPassword} />
+              <View style={{ marginTop: Space.xs }}>
+                <PasswordStrengthBar password={newPassword} />
+              </View>
 
               <AppInput
                 label="Confirm New Password"
@@ -117,6 +123,13 @@ export default function ChangePasswordScreen() {
                 placeholder="Re-enter new password"
                 containerStyle={styles.inputSpacing}
               />
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ForgotPassword')}
+                activeOpacity={0.7}
+                style={styles.forgotPasswordLink}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
             </SettingsCard>
           </Reanimated.View>
 
@@ -161,5 +174,23 @@ const styles = StyleSheet.create({
   updateBtn: {
     marginTop: Space.lg,
     borderRadius: Radius.xl,
+  },
+  infoText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginBottom: Space.sm,
+    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  forgotPasswordLink: {
+    marginTop: Space.sm,
+    alignItems: 'center',
+  },
+  forgotPasswordText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.brand,
+    letterSpacing: Type.body.letterSpacing,
   },
 });

@@ -25,6 +25,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { SettingsHeader } from '../components/settings/SettingsHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'Payments'>;
@@ -101,7 +102,13 @@ export default function PaymentsScreen({ navigation }: Props) {
   ) => {
     if (!allow) {
       return (
-        <View style={styles.paymentRow}>
+        <AnimatedPressable
+          style={styles.paymentRow}
+          onPress={() => show('Payment method options coming soon', 'info')}
+          scaleValue={0.98}
+          hapticFeedback="light"
+          activeOpacity={0.8}
+        >
           <View style={styles.iconCircle}>
             <Ionicons name={iconOutline as any} size={20} color={Colors.textPrimary} />
           </View>
@@ -109,14 +116,18 @@ export default function PaymentsScreen({ navigation }: Props) {
             <Text style={styles.paymentTitle}>{unavailableTitle}</Text>
             <Text style={styles.paymentSub}>{unavailableSub}</Text>
           </View>
-        </View>
+        </AnimatedPressable>
       );
     }
     if (methods.length > 0) {
       return methods.map((method, idx) => (
-        <View
+        <AnimatedPressable
           key={method.id}
           style={[styles.paymentRow, idx < methods.length - 1 && styles.paymentRowBorder]}
+          onPress={() => show('Payment method options coming soon', 'info')}
+          scaleValue={0.98}
+          hapticFeedback="light"
+          activeOpacity={0.8}
         >
           <View style={styles.iconCircle}>
             <Ionicons name={iconName as any} size={20} color={Colors.textPrimary} />
@@ -130,12 +141,18 @@ export default function PaymentsScreen({ navigation }: Props) {
               <Text style={styles.defaultText}>Default</Text>
             </View>
           ) : null}
-        </View>
+        </AnimatedPressable>
       ));
     }
     if (fallback) {
       return (
-        <View style={styles.paymentRow}>
+        <AnimatedPressable
+          style={styles.paymentRow}
+          onPress={() => show('Payment method options coming soon', 'info')}
+          scaleValue={0.98}
+          hapticFeedback="light"
+          activeOpacity={0.8}
+        >
           <View style={styles.iconCircle}>
             <Ionicons name={iconName as any} size={20} color={Colors.textPrimary} />
           </View>
@@ -143,18 +160,14 @@ export default function PaymentsScreen({ navigation }: Props) {
             <Text style={styles.paymentTitle}>{fallback.label}</Text>
             <Text style={styles.paymentSub}>{fallback.details ?? 'Saved'}</Text>
           </View>
-        </View>
+        </AnimatedPressable>
       );
     }
     return (
-      <View style={styles.paymentRow}>
-        <View style={styles.iconCircle}>
-          <Ionicons name={iconOutline as any} size={20} color={Colors.textPrimary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.paymentTitle}>{emptyTitle}</Text>
-          <Text style={styles.paymentSub}>{emptySub}</Text>
-        </View>
+      <View style={styles.emptyState}>
+        <Ionicons name={iconOutline as any} size={40} color={Colors.textMuted} />
+        <Text style={styles.emptyStateTitle}>{emptyTitle}</Text>
+        <Text style={styles.emptyStateSub}>{emptySub}</Text>
       </View>
     );
   };
@@ -206,8 +219,8 @@ export default function PaymentsScreen({ navigation }: Props) {
               cardMethods,
               fallbackCard as CommercePaymentMethod | null,
               allowCards,
-              'No saved cards',
-              'Add a card to pay instantly at checkout',
+              'No cards saved yet',
+              'Add your first card to checkout faster',
               'Cards unavailable in your region',
               'Switching compliance country will refresh payment rails.',
               'card',
@@ -287,7 +300,7 @@ const styles = StyleSheet.create({
   },
   policyLabel: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     marginTop: Space.xs,
     marginBottom: Space.sm,
@@ -384,5 +397,27 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xl,
+  },
+  emptyStateTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+    marginTop: Space.md,
+    textAlign: 'center',
+    letterSpacing: Type.body.letterSpacing,
+  },
+  emptyStateSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: Space.xs,
+    textAlign: 'center',
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
 });

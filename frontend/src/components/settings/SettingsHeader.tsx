@@ -1,19 +1,20 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Headline } from '../ui/Text';
+import { Typography } from '../../constants/typography';
 
 interface SettingsHeaderProps {
   title: string;
   onBack: () => void;
   rightAction?: React.ReactNode;
   style?: ViewStyle;
+  subtitle?: string;
 }
 
-export function SettingsHeader({ title, onBack, rightAction, style }: SettingsHeaderProps) {
+export function SettingsHeader({ title, onBack, rightAction, style, subtitle }: SettingsHeaderProps) {
   return (
     <View style={[styles.header, style]}>
       <AnimatedPressable
@@ -30,7 +31,10 @@ export function SettingsHeader({ title, onBack, rightAction, style }: SettingsHe
       </AnimatedPressable>
 
       <View style={styles.titleContainer}>
-        <Headline numberOfLines={1}>{title}</Headline>
+        <Text style={styles.title} numberOfLines={1}>{title}</Text>
+        {subtitle ? (
+          <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
+        ) : null}
       </View>
 
       <View style={styles.rightSlot}>{rightAction || <View style={styles.spacer} />}</View>
@@ -43,22 +47,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.md - Space.xs,
-    paddingVertical: Space.md - Space.xs,
-    minHeight: 56,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    minHeight: 64,
   },
   backBtn: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: Radius.md,
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   titleContainer: {
     flex: 1,
     alignItems: 'center',
     marginHorizontal: Space.sm,
+  },
+  title: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
+    lineHeight: Type.subtitle.lineHeight,
+  },
+  subtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 2,
+    letterSpacing: Type.caption.letterSpacing,
   },
   rightSlot: {
     minWidth: 44,

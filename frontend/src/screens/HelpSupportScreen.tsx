@@ -21,6 +21,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
+import { AppInput } from '../components/ui/AppInput';
 import { SettingsHeader } from '../components/settings/SettingsHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { Typography } from '../constants/typography';
@@ -162,22 +163,14 @@ export default function HelpSupportScreen({ navigation }: Props) {
             <Text style={styles.sectionTitle}>Frequently Asked</Text>
 
             {/* FAQ Search */}
-            <View style={styles.searchRow}>
-              <Ionicons name="search-outline" size={16} color={Colors.textMuted} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search FAQs..."
-                placeholderTextColor={Colors.textMuted}
-                value={faqSearch}
-                onChangeText={setFaqSearch}
-                accessibilityLabel="Search FAQs"
-              />
-              {faqSearch.length > 0 && (
-                <AnimatedPressable onPress={() => setFaqSearch('')} hapticFeedback="light">
-                  <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
-                </AnimatedPressable>
-              )}
-            </View>
+            <AppInput
+              label="Search FAQs"
+              value={faqSearch}
+              onChangeText={setFaqSearch}
+              placeholder="Search FAQs..."
+              clearButtonMode="while-editing"
+              accessibilityLabel="Search FAQs"
+            />
 
             <SettingsCard>
               {filteredFaqs.length === 0 ? (
@@ -214,17 +207,14 @@ export default function HelpSupportScreen({ navigation }: Props) {
           <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
             <Text style={styles.sectionTitle}>Send a Message</Text>
             <SettingsCard>
-              <TextInput
+              <AppInput
                 ref={messageInputRef}
-                style={styles.messageInput}
+                label="Your message"
+                placeholder="Describe your issue..."
                 value={message}
                 onChangeText={setMessage}
-                placeholder="Describe your issue in detail..."
-                placeholderTextColor={Colors.textMuted}
                 multiline
-                numberOfLines={5}
-                textAlignVertical="top"
-                selectionColor={Colors.brand}
+                numberOfLines={4}
                 accessibilityLabel="Support message"
                 accessibilityHint="Type details about your issue so support can help you."
               />
@@ -319,26 +309,6 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     marginLeft: Space.xs,
   },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Space.sm + Space.xs,
-    paddingVertical: Space.sm,
-    gap: Space.xs + Space.xs,
-    marginBottom: Space.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    paddingVertical: 0,
-  },
   emptyFaqs: {
     paddingVertical: Space.lg,
     alignItems: 'center',
@@ -373,15 +343,6 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: Colors.border,
-  },
-  messageInput: {
-    fontSize: Type.body.size,
-    color: Colors.textPrimary,
-    minHeight: 100,
-    marginBottom: Space.sm,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
-    letterSpacing: Type.body.letterSpacing,
   },
   sendBtnDisabled: {
     opacity: 0.4,

@@ -103,8 +103,10 @@ export default function PostageScreen({ navigation }: Props) {
         title="Postage"
         onBack={() => navigation.goBack()}
         rightAction={
-          <AnimatedPressable onPress={() => { show('Postage preferences saved', 'success'); navigation.goBack(); }} hapticFeedback="light">
-            <Text style={styles.saveBtn}>Save</Text>
+          <AnimatedPressable onPress={() => { show('Postage preferences saved', 'success'); navigation.goBack(); }} hapticFeedback="light" scaleValue={0.98}>
+            <View style={styles.saveBtnContainer}>
+              <Text style={styles.saveBtnText}>Save</Text>
+            </View>
           </AnimatedPressable>
         }
       />
@@ -120,7 +122,7 @@ export default function PostageScreen({ navigation }: Props) {
             {carriers.map((c, idx) => (
               <AnimatedPressable
                 key={c.key}
-                style={[styles.carrierRow, idx < carriers.length - 1 && styles.carrierRowBorder]}
+                style={[styles.carrierRow, c.selected && { backgroundColor: `${Colors.brand}10` }, idx < carriers.length - 1 && styles.carrierRowBorder]}
                 onPress={() => selectCarrier(c.key)}
                 hapticFeedback="light"
                 accessibilityRole="radio"
@@ -128,11 +130,16 @@ export default function PostageScreen({ navigation }: Props) {
                 accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}`}
               >
                 <View style={styles.carrierText}>
-                  <Text style={styles.carrierLabel}>{c.label}</Text>
+                  <Text style={[styles.carrierLabel, c.selected && { fontFamily: Typography.family.semibold }]}>{c.label}</Text>
                   <Text style={styles.carrierPrice}>
                     from {formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}
                   </Text>
                 </View>
+                {c.selected ? (
+                  <View style={styles.selectedBadge}>
+                    <Text style={styles.selectedBadgeText}>Selected</Text>
+                  </View>
+                ) : null}
                 <RadioButton selected={c.selected} />
               </AnimatedPressable>
             ))}
@@ -183,10 +190,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  saveBtn: {
+  saveBtnContainer: {
+    backgroundColor: Colors.brand,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  saveBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: '#ffffff',
     letterSpacing: Type.body.letterSpacing,
   },
   content: {
@@ -225,7 +238,7 @@ const styles = StyleSheet.create({
   },
   carrierLabel: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: Typography.family.regular,
     color: Colors.textPrimary,
     marginBottom: 2,
     letterSpacing: Type.body.letterSpacing,
@@ -244,5 +257,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs,
     marginTop: Space.sm,
     letterSpacing: Type.caption.letterSpacing,
+    textAlign: 'center',
+  },
+  selectedBadge: {
+    backgroundColor: `${Colors.brand}15`,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+    marginRight: Space.sm,
+  },
+  selectedBadgeText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+    letterSpacing: Type.meta.letterSpacing,
   },
 });

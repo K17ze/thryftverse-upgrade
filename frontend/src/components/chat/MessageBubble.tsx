@@ -97,26 +97,31 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bubbleContainer: {
-    maxWidth: '80%',
+    maxWidth: '78%',
   },
   senderLabel: {
     marginBottom: 2,
-    marginLeft: Space.xs,
+    marginLeft: Space.xs + 2,
   },
   bubble: {
     borderRadius: Radius.xl,
-    paddingHorizontal: Space.md - 2,
-    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
   },
   bubbleMe: {
     backgroundColor: Colors.brand,
-    borderBottomRightRadius: Space.xs,
+    borderBottomRightRadius: Space.sm,
   },
   bubbleThem: {
     backgroundColor: Colors.surface,
-    borderBottomLeftRadius: Space.xs,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderBottomLeftRadius: Space.sm,
+    shadowOpacity: 0.08,
+    elevation: 2,
   },
   statusContainer: {
     flexDirection: 'row',
@@ -126,14 +131,16 @@ const styles = StyleSheet.create({
   },
   incomingTimestamp: {
     marginTop: 2,
-    marginLeft: Space.xs,
+    marginLeft: Space.xs + 2,
   },
   reactionsMe: {
     alignSelf: 'flex-end',
     marginRight: Space.xs,
+    marginTop: -Space.xs - 2,
   },
   reactionsThem: {
     alignSelf: 'flex-start',
     marginLeft: Space.xs,
+    marginTop: -Space.xs - 2,
   },
 });

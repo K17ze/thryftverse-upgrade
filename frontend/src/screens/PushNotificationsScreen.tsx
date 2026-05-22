@@ -173,6 +173,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
             disabled={isSyncingDevice}
             accessibilityLabel={allEnabled ? 'Disable all push notifications' : 'Enable all push notifications'}
             hapticFeedback="medium"
+            style={styles.iconBtn}
           >
             {isSyncingDevice ? (
               <ActivityIndicator size="small" color={Colors.textPrimary} />
@@ -239,6 +240,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   content: {
     padding: Space.md,

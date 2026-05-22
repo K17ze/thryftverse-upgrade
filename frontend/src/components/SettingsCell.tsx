@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Switch,
   ViewStyle,
 } from 'react-native';
@@ -12,6 +11,7 @@ import { Colors } from '../constants/colors';
 import { Type, Space, Radius } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { Typography } from '../constants/typography';
+import { AnimatedPressable } from './AnimatedPressable';
 
 export type SettingsCellVariant = 'default' | 'value' | 'toggle' | 'button' | 'destructive' | 'custom';
 
@@ -142,13 +142,15 @@ export function SettingsCell({
   }
 
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled || !onPress}
       activeOpacity={0.7}
+      scaleValue={0.985}
+      hapticFeedback='light'
     >
       {renderContent()}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
@@ -191,7 +193,7 @@ export function SettingsGroup({ children, style }: SettingsGroupProps) {
 const styles = StyleSheet.create({
   group: {
     marginHorizontal: Space.md,
-    marginBottom: Space.lg,
+    marginBottom: Space.md,
     backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
@@ -273,7 +275,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: Colors.textMuted,
-    marginHorizontal: Space.md + Space.md,
+    marginHorizontal: Space.md,
     marginTop: Space.lg + Space.sm,
     marginBottom: Space.xs + Space.xs,
     letterSpacing: Type.meta.letterSpacing,
@@ -282,9 +284,9 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    marginHorizontal: Space.md + Space.md,
+    marginHorizontal: Space.md,
     marginTop: Space.xs + Space.xs,
-    marginBottom: Space.lg,
+    marginBottom: Space.md,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
   },

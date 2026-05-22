@@ -3,31 +3,21 @@ import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '../../constants/typography';
 
-export type CreativeTool =
-  | 'text'
-  | 'layout'
-  | 'background'
-  | 'stickers'
-  | 'draw'
-  | null;
+export type CreativeTool = 'text' | 'stickers' | 'draw' | null;
 
 interface CreativeToolbarProps {
   activeTool: CreativeTool;
   onToolSelect: (tool: CreativeTool) => void;
   visible: boolean;
-  onFilterToggle?: () => void;
-  filterActive?: boolean;
 }
 
 const TOOLS: { key: CreativeTool; icon: string; label: string }[] = [
   { key: 'text', icon: 'text-outline', label: 'Text' },
-  { key: 'layout', icon: 'grid-outline', label: 'Layout' },
-  { key: 'background', icon: 'ellipse-outline', label: 'Background' },
   { key: 'stickers', icon: 'happy-outline', label: 'Stickers' },
   { key: 'draw', icon: 'pencil-outline', label: 'Draw' },
 ];
 
-export default function CreativeToolbar({ activeTool, onToolSelect, visible, onFilterToggle, filterActive }: CreativeToolbarProps) {
+export default function CreativeToolbar({ activeTool, onToolSelect, visible }: CreativeToolbarProps) {
   if (!visible) return null;
 
   return (
@@ -53,24 +43,6 @@ export default function CreativeToolbar({ activeTool, onToolSelect, visible, onF
             </Pressable>
           );
         })}
-
-        {/* Filter toggle (inline in toolbar) */}
-        {onFilterToggle && (
-          <Pressable
-            style={[styles.toolBtn, filterActive && styles.toolBtnActive]}
-            onPress={onFilterToggle}
-            hitSlop={8}
-          >
-            <Ionicons
-              name="color-wand-outline"
-              size={20}
-              color={filterActive ? '#000' : 'rgba(255,255,255,0.9)'}
-            />
-            <Text style={[styles.toolLabel, filterActive && styles.toolLabelActive]}>
-              Filters
-            </Text>
-          </Pressable>
-        )}
       </View>
     </View>
   );

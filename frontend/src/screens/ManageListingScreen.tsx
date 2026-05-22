@@ -20,6 +20,7 @@ import Reanimated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppButton } from '../components/ui/AppButton';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { MOCK_LISTINGS } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
@@ -204,14 +205,17 @@ export default function ManageListingScreen() {
         </View>
 
         {/* Primary Edit Button */}
-        <AnimatedPressable
+        <AppButton
+          title="Edit Listing"
+          icon={<Ionicons name="create-outline" size={18} color={Colors.background} />}
+          variant="primary"
+          size="lg"
           style={styles.editBtn}
-          activeOpacity={0.9}
           onPress={() => show('Edit coming soon', 'info')}
-        >
-          <Ionicons name="create-outline" size={18} color={Colors.background} />
-          <Text style={styles.editBtnText}>Edit Listing</Text>
-        </AnimatedPressable>
+          accessibilityLabel="Edit listing"
+          accessibilityHint="Listing editing is not yet available"
+          hapticFeedback="light"
+        />
 
         {/* Icon Actions Row */}
         <View style={styles.iconActionsRow}>

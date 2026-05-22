@@ -42,6 +42,7 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { AppButton } from '../components/ui/AppButton';
+import { ActivityBadge, ActivityBadgeRow } from '../components/ui/ActivityBadge';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { SharedTransitionView } from '../components/SharedTransitionView';
@@ -247,6 +248,17 @@ export default function ItemDetailScreen() {
             <Text style={styles.description}>{item.description}</Text>
             <Text style={styles.timePosted}>Posted 2 hours ago · {seller.location}</Text>
           </View>
+
+          {/* ── Social Proof & Scarcity ── */}
+          <ActivityBadgeRow
+            badges={[
+              { variant: 'closeted', count: Math.max(3, (item.likes ?? 0) % 47 + 5), label: 'in closets' },
+              { variant: 'viewers', count: Math.max(1, (item.id.charCodeAt(0) % 8) + 1), label: 'viewing now' },
+              ...(item.price < 50 ? [{ variant: 'fastSelling' as const, label: 'selling fast' }] : []),
+              ...(item.condition === 'New with tags' ? [{ variant: 'rareItem' as const, label: 'new with tags' }] : []),
+            ]}
+            style={{ marginBottom: Space.md }}
+          />
 
           {/* Phase 3: Removed sync status card - cleaner detail view */}
           {lastError ? (

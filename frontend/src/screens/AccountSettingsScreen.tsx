@@ -289,6 +289,7 @@ export default function AccountSettingsScreen() {
               value={facebookLinked ? 'Linked' : 'Link'}
               isFirst
               onPress={handleFacebookLink}
+              disabled
             />
             <SettingsCell
               icon="logo-google"
@@ -297,21 +298,11 @@ export default function AccountSettingsScreen() {
               value={googleLinked ? 'Linked' : 'Link'}
               isLast
               onPress={handleGoogleLink}
+              disabled
             />
           </SettingsCard>
         </Reanimated.View>
 
-        {/* Save */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(320)}>
-          <AppButton
-            title="Save Changes"
-            onPress={handleSaveChanges}
-            variant="primary"
-            size="md"
-            style={styles.saveBtn}
-            accessibilityLabel="Save account settings"
-          />
-        </Reanimated.View>
 
         {/* Footer Actions */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(400)}>
@@ -369,6 +360,18 @@ export default function AccountSettingsScreen() {
             accessibilityLabel="Delete account"
           />
         </Reanimated.View>
+
+        {/* Save */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(320)}>
+          <AppButton
+            title="Save Changes"
+            onPress={handleSaveChanges}
+            variant="primary"
+            size="md"
+            style={styles.saveBtn}
+            accessibilityLabel="Save account settings"
+          />
+        </Reanimated.View>
       </ScrollView>
 
       {/* Disable 2FA Modal */}
@@ -379,7 +382,7 @@ export default function AccountSettingsScreen() {
         onRequestClose={closeDisableTwoFactorModal}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <SettingsCard style={{ marginHorizontal: 0, marginBottom: 0 }}>
             <Text style={styles.modalTitle}>Disable 2FA</Text>
             <Text style={styles.modalCopy}>
               Confirm with your authenticator code or a recovery code.
@@ -434,7 +437,7 @@ export default function AccountSettingsScreen() {
                 accessibilityLabel="Confirm disable two-factor authentication"
               />
             </View>
-          </View>
+          </SettingsCard>
         </View>
       </Modal>
     </SafeAreaView>
@@ -547,12 +550,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     paddingHorizontal: Space.md,
-  },
-  modalCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    padding: Space.md,
-    gap: Space.sm,
   },
   modalTitle: {
     color: Colors.textPrimary,
