@@ -8,6 +8,7 @@ import { MessageReactionsSummary, EmojiReaction } from './EmojiReactionsBar';
 import { MentionHighlight } from './MentionHighlight';
 import { MessageStatusIndicator, MessageStatus } from '../MessageStatusIndicator';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { GlassSurface } from '../ui/GlassSurface';
 
 interface MessageBubbleProps {
   text: string;
@@ -44,14 +45,19 @@ export function MessageBubble({
           </Meta>
         ) : null}
 
-        <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-          <Body color={isMe ? Colors.textInverse : Colors.textPrimary}>
-            <MentionHighlight
-              text={text}
-              color={isMe ? Colors.textInverse : Colors.brand}
-            />
-          </Body>
-        </View>
+        {isMe ? (
+          <View style={[styles.bubble, styles.bubbleMe]}>
+            <Body color={Colors.textInverse}>
+              <MentionHighlight text={text} color={Colors.textInverse} />
+            </Body>
+          </View>
+        ) : (
+          <GlassSurface intensity={20} tint="dark" borderRadius={Radius.xl} style={styles.bubbleThem}>
+            <Body color={Colors.textPrimary}>
+              <MentionHighlight text={text} color={Colors.brand} />
+            </Body>
+          </GlassSurface>
+        )}
 
         {isMe && status ? (
           <View style={styles.statusContainer}>
@@ -107,21 +113,21 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 1,
   },
   bubbleMe: {
     backgroundColor: Colors.brand,
     borderBottomRightRadius: Space.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   bubbleThem: {
-    backgroundColor: Colors.surface,
     borderBottomLeftRadius: Space.sm,
-    shadowOpacity: 0.08,
-    elevation: 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 4,
+    overflow: 'hidden',
   },
   statusContainer: {
     flexDirection: 'row',

@@ -39,6 +39,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { ChatHeader } from '../components/chat/ChatHeader';
 import { ChatCard } from '../components/chat/ChatCard';
+import { GlassCard } from '../components/ui/GlassSurface';
 import { ComposerInput } from '../components/chat/ComposerInput';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { Space, Radius, Type } from '../theme/designTokens';
@@ -442,7 +443,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           layout={layoutAnimation}
           style={styles.statusWrap}
         >
-          <ChatCard variant="surface" style={styles.statusCard}>
+          <GlassCard intensity={30} style={styles.statusCard}>
             <BodyEmphasis style={styles.statusTitle}>{lines[0]}</BodyEmphasis>
             <Caption color={Colors.textSecondary} style={styles.statusBody}>{lines.slice(1).join('\n')}</Caption>
             <AnimatedPressable
@@ -455,7 +456,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             >
               <Caption color={Colors.brand} style={styles.statusLink}>Tracking information</Caption>
             </AnimatedPressable>
-          </ChatCard>
+          </GlassCard>
         </Reanimated.View>
       );
     }
@@ -470,7 +471,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           layout={layoutAnimation}
           style={[styles.msgRow, isMe && styles.msgRowRight]}
         >
-          <ChatCard variant={isMe ? 'tint' : 'surface'} style={[styles.offerCard, isMe && styles.offerCardMe]}>
+          <GlassCard intensity={isMe ? 35 : 30} style={[styles.offerCard, isMe && styles.offerCardMe]}>
             {isGroup && !isMe && msg.senderLabel ? (
               <Meta color={Colors.textMuted} style={styles.offerSender}>{msg.senderLabel}</Meta>
             ) : null}
@@ -513,7 +514,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 </AnimatedPressable>
               </View>
             )}
-          </ChatCard>
+          </GlassCard>
         </Reanimated.View>
       );
     }

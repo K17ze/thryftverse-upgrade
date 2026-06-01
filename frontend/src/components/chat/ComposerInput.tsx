@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle, KeyboardTypeOptions } from 'react-native';
+import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppInput } from '../ui/AppInput';
+import { GlassSurface } from '../ui/GlassSurface';
 
 interface ComposerInputProps {
   value: string;
@@ -33,7 +34,12 @@ export function ComposerInput({
 
   return (
     <View style={[styles.container, style]}>
-      <View style={[styles.pill, inputContainerStyle]}>
+      <GlassSurface
+        intensity={25}
+        tint="dark"
+        borderRadius={Radius.full}
+        style={[styles.glassPill, inputContainerStyle]}
+      >
         {onAttachmentPress && (
           <AnimatedPressable
             style={styles.iconBtn}
@@ -87,7 +93,7 @@ export function ComposerInput({
         >
           <Ionicons name="arrow-up" size={20} color={canSend ? Colors.background : Colors.textMuted} />
         </AnimatedPressable>
-      </View>
+      </GlassSurface>
     </View>
   );
 }
@@ -96,11 +102,9 @@ const styles = StyleSheet.create({
   container: {
     paddingVertical: Space.sm + 2,
   },
-  pill: {
+  glassPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.full,
     paddingLeft: Space.sm,
     paddingRight: Space.xs,
     minHeight: 48,
