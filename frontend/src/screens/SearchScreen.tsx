@@ -35,9 +35,19 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { Type } from '../theme/designTokens';
 import { Typography } from '../constants/typography';
+import { AppSegmentControl } from '../components/ui/AppSegmentControl';
+import PulseTab from '../components/explore/PulseTab';
+import LooksTab from '../components/explore/LooksTab';
+import EditTab from '../components/explore/EditTab';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const EXPLORE_TABS = [
+  { value: 'pulse', label: 'Pulse' },
+  { value: 'looks', label: 'Looks' },
+  { value: 'edit', label: 'Edit' },
+];
 
 
 const PANEL_BG = Colors.surface;
@@ -210,6 +220,7 @@ export default function SearchScreen() {
   const reducedMotionEnabled = useReducedMotion();
 
   const listingIdSet = React.useMemo(() => new Set(listings.map((item) => item.id)), [listings]);
+  const [activeTab, setActiveTab] = useState<'pulse' | 'looks' | 'edit'>('pulse');
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -248,29 +259,27 @@ export default function SearchScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      {/* â”€â”€ Header â”€â”€ */}
+      {/* -- Header -- */}
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.hugeTitle}>Explore</Text>
         </View>
         <View style={styles.headerRight}>
-
-          <AppButton
-            title="Discover"
-            icon={<Ionicons name="compass-outline" size={14} color={Colors.background} />}
-            variant="secondary"
-            size="sm"
-            style={styles.discoverBtn}
-            titleStyle={styles.discoverBtnText}
-            iconContainerStyle={styles.discoverBtnIconWrap}
-            onPress={() => navigation.navigate('GlobalSearch')}
-            accessibilityLabel="Open discover search"
-            accessibilityHint="Find recommended listings with smarter search"
-          />
+          <View style={styles.creatorActions}>
+            <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('CreateLook')}>
+              <Ionicons name="camera-outline" size={18} color={Colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('OutfitBuilder')}>
+              <Ionicons name="shirt-outline" size={18} color={Colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('GlobalSearch')}>
+              <Ionicons name="compass-outline" size={18} color={Colors.textPrimary} />
+            </AnimatedPressable>
+          </View>
         </View>
       </View>
 
-      {/* â”€â”€ Search Bar â”€â”€ */}
+      {/* -- Search Bar -- */}
       <View style={styles.searchRow}>
         <View style={[styles.searchBar, isSearchFocused && styles.searchBarFocused]}>
           <Ionicons name="search" size={20} color={Colors.textMuted} style={{ marginLeft: 4 }} />
@@ -295,28 +304,18 @@ export default function SearchScreen() {
         </View>
       </View>
 
-            {/* ── Closet Shortcut ── */}
-      <AnimatedPressable
-        style={styles.closetShortcut}
-        onPress={() => navigation.push('Closet')}
-        activeOpacity={0.9}
-        accessibilityRole="button"
-        accessibilityLabel="Open your closet"
-        accessibilityHint="View your saved items, wishlist, and collections"
-      >
-        <View style={styles.closetShortcutLeft}>
-          <View style={styles.closetShortcutIcon}>
-            <Ionicons name="shirt-outline" size={22} color={Colors.brand} />
-          </View>
-          <View>
-            <Text style={styles.closetShortcutTitle}>Your Closet</Text>
-            <Text style={styles.closetShortcutSub}>Saved, Wishlist & Collections</Text>
-          </View>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-      </AnimatedPressable>
+      {/* -- Sync Error Banner -- */}
+      {lastError ? (
+        <SyncRetryBanner
+          message="Sync is unavailable. Showing cached items."
+          onRetry={() => void handleRefresh()}
+          isRetrying={isSyncing || refreshing}
+          telemetryContext="explore_sync"
+          containerStyle={styles.syncRetryBanner}
+        />
+      ) : null}
 
-      {/* ── Content ── */}
+      {/* -- Content -- */}
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
 
@@ -335,22 +334,26 @@ export default function SearchScreen() {
             />
           }
         >
-          <MasonryGrid
-            items={listings.slice(0, 20)}
-            onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
-            numColumns={2}
-            showSeller={false}
-            showSaveButton={false}
-            visualOnly={true}
+          <AppSegmentControl
+            options={EXPLORE_TABS}
+            value={activeTab}
+            onChange={(v) => setActiveTab(v as 'pulse' | 'looks' | 'edit')}
+            style={{ marginHorizontal: 16, marginBottom: 12 }}
+            fullWidth
           />
+
+          {activeTab === 'pulse' && <PulseTab />}
+          {activeTab === 'looks' && <LooksTab />}
+          {activeTab === 'edit' && <EditTab />}
+
           <View style={styles.emptyFooter} />
         </Reanimated.ScrollView>
       </View>
-        </SafeAreaView>
+    </SafeAreaView>
   );
 }
 
-// â”€â”€ Look Card Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Look Card Styles --
 const lookStyles = StyleSheet.create({
   card: {
     backgroundColor: PANEL_BG,
@@ -377,7 +380,6 @@ const lookStyles = StyleSheet.create({
     right: 0,
     height: 100,
     backgroundColor: 'transparent',
-    // Simulated gradient with opacity layers
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
@@ -448,7 +450,7 @@ const lookStyles = StyleSheet.create({
   },
 });
 
-// ————————————————————————————————————————————————————————————————————————————
+// ------------------------------------------------------------------------------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
@@ -506,6 +508,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
+  },
+
+  creatorActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Search
@@ -684,5 +703,3 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
-
-

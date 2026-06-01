@@ -11,6 +11,8 @@ interface TradeCardProps {
   isFirst?: boolean;
   isLast?: boolean;
   fullWidth?: boolean;
+  /** Legacy/compat — no longer drives styling but accepted to avoid breakage */
+  variant?: string;
 }
 
 export function TradeCard({
@@ -20,6 +22,7 @@ export function TradeCard({
   isFirst = true,
   isLast = true,
   fullWidth = true,
+  variant,
 }: TradeCardProps) {
   return (
     <GlassCard

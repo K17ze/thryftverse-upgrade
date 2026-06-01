@@ -64,9 +64,6 @@ export const Type: Record<string, TypeStyle> = {
   /** 14/20/400 - Body text, descriptions, general content */
   body: { size: 14, lineHeight: 20, weight: '400', letterSpacing: -0.2 },
 
-  /** 14/20/400 - Body text, descriptions, general content */
-  body: { size: 14, lineHeight: 20, weight: '400', letterSpacing: -0.2 },
-
   /** 15/21/600 - Strong body, picker values, emphasized descriptions */
   bodyEmphasis: { size: 15, lineHeight: 21, weight: '600', letterSpacing: 0 },
 

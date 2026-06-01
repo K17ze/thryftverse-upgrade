@@ -20,7 +20,7 @@ import { Colors, ActiveTheme } from '../../constants/colors';
 import { Radius } from '../../theme/designTokens';
 
 export interface GlassSurfaceProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   intensity?: number; // 0-100, default 40
   tint?: 'light' | 'dark' | 'default';
   borderRadius?: number;

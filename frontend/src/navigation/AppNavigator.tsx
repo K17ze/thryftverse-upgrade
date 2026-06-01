@@ -82,6 +82,10 @@ import WriteReviewScreen from '../screens/WriteReviewScreen';
 import ReportScreen from '../screens/ReportScreen';
 import EditListingScreen from '../screens/EditListingScreen';
 
+// Explore / Creator screens
+import CreateLookScreen from '../screens/CreateLookScreen';
+import OutfitBuilderScreen from '../screens/OutfitBuilderScreen';
+
 const Stack = createStackNavigator<RootStackParamList>();
 
 const pushScreenOptions = {
@@ -223,6 +227,10 @@ export default function AppNavigator() {
       <Stack.Screen name="TwoFactorSetup" component={TwoFactorSetupScreen} />
       <Stack.Screen name="WriteReview" component={WriteReviewScreen} options={modalScreenOptions} />
       <Stack.Screen name="Report" component={ReportScreen} options={modalScreenOptions} />
+
+      {/* Explore / Creator screens */}
+      <Stack.Screen name="CreateLook" component={CreateLookScreen} options={modalScreenOptions} />
+      <Stack.Screen name="OutfitBuilder" component={OutfitBuilderScreen} options={modalScreenOptions} />
     </Stack.Navigator>
   );
 }

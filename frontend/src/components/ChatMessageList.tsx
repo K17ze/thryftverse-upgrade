@@ -102,7 +102,6 @@ export function ChatMessageList({
           minimumViewTime: 200,
           viewAreaCoveragePercentThreshold: 50,
         }}
-        inverted={false}
       />
     </View>
   );
@@ -143,7 +142,7 @@ const styles = StyleSheet.create({
 interface SimpleChatMessageListProps {
   messages: ChatMessage[];
   isGroup?: boolean;
-  scrollViewRef?: React.RefObject<FlatList>;
+  scrollViewRef?: React.RefObject<FlatList<ChatMessage>>;
 }
 
 export function SimpleChatMessageList({

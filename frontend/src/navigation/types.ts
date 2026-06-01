@@ -101,6 +101,9 @@ export type RootStackParamList = {
   Report: { type: 'item' | 'user' };
   MyBids: undefined;
   MyListings: { type?: 'coown' | 'auction' | 'standard' } | undefined;
+  // Explore / Creator screens
+  CreateLook: undefined;
+  OutfitBuilder: undefined;
 };
 
 export type TabParamList = {
