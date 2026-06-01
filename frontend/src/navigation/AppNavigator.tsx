@@ -80,6 +80,7 @@ import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import TwoFactorSetupScreen from '../screens/TwoFactorSetupScreen';
 import WriteReviewScreen from '../screens/WriteReviewScreen';
 import ReportScreen from '../screens/ReportScreen';
+import EditListingScreen from '../screens/EditListingScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -212,6 +213,7 @@ export default function AppNavigator() {
       {/* Phase 25 new screens */}
       <Stack.Screen name="Filter" component={FilterScreen} options={transparentSheetScreenOptions} />
       <Stack.Screen name="ListingSuccess" component={ListingSuccessScreen} />
+      <Stack.Screen name="EditListing" component={EditListingScreen} options={modalScreenOptions} />
 
       {/* Phase 27 new screens */}
       <Stack.Screen name="NotificationsList" component={NotificationsScreen} />

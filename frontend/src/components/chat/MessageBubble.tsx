@@ -52,7 +52,7 @@ export function MessageBubble({
             </Body>
           </View>
         ) : (
-          <GlassSurface intensity={20} tint="dark" borderRadius={Radius.xl} style={styles.bubbleThem}>
+          <GlassSurface intensity={20} tint="default" borderRadius={Radius.xl} style={styles.bubbleThem}>
             <Body color={Colors.textPrimary}>
               <MentionHighlight text={text} color={Colors.brand} />
             </Body>

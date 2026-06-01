@@ -11,6 +11,8 @@ interface BackendDataContextValue {
   isSyncing: boolean;
   lastError: string | null;
   refreshListings: () => Promise<void>;
+  updateListing: (id: string, updates: Partial<Listing>) => void;
+  deleteListing: (id: string) => void;
 }
 
 const BackendDataContext = React.createContext<BackendDataContextValue | undefined>(undefined);
@@ -31,6 +33,16 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
     setIsSyncing(false);
   }, []);
 
+  const updateListing = React.useCallback((id: string, updates: Partial<Listing>) => {
+    setListings((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, ...updates } : l))
+    );
+  }, []);
+
+  const deleteListing = React.useCallback((id: string) => {
+    setListings((prev) => prev.filter((l) => l.id !== id));
+  }, []);
+
   React.useEffect(() => {
     void refreshListings();
   }, [refreshListings]);
@@ -43,8 +55,10 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
       isSyncing,
       lastError,
       refreshListings,
+      updateListing,
+      deleteListing,
     }),
-    [apiBaseUrl, isSyncing, lastError, listings, refreshListings, source]
+    [apiBaseUrl, deleteListing, isSyncing, lastError, listings, refreshListings, source, updateListing]
   );
 
   return <BackendDataContext.Provider value={value}>{children}</BackendDataContext.Provider>;

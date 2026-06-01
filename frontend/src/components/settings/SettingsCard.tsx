@@ -2,8 +2,9 @@ import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Elevation } from '../../theme/designTokens';
+import { Glass } from '../../theme/gradients';
 
-export type SettingsCardVariant = 'surface' | 'elevated' | 'tint';
+export type SettingsCardVariant = 'surface' | 'elevated' | 'tint' | 'glass';
 
 interface SettingsCardProps {
   children: React.ReactNode;
@@ -25,6 +26,12 @@ function resolveVariantStyle(variant: SettingsCardVariant) {
         backgroundColor: Colors.surfaceAlt,
         borderColor: Colors.borderLight,
         shadowConfig: Elevation.none,
+      };
+    case 'glass':
+      return {
+        backgroundColor: Glass.bg,
+        borderColor: Glass.border,
+        shadowConfig: Elevation.card,
       };
     case 'surface':
     default:
@@ -52,7 +59,7 @@ export function SettingsCard({
           backgroundColor: tone.backgroundColor,
           borderColor: noBorder ? 'transparent' : tone.borderColor,
         },
-        variant === 'elevated' && tone.shadowConfig,
+        (variant === 'elevated' || variant === 'glass') && tone.shadowConfig,
         style,
       ]}
     >

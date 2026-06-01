@@ -9,7 +9,9 @@ import {
   Text,
   ScrollView,
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+// Dynamically require `react-native-svg` at runtime so bundler doesn't fail
+// when the package is intentionally missing during development. When the
+// library is unavailable we render a harmless fallback so the app can run.
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '../../constants/typography';
 
@@ -104,21 +106,41 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
 
   const allStrokes = currentStroke ? [...strokes, currentStroke] : strokes;
 
-  const renderSvg = (
-    <Svg width={canvasSize.width} height={canvasSize.height} style={StyleSheet.absoluteFillObject}>
-      {allStrokes.map((stroke) => (
-        <Path
-          key={stroke.id}
-          d={pointsToSvgPath(stroke.points)}
-          stroke={stroke.color}
-          strokeWidth={stroke.width}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-      ))}
-    </Svg>
-  );
+  // Attempt to load react-native-svg dynamically. Metro bundler only resolves
+  // static imports, so this prevents a hard bundling failure if the package
+  // isn't installed yet. If not available, render an empty surface fallback.
+  let renderSvg: React.ReactNode = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const RNsvg = require('react-native-svg');
+    const SvgComp = RNsvg && (RNsvg.default || RNsvg.Svg || RNsvg);
+    const PathComp = RNsvg && RNsvg.Path;
+
+    if (SvgComp && PathComp) {
+      renderSvg = (
+        <SvgComp width={canvasSize.width} height={canvasSize.height} style={StyleSheet.absoluteFillObject}>
+          {allStrokes.map((stroke) => (
+            <PathComp
+              key={stroke.id}
+              d={pointsToSvgPath(stroke.points)}
+              stroke={stroke.color}
+              strokeWidth={stroke.width}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          ))}
+        </SvgComp>
+      );
+    }
+  } catch (e) {
+    renderSvg = null;
+  }
+
+  // If SVG rendering isn't available, provide a non-crashing placeholder.
+  if (!renderSvg) {
+    renderSvg = <View style={StyleSheet.absoluteFill} pointerEvents="none" />;
+  }
 
   if (!isActive) {
     return (

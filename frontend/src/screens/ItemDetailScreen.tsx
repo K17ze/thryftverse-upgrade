@@ -50,9 +50,9 @@ import { Space, Radius } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 
 const { width, height } = Dimensions.get('window');
-const PANEL_BG = Colors.surface;
-const PANEL_ALT_BG = Colors.background;
-const PANEL_BORDER = Colors.border;
+const PANEL_BG = Colors.glassBg;
+const PANEL_ALT_BG = Colors.glassBg;
+const PANEL_BORDER = Colors.glassBorder;
 const TOP_SCRIM_BG = 'rgba(0,0,0,0.2)';
 
 export default function ItemDetailScreen() {
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     width: width,
     height: height * 0.65,
     position: 'relative',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
     overflow: 'hidden',
   },
   heroTopScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 132, backgroundColor: TOP_SCRIM_BG },
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.borderLight,
+    borderColor: Colors.glassBorder,
     backgroundColor: PANEL_ALT_BG,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm - Space.xs,
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: PANEL_BORDER,
   },
   attributesRow: {
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: PANEL_BORDER,
     alignItems: 'center',
   },
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     backgroundColor: PANEL_BG,
     padding: 16,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: PANEL_BORDER,
   },
   description: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, lineHeight: 24 },
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: PANEL_BG,
     gap: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: PANEL_BORDER,
   },
   sellerIdentityTap: {
@@ -539,9 +539,9 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingHorizontal: 16,
     borderRadius: 18,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: PANEL_BORDER,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.glassBg,
   },
   messageSellerBtnText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
   sellerItemsSection: { marginTop: 28, paddingBottom: 8 },

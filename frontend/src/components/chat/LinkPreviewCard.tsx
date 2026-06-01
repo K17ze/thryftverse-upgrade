@@ -99,10 +99,10 @@ export function LinkPreviewCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
     overflow: 'hidden',
     marginTop: Space.xs + 2,
   },

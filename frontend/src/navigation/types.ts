@@ -67,6 +67,7 @@ export type RootStackParamList = {
   Checkout: { itemId: string };
   Success: undefined;
   ManageListing: { itemId: string };
+  EditListing: { itemId: string };
   Withdraw: undefined;
   CategoryTree: { categoryPrefix: string };
   // Phase 24 new screens

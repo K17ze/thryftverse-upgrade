@@ -211,9 +211,9 @@ export default function ManageListingScreen() {
           variant="primary"
           size="lg"
           style={styles.editBtn}
-          onPress={() => show('Edit coming soon', 'info')}
+          onPress={() => navigation.navigate('EditListing', { itemId })}
           accessibilityLabel="Edit listing"
-          accessibilityHint="Listing editing is not yet available"
+          accessibilityHint="Opens the listing editor"
           hapticFeedback="light"
         />
 

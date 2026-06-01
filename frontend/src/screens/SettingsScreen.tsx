@@ -40,8 +40,8 @@ import {
 } from '../theme/themePreference';
 import { t } from '../i18n';
 import { Space, Radius, Type } from '../theme/designTokens';
-import { AppCard } from '../components/ui/AppCard';
-import { CachedImage } from '../components/CachedImage';
+import { GlassCard } from '../components/ui/GlassSurface';
+import { AvatarRing } from '../components/chat/AvatarRing';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { MY_USER } from '../data/mockData';
 import { Typography } from '../constants/typography';
@@ -487,7 +487,7 @@ export default function SettingsScreen({ navigation }: Props) {
       >
         {/* Profile Preview Card */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <AppCard variant="elevated" style={styles.profileCard}>
+          <GlassCard intensity={30} style={styles.profileCard}>
             <AnimatedPressable
               onPress={() => navigation.navigate('EditProfile')}
               activeOpacity={0.85}
@@ -495,11 +495,11 @@ export default function SettingsScreen({ navigation }: Props) {
               hapticFeedback="light"
               style={styles.profileRow}
             >
-              <CachedImage
+              <AvatarRing
                 uri={avatarUri}
-                style={styles.profileAvatar}
-                containerStyle={styles.profileAvatarWrap}
-                contentFit="cover"
+                size={56}
+                isUnread={user.isVerified}
+                ringWidth={2}
               />
               <View style={styles.profileText}>
                 <Text style={styles.profileName}>{displayName}</Text>
@@ -513,12 +513,13 @@ export default function SettingsScreen({ navigation }: Props) {
               </View>
               <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
             </AnimatedPressable>
-          </AppCard>
+          </GlassCard>
         </Reanimated.View>
 
         {/* Search */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.searchWrap}>
-          <View style={styles.searchInputRow}>
+          <GlassCard intensity={25} style={{ borderRadius: 16, overflow: 'hidden' }}>
+            <View style={styles.searchInputRow}>
             <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
             <TextInput
               style={styles.searchInput}
@@ -535,6 +536,7 @@ export default function SettingsScreen({ navigation }: Props) {
               </AnimatedPressable>
             )}
           </View>
+          </GlassCard>
         </Reanimated.View>
 
         {/* Sections */}
@@ -625,7 +627,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -706,10 +710,10 @@ const styles = StyleSheet.create({
   searchInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: 'transparent',
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
     paddingHorizontal: Space.sm + Space.xs,
     paddingVertical: Space.sm,
     gap: Space.xs + Space.xs,

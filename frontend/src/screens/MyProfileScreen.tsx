@@ -56,10 +56,10 @@ const HERO_MEDIA_GAP = 6;
 const HERO_MEDIA_TILE = (SCREEN_WIDTH - 40 - HERO_MEDIA_GAP * 2) / 3;
 // Phase 3: Simplified to use new 5-core palette
 const BRAND = Colors.brand;
-const PANEL_BG = Colors.surface;
-const PANEL_SOFT = Colors.surfaceAlt;
-const PANEL_ICON = Colors.surfaceAlt;
-const PANEL_BORDER = Colors.border;
+const PANEL_BG = Colors.glassBg;
+const PANEL_SOFT = Colors.glassBg;
+const PANEL_ICON = Colors.glassBg;
+const PANEL_BORDER = Colors.glassBorder;
 
 const COVER_IMAGE = MY_USER.coverPhoto || 'https://picsum.photos/seed/profilecoverdefault/1200/800';
 
@@ -704,9 +704,9 @@ const styles = StyleSheet.create({
     height: COVER_HEIGHT,
     zIndex: 0,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
   },
-  coverImage: { width: '100%', height: '100%', backgroundColor: Colors.border },
+  coverImage: { width: '100%', height: '100%', backgroundColor: Colors.glassBg },
   coverGradient: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.2)',
@@ -1084,10 +1084,10 @@ const styles = StyleSheet.create({
     width: '31%',
     alignItems: 'center',
     marginBottom: 10,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
     paddingHorizontal: 4,
     paddingVertical: 8,
     shadowColor: '#000',
@@ -1103,7 +1103,9 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 10,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -1303,8 +1305,8 @@ const styles = StyleSheet.create({
     width: 200,
     height: 180,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1315,7 +1317,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
     alignItems: 'center',
     justifyContent: 'center',
   },

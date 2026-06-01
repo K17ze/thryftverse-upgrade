@@ -2,11 +2,10 @@ import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Elevation } from '../../theme/designTokens';
-import { AppCard, AppCardVariant } from '../ui/AppCard';
+import { GlassCard } from '../ui/GlassSurface';
 
 interface TradeCardProps {
   children: React.ReactNode;
-  variant?: AppCardVariant;
   style?: StyleProp<ViewStyle>;
   noBorder?: boolean;
   isFirst?: boolean;
@@ -16,7 +15,6 @@ interface TradeCardProps {
 
 export function TradeCard({
   children,
-  variant = 'surface',
   style,
   noBorder = false,
   isFirst = true,
@@ -24,9 +22,7 @@ export function TradeCard({
   fullWidth = true,
 }: TradeCardProps) {
   return (
-    <AppCard
-      variant={variant}
-      noBorder={noBorder}
+    <GlassCard
       style={[
         styles.base,
         fullWidth && styles.fullWidth,
@@ -36,7 +32,7 @@ export function TradeCard({
       ]}
     >
       {children}
-    </AppCard>
+    </GlassCard>
   );
 }
 

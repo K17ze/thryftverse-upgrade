@@ -126,7 +126,7 @@ export function BottomSheet({
       <Reanimated.View style={[styles.backdrop, backdropStyle]}>
         <BlurView
           intensity={blurIntensity}
-          tint="dark"
+          tint={Colors.background === '#FFFFFF' ? 'light' : 'dark'}
           style={StyleSheet.absoluteFill}
         />
         <Pressable style={StyleSheet.absoluteFill} onPress={close} />

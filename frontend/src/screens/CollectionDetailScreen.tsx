@@ -29,7 +29,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { MasonryGrid } from '../components/ProductCardV2';
-import { AppCard } from '../components/ui/AppCard';
+import { GlassCard } from '../components/ui/GlassSurface';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useHaptic } from '../hooks/useHaptic';
@@ -357,7 +357,7 @@ function RenameCollectionSheet({
       <View style={renameStyles.backdrop}>
         <AnimatedPressable style={StyleSheet.absoluteFill} onPress={onCancel} activeOpacity={1} />
       </View>
-      <AppCard variant="elevated" style={renameStyles.card} noBorder>
+      <GlassCard style={renameStyles.card}>
         <Text style={renameStyles.title}>Rename Collection</Text>
         <AppInput
           value={value}
@@ -371,7 +371,7 @@ function RenameCollectionSheet({
           <AppButton title="Cancel" variant="secondary" size="sm" onPress={onCancel} style={{ flex: 1 }} />
           <AppButton title="Rename" size="sm" onPress={onSubmit} disabled={!value.trim()} style={{ flex: 1, marginLeft: Space.sm }} />
         </View>
-      </AppCard>
+      </GlassCard>
     </View>
   );
 }

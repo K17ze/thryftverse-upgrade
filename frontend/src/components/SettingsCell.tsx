@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Switch,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +11,7 @@ import { Type, Space, Radius } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { Typography } from '../constants/typography';
 import { AnimatedPressable } from './AnimatedPressable';
+import { PremiumToggle } from './settings/PremiumToggle';
 
 export type SettingsCellVariant = 'default' | 'value' | 'toggle' | 'button' | 'destructive' | 'custom';
 
@@ -104,16 +104,12 @@ export function SettingsCell({
         )}
 
         {variant === 'toggle' && (
-          <Switch
-            value={toggleValue}
+          <PremiumToggle
+            value={toggleValue ?? false}
             onValueChange={(value) => {
               haptics.tap();
               onToggle?.(value);
             }}
-            trackColor={{ false: Colors.border, true: Colors.brand }}
-            thumbColor={toggleValue ? '#FFFFFF' : '#FFFFFF'}
-            ios_backgroundColor={Colors.border}
-            disabled={disabled}
           />
         )}
 

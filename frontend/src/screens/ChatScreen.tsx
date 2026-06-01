@@ -735,11 +735,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface + '80',
+    backgroundColor: Colors.glassBg,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border + '60',
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
   },
 
   selectionToolbar: {
@@ -748,9 +748,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: Colors.glassBorder,
   },
 
   contextGallery: {
@@ -766,7 +766,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
     overflow: 'hidden',
   },
   itemThumbImage: {
@@ -794,7 +794,7 @@ const styles = StyleSheet.create({
     marginVertical: Space.sm + 4,
   },
   datePill: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 4,
     paddingVertical: Space.xs + 2,
@@ -865,11 +865,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
     borderRadius: Radius.md,
     paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
   },
   passBtnText: {
     fontSize: Type.caption.size,
@@ -916,8 +916,8 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: Radius.sm,
     borderWidth: 2,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.glassBg,
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: Space.sm,
@@ -933,6 +933,6 @@ const styles = StyleSheet.create({
     paddingTop: Space.xs,
     backgroundColor: Colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: Colors.glassBorder,
   },
 });

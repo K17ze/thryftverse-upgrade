@@ -16,19 +16,19 @@ function resolveChatCardStyle(variant: ChatCardVariant) {
   switch (variant) {
     case 'tint':
       return {
-        backgroundColor: Colors.surfaceAlt,
-        borderColor: Colors.borderLight,
+        backgroundColor: Colors.glassBg,
+        borderColor: Colors.glassBorder,
       };
     case 'elevated':
       return {
-        backgroundColor: Colors.surface,
-        borderColor: Colors.border,
+        backgroundColor: Colors.glassBg,
+        borderColor: Colors.glassBorder,
       };
     case 'surface':
     default:
       return {
-        backgroundColor: Colors.surface,
-        borderColor: Colors.border,
+        backgroundColor: Colors.glassBg,
+        borderColor: Colors.glassBorder,
       };
   }
 }
@@ -62,7 +62,7 @@ export function ChatCard({
 const styles = StyleSheet.create({
   base: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: 0.5,
     paddingHorizontal: Radius.lg,
     paddingVertical: Radius.md,
   },

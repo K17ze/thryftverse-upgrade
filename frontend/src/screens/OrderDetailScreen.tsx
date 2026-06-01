@@ -52,8 +52,8 @@ type TrackingStep = {
 };
 
 
-const STATUS_PANEL_BG = Colors.surfaceAlt;
-const STATUS_PANEL_BORDER = Colors.border;
+const STATUS_PANEL_BG = Colors.glassBg;
+const STATUS_PANEL_BORDER = Colors.glassBorder;
 
 type OrderStatus = 'created' | 'paid' | 'shipped' | 'delivered' | 'cancelled';
 
@@ -569,12 +569,14 @@ const styles = StyleSheet.create({
 
   itemCard: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
     borderRadius: Radius.lg,
     padding: Space.md - Space.xs,
     alignItems: 'center',
     gap: Space.sm + 2,
     marginBottom: 16,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
   },
   itemThumb: { width: 72, height: 72, borderRadius: 14, overflow: 'hidden' },
   itemThumbImage: { width: '100%', height: '100%' },
@@ -591,7 +593,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     alignItems: 'flex-start',
     marginBottom: 22,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: STATUS_PANEL_BORDER,
   },
   statusLabel: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.brand, marginBottom: 4 },
@@ -614,12 +616,12 @@ const styles = StyleSheet.create({
   },
 
   shipmentMetaCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
     borderRadius: Radius.xl,
     padding: Space.md,
     marginBottom: Space.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
     gap: 10,
   },
   shipmentMetaRow: {
@@ -663,7 +665,7 @@ const styles = StyleSheet.create({
   },
 
   // Timeline
-  timelineCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Space.lg, marginBottom: Space.lg + Space.sm },
+  timelineCard: { backgroundColor: Colors.glassBg, borderRadius: Radius.lg, padding: Space.lg, marginBottom: Space.lg + Space.sm, borderWidth: 0.5, borderColor: Colors.glassBorder },
   timelineRow: { flexDirection: 'row', gap: 16 },
   timelineLeft: { alignItems: 'center', width: 20 },
   dot: {
@@ -679,9 +681,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 4,
   },
-  dotInactive: { backgroundColor: Colors.border },
+  dotInactive: { backgroundColor: Colors.glassBorder },
   line: { width: 2, flex: 1, backgroundColor: Colors.brand, marginVertical: 4, minHeight: 24 },
-  lineInactive: { backgroundColor: Colors.borderLight },
+  lineInactive: { backgroundColor: Colors.glassBorder },
   timelineContent: { flex: 1, paddingBottom: 20 },
   timelineTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   stepLabel: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
@@ -693,12 +695,14 @@ const styles = StyleSheet.create({
   // Seller card
   sellerCard: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
     borderRadius: Radius.lg,
     padding: Space.md,
     alignItems: 'center',
     gap: Space.sm,
     marginBottom: Space.lg + Space.sm,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
   },
   sellerIdentityTap: {
     flex: 1,
@@ -723,8 +727,8 @@ const styles = StyleSheet.create({
   msgBtnText: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.brand },
 
   // Transaction card
-  txCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, paddingHorizontal: Space.lg, paddingVertical: Space.sm, marginBottom: Space.lg + Space.sm },
-  txDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 6 },
+  txCard: { backgroundColor: Colors.glassBg, borderRadius: Radius.lg, paddingHorizontal: Space.lg, paddingVertical: Space.sm, marginBottom: Space.lg + Space.sm, borderWidth: 0.5, borderColor: Colors.glassBorder },
+  txDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.glassBorder, marginVertical: 6 },
 
   // Actions
   actionsRow: { flexDirection: 'row', gap: 12 },
@@ -732,7 +736,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 56,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
   },
   actionSecondaryIconWrap: {
     width: 20,

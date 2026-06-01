@@ -18,6 +18,8 @@ import { RootStackParamList } from '../navigation/types';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
+import { AvatarRing } from '../components/chat/AvatarRing';
+import { PulseDot } from '../components/chat/PulseDot';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -349,7 +351,7 @@ export default function NotificationsScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`${item.read ? '' : 'Unread: '}${item.text}, ${item.time}`}
                 >
-                  {!item.read && <View style={styles.unreadDot} />}
+                  {!item.read && <PulseDot size={8} color={Colors.brand} />}
 
                   <View style={styles.notifImageWrap}>
                     <SharedTransitionView
@@ -383,18 +385,11 @@ export default function NotificationsScreen() {
                       accessibilityLabel={`Open @${actorHandle} profile`}
                       accessibilityHint="Shows sender profile details"
                     >
-                      {actorUser?.avatar ? (
-                        <CachedImage
-                          uri={actorUser.avatar}
-                          style={styles.notifActorAvatar}
-                          containerStyle={styles.notifActorAvatarWrap}
-                          contentFit="cover"
-                        />
-                      ) : (
-                        <View style={styles.notifActorAvatarFallback}>
-                          <Ionicons name="person" size={10} color={Colors.textMuted} />
-                        </View>
-                      )}
+                      <AvatarRing
+                        uri={actorUser?.avatar}
+                        size={28}
+                        isUnread={!item.read}
+                      />
                       <Text style={styles.notifActorText} numberOfLines={1}>@{actorHandle}</Text>
                     </AnimatedPressable>
 
@@ -498,8 +493,8 @@ const styles = StyleSheet.create({
 
   notifBody: { flex: 1 },
   notifText: {
-    color: Colors.textSecondary, fontSize: 14, fontFamily: Typography.family.regular,
-    lineHeight: 20, marginBottom: 8,
+    color: Colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.regular,
+    lineHeight: Type.body.lineHeight, marginBottom: 8,
   },
   notifTextUnread: { color: Colors.textPrimary, fontFamily: Typography.family.medium },
 

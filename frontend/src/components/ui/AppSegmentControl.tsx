@@ -86,9 +86,9 @@ const styles = StyleSheet.create({
   option: {
     minHeight: 34,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.glassBg,
     paddingHorizontal: 12,
     paddingVertical: 6,
     alignItems: 'center',
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   },
   optionActive: {
     borderColor: Colors.brand,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
   },
   optionText: {
     color: Colors.textSecondary,

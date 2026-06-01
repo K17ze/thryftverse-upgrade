@@ -64,17 +64,35 @@ export const Type: Record<string, TypeStyle> = {
   /** 14/20/400 - Body text, descriptions, general content */
   body: { size: 14, lineHeight: 20, weight: '400', letterSpacing: -0.2 },
 
-  /** 14/20/600 - Button text, emphasized content, prices */
+  /** 14/20/400 - Body text, descriptions, general content */
+  body: { size: 14, lineHeight: 20, weight: '400', letterSpacing: -0.2 },
+
+  /** 15/21/600 - Strong body, picker values, emphasized descriptions */
+  bodyEmphasis: { size: 15, lineHeight: 21, weight: '600', letterSpacing: 0 },
+
+  /** 14/20/600 - Button text, emphasized content, prices (LEGACY — prefer priceList for actual prices) */
   price: { size: 14, lineHeight: 20, weight: '600', letterSpacing: -0.2 },
+
+  /** 20/24/700 - Prices in lists, totals (ELEVATED per OVERALL spec) */
+  priceList: { size: 20, lineHeight: 24, weight: '700', letterSpacing: -0.3 },
+
+  /** 28/32/700 - Hero prices, checkout totals (ELEVATED per OVERALL spec) */
+  priceLarge: { size: 28, lineHeight: 32, weight: '700', letterSpacing: -0.5 },
 
   /** 12/16/400 - Captions, metadata, timestamps, hints */
   caption: { size: 12, lineHeight: 16, weight: '400', letterSpacing: 0 },
 
-  /** 11/14/500 - Small metadata, seller handles (ELEVATED) */
+  /** 13/18/400 - Metadata, timestamps, hints (ELEVATED per OVERALL spec) */
+  captionElevated: { size: 13, lineHeight: 18, weight: '400', letterSpacing: 0.1 },
+
+  /** 11/14/500 - Small metadata, seller handles */
   meta: { size: 11, lineHeight: 14, weight: '500', letterSpacing: 0.15 },
 
-  /** 18/24/700 - Large prices for detail screen (ELEVATED) */
-  priceLarge: { size: 18, lineHeight: 24, weight: '700', letterSpacing: -0.3 },
+  /** 11/14/600 - Labels, badges, section headers (ELEVATED per OVERALL spec) */
+  metaElevated: { size: 11, lineHeight: 14, weight: '600', letterSpacing: 0.5 },
+
+  /** 32/38/700 - Auth hero, empty state titles (ELEVATED per OVERALL spec) */
+  display: { size: 32, lineHeight: 38, weight: '700', letterSpacing: -0.5 },
 } as const;
 
 // REMOVED (to reduce visual chaos):
@@ -135,6 +153,14 @@ export const Elevation: Record<string, ShadowConfig> = {
     shadowOpacity: 0.18,
     shadowRadius: 24,
     elevation: 16,
+  },
+  /** Glow - Brand-colored halo for active CTAs, avatars, unread indicators */
+  glow: {
+    shadowColor: '#D4AF37',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 0,
   },
   /** Legacy aliases for backward compatibility */
   sm: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2, elevation: 2 },

@@ -16,7 +16,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Colors } from '../../constants/colors';
+import { Colors, ActiveTheme } from '../../constants/colors';
 import { Radius } from '../../theme/designTokens';
 
 export interface GlassSurfaceProps {
@@ -39,6 +39,10 @@ export function GlassSurface({
   contentStyle,
   borderPosition = 'none',
 }: GlassSurfaceProps) {
+  const resolvedTint = tint === 'default'
+    ? (ActiveTheme === 'light' ? 'light' : 'dark')
+    : tint;
+
   return (
     <View
       style={[
@@ -49,7 +53,7 @@ export function GlassSurface({
     >
       <BlurView
         intensity={intensity}
-        tint={tint}
+        tint={resolvedTint}
         style={[StyleSheet.absoluteFill, { borderRadius }]}
       />
       {/* Subtle border overlay for depth */}
@@ -89,7 +93,7 @@ const styles = StyleSheet.create({
   borderOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: Colors.glassBorder,
     zIndex: 2,
     pointerEvents: 'none',
   },
@@ -119,7 +123,7 @@ export function GlassHeader({
   return (
     <GlassSurface
       intensity={intensity}
-      tint="dark"
+      tint="default"
       borderRadius={0}
       borderPosition="bottom"
       style={style}
@@ -143,7 +147,7 @@ export function GlassBottomBar({
   return (
     <GlassSurface
       intensity={intensity}
-      tint="dark"
+      tint="default"
       borderRadius={0}
       borderPosition="top"
       style={style}
@@ -167,7 +171,7 @@ export function GlassCard({
   return (
     <GlassSurface
       intensity={intensity}
-      tint="dark"
+      tint="default"
       borderRadius={Radius.xl}
       borderPosition="both"
       style={[cardStyles.cardShadow, style]}

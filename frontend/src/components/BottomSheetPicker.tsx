@@ -14,11 +14,11 @@ import { AnimatedPressable } from './AnimatedPressable';
 const { height, width } = Dimensions.get('window');
 const IS_LIGHT = ActiveTheme === 'light';
 const OVERLAY_BG = IS_LIGHT ? 'rgba(14, 12, 10, 0.34)' : 'rgba(0,0,0,0.6)';
-const SHEET_BG = Colors.surface;
-const HANDLE_BG = Colors.borderLight;
-const SEARCH_BG = Colors.background;
-const SEARCH_BORDER = Colors.border;
-const OPTION_BORDER = Colors.border;
+const SHEET_BG = Colors.glassBg;
+const HANDLE_BG = Colors.glassBorder;
+const SEARCH_BG = Colors.glassBg;
+const SEARCH_BORDER = Colors.glassBorder;
+const OPTION_BORDER = Colors.glassBorder;
 
 interface Props {
   visible: boolean;
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: SEARCH_BG,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: SEARCH_BORDER,
     marginHorizontal: 20,
     paddingHorizontal: 16,
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 16,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.5,
     borderBottomColor: OPTION_BORDER,
   },
   optionText: { fontSize: 16, fontFamily: Typography.family.medium, color: Colors.textPrimary, letterSpacing: 0.08 },

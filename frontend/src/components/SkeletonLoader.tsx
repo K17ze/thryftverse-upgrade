@@ -36,6 +36,7 @@ interface SkeletonProps {
 export function SkeletonLoader({ width, height, borderRadius = 8, style }: SkeletonProps) {
   const translateX = useSharedValue(-400);
   const breathe = useSharedValue(1);
+  const brandTranslate = useSharedValue(-400);
 
   useEffect(() => {
     // Primary wave sweep
@@ -57,6 +58,16 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style }: Skele
       -1,
       true,
     );
+
+    // Secondary brand-tinted wave uses a slight delay for depth
+    brandTranslate.value = withRepeat(
+      withSequence(
+        withDelay(200, withTiming(500, { duration: 1600, easing: Easing.inOut(Easing.ease) })),
+        withTiming(-400, { duration: 0 })
+      ),
+      -1,
+      false,
+    );
   }, [translateX, breathe]);
 
   const waveStyle = useAnimatedStyle(() => ({
@@ -64,7 +75,7 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style }: Skele
   }));
 
   const brandWaveStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: withDelay(200, translateX.value) }],
+    transform: [{ translateX: brandTranslate.value }],
   }));
 
   const breatheStyle = useAnimatedStyle(() => ({

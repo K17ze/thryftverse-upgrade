@@ -38,7 +38,7 @@ import {
 import { CapabilityCarrier, getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { CachedImage } from '../components/CachedImage';
 import { AppButton } from '../components/ui/AppButton';
-import { AppCard } from '../components/ui/AppCard';
+import { GlassCard } from '../components/ui/GlassSurface';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { Body, Caption, Meta, Headline } from '../components/ui/Text';
 import { haptics } from '../utils/haptics';
@@ -49,9 +49,9 @@ import { t } from '../i18n';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 const BRAND = Colors.brand;
-const PANEL_BG = Colors.surface;
-const PANEL_SOFT_BG = Colors.surfaceAlt;
-const PANEL_BORDER = Colors.border;
+const PANEL_BG = Colors.glassBg;
+const PANEL_SOFT_BG = Colors.glassBg;
+const PANEL_BORDER = Colors.glassBorder;
 const FOOTER_BG = Colors.background;
 
 interface CheckoutPostageOption {
@@ -407,7 +407,7 @@ export default function CheckoutScreen() {
         
         {/* Item Summary Card */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
-        <AppCard style={styles.itemCard}>
+        <GlassCard style={styles.itemCard}>
           <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/checkout-item-fallback/300/400')} style={styles.itemThumb} contentFit="cover" />
           <View style={styles.itemInfo}>
             <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
@@ -442,11 +442,11 @@ export default function CheckoutScreen() {
             </View>
             <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP')}</Text>
           </View>
-        </AppCard>
+        </GlassCard>
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(60)}>
-        <AppCard style={styles.readinessCard}>
+        <GlassCard style={styles.readinessCard}>
           <View style={styles.readinessTopRow}>
             <Text style={styles.readinessTitle}>{t('checkout.readiness.title')}</Text>
             <SyncStatusPill tone={checkoutStatus.tone} label={checkoutStatus.label} compact />
@@ -469,7 +469,7 @@ export default function CheckoutScreen() {
               </Text>
             </View>
           </View>
-        </AppCard>
+        </GlassCard>
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}>
@@ -549,7 +549,7 @@ export default function CheckoutScreen() {
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}>
         <Text style={styles.sectionTitle}>{t('checkout.section.orderSummary')}</Text>
-        <AppCard style={styles.summaryCard}>
+        <GlassCard style={styles.summaryCard}>
           <SummaryRow label={t('checkout.summary.itemPrice')} value={formatFromFiat(item.price, 'GBP')} />
           <SummaryRow label={t('checkout.summary.platformCharge')} value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} info />
           <SummaryRow
@@ -562,7 +562,7 @@ export default function CheckoutScreen() {
           />
           <View style={styles.divider} />
           <SummaryRow label={t('checkout.summary.total')} value={formatFromFiat(TOTAL, 'GBP')} bold />
-        </AppCard>
+        </GlassCard>
         </Reanimated.View>
 
         <Text style={styles.termsText}>
@@ -725,8 +725,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   readinessChipReady: {
-    backgroundColor: Colors.surfaceAlt,
-    borderColor: Colors.border,
+    backgroundColor: Colors.glassBg,
+    borderColor: Colors.glassBorder,
   },
   readinessChipPending: {
     backgroundColor: PANEL_SOFT_BG,
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: PANEL_BG,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: PANEL_BORDER,
     padding: 16,
     borderRadius: 16,
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
   blockSub: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
   blockRightPrice: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
 
-  summaryCard: { backgroundColor: PANEL_BG, borderWidth: 1, borderColor: PANEL_BORDER, padding: 24, borderRadius: 20, marginBottom: 24 },
+  summaryCard: { backgroundColor: PANEL_BG, borderWidth: 0.5, borderColor: PANEL_BORDER, padding: 24, borderRadius: 20, marginBottom: 24 },
   divider: { height: 1, backgroundColor: PANEL_BORDER, marginVertical: 12 },
 
   termsText: { fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted, lineHeight: 18, textAlign: 'center', paddingHorizontal: 16 },
@@ -789,10 +789,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  footer: { 
-    position: 'absolute', bottom: 0, left: 0, right: 0, 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
-    borderTopWidth: 1,
+  footer: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: PANEL_BORDER,
     backgroundColor: FOOTER_BG, 
     paddingHorizontal: 20, paddingTop: 20, paddingBottom: Platform.OS === 'ios' ? 34 : 24,

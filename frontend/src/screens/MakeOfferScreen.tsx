@@ -27,7 +27,7 @@ import {
 } from '../utils/currencyAuthoringFlows';
 import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { AppCard } from '../components/ui/AppCard';
+import { GlassCard } from '../components/ui/GlassSurface';
 import { useBackendData } from '../context/BackendDataContext';
 import { mockFind } from '../utils/mockGate';
 import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
@@ -119,7 +119,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Item Info Context */}
-        <AppCard style={styles.itemCard}>
+        <GlassCard style={styles.itemCard}>
           <View style={styles.itemThumb}>
             <Ionicons name="shirt-outline" size={24} color={MUTED} />
           </View>
@@ -156,7 +156,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             </View>
             <Text style={styles.itemListingPrice}>Listed at {formatFromFiat(price, 'GBP')}</Text>
           </View>
-        </AppCard>
+        </GlassCard>
 
         {/* Floating Input Block */}
         <View style={styles.section}>
@@ -177,7 +177,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 
         {/* Spaced Anti-list Platform Charge */}
         <Text style={styles.sectionLabel}>Summary</Text>
-        <AppCard style={styles.protectionCard}>
+        <GlassCard style={styles.protectionCard}>
           <View style={styles.protectionRow}>
             <Ionicons name="shield-checkmark" size={18} color={BRAND} />
             <Text style={styles.protectionLabel}>Platform charge</Text>
@@ -192,17 +192,17 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           <Text style={styles.protectionNote}>
             Includes our platform charge for secure settlement and support.
           </Text>
-        </AppCard>
+        </GlassCard>
 
         {/* Tip Pill */}
-        <AppCard style={styles.tipCard} variant="tint">
+        <GlassCard style={styles.tipCard}>
           <View style={styles.tipIconBox}>
             <Ionicons name="bulb" size={16} color={Colors.textInverse} />
           </View>
           <Text style={styles.tipText}>
             Offers within 10% of the listing price are <Text style={{ fontFamily: Typography.family.bold, color: TEXT }}>3x</Text> more likely to be accepted.
           </Text>
-        </AppCard>
+        </GlassCard>
 
         {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
       </ScrollView>

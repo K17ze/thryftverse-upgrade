@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: Colors.glassBorder,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cancelBtn: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     alignItems: 'center',

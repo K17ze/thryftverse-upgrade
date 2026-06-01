@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     height: MAX_MEDIA_W * 0.75,
     borderRadius: Radius.xl,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
     position: 'relative',
   },
   mediaMe: {
@@ -93,8 +93,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: Radius.xl,
     borderTopLeftRadius: Radius.xl,
     borderBottomRightRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
   },
   image: {
     width: '100%',

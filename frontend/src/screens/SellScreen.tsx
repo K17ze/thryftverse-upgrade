@@ -38,7 +38,8 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl, AppSegmentOption } from '../components/ui/AppSegmentControl';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppInput } from '../components/ui/AppInput';
-import { AppCard } from '../components/ui/AppCard';
+import { GlassCard } from '../components/ui/GlassSurface';
+import { GlowSurface } from '../components/ui/GlowSurface';
 import { T } from '../components/ui/Text';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -130,7 +131,7 @@ const readinessStyles = StyleSheet.create({
   track: {
     height: 4,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
     overflow: 'hidden',
   },
   fill: {
@@ -196,7 +197,7 @@ const pickerStyles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Space.md - 2,
     paddingHorizontal: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'transparent',
   },
   valueArea: {
     flexDirection: 'row',
@@ -576,7 +577,7 @@ export default function SellScreen() {
           >
             <Ionicons name="close" size={28} color={Colors.textPrimary} />
           </AnimatedPressable>
-          <T.Headline style={styles.headerTitle}>Scan Item</T.Headline>
+          <T.Headline style={styles.headerTitle}>New Listing</T.Headline>
           <AnimatedPressable
             style={styles.iconBtn}
             activeOpacity={0.8}
@@ -594,45 +595,35 @@ export default function SellScreen() {
       {/* ── Photo Upload Area ── */}
       {photos.length === 0 ? (
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
-          <AppCard variant="surface" style={styles.uploadCard} noBorder>
-            <View style={styles.uploadInner}>
-              <View style={styles.uploadIconCircle}>
-                <Ionicons name="camera" size={32} color={Colors.background} />
-              </View>
-              <T.BodyEmphasis style={styles.uploadTitle}>Add listing media</T.BodyEmphasis>
-              <T.Caption color={Colors.textMuted} style={styles.uploadSubtext}>
-                Take a photo or video, or upload from your gallery
-              </T.Caption>
-              <View style={styles.uploadActionRow}>
-                <AppButton
-                  title="Camera"
-                  variant="primary"
-                  size="sm"
-                  onPress={handlePickFromCamera}
-                  icon={<Ionicons name="camera-outline" size={16} color={Colors.background} />}
-                  style={styles.uploadActionBtn}
-                  contentStyle={styles.uploadActionContent}
-                  iconContainerStyle={styles.uploadActionIconWrap}
-                  titleStyle={styles.uploadActionBtnText}
-                  accessibilityLabel="Capture listing media"
-                  accessibilityHint="Opens camera to capture photo or video"
-                />
-                <AppButton
-                  title="Gallery"
-                  variant="secondary"
-                  size="sm"
-                  onPress={handlePickFromLibrary}
-                  icon={<Ionicons name="images-outline" size={16} color={Colors.textPrimary} />}
-                  style={styles.uploadActionBtn}
-                  contentStyle={styles.uploadActionContent}
-                  iconContainerStyle={styles.uploadActionIconWrap}
-                  titleStyle={styles.uploadActionBtnTextSecondary}
-                  accessibilityLabel="Upload media from gallery"
-                  accessibilityHint="Opens media library to select photo or video"
-                />
-              </View>
+          <GlassCard style={styles.uploadCard} contentStyle={styles.uploadInner}>
+            <View style={styles.uploadIconCircle}>
+              <Ionicons name="camera" size={28} color={Colors.brand} />
             </View>
-          </AppCard>
+            <T.BodyEmphasis style={styles.uploadTitle}>Add listing media</T.BodyEmphasis>
+            <T.Caption color={Colors.textMuted} style={styles.uploadSubtext}>
+              Take a photo or video, or upload from your gallery
+            </T.Caption>
+            <View style={styles.uploadActionRow}>
+              <AnimatedPressable
+                style={styles.uploadActionGlassCircle}
+                onPress={handlePickFromCamera}
+                activeOpacity={0.85}
+                accessibilityLabel="Capture listing media"
+                accessibilityHint="Opens camera to capture photo or video"
+              >
+                <Ionicons name="camera-outline" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.uploadActionGlassCircle}
+                onPress={handlePickFromLibrary}
+                activeOpacity={0.85}
+                accessibilityLabel="Upload media from gallery"
+                accessibilityHint="Opens media library to select photo or video"
+              >
+                <Ionicons name="images-outline" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
+          </GlassCard>
         </Reanimated.View>
       ) : (
         <SortablePhotoStrip photos={photos} onReorder={setPhotos} onAddPhoto={handlePickFromLibrary} />
@@ -644,7 +635,7 @@ export default function SellScreen() {
           {/* ── Listing Type Selector ── */}
           <SectionHeader title="Listing Type" delay={getDelay(1)} />
           <Reanimated.View entering={FadeInDown.delay(getDelay(2)).duration(400)}>
-            <AppCard variant="surface" noBorder style={styles.listingTypeCard}>
+            <GlassCard style={styles.listingTypeCard}>
               <View style={styles.listingTypeRow}>
                 {LISTING_TYPE_OPTIONS.map((option) => {
                   const isActive = listingType === option.value;
@@ -692,14 +683,14 @@ export default function SellScreen() {
                 {listingType === 'co-own' && 'Fractional ownership with share issuance.'}
                 {listingType === 'auction' && 'Time-limited bidding with highest bid wins.'}
               </T.Caption>
-            </AppCard>
+            </GlassCard>
           </Reanimated.View>
 
           {/* ── Item Details ── */}
           <SectionHeader title="Item Details" delay={getDelay(3)} />
 
           <Reanimated.View entering={FadeInDown.delay(getDelay(4)).duration(400)}>
-            <AppCard variant="surface" noBorder style={styles.formCard}>
+            <GlassCard style={styles.formCard}>
               <AppInput
                 label="Title"
                 placeholder="e.g. Vintage Nike Sweatshirt"
@@ -720,12 +711,12 @@ export default function SellScreen() {
                 accessibilityHint="Describe condition, measurements, and details"
                 helperText={`${desc.length} characters`}
               />
-            </AppCard>
+            </GlassCard>
           </Reanimated.View>
 
           {/* ── Pickers ── */}
           <Reanimated.View entering={FadeInDown.delay(getDelay(5)).duration(400)}>
-            <AppCard variant="surface" noBorder style={styles.pickerCard}>
+            <GlassCard style={styles.pickerCard}>
               <PickerRow
                 label="Category"
                 value={sellDraft.categoryId}
@@ -755,14 +746,14 @@ export default function SellScreen() {
                 onPress={() => setPickerMode('Condition')}
                 isLast
               />
-            </AppCard>
+            </GlassCard>
           </Reanimated.View>
 
           {/* ── Pricing ── */}
           <SectionHeader title="Pricing" delay={getDelay(6)} />
 
           <Reanimated.View entering={FadeInDown.delay(getDelay(7)).duration(400)}>
-            <AppCard variant="surface" noBorder style={styles.priceCard}>
+            <GlassCard style={styles.priceCard}>
               <AppInput
                 label="Price"
                 placeholder="0.00"
@@ -778,7 +769,7 @@ export default function SellScreen() {
               <T.Caption color={Colors.textMuted} style={{ marginTop: Space.xs }}>
                 Listing currency: {currencyCode}
               </T.Caption>
-            </AppCard>
+            </GlassCard>
           </Reanimated.View>
 
           {/* ── Co-Own ── */}
@@ -786,7 +777,7 @@ export default function SellScreen() {
             <>
               <SectionHeader title="Co-Own Details" delay={getDelay(8)} />
               <Reanimated.View entering={FadeInDown.delay(getDelay(9)).duration(400)}>
-                <AppCard variant="elevated" noBorder style={styles.coOwnCard}>
+                <GlassCard style={styles.coOwnCard}>
                   <View style={styles.coOwnTopRow}>
                     <View style={{ flex: 1 }}>
                       <T.BodyEmphasis>Tokenize this item</T.BodyEmphasis>
@@ -831,7 +822,7 @@ export default function SellScreen() {
                       Enable this to route publishing into the Co-Own issuer flow.
                     </T.Caption>
                   )}
-                </AppCard>
+                </GlassCard>
               </Reanimated.View>
             </>
           )}
@@ -841,7 +832,7 @@ export default function SellScreen() {
             <>
               <SectionHeader title="Auction Details" delay={getDelay(8)} />
               <Reanimated.View entering={FadeInDown.delay(getDelay(9)).duration(400)}>
-                <AppCard variant="elevated" noBorder style={styles.auctionCard}>
+                <GlassCard style={styles.auctionCard}>
                   <AppInput
                     label={`Starting Bid (${currencyCode})`}
                     placeholder="0.00"
@@ -868,14 +859,14 @@ export default function SellScreen() {
                     onChange={() => {}}
                     fullWidth
                   />
-                </AppCard>
+                </GlassCard>
               </Reanimated.View>
             </>
           )}
 
           {/* ── Readiness Card ── */}
           <Reanimated.View entering={FadeInDown.delay(getDelay(10)).duration(400)}>
-            <AppCard variant="surface" noBorder style={styles.readinessCard}>
+            <GlassCard style={styles.readinessCard}>
               <ReadinessBar
                 total={visibleReadinessItems.length}
                 done={visibleReadinessItems.filter((i) => i.done).length}
@@ -909,7 +900,7 @@ export default function SellScreen() {
               <T.Caption color={Colors.textMuted} style={styles.readinessHint}>
                 {nextFlowActionHint}
               </T.Caption>
-            </AppCard>
+            </GlassCard>
           </Reanimated.View>
 
           <View style={{ height: 180 }} />
@@ -929,46 +920,48 @@ export default function SellScreen() {
           </Reanimated.Text>
         )}
         <Reanimated.View style={[shakeStyle, { width: '100%' }]} layout={layoutAnimation}>
-          <AppButton
-            title={primaryCtaTitle}
-            subtitle={primaryCtaSubtitle}
-            variant={publishReady ? 'primary' : 'secondary'}
-            size="lg"
-            onPress={handlePublish}
-            align="start"
-            icon={
-              <Ionicons
-                name={publishReady ? 'cloud-upload-outline' : 'alert-circle-outline'}
-                size={18}
-                color={publishReady ? Colors.background : Colors.textPrimary}
+          {publishReady ? (
+            <GlowSurface intensity={0.12} color={Colors.brand} spread={1.2}>
+              <AppButton
+                title={primaryCtaTitle}
+                subtitle={primaryCtaSubtitle}
+                variant="primary"
+                size="lg"
+                onPress={handlePublish}
+                align="start"
+                icon={<Ionicons name="cloud-upload-outline" size={18} color={Colors.background} />}
+                trailingIcon={<Ionicons name="arrow-forward" size={18} color={Colors.background} />}
+                style={styles.uploadCta}
+                contentStyle={styles.uploadCtaContent}
+                iconContainerStyle={styles.uploadCtaIconWrap}
+                trailingIconContainerStyle={styles.uploadCtaTrailingIconWrap}
+                titleStyle={styles.uploadCtaText}
+                subtitleStyle={styles.uploadCtaSubtext}
+                accessibilityLabel="Publish listing"
+                accessibilityHint="Publishes this listing"
               />
-            }
-            trailingIcon={
-              <Ionicons
-                name={publishReady ? 'arrow-forward' : 'sparkles-outline'}
-                size={18}
-                color={publishReady ? Colors.background : Colors.textMuted}
-              />
-            }
-            style={[styles.uploadCta, !publishReady && styles.uploadCtaPending]}
-            contentStyle={styles.uploadCtaContent}
-            iconContainerStyle={[
-              styles.uploadCtaIconWrap,
-              !publishReady && styles.uploadCtaIconWrapPending,
-            ]}
-            trailingIconContainerStyle={[
-              styles.uploadCtaTrailingIconWrap,
-              !publishReady && styles.uploadCtaTrailingIconWrapPending,
-            ]}
-            titleStyle={[styles.uploadCtaText, !publishReady && styles.uploadCtaTextPending]}
-            subtitleStyle={[styles.uploadCtaSubtext, !publishReady && styles.uploadCtaSubtextPending]}
-            accessibilityLabel={publishReady ? 'Publish listing' : 'Complete required fields'}
-            accessibilityHint={
-              publishReady
-                ? 'Publishes this listing'
-                : 'Shows missing checks and highlights the first required fix'
-            }
-          />
+            </GlowSurface>
+          ) : (
+            <AppButton
+              title={primaryCtaTitle}
+              subtitle={primaryCtaSubtitle}
+              variant="secondary"
+              size="lg"
+              onPress={handlePublish}
+              align="start"
+              icon={<Ionicons name="alert-circle-outline" size={18} color={Colors.textPrimary} />}
+              trailingIcon={<Ionicons name="sparkles-outline" size={18} color={Colors.textMuted} />}
+              style={[styles.uploadCta, styles.uploadCtaPending]}
+              contentStyle={styles.uploadCtaContent}
+              iconContainerStyle={[styles.uploadCtaIconWrap, styles.uploadCtaIconWrapPending]}
+              trailingIconContainerStyle={[styles.uploadCtaTrailingIconWrap, styles.uploadCtaTrailingIconWrapPending]}
+              titleStyle={[styles.uploadCtaText, styles.uploadCtaTextPending]}
+              subtitleStyle={[styles.uploadCtaSubtext, styles.uploadCtaSubtextPending]}
+              accessibilityLabel="Complete required fields"
+              accessibilityHint="Complete all required fields before publishing"
+              disabled
+            />
+          )}
         </Reanimated.View>
       </View>
 
@@ -1012,9 +1005,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.glassBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1036,13 +1029,30 @@ const styles = StyleSheet.create({
     paddingVertical: Space.lg,
   },
   uploadIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.textPrimary,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Colors.glassBg,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
+  },
+  uploadActionGlassCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.glassBg,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   uploadTitle: {
     marginBottom: Space.xs,
@@ -1103,8 +1113,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.glassBg,
     flex: 1,
     justifyContent: 'center',
   },
@@ -1137,8 +1147,8 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   divider: {
-    height: 1,
-    backgroundColor: Colors.border,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.glassBorder,
     marginHorizontal: Space.md,
   },
 
@@ -1174,11 +1184,11 @@ const styles = StyleSheet.create({
   },
   coOwnToggleWrap: {
     flexDirection: 'row',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
     borderRadius: Radius.md,
     padding: 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
     height: 36,
   },
   coOwnFieldsWrap: {
@@ -1206,8 +1216,9 @@ const styles = StyleSheet.create({
   },
   readinessChip: {
     borderRadius: Radius.full,
-    borderWidth: 0,
-    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.glassBg,
     paddingHorizontal: 8,
     paddingVertical: 5,
     flexDirection: 'row',
@@ -1215,7 +1226,8 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   readinessChipDone: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: 'rgba(212,175,55,0.08)',
+    borderColor: 'rgba(212,175,55,0.15)',
   },
   readinessChipText: {
     fontSize: Type.meta.size,
@@ -1239,8 +1251,8 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm + 2,
     paddingBottom: Platform.OS === 'ios' ? Space.md : Space.sm + 2,
     backgroundColor: Colors.background,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.glassBorder,
   },
   errorText: {
     color: Colors.danger,
@@ -1254,13 +1266,13 @@ const styles = StyleSheet.create({
   uploadCta: {
     minHeight: 58,
     borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
     paddingHorizontal: Space.md - 4,
   },
   uploadCtaPending: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
+    backgroundColor: Colors.glassBg,
+    borderColor: Colors.glassBorder,
   },
   uploadCtaContent: {
     width: '100%',
@@ -1273,7 +1285,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.16)',
   },
   uploadCtaIconWrapPending: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
   },
   uploadCtaTrailingIconWrap: {
     width: 30,
@@ -1282,7 +1294,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.16)',
   },
   uploadCtaTrailingIconWrapPending: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
   },
   uploadCtaText: {
     color: Colors.background,

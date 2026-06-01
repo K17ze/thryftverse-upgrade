@@ -36,7 +36,7 @@ export function ComposerInput({
     <View style={[styles.container, style]}>
       <GlassSurface
         intensity={25}
-        tint="dark"
+        tint="default"
         borderRadius={Radius.full}
         style={[styles.glassPill, inputContainerStyle]}
       >
@@ -138,6 +138,6 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   sendBtnDisabled: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.glassBg,
   },
 });

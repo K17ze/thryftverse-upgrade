@@ -24,6 +24,7 @@ import { requestMyDataExport, deleteMyAccount } from '../services/accountApi';
 import { disableTwoFactor, logoutFromSession } from '../services/authApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
+import { GlassCard } from '../components/ui/GlassSurface';
 import { SettingsHeader } from '../components/settings/SettingsHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
@@ -194,7 +195,7 @@ export default function AccountSettingsScreen() {
         {/* Personal Details */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
           <Text style={styles.sectionTitle}>Personal Details</Text>
-          <SettingsCard>
+          <GlassCard intensity={25} style={styles.glassCard}>
             <AppInput
               label="Email Address"
               value={email}
@@ -223,13 +224,13 @@ export default function AccountSettingsScreen() {
               onChangeText={setBirthday}
               suffix={<Ionicons name="calendar-outline" size={20} color={Colors.textMuted} />}
             />
-          </SettingsCard>
+          </GlassCard>
         </Reanimated.View>
 
         {/* Preferences */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
           <Text style={styles.sectionTitle}>Preferences</Text>
-          <SettingsCard>
+          <GlassCard intensity={25} style={styles.glassCard}>
             <SettingsCell
               icon="sunny-outline"
               iconColor={Colors.brand}
@@ -250,13 +251,13 @@ export default function AccountSettingsScreen() {
               onToggle={((v: boolean) => updateAccountPreferences({ privateProfile: v }))}
               isLast
             />
-          </SettingsCard>
+          </GlassCard>
         </Reanimated.View>
 
         {/* Security */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
           <Text style={styles.sectionTitle}>Security</Text>
-          <SettingsCard>
+          <GlassCard intensity={25} style={styles.glassCard}>
             <SettingsCell
               icon="key-outline"
               iconColor={Colors.textSecondary}
@@ -275,13 +276,13 @@ export default function AccountSettingsScreen() {
               onToggle={(value) => void handleToggleTwoFactor(value)}
               isLast
             />
-          </SettingsCard>
+          </GlassCard>
         </Reanimated.View>
 
         {/* Linked Accounts */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
           <Text style={styles.sectionTitle}>Linked Accounts</Text>
-          <SettingsCard>
+          <GlassCard intensity={25} style={styles.glassCard}>
             <SettingsCell
               icon="logo-facebook"
               iconColor="#1877F2"
@@ -300,7 +301,7 @@ export default function AccountSettingsScreen() {
               onPress={handleGoogleLink}
               disabled
             />
-          </SettingsCard>
+          </GlassCard>
         </Reanimated.View>
 
 
@@ -382,7 +383,7 @@ export default function AccountSettingsScreen() {
         onRequestClose={closeDisableTwoFactorModal}
       >
         <View style={styles.modalOverlay}>
-          <SettingsCard style={{ marginHorizontal: 0, marginBottom: 0 }}>
+          <GlassCard intensity={35} style={{ marginHorizontal: 0, marginBottom: 0 }}>
             <Text style={styles.modalTitle}>Disable 2FA</Text>
             <Text style={styles.modalCopy}>
               Confirm with your authenticator code or a recovery code.
@@ -437,7 +438,7 @@ export default function AccountSettingsScreen() {
                 accessibilityLabel="Confirm disable two-factor authentication"
               />
             </View>
-          </SettingsCard>
+          </GlassCard>
         </View>
       </Modal>
     </SafeAreaView>
@@ -463,6 +464,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: Type.meta.letterSpacing,
   },
+  glassCard: {
+    marginHorizontal: 0,
+    marginBottom: Space.sm,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+  },
   inputSpacing: {
     marginBottom: Space.sm,
   },
@@ -472,10 +479,10 @@ const styles = StyleSheet.create({
   },
   footerActionBtn: {
     marginTop: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.glassBg,
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
   },
   footerActionIconWrap: {
     width: 34,
@@ -483,9 +490,9 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.glassBg,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
   },
   footerActionChevronWrap: {
     width: 22,
@@ -580,9 +587,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalBtnMuted: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.glassBg,
+    borderWidth: 0.5,
+    borderColor: Colors.glassBorder,
   },
   modalBtnMutedText: {
     color: Colors.textPrimary,

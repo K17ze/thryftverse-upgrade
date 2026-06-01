@@ -15,7 +15,7 @@ import { Type, Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppInput } from '../ui/AppInput';
 import { AppButton } from '../ui/AppButton';
-import { AppCard } from '../ui/AppCard';
+import { GlassCard } from '../ui/GlassSurface';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useStore, Collection } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
@@ -116,7 +116,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
       >
-        <AppCard variant="elevated" style={styles.card} noBorder>
+        <GlassCard style={styles.card}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Save</Text>
@@ -135,7 +135,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
             accessibilityLabel={saved ? 'Saved to items' : 'Save for later'}
           >
             <View style={styles.savedRowLeft}>
-              <View style={[styles.savedIconWrap, { backgroundColor: saved ? `${Colors.success}20` : Colors.surfaceAlt }]}>
+              <View style={[styles.savedIconWrap, { backgroundColor: saved ? `${Colors.success}20` : 'rgba(255,255,255,0.03)' }]}>
                 <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color={saved ? Colors.success : Colors.textPrimary} />
               </View>
               <View>
@@ -198,7 +198,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
               <Text style={styles.createTriggerText}>Create New Collection</Text>
             </AnimatedPressable>
           )}
-        </AppCard>
+        </GlassCard>
       </KeyboardAvoidingView>
     </Modal>
   );
