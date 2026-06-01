@@ -32,6 +32,21 @@ interface DraftListing {
   brand?: string;
   size?: string;
   condition?: string;
+  title?: string;
+  description?: string;
+  price?: string;
+  photos?: string[];
+}
+
+export interface UserLook {
+  id: string;
+  title: string;
+  coverImage: string;
+  items: { id: string; label: string; x: number; y: number }[];
+  creator: { name: string; avatar: string };
+  likes: number;
+  comments: number;
+  createdAt: number;
 }
 
 interface CreateGroupConversationInput {
@@ -292,6 +307,12 @@ interface StoreState {
   setConversationDraft: (conversationId: string, draft: string) => void;
   addMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
   removeMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
+
+  userLooks: UserLook[];
+  addUserLook: (look: Omit<UserLook, 'id' | 'createdAt'>) => string;
+  removeUserLook: (id: string) => void;
+  toggleUserLookLike: (lookId: string) => void;
+  isUserLookLiked: (lookId: string) => boolean;
 
   // Profile Uploads
   userAvatar: string | null;
@@ -1127,6 +1148,35 @@ export const useStore = create<StoreState>()(
         profileMediaOverrides: nextOverrides,
       };
     }),
+
+  userLooks: [],
+  addUserLook: (look) => {
+    const id = `look_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const now = Date.now();
+    set((state) => ({
+      userLooks: [{ ...look, id, createdAt: now }, ...state.userLooks],
+    }));
+    return id;
+  },
+  removeUserLook: (id) =>
+    set((state) => ({
+      userLooks: state.userLooks.filter((l) => l.id !== id),
+    })),
+  toggleUserLookLike: (lookId) =>
+    set((state) => {
+      const likedSet = new Set<string>((state as any).__likedLooks ?? []);
+      if (likedSet.has(lookId)) {
+        likedSet.delete(lookId);
+      } else {
+        likedSet.add(lookId);
+      }
+      return { __likedLooks: Array.from(likedSet) } as any;
+    }),
+  isUserLookLiked: (lookId) => {
+    const likedSet = new Set<string>((get() as any).__likedLooks ?? []);
+    return likedSet.has(lookId);
+  },
+
   updateUserCover: (uri) =>
     set((state) => {
       const targetIds = new Set<string>([MY_USER.id]);

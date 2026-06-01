@@ -9,7 +9,7 @@ import {
   Platform,
   FlatList,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, {
   SlideInRight,
   SlideInLeft,
@@ -34,7 +34,6 @@ import {
 } from '../services/chatApi';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
-import { AppButton } from '../components/ui/AppButton';
 import { AppStatusPill } from '../components/ui/AppStatusPill';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
@@ -49,7 +48,9 @@ import { ReplyQuote } from '../components/chat/ReplyQuote';
 import { ScrollToBottomFAB } from '../components/chat/ScrollToBottomFAB';
 import { LinkPreviewCard, extractFirstUrl } from '../components/chat/LinkPreviewCard';
 import { SkeletonChatLoader } from '../components/chat/SkeletonChatLoader';
+import { AttachmentPickerSheet, AttachmentType } from '../components/chat/AttachmentPickerSheet';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 
 type Props = StackScreenProps<RootStackParamList, 'Chat'>;
@@ -149,6 +150,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const addMessageReaction = useStore((state) => state.addMessageReaction);
   const { show } = useToast();
   const haptic = useHaptic();
+  const insets = useSafeAreaInsets();
   const conversation = useMemo(
     () => conversations.find((item) => item.id === conversationId),
     [conversationId, conversations]
@@ -228,6 +230,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
   const [isSyncing, setIsSyncing] = useState(false);
+  const [attachmentPickerVisible, setAttachmentPickerVisible] = useState(false);
   const listRef = React.useRef<FlatList>(null);
   const { formatFromFiat } = useFormattedPrice();
 
@@ -397,6 +400,21 @@ export default function ChatScreen({ navigation, route }: Props) {
     setShowScrollToBottom(false);
   };
 
+  const handleAttachmentSelect = async (type: AttachmentType) => {
+    if (type === 'gallery') {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) { show('Allow gallery access to upload media.', 'error'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], allowsMultipleSelection: false, quality: 0.9 });
+      if (!result.canceled && result.assets?.[0]?.uri) { show('Photo attached', 'success'); haptic.success(); }
+    } else if (type === 'camera') {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) { show('Allow camera access to capture media.', 'error'); return; }
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.9 });
+      if (!result.canceled && result.assets?.[0]?.uri) { show('Photo captured', 'success'); haptic.success(); }
+    } else if (type === 'file') { show('File upload coming soon', 'info'); }
+    else if (type === 'location') { show('Location sharing coming soon', 'info'); }
+  };
+
   const renderMessage = (msg: Message) => {
     const layoutAnimation = reducedMotionEnabled ? undefined : Layout.springify();
 
@@ -473,24 +491,26 @@ export default function ChatScreen({ navigation, route }: Props) {
             )}
             {!isMe && !offerStatus && (
               <View style={styles.offerActions}>
-                <AppButton
-                  style={styles.offerBtn}
-                  variant="secondary"
-                  size="sm"
-                  align="center"
-                  icon={<Ionicons name="close-outline" size={15} color={Colors.textPrimary} />}
-                  title="Pass"
+                <AnimatedPressable
+                  style={styles.passBtn}
                   onPress={() => handleDeclineOffer(msg.id)}
-                />
-                <AppButton
-                  style={styles.offerBtn}
-                  variant="primary"
-                  size="sm"
-                  align="center"
-                  icon={<Ionicons name="flash-outline" size={15} color={Colors.background} />}
-                  title="Accept"
+                  activeOpacity={0.85}
+                  scaleValue={0.96}
+                  hapticFeedback="light"
+                >
+                  <Ionicons name="close-outline" size={14} color={Colors.textPrimary} />
+                  <Text style={styles.passBtnText}>Pass</Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  style={styles.acceptBtn}
                   onPress={() => handleAcceptOffer(msg.id)}
-                />
+                  activeOpacity={0.85}
+                  scaleValue={0.96}
+                  hapticFeedback="medium"
+                >
+                  <Ionicons name="flash-outline" size={14} color={Colors.textInverse} />
+                  <Text style={styles.acceptBtnText}>Accept</Text>
+                </AnimatedPressable>
               </View>
             )}
           </ChatCard>
@@ -631,7 +651,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           </View>
         )}
 
-        <View style={styles.composerWrap}>
+        <View style={[styles.composerWrap, { paddingBottom: Math.max(insets.bottom, Space.sm) + 8 }]}>
           {replyTo ? (
             <ReplyQuote
               senderName={replyTo.senderLabel ?? 'Unknown'}
@@ -655,11 +675,19 @@ export default function ChatScreen({ navigation, route }: Props) {
             value={input}
             onChangeText={setInput}
             onSend={sendMessage}
+            onAttachmentPress={() => setAttachmentPickerVisible(true)}
+            onCameraPress={() => handleAttachmentSelect('camera')}
             placeholder="Message..."
             returnKeyType="send"
           />
         </View>
       </KeyboardAvoidingView>
+
+      <AttachmentPickerSheet
+        visible={attachmentPickerVisible}
+        onClose={() => setAttachmentPickerVisible(false)}
+        onSelect={handleAttachmentSelect}
+      />
 
       <ScrollToBottomFAB visible={showScrollToBottom} onPress={scrollToBottom} />
 
@@ -830,8 +858,39 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     marginTop: Space.sm,
   },
-  offerBtn: {
+  passBtn: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  passBtnText: {
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textPrimary,
+  },
+  acceptBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.brand,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: Colors.brand,
+  },
+  acceptBtnText: {
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textInverse,
   },
 
   linkPreviewWrap: {

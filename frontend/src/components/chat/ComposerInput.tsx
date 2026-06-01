@@ -10,6 +10,7 @@ interface ComposerInputProps {
   value: string;
   onChangeText: (text: string) => void;
   onSend: () => void;
+  onAttachmentPress?: () => void;
   onCameraPress?: () => void;
   placeholder?: string;
   returnKeyType?: 'send' | 'default';
@@ -21,6 +22,7 @@ export function ComposerInput({
   value,
   onChangeText,
   onSend,
+  onAttachmentPress,
   onCameraPress,
   placeholder = 'Message...',
   returnKeyType = 'send',
@@ -32,9 +34,23 @@ export function ComposerInput({
   return (
     <View style={[styles.container, style]}>
       <View style={[styles.pill, inputContainerStyle]}>
+        {onAttachmentPress && (
+          <AnimatedPressable
+            style={styles.iconBtn}
+            onPress={onAttachmentPress}
+            accessibilityRole="button"
+            accessibilityLabel="Open attachments"
+            activeOpacity={0.7}
+            scaleValue={0.9}
+            hapticFeedback="light"
+          >
+            <Ionicons name="add-circle-outline" size={24} color={Colors.textSecondary} />
+          </AnimatedPressable>
+        )}
+
         {onCameraPress && (
           <AnimatedPressable
-            style={styles.cameraBtn}
+            style={styles.iconBtn}
             onPress={onCameraPress}
             accessibilityRole="button"
             accessibilityLabel="Attach photo"
@@ -69,7 +85,7 @@ export function ComposerInput({
           scaleValue={0.9}
           hapticFeedback="light"
         >
-          <Ionicons name="arrow-up" size={20} color={Colors.background} />
+          <Ionicons name="arrow-up" size={20} color={canSend ? Colors.background : Colors.textMuted} />
         </AnimatedPressable>
       </View>
     </View>
@@ -89,7 +105,7 @@ const styles = StyleSheet.create({
     paddingRight: Space.xs,
     minHeight: 48,
   },
-  cameraBtn: {
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: Radius.full,
