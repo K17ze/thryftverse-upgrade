@@ -19,7 +19,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import HomeScreen from '../screens/HomeScreen';
 import TradeHubScreen from '../screens/TradeHubScreen';
 import SearchScreen from '../screens/SearchScreen';
-import SellScreen from '../screens/SellScreen';
+import SellScreenV2 from '../screens/SellScreenV2';
 import InboxScreen from '../screens/InboxScreen';
 import MyProfileScreen from '../screens/MyProfileScreen';
 
@@ -119,7 +119,7 @@ export default function TabNavigator() {
         />
         <Tab.Screen
           name="Sell"
-          component={SellScreen}
+          component={SellScreenV2}
           options={{
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={focused ? 'add-circle' : 'add-circle-outline'} color={color} focused={focused} />
