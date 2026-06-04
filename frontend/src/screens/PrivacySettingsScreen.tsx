@@ -17,6 +17,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { PremiumToggle } from '../components/PremiumToggle';
 import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'PrivacySettings'>;
@@ -63,9 +64,7 @@ function SettingRow({
         <View style={styles.rowRight}>
           {value ? <Text style={styles.rowValue} numberOfLines={1}>{value}</Text> : null}
           {onToggle ? (
-            <View style={styles.toggleTrack}>
-              <View style={[styles.toggleKnob, toggleValue ? styles.toggleKnobOn : styles.toggleKnobOff]} />
-            </View>
+            <PremiumToggle value={!!toggleValue} onValueChange={onToggle} />
           ) : onPress ? (
             <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
           ) : null}
@@ -235,6 +234,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     overflow: 'hidden',
     marginBottom: Space.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   rowRoot: {
     flexDirection: 'row',
@@ -283,27 +287,5 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     maxWidth: 140,
     letterSpacing: Type.body.letterSpacing,
-  },
-  toggleTrack: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceAlt,
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  toggleKnob: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.textPrimary,
-  },
-  toggleKnobOn: {
-    alignSelf: 'flex-end',
-    backgroundColor: Colors.brand,
-  },
-  toggleKnobOff: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.textMuted,
   },
 });

@@ -81,8 +81,6 @@ interface Message {
 
 const INITIAL_MESSAGES: Message[] = [];
 
-const CHAT_ORDER_ID = 'ord1';
-
 function TaggedItemCard({
   itemId,
   navigation,
@@ -111,7 +109,7 @@ function TaggedItemCard({
       >
         <ChatCard variant="elevated" style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm + 6 }}>
           <CachedImage
-            uri={getListingCoverUri(listing.images, 'https://picsum.photos/seed/chat-item/100/100')}
+            uri={getListingCoverUri(listing.images, '')}
             style={styles.itemThumbImage}
             containerStyle={styles.itemThumb}
             contentFit="cover"
@@ -226,9 +224,9 @@ export default function ChatScreen({ navigation, route }: Props) {
   const undoTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const deleteApiStatusRef = useRef<'pending' | 'success' | 'error'>('pending');
   const wasOfflineRef = useRef(false);
-  const [searchQuery, setSearchQuery] = useState(route.params.focusQuery ?? '');
+  const [searchQuery, setSearchQuery] = useState(route.params?.focusQuery ?? '');
   const [searchMatchIndex, setSearchMatchIndex] = useState(0);
-  const [isSearchActive, setIsSearchActive] = useState(!!route.params.focusQuery);
+  const [isSearchActive, setIsSearchActive] = useState(!!route.params?.focusQuery);
   const [isOffline, setIsOffline] = useState(false);
   const [composerSending, setComposerSending] = useState(false);
   const listRef = React.useRef<FlatList>(null);
@@ -286,24 +284,22 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const resolvedPartnerId = useMemo(() => {
     if (isGroup) return null;
-    if (route.params.partnerUserId) return route.params.partnerUserId;
+    if (route.params?.partnerUserId) return route.params.partnerUserId;
     if (conversation?.sellerId) return conversation.sellerId;
     return conversation?.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id) ?? null;
-  }, [conversation?.participantIds, conversation?.sellerId, currentUser?.id, isGroup, route.params.partnerUserId]);
+  }, [conversation?.participantIds, conversation?.sellerId, currentUser?.id, isGroup, route.params?.partnerUserId]);
 
   const deployedBotIds = conversation?.botIds ?? [];
   const sellerHandle = resolvedPartnerId
     ? userLookup.get(resolvedPartnerId) ?? 'Thryft user'
     : 'Thryft user';
-  const sellerLocation = '';
-  const sellerLastSeen = '';
 
   const searchMatches = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = String(searchQuery ?? '').trim().toLowerCase();
     if (!q) return [];
     return messages
       .map((m, idx) => ({ msg: m, idx }))
-      .filter(({ msg }) => (msg.text ?? '').toLowerCase().includes(q));
+      .filter(({ msg }) => String(msg.text ?? '').toLowerCase().includes(q));
   }, [messages, searchQuery]);
 
   useEffect(() => {
@@ -380,35 +376,36 @@ export default function ChatScreen({ navigation, route }: Props) {
       })
       .finally(() => setComposerSending(false));
 
-    if (isGroup && trimmed.startsWith('/') && deployedBotIds.length > 0) {
-      const botId = deployedBotIds[0];
-      const botName = botLookup.get(botId) ?? 'Bot';
-      const botReply: Message = {
-        id: String(Date.now()) + '_bot',
-        type: 'text',
-        sender: 'them',
-        senderLabel: botName,
-        text: botName + ': command received (' + trimmed + ').',
-      };
-      setTimeout(() => {
-        pushMessage(botReply);
-        appendToConversationStore(botReply, botId);
-      }, 350);
-    }
-
     setInput('');
     setReplyTo(null);
   };
 
   const handleAcceptOffer = (msgId: string) => {
     haptic.medium();
-    setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, offer: { ...m.offer!, status: 'accepted' } } : m));
-    navigation.navigate('Checkout', { itemId: '1' });
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId && m.offer
+          ? { ...m, offer: { ...m.offer, status: 'accepted' as const } }
+          : m
+      )
+    );
+    const linkedItemId = routeItemId || conversation?.itemId;
+    if (linkedItemId) {
+      navigation.navigate('Checkout', { itemId: linkedItemId });
+    } else {
+      show('Offer accepted. Checkout requires a linked listing.', 'info');
+    }
   };
 
   const handleDeclineOffer = (msgId: string) => {
     haptic.light();
-    setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, offer: { ...m.offer!, status: 'declined' } } : m));
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId && m.offer
+          ? { ...m, offer: { ...m.offer, status: 'declined' as const } }
+          : m
+      )
+    );
   };
 
   const handleMessageLongPress = (msg: Message) => {
@@ -582,33 +579,64 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const handleAttachmentSelect = async (type: AttachmentType) => {
     if (type === 'gallery') {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) { show('Allow gallery access to upload media.', 'error'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], allowsMultipleSelection: false, quality: 0.9 });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        const uri = result.assets[0].uri;
-        const outgoing = createMediaMessage(uri);
-        pushMessage(outgoing);
-        appendToConversationStore(outgoing, currentUser?.id ?? 'me');
-        show(mediaTypeLabel(outgoing.mediaType!) + ' attached', 'success');
-        haptic.success();
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-        sendMediaMessage(outgoing.id, uri, outgoing.mediaType!);
+      try {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) { show('Allow gallery access to upload media.', 'error'); return; }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsMultipleSelection: false,
+          quality: 0.9,
+        });
+        if (!result.canceled && result.assets?.[0]?.uri) {
+          const uri = result.assets[0].uri;
+          const outgoing = createMediaMessage(uri);
+          pushMessage(outgoing);
+          appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+          show(mediaTypeLabel(outgoing.mediaType!) + ' attached', 'success');
+          haptic.success();
+          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+          sendMediaMessage(outgoing.id, uri, outgoing.mediaType!);
+        }
+      } catch {
+        show('Could not open gallery.', 'error');
       }
     } else if (type === 'camera') {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) { show('Allow camera access to capture media.', 'error'); return; }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.9 });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        const uri = result.assets[0].uri;
-        const outgoing = createMediaMessage(uri);
-        pushMessage(outgoing);
-        appendToConversationStore(outgoing, currentUser?.id ?? 'me');
-        show(mediaTypeLabel(outgoing.mediaType!) + ' captured', 'success');
-        haptic.success();
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-        sendMediaMessage(outgoing.id, uri, outgoing.mediaType!);
+      try {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) { show('Allow camera access to capture media.', 'error'); return; }
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.9,
+        });
+        if (!result.canceled && result.assets?.[0]?.uri) {
+          const uri = result.assets[0].uri;
+          const outgoing = createMediaMessage(uri);
+          pushMessage(outgoing);
+          appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+          show(mediaTypeLabel(outgoing.mediaType!) + ' captured', 'success');
+          haptic.success();
+          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+          sendMediaMessage(outgoing.id, uri, outgoing.mediaType!);
+        }
+      } catch {
+        show('Could not open camera.', 'error');
       }
+    } else if (type === 'offer') {
+      show('Make Offer is not connected yet. Use Make Offer from the item page.', 'info');
+    } else if (type === 'shareListing') {
+      show('Share Listing requires backend connection for item context.', 'info');
+    } else if (type === 'shareOrder') {
+      show('Order status sharing requires a linked order.', 'info');
+    } else if (type === 'requestPayment') {
+      show('Payment requests require a linked transaction.', 'info');
+    } else if (type === 'inviteBot') {
+      if (isGroup) {
+        navigation.navigate('GroupBotDirectory', { conversationId });
+      } else {
+        show('Bots can only be invited into group chats.', 'info');
+      }
+    } else if (type === 'report') {
+      navigation.navigate('Report', { type: 'user' });
     }
   };
 
@@ -661,7 +689,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             <BodyEmphasis style={styles.statusTitle}>{lines[0]}</BodyEmphasis>
             <Caption color={Colors.textSecondary} style={styles.statusBody}>{lines.slice(1).join('\n')}</Caption>
             <AnimatedPressable
-              onPress={() => navigation.navigate('OrderDetail', { orderId: CHAT_ORDER_ID })}
+              onPress={() => show('Tracking requires a linked order. Use My Orders for tracking.', 'info')}
               accessibilityRole="button"
               accessibilityLabel="Open tracking"
               activeOpacity={0.7}
@@ -1010,6 +1038,9 @@ export default function ChatScreen({ navigation, route }: Props) {
         visible={attachmentPickerVisible}
         onClose={() => setAttachmentPickerVisible(false)}
         onSelect={handleAttachmentSelect}
+        isGroup={isGroup}
+        hasLinkedItem={!!routeItemId || !!conversation?.itemId}
+        hasLinkedOrder={false}
       />
 
       <ScrollToBottomFAB visible={showScrollToBottom} onPress={scrollToBottom} />
@@ -1104,19 +1135,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xl,
   },
   emptyIconCircle: {
-    width: 72,
-    height: 72,
+    width: 88,
+    height: 88,
     borderRadius: Radius.full,
     backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   emptyTitle: {
-    fontSize: Type.title.size,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     textAlign: 'center',
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   emptyBody: {
     fontSize: Type.body.size,
@@ -1187,7 +1224,7 @@ const styles = StyleSheet.create({
   },
   offerPriceText: {
     fontSize: Type.price.size,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
   strike: {
@@ -1216,7 +1253,7 @@ const styles = StyleSheet.create({
   },
   passBtnText: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   acceptBtn: {
@@ -1233,7 +1270,7 @@ const styles = StyleSheet.create({
   },
   acceptBtnText: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textInverse,
   },
 
@@ -1275,11 +1312,13 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm + 4,
     paddingTop: Space.xs,
     backgroundColor: Colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 6,
   },
   undoBanner: {
     flexDirection: 'row',

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors } from '../../constants/colors';
+import { Typography } from '../../constants/typography';
 import { Space, Radius } from '../../theme/designTokens';
 import { Caption } from '../ui/Text';
 
@@ -142,11 +143,11 @@ const styles = StyleSheet.create({
   },
   count: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   plus: {
     fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   summaryContainer: {
     flexDirection: 'row',
@@ -179,6 +180,6 @@ const styles = StyleSheet.create({
   },
   summaryCount: {
     marginLeft: Space.xs + 2,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
 });

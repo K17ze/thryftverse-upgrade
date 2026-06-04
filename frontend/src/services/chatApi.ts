@@ -33,7 +33,9 @@ interface ApiBotPayload {
   name: string;
   description: string;
   commandHint: string;
-  category: 'moderation' | 'commerce' | 'automation';
+  category: 'moderation' | 'commerce' | 'automation' | 'assistant' | 'safety' | 'styling';
+  status?: 'available' | 'local-only' | 'backend-required';
+  permissions?: string[];
 }
 
 interface ApiGroupInvitePayload {
@@ -244,6 +246,8 @@ export async function fetchChatBotsFromApi(): Promise<ChatBot[]> {
     description: item.description,
     commandHint: item.commandHint,
     category: item.category,
+    status: item.status ?? 'backend-required',
+    permissions: item.permissions ?? ['read_messages', 'send_messages'],
   }));
 }
 

@@ -15,8 +15,7 @@ import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { MOCK_LISTINGS, MOCK_USERS, Listing, User } from '../data/mockData';
-import { mockArrayOrEmpty, mockFind } from '../utils/mockGate';
+import { Listing, User } from '../data/mockData';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { EmptyState } from '../components/EmptyState';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -63,13 +62,14 @@ export default function MyOrdersScreen() {
   const { listings, refreshListings } = useBackendData();
   const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
-  const viewerId = currentUser?.id ?? 'u1';
+  const viewerId = currentUser?.id;
   const [activeTab, setActiveTab] = useState<OrdersTab>('buying');
   const [backendOrders, setBackendOrders] = useState<CommerceUserOrder[]>([]);
 
-  const listingPool = React.useMemo(() => (listings.length ? listings : mockArrayOrEmpty(MOCK_LISTINGS)), [listings]);
+  const listingPool = React.useMemo(() => listings, [listings]);
 
   const syncOrders = React.useCallback(async () => {
+    if (!viewerId) return;
     try {
       const items = await listUserOrders(viewerId, 'all', 80);
       setBackendOrders(items);
@@ -82,30 +82,7 @@ export default function MyOrdersScreen() {
     void syncOrders();
   }, [syncOrders]);
 
-  // Restored full mock mapping for Buying and Selling tabs
-  const buyingOrders: OrderItem[] = React.useMemo(() => {
-    const inTransitItem = listingPool[0];
-    const deliveredItem = listingPool[2] || listingPool[1] || listingPool[0];
-
-    return [
-      ...(inTransitItem ? [{ id: 'o1', item: inTransitItem, status: 'In Transit', isDone: false }] : []),
-      ...(deliveredItem ? [{ id: 'o2', item: deliveredItem, status: 'Delivered', isDone: true }] : []),
-    ];
-  }, [listingPool]);
-
-  const sellingOrders: OrderItem[] = React.useMemo(() => {
-    const awaitingDispatchItem = listingPool[6] || listingPool[0];
-    const completedItem = listingPool[1] || listingPool[0];
-
-    return [
-      ...(awaitingDispatchItem
-        ? [{ id: 'o3', item: awaitingDispatchItem, status: 'Awaiting Dispatch', isDone: false, buyer: mockArrayOrEmpty(MOCK_USERS)[1] }]
-        : []),
-      ...(completedItem
-        ? [{ id: 'o4', item: completedItem, status: 'Completed', isDone: true, buyer: mockArrayOrEmpty(MOCK_USERS)[2] }]
-        : []),
-    ];
-  }, [listingPool]);
+  // No mock fallback — only backend orders are shown
 
   const backendOrderCards: OrderItem[] = React.useMemo(() => {
     const statusLabelByState: Record<string, string> = {
@@ -126,7 +103,7 @@ export default function MyOrdersScreen() {
         condition: 'Very good',
         price: order.totalGbp,
         priceWithProtection: order.totalGbp,
-        images: [order.listingImageUrl ?? `https://picsum.photos/seed/${order.listingId}/400/400`],
+        images: [order.listingImageUrl ?? ''],
         likes: 0,
         sellerId: order.sellerId,
         category: 'general',
@@ -165,12 +142,8 @@ export default function MyOrdersScreen() {
   );
 
   const activeOrders = React.useMemo(() => {
-    if (backendOrders.length > 0) {
-      return activeTab === 'buying' ? backendBuyingOrders : backendSellingOrders;
-    }
-
-    return activeTab === 'buying' ? buyingOrders : sellingOrders;
-  }, [activeTab, backendBuyingOrders, backendOrders, backendSellingOrders, buyingOrders, sellingOrders]);
+    return activeTab === 'buying' ? backendBuyingOrders : backendSellingOrders;
+  }, [activeTab, backendBuyingOrders, backendSellingOrders]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OrdersStatusFilter>('All');
@@ -183,6 +156,7 @@ export default function MyOrdersScreen() {
   });
 
   const handleRefresh = async () => {
+    if (!viewerId) return;
     setRefreshing(true);
     await Promise.all([refreshListings(), syncOrders()]);
     setTimeout(() => setRefreshing(false), 400);
@@ -209,13 +183,17 @@ export default function MyOrdersScreen() {
   // Helper to get status color
   const getStatusColor = (status: string): string => {
     const statusColors: Record<string, string> = {
-      'pending': '#F59E0B', // amber
-      'confirmed': '#3B82F6', // blue
-      'shipped': '#8B5CF6', // purple
-      'delivered': '#22C55E', // green
-      'completed': '#22C55E', // green
-      'cancelled': '#EF4444', // red
-      'refunded': '#6B7280', // gray
+      'pending': '#F59E0B',
+      'awaiting payment': '#F59E0B',
+      'paid': '#3B82F6',
+      'confirmed': '#3B82F6',
+      'shipped': '#8B5CF6',
+      'in transit': '#8B5CF6',
+      'delivered': '#22C55E',
+      'completed': '#22C55E',
+      'cancelled': '#EF4444',
+      'refunded': '#6B7280',
+      'in progress': '#3B82F6',
     };
     return statusColors[status.toLowerCase()] || Colors.textMuted;
   };
@@ -274,10 +252,18 @@ export default function MyOrdersScreen() {
             />
           }
         >
-          {filteredOrders.length === 0 ? (
+          {!viewerId ? (
+            <EmptyState
+              icon="person-outline"
+              title="Sign in to view orders"
+              subtitle="Your buying and selling history appears here once you're signed in."
+              ctaLabel="Sign In"
+              onCtaPress={() => navigation.navigate('Login')}
+            />
+          ) : filteredOrders.length === 0 ? (
             <EmptyState
               icon="cube-outline"
-              title={statusFilter === 'All' ? 'No tracking data' : `No ${statusFilter.toLowerCase()} orders`}
+              title={statusFilter === 'All' ? 'No orders yet' : `No ${statusFilter.toLowerCase()} orders`}
               subtitle={
                 statusFilter === 'All'
                   ? `When you ${activeTab === 'buying' ? 'buy' : 'sell'} items, you'll track them here.`
@@ -318,7 +304,7 @@ export default function MyOrdersScreen() {
                       accessibilityHint={`View details for this ${order.status.toLowerCase()} order`}
                     >
                       <View style={styles.orderRow}>
-                        <CachedImage uri={getListingCoverUri(order.item.images, 'https://picsum.photos/seed/order-thumb-fallback/300/400')} style={styles.orderThumb} contentFit="cover" />
+                        <CachedImage uri={getListingCoverUri(order.item.images, '')} style={styles.orderThumb} contentFit="cover" />
                         <View style={styles.orderInfo}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '15' }]}>

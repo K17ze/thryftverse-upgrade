@@ -20,7 +20,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { RootStackParamList } from '../navigation/types';
-import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
+import { MOCK_LISTINGS } from '../data/mockData';
 import { mockArrayOrEmpty } from '../utils/mockGate';
 import type { Poster } from '../data/posters';
 import { useStore } from '../store/useStore';
@@ -35,6 +35,7 @@ import DetailsDrawer from '../components/poster/DetailsDrawer';
 import StickerPicker, { StickerItem } from '../components/poster/StickerPicker';
 import DrawingCanvas, { BrushStroke } from '../components/poster/DrawingCanvas';
 import { ImageFilter, getFilterOverlay, FILTERS } from '../components/poster/FilterStrip';
+import FilterStrip from '../components/poster/FilterStrip';
 import { Typography } from '../constants/typography';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -65,7 +66,7 @@ export default function CreatePosterScreen() {
 
   const currentUser = useStore((state) => state.currentUser);
   const addPoster = useStore((state) => state.addPoster);
-  const uploaderId = currentUser?.id ?? MOCK_USERS[0]?.id ?? 'u1';
+  const uploaderId = currentUser?.id ?? null;
 
   const allListingOptions = React.useMemo(
     () => (listings.length ? listings : mockArrayOrEmpty(MOCK_LISTINGS)),
@@ -82,6 +83,8 @@ export default function CreatePosterScreen() {
   const [showStickerPicker, setShowStickerPicker] = React.useState(false);
   const [showDetails, setShowDetails] = React.useState(false);
   const [isPublishing, setIsPublishing] = React.useState(false);
+  const [isPreview, setIsPreview] = React.useState(false);
+  const [showFilterStrip, setShowFilterStrip] = React.useState(false);
 
   const [recentPhotos, setRecentPhotos] = React.useState<MediaLibrary.Asset[]>([]);
   const [mediaLibPermission] = MediaLibrary.usePermissions();
@@ -136,15 +139,21 @@ export default function CreatePosterScreen() {
   // ── Tool handling ──
   React.useEffect(() => {
     if (activeTool === 'text') {
-      // TextOverlayCanvas handles its own UI
+      setShowFilterStrip(false);
     } else if (activeTool === 'stickers') {
       setShowStickerPicker(true);
       setActiveTool(null);
+      setShowFilterStrip(false);
     } else if (activeTool === 'draw') {
-      // stays active
-    } else if (activeTool === 'layout' || activeTool === 'background') {
-      // removed features
+      setShowFilterStrip(false);
+    } else if (activeTool === 'filter') {
+      setShowFilterStrip(true);
+    } else if (activeTool === 'preview') {
       setActiveTool(null);
+      setShowFilterStrip(false);
+      setIsPreview(true);
+    } else {
+      setShowFilterStrip(false);
     }
   }, [activeTool]);
 
@@ -269,20 +278,24 @@ export default function CreatePosterScreen() {
   };
 
   const handleGalleryPress = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      show('Allow photo library access to select images', 'error');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 5],
-      quality: 0.92,
-    });
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setSelectedImageUri(result.assets[0].uri);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        show('Allow photo library access to select images', 'error');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 5],
+        quality: 0.92,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setSelectedImageUri(result.assets[0].uri);
+      }
+    } catch {
+      show('Could not open photo library', 'error');
     }
   };
 
@@ -334,19 +347,61 @@ export default function CreatePosterScreen() {
     setStickers((prev) => prev.filter((s) => s.id !== id));
   };
 
+  // ── Replace / reset background ──
+  const handleReplaceBackground = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) { show('Allow photo library access to select images', 'error'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 5],
+        quality: 0.92,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setSelectedImageUri(result.assets[0].uri);
+        setImgScale(1);
+        setImgTranslateX(0);
+        setImgTranslateY(0);
+      }
+    } catch {
+      show('Could not open photo library', 'error');
+    }
+  };
+
+  const handleResetBackground = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedImageUri(null);
+    setTextLayers([]);
+    setStickers([]);
+    setDrawings([]);
+    setCaption('');
+    setFilter('normal');
+    setImgScale(1);
+    setImgTranslateX(0);
+    setImgTranslateY(0);
+    setIsPreview(false);
+  };
+
   // ── Publish ──
   const handlePublish = () => {
+    if (!uploaderId) {
+      show('Sign in to publish posters', 'error');
+      return;
+    }
+    if (!selectedImageUri) {
+      show('Add a photo before publishing', 'error');
+      return;
+    }
     const trimmedCaption = caption.trim();
     const trimmedStoryText = textLayers[0]?.text.trim() ?? '';
-    const selectedListing = allListingOptions.find((l) => l.id === selectedListingId);
-
-    const posterImageUri = selectedImageUri ?? selectedListing?.images?.[0];
 
     const newPoster: Poster = {
       id: `poster_${Date.now()}`,
       uploaderId,
       listingId: selectedListingId || '',
-      image: posterImageUri || '',
+      image: selectedImageUri,
       caption: trimmedCaption || trimmedStoryText || 'New poster',
       createdAt: new Date().toISOString(),
       expiryHours,
@@ -372,12 +427,9 @@ export default function CreatePosterScreen() {
 
     setIsPublishing(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setTimeout(() => {
-      addPoster(newPoster);
-      show('Poster published!', 'success');
-      setIsPublishing(false);
-      navigation.replace('PosterViewer', { posterId: newPoster.id });
-    }, 600);
+    addPoster(newPoster);
+    setIsPublishing(false);
+    navigation.replace('PosterViewer', { posterId: newPoster.id });
   };
 
   // ── Reset / close ──
@@ -459,37 +511,72 @@ export default function CreatePosterScreen() {
       {/* Top bar */}
       {hasCanvas && activeTool !== 'draw' && (
         <SafeAreaView style={styles.topBar} edges={['top']} pointerEvents="box-none">
-          <Pressable
-            style={styles.topIconBtn}
-            onPress={handleClose}
-            hitSlop={12}
-          >
-            <Ionicons name="close" size={26} color="#fff" />
-          </Pressable>
+          {isPreview ? (
+            <>
+              <Pressable
+                style={styles.topIconBtn}
+                onPress={() => { setIsPreview(false); setActiveTool(null); }}
+                hitSlop={12}
+              >
+                <Ionicons name="close" size={26} color="#fff" />
+              </Pressable>
+              <Pressable
+                style={styles.nextBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowDetails(true);
+                }}
+                hitSlop={12}
+              >
+                <Text style={styles.nextBtnText}>Publish</Text>
+                <Ionicons name="checkmark" size={18} color="#000" />
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Pressable
+                style={styles.topIconBtn}
+                onPress={handleClose}
+                hitSlop={12}
+              >
+                <Ionicons name="close" size={26} color="#fff" />
+              </Pressable>
 
-          <Pressable
-            style={styles.nextBtn}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowDetails(true);
-            }}
-            hitSlop={12}
-          >
-            <Text style={styles.nextBtnText}>Next</Text>
-            <Ionicons name="arrow-forward" size={18} color="#000" />
-          </Pressable>
+              <Pressable
+                style={styles.nextBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowDetails(true);
+                }}
+                hitSlop={12}
+              >
+                <Text style={styles.nextBtnText}>Next</Text>
+                <Ionicons name="arrow-forward" size={18} color="#000" />
+              </Pressable>
+            </>
+          )}
         </SafeAreaView>
       )}
 
       {/* Creative Toolbar (bottom) */}
-      {hasCanvas && activeTool !== 'draw' && (
+      {hasCanvas && !isPreview && activeTool !== 'draw' && (
         <CreativeToolbar
           activeTool={activeTool}
           onToolSelect={(tool) => {
             if (tool) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setActiveTool(tool);
           }}
-          visible={!showDetails && !showStickerPicker}
+          visible={!showDetails && !showStickerPicker && !showFilterStrip}
+        />
+      )}
+
+      {/* Filter Strip */}
+      {hasCanvas && showFilterStrip && !isPreview && (
+        <FilterStrip
+          activeFilter={filter}
+          onFilterChange={(f) => { setFilter(f); showFilterName(); }}
+          visible={showFilterStrip}
+          previewUri={selectedImageUri ?? undefined}
         />
       )}
 
@@ -499,7 +586,7 @@ export default function CreatePosterScreen() {
           layers={textLayers}
           onLayersChange={setTextLayers}
           canvasSize={canvasSize}
-          isActive={activeTool === 'text'}
+          isActive={!isPreview && activeTool === 'text'}
         />
       )}
 
@@ -509,26 +596,38 @@ export default function CreatePosterScreen() {
           strokes={drawings}
           onStrokesChange={setDrawings}
           canvasSize={canvasSize}
-          isActive={activeTool === 'draw'}
+          isActive={!isPreview && activeTool === 'draw'}
           onClose={() => setActiveTool(null)}
         />
       )}
 
-      {/* Sticker Overlays (draggable) */}
+      {/* Sticker Overlays (draggable only when not preview) */}
       {hasCanvas && stickers.length > 0 && activeTool !== 'draw' && (
-        <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+        <View style={StyleSheet.absoluteFillObject} pointerEvents={isPreview ? 'none' : 'box-none'}>
           {stickers.map((sticker) => {
             const pan = createStickerPanResponder(sticker.id);
             return (
               <StickerOverlay
                 key={sticker.id}
                 sticker={sticker}
-                panHandlers={pan.panHandlers}
-                onDelete={() => removeSticker(sticker.id)}
+                panHandlers={isPreview ? {} : pan.panHandlers}
+                onDelete={isPreview ? undefined : () => removeSticker(sticker.id)}
                 canvasSize={canvasSize}
               />
             );
           })}
+        </View>
+      )}
+
+      {/* Replace / Reset background buttons (edit mode only) */}
+      {hasCanvas && !isPreview && (
+        <View style={styles.bgControls} pointerEvents="box-none">
+          <Pressable style={styles.bgControlBtn} onPress={handleReplaceBackground} hitSlop={10}>
+            <Ionicons name="images-outline" size={18} color="#fff" />
+          </Pressable>
+          <Pressable style={styles.bgControlBtn} onPress={handleResetBackground} hitSlop={10}>
+            <Ionicons name="refresh" size={18} color="#fff" />
+          </Pressable>
         </View>
       )}
 
@@ -577,7 +676,7 @@ function StickerOverlay({
 }: {
   sticker: StickerItem;
   panHandlers: any;
-  onDelete: () => void;
+  onDelete?: () => void;
   canvasSize: { width: number; height: number };
 }) {
   const countdownLabel = useCountdownLabel(sticker.targetDate);
@@ -610,9 +709,11 @@ function StickerOverlay({
           {displayContent}
         </Text>
       </View>
-      <Pressable style={styles.stickerDeleteBtn} onPress={onDelete} hitSlop={6}>
-        <Ionicons name="close-circle" size={16} color="#ff3b30" />
-      </Pressable>
+      {onDelete && (
+        <Pressable style={styles.stickerDeleteBtn} onPress={onDelete} hitSlop={6}>
+          <Ionicons name="close-circle" size={16} color="#ff3b30" />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -741,5 +842,22 @@ const styles = StyleSheet.create({
     height: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bgControls: {
+    position: 'absolute',
+    top: 100,
+    right: 12,
+    gap: 10,
+    zIndex: 18,
+  },
+  bgControlBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
 });

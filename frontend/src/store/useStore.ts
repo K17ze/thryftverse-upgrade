@@ -57,7 +57,7 @@ export interface UserLook {
   title: string;
   coverImage: string;
   items: { id: string; label: string; x: number; y: number }[];
-  creator: { name: string; avatar: string };
+  creator: { name: string; avatar?: string };
   likes: number;
   comments: number;
   createdAt: number;
@@ -335,6 +335,20 @@ interface StoreState {
   archivedConversationIds: string[];
   toggleArchivedConversation: (id: string) => void;
   isArchivedConversation: (id: string) => boolean;
+  // Message requests
+  messageRequests: string[]; // conversationIds that are pending requests
+  acceptMessageRequest: (id: string) => void;
+  declineMessageRequest: (id: string) => void;
+  isMessageRequest: (id: string) => boolean;
+  // Marketplace chat settings
+  offersInChatEnabled: boolean;
+  setOffersInChatEnabled: (v: boolean) => void;
+  orderUpdatesInChatEnabled: boolean;
+  setOrderUpdatesInChatEnabled: (v: boolean) => void;
+  // Enabled bots (global)
+  enabledBotIds: string[];
+  toggleEnabledBot: (botId: string) => void;
+  isBotEnabled: (botId: string) => boolean;
 
   userLooks: UserLook[];
   addUserLook: (look: Omit<UserLook, 'id' | 'createdAt'>) => string;
@@ -1121,6 +1135,32 @@ export const useStore = create<StoreState>()(
       };
     }),
   isArchivedConversation: (id) => get().archivedConversationIds.includes(id),
+  messageRequests: [],
+  acceptMessageRequest: (id) =>
+    set((state) => ({
+      messageRequests: state.messageRequests.filter((rid) => rid !== id),
+    })),
+  declineMessageRequest: (id) =>
+    set((state) => ({
+      messageRequests: state.messageRequests.filter((rid) => rid !== id),
+      conversations: state.conversations.filter((c) => c.id !== id),
+    })),
+  isMessageRequest: (id) => get().messageRequests.includes(id),
+  offersInChatEnabled: true,
+  setOffersInChatEnabled: (v) => set({ offersInChatEnabled: v }),
+  orderUpdatesInChatEnabled: true,
+  setOrderUpdatesInChatEnabled: (v) => set({ orderUpdatesInChatEnabled: v }),
+  enabledBotIds: [],
+  toggleEnabledBot: (botId) =>
+    set((state) => {
+      const isEnabled = state.enabledBotIds.includes(botId);
+      return {
+        enabledBotIds: isEnabled
+          ? state.enabledBotIds.filter((id) => id !== botId)
+          : [...state.enabledBotIds, botId],
+      };
+    }),
+  isBotEnabled: (botId) => get().enabledBotIds.includes(botId),
 
   addMessageReaction: (conversationId, messageId, reaction) =>
     set((state) => ({
@@ -1299,6 +1339,10 @@ export const useStore = create<StoreState>()(
         readReceiptsEnabled: state.readReceiptsEnabled,
         allowMessagesFrom: state.allowMessagesFrom,
         archivedConversationIds: state.archivedConversationIds,
+        messageRequests: state.messageRequests,
+        offersInChatEnabled: state.offersInChatEnabled,
+        orderUpdatesInChatEnabled: state.orderUpdatesInChatEnabled,
+        enabledBotIds: state.enabledBotIds,
       }),
     },
   ),

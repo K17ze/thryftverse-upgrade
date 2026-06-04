@@ -7,7 +7,6 @@ import {
   StatusBar,
   Dimensions,
   Share,
-  Image,
 } from 'react-native';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,8 +25,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Listing, MY_USER, User, MOCK_USERS } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
+import { Listing } from '../data/mockData';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { Space, Radius } from '../theme/designTokens';
@@ -53,29 +51,13 @@ const GRID_SPACING = 16;
 const ITEM_SIZE = (width - 40 - GRID_SPACING) / 2;
 const COVER_HEIGHT = 200;
 const AVATAR_SIZE = 108;
-const COVER_IMAGE = 'https://picsum.photos/seed/profilecoverdefault/1200/800';
+const COVER_IMAGE = '';
 
-type Tab = 'Listings' | 'Reviews' | 'About';
-
-const MOCK_REVIEWS = [
-  { id: 'r1', from: 'Thryftverse', rating: 5, text: 'Auto-feedback: Sale completed successfully', time: '6 days ago', auto: true },
-  { id: 'r2', from: 'Thryftverse', rating: 5, text: 'Auto-feedback: Sale completed successfully', time: '1 week ago', auto: true },
-  { id: 'r3', from: 'alexj92', rating: 5, text: 'Super fast shipping, item exactly as described. Very trustworthy seller!', time: '2 weeks ago', auto: false },
-  { id: 'r4', from: 'samrivera', rating: 5, text: 'Great quality item, well packaged. Would buy again.', time: '3 weeks ago', auto: false },
-];
-
-type ReviewFilter = 'All' | 'From members' | 'Automatic';
+type Tab = 'Listings' | 'About';
 
 const TAB_OPTIONS: Array<{ value: Tab; label: string; accessibilityLabel: string }> = [
   { value: 'Listings', label: 'Listings', accessibilityLabel: 'Show listings tab' },
-  { value: 'Reviews', label: 'Reviews', accessibilityLabel: 'Show reviews tab' },
   { value: 'About', label: 'About', accessibilityLabel: 'Show about tab' },
-];
-
-const REVIEW_FILTER_OPTIONS: Array<{ value: ReviewFilter; label: string; accessibilityLabel: string }> = [
-  { value: 'All', label: 'All', accessibilityLabel: 'Show all reviews' },
-  { value: 'From members', label: 'From members', accessibilityLabel: 'Show member reviews' },
-  { value: 'Automatic', label: 'Automatic', accessibilityLabel: 'Show automatic reviews' },
 ];
 
 function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
@@ -100,45 +82,39 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('Listings');
   const [following, setFollowing] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
-  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('All');
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
   const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
 
-  const profileListings = React.useMemo(() => listings.slice(0, 6), [listings]);
-  const filteredReviews = MOCK_REVIEWS.filter(r => {
-    if (reviewFilter === 'All') return true;
-    if (reviewFilter === 'Automatic') return r.auto;
-    return !r.auto;
-  });
+  const isMe = route.params?.isMe ?? false;
+  const userId = route.params?.userId;
 
-  const profileUser = React.useMemo(
-    () =>
-      route.params.isMe
-        ? (currentUser as any ?? MY_USER)
-        : (mockFind(MOCK_USERS, u => u.id === route.params.userId) as any),
-    [route.params.isMe, route.params.userId, currentUser]
-  );
+  const profileListings = React.useMemo(() => {
+    const targetId = isMe ? currentUser?.id : userId;
+    return targetId ? listings.filter((l) => l.sellerId === targetId) : [];
+  }, [listings, isMe, userId, currentUser?.id]);
 
   const isSelfProfile =
-    route.params.isMe ||
-    route.params.userId === currentUser?.id;
+    isMe ||
+    userId === currentUser?.id;
+
+  const hasRealUserData = isSelfProfile && currentUser != null;
 
   const mediaOverride =
-    profileMediaOverrides[route.params.userId]
-    ?? (profileUser ? profileMediaOverrides[profileUser.id] : undefined)
+    (userId ? profileMediaOverrides[userId] : undefined)
+    ?? (currentUser ? profileMediaOverrides[currentUser.id] : undefined)
     ?? null;
 
-  const displayUsername = isSelfProfile
-    ? currentUser?.username ?? MY_USER.username
-    : profileUser?.username ?? 'Thryft user';
-  const displayHandle = `@${displayUsername}`;
-  const displayAvatar = isSelfProfile
-    ? userAvatar || mediaOverride?.avatar || MY_USER.avatar
-    : mediaOverride?.avatar || profileUser?.avatar || undefined;
-  const displayCover = isSelfProfile
-    ? userCover || mediaOverride?.cover || MY_USER.coverPhoto || COVER_IMAGE
-    : mediaOverride?.cover || profileUser?.coverPhoto || COVER_IMAGE;
+  const displayUsername = hasRealUserData
+    ? currentUser?.username ?? 'Thryft user'
+    : 'Profile unavailable';
+  const displayHandle = hasRealUserData ? `@${currentUser?.username ?? 'user'}` : '';
+  const displayAvatar = hasRealUserData
+    ? userAvatar || mediaOverride?.avatar || undefined
+    : undefined;
+  const displayCover = hasRealUserData
+    ? userCover || mediaOverride?.cover || COVER_IMAGE
+    : COVER_IMAGE;
 
   const handleShare = React.useCallback(async () => {
     try {
@@ -151,17 +127,18 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const primaryListingId = profileListings[0]?.id;
 
   const handleMessageProfile = React.useCallback(() => {
-    if (!profileUser?.id) return;
+    const targetId = isSelfProfile ? currentUser?.id : userId;
+    if (!targetId) return;
     const conversationId = primaryListingId
-      ? `${profileUser.id}_${primaryListingId}`
-      : `profile_${profileUser.id}`;
+      ? `${targetId}_${primaryListingId}`
+      : `profile_${targetId}`;
 
     navigation.navigate('Chat', {
       conversationId,
       focusQuery: displayUsername,
-      partnerUserId: profileUser.id,
+      partnerUserId: targetId,
     });
-  }, [displayUsername, navigation, primaryListingId, profileUser?.id]);
+  }, [displayUsername, navigation, primaryListingId, isSelfProfile, currentUser?.id, userId]);
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -198,7 +175,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           sharedTransitionTag={`image-${item.id}-0`}
         >
           <CachedImage
-            uri={item.images[0] || `https://picsum.photos/seed/${item.id}/600/800`}
+            uri={item.images?.[0] || ''}
             style={styles.gridImage}
             contentFit="cover"
           />
@@ -260,6 +237,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       <Reanimated.View style={[styles.coverWrap, coverStyle]}>
         {isVideoUri(displayCover) ? (
           <Video
+            key={`user-cover-video-${displayCover}`}
             source={{ uri: displayCover }}
             style={styles.coverImage}
             resizeMode={ResizeMode.COVER}
@@ -268,7 +246,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             isMuted
           />
         ) : (
-          <CachedImage uri={displayCover} style={styles.coverImage} contentFit="cover" priority="high" />
+          <CachedImage
+            key={`user-cover-image-${displayCover}`}
+            uri={displayCover}
+            style={styles.coverImage}
+            contentFit="cover"
+            priority="high"
+          />
         )}
         <View style={styles.coverGradient} />
       </Reanimated.View>
@@ -286,31 +270,41 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           {/* Avatar overlapping banner bottom edge */}
           <View style={styles.avatarContainer}>
             <View style={styles.avatarWrapLinkedIn}>
-              <CachedImage uri={displayAvatar} style={styles.heroAvatarLinkedIn} contentFit="cover" />
+              {displayAvatar ? (
+                <CachedImage uri={displayAvatar} style={styles.heroAvatarLinkedIn} contentFit="cover" />
+              ) : (
+                <View style={[styles.heroAvatarLinkedIn, { backgroundColor: Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]}>
+                  <Ionicons name="person" size={40} color={Colors.textMuted} />
+                </View>
+              )}
             </View>
           </View>
           <View style={styles.heroInfoLinkedIn}>
             <Text style={styles.heroNameLinkedIn}>{displayUsername}</Text>
             <Text style={styles.heroHandleLinkedIn}>{displayHandle}</Text>
-            <View style={styles.heroRatingRow}>
-              <StarRating rating={5} size={14} />
-              <Text style={styles.heroReviewCount}>(54 reviews)</Text>
-            </View>
+            {hasRealUserData && (currentUser as any)?.rating ? (
+              <View style={styles.heroRatingRow}>
+                <StarRating rating={Math.round((currentUser as any).rating)} size={14} />
+                {(currentUser as any)?.reviewCount ? (
+                  <Text style={styles.heroReviewCount}>({(currentUser as any).reviewCount} reviews)</Text>
+                ) : null}
+              </View>
+            ) : null}
           </View>
           
           <View style={styles.statsCard}>
             <View style={styles.statCol}>
-              <Text style={styles.statValue}>{profileUser?.followers ?? 0}</Text>
+              <Text style={styles.statValue}>{hasRealUserData ? (currentUser as any)?.followers ?? 0 : 0}</Text>
               <Text style={styles.statLabel}>Followers</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statValue}>{profileUser?.following ?? 0}</Text>
+              <Text style={styles.statValue}>{hasRealUserData ? (currentUser as any)?.following ?? 0 : 0}</Text>
               <Text style={styles.statLabel}>Following</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statValue}>{profileUser?.listingCount ?? 0}</Text>
+              <Text style={styles.statValue}>{hasRealUserData ? (currentUser as any)?.listingCount ?? 0 : profileListings.length}</Text>
               <Text style={styles.statLabel}>Active Items</Text>
             </View>
           </View>
@@ -430,90 +424,29 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          {activeTab === 'Reviews' && (
-            <View style={styles.reviewsContent}>
-              <View style={styles.ratingHero}>
-                <Text style={styles.ratingBigNumber}>{(MOCK_REVIEWS.reduce((sum, r) => sum + r.rating, 0) / MOCK_REVIEWS.length).toFixed(1)}</Text>
-                <StarRating rating={5} size={28} />
-                <Text style={styles.ratingTotalText}>Based on {MOCK_REVIEWS.length} reviews</Text>
-              </View>
-
-              <View style={styles.reviewsFilterRow}>
-                <AppSegmentControl
-                  style={styles.reviewsFilterStrip}
-                  options={REVIEW_FILTER_OPTIONS}
-                  value={reviewFilter}
-                  onChange={setReviewFilter}
-                  fullWidth
-                  optionStyle={styles.filterChip}
-                  optionActiveStyle={styles.filterChipActive}
-                  optionTextStyle={styles.filterChipText}
-                  optionTextActiveStyle={styles.filterChipTextActive}
-                />
-              </View>
-
-              <View style={styles.reviewsList}>
-                {filteredReviews.map((r, i) => (
-                  <View key={r.id} style={[styles.reviewBlock, i > 0 && { marginTop: 16 }]}>
-                    {r.auto ? (
-                      <View style={styles.reviewerAvatarAuto}>
-                        <Text style={styles.reviewerAvatarAutoText}>T</Text>
-                      </View>
-                    ) : (
-                      <View style={styles.reviewerAvatar}>
-                        <Ionicons name="person" size={20} color={MUTED} />
-                      </View>
-                    )}
-                    <View style={styles.reviewBlockInfo}>
-                      <View style={styles.reviewSenderRow}>
-                        <Text style={styles.reviewSenderName}>{r.auto ? 'Thryftverse System' : r.from}</Text>
-                        <Text style={styles.reviewTime}>{r.time}</Text>
-                      </View>
-                      <StarRating rating={r.rating} size={14} />
-                      <Text style={styles.reviewBody}>{r.text}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
           {activeTab === 'About' && (
             <View style={styles.aboutContent}>
-              <View style={[styles.aboutBannerImage, { overflow: 'hidden' }]}>
-                <CachedImage uri={displayCover} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-              </View>
-              
-              <Text style={styles.aboutBigName}>{displayUsername}</Text>
-              {(!profileUser && !isSelfProfile) ? (
-                <Text style={styles.honestNote}>Full profile data is fetched from the server when available.</Text>
+              {hasRealUserData && (currentUser as any)?.bio ? (
+                <View style={styles.aboutBlock}>
+                  <Text style={styles.aboutLabel}>Bio</Text>
+                  <Text style={styles.aboutText}>{(currentUser as any).bio}</Text>
+                </View>
               ) : null}
-              
-              <View style={styles.aboutInfoCard}>
-                <Text style={styles.aboutSectionHeading}>Verified Details</Text>
-                <View style={styles.aboutRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={ACCENT} />
-                  <Text style={styles.aboutRowText}>Facebook Connected</Text>
+              {hasRealUserData && (currentUser as any)?.location ? (
+                <View style={styles.aboutBlock}>
+                  <Text style={styles.aboutLabel}>Location</Text>
+                  <Text style={styles.aboutText}>{(currentUser as any).location}</Text>
                 </View>
-                <View style={styles.aboutRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={ACCENT} />
-                  <Text style={styles.aboutRowText}>Email Verified</Text>
+              ) : null}
+              {hasRealUserData && (currentUser as any)?.website ? (
+                <View style={styles.aboutBlock}>
+                  <Text style={styles.aboutLabel}>Website</Text>
+                  <Text style={styles.aboutText}>{(currentUser as any).website}</Text>
                 </View>
-              </View>
-
-              <View style={styles.aboutInfoCard}>
-                <Text style={styles.aboutSectionHeading}>Location & Activity</Text>
-                <View style={styles.aboutRow}>
-                  <Ionicons name="location" size={20} color={MUTED} />
-                  <Text style={styles.aboutRowText}>{profileUser?.location ?? 'Unknown location'}</Text>
-                </View>
-                <View style={styles.aboutRow}>
-                  <Ionicons name="time" size={20} color={MUTED} />
-                  <Text style={styles.aboutRowText}>Last seen {profileUser?.lastSeen ?? 'unknown'}</Text>
-                </View>
-              </View>
-
-              <View style={{ height: 40 }} />
+              ) : null}
+              {(!hasRealUserData || (!(currentUser as any)?.bio && !(currentUser as any)?.location && !(currentUser as any)?.website)) && (
+                <Text style={{ color: MUTED, textAlign: 'center', marginTop: 40 }}>No additional info.</Text>
+              )}
             </View>
           )}
         </View>
@@ -891,6 +824,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   aboutRowText: { fontSize: Typography.size.body, fontFamily: Typography.family.medium, color: TEXT },
+  aboutBlock: {
+    backgroundColor: CARD,
+    borderRadius: Radius.lg,
+    padding: Space.lg,
+    marginBottom: Space.md,
+  },
+  aboutLabel: {
+    fontSize: Typography.size.caption,
+    fontFamily: Typography.family.bold,
+    color: MUTED,
+    textTransform: 'uppercase',
+    letterSpacing: Typography.tracking.caps,
+    marginBottom: Space.sm,
+  },
+  aboutText: {
+    fontSize: Typography.size.body,
+    fontFamily: Typography.family.regular,
+    color: TEXT,
+    lineHeight: 22,
+  },
 });
 
 

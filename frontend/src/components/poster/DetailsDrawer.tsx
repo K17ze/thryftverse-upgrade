@@ -33,7 +33,7 @@ interface DetailsDrawerProps {
   listings: Listing[];
   onPublish: () => void;
   isPublishing: boolean;
-  currentUserId: string;
+  currentUserId: string | null;
 }
 
 const EXPIRY_OPTIONS = [6, 12, 24, 48] as const;
@@ -56,7 +56,7 @@ export default function DetailsDrawer({
   const backdropOpacity = React.useRef(new Animated.Value(0)).current;
 
   const marketplaceListings = React.useMemo(
-    () => listings.filter((l) => l.sellerId !== currentUserId),
+    () => (currentUserId ? listings.filter((l) => l.sellerId !== currentUserId) : listings),
     [listings, currentUserId]
   );
 
@@ -99,7 +99,7 @@ export default function DetailsDrawer({
         onPress={() => onListingSelect(item.id)}
       >
         <CachedImage
-          uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/poster-listing-fallback/300/400')}
+          uri={getListingCoverUri(item.images, '')}
           style={styles.listingImage}
           contentFit="cover"
         />

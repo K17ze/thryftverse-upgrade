@@ -26,6 +26,7 @@ import { ProductCardV2 } from '../components/ProductCardV2';
 import { SyncStatusPill } from '../components/SyncStatusPill';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { RootStackParamList } from '../navigation/types';
+import { MOCK_USERS } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -78,8 +79,8 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, showToast, formatPrice, reducedMotionEnabled }: any) => {
   const isWishlisted = wishlist?.includes(item.id) ?? false;
   const haptic = useHaptic();
-  const seller = null as any;
-  const sellerHandle = seller?.username ?? item.sellerId ?? 'seller';
+  const seller = item.sellerId ? MOCK_USERS.find((u: { id: string }) => u.id === item.sellerId) : undefined;
+  const sellerHandle = seller?.username ?? 'Seller';
   const heartScale = useSharedValue(0);
   const likeBtnScale = useSharedValue(1);
 
@@ -149,7 +150,7 @@ const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, sho
               style={styles.sharedImageLayer}
               sharedTransitionTag={`image-${item.id}-0`}
             >
-              <CachedImage uri={item.images[0]} style={styles.gridImage} containerStyle={{ width: '100%', height: 180, borderRadius: 12 }} contentFit="cover" />
+              <CachedImage uri={item.images?.[0] ?? ''} style={styles.gridImage} containerStyle={{ width: '100%', height: 180, borderRadius: 12 }} contentFit="cover" />
             </SharedTransitionView>
 
             <Reanimated.View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }, bigHeartStyle]}>
@@ -183,44 +184,40 @@ const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, sho
         </View>
       </AnimatedPressable>
 
-      <View style={styles.sellerActionRow}>
-        <AnimatedPressable
-          style={styles.sellerIdentityChip}
-          onPress={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel={`Open @${sellerHandle} profile`}
-          accessibilityHint="Shows seller profile details"
-        >
-          {seller?.avatar ? (
+      {seller ? (
+        <View style={styles.sellerActionRow}>
+          <AnimatedPressable
+            style={styles.sellerIdentityChip}
+            onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Open @${seller.username} profile`}
+            accessibilityHint="Shows seller profile details"
+          >
             <CachedImage
               uri={seller.avatar}
               style={styles.sellerActionAvatar}
               containerStyle={styles.sellerActionAvatarWrap}
               contentFit="cover"
             />
-          ) : (
-            <View style={styles.sellerActionAvatarFallback}>
-              <Ionicons name="person" size={10} color={Colors.textMuted} />
-            </View>
-          )}
-          <Text style={styles.sellerActionHandle} numberOfLines={1}>@{sellerHandle}</Text>
-        </AnimatedPressable>
+            <Text style={styles.sellerActionHandle} numberOfLines={1}>@{seller.username}</Text>
+          </AnimatedPressable>
 
-        <AnimatedPressable
-          style={styles.sellerMessageBtn}
-          onPress={() => navigation.navigate('Chat', {
-            conversationId: `${item.sellerId}_${item.id}`,
-            focusQuery: sellerHandle,
-            partnerUserId: item.sellerId,
-          })}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel={`Message @${sellerHandle}`}
-        >
-          <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-        </AnimatedPressable>
-      </View>
+          <AnimatedPressable
+            style={styles.sellerMessageBtn}
+            onPress={() => navigation.navigate('Chat', {
+              conversationId: `${seller.id}_${item.id}`,
+              focusQuery: seller.username,
+              partnerUserId: seller.id,
+            })}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Message @${seller.username}`}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
+      ) : null}
     </Reanimated.View>
   );
 };

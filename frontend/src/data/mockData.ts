@@ -111,7 +111,9 @@ export interface ChatBot {
   name: string;
   description: string;
   commandHint: string;
-  category: 'moderation' | 'commerce' | 'automation';
+  category: 'moderation' | 'commerce' | 'automation' | 'assistant' | 'safety' | 'styling';
+  status: 'available' | 'local-only' | 'backend-required';
+  permissions: string[];
 }
 
 export interface Conversation {
@@ -411,6 +413,8 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
     description: 'Moderation helper for rules, join messages, and spam guardrails.',
     commandHint: '/guard status',
     category: 'moderation',
+    status: 'available',
+    permissions: ['read_messages', 'send_messages'],
   },
   {
     id: 'bot_trade',
@@ -419,6 +423,8 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
     description: 'Posts auction and co-own market alerts into your group.',
     commandHint: '/tradeops alerts on',
     category: 'commerce',
+    status: 'available',
+    permissions: ['read_messages', 'send_messages'],
   },
   {
     id: 'bot_brief',
@@ -427,6 +433,78 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
     description: 'Sends timed digest updates and pinned reminders.',
     commandHint: '/brief now',
     category: 'automation',
+    status: 'available',
+    permissions: ['read_messages', 'send_messages'],
+  },
+  {
+    id: 'bot_deals',
+    slug: 'deals',
+    name: 'Deal Assistant',
+    description: 'Suggests price drops and bundle deals based on your saved items.',
+    commandHint: '/deals check',
+    category: 'assistant',
+    status: 'local-only',
+    permissions: ['read_saved', 'send_suggestions'],
+  },
+  {
+    id: 'bot_price',
+    slug: 'price',
+    name: 'Price Helper',
+    description: 'Checks market value and recent sold prices for listings.',
+    commandHint: '/price value',
+    category: 'assistant',
+    status: 'backend-required',
+    permissions: ['read_listings', 'read_market_data'],
+  },
+  {
+    id: 'bot_shipping',
+    slug: 'shipping',
+    name: 'Shipping Helper',
+    description: 'Estimates delivery times and tracks parcels when connected.',
+    commandHint: '/shipping track',
+    category: 'assistant',
+    status: 'backend-required',
+    permissions: ['read_orders', 'read_tracking'],
+  },
+  {
+    id: 'bot_safety',
+    slug: 'safety',
+    name: 'Safety / Scam Check',
+    description: 'Flags suspicious messages and offers safety tips in transactions.',
+    commandHint: '/safety report',
+    category: 'safety',
+    status: 'local-only',
+    permissions: ['read_messages', 'send_alerts'],
+  },
+  {
+    id: 'bot_stylist',
+    slug: 'stylist',
+    name: 'Wardrobe Stylist',
+    description: 'Suggests outfit pairings and style tips from saved items.',
+    commandHint: '/stylist suggest',
+    category: 'styling',
+    status: 'local-only',
+    permissions: ['read_saved', 'send_suggestions'],
+  },
+  {
+    id: 'bot_coown',
+    slug: 'coown',
+    name: 'Co-own Assistant',
+    description: 'Explains co-own terms, alerts on asset updates, and dividend events.',
+    commandHint: '/coown alerts',
+    category: 'assistant',
+    status: 'backend-required',
+    permissions: ['read_assets', 'read_orders', 'send_alerts'],
+  },
+  {
+    id: 'bot_ordersupport',
+    slug: 'ordersupport',
+    name: 'Order Support Bot',
+    description: 'Answers common order and delivery questions automatically.',
+    commandHint: '/order status',
+    category: 'assistant',
+    status: 'backend-required',
+    permissions: ['read_orders', 'send_messages'],
   },
 ];
 

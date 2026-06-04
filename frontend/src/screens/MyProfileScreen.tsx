@@ -23,7 +23,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
-import { MY_USER } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -62,7 +61,7 @@ const PANEL_SOFT = Colors.surfaceAlt;
 const PANEL_ICON = Colors.surfaceAlt;
 const PANEL_BORDER = Colors.border;
 
-const COVER_IMAGE = MY_USER.coverPhoto || 'https://picsum.photos/seed/profilecoverdefault/1200/800';
+const COVER_IMAGE = '';
 
 interface QuickAccessItem {
   icon: string;
@@ -98,15 +97,14 @@ export default function MyProfileScreen() {
         const persistedCoverUri = await persistProfileMediaUri(userCover, 'cover');
         if (!canceled && persistedCoverUri !== userCover) {
           updateUserCover(persistedCoverUri);
-          Promise.all([
-            setStoredUserCover(persistedCoverUri),
-            setStoredUserCoverForUser(MY_USER.id, persistedCoverUri),
-            currentUser?.id
-              ? setStoredUserCoverForUser(currentUser.id, persistedCoverUri)
-              : Promise.resolve(),
-          ]).catch(() => {
-            // Keep UX responsive when local persistence fails.
-          });
+          if (currentUser?.id) {
+            Promise.all([
+              setStoredUserCover(persistedCoverUri),
+              setStoredUserCoverForUser(currentUser.id, persistedCoverUri),
+            ]).catch(() => {
+              // Keep UX responsive when local persistence fails.
+            });
+          }
         }
       }
 
@@ -114,15 +112,14 @@ export default function MyProfileScreen() {
         const persistedAvatarUri = await persistProfileMediaUri(userAvatar, 'avatar');
         if (!canceled && persistedAvatarUri !== userAvatar) {
           updateUserAvatar(persistedAvatarUri);
-          Promise.all([
-            setStoredUserAvatar(persistedAvatarUri),
-            setStoredUserAvatarForUser(MY_USER.id, persistedAvatarUri),
-            currentUser?.id
-              ? setStoredUserAvatarForUser(currentUser.id, persistedAvatarUri)
-              : Promise.resolve(),
-          ]).catch(() => {
-            // Keep UX responsive when local persistence fails.
-          });
+          if (currentUser?.id) {
+            Promise.all([
+              setStoredUserAvatar(persistedAvatarUri),
+              setStoredUserAvatarForUser(currentUser.id, persistedAvatarUri),
+            ]).catch(() => {
+              // Keep UX responsive when local persistence fails.
+            });
+          }
         }
       }
     };
@@ -153,13 +150,14 @@ export default function MyProfileScreen() {
       if (!result.canceled && result.assets?.[0]?.uri) {
         const nextCoverUri = await persistProfileMediaUri(result.assets[0].uri, 'cover');
         updateUserCover(nextCoverUri);
-        Promise.all([
-          setStoredUserCover(nextCoverUri),
-          setStoredUserCoverForUser(MY_USER.id, nextCoverUri),
-          currentUser?.id ? setStoredUserCoverForUser(currentUser.id, nextCoverUri) : Promise.resolve(),
-        ]).catch(() => {
-          // Keep UX responsive when local persistence fails.
-        });
+        if (currentUser?.id) {
+          Promise.all([
+            setStoredUserCover(nextCoverUri),
+            setStoredUserCoverForUser(currentUser.id, nextCoverUri),
+          ]).catch(() => {
+            // Keep UX responsive when local persistence fails.
+          });
+        }
         show('Cover updated', 'success');
       }
     } catch {
@@ -185,13 +183,14 @@ export default function MyProfileScreen() {
       if (!result.canceled && result.assets?.[0]?.uri) {
         const nextAvatarUri = await persistProfileMediaUri(result.assets[0].uri, 'avatar');
         updateUserAvatar(nextAvatarUri);
-        Promise.all([
-          setStoredUserAvatar(nextAvatarUri),
-          setStoredUserAvatarForUser(MY_USER.id, nextAvatarUri),
-          currentUser?.id ? setStoredUserAvatarForUser(currentUser.id, nextAvatarUri) : Promise.resolve(),
-        ]).catch(() => {
-          // Keep UX responsive when local persistence fails.
-        });
+        if (currentUser?.id) {
+          Promise.all([
+            setStoredUserAvatar(nextAvatarUri),
+            setStoredUserAvatarForUser(currentUser.id, nextAvatarUri),
+          ]).catch(() => {
+            // Keep UX responsive when local persistence fails.
+          });
+        }
         show('Avatar updated', 'success');
       }
     } catch {
@@ -199,6 +198,22 @@ export default function MyProfileScreen() {
     }
   };
 
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <EmptyState
+          icon="person-outline"
+          title="Not signed in"
+          subtitle="Sign in to view your profile, listings, and wallet."
+          ctaLabel="Sign In"
+          onCtaPress={() => navigation.navigate('Login')}
+        />
+      </View>
+    );
+  }
+
+  // All user.* accesses must happen AFTER the null guard above
   const profileUserId = user.id;
   const profileMediaOverride = profileMediaOverrides[profileUserId] ?? null;
   const displayCover = userCover || profileMediaOverride?.cover || user.coverPhoto || COVER_IMAGE;
@@ -206,15 +221,11 @@ export default function MyProfileScreen() {
 
   const myListings = React.useMemo(() => {
     const owned = listings.filter((item) => item.sellerId === profileUserId);
-    if (owned.length > 0) {
-      return owned.slice(0, 6);
-    }
-
-    return listings.slice(0, 6);
+    return owned.slice(0, 6);
   }, [listings, profileUserId]);
 
   const heroMediaListings = React.useMemo(
-    () => myListings.filter((item) => item.images.length > 0),
+    () => myListings.filter((item) => item.images && item.images.length > 0),
     [myListings]
   );
 
@@ -291,7 +302,6 @@ export default function MyProfileScreen() {
         icon: 'wallet-outline',
         label: 'Wallet',
         route: 'Wallet',
-        value: formatFromFiat(120.5, 'GBP', { displayMode: 'fiat' }),
         color: Colors.textSecondary,
       },
       {
@@ -307,21 +317,6 @@ export default function MyProfileScreen() {
 
   const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
 
-  if (!user) {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <EmptyState
-          icon="person-outline"
-          title="Not signed in"
-          subtitle="Sign in to view your profile, listings, and wallet."
-          ctaLabel="Sign In"
-          onCtaPress={() => navigation.navigate('Login')}
-        />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
@@ -330,6 +325,7 @@ export default function MyProfileScreen() {
       <Reanimated.View style={[styles.coverWrap, coverStyle]}>
         {isVideoUri(displayCover) ? (
           <Video
+            key={`cover-video-${displayCover}`}
             source={{ uri: displayCover }}
             style={styles.coverImage}
             resizeMode={ResizeMode.COVER}
@@ -339,6 +335,7 @@ export default function MyProfileScreen() {
           />
         ) : (
           <CachedImage
+            key={`cover-image-${displayCover}`}
             uri={displayCover}
             style={styles.coverImage}
             contentFit="cover"
@@ -402,9 +399,6 @@ export default function MyProfileScreen() {
                 containerStyle={styles.heroAvatarContainerLinkedIn}
                 contentFit="cover"
               />
-              <View style={styles.verifiedBadgeLinkedIn}>
-                <Ionicons name="checkmark-circle" size={24} color={BRAND} />
-              </View>
               <View style={styles.editAvatarChipLinkedIn}>
                 <Ionicons name="camera" size={18} color="#fff" />
               </View>
@@ -425,7 +419,11 @@ export default function MyProfileScreen() {
               <Text style={styles.heroBio} numberOfLines={2}>{user.bio}</Text>
             )}
             <Text style={styles.heroMeta}>
-              {user.location} | {user.reviewCount} reviews | last seen {user.lastSeen.toLowerCase()}
+              {[
+                user.location,
+                user.reviewCount ? `${user.reviewCount} reviews` : null,
+                user.lastSeen ? `last seen ${user.lastSeen.toLowerCase()}` : null,
+              ].filter(Boolean).join(' | ')}
             </Text>
           </AnimatedPressable>
 
@@ -538,7 +536,7 @@ export default function MyProfileScreen() {
                   sharedTransitionTag={`image-${item.id}-0`}
                 >
                   <CachedImage
-                    uri={item.images[0]}
+                    uri={item.images?.[0] ?? ''}
                     style={styles.mediaThumb}
                     containerStyle={{ width: '100%', height: '100%', borderRadius: 10 }}
                     contentFit="cover"
@@ -659,7 +657,7 @@ export default function MyProfileScreen() {
                     style={styles.wardrobeImageWrap}
                     sharedTransitionTag={`image-${item.id}-0`}
                   >
-                    <CachedImage uri={item.images[0]} style={styles.wardrobeImage} containerStyle={{ width: '100%', height: '100%', borderRadius: 16 }} contentFit="cover" />
+                    <CachedImage uri={item.images?.[0] ?? ''} style={styles.wardrobeImage} containerStyle={{ width: '100%', height: '100%', borderRadius: 16 }} contentFit="cover" />
                   </SharedTransitionView>
                   <View style={styles.wardrobeInfo}>
                     <Text style={styles.wardrobePrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
@@ -675,30 +673,7 @@ export default function MyProfileScreen() {
           </ScrollView>
         </View>
 
-        {/* Badges Section */}
-        <View style={styles.badgesCard}>
-          <Text style={styles.badgesTitle}>Badges</Text>
-          <View style={styles.badgeRow}>
-            <View style={styles.badgeItem}>
-              <View style={[styles.badgeCircle, { backgroundColor: Colors.brand + '20' }]}>
-                <Ionicons name="shield-checkmark" size={24} color={Colors.brand} />
-              </View>
-              <Text style={styles.badgeLabel}>Verified</Text>
-            </View>
-            <View style={styles.badgeItem}>
-              <View style={[styles.badgeCircle, { backgroundColor: '#FFD70020' }]}>
-                <Ionicons name="trophy" size={24} color="#FFD700" />
-              </View>
-              <Text style={styles.badgeLabel}>Top Seller</Text>
-            </View>
-            <View style={styles.badgeItem}>
-              <View style={[styles.badgeCircle, { backgroundColor: '#4CAF5020' }]}>
-                <Ionicons name="flash" size={24} color="#4CAF50" />
-              </View>
-              <Text style={styles.badgeLabel}>Fast Ship</Text>
-            </View>
-          </View>
-        </View>
+        {/* Badges removed — only show when backed by real backend data */}
         </View>
 
       </AnimatedScrollView>
@@ -835,14 +810,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  verifiedBadgeLinkedIn: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    backgroundColor: Colors.background,
-    borderRadius: 14,
-    padding: 2,
-  },
   editAvatarChipLinkedIn: {
     position: 'absolute',
     bottom: 4,
@@ -867,14 +834,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: AVATAR_SIZE / 2,
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: -2,
-    backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: 1,
   },
   editAvatarChip: {
     position: 'absolute',
@@ -1347,50 +1306,4 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
 
-  // Badges (original preserved)
-  badgesCard: {
-    marginHorizontal: 20,
-    backgroundColor: 'transparent',
-    borderRadius: 0,
-    padding: 0,
-    marginBottom: 16,
-  },
-  badgesSectionLabel: {
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  badgesTitle: {
-    fontSize: 20,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginBottom: 14,
-    letterSpacing: -0.2,
-  },
-  badgeRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  badgeItem: { alignItems: 'center', gap: 6 },
-  badgeCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeCircleEarned: {
-    borderColor: Colors.brand + '50',
-    backgroundColor: Colors.brand + '14',
-  },
-  badgeLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.medium,
-    textAlign: 'center',
-    maxWidth: 64,
-  },
-  badgeLabelEarned: {
-    color: Colors.brand,
-  },
 });

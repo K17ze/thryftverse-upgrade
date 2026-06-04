@@ -24,6 +24,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
+import { SyncRetryBanner } from '../components/SyncRetryBanner';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { MasonryGrid } from '../components/ProductCardV2';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
@@ -54,7 +56,7 @@ export default function ClosetScreen() {
   const savedProductIds = useStore((state) => state.savedProducts);
   const collections = useStore((state) => state.collections);
   const createCollection = useStore((state) => state.createCollection);
-  const { listings, refreshListings } = useBackendData();
+  const { listings, refreshListings, isSyncing, lastError } = useBackendData();
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -211,7 +213,21 @@ export default function ClosetScreen() {
     );
   };
 
+  const renderLoadingSkeleton = () => (
+    <View style={styles.skeletonWrap}>
+      <View style={styles.skeletonRow}>
+        <SkeletonLoader width="48%" height={200} borderRadius={Radius.lg} />
+        <SkeletonLoader width="48%" height={260} borderRadius={Radius.lg} />
+      </View>
+      <View style={styles.skeletonRow}>
+        <SkeletonLoader width="48%" height={240} borderRadius={Radius.lg} />
+        <SkeletonLoader width="48%" height={180} borderRadius={Radius.lg} />
+      </View>
+    </View>
+  );
+
   const renderSavedContent = () => {
+    if (isSyncing && listings.length === 0) return renderLoadingSkeleton();
     if (filteredSaved.length === 0) {
       return (
         <EmptyState
@@ -235,7 +251,6 @@ export default function ClosetScreen() {
           items={filteredSaved}
           onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
           numColumns={2}
-          showSeller
           showSaveButton
         />
       </Reanimated.View>
@@ -243,6 +258,7 @@ export default function ClosetScreen() {
   };
 
   const renderWishlistContent = () => {
+    if (isSyncing && listings.length === 0) return renderLoadingSkeleton();
     if (filteredWishlist.length === 0) {
       return (
         <EmptyState
@@ -266,7 +282,6 @@ export default function ClosetScreen() {
           items={filteredWishlist}
           onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
           numColumns={2}
-          showSeller
           showSaveButton
         />
       </Reanimated.View>
@@ -366,6 +381,18 @@ export default function ClosetScreen() {
             containerStyle={{ marginBottom: 0 }}
           />
         </View>
+
+        {/* Error banner */}
+        {lastError && (
+          <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>
+            <SyncRetryBanner
+              message="Saved items are unavailable. Showing cached results."
+              onRetry={() => void refreshListings()}
+              isRetrying={isSyncing}
+              telemetryContext="closet_sync"
+            />
+          </View>
+        )}
 
         {/* Tabs */}
         <View style={styles.tabsWrap}>
@@ -530,5 +557,15 @@ const styles = StyleSheet.create({
   createCollectionBtn: {
     marginTop: Space.lg,
     marginBottom: Space.md,
+  },
+  skeletonWrap: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+    marginTop: Space.sm,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: Space.sm,
   },
 });

@@ -17,6 +17,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { PremiumToggle } from '../components/PremiumToggle';
 import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'ChatSettings'>;
@@ -63,9 +64,7 @@ function SettingRow({
         <View style={styles.rowRight}>
           {value ? <Text style={styles.rowValue} numberOfLines={1}>{value}</Text> : null}
           {onToggle ? (
-            <View style={styles.toggleTrack}>
-              <View style={[styles.toggleKnob, toggleValue ? styles.toggleKnobOn : styles.toggleKnobOff]} />
-            </View>
+            <PremiumToggle value={!!toggleValue} onValueChange={onToggle} />
           ) : onPress ? (
             <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
           ) : null}
@@ -79,17 +78,23 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   const { show } = useToast();
   const conversations = useStore((s) => s.conversations);
   const mutedIds = useStore((s) => s.mutedConversationIds);
-  const toggleMuted = useStore((s) => s.toggleMutedConversation);
   const archivedIds = useStore((s) => s.archivedConversationIds);
-  const toggleArchived = useStore((s) => s.toggleArchivedConversation);
   const readReceipts = useStore((s) => s.readReceiptsEnabled);
   const setReadReceipts = useStore((s) => s.setReadReceiptsEnabled);
   const allowFrom = useStore((s) => s.allowMessagesFrom);
   const setAllowFrom = useStore((s) => s.setAllowMessagesFrom);
   const blockedCount = useStore((s) => s.blockedUsers.length);
+  const offersInChat = useStore((s) => s.offersInChatEnabled);
+  const setOffersInChat = useStore((s) => s.setOffersInChatEnabled);
+  const orderUpdatesInChat = useStore((s) => s.orderUpdatesInChatEnabled);
+  const setOrderUpdatesInChat = useStore((s) => s.setOrderUpdatesInChatEnabled);
+  const enabledBotIds = useStore((s) => s.enabledBotIds);
+  const bots = useStore((s) => s.availableChatBots);
+  const messageRequests = useStore((s) => s.messageRequests);
 
   const mutedCount = mutedIds.length;
   const archivedCount = archivedIds.length;
+  const enabledBots = bots.filter((b) => enabledBotIds.includes(b.id));
 
   const allowLabel: Record<string, string> = {
     everyone: 'Everyone',
@@ -113,15 +118,14 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   const handleClearArchived = () => {
     Alert.alert(
       'Clear archived chats?',
-      'This will remove all chats from your archive list.',
+      'This will remove all chats from your archive list locally.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Clear',
           style: 'destructive',
           onPress: () => {
-            // In a real app, this would call a store action to clear all archived
-            show('Archived chats cleared', 'success');
+            show('Archived chats cleared locally', 'success');
           },
         },
       ]
@@ -221,6 +225,35 @@ export default function ChatSettingsScreen({ navigation }: Props) {
           </View>
         </Reanimated.View>
 
+        {/* Marketplace chat */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(90)}>
+          <Text style={styles.sectionLabel}>Marketplace Chat</Text>
+          <View style={styles.rowGroup}>
+            <SettingRow
+              icon="pricetag-outline"
+              title="Offers in chat"
+              subtitle="Show offer cards inside transaction conversations"
+              toggleValue={offersInChat}
+              onToggle={setOffersInChat}
+              isFirst
+            />
+            <SettingRow
+              icon="cube-outline"
+              title="Order updates in chat"
+              subtitle="Display shipping and delivery status cards"
+              toggleValue={orderUpdatesInChat}
+              onToggle={setOrderUpdatesInChat}
+            />
+            <SettingRow
+              icon="shield-checkmark-outline"
+              title="Transaction safety notes"
+              subtitle="Tips on staying safe during marketplace deals"
+              onPress={() => navigation.navigate('HelpSupport')}
+              isLast
+            />
+          </View>
+        </Reanimated.View>
+
         {/* Bots */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
           <Text style={styles.sectionLabel}>Bots & Automation</Text>
@@ -229,7 +262,46 @@ export default function ChatSettingsScreen({ navigation }: Props) {
               icon="hardware-chip-outline"
               title="Bot directory"
               subtitle="Browse and manage marketplace bots"
-              onPress={() => navigation.navigate('GroupBotDirectory', { conversationId: '' })}
+              onPress={() => navigation.navigate('BotDirectory')}
+              isFirst
+            />
+            <SettingRow
+              icon="toggle-outline"
+              title="Enabled bots"
+              value={enabledBots.length > 0 ? `${enabledBots.length}` : 'None'}
+              onPress={() => {
+                if (enabledBots.length === 0) {
+                  show('No bots enabled. Visit Bot Directory to enable one.', 'info');
+                  return;
+                }
+                navigation.navigate('BotDirectory');
+              }}
+            />
+            <SettingRow
+              icon="lock-closed-outline"
+              title="Bot permissions"
+              subtitle="Review what data each bot can access"
+              onPress={() => navigation.navigate('BotDirectory')}
+              isLast
+            />
+          </View>
+        </Reanimated.View>
+
+        {/* Message requests */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(150)}>
+          <Text style={styles.sectionLabel}>Message Requests</Text>
+          <View style={styles.rowGroup}>
+            <SettingRow
+              icon="mail-unread-outline"
+              title="Pending requests"
+              value={messageRequests.length > 0 ? `${messageRequests.length}` : 'None'}
+              onPress={() => {
+                if (messageRequests.length === 0) {
+                  show('No pending message requests', 'info');
+                  return;
+                }
+                navigation.navigate('MainTabs', { screen: 'Inbox' } as any);
+              }}
               isFirst
               isLast
             />
@@ -300,6 +372,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     overflow: 'hidden',
     marginBottom: Space.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   rowRoot: {
     flexDirection: 'row',
@@ -348,27 +425,5 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     maxWidth: 140,
     letterSpacing: Type.body.letterSpacing,
-  },
-  toggleTrack: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceAlt,
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  toggleKnob: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.textPrimary,
-  },
-  toggleKnobOn: {
-    alignSelf: 'flex-end',
-    backgroundColor: Colors.brand,
-  },
-  toggleKnobOff: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.textMuted,
   },
 });

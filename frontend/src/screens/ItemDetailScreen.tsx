@@ -25,8 +25,7 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { MOCK_LISTINGS, Listing, User } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
+import { Listing, MOCK_USERS } from '../data/mockData';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { ImageViewer } from '../components/ImageViewer';
@@ -67,15 +66,33 @@ export default function ItemDetailScreen() {
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
 
   const { itemId } = route.params || {};
-  const backendItem = listings.find(l => l.id === itemId);
-  const mockItem = mockFind(MOCK_LISTINGS, l => l.id === itemId);
-  const fallbackItem = listings[0] ?? mockFind(MOCK_LISTINGS, () => true);
-  const item: Listing = backendItem ?? mockItem ?? fallbackItem!;
-  const seller = null as any;
-  const sellerItems = listings.filter(l => l.sellerId === (seller?.id ?? item.sellerId) && l.id !== item.id);
-  const otherListings = listings.filter(l => l.id !== item.id).slice(0, 12);
+  const item = listings.find(l => l.id === itemId);
+  const resolvedSeller = item ? MOCK_USERS.find(u => u.id === item.sellerId) : undefined;
+  const sellerItems = item ? listings.filter(l => l.sellerId === item.sellerId && l.id !== item.id) : [];
+  const otherListings = listings.filter(l => l.id !== itemId).slice(0, 12);
 
   const { formatFromFiat } = useFormattedPrice();
+
+  if (!item) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.xl }]}>
+        <Ionicons name="cube-outline" size={48} color={Colors.textMuted} />
+        <Text style={{ marginTop: Space.md, fontSize: 16, fontFamily: Typography.family.medium, color: Colors.textSecondary, textAlign: 'center' }}>
+          Item not found
+        </Text>
+        <Text style={{ marginTop: Space.sm, fontSize: 13, color: Colors.textMuted, textAlign: 'center' }}>
+          This listing may have been removed or is no longer available.
+        </Text>
+        <AnimatedPressable
+          style={{ marginTop: Space.lg, paddingHorizontal: Space.lg, paddingVertical: Space.md, backgroundColor: Colors.brand, borderRadius: Radius.lg }}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.85}
+        >
+          <Text style={{ color: Colors.textInverse, fontFamily: Typography.family.semibold }}>Go back</Text>
+        </AnimatedPressable>
+      </View>
+    );
+  }
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -244,19 +261,20 @@ export default function ItemDetailScreen() {
           {/* ── Description ── */}
           <View style={styles.descriptionBox}>
             <Text style={styles.description}>{item.description}</Text>
-            <Text style={styles.timePosted}>Posted 2 hours ago · {seller.location}</Text>
+            {item.createdAt ? (
+              <Text style={styles.timePosted}>Posted {item.createdAt}</Text>
+            ) : null}
           </View>
 
-          {/* ── Social Proof & Scarcity ── */}
-          <ActivityBadgeRow
-            badges={[
-              { variant: 'closeted', count: Math.max(3, (item.likes ?? 0) % 47 + 5), label: 'in closets' },
-              { variant: 'viewers', count: Math.max(1, (item.id.charCodeAt(0) % 8) + 1), label: 'viewing now' },
-              ...(item.price < 50 ? [{ variant: 'fastSelling' as const, label: 'selling fast' }] : []),
-              ...(item.condition === 'New with tags' ? [{ variant: 'rareItem' as const, label: 'new with tags' }] : []),
-            ]}
-            style={{ marginBottom: Space.md }}
-          />
+          {/* ── Social Proof — honest counts only ── */}
+          {item.likes > 0 ? (
+            <ActivityBadgeRow
+              badges={[
+                { variant: 'closeted', count: item.likes, label: 'likes' },
+              ]}
+              style={{ marginBottom: Space.md }}
+            />
+          ) : null}
 
           {/* Phase 3: Removed sync status card - cleaner detail view */}
           {lastError ? (
@@ -269,47 +287,61 @@ export default function ItemDetailScreen() {
             />
           ) : null}
 
-          {/* ── Seller Card (single, comprehensive) ── */}
-          <View style={styles.sellerCard}>
-            <AnimatedPressable
-              style={styles.sellerIdentityTap}
-              onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
-              activeOpacity={0.86}
-              accessibilityRole="button"
-              accessibilityLabel={`Open @${seller.username} profile`}
-            >
-              <CachedImage uri={seller.avatar} style={styles.sellerAvatar} containerStyle={{ width: 52, height: 52, borderRadius: 26 }} contentFit="cover" />
-              <View style={styles.sellerInfo}>
-                <Text style={styles.sellerName}>@{seller.username}</Text>
-                <View style={styles.sellerMetaRow}>
-                  <Ionicons name="star" size={12} color={Colors.brand} />
-                  <Text style={styles.sellerStats}>{seller.rating} · {seller.reviewCount} reviews</Text>
+          {/* ── Seller Card — honest, only if resolved ── */}
+          {resolvedSeller ? (
+            <View style={styles.sellerCard}>
+              <AnimatedPressable
+                style={styles.sellerIdentityTap}
+                onPress={() => navigation.navigate('UserProfile', { userId: resolvedSeller.id })}
+                activeOpacity={0.86}
+                accessibilityRole="button"
+                accessibilityLabel={`Open @${resolvedSeller.username} profile`}
+              >
+                <CachedImage uri={resolvedSeller.avatar} style={styles.sellerAvatar} containerStyle={{ width: 52, height: 52, borderRadius: 26 }} contentFit="cover" />
+                <View style={styles.sellerInfo}>
+                  <Text style={styles.sellerName}>@{resolvedSeller.username}</Text>
+                  <View style={styles.sellerMetaRow}>
+                    <Ionicons name="star" size={12} color={Colors.brand} />
+                    <Text style={styles.sellerStats}>{resolvedSeller.rating} · {resolvedSeller.reviewCount} reviews</Text>
+                  </View>
+                  <Text style={styles.sellerLastSeen}>{resolvedSeller.location}</Text>
                 </View>
-                <Text style={styles.sellerLastSeen}>Last seen {seller.lastSeen} · {seller.location}</Text>
-              </View>
-            </AnimatedPressable>
+              </AnimatedPressable>
 
-            <AppButton
-              title="Message"
-              style={styles.messageSellerBtn}
-              titleStyle={styles.messageSellerBtnText}
-              variant="secondary"
-              size="sm"
-              onPress={() =>
-                navigation.navigate('Chat', {
-                  conversationId: `${seller.id}_${item.id}`,
-                  focusQuery: seller.username,
-                  partnerUserId: seller.id,
-                })}
-            />
-          </View>
+              <AppButton
+                title="Message"
+                style={styles.messageSellerBtn}
+                titleStyle={styles.messageSellerBtnText}
+                variant="secondary"
+                size="sm"
+                onPress={() =>
+                  navigation.navigate('Chat', {
+                    conversationId: `${resolvedSeller.id}_${item.id}`,
+                    focusQuery: resolvedSeller.username,
+                    partnerUserId: resolvedSeller.id,
+                  })}
+              />
+            </View>
+          ) : item.sellerId ? (
+            <View style={styles.sellerCard}>
+              <View style={styles.sellerIdentityTap}>
+                <View style={[styles.sellerAvatar, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name="person" size={20} color={Colors.textMuted} />
+                </View>
+                <View style={styles.sellerInfo}>
+                  <Text style={styles.sellerName}>Seller</Text>
+                  <Text style={styles.sellerLastSeen}>Seller details require backend connection.</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
 
           {/* ── More from this seller ── */}
-          {sellerItems.length > 0 && (
+          {sellerItems.length > 0 && resolvedSeller && (
             <View style={styles.sellerItemsSection}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>More from @{seller.username}</Text>
-                <AnimatedPressable onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}>
+                <Text style={styles.sectionTitle}>More from @{resolvedSeller.username}</Text>
+                <AnimatedPressable onPress={() => navigation.navigate('UserProfile', { userId: resolvedSeller.id })}>
                   <Text style={styles.sectionLink}>See all</Text>
                 </AnimatedPressable>
               </View>
@@ -324,7 +356,7 @@ export default function ItemDetailScreen() {
                       style={styles.sellerItemMediaWrap}
                       sharedTransitionTag={`image-${sItem.id}-0`}
                     >
-                      <CachedImage uri={sItem.images[0]} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 14 }} contentFit="cover" />
+                      <CachedImage uri={sItem.images?.[0] ?? ''} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 14 }} contentFit="cover" />
                     </SharedTransitionView>
                     <Text style={styles.sellerItemPrice}>{formatFromFiat(sItem.price, 'GBP', { displayMode: 'fiat' })}</Text>
                   </AnimatedPressable>
@@ -348,7 +380,7 @@ export default function ItemDetailScreen() {
                       style={styles.sellerItemMediaWrap}
                       sharedTransitionTag={`image-${oItem.id}-0`}
                     >
-                      <CachedImage uri={oItem.images[0]} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 14 }} contentFit="cover" />
+                      <CachedImage uri={oItem.images?.[0] ?? ''} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 14 }} contentFit="cover" />
                     </SharedTransitionView>
                     <Text style={styles.sellerItemPrice}>{formatFromFiat(oItem.price, 'GBP', { displayMode: 'fiat' })}</Text>
                   </AnimatedPressable>

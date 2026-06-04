@@ -26,6 +26,7 @@ import { ToastContainer } from './src/components/Toast';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { BrandedSplash } from './src/components/BrandedSplash';
 import { Typography } from './src/constants/typography';
+import { ThemeProvider } from './src/theme/ThemeContext';
 import {
   applyThemePreference,
   getStoredThemePreference,
@@ -372,34 +373,36 @@ export default function App() {
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
-          <ToastProvider>
-            <BackendDataProvider>
-              <CurrencyProvider>
-                <SettingsPreferencesProvider>
-                  <TabScrollProvider>
-                    <NavigationContainer
-                      ref={navigationRef}
-                      theme={premiumNavigationTheme}
-                      onReady={() => {
-                        if (!queuedConversationId) {
-                          return;
-                        }
+          <ThemeProvider>
+            <ToastProvider>
+              <BackendDataProvider>
+                <CurrencyProvider>
+                  <SettingsPreferencesProvider>
+                    <TabScrollProvider>
+                      <NavigationContainer
+                        ref={navigationRef}
+                        theme={premiumNavigationTheme}
+                        onReady={() => {
+                          if (!queuedConversationId) {
+                            return;
+                          }
 
-                        navigationRef.navigate('Chat', {
-                          conversationId: queuedConversationId,
-                        });
-                        setQueuedConversationId(null);
-                      }}
-                    >
-                      <StatusBar style={ActiveTheme === 'light' ? 'dark' : 'light'} backgroundColor={Colors.background} />
-                      {ThemeReadyNavigator ? <ThemeReadyNavigator /> : null}
-                    </NavigationContainer>
-                  </TabScrollProvider>
-                </SettingsPreferencesProvider>
-              </CurrencyProvider>
-            </BackendDataProvider>
-            <ToastContainer />
-          </ToastProvider>
+                          navigationRef.navigate('Chat', {
+                            conversationId: queuedConversationId,
+                          });
+                          setQueuedConversationId(null);
+                        }}
+                      >
+                        <StatusBar style={ActiveTheme === 'light' ? 'dark' : 'light'} backgroundColor={Colors.background} />
+                        {ThemeReadyNavigator ? <ThemeReadyNavigator /> : null}
+                      </NavigationContainer>
+                    </TabScrollProvider>
+                  </SettingsPreferencesProvider>
+                </CurrencyProvider>
+              </BackendDataProvider>
+              <ToastContainer />
+            </ToastProvider>
+          </ThemeProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

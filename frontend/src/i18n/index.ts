@@ -86,7 +86,7 @@ const EN_TRANSLATIONS = {
   'syndicate.compliance.state.pending': 'pending',
   'syndicate.compliance.eligible': 'Eligible to trade co-owned assets.',
   'syndicate.issue.console': 'Issuer Console',
-  'syndicate.issue.cta': 'Issue',
+  'syndicate.issue.cta': 'Create Co-Own',
   'syndicate.sync.delayed': 'Co-Own pools are delayed. Showing local portfolio state.',
   'syndicate.quick.portfolio': 'Portfolio',
   'syndicate.quick.orders': 'Orders',

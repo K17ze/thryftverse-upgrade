@@ -36,8 +36,8 @@ function deriveBrand(title: string) {
   return `${parts[0]} ${parts[1]}`;
 }
 
-function getFallbackImage(id: string) {
-  return `https://picsum.photos/seed/${id}/800/800`;
+function getFallbackImage(_id: string) {
+  return '';
 }
 
 function mapApiListingToApp(row: ApiListingRow, fallback?: Listing): Listing {

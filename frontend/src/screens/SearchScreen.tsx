@@ -76,7 +76,7 @@ const SAVED_LOOKS_SEED: SavedLook[] = [
       { id: 'l7', label: 'Cargo Trousers', x: 0.6, y: 0.65 },
       { id: 'l6', label: 'Air Max 90', x: 0.5, y: 0.85 },
     ],
-    creator: { name: 'mariefullery', avatar: 'https://picsum.photos/seed/user1/80/80' },
+    creator: { name: 'mariefullery', avatar: '' },
     likes: 234,
     comments: 18,
     saved: true,
@@ -89,7 +89,7 @@ const SAVED_LOOKS_SEED: SavedLook[] = [
       { id: 'l2', label: 'AMI Striped Shirt', x: 0.35, y: 0.25 },
       { id: 'l3', label: 'RL Harrington', x: 0.7, y: 0.4 },
     ],
-    creator: { name: 'scott_art', avatar: 'https://picsum.photos/seed/user2/80/80' },
+    creator: { name: 'scott_art', avatar: '' },
     likes: 156,
     comments: 12,
     saved: true,
@@ -103,7 +103,7 @@ const SAVED_LOOKS_SEED: SavedLook[] = [
       { id: 'l9', label: 'Represent Hoodie', x: 0.25, y: 0.15 },
       { id: 'l10', label: 'Chuck Taylor', x: 0.6, y: 0.8 },
     ],
-    creator: { name: 'dankdunksuk', avatar: 'https://picsum.photos/seed/user3/80/80' },
+    creator: { name: 'dankdunksuk', avatar: '' },
     likes: 89,
     comments: 7,
     saved: true,
@@ -299,7 +299,9 @@ export default function SearchScreen() {
               <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
             </AnimatedPressable>
           ) : (
-            <Ionicons name="camera-outline" size={22} color={Colors.textMuted} style={{ marginRight: 4 }} />
+            <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Visual search" accessibilityRole="button">
+              <Ionicons name="camera-outline" size={22} color={Colors.textMuted} style={{ marginRight: 4 }} />
+            </AnimatedPressable>
           )}
         </View>
       </View>

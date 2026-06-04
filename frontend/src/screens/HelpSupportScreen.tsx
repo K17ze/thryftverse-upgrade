@@ -17,6 +17,7 @@ import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppInput } from '../components/ui/AppInput';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -27,6 +28,7 @@ type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
 
 export default function HelpSupportScreen({ navigation }: Props) {
   const { formatFromFiat } = useFormattedPrice();
+  const { show } = useToast();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [faqSearch, setFaqSearch] = useState('');
   const scrollRef = useRef<ScrollView>(null);
@@ -41,12 +43,8 @@ export default function HelpSupportScreen({ navigation }: Props) {
   }, []);
 
   const handleOpenLiveChat = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'support',
-      partnerUserId: 'u1',
-    });
-  }, [navigation]);
+    show('Live chat support is not available yet. Please email us for assistance.', 'info');
+  }, [show]);
 
   const handleOpenEmail = React.useCallback(() => {
     void handleOpenExternal('mailto:support@thryftverse.com?subject=Thryftverse%20Support');

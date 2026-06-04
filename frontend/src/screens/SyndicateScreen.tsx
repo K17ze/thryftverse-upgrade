@@ -27,7 +27,6 @@ import { formatIzeAmount, toIze } from '../utils/currency';
 import { parseApiError } from '../lib/apiClient';
 import { listCoOwnAssets, placeCoOwnOrder } from '../services/marketApi';
 import { t } from '../i18n';
-import { MOCK_USERS } from '../data/mockData';
 import { Motion } from '../constants/motion';
 import { Space, Radius } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -57,10 +56,9 @@ export default function CoOwnScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const customCoOwns = useStore((state) => state.customCoOwns);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
-  const supportUser = MOCK_USERS[0];
   const reducedMotionEnabled = useReducedMotion();
 
-  const actingUserId = currentUser?.id ?? 'u1';
+  const actingUserId = currentUser?.id;
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [activeView, setActiveView] = React.useState<CoOwnView>('ISSUED');
@@ -74,6 +72,10 @@ export default function CoOwnScreen() {
   const [isSubmittingOrder, setIsSubmittingOrder] = React.useState(false);
 
   const syncCoOwnAssets = React.useCallback(async () => {
+    if (!actingUserId) {
+      setIsSyncingAssets(false);
+      return;
+    }
     setIsSyncingAssets(true);
     try {
       const items = await listCoOwnAssets({ limit: 120, issuerId: actingUserId });
@@ -82,7 +84,7 @@ export default function CoOwnScreen() {
         listingId: item.listingId,
         issuerId: item.issuerId,
         title: item.title,
-        image: item.imageUrl ?? `https://picsum.photos/seed/${item.id}/500/700`,
+        image: item.imageUrl ?? '',
         totalUnits: item.totalUnits,
         availableUnits: item.availableUnits,
         unitPriceGBP: item.unitPriceGbp,
@@ -182,13 +184,8 @@ export default function CoOwnScreen() {
   }, [isSyncingAssets, marketAssets.length, remoteAssets.length, syncError]);
 
   const handleOpenSyndicateSupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'co-own issuance and holdings',
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for co-own help.', 'info');
-  }, [navigation, show, supportUser.id]);
+    navigation.navigate('HelpSupport');
+  }, [navigation]);
 
   const openUnitsComposer = (asset: CoOwnAsset, mode: 'buy' | 'sell') => {
     setComposerMode(mode);
@@ -222,6 +219,10 @@ export default function CoOwnScreen() {
       return;
     }
 
+    if (!actingUserId) {
+      show('Sign in to place orders', 'error');
+      return;
+    }
     setIsSubmittingOrder(true);
     try {
       let remoteOrder: Awaited<ReturnType<typeof placeCoOwnOrder>> | null = null;
@@ -312,7 +313,7 @@ export default function CoOwnScreen() {
       <View style={styles.issueRow}>
         <View>
           <BodyEmphasis style={styles.issueTitle}>{t('syndicate.issue.console')}</BodyEmphasis>
-          <Meta style={styles.issueHint}>Issue co-own splits from your listings</Meta>
+          <Meta style={styles.issueHint}>Split a listing into co-own units</Meta>
         </View>
         <AppButton
           title={t('syndicate.issue.cta')}
@@ -380,8 +381,7 @@ export default function CoOwnScreen() {
         data={visibleAssets}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => {
-          const issuerUser = MOCK_USERS.find((user) => user.id === item.issuerId);
-          const issuerHandle = issuerUser?.username ?? item.issuerId;
+          const issuerHandle = item.issuerId.slice(0, 12);
           const canMessageIssuer = currentUser?.id !== item.issuerId;
           const marketValue = item.totalUnits * item.unitPriceGBP;
           const openValue = item.availableUnits * item.unitPriceGBP;
@@ -407,7 +407,7 @@ export default function CoOwnScreen() {
                 totalUnits={item.totalUnits}
                 marketMovePct24h={item.marketMovePct24h}
                 issuerHandle={issuerHandle}
-                issuerAvatar={issuerUser?.avatar}
+                issuerAvatar={undefined}
                 yourUnits={item.yourUnits}
                 isOpen={item.isOpen}
                 onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}

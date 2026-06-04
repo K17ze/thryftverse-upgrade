@@ -32,7 +32,6 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { MOCK_USERS } from '../data/mockData';
 
 /* ── New Discover Components ── */
 import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
@@ -301,7 +300,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           brand: listing.brand,
           size: listing.size,
           condition: listing.condition,
-          image: listing.images[0] ?? `https://picsum.photos/seed/${listing.id}/500/600`,
+          image: listing.images?.[0] ?? '',
           price: listing.price,
           likes: listing.likes,
           sellerId: listing.sellerId,
@@ -341,7 +340,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       brand: listing.brand,
       size: listing.size,
       condition: listing.condition,
-      image: listing.images[0] ?? `https://picsum.photos/seed/${listing.id}/500/600`,
+      image: listing.images?.[0] ?? '',
       price: listing.price,
       likes: listing.likes,
       sellerId: listing.sellerId,
@@ -464,10 +463,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   };
 
   const handleMessageRecommendationSeller = (sellerId: string, listingId: string) => {
-    const sellerHandle = MOCK_USERS.find((entry) => entry.id === sellerId)?.username ?? sellerId;
     navigation.navigate('Chat', {
       conversationId: `${sellerId}_${listingId}`,
-      focusQuery: sellerHandle,
+      focusQuery: sellerId,
       partnerUserId: sellerId,
     });
   };
@@ -529,7 +527,11 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             value={query}
             onChangeText={setQuery}
             containerStyle={{ flex: 1, borderWidth: 0, backgroundColor: 'transparent' }}
-            rightNode={<Ionicons name="camera" size={24} color={Colors.textMuted} />}
+            rightNode={
+              <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Visual search" accessibilityRole="button">
+                <Ionicons name="camera" size={24} color={Colors.textMuted} />
+              </AnimatedPressable>
+            }
             inputProps={{
               onSubmitEditing: handleSearchSubmit,
               onFocus: () => setIsSearchFocused(true),

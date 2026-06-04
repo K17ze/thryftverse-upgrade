@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { MOCK_USERS } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
@@ -44,16 +43,25 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const members = useMemo(
-    () => MOCK_USERS.filter((user) => user.id !== (currentUser?.id ?? 'me')),
-    [currentUser?.id]
-  );
+  const conversations = useStore((state) => state.conversations);
+
+  const members = useMemo(() => {
+    const participantIds = new Set<string>();
+    for (const convo of conversations) {
+      for (const pid of convo.participantIds ?? []) {
+        if (pid !== 'me' && pid !== (currentUser?.id ?? 'me')) {
+          participantIds.add(pid);
+        }
+      }
+    }
+    return Array.from(participantIds).map((id) => ({ id, username: id.slice(0, 8) }));
+  }, [conversations, currentUser?.id]);
 
   const filteredMembers = useMemo(() => {
     if (!searchQuery.trim()) return members;
-    const query = searchQuery.toLowerCase();
+    const query = String(searchQuery).toLowerCase();
     return members.filter(
-      (user) => user.username?.toLowerCase()?.includes(query) ?? false
+      (user) => String(user.username).toLowerCase().includes(query)
     );
   }, [members, searchQuery]);
 
@@ -187,16 +195,13 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
                     scaleValue={0.98}
                     hapticFeedback="light"
                   >
-                    <CachedImage
-                      uri={item.avatar}
-                      style={styles.memberAvatar}
-                      containerStyle={styles.memberAvatar}
-                      contentFit="cover"
-                    />
+                    <View style={styles.memberAvatar}>
+                      <Ionicons name="person" size={18} color={Colors.textMuted} />
+                    </View>
 
                     <View style={styles.memberTextWrap}>
                       <BodyEmphasis>@{item.username}</BodyEmphasis>
-                      <Caption color={Colors.textSecondary}>{item.location}</Caption>
+                      <Caption color={Colors.textSecondary}>Conversation contact</Caption>
                     </View>
 
                     <Ionicons

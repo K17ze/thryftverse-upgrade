@@ -16,7 +16,6 @@ import { EmptyState } from '../components/EmptyState';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { useToast } from '../context/ToastContext';
-import { MOCK_USERS } from '../data/mockData';
 import { Space, Radius } from '../theme/designTokens';
 import {
   TradeHeader,
@@ -36,8 +35,6 @@ export default function PortfolioScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
-  const supportUser = MOCK_USERS[0];
-
   const baseAssets = React.useMemo(() => getCoOwnMarket(customCoOwns), [customCoOwns]);
   const marketAssets = React.useMemo(
     () => baseAssets.map((asset) => resolveAssetMarketState(asset, coOwnRuntime[asset.id])),
@@ -73,20 +70,14 @@ export default function PortfolioScreen() {
   }, [holdings, totalValue]);
 
   const handleOpenPortfolioSupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'portfolio holdings support',
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for portfolio help.', 'info');
-  }, [navigation, show, supportUser.id]);
+    navigation.navigate('HelpSupport');
+  }, [navigation]);
 
   const renderHolding = ({ item, index }: { item: CoOwnAsset; index: number }) => {
     const value = item.yourUnits * item.unitPriceGBP;
     const avg = item.avgEntryPriceGBP ?? item.unitPriceGBP;
     const pnl = (item.unitPriceGBP - avg) * item.yourUnits;
-    const issuerUser = MOCK_USERS.find((user) => user.id === item.issuerId);
-    const issuerHandle = issuerUser?.username ?? item.issuerId;
+    const issuerHandle = item.issuerId.slice(0, 12);
     const canMessageIssuer = currentUser?.id !== item.issuerId;
 
     return (
@@ -110,7 +101,7 @@ export default function PortfolioScreen() {
           totalUnits={item.totalUnits}
           marketMovePct24h={item.marketMovePct24h}
           issuerHandle={issuerHandle}
-          issuerAvatar={issuerUser?.avatar}
+          issuerAvatar={undefined}
           yourUnits={item.yourUnits}
           isOpen={item.isOpen}
           compact

@@ -22,7 +22,6 @@ import {
 } from '../services/marketApi';
 import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { useToast } from '../context/ToastContext';
-import { MOCK_USERS } from '../data/mockData';
 import { TradeHeader, OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AppInput } from '../components/ui/AppInput';
@@ -129,7 +128,7 @@ export default function CoOwnOrderHistoryScreen() {
   const customCoOwns = useStore((state) => state.customCoOwns);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
-  const viewerId = currentUser?.id ?? 'u1';
+  const viewerId = currentUser?.id;
   const reducedMotionEnabled = useReducedMotion();
 
   const assetIssuerMap = React.useMemo(() => {
@@ -139,8 +138,6 @@ export default function CoOwnOrderHistoryScreen() {
     }
     return map;
   }, [customCoOwns]);
-
-  const supportUser = MOCK_USERS[0];
 
   const [sideFilter, setSideFilter] = React.useState<SideFilter>('all');
   const [dateFilter, setDateFilter] = React.useState<DateFilter>('all');
@@ -154,6 +151,10 @@ export default function CoOwnOrderHistoryScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
 
   const syncRemoteHistory = React.useCallback(async () => {
+    if (!viewerId) {
+      setIsSyncingRemote(false);
+      return;
+    }
     setIsSyncingRemote(true);
     try {
       const page = await listUserMarketHistory(viewerId, { channel: 'co-own', limit: PAGE_SIZE });
@@ -173,6 +174,7 @@ export default function CoOwnOrderHistoryScreen() {
 
   const loadMoreRemoteHistory = React.useCallback(async () => {
     if (!isRemoteAvailable || !hasMoreRemote || !nextCursor || isLoadingMore || isSyncingRemote) return;
+    if (!viewerId) return;
     setIsLoadingMore(true);
     try {
       const page = await listUserMarketHistory(viewerId, {
@@ -255,9 +257,8 @@ export default function CoOwnOrderHistoryScreen() {
         onEndReachedThreshold={0.5}
         renderItem={({ item, index }) => {
           const asset = customCoOwns.find((a) => a.id === item.assetId);
-          const issuerId = assetIssuerMap.get(item.assetId) ?? supportUser.id;
-          const issuerUser = MOCK_USERS.find((user) => user.id === issuerId);
-          const issuerHandle = issuerUser?.username ?? issuerId;
+          const issuerId = assetIssuerMap.get(item.assetId) ?? item.assetId;
+          const issuerHandle = issuerId.slice(0, 12);
           const canMessageIssuer = issuerId !== viewerId;
           return (
             <Reanimated.View
@@ -281,7 +282,7 @@ export default function CoOwnOrderHistoryScreen() {
                 timestamp={item.createdAt}
                 onPress={() => navigation.navigate('AssetDetail', { assetId: item.assetId })}
                 issuerHandle={issuerHandle}
-                issuerAvatar={issuerUser?.avatar}
+                issuerAvatar={undefined}
                 canMessageIssuer={canMessageIssuer}
                 onPressIssuer={() => navigation.navigate('UserProfile', { userId: issuerId })}
                 onMessageIssuer={() =>

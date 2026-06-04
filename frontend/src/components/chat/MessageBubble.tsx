@@ -249,21 +249,32 @@ export function MessageBubble({
           </View>
         ) : null}
 
-        {hasMedia ? (
-          renderMedia()
-        ) : isMe ? (
-          <View style={[styles.bubble, styles.bubbleMe, isFailed && styles.bubbleFailedMe, { borderBottomRightRadius: tailRadiusMe, borderTopRightRadius: topRadius }]}>
-            <Body color={isFailed ? Colors.danger : Colors.textInverse}>
-              {text}
-            </Body>
-          </View>
-        ) : (
-          <View style={[styles.bubble, styles.bubbleThem, { borderBottomLeftRadius: tailRadiusThem, borderTopLeftRadius: topRadius }]}>
-            <Body color={Colors.textPrimary}>
-              {text}
-            </Body>
-          </View>
-        )}
+        <View style={styles.bubbleWrap}>
+          {hasMedia ? (
+            renderMedia()
+          ) : isMe ? (
+            <View style={[styles.bubble, styles.bubbleMe, isFailed && styles.bubbleFailedMe, { borderBottomRightRadius: tailRadiusMe, borderTopRightRadius: topRadius }]}>
+              <Body color={isFailed ? Colors.danger : Colors.textInverse}>
+                {text}
+              </Body>
+            </View>
+          ) : (
+            <View style={[styles.bubble, styles.bubbleThem, { borderBottomLeftRadius: tailRadiusThem, borderTopLeftRadius: topRadius }]}>
+              <Body color={Colors.textPrimary}>
+                {text}
+              </Body>
+            </View>
+          )}
+
+          {/* Bubble tail */}
+          {!hasMedia && isLastInCluster && (
+            isMe ? (
+              <View style={styles.tailMe} />
+            ) : (
+              <View style={styles.tailThem} />
+            )
+          )}
+        </View>
 
         {hasMedia && text ? (
           <View style={[styles.captionWrap, isMe && styles.captionWrapMe]}>
@@ -281,7 +292,7 @@ export function MessageBubble({
           </Reanimated.View>
         ) : null}
 
-        {!isMe && isLastInCluster && timestamp ? (
+        {!isMe && timestamp ? (
           <Caption color={Colors.textMuted} style={styles.incomingTimestamp}>
             {timestamp}
           </Caption>
@@ -358,16 +369,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.brand,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
     elevation: 3,
   },
   bubbleThem: {
     backgroundColor: Colors.surfaceAlt,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 2,
   },
   statusContainer: {
@@ -389,6 +400,35 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginLeft: Space.xs,
     marginTop: -Space.xs - 2,
+  },
+  bubbleWrap: {
+    position: 'relative',
+  },
+  tailMe: {
+    position: 'absolute',
+    right: -6,
+    bottom: 4,
+    width: 0,
+    height: 0,
+    borderTopWidth: 6,
+    borderBottomWidth: 6,
+    borderLeftWidth: 8,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftColor: Colors.brand,
+  },
+  tailThem: {
+    position: 'absolute',
+    left: -6,
+    bottom: 4,
+    width: 0,
+    height: 0,
+    borderTopWidth: 6,
+    borderBottomWidth: 6,
+    borderRightWidth: 8,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderRightColor: Colors.surfaceAlt,
   },
   replyIndicator: {
     flexDirection: 'row',
@@ -418,14 +458,14 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   mediaWrap: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   mediaWrapMe: {
     alignSelf: 'flex-end',

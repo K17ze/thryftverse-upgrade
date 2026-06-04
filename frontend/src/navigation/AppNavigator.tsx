@@ -32,6 +32,7 @@ import CoOwnOnboardingScreen from '../screens/SyndicateOnboardingScreen';
 import ChatScreen from '../screens/ChatScreen';
 import CreateGroupChatScreen from '../screens/CreateGroupChatScreen';
 import GroupBotDirectoryScreen from '../screens/GroupBotDirectoryScreen';
+import BotDirectoryScreen from '../screens/BotDirectoryScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 
 // Profile Subs
@@ -39,20 +40,20 @@ import BalanceScreen from '../screens/BalanceScreen';
 import WalletScreen from '../screens/WalletScreen';
 import MyOrdersScreen from '../screens/MyOrdersScreen';
 import PersonalisationScreen from '../screens/PersonalisationScreen';
-import SettingsScreen from '../screens/SettingsScreen';
+import SettingsScreen from '../screens/SettingsScreenV2';
 import EditProfileScreen from '../screens/EditProfileScreen';
-import AccountSettingsScreen from '../screens/AccountSettingsScreen';
+import AccountSettingsScreen from '../screens/AccountSettingsScreenV2';
 import PaymentsScreen from '../screens/PaymentsScreen';
 
 // Phase 16 new screens
 import MakeOfferScreen from '../screens/MakeOfferScreen';
-import PushNotificationsScreen from '../screens/PushNotificationsScreen';
+import PushNotificationsScreen from '../screens/PushNotificationsScreenV2';
 import PostageScreen from '../screens/PostageScreen';
 import InviteFriendsScreen from '../screens/InviteFriendsScreen';
 import BalanceHistoryScreen from '../screens/BalanceHistoryScreen';
 
 import AddBankAccountScreen from '../screens/AddBankAccountScreen';
-import HelpSupportScreen from '../screens/HelpSupportScreen';
+import HelpSupportScreen from '../screens/HelpSupportScreenV2';
 
 // Phase 18 new screens
 import OrderDetailScreen from '../screens/OrderDetailScreen';
@@ -76,8 +77,9 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 
 // Phase 28
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
-import ChangePasswordScreen from '../screens/ChangePasswordScreen';
-import TwoFactorSetupScreen from '../screens/TwoFactorSetupScreen';
+import VisualSearchScreen from '../screens/VisualSearchScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreenV2';
+import TwoFactorSetupScreen from '../screens/TwoFactorSetupScreenV2';
 import WriteReviewScreen from '../screens/WriteReviewScreen';
 import ReportScreen from '../screens/ReportScreen';
 import EditListingScreen from '../screens/EditListingScreen';
@@ -85,13 +87,17 @@ import EditListingScreen from '../screens/EditListingScreen';
 // Explore / Creator screens
 import CreateLookScreen from '../screens/CreateLookScreen';
 import OutfitBuilderScreen from '../screens/OutfitBuilderScreen';
+import CoOwnIssueScreen from '../screens/CoOwnIssueScreen';
 
 // Phase 13 — Settings integrity
-import ChatSettingsScreen from '../screens/ChatSettingsScreen';
-import ActiveSessionsScreen from '../screens/ActiveSessionsScreen';
-import BlockedUsersScreen from '../screens/BlockedUsersScreen';
-import PrivacySettingsScreen from '../screens/PrivacySettingsScreen';
+import ChatSettingsScreen from '../screens/ChatSettingsScreenV2';
+import ActiveSessionsScreen from '../screens/ActiveSessionsScreenV2';
+import BlockedUsersScreen from '../screens/BlockedUsersScreenV2';
+import PrivacySettingsScreen from '../screens/PrivacySettingsScreenV2';
 import AboutScreen from '../screens/AboutScreen';
+
+// Diagnostic — dev only
+import RuntimeSmokeTestScreen from '../screens/RuntimeSmokeTestScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -187,6 +193,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="CreateGroupChat" component={CreateGroupChatScreen} options={modalScreenOptions} />
       <Stack.Screen name="GroupBotDirectory" component={GroupBotDirectoryScreen} options={modalScreenOptions} />
+      <Stack.Screen name="BotDirectory" component={BotDirectoryScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
       <Stack.Screen name="Balance" component={BalanceScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
@@ -235,9 +242,13 @@ export default function AppNavigator() {
       <Stack.Screen name="WriteReview" component={WriteReviewScreen} options={modalScreenOptions} />
       <Stack.Screen name="Report" component={ReportScreen} options={modalScreenOptions} />
 
+      {/* Visual Search */}
+      <Stack.Screen name="VisualSearch" component={VisualSearchScreen} />
+
       {/* Explore / Creator screens */}
       <Stack.Screen name="CreateLook" component={CreateLookScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" component={OutfitBuilderScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CoOwnIssue" component={CoOwnIssueScreen} options={modalScreenOptions} />
 
       {/* Phase 13 — Settings integrity */}
       <Stack.Screen name="ChatSettings" component={ChatSettingsScreen} />
@@ -245,6 +256,11 @@ export default function AppNavigator() {
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
       <Stack.Screen name="PrivacySettings" component={PrivacySettingsScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
+
+      {/* Diagnostic — dev only */}
+      {__DEV__ && (
+        <Stack.Screen name="RuntimeSmokeTest" component={RuntimeSmokeTestScreen} />
+      )}
     </Stack.Navigator>
   );
 }

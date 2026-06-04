@@ -17,7 +17,6 @@ import { Text } from 'react-native';
 interface AvatarRingProps {
   uri?: string;
   size?: number;
-  isOnline?: boolean;
   isUnread?: boolean;
   ringWidth?: number;
   fallbackInitials?: string;
@@ -26,7 +25,6 @@ interface AvatarRingProps {
 export function AvatarRing({
   uri,
   size = 52,
-  isOnline = false,
   isUnread = false,
   ringWidth = 2,
   fallbackInitials,
@@ -118,22 +116,6 @@ export function AvatarRing({
         ) : null}
       </View>
 
-      {/* Online dot */}
-      {isOnline && (
-        <View
-          style={[
-            styles.onlineDot,
-            {
-              width: 10,
-              height: 10,
-              borderRadius: 5,
-              borderWidth: 2.5,
-              bottom: 1,
-              right: 1,
-            },
-          ]}
-        />
-      )}
     </View>
   );
 }
@@ -151,10 +133,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-  },
-  onlineDot: {
-    position: 'absolute',
-    backgroundColor: Colors.success,
-    borderColor: Colors.background,
   },
 });

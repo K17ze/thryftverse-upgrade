@@ -74,12 +74,14 @@ export default function BlockedUsersScreen({ navigation }: Props) {
                 >
                   <View style={styles.avatar}>
                     <View style={styles.avatarCircle}>
-                      <Ionicons name="person" size={18} color={Colors.textMuted} />
+                      <Text style={styles.avatarInitial}>
+                        {userId.slice(0, 2).toUpperCase()}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.userText}>
-                    <Text style={styles.userName}>Thryft user</Text>
-                    <Text style={styles.userMeta}>Blocked user</Text>
+                    <Text style={styles.userName}>Blocked account</Text>
+                    <Text style={styles.userMeta} numberOfLines={1}>ID: {userId}</Text>
                   </View>
                   <AnimatedPressable
                     onPress={() => handleUnblock(userId)}

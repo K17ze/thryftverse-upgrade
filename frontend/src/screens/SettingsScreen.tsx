@@ -25,6 +25,8 @@ import {
   SupportedLanguageOption,
 } from '../preferences/settingsPreferences';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
+import { CachedImage } from '../components/CachedImage';
+import { PremiumToggle } from '../components/PremiumToggle';
 import {
   getStoredThemePreference,
   getThemePreferenceLabel,
@@ -82,9 +84,7 @@ function CommandRow({
         <View style={styles.rowRight}>
           {value ? <Text style={styles.rowValue} numberOfLines={1}>{value}</Text> : null}
           {onToggle ? (
-            <View style={styles.toggleTrack}>
-              <View style={[styles.toggleKnob, toggleValue ? styles.toggleKnobOn : styles.toggleKnobOff]} />
-            </View>
+            <PremiumToggle value={!!toggleValue} onValueChange={onToggle} />
           ) : onPress ? (
             <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
           ) : null}
@@ -272,14 +272,11 @@ export default function SettingsScreen({ navigation }: Props) {
               >
                 {avatarUri ? (
                   <AnimatedPressable style={styles.identityAvatar} onPress={() => navigation.navigate('EditProfile')}>
-                    {/* Avatar image placeholder - would use CachedImage in real app */}
-                    <View style={styles.identityAvatarCircle}>
-                      <Text style={styles.identityAvatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
-                    </View>
+                    <CachedImage uri={avatarUri} style={styles.identityAvatarImage} contentFit="cover" />
                   </AnimatedPressable>
                 ) : (
                   <View style={styles.identityAvatarCircle}>
-                    <Ionicons name="person" size={24} color={Colors.textPrimary} />
+                    <Text style={styles.identityAvatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
                   </View>
                 )}
                 <View style={styles.identityText}>
@@ -632,6 +629,12 @@ const styles = StyleSheet.create({
     gap: Space.sm + 4,
   },
   identityAvatar: {},
+  identityAvatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.surfaceAlt,
+  },
   identityAvatarCircle: {
     width: 56,
     height: 56,
@@ -675,6 +678,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     overflow: 'hidden',
     marginBottom: Space.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   rowRoot: {
     flexDirection: 'row',
@@ -723,30 +731,6 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     maxWidth: 140,
     letterSpacing: Type.body.letterSpacing,
-  },
-
-  // Toggle
-  toggleTrack: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceAlt,
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  toggleKnob: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.textPrimary,
-  },
-  toggleKnobOn: {
-    alignSelf: 'flex-end',
-    backgroundColor: Colors.brand,
-  },
-  toggleKnobOff: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.textMuted,
   },
 
   // Verified

@@ -99,6 +99,8 @@ export default function CreateLookScreen() {
   const [tagSearchQuery, setTagSearchQuery] = useState('');
   const [photoSize, setPhotoSize] = useState({ width: SCREEN_W, height: PHOTO_H });
   const [isPicking, setIsPicking] = useState(false);
+  const [isPreview, setIsPreview] = useState(false);
+  const [errors, setErrors] = useState<{ title?: string; tags?: string }>({});
 
   const drawerY = useRef(new RNAnimated.Value(DRAWER_H)).current;
   const backdropOpacity = useRef(new RNAnimated.Value(0)).current;
@@ -123,17 +125,30 @@ export default function CreateLookScreen() {
     ]).start();
   }, [drawerY, backdropOpacity]);
 
-  const handlePickImage = async () => {
+  const handlePickImage = async (source: 'gallery' | 'camera') => {
     setIsPicking(true);
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) { show('Allow photo library access', 'error'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'], allowsEditing: true, aspect: [4, 5], quality: 0.92,
-      });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        setImageUri(result.assets[0].uri);
-        setTags([]);
+      if (source === 'gallery') {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) { show('Allow photo library access', 'error'); return; }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 5], quality: 0.92,
+        });
+        if (!result.canceled && result.assets?.[0]?.uri) {
+          setImageUri(result.assets[0].uri);
+          setTags([]);
+        }
+      } else {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) { show('Allow camera access', 'error'); return; }
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true, aspect: [4, 5], quality: 0.92,
+        });
+        if (!result.canceled && result.assets?.[0]?.uri) {
+          setImageUri(result.assets[0].uri);
+          setTags([]);
+        }
       }
     } finally { setIsPicking(false); }
   };
@@ -207,17 +222,26 @@ export default function CreateLookScreen() {
     closeEditor();
   };
 
+  const validate = (): boolean => {
+    const nextErrors: { title?: string; tags?: string } = {};
+    if (!title.trim()) nextErrors.title = 'Add a title for your look';
+    if (!imageUri) nextErrors.title = nextErrors.title ?? 'Upload a photo to continue';
+    if (tags.length === 0) nextErrors.tags = 'Tag at least one product';
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
   const handleSubmit = () => {
-    if (!imageUri || !title.trim()) { show('Add a photo and title', 'error'); return; }
+    if (!validate()) { haptic.error(); return; }
+    if (!imageUri) return;
     haptic.medium();
-    const name = currentUser?.username ?? 'stylehunter';
-    const avatar = currentUser?.avatar ?? `https://picsum.photos/seed/${name}/80/80`;
+    const name = currentUser?.username ?? 'Thryft user';
+    const avatar = currentUser?.avatar ?? null;
     addUserLook({
       title: title.trim(), coverImage: imageUri,
       items: tags.map((t) => ({ id: t.listingId ?? t.id, label: t.label, x: t.x, y: t.y })),
-      creator: { name, avatar }, likes: 0, comments: 0,
+      creator: { name, avatar: avatar ?? undefined }, likes: 0, comments: 0,
     });
-    show('Look posted to Explore', 'success');
     navigation.goBack();
   };
 
@@ -232,11 +256,21 @@ export default function CreateLookScreen() {
           {/* Photo Canvas */}
           <Reanimated.View entering={FadeInDown.duration(300)}>
             {!imageUri ? (
-              <AnimatedPressable style={styles.photoPlaceholder} onPress={handlePickImage} activeOpacity={0.9}>
+              <View style={styles.photoPlaceholder}>
                 <Ionicons name="camera-outline" size={40} color={Colors.textMuted} />
-                <Text style={styles.placeholderTitle}>Choose a photo</Text>
+                <Text style={styles.placeholderTitle}>Add a photo to start tagging</Text>
                 <Text style={styles.placeholderSub}>Portrait orientation works best</Text>
-              </AnimatedPressable>
+                <View style={styles.emptyActions}>
+                  <AnimatedPressable style={styles.emptyActionBtn} onPress={() => handlePickImage('gallery')} activeOpacity={0.85}>
+                    <Ionicons name="images-outline" size={18} color={Colors.brand} />
+                    <Text style={styles.emptyActionText}>Gallery</Text>
+                  </AnimatedPressable>
+                  <AnimatedPressable style={styles.emptyActionBtn} onPress={() => handlePickImage('camera')} activeOpacity={0.85}>
+                    <Ionicons name="camera-outline" size={18} color={Colors.brand} />
+                    <Text style={styles.emptyActionText}>Camera</Text>
+                  </AnimatedPressable>
+                </View>
+              </View>
             ) : (
               <View style={styles.photoWrap}
                 onLayout={(e: LayoutChangeEvent) => {
@@ -244,7 +278,7 @@ export default function CreateLookScreen() {
                   setPhotoSize({ width, height });
                 }}
               >
-                <Pressable onPress={handlePhotoPress} style={StyleSheet.absoluteFillObject}>
+                <Pressable onPress={isPreview ? undefined : handlePhotoPress} style={StyleSheet.absoluteFillObject}>
                   <Image source={{ uri: imageUri }} style={styles.photo} resizeMode="cover" />
                 </Pressable>
 
@@ -253,9 +287,9 @@ export default function CreateLookScreen() {
                   const pan = createTagPan(tag.id);
                   return (
                     <View key={tag.id} style={[styles.tagWrap, { left: tag.x * photoSize.width, top: tag.y * photoSize.height }]} pointerEvents="box-none">
-                      <View {...pan.panHandlers} pointerEvents="auto" style={styles.tagDragArea}>
+                      <View {...(isPreview ? {} : pan.panHandlers)} pointerEvents="auto" style={styles.tagDragArea}>
                         <TagDot />
-                        {(isActive || tag.listingId) && (
+                        {(isActive || tag.listingId || isPreview) && (
                           <Reanimated.View entering={FadeInDown.duration(180)} style={styles.tagPill}>
                             {tag.listingImage && <CachedImage uri={tag.listingImage} style={styles.tagPillImg} containerStyle={{ borderRadius: 4 }} contentFit="cover" />}
                             <View style={{ flex: 1, gap: 1 }}>
@@ -265,20 +299,28 @@ export default function CreateLookScreen() {
                           </Reanimated.View>
                         )}
                       </View>
-                      <Pressable style={styles.tagTapOverlay} onPress={() => openEditor(tag.id)} hitSlop={20} />
+                      {!isPreview && <Pressable style={styles.tagTapOverlay} onPress={() => openEditor(tag.id)} hitSlop={20} />}
                     </View>
                   );
                 })}
 
-                <AnimatedPressable style={styles.changePhotoBtn} onPress={handlePickImage} activeOpacity={0.85}>
-                  <Ionicons name="refresh" size={14} color="#fff" />
-                  <Text style={styles.changePhotoText}>Change</Text>
-                </AnimatedPressable>
+                {!isPreview && (
+                  <AnimatedPressable style={styles.changePhotoBtn} onPress={() => handlePickImage('gallery')} activeOpacity={0.85}>
+                    <Ionicons name="refresh" size={14} color="#fff" />
+                    <Text style={styles.changePhotoText}>Change</Text>
+                  </AnimatedPressable>
+                )}
 
-                {tags.length === 0 && (
+                {tags.length === 0 && !isPreview && (
                   <View style={styles.tagHintOverlay} pointerEvents="none">
                     <Ionicons name="finger-print-outline" size={28} color="rgba(255,255,255,0.5)" />
                     <Text style={styles.tagHintText}>Tap anywhere to tag a product</Text>
+                  </View>
+                )}
+
+                {isPreview && (
+                  <View style={styles.previewBadge} pointerEvents="none">
+                    <Text style={styles.previewBadgeText}>Preview</Text>
                   </View>
                 )}
               </View>
@@ -287,8 +329,23 @@ export default function CreateLookScreen() {
 
           {/* Title */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(100)} style={{ marginTop: Space.md }}>
-            <AppInput label="Look Title" placeholder="e.g. Weekend Layers" value={title} onChangeText={setTitle} />
+            <AppInput
+              label="Look Title"
+              placeholder="e.g. Weekend Layers"
+              value={title}
+              onChangeText={(t) => { setTitle(t); if (errors.title) setErrors((prev) => ({ ...prev, title: undefined })); }}
+              errorText={errors.title}
+            />
           </Reanimated.View>
+
+          {errors.tags && (
+            <Reanimated.View entering={FadeInDown.duration(200)}>
+              <View style={styles.inlineErrorRow}>
+                <Ionicons name="alert-circle" size={14} color={Colors.danger} />
+                <Text style={styles.inlineErrorText}>{errors.tags}</Text>
+              </View>
+            </Reanimated.View>
+          )}
 
           {tags.length > 0 && (
             <Reanimated.View entering={FadeInDown.duration(250)}>
@@ -298,6 +355,44 @@ export default function CreateLookScreen() {
                   <Text style={styles.tagCountClear}>Clear all</Text>
                 </AnimatedPressable>
               </View>
+            </Reanimated.View>
+          )}
+
+          {/* Tagged product list */}
+          {tags.length > 0 && (
+            <Reanimated.View entering={FadeInDown.duration(250).delay(50)} style={{ marginTop: Space.md }}>
+              <View style={styles.tagList}>
+                {tags.map((tag) => (
+                  <View key={tag.id} style={styles.tagListItem}>
+                    {tag.listingImage ? (
+                      <CachedImage uri={tag.listingImage} style={styles.tagListImg} containerStyle={{ borderRadius: Radius.sm }} contentFit="cover" />
+                    ) : (
+                      <View style={styles.tagListImgPlaceholder}><Ionicons name="pricetag" size={14} color={Colors.textMuted} /></View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.tagListLabel} numberOfLines={1}>{tag.label}</Text>
+                      {tag.listingPrice !== undefined && <Text style={styles.tagListPrice}>£{tag.listingPrice}</Text>}
+                    </View>
+                    <AnimatedPressable onPress={() => openEditor(tag.id)} activeOpacity={0.85}>
+                      <Ionicons name="create-outline" size={18} color={Colors.textMuted} />
+                    </AnimatedPressable>
+                  </View>
+                ))}
+              </View>
+            </Reanimated.View>
+          )}
+
+          {/* Preview toggle */}
+          {imageUri && tags.length > 0 && (
+            <Reanimated.View entering={FadeInDown.duration(200)} style={{ marginTop: Space.md }}>
+              <AnimatedPressable
+                style={styles.previewToggle}
+                onPress={() => { setIsPreview((p) => !p); haptic.light(); }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name={isPreview ? 'create-outline' : 'eye-outline'} size={18} color={Colors.brand} />
+                <Text style={styles.previewToggleText}>{isPreview ? 'Back to Edit' : 'Preview Look'}</Text>
+              </AnimatedPressable>
             </Reanimated.View>
           )}
 
@@ -359,7 +454,7 @@ export default function CreateLookScreen() {
                 <View style={styles.listingGrid}>
                   {filteredListings.map((listing) => (
                     <AnimatedPressable key={listing.id} style={[styles.listingCard, editorTag?.listingId === listing.id && styles.listingCardActive]} onPress={() => handleSelectListing(listing)} activeOpacity={0.9}>
-                      <CachedImage uri={listing.images?.[0] ?? `https://picsum.photos/seed/${listing.id}/200/260`} style={styles.listingImg} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
+                      <CachedImage uri={listing.images?.[0] ?? ''} style={styles.listingImg} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
                       <Text style={styles.listingBrand} numberOfLines={1}>{listing.brand}</Text>
                       <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
                       <Text style={styles.listingPrice}>£{listing.price}</Text>
@@ -394,6 +489,9 @@ const styles = StyleSheet.create({
   },
   placeholderTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, letterSpacing: Type.subtitle.letterSpacing },
   placeholderSub: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, letterSpacing: Type.caption.letterSpacing },
+  emptyActions: { flexDirection: 'row', gap: Space.sm, marginTop: Space.sm },
+  emptyActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, paddingHorizontal: 16, paddingVertical: 10 },
+  emptyActionText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.brand },
 
   photoWrap: { width: '100%', height: PHOTO_H, borderRadius: Radius.lg, overflow: 'hidden', position: 'relative', backgroundColor: Colors.surfaceAlt },
   photo: { width: '100%', height: '100%' },
@@ -476,4 +574,20 @@ const styles = StyleSheet.create({
 
   removeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: Space.lg, paddingVertical: 12, borderRadius: Radius.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.danger },
   removeText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.danger, letterSpacing: Type.body.letterSpacing },
+
+  inlineErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Space.sm, paddingHorizontal: 4 },
+  inlineErrorText: { fontSize: Type.caption.size, fontFamily: Typography.family.medium, color: Colors.danger },
+
+  tagList: { gap: Space.sm, marginTop: Space.sm },
+  tagListItem: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: Space.sm },
+  tagListImg: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: Colors.surfaceAlt },
+  tagListImgPlaceholder: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  tagListLabel: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
+  tagListPrice: { fontSize: Type.caption.size, fontFamily: Typography.family.medium, color: Colors.textMuted },
+
+  previewToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: Radius.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
+  previewToggleText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.brand },
+
+  previewBadge: { position: 'absolute', top: 16, left: 16, backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 6 },
+  previewBadgeText: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: '#fff' },
 });

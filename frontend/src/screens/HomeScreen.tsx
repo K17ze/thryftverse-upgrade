@@ -30,7 +30,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 // Typography simplified - using direct font names
-import { MOCK_USERS } from '../data/mockData';
 import { getFreshPosters } from '../data/posters';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -145,22 +144,7 @@ const STORY_STATUS_GRADIENT: Record<StoryStatus, [string, string]> = {
   'sold-recently': ['#f2ddaa', '#d69044'],
 };
 
-const TREND_CLIPS = [
-  {
-    id: 'v1',
-    videoUri: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    posterUri: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800&q=80',
-    title: 'Fit transition',
-    likes: 402,
-  },
-  {
-    id: 'v2',
-    videoUri: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-    posterUri: 'https://images.unsplash.com/photo-1485231183945-ef89e404cf89?w=800&q=80',
-    title: 'Weekend styling',
-    likes: 355,
-  },
-];
+// Trend clips removed — demo-only content, not real data
 
 type ExploreTile = {
   id: string;
@@ -212,9 +196,6 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
     ? `image-${item.routeId}-0`
     : undefined;
   const mediaHeight = Math.round(tileWidth * item.aspectRatio);
-  const seller = item.sellerId ? MOCK_USERS.find((entry) => entry.id === item.sellerId) : undefined;
-  const sellerHandle = seller?.username ?? item.sellerId;
-  const canShowSellerActions = Boolean(item.sellerId && item.routeId);
 
   return (
     <View style={[styles.exploreItemBox, { width: tileWidth }]}>
@@ -255,44 +236,6 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
           </View>
         </View>
       </AnimatedPressable>
-
-      {canShowSellerActions ? (
-        <View style={styles.exploreSellerRow}>
-          <AnimatedPressable
-            style={styles.exploreSellerChip}
-            onPress={() => onPressSellerProfile(item.sellerId as string)}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Open @${sellerHandle ?? 'seller'} profile`}
-            accessibilityHint="Shows seller profile details"
-          >
-            {seller?.avatar ? (
-              <CachedImage
-                uri={seller.avatar}
-                style={styles.exploreSellerAvatar}
-                containerStyle={styles.exploreSellerAvatarWrap}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={styles.exploreSellerAvatarFallback}>
-                <Ionicons name="person" size={10} color={Colors.textMuted} />
-              </View>
-            )}
-            <Text style={styles.exploreSellerText} numberOfLines={1}>@{sellerHandle}</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={styles.exploreMessageBtn}
-            onPress={() => onPressSellerMessage(item.sellerId as string, item.routeId as string)}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Message @${sellerHandle ?? 'seller'}`}
-            accessibilityHint="Opens chat with this seller"
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
-      ) : null}
     </View>
   );
 });
@@ -472,8 +415,8 @@ export default function HomeScreen() {
 
   const exploreData = React.useMemo<ExploreTile[]>(() => {
     return listings.map((item): ExploreTile => {
-      const primaryMediaUri = item.images[0] ?? 'https://picsum.photos/seed/listing-fallback-home/600/800';
-      const posterUri = item.images.find((uri) => !isVideoUri(uri));
+      const primaryMediaUri = item.images?.[0] ?? '';
+      const posterUri = item.images?.find((uri) => !isVideoUri(uri));
 
       return {
         id: `item_${item.id}`,
@@ -565,7 +508,7 @@ export default function HomeScreen() {
                   uri={
                     poster.image
                     || listings.find((listing) => listing.id === poster.listingId)?.images?.[0]
-                    || 'https://picsum.photos/seed/poster-fallback-home/400/500'
+                    || ''
                   }
                   style={styles.posterImage}
                   contentFit="cover"
@@ -576,7 +519,7 @@ export default function HomeScreen() {
               {/* User PFP overlay in top left corner */}
               <View style={styles.posterAvatarOverlay}>
                 <CachedImage
-                  uri={poster.uploader?.avatar ?? 'https://picsum.photos/seed/posterUser/60/60'}
+                  uri={poster.uploader?.avatar ?? ''}
                   style={styles.posterAvatarOverlayImage}
                   containerStyle={styles.posterAvatarOverlayWrap}
                   contentFit="cover"
@@ -679,11 +622,10 @@ export default function HomeScreen() {
   }, [navigation, haptic]);
 
   const handleSellerMessagePress = React.useCallback((sellerId: string, listingId: string) => {
-    haptic.light(); // ELEVATED: Light haptic on message action
-    const sellerHandle = MOCK_USERS.find((entry) => entry.id === sellerId)?.username ?? sellerId;
+    haptic.light();
     navigation.navigate('Chat', {
       conversationId: `${sellerId}_${listingId}`,
-      focusQuery: sellerHandle,
+      focusQuery: '',
       partnerUserId: sellerId,
     });
   }, [navigation, haptic]);

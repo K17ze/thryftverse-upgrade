@@ -247,7 +247,6 @@ export default function CollectionDetailScreen() {
               items={collectionItems}
               onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
               numColumns={2}
-              showSeller
               showSaveButton
             />
           </Reanimated.View>
@@ -321,7 +320,7 @@ function MoreLikeThisRow({
               sharedTransitionTag={"image-"+item.id+"-0"}
             >
               <CachedImage
-                uri={item.images[0]}
+                uri={item.images?.[0] ?? ''}
                 style={styles.moreImg}
                 containerStyle={{ width: '100%', height: '100%', borderRadius: 12 }}
                 contentFit="cover"

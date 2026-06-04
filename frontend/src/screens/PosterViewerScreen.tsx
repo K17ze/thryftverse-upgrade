@@ -15,8 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { MOCK_LISTINGS } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
+import { useBackendData } from '../context/BackendDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { getFreshPosters } from '../data/posters';
 import { useStore } from '../store/useStore';
@@ -135,10 +134,11 @@ export default function PosterViewerScreen() {
         ? styles.storyOverlayCenter
         : styles.storyOverlayBottom;
 
+  const { listings } = useBackendData();
   const posterImageUri =
     activePoster.image ||
-    mockFind(MOCK_LISTINGS, (listing) => listing.id === activePoster.listingId)?.images?.[0] ||
-    'https://picsum.photos/seed/poster-fallback-viewer/900/1400';
+    listings.find((listing) => listing.id === activePoster.listingId)?.images?.[0] ||
+    '';
 
   return (
     <View style={styles.container}>
@@ -190,7 +190,7 @@ export default function PosterViewerScreen() {
             accessibilityHint="Shows poster creator profile"
           >
             <CachedImage
-              uri={activePoster.uploader?.avatar ?? 'https://picsum.photos/seed/poster-avatar/120/120'}
+              uri={activePoster.uploader?.avatar ?? ''}
               style={styles.authorAvatar}
               containerStyle={{ width: 30, height: 30, borderRadius: 15 }}
               contentFit="cover"

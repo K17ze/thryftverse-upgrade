@@ -17,8 +17,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Listing, MOCK_USERS } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
+import { Listing } from '../data/mockData';
 import { isVideoUri } from '../utils/media';
 import { Typography } from '../constants/typography';
 import { StaggeredItem } from './StaggeredGridEntrance';
@@ -29,14 +28,13 @@ interface ProductCardV2Props {
   item: Listing;
   onPress: () => void;
   index?: number;
-  showSeller?: boolean;
   showSaveButton?: boolean;
   visualOnly?: boolean;
   /** Enable staggered entrance animation (default true) */
   enableEntranceAnimation?: boolean;
 }
 
-export function ProductCardV2({ item, onPress, index = 0, showSeller = false, showSaveButton = false, visualOnly = false, enableEntranceAnimation = true }: ProductCardV2Props) {
+export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false, visualOnly = false, enableEntranceAnimation = true }: ProductCardV2Props) {
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
   const isSaved = useStore((state) => state.isSavedProduct(item.id));
@@ -44,7 +42,6 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
-  const seller = mockFind(MOCK_USERS, (u) => u.id === item.sellerId);
 
   // Deterministic aspect ratio based on item id
   const aspectRatio = ASPECT_RATIOS[item.id.charCodeAt(0) % ASPECT_RATIOS.length];
@@ -76,7 +73,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
       {/* Image - Full bleed, no border radius */}
       <AnimatedPressable onPress={onPress} style={styles.imageWrap}>
         <CachedImage
-          uri={item.images[0]}
+          uri={item.images?.[0] ?? ''}
           style={[styles.image, { aspectRatio, borderRadius: visualOnly ? 16 : Radius.none }]}
           contentFit="cover"
           transition={300}
@@ -110,17 +107,6 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
               name={hasVideo ? 'videocam' : 'images'}
               size={12}
               color="#FFFFFF"
-            />
-          </View>
-        )}
-
-        {/* Seller avatar overlay - bottom left, Depop style */}
-        {showSeller && seller && (
-          <View style={styles.sellerOverlay}>
-            <CachedImage
-              uri={seller.avatar}
-              style={styles.sellerOverlayAvatar}
-              contentFit="cover"
             />
           </View>
         )}
@@ -170,22 +156,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSeller = false, sh
 
           <T.Caption numberOfLines={1}>{item.size}</T.Caption>
 
-          {showSeller && seller && (
-            <View style={styles.sellerRow}>
-              <CachedImage
-                uri={seller.avatar}
-                style={styles.sellerAvatar}
-                contentFit="cover"
-              />
-              <T.Meta>@{seller.username}</T.Meta>
-              {seller.rating > 0 && (
-                <View style={styles.ratingPill}>
-                  <Ionicons name="star" size={8} color={Colors.brand} />
-                  <T.Meta style={styles.ratingText}>{seller.rating.toFixed(1)}</T.Meta>
-                </View>
-              )}
-            </View>
-          )}
+          {/* Seller info omitted — shown in ItemDetail only */}
         </View>
       )}
     </View>
@@ -210,12 +181,11 @@ interface MasonryGridProps {
   items: Listing[];
   onPressItem: (item: Listing) => void;
   numColumns?: number;
-  showSeller?: boolean;
   showSaveButton?: boolean;
   visualOnly?: boolean;
 }
 
-export function MasonryGrid({ items, onPressItem, numColumns = 2, showSeller = false, showSaveButton = false, visualOnly = false }: MasonryGridProps) {
+export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton = false, visualOnly = false }: MasonryGridProps) {
   // Split items into columns for masonry effect, tracking original indices
   const columns: { item: Listing; originalIndex: number }[][] = Array.from({ length: numColumns }, () => []);
   items.forEach((item, index) => {
@@ -232,7 +202,6 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSeller = f
               item={item}
               onPress={() => onPressItem(item)}
               index={originalIndex}
-              showSeller={showSeller}
               showSaveButton={showSaveButton}
               visualOnly={visualOnly}
               enableEntranceAnimation={true}
@@ -349,34 +318,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
-  sellerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginTop: Space.xs,
-  },
-  sellerAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  ratingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 6,
-    marginLeft: 2,
-  },
-  ratingText: {
-    color: Colors.textSecondary,
-    fontSize: 10,
-  },
-
   // Condition & price-drop badges
   conditionBadge: {
     position: 'absolute',
@@ -399,24 +340,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
-  },
-
-  // Seller overlay on image
-  sellerOverlay: {
-    position: 'absolute',
-    bottom: Space.sm,
-    left: Space.sm,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#fff',
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-  },
-  sellerOverlayAvatar: {
-    width: '100%',
-    height: '100%',
   },
 
   // Grid

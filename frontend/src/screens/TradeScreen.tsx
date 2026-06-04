@@ -69,7 +69,7 @@ export default function TradeScreen() {
   const { goldRates } = useCurrencyContext();
   const { formatFromIze } = useFormattedPrice();
 
-  const [side, setSide] = React.useState<TradeSide>(route.params.side);
+  const [side, setSide] = React.useState<TradeSide>(route.params?.side ?? 'buy');
   const [quantityInput, setQuantityInput] = React.useState('1');
   const [offerPriceInput, setOfferPriceInput] = React.useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = React.useState(false);
@@ -80,7 +80,8 @@ export default function TradeScreen() {
     [baseAssets, coOwnRuntime]
   );
 
-  const asset = marketAssets.find((item) => item.id === route.params.assetId);
+  const tradeAssetId = route.params?.assetId;
+  const asset = tradeAssetId ? marketAssets.find((item) => item.id === tradeAssetId) : undefined;
   const marketPrice = asset ? toIze(asset.unitPriceGBP, 'GBP', goldRates) : 0;
   const orderMode = offerPriceInput.trim().length > 0 ? 'limit' : 'market';
 

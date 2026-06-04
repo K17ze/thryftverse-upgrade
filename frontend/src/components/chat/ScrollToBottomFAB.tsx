@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
+import { Typography } from '../../constants/typography';
 import { Space, Radius, Elevation } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption } from '../ui/Text';
@@ -80,6 +81,6 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 10,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
 });

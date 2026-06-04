@@ -43,7 +43,8 @@ export default function BuyoutScreen() {
     [baseAssets, coOwnRuntime]
   );
 
-  const asset = marketAssets.find((item) => item.id === route.params.assetId);
+  const buyoutAssetId = route.params?.assetId;
+  const asset = buyoutAssetId ? marketAssets.find((item) => item.id === buyoutAssetId) : undefined;
 
   if (!asset) {
     return (

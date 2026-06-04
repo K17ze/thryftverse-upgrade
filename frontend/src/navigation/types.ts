@@ -41,6 +41,7 @@ export type RootStackParamList = {
   };
   CreateGroupChat: undefined;
   GroupBotDirectory: { conversationId: string };
+  BotDirectory: undefined;
   UserProfile: { userId: string; isMe?: boolean };
   // Profile sub-screens
   Balance: undefined;
@@ -50,6 +51,8 @@ export type RootStackParamList = {
   Settings: undefined;
   EditProfile: undefined;
   AccountSettings: undefined;
+  PersonalInformation: undefined;
+  SecurityAndLogins: undefined;
   Payments: undefined;
   // Phase 16 new screens
   MakeOffer: { itemId: string; price: number; title: string };
@@ -95,6 +98,7 @@ export type RootStackParamList = {
   NotificationsList: undefined;
   // Phase 28
   ForgotPassword: undefined;
+  VisualSearch: undefined;
   ChangePassword: undefined;
   TwoFactorSetup: undefined;
   WriteReview: { orderId: string };
@@ -103,6 +107,7 @@ export type RootStackParamList = {
   MyListings: { type?: 'coown' | 'auction' | 'standard' } | undefined;
   // Explore / Creator screens
   CreateLook: undefined;
+  CoOwnIssue: { assetId?: string };
   OutfitBuilder: undefined;
   // Phase 13 — Settings integrity
   ChatSettings: undefined;
@@ -110,6 +115,8 @@ export type RootStackParamList = {
   BlockedUsers: undefined;
   PrivacySettings: undefined;
   About: undefined;
+  // Diagnostic — dev only
+  RuntimeSmokeTest: undefined;
 };
 
 export type TabParamList = {

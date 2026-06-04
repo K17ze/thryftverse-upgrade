@@ -17,7 +17,17 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export type AttachmentType = 'gallery' | 'camera' | 'file' | 'location';
+export type AttachmentType =
+  | 'gallery'
+  | 'camera'
+  | 'file'
+  | 'location'
+  | 'offer'
+  | 'shareListing'
+  | 'shareOrder'
+  | 'requestPayment'
+  | 'inviteBot'
+  | 'report';
 
 interface AttachmentOption {
   id: AttachmentType;
@@ -29,15 +39,24 @@ interface AttachmentOption {
 const OPTIONS: AttachmentOption[] = [
   { id: 'gallery', label: 'Photo & Video', icon: 'images-outline', color: '#3B82F6' },
   { id: 'camera', label: 'Camera', icon: 'camera-outline', color: '#10B981' },
+  { id: 'offer', label: 'Make Offer', icon: 'pricetag-outline', color: '#F59E0B' },
+  { id: 'shareListing', label: 'Share Listing', icon: 'share-outline', color: '#8B5CF6' },
+  { id: 'shareOrder', label: 'Order Status', icon: 'cube-outline', color: '#3B82F6' },
+  { id: 'requestPayment', label: 'Payment', icon: 'card-outline', color: '#22C55E' },
+  { id: 'inviteBot', label: 'Bot', icon: 'hardware-chip-outline', color: '#6366F1' },
+  { id: 'report', label: 'Report', icon: 'flag-outline', color: '#EF4444' },
 ];
 
 interface AttachmentPickerSheetProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (type: AttachmentType) => void;
+  isGroup?: boolean;
+  hasLinkedItem?: boolean;
+  hasLinkedOrder?: boolean;
 }
 
-export function AttachmentPickerSheet({ visible, onClose, onSelect }: AttachmentPickerSheetProps) {
+export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = false, hasLinkedItem = false, hasLinkedOrder = false }: AttachmentPickerSheetProps) {
   const reducedMotion = useReducedMotion();
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const opacity = useSharedValue(0);
@@ -82,6 +101,13 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect }: Attachment
     onClose();
   };
 
+  const visibleOptions = OPTIONS.filter((opt) => {
+    if (opt.id === 'inviteBot') return isGroup;
+    if (opt.id === 'offer' || opt.id === 'shareListing') return hasLinkedItem;
+    if (opt.id === 'shareOrder' || opt.id === 'requestPayment') return hasLinkedOrder;
+    return true;
+  });
+
   if (!rendered) return null;
 
   return (
@@ -95,7 +121,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect }: Attachment
           <View style={styles.handle} />
 
           <View style={styles.optionsGrid}>
-            {OPTIONS.map((opt) => (
+            {visibleOptions.map((opt) => (
               <AnimatedPressable
                 key={opt.id}
                 style={styles.optionBtn}

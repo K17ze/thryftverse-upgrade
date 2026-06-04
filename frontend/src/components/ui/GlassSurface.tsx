@@ -165,14 +165,15 @@ export function GlassBottomBar({
 export function GlassCard({
   children,
   intensity = 35,
+  borderRadius = Radius.xl,
   style,
   contentStyle,
-}: Omit<GlassSurfaceProps, 'borderPosition' | 'tint' | 'borderRadius'>) {
+}: Omit<GlassSurfaceProps, 'borderPosition' | 'tint'>) {
   return (
     <GlassSurface
       intensity={intensity}
       tint="default"
-      borderRadius={Radius.xl}
+      borderRadius={borderRadius}
       borderPosition="both"
       style={[cardStyles.cardShadow, style]}
       contentStyle={contentStyle}

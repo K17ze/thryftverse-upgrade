@@ -17,7 +17,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Space, Radius, Type } from '../theme/designTokens';
-import { MY_USER } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -27,6 +26,8 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import {
   setStoredUserAvatar,
   setStoredUserAvatarForUser,
+  setStoredUserCover,
+  setStoredUserCoverForUser,
 } from '../preferences/profileMediaPreferences';
 import { persistProfileMediaUri } from '../utils/profileMediaAsset';
 import { Typography } from '../constants/typography';
@@ -38,29 +39,35 @@ export default function EditProfileScreen() {
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const userAvatar = useStore((state) => state.userAvatar);
+  const userCover = useStore((state) => state.userCover);
   const updateUserAvatar = useStore((state) => state.updateUserAvatar);
+  const updateUserCover = useStore((state) => state.updateUserCover);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
 
   const user = currentUser as any;
+  const initialGender = user?.gender ?? 'Prefer not to say';
+  const initialName = user?.fullName ?? user?.displayName ?? '';
+  const initialUsername = user?.username ?? '';
 
-  const [name, setName] = useState(user?.username ?? '');
-  const [username, setUsername] = useState(user?.username ?? '');
+  const [name, setName] = useState(initialName);
+  const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(user?.bio ?? '');
   const [website, setWebsite] = useState(
     (user as any)?.website ?? ''
   );
-  const [gender, setGender] = useState('Non-binary');
+  const [gender, setGender] = useState(initialGender);
   const [genderPickerVisible, setGenderPickerVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [websiteError, setWebsiteError] = useState('');
 
   const hasChanges =
-    name !== (user?.username ?? '') ||
-    username !== (user?.username ?? '') ||
+    name !== initialName ||
+    username !== initialUsername ||
     bio !== (user?.bio ?? '') ||
     website !== ((user as any)?.website ?? '') ||
-    gender !== 'Non-binary';
+    gender !== initialGender;
 
   const validateWebsite = (value: string) => {
     if (!value) {
@@ -76,28 +83,58 @@ export default function EditProfileScreen() {
     return true;
   };
 
-  const pickAvatar = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setIsUploadingAvatar(true);
-      try {
-        const nextAvatarUri = await persistProfileMediaUri(result.assets[0].uri, 'avatar');
-        updateUserAvatar(nextAvatarUri);
-        await Promise.all([
-          setStoredUserAvatar(nextAvatarUri),
-          setStoredUserAvatarForUser(MY_USER.id, nextAvatarUri),
-          currentUser?.id ? setStoredUserAvatarForUser(currentUser.id, nextAvatarUri) : Promise.resolve(),
-        ]).catch(() => {});
-        show('Avatar updated', 'success');
-      } finally {
-        setIsUploadingAvatar(false);
+  const pickCover = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.86,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setIsUploadingCover(true);
+        try {
+          const nextCoverUri = await persistProfileMediaUri(result.assets[0].uri, 'cover');
+          updateUserCover(nextCoverUri);
+          await Promise.all([
+            setStoredUserCover(nextCoverUri),
+            currentUser?.id ? setStoredUserCoverForUser(currentUser.id, nextCoverUri) : Promise.resolve(),
+          ]).catch(() => {});
+          show('Cover updated', 'success');
+        } finally {
+          setIsUploadingCover(false);
+        }
       }
+    } catch (err) {
+      show('Could not select cover photo', 'error');
+    }
+  };
+
+  const pickAvatar = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setIsUploadingAvatar(true);
+        try {
+          const nextAvatarUri = await persistProfileMediaUri(result.assets[0].uri, 'avatar');
+          updateUserAvatar(nextAvatarUri);
+          await Promise.all([
+            setStoredUserAvatar(nextAvatarUri),
+            currentUser?.id ? setStoredUserAvatarForUser(currentUser.id, nextAvatarUri) : Promise.resolve(),
+          ]).catch(() => {});
+          show('Avatar updated', 'success');
+        } finally {
+          setIsUploadingAvatar(false);
+        }
+      }
+    } catch (err) {
+      show('Could not select profile photo', 'error');
     }
   };
 
@@ -106,13 +143,17 @@ export default function EditProfileScreen() {
     setIsSaving(true);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await new Promise((resolve) => setTimeout(resolve, 400));
-    updateUserProfile({ bio, website, username: name });
+    const updates: Partial<any> = { bio, website, gender };
+    if (name !== initialName) updates.fullName = name;
+    if (username !== initialUsername) updates.username = username;
+    updateUserProfile(updates);
     setIsSaving(false);
     show('Profile updated', 'success');
     navigation.goBack();
   };
 
   const currentAvatar = userAvatar || user?.avatar;
+  const currentCover = userCover || user?.coverPhoto;
 
   if (!user) {
     return (
@@ -164,6 +205,35 @@ export default function EditProfileScreen() {
             <Text style={styles.helperText}>
               Your profile is visible to everyone on Thryftverse. Keep it accurate and up to date.
             </Text>
+          </Reanimated.View>
+
+          {/* Cover */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.coverSection}>
+            <AnimatedPressable style={styles.coverWrap} onPress={pickCover} activeOpacity={0.85} scaleValue={0.98}>
+              <CachedImage
+                key={`edit-cover-${currentCover}`}
+                uri={currentCover}
+                style={styles.coverImage}
+                containerStyle={styles.coverContainer}
+                contentFit="cover"
+              />
+              {isUploadingCover ? (
+                <View style={styles.coverOverlay}>
+                  <View style={styles.coverSpinner}>
+                    <Ionicons name="sync" size={22} color="#fff" />
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.coverOverlay}>
+                  <View style={styles.coverCameraCircle}>
+                    <Ionicons name="camera" size={18} color="#fff" />
+                  </View>
+                </View>
+              )}
+            </AnimatedPressable>
+            <AnimatedPressable onPress={pickCover} activeOpacity={0.8} scaleValue={0.98}>
+              <Text style={styles.changeText}>Change cover photo</Text>
+            </AnimatedPressable>
           </Reanimated.View>
 
           {/* Avatar */}
@@ -220,7 +290,7 @@ export default function EditProfileScreen() {
                   placeholder="username"
                   placeholderTextColor={Colors.textMuted}
                   autoCapitalize="none"
-                  editable={false}
+                  editable={true}
                 />
               </View>
 
@@ -341,6 +411,56 @@ const styles = StyleSheet.create({
     marginBottom: Space.lg,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
+  },
+
+  // Cover
+  coverSection: {
+    alignItems: 'center',
+    marginBottom: Space.lg,
+  },
+  coverWrap: {
+    position: 'relative',
+    marginBottom: Space.sm,
+    width: '100%',
+    height: 140,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
+  },
+  coverContainer: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Radius.lg,
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Radius.lg,
+  },
+  coverOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+  },
+  coverCameraCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.background,
+  },
+  coverSpinner: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.background,
   },
 
   // Avatar

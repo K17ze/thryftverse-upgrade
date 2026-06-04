@@ -34,7 +34,7 @@ interface LookItem {
   title: string;
   coverImage: string;
   items: { id: string; label: string; x: number; y: number }[];
-  creator: { name: string; avatar: string };
+  creator: { name: string; avatar?: string };
   likes: number;
   comments: number;
   saved: boolean;
@@ -202,7 +202,7 @@ function LookCard({
         {/* Bottom info row */}
         <View style={styles.infoRow}>
           <CachedImage
-            uri={look.creator.avatar}
+            uri={look.creator.avatar ?? ''}
             style={styles.creatorAvatar}
             containerStyle={{ width: 32, height: 32, borderRadius: 16 }}
             contentFit="cover"

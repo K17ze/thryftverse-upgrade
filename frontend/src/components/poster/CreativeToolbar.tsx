@@ -3,7 +3,7 @@ import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '../../constants/typography';
 
-export type CreativeTool = 'text' | 'stickers' | 'draw' | null;
+export type CreativeTool = 'text' | 'stickers' | 'draw' | 'filter' | 'preview' | null;
 
 interface CreativeToolbarProps {
   activeTool: CreativeTool;
@@ -15,6 +15,8 @@ const TOOLS: { key: CreativeTool; icon: string; label: string }[] = [
   { key: 'text', icon: 'text-outline', label: 'Text' },
   { key: 'stickers', icon: 'happy-outline', label: 'Stickers' },
   { key: 'draw', icon: 'pencil-outline', label: 'Draw' },
+  { key: 'filter', icon: 'color-filter-outline', label: 'Filter' },
+  { key: 'preview', icon: 'eye-outline', label: 'Preview' },
 ];
 
 export default function CreativeToolbar({ activeTool, onToolSelect, visible }: CreativeToolbarProps) {

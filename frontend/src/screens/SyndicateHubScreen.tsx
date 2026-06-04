@@ -19,7 +19,6 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { useToast } from '../context/ToastContext';
-import { MOCK_USERS } from '../data/mockData';
 import { Space, Radius } from '../theme/designTokens';
 import {
   TradeHeader,
@@ -48,7 +47,6 @@ export default function CoOwnHubScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
-  const supportUser = MOCK_USERS[0];
 
   const [query, setQuery] = React.useState('');
   const [sortBy, setSortBy] = React.useState<HubSort>('value');
@@ -89,13 +87,8 @@ export default function CoOwnHubScreen() {
   );
 
   const handleOpenCoOwnSupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'co-own hub support',
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for co-own market help.', 'info');
-  }, [navigation, show, supportUser.id]);
+    navigation.navigate('HelpSupport');
+  }, [navigation]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -121,28 +114,24 @@ export default function CoOwnHubScreen() {
       <View style={styles.supportRow}>
         <AnimatedPressable
           style={styles.supportIdentity}
-          onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+          onPress={handleOpenCoOwnSupport}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel={`Open @${supportUser.username} profile`}
-          accessibilityHint="Shows co-own support profile"
+          accessibilityLabel="Open help and support"
+          accessibilityHint="Shows help and support options"
         >
-          <CachedImage
-            uri={supportUser.avatar}
-            style={styles.supportAvatar}
-            containerStyle={styles.supportAvatarContainer}
-          />
-          <Meta style={styles.supportText}>Support: @{supportUser.username}</Meta>
+          <View style={[styles.supportAvatar, { backgroundColor: Colors.surfaceAlt }]} />
+          <Meta style={styles.supportText}>Help & Support</Meta>
         </AnimatedPressable>
         <AnimatedPressable
           style={styles.supportMessageBtn}
           onPress={handleOpenCoOwnSupport}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Message co-own support"
-          accessibilityHint="Opens support chat"
+          accessibilityLabel="Open help and support"
+          accessibilityHint="Shows help and support options"
         >
-          <Ionicons name="chatbubble-ellipses-outline" size={14} color={Colors.textPrimary} />
+          <Ionicons name="help-circle-outline" size={18} color={Colors.textPrimary} />
         </AnimatedPressable>
       </View>
 
@@ -222,8 +211,7 @@ export default function CoOwnHubScreen() {
         data={filteredAssets}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => {
-          const issuerUser = MOCK_USERS.find((user) => user.id === item.issuerId);
-          const issuerHandle = issuerUser?.username ?? item.issuerId;
+          const issuerHandle = item.issuerId.slice(0, 12);
           const canMessageIssuer = currentUser?.id !== item.issuerId;
           const marketValue = item.totalUnits * item.unitPriceGBP;
           const openValue = item.availableUnits * item.unitPriceGBP;
@@ -249,7 +237,7 @@ export default function CoOwnHubScreen() {
                 totalUnits={item.totalUnits}
                 marketMovePct24h={item.marketMovePct24h}
                 issuerHandle={issuerHandle}
-                issuerAvatar={issuerUser?.avatar}
+                issuerAvatar={undefined}
                 yourUnits={item.yourUnits}
                 isOpen={item.isOpen}
                 onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}

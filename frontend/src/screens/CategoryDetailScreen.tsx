@@ -72,74 +72,28 @@ export default function CategoryDetailScreen() {
 
         {/* Dense Grid - Restored Navigation & Real Data Mapping */}
         <View style={styles.grid}>
-          {gridData.map((item) => {
-            const seller = null as any;
-            const sellerHandle = seller?.username ?? item.sellerId;
-
-            return (
-              <View key={item.id} style={styles.gridCard}>
-                <AnimatedPressable 
-                  style={styles.gridItemTap} 
-                  activeOpacity={0.9}
-                  onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${item.title}`}
-                  accessibilityHint={`View listing details priced at ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
+          {gridData.map((item) => (
+            <View key={item.id} style={styles.gridCard}>
+              <AnimatedPressable
+                style={styles.gridItemTap}
+                activeOpacity={0.9}
+                onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${item.title}`}
+                accessibilityHint={`View listing details priced at ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
+              >
+                <SharedTransitionView
+                  style={styles.sharedImageLayer}
+                  sharedTransitionTag={`image-${item.id}-0`}
                 >
-                  <SharedTransitionView
-                    style={styles.sharedImageLayer}
-                    sharedTransitionTag={`image-${item.id}-0`}
-                  >
-                    <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/category-grid-fallback/400/500')} style={styles.gridImage} contentFit="cover" />
-                  </SharedTransitionView>
-                  <View style={styles.pricePill}>
-                    <Text style={styles.priceText}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
-                  </View>
-                </AnimatedPressable>
-
-                <View style={styles.gridSellerRow}>
-                  <AnimatedPressable
-                    style={styles.gridSellerChip}
-                    onPress={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open @${sellerHandle} profile`}
-                    accessibilityHint="Shows seller profile details"
-                  >
-                    {seller?.avatar ? (
-                      <CachedImage
-                        uri={seller.avatar}
-                        style={styles.gridSellerAvatar}
-                        containerStyle={styles.gridSellerAvatarWrap}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View style={styles.gridSellerAvatarFallback}>
-                        <Ionicons name="person" size={9} color={Colors.textMuted} />
-                      </View>
-                    )}
-                    <Text style={styles.gridSellerText} numberOfLines={1}>@{sellerHandle}</Text>
-                  </AnimatedPressable>
-
-                  <AnimatedPressable
-                    style={styles.gridMessageBtn}
-                    onPress={() =>
-                      navigation.navigate('Chat', {
-                        conversationId: `${item.sellerId}_${item.id}`,
-                        focusQuery: sellerHandle,
-                        partnerUserId: item.sellerId,
-                      })}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Message @${sellerHandle}`}
-                    accessibilityHint="Opens chat with this seller"
-                  >
-                    <Ionicons name="chatbubble-ellipses-outline" size={10} color={Colors.textPrimary} />
-                  </AnimatedPressable>
+                  <CachedImage uri={getListingCoverUri(item.images, '')} style={styles.gridImage} contentFit="cover" />
+                </SharedTransitionView>
+                <View style={styles.pricePill}>
+                  <Text style={styles.priceText}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
                 </View>
-              </View>
-            );
-          })}
+              </AnimatedPressable>
+            </View>
+          ))}
         </View>
         {gridData.length === 0 && (
           <Text style={{color: Colors.textMuted, textAlign: 'center', marginTop: 40}}>No items found in this category.</Text>

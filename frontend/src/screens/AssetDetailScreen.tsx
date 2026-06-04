@@ -8,7 +8,6 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { getCoOwnMarket, getUserLabel } from '../data/tradeHub';
-import { MOCK_USERS } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { resolveAssetMarketState, getOrderBookSnapshot, getPriceSeries, ChartRange } from '../data/mockSyndicateData';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -54,7 +53,8 @@ export default function AssetDetailScreen() {
     [baseAssets, coOwnRuntime]
   );
 
-  const asset = marketAssets.find((item) => item.id === route.params.assetId);
+  const assetId = route.params?.assetId;
+  const asset = assetId ? marketAssets.find((item) => item.id === assetId) : undefined;
 
   const series = React.useMemo(() => (asset ? getPriceSeries(asset.id, range) : []), [asset, range]);
   const orderBook = React.useMemo(() => (asset ? getOrderBookSnapshot(asset.id) : []), [asset]);
@@ -96,8 +96,7 @@ export default function AssetDetailScreen() {
   const marketValue = asset.totalUnits * asset.unitPriceGBP;
   const circulatingValue = Math.max(0, asset.totalUnits - asset.availableUnits) * asset.unitPriceGBP;
 
-  const issuerUser = MOCK_USERS.find((user) => user.id === asset.issuerId);
-  const issuerHandle = issuerUser?.username ?? getUserLabel(asset.issuerId).replace(/^@/, 'seller');
+  const issuerHandle = getUserLabel(asset.issuerId).replace(/^@/, 'seller');
   const canMessageIssuer = currentUser?.id !== asset.issuerId;
 
   const ownerAccounts: Array<{ id: string; handle: string; role: string; units: number }> = [];
@@ -118,9 +117,7 @@ export default function AssetDetailScreen() {
   const allocatedUnits = ownerAccounts.reduce((sum, account) => sum + account.units, 0);
   let remainingUnits = Math.max(0, asset.totalUnits - allocatedUnits);
   const syntheticOwners = Math.max(0, Math.min(3, asset.holders - (asset.yourUnits > 0 ? 1 : 0)));
-  const fallbackHandles = MOCK_USERS
-    .filter((user) => user.id !== asset.issuerId && user.id !== currentUser?.id)
-    .map((user) => `@${user.username}`);
+  const fallbackHandles = ['@holder1', '@holder2', '@holder3'];
 
   for (let index = 0; index < syntheticOwners; index += 1) {
     const slotsLeft = syntheticOwners - index;
@@ -174,7 +171,7 @@ export default function AssetDetailScreen() {
               accessibilityLabel={`Open @${issuerHandle} profile`}
             >
               <CachedImage
-                uri={issuerUser?.avatar ?? 'https://picsum.photos/seed/co-own-issuer-fallback/80/80'}
+                uri={''}
                 style={styles.issuerAvatar}
                 containerStyle={styles.issuerAvatarContainer}
               />
@@ -316,6 +313,16 @@ export default function AssetDetailScreen() {
               size="md"
               style={styles.actionBtn}
               hapticFeedback="medium"
+            />
+          </View>
+          <View style={styles.actionRow}>
+            <AppButton
+              title="Report Issue"
+              icon={<Ionicons name="shield-outline" size={16} color={Colors.danger} />}
+              onPress={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
+              variant="secondary"
+              size="md"
+              style={styles.actionBtn}
             />
           </View>
         </Reanimated.View>

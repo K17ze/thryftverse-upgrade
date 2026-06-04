@@ -15,6 +15,7 @@ import { Space, Radius, Duration, Elevation } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AnimatedBadge } from '../components/AnimatedBadge';
 import { useHaptic } from '../hooks/useHaptic';
+import { useStore } from '../store/useStore';
 
 import HomeScreen from '../screens/HomeScreen';
 import TradeHubScreen from '../screens/TradeHubScreen';
@@ -68,6 +69,11 @@ const TabIcon = ({ name, color, focused, badgeCount }: TabIconProps) => {
 export default function TabNavigator() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const conversations = useStore((s) => s.conversations);
+  const messageRequests = useStore((s) => s.messageRequests);
+  const unreadCount = conversations.filter((c) => c.unread).length;
+  const requestCount = messageRequests.length;
+  const inboxBadgeCount = unreadCount + requestCount;
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -140,7 +146,7 @@ export default function TabNavigator() {
           component={InboxScreen}
           options={{
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name={focused ? 'chatbubbles' : 'chatbubbles-outline'} color={color} focused={focused} badgeCount={3} />
+              <TabIcon name={focused ? 'chatbubbles' : 'chatbubbles-outline'} color={color} focused={focused} badgeCount={inboxBadgeCount > 0 ? inboxBadgeCount : undefined} />
             ),
           }}
         />

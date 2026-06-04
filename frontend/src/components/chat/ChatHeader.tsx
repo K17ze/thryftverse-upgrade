@@ -22,38 +22,7 @@ interface ChatHeaderProps {
   avatarUrl?: string | null;
   rightAction?: React.ReactNode;
   onTitlePress?: () => void;
-  isOnline?: boolean;
   style?: ViewStyle;
-}
-
-function OnlineRing() {
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(0.6);
-
-  React.useEffect(() => {
-    scale.value = withRepeat(
-      withTiming(1.6, { duration: 1200 }),
-      -1,
-      true
-    );
-    opacity.value = withRepeat(
-      withTiming(0, { duration: 1200 }),
-      -1,
-      true
-    );
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-
-  return (
-    <View style={styles.onlineRingContainer}>
-      <Reanimated.View style={[styles.onlineRingPulse, animStyle]} />
-      <View style={styles.onlineRingDot} />
-    </View>
-  );
 }
 
 export function ChatHeader({
@@ -64,7 +33,6 @@ export function ChatHeader({
   avatarUrl,
   rightAction,
   onTitlePress,
-  isOnline = false,
   style,
 }: ChatHeaderProps) {
   const TitleWrap = onTitlePress ? AnimatedPressable : View;
@@ -118,7 +86,6 @@ export function ChatHeader({
                   <Ionicons name="person" size={16} color={Colors.textMuted} />
                 </View>
               )}
-              {isOnline && <OnlineRing />}
             </View>
           )}
 
@@ -199,30 +166,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  onlineRingContainer: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 16,
-    height: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  onlineRingPulse: {
-    position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.success,
-  },
-  onlineRingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.success,
-    borderWidth: 2,
-    borderColor: Colors.background,
   },
   rightSlot: {
     minWidth: 44,

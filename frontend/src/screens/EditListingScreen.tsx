@@ -90,14 +90,18 @@ export default function EditListingScreen() {
   }, [listing, title, description, price, photos, category, brand, size, condition]);
 
   const handlePickPhoto = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      quality: 0.9,
-    });
-    if (!result.canceled && result.assets.length > 0) {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setPhotos((prev) => [...prev, ...result.assets.map((a) => a.uri)]);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.9,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setPhotos((prev) => [...prev, ...result.assets.map((a) => a.uri)]);
+      }
+    } catch {
+      // silently ignore picker errors
     }
   }, []);
 
