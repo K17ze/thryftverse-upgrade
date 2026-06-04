@@ -104,6 +104,12 @@ export type RootStackParamList = {
   // Explore / Creator screens
   CreateLook: undefined;
   OutfitBuilder: undefined;
+  // Phase 13 — Settings integrity
+  ChatSettings: undefined;
+  ActiveSessions: undefined;
+  BlockedUsers: undefined;
+  PrivacySettings: undefined;
+  About: undefined;
 };
 
 export type TabParamList = {

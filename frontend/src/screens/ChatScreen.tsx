@@ -31,6 +31,7 @@ import type { Message as ConversationMessage } from '../data/mockData';
 import { useBackendData } from '../context/BackendDataContext';
 import { getListingCoverUri, isVideoUri } from '../utils/media';
 import { useStore } from '../store/useStore';
+import { MOCK_USERS } from '../data/mockData';
 import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
@@ -161,8 +162,13 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (currentUser?.id) {
       map.set(currentUser.id, currentUser.username);
     }
+    for (const u of MOCK_USERS) {
+      map.set(u.id, u.username);
+    }
     return map;
   }, [currentUser?.id, currentUser?.username]);
+
+  const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
 
   const hydratedMessages = useMemo<Message[]>(() => {
     if (!conversation?.messages.length) {
@@ -291,8 +297,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const deployedBotIds = conversation?.botIds ?? [];
   const sellerHandle = resolvedPartnerId
-    ? userLookup.get(resolvedPartnerId) ?? resolvedPartnerId
-    : 'profile';
+    ? userLookup.get(resolvedPartnerId) ?? 'Unknown user'
+    : 'Unknown user';
   const sellerLocation = '';
   const sellerLastSeen = '';
 
@@ -816,8 +822,11 @@ export default function ChatScreen({ navigation, route }: Props) {
             ? (conversation?.participantIds?.length ?? 0) + ' members'
             : ''
         }
-        avatarUrl={isGroup ? null : null}
-        isOnline={false}
+        avatarUrl={
+          isGroup
+            ? null
+            : (resolvedPartnerId ? profileMediaOverrides[resolvedPartnerId]?.avatar ?? null : null)
+        }
         onTitlePress={
           isGroup
             ? undefined

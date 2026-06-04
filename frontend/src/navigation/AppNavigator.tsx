@@ -86,6 +86,13 @@ import EditListingScreen from '../screens/EditListingScreen';
 import CreateLookScreen from '../screens/CreateLookScreen';
 import OutfitBuilderScreen from '../screens/OutfitBuilderScreen';
 
+// Phase 13 — Settings integrity
+import ChatSettingsScreen from '../screens/ChatSettingsScreen';
+import ActiveSessionsScreen from '../screens/ActiveSessionsScreen';
+import BlockedUsersScreen from '../screens/BlockedUsersScreen';
+import PrivacySettingsScreen from '../screens/PrivacySettingsScreen';
+import AboutScreen from '../screens/AboutScreen';
+
 const Stack = createStackNavigator<RootStackParamList>();
 
 const pushScreenOptions = {
@@ -231,6 +238,13 @@ export default function AppNavigator() {
       {/* Explore / Creator screens */}
       <Stack.Screen name="CreateLook" component={CreateLookScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" component={OutfitBuilderScreen} options={modalScreenOptions} />
+
+      {/* Phase 13 — Settings integrity */}
+      <Stack.Screen name="ChatSettings" component={ChatSettingsScreen} />
+      <Stack.Screen name="ActiveSessions" component={ActiveSessionsScreen} />
+      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+      <Stack.Screen name="PrivacySettings" component={PrivacySettingsScreen} />
+      <Stack.Screen name="About" component={AboutScreen} />
     </Stack.Navigator>
   );
 }

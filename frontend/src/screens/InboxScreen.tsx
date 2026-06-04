@@ -14,6 +14,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import Reanimated, { FadeInDown, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { EmptyState } from '../components/EmptyState';
 import { useStore } from '../store/useStore';
+import { MOCK_USERS } from '../data/mockData';
 import { useToast } from '../context/ToastContext';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { useBackendData } from '../context/BackendDataContext';
@@ -116,8 +117,14 @@ export default function InboxScreen() {
     if (currentUser?.id) {
       map.set(currentUser.id, currentUser.username);
     }
+    // Resolve mock user names for known IDs
+    for (const u of MOCK_USERS) {
+      map.set(u.id, u.username);
+    }
     return map;
   }, [currentUser?.id, currentUser?.username]);
+
+  const profileMediaOverrides = useStore((s) => s.profileMediaOverrides);
 
   const visibleConversations = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -126,7 +133,6 @@ export default function InboxScreen() {
       if (segment === 'groups' && conversation.type !== 'group') return false;
       if (!normalizedQuery) return true;
 
-      const seller = null as any;
       const counterpartyId = conversation.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
       const title = conversation.type === 'group'
         ? conversation.title ?? 'group chat'
@@ -217,7 +223,6 @@ export default function InboxScreen() {
 
   const renderItem = ({ item, index }: { item: ConvoItem; index: number }) => {
     const isGroup = item.type === 'group';
-    const seller = null as any;
     const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
     const displayTitle = isGroup
       ? item.title ?? 'Untitled Group'
@@ -263,12 +268,18 @@ export default function InboxScreen() {
                     </View>
                   ) : (
                     <AvatarRing
-                      uri={undefined}
+                      uri={
+                        item.avatar
+                        ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined)
+                      }
                       size={48}
-                      isOnline={false}
                       isUnread={item.unread}
                       ringWidth={2}
-                      fallbackInitials={displayTitle.slice(0, 2).toUpperCase()}
+                      fallbackInitials={
+                        displayTitle === 'Unknown user'
+                          ? '?'
+                          : displayTitle.slice(0, 2).toUpperCase()
+                      }
                     />
                   )}
                 </View>
@@ -283,7 +294,7 @@ export default function InboxScreen() {
                   </View>
 
                   <View style={styles.snippetRow}>
-                    <Text style={[styles.snippet, item.unread && styles.snippetUnread]} numberOfLines={2}>
+                    <Text style={[styles.snippet, item.unread && styles.snippetUnread]} numberOfLines={1}>
                       {item.draftText ? (
                         <Text>
                           <Text style={styles.draftLabel}>Draft: </Text>
@@ -322,7 +333,7 @@ export default function InboxScreen() {
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.iconBtn}
-              onPress={() => navigation.navigate('Settings')}
+              onPress={() => navigation.navigate('ChatSettings')}
               activeOpacity={0.7}
               scaleValue={0.9}
               hapticFeedback="light"

@@ -308,6 +308,20 @@ interface StoreState {
   setConversationDraft: (conversationId: string, draft: string) => void;
   addMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
   removeMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
+  // Chat settings / privacy
+  blockedUsers: string[];
+  toggleBlockedUser: (userId: string) => void;
+  isBlockedUser: (userId: string) => boolean;
+  mutedConversationIds: string[];
+  toggleMutedConversation: (id: string) => void;
+  isMutedConversation: (id: string) => boolean;
+  readReceiptsEnabled: boolean;
+  setReadReceiptsEnabled: (v: boolean) => void;
+  allowMessagesFrom: 'everyone' | 'following' | 'nobody';
+  setAllowMessagesFrom: (v: 'everyone' | 'following' | 'nobody') => void;
+  archivedConversationIds: string[];
+  toggleArchivedConversation: (id: string) => void;
+  isArchivedConversation: (id: string) => boolean;
 
   userLooks: UserLook[];
   addUserLook: (look: Omit<UserLook, 'id' | 'createdAt'>) => string;
@@ -1057,6 +1071,44 @@ export const useStore = create<StoreState>()(
         };
       }),
     })),
+  blockedUsers: [],
+  toggleBlockedUser: (userId) =>
+    set((state) => {
+      const isBlocked = state.blockedUsers.includes(userId);
+      return {
+        blockedUsers: isBlocked
+          ? state.blockedUsers.filter((id) => id !== userId)
+          : [...state.blockedUsers, userId],
+      };
+    }),
+  isBlockedUser: (userId) => get().blockedUsers.includes(userId),
+  mutedConversationIds: [],
+  toggleMutedConversation: (id) =>
+    set((state) => {
+      const isMuted = state.mutedConversationIds.includes(id);
+      return {
+        mutedConversationIds: isMuted
+          ? state.mutedConversationIds.filter((mid) => mid !== id)
+          : [...state.mutedConversationIds, id],
+      };
+    }),
+  isMutedConversation: (id) => get().mutedConversationIds.includes(id),
+  readReceiptsEnabled: true,
+  setReadReceiptsEnabled: (v) => set({ readReceiptsEnabled: v }),
+  allowMessagesFrom: 'everyone',
+  setAllowMessagesFrom: (v) => set({ allowMessagesFrom: v }),
+  archivedConversationIds: [],
+  toggleArchivedConversation: (id) =>
+    set((state) => {
+      const isArchived = state.archivedConversationIds.includes(id);
+      return {
+        archivedConversationIds: isArchived
+          ? state.archivedConversationIds.filter((aid) => aid !== id)
+          : [...state.archivedConversationIds, id],
+      };
+    }),
+  isArchivedConversation: (id) => get().archivedConversationIds.includes(id),
+
   addMessageReaction: (conversationId, messageId, reaction) =>
     set((state) => ({
       conversations: state.conversations.map((conversation) => {
@@ -1229,6 +1281,11 @@ export const useStore = create<StoreState>()(
         paymentPreferences: state.paymentPreferences,
         postagePreferences: state.postagePreferences,
         personalisationPreferences: state.personalisationPreferences,
+        blockedUsers: state.blockedUsers,
+        mutedConversationIds: state.mutedConversationIds,
+        readReceiptsEnabled: state.readReceiptsEnabled,
+        allowMessagesFrom: state.allowMessagesFrom,
+        archivedConversationIds: state.archivedConversationIds,
       }),
     },
   ),

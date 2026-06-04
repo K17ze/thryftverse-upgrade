@@ -11,12 +11,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
-import {
-  SettingsCell,
-  SettingsGroup,
-  SettingsSectionHeader,
-  SettingsSectionFooter,
-} from '../components/SettingsCell';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -39,19 +33,69 @@ import {
 } from '../theme/themePreference';
 import { t } from '../i18n';
 import { Space, Radius, Type } from '../theme/designTokens';
-import { AvatarRing } from '../components/chat/AvatarRing';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'Settings'>;
 
-// Section definition for searchability and animation ordering
-interface SettingsSectionDef {
+interface RowDef {
   key: string;
-  header: string;
-  footer?: string;
-  items: React.ReactNode;
+  icon: string;
+  iconColor?: string;
+  title: string;
+  subtitle?: string;
+  value?: string;
+  onPress?: () => void;
+  toggleValue?: boolean;
+  onToggle?: (v: boolean) => void;
+}
+
+function CommandRow({
+  icon,
+  iconColor,
+  title,
+  subtitle,
+  value,
+  onPress,
+  toggleValue,
+  onToggle,
+  isFirst,
+  isLast,
+}: RowDef & { isFirst?: boolean; isLast?: boolean }) {
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      activeOpacity={0.75}
+      scaleValue={0.995}
+      hapticFeedback="light"
+      disabled={!onPress && !onToggle}
+    >
+      <View style={[styles.rowRoot, !isLast && styles.rowBorder]}>
+        <View style={styles.rowIconWrap}>
+          <Ionicons name={icon as any} size={22} color={iconColor ?? Colors.textPrimary} />
+        </View>
+        <View style={styles.rowTextWrap}>
+          <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
+          {subtitle ? <Text style={styles.rowSubtitle} numberOfLines={1}>{subtitle}</Text> : null}
+        </View>
+        <View style={styles.rowRight}>
+          {value ? <Text style={styles.rowValue} numberOfLines={1}>{value}</Text> : null}
+          {onToggle ? (
+            <View style={styles.toggleTrack}>
+              <View style={[styles.toggleKnob, toggleValue ? styles.toggleKnobOn : styles.toggleKnobOff]} />
+            </View>
+          ) : onPress ? (
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          ) : null}
+        </View>
+      </View>
+    </AnimatedPressable>
+  );
+}
+
+function SectionDivider() {
+  return <View style={styles.sectionDivider} />;
 }
 
 export default function SettingsScreen({ navigation }: Props) {
@@ -112,9 +156,7 @@ export default function SettingsScreen({ navigation }: Props) {
   });
 
   React.useEffect(() => {
-    getStoredThemePreference().then(setThemePreference).catch(() => {
-      // Ignore persistence errors and keep default.
-    });
+    getStoredThemePreference().then(setThemePreference).catch(() => {});
   }, []);
 
   const handleCurrencySelect = (option: string) => {
@@ -167,16 +209,6 @@ export default function SettingsScreen({ navigation }: Props) {
     navigation.replace('AuthLanding');
   }, [logout, navigation]);
 
-  const handleClearCache = React.useCallback(async () => {
-    try {
-      await clearImageCache();
-      show('Cache cleared', 'success');
-    } catch {
-      show('Failed to clear cache', 'error');
-    }
-  }, [show]);
-
-  // Profile preview data — use real user only, no mock fallback for authenticated users
   const user = currentUser;
   const avatarUri = userAvatar || user?.avatar || null;
   const displayName = user?.username ?? 'Not signed in';
@@ -185,208 +217,10 @@ export default function SettingsScreen({ navigation }: Props) {
     ? `${(user as any).rating?.toFixed(1) ?? '0.0'} · ${(user as any).reviewCount ?? 0} reviews`
     : null;
 
-  // Search filter helper
   const matchesSearch = (text: string) => {
     if (!searchQuery.trim()) return true;
     return text.toLowerCase().includes(searchQuery.toLowerCase().trim());
   };
-
-  // Build sections as renderable content — 4 card groups
-  const sections: SettingsSectionDef[] = React.useMemo(() => {
-    const list: SettingsSectionDef[] = [];
-
-    // IDENTITY CARD
-    const identityItems = (
-      <SettingsGroup>
-        <SettingsCell
-          icon="person-outline"
-          iconColor={Colors.textPrimary}
-          title="Personal Information"
-          value={user?.username ?? 'Not signed in'}
-          isFirst
-          onPress={() => navigation.navigate('EditProfile')}
-        />
-        <SettingsCell
-          icon="location-outline"
-          iconColor={Colors.textPrimary}
-          title="Addresses"
-          value={savedAddress ? 'Manage' : 'None'}
-          onPress={() => navigation.navigate('AccountSettings')}
-        />
-        <SettingsCell
-          icon="shirt-outline"
-          iconColor={Colors.textPrimary}
-          title="Closet"
-          subtitle="Saved, Wishlist & Collections"
-          isLast
-          onPress={() => navigation.navigate('Closet')}
-        />
-      </SettingsGroup>
-    );
-    if (matchesSearch('Identity Personal Information Addresses Closet')) {
-      list.push({ key: 'identity', header: 'Identity', items: identityItems });
-    }
-
-    // COMMERCE CARD
-    const commerceItems = (
-      <SettingsGroup>
-        <SettingsCell
-          icon="card-outline"
-          iconColor={Colors.brand}
-          title="Payment Methods"
-          value={savedPaymentMethod ? 'Manage' : 'None'}
-          isFirst
-          onPress={() => navigation.navigate('Payments')}
-        />
-        <SettingsCell
-          icon="wallet-outline"
-          iconColor={Colors.brand}
-          title="Payout Method"
-          value={savedPaymentMethod ? 'Manage' : 'None'}
-          onPress={() => navigation.navigate('Payments')}
-        />
-        <SettingsCell
-          icon="cube-outline"
-          iconColor={Colors.brand}
-          title="Shipping Profiles"
-          value="Manage"
-          isLast
-          onPress={() => navigation.navigate('Postage')}
-        />
-      </SettingsGroup>
-    );
-    if (matchesSearch('Commerce Payment Methods Payout Method Shipping Profiles')) {
-      list.push({ key: 'commerce', header: 'Commerce', items: commerceItems });
-    }
-
-    // SECURITY CARD
-    const securityItems = (
-      <SettingsGroup>
-        <SettingsCell
-          icon="lock-closed-outline"
-          iconColor={Colors.brand}
-          title="Password"
-          value="••••••••"
-          isFirst
-          onPress={() => navigation.navigate('ChangePassword')}
-        />
-        <SettingsCell
-          icon="shield-checkmark-outline"
-          iconColor={Colors.brand}
-          title="Two-Factor Authentication"
-          value={twoFactorEnabled ? 'On' : 'Off'}
-          onPress={() => navigation.navigate('TwoFactorSetup')}
-        />
-        <SettingsCell
-          icon="phone-portrait-outline"
-          iconColor={Colors.brand}
-          title="Active Devices"
-          value="Manage"
-          isLast
-          onPress={() => navigation.navigate('AccountSettings')}
-        />
-      </SettingsGroup>
-    );
-    if (matchesSearch('Security Password Two-Factor Active Devices')) {
-      list.push({ key: 'security', header: 'Security', items: securityItems });
-    }
-
-    // PREFERENCES CARD
-    const prefItems = (
-      <SettingsGroup>
-        <SettingsCell
-          icon="swap-horizontal-outline"
-          title="Currency Display"
-          value={displayModeLabel}
-          isFirst
-          onPress={cycleDisplayMode}
-        />
-        <SettingsCell
-          icon="globe-outline"
-          title="Local Currency"
-          value={`${currencyCode} (${CURRENCIES[currencyCode].symbol})`}
-          onPress={() => setCurrencyPickerVisible(true)}
-        />
-        <SettingsCell
-          icon="color-palette-outline"
-          title="Theme"
-          value={getThemePreferenceLabel(themePreference)}
-          onPress={() => setThemePickerVisible(true)}
-        />
-        <SettingsCell
-          icon="language-outline"
-          title="Language"
-          value={selectedLanguage}
-          onPress={() => setLanguagePickerVisible(true)}
-        />
-        <SettingsCell
-          icon="notifications-outline"
-          title="Push Notifications"
-          subtitle={pushNotificationsSubtitle}
-          onPress={() => navigation.navigate('PushNotifications')}
-        />
-        <SettingsCell
-          icon="mail-outline"
-          title="Email Notifications"
-          variant="toggle"
-          toggleValue={emailNotificationsEnabled}
-          onToggle={handleToggleEmailNotifications}
-          isLast
-        />
-      </SettingsGroup>
-    );
-    if (matchesSearch('Preferences Currency Local Currency Theme Language Notifications Push Email')) {
-      list.push({ key: 'preferences', header: 'Preferences', items: prefItems });
-    }
-
-    // SUPPORT CARD
-    const supportItems = (
-      <SettingsGroup>
-        <SettingsCell
-          icon="help-circle-outline"
-          title="Help & Support"
-          subtitle="FAQs, contact us, and more"
-          isFirst
-          onPress={() => navigation.navigate('HelpSupport')}
-        />
-        <SettingsCell
-          icon="document-text-outline"
-          title="Terms of Service"
-          onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
-        />
-        <SettingsCell
-          icon="shield-checkmark-outline"
-          title="Privacy Policy"
-          isLast
-          onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
-        />
-      </SettingsGroup>
-    );
-    if (matchesSearch('Support Help Terms Privacy')) {
-      list.push({ key: 'support', header: 'Support', items: supportItems });
-    }
-
-    return list;
-  }, [
-    user?.username,
-    savedPaymentMethod,
-    savedAddress,
-    displayModeLabel,
-    currencyCode,
-    themePreference,
-    selectedLanguage,
-    pushNotificationsSubtitle,
-    emailNotificationsEnabled,
-    twoFactorEnabled,
-    searchQuery,
-    handleToggleEmailNotifications,
-    handleOpenExternal,
-    handleClearCache,
-    navigation,
-    cycleDisplayMode,
-  ]);
-
-  const hasResults = sections.length > 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -395,23 +229,18 @@ export default function SettingsScreen({ navigation }: Props) {
         backgroundColor={Colors.background}
       />
 
-      {/* Header */}
-      <View style={styles.header}>
+      {/* ── Top Bar ── */}
+      <View style={styles.topBar}>
         <AnimatedPressable
           onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityLabel={t('settings.a11y.goBack')}
-          accessibilityRole="button"
-          accessibilityHint="Returns to the previous screen"
+          style={styles.topBarBack}
           scaleValue={0.92}
           hapticFeedback="light"
         >
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
-        <View>
-          <Text style={styles.headerLabel}>{t('settings.header.preferences')}</Text>
-          <Text style={styles.hugeTitle}>{t('settings.header.title')}</Text>
-        </View>
+        <Text style={styles.topBarTitle}>Settings</Text>
+        <View style={styles.topBarBack} />
       </View>
 
       <ScrollView
@@ -419,95 +248,292 @@ export default function SettingsScreen({ navigation }: Props) {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Profile Preview Card */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <View style={styles.profileCard}>
-            <AnimatedPressable
-              onPress={() => navigation.navigate('EditProfile')}
-              activeOpacity={0.85}
-              scaleValue={0.98}
-              hapticFeedback="light"
-              style={styles.profileRow}
-            >
-              <AvatarRing
-                uri={avatarUri ?? undefined}
-                size={56}
-                isUnread={(user as any)?.isVerified ?? false}
-                ringWidth={2}
-              />
-              <View style={styles.profileText}>
-                <Text style={styles.profileName}>{displayName}</Text>
-                {reputationLabel ? <Text style={styles.profileMeta}>{reputationLabel}</Text> : null}
-                {(user as any)?.isVerified && (
-                  <View style={styles.verifiedRow}>
-                    <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
-                    <Text style={styles.verifiedLabel}>Verified</Text>
-                  </View>
-                )}
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </AnimatedPressable>
-          </View>
-        </Reanimated.View>
-
-        {/* Search */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.searchWrap}>
+        {/* ── Search ── */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(0)} style={styles.searchWrap}>
           <AppSearchBar
-            placeholder="Search settings..."
+            placeholder="Search settings"
             value={searchQuery}
             onChangeText={setSearchQuery}
-            containerStyle={{ borderRadius: Radius.full, backgroundColor: Colors.surfaceAlt }}
+            containerStyle={styles.searchField}
           />
         </Reanimated.View>
 
-        {/* Sections */}
-        {hasResults ? (
-          sections.map((section, idx) => {
-            const importanceMap: Record<string, 'high' | 'medium' | 'low' | 'lowest'> = {
-              identity: 'high',
-              commerce: 'medium',
-              security: 'medium',
-              preferences: 'low',
-              support: 'lowest',
-            };
-            return (
-              <Reanimated.View
-                key={section.key}
-                entering={FadeInDown.duration(350).delay(120 + idx * 60)}
+        {/* ── Account Centre / Identity Card ── */}
+        {matchesSearch('Account Centre Personal Information') && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+            <Text style={styles.sectionLabel}>Account Centre</Text>
+            <View style={styles.identityCard}>
+              <AnimatedPressable
+                onPress={() => navigation.navigate('EditProfile')}
+                activeOpacity={0.85}
+                scaleValue={0.98}
+                hapticFeedback="light"
+                style={styles.identityRow}
               >
-                <SettingsSectionHeader title={section.header} importance={importanceMap[section.key] ?? 'medium'} />
-                {section.items}
-                {section.footer ? (
-                  <SettingsSectionFooter text={section.footer} />
-                ) : null}
-              </Reanimated.View>
-            );
-          })
-        ) : (
-          <View style={styles.emptySearch}>
-            <Ionicons name="search-outline" size={40} color={Colors.textMuted} />
-            <Text style={styles.emptySearchText}>No settings found</Text>
-          </View>
-        )}
+                {avatarUri ? (
+                  <AnimatedPressable style={styles.identityAvatar} onPress={() => navigation.navigate('EditProfile')}>
+                    {/* Avatar image placeholder - would use CachedImage in real app */}
+                    <View style={styles.identityAvatarCircle}>
+                      <Text style={styles.identityAvatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
+                    </View>
+                  </AnimatedPressable>
+                ) : (
+                  <View style={styles.identityAvatarCircle}>
+                    <Ionicons name="person" size={24} color={Colors.textPrimary} />
+                  </View>
+                )}
+                <View style={styles.identityText}>
+                  <Text style={styles.identityName}>{displayName}</Text>
+                  {reputationLabel ? (
+                    <Text style={styles.identityMeta}>{reputationLabel}</Text>
+                  ) : (
+                    <Text style={styles.identityMeta}>Manage your account details, privacy and security</Text>
+                  )}
+                  {(user as any)?.isVerified && (
+                    <View style={styles.verifiedRow}>
+                      <Ionicons name="checkmark-circle" size={12} color={Colors.success} />
+                      <Text style={styles.verifiedLabel}>Verified</Text>
+                    </View>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </AnimatedPressable>
 
-        {/* Logout */}
-        {matchesSearch('Log Out') && (
-          <Reanimated.View entering={FadeInDown.duration(350).delay(120 + sections.length * 60)}>
-            <SettingsGroup style={{ marginTop: Space.sm }}>
-              <SettingsCell
-                variant="destructive"
-                title="Log Out"
+              <View style={styles.identityDivider} />
+
+              <CommandRow
+                key="personal-info"
+                icon="person-outline"
+                title="Personal Information"
+                value={user?.username ?? 'Not signed in'}
+                onPress={() => navigation.navigate('EditProfile')}
                 isFirst
-                isLast
-                onPress={handleLogout}
-                accessibilityHint="Signs you out of your account"
               />
-            </SettingsGroup>
+              <CommandRow
+                key="addresses"
+                icon="location-outline"
+                title="Addresses"
+                value={savedAddress ? 'Manage' : 'None'}
+                onPress={() => navigation.navigate('Postage')}
+              />
+              <CommandRow
+                key="closet"
+                icon="shirt-outline"
+                title="Closet"
+                subtitle="Saved, Wishlist & Collections"
+                onPress={() => navigation.navigate('Closet')}
+                isLast
+              />
+            </View>
           </Reanimated.View>
         )}
 
-        {/* Version */}
-        <Text style={styles.versionText}>{t('settings.version', { version: '1.0.0' })}</Text>
+        {/* ── Commerce / Seller Hub ── */}
+        {matchesSearch('Commerce Seller Hub Balance Wallet Payments Shipping Payouts') && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+            <Text style={styles.sectionLabel}>Seller Hub</Text>
+            <View style={styles.rowGroup}>
+              <CommandRow
+                key="balance"
+                icon="wallet-outline"
+                iconColor={Colors.brand}
+                title="Balance & Wallet"
+                value="Manage"
+                onPress={() => navigation.navigate('Wallet')}
+                isFirst
+              />
+              <CommandRow
+                key="payments"
+                icon="card-outline"
+                iconColor={Colors.brand}
+                title="Payment Methods"
+                value={savedPaymentMethod ? 'Manage' : 'None'}
+                onPress={() => navigation.navigate('Payments')}
+              />
+              <CommandRow
+                key="payouts"
+                icon="cash-outline"
+                iconColor={Colors.brand}
+                title="Payouts"
+                value="Manage"
+                onPress={() => navigation.navigate('BalanceHistory')}
+              />
+              <CommandRow
+                key="shipping"
+                icon="cube-outline"
+                iconColor={Colors.brand}
+                title="Shipping"
+                value="Manage"
+                onPress={() => navigation.navigate('Postage')}
+                isLast
+              />
+            </View>
+          </Reanimated.View>
+        )}
+
+        {/* ── Trust & Security ── */}
+        {matchesSearch('Trust Security Password 2FA Devices Sessions Blocked Privacy') && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+            <Text style={styles.sectionLabel}>Trust & Security</Text>
+            <View style={styles.rowGroup}>
+              <CommandRow
+                key="account-details"
+                icon="person-circle-outline"
+                title="Account Details"
+                value="View"
+                onPress={() => navigation.navigate('AccountSettings')}
+                isFirst
+              />
+              <CommandRow
+                key="password"
+                icon="lock-closed-outline"
+                title="Password"
+                value="••••••••"
+                onPress={() => navigation.navigate('ChangePassword')}
+              />
+              <CommandRow
+                key="2fa"
+                icon="shield-checkmark-outline"
+                title="Two-Factor Authentication"
+                value={twoFactorEnabled ? 'On' : 'Off'}
+                onPress={() => navigation.navigate('TwoFactorSetup')}
+              />
+              <CommandRow
+                key="devices"
+                icon="phone-portrait-outline"
+                title="Devices & Sessions"
+                value="Manage"
+                onPress={() => navigation.navigate('ActiveSessions')}
+              />
+              <CommandRow
+                key="blocked"
+                icon="ban-outline"
+                title="Blocked Users"
+                value="View"
+                onPress={() => navigation.navigate('BlockedUsers')}
+              />
+              <CommandRow
+                key="privacy"
+                icon="eye-outline"
+                title="Privacy Controls"
+                value="Manage"
+                onPress={() => navigation.navigate('PrivacySettings')}
+                isLast
+              />
+            </View>
+          </Reanimated.View>
+        )}
+
+        {/* ── Preferences ── */}
+        {matchesSearch('Preferences Currency Language Theme Notifications Personalisation') && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+            <Text style={styles.sectionLabel}>Preferences</Text>
+            <View style={styles.rowGroup}>
+              <CommandRow
+                key="currency-display"
+                icon="swap-horizontal-outline"
+                title="Currency Display"
+                value={displayModeLabel}
+                onPress={cycleDisplayMode}
+                isFirst
+              />
+              <CommandRow
+                key="local-currency"
+                icon="globe-outline"
+                title="Local Currency"
+                value={`${currencyCode} (${CURRENCIES[currencyCode].symbol})`}
+                onPress={() => setCurrencyPickerVisible(true)}
+              />
+              <CommandRow
+                key="theme"
+                icon="color-palette-outline"
+                title="Theme"
+                value={getThemePreferenceLabel(themePreference)}
+                onPress={() => setThemePickerVisible(true)}
+              />
+              <CommandRow
+                key="language"
+                icon="language-outline"
+                title="Language"
+                value={selectedLanguage}
+                onPress={() => setLanguagePickerVisible(true)}
+              />
+              <CommandRow
+                key="personalisation"
+                icon="options-outline"
+                title="Personalisation"
+                subtitle="Content preferences and recommendations"
+                onPress={() => navigation.navigate('Personalisation')}
+              />
+              <CommandRow
+                key="push"
+                icon="notifications-outline"
+                title="Push Notifications"
+                subtitle={pushNotificationsSubtitle}
+                onPress={() => navigation.navigate('PushNotifications')}
+              />
+              <CommandRow
+                key="email"
+                icon="mail-outline"
+                title="Email Notifications"
+                toggleValue={emailNotificationsEnabled}
+                onToggle={handleToggleEmailNotifications}
+                isLast
+              />
+            </View>
+          </Reanimated.View>
+        )}
+
+        {/* ── Support ── */}
+        {matchesSearch('Support Help Terms Privacy About') && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
+            <Text style={styles.sectionLabel}>Support</Text>
+            <View style={styles.rowGroup}>
+              <CommandRow
+                key="help"
+                icon="help-circle-outline"
+                title="Help Centre"
+                subtitle="FAQs, contact us, and more"
+                onPress={() => navigation.navigate('HelpSupport')}
+                isFirst
+              />
+              <CommandRow
+                key="terms"
+                icon="document-text-outline"
+                title="Terms of Service"
+                onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
+              />
+              <CommandRow
+                key="privacy-policy"
+                icon="shield-checkmark-outline"
+                title="Privacy Policy"
+                onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
+              />
+              <CommandRow
+                key="about"
+                icon="information-circle-outline"
+                title="About Thryftverse"
+                value="v1.0.0"
+                onPress={() => navigation.navigate('About')}
+                isLast
+              />
+            </View>
+          </Reanimated.View>
+        )}
+
+        {/* ── Logout ── */}
+        {matchesSearch('Log Out') && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={{ marginTop: Space.md }}>
+            <AnimatedPressable onPress={handleLogout} activeOpacity={0.8} scaleValue={0.98} hapticFeedback="medium">
+              <View style={styles.logoutRow}>
+                <Ionicons name="log-out-outline" size={22} color={Colors.danger} />
+                <Text style={styles.logoutText}>Log Out</Text>
+              </View>
+            </AnimatedPressable>
+          </Reanimated.View>
+        )}
+
+        <View style={{ height: Space.xl }} />
       </ScrollView>
 
       <BottomSheetPicker
@@ -546,34 +572,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.md - Space.xs,
-    paddingVertical: Space.md - Space.xs,
-    gap: 14,
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 4,
   },
-  backBtn: {
+  topBarBack: {
     width: 40,
     height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    letterSpacing: Type.meta.letterSpacing,
-    marginBottom: 2,
-  },
-  hugeTitle: {
-    fontSize: Type.title.size,
+  topBarTitle: {
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
+    letterSpacing: Type.subtitle.letterSpacing,
+    lineHeight: Type.subtitle.lineHeight,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -581,56 +598,163 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xl,
   },
 
-  // Profile card
-  profileCard: {
-    marginBottom: Space.md,
-    padding: Space.md,
+  // Search
+  searchWrap: {
+    marginBottom: Space.lg,
+  },
+  searchField: {
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    height: 48,
+  },
+
+  // Section labels
+  sectionLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    marginBottom: Space.sm + 4,
+    marginTop: Space.lg,
+    letterSpacing: Type.body.letterSpacing,
+  },
+
+  // Identity card
+  identityCard: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    overflow: 'hidden',
+    marginBottom: Space.sm,
   },
-  profileRow: {
+  identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: Space.md,
+    gap: Space.sm + 4,
   },
-  profileAvatarWrap: {
+  identityAvatar: {},
+  identityAvatarCircle: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    overflow: 'hidden',
-    marginRight: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  profileAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  identityAvatarInitial: {
+    fontSize: 20,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
-  profileText: {
+  identityText: {
     flex: 1,
   },
-  profileName: {
+  identityName: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
     lineHeight: Type.subtitle.lineHeight,
   },
-  profileMeta: {
+  identityMeta: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
     marginTop: 2,
     letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
+  identityDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginHorizontal: Space.md,
+  },
+
+  // Row group
+  rowGroup: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    marginBottom: Space.sm,
+  },
+  rowRoot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: Space.md,
+    minHeight: 56,
+    gap: Space.sm + 4,
+  },
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  rowIconWrap: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowTextWrap: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  rowTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+    lineHeight: Type.body.lineHeight,
+  },
+  rowSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 2,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
+  },
+  rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  rowValue: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    maxWidth: 140,
+    letterSpacing: Type.body.letterSpacing,
+  },
+
+  // Toggle
+  toggleTrack: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceAlt,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.textPrimary,
+  },
+  toggleKnobOn: {
+    alignSelf: 'flex-end',
+    backgroundColor: Colors.brand,
+  },
+  toggleKnobOff: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.textMuted,
+  },
+
+  // Verified
   verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
+    marginTop: 2,
   },
   verifiedLabel: {
     fontSize: Type.meta.size,
@@ -639,32 +763,27 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
   },
 
-  // Search
-  searchWrap: {
-    marginBottom: Space.md,
+  // Section divider
+  sectionDivider: {
+    height: 8,
+    backgroundColor: Colors.border,
+    marginVertical: Space.sm,
   },
 
-  // Empty search
-  emptySearch: {
+  // Logout
+  logoutRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xl,
-    gap: Space.sm,
+    gap: Space.sm + 4,
+    paddingVertical: 14,
+    paddingHorizontal: Space.md,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
   },
-  emptySearchText: {
+  logoutText: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    fontFamily: Typography.family.semibold,
+    color: Colors.danger,
     letterSpacing: Type.body.letterSpacing,
-  },
-
-  // Version
-  versionText: {
-    textAlign: 'center',
-    color: Colors.textMuted,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.lg,
-    letterSpacing: Type.caption.letterSpacing,
   },
 });

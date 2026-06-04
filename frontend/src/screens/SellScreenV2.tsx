@@ -23,6 +23,7 @@ import Animated, {
   Extrapolation,
   withSpring,
   withTiming,
+  withSequence,
   FadeInUp,
   FadeIn,
   FadeOut,
@@ -326,8 +327,83 @@ export default function SellScreenV2() {
     return { score, total: steps.length, steps };
   }, [listingMode, photos, title, price, category, condition, desc, shareCountInput, startingBid]);
 
+  /* ── restored readiness + flow logic from .bak ── */
+  const hasBasePhotos = photos.length > 0;
+  const hasRequiredDetails = Boolean(title.trim() && category && size && condition);
+  const hasDescription = desc.trim().length >= 10;
+  const numericPrice = Number(sanitizeDecimalInput(price));
+  const hasValidPrice = Number.isFinite(numericPrice) && numericPrice > 0;
+  const parsedShareCount = Math.floor(Number(shareCountInput));
+  const hasValidShareCount = Number.isFinite(parsedShareCount) && parsedShareCount > 0;
+  const parsedSharePrice = Number(sanitizeDecimalInput(sharePriceInput));
+  const hasValidSharePrice = Number.isFinite(parsedSharePrice) && parsedSharePrice > 0;
+  const coOwnFinancialReady = !coOwnEnabled || (hasValidShareCount && hasValidSharePrice);
+  const coOwnAuthReady = !coOwnEnabled || authPhotos.length > 0;
+
+  const readinessItems = [
+    { key: 'photos', label: 'Media', done: hasBasePhotos },
+    { key: 'details', label: 'Details', done: hasRequiredDetails },
+    { key: 'description', label: 'Description', done: hasDescription },
+    { key: 'price', label: 'Price', done: hasValidPrice },
+    { key: 'coOwnPrice', label: 'Share setup', done: coOwnFinancialReady },
+    { key: 'coOwnAuth', label: 'Auth proof', done: coOwnAuthReady },
+  ];
+
+  const visibleReadinessItems = listingMode === 'co_own'
+    ? readinessItems
+    : readinessItems.filter((item) => item.key !== 'coOwnPrice' && item.key !== 'coOwnAuth');
+
+  const incompleteReadinessCount = visibleReadinessItems.reduce(
+    (count, item) => (item.done ? count : count + 1),
+    0,
+  );
+
+  const publishReady = incompleteReadinessCount === 0;
+
+  const flowSteps = [
+    { key: 'media', label: 'Media', done: hasBasePhotos },
+    { key: 'details', label: 'Details', done: hasRequiredDetails && hasDescription },
+    { key: 'pricing', label: 'Pricing', done: hasValidPrice },
+    { key: 'launch', label: listingMode === 'co_own' ? 'Issue' : listingMode === 'auction' ? 'Auction' : 'Publish', done: publishReady },
+  ];
+
+  const currentFlowStep = flowSteps.findIndex((step) => !step.done);
+  const flowStepCount = flowSteps.length;
+  const flowProgressLabel = currentFlowStep === -1
+    ? `Step ${flowStepCount}/${flowStepCount}`
+    : `Step ${currentFlowStep + 1}/${flowStepCount}`;
+
+  const nextFlowActionHint = !hasBasePhotos
+    ? 'Add at least one photo or video to unlock the listing flow.'
+    : !hasRequiredDetails
+      ? 'Complete title, category, size, and condition.'
+      : !hasDescription
+        ? 'Add a description with key details buyers care about.'
+        : !hasValidPrice
+          ? 'Set a valid price to enable publishing.'
+          : listingMode === 'co_own' && !coOwnFinancialReady
+            ? 'Complete share count and share price for co-own.'
+            : listingMode === 'co_own' && !coOwnAuthReady
+              ? 'Attach authentication photos before issuing co-own units.'
+              : listingMode === 'auction' && !startingBid
+                ? 'Set a starting bid to start your auction.'
+                : 'Everything is ready. You can continue now.';
+
+  const missingReadinessItems = visibleReadinessItems.filter((item) => !item.done);
+  const primaryCtaTitle = publishReady
+    ? listingMode === 'co_own' ? 'Continue to Issue' : listingMode === 'auction' ? 'Start Auction' : 'Publish Item'
+    : 'Review Required Fields';
+  const primaryCtaSubtitle = publishReady
+    ? listingMode === 'co_own'
+      ? 'Opens issuer setup with this listing prefilled.'
+      : listingMode === 'auction'
+      ? 'Starts your auction immediately.'
+      : 'Publishes this listing to your storefront.'
+    : missingReadinessItems.length > 2
+      ? `${missingReadinessItems.slice(0, 2).map((item) => item.label).join(' + ')} +${missingReadinessItems.length - 2} more`
+      : missingReadinessItems.map((item) => item.label).join(' + ');
+
   /* ── clear error when publish-ready ── */
-  const publishReady = readiness.score === readiness.total;
   useEffect(() => {
     if (publishReady && errorMsg) setErrorMsg(null);
   }, [publishReady, errorMsg]);
@@ -351,12 +427,15 @@ export default function SellScreenV2() {
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeOffset.value }] }));
   const triggerShake = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    shakeOffset.value = 0;
-    shakeOffset.value = withSpring(10, { damping: 5, stiffness: 300 }, () => {
-      shakeOffset.value = withSpring(-10, { damping: 5, stiffness: 300 }, () => {
-        shakeOffset.value = withSpring(0, { damping: 5, stiffness: 300 });
-      });
-    });
+    shakeOffset.value = withSequence(
+      withTiming(-8, { duration: 50 }),
+      withTiming(8, { duration: 50 }),
+      withTiming(-6, { duration: 50 }),
+      withTiming(6, { duration: 50 }),
+      withTiming(-3, { duration: 50 }),
+      withTiming(3, { duration: 50 }),
+      withTiming(0, { duration: 50 })
+    );
   }, []);
 
   /* ── price focus animation ── */
@@ -568,13 +647,13 @@ export default function SellScreenV2() {
   }, [pickerMode, category, brand, size, condition]);
 
   const handlePickerSelect = useCallback((val: string) => {
-    if (pickerMode === 'Category') setCategory(val);
-    if (pickerMode === 'Brand') setBrand(val);
-    if (pickerMode === 'Size') setSize(val);
-    if (pickerMode === 'Condition') setCondition(val);
+    if (pickerMode === 'Category') { setCategory(val); updateSellDraft({ categoryId: val, subcategoryId: undefined }); }
+    if (pickerMode === 'Brand') { setBrand(val); updateSellDraft({ brand: val }); }
+    if (pickerMode === 'Size') { setSize(val); updateSellDraft({ size: val }); }
+    if (pickerMode === 'Condition') { setCondition(val); updateSellDraft({ condition: val }); }
     setPickerMode(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [pickerMode]);
+  }, [pickerMode, updateSellDraft]);
 
   /* ── computed values ── */
   const hasDiscount = useMemo(() => {
@@ -624,7 +703,7 @@ export default function SellScreenV2() {
             />
           </View>
           <T.Caption color={Colors.textMuted} style={styles.progressLabel}>
-            {readiness.score} of {readiness.total} steps complete
+            {readiness.score} of {readiness.total} steps complete &middot; {flowProgressLabel}
           </T.Caption>
         </View>
 
@@ -1152,6 +1231,7 @@ export default function SellScreenV2() {
                         <T.Caption color={Colors.textMuted}>{brand}</T.Caption>
                       </Animated.View>
                     ) : null}
+                    <T.Caption color={Colors.textMuted}>{category || 'Category'}</T.Caption>
                   </View>
                 </View>
               </View>
