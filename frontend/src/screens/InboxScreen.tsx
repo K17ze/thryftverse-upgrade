@@ -14,7 +14,6 @@ import { Swipeable } from 'react-native-gesture-handler';
 import Reanimated, { FadeInDown, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { EmptyState } from '../components/EmptyState';
 import { useStore } from '../store/useStore';
-import { MOCK_USERS } from '../data/mockData';
 import { useToast } from '../context/ToastContext';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { useBackendData } from '../context/BackendDataContext';
@@ -117,10 +116,6 @@ export default function InboxScreen() {
     if (currentUser?.id) {
       map.set(currentUser.id, currentUser.username);
     }
-    // Resolve mock user names for known IDs
-    for (const u of MOCK_USERS) {
-      map.set(u.id, u.username);
-    }
     return map;
   }, [currentUser?.id, currentUser?.username]);
 
@@ -136,7 +131,7 @@ export default function InboxScreen() {
       const counterpartyId = conversation.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
       const title = conversation.type === 'group'
         ? conversation.title ?? 'group chat'
-        : (counterpartyId ? participantNameLookup.get(counterpartyId) ?? 'Unknown user' : 'Unknown user');
+        : (counterpartyId ? participantNameLookup.get(counterpartyId) ?? 'Thryft user' : 'Thryft user');
 
       const corpus = [
         title,
@@ -226,7 +221,7 @@ export default function InboxScreen() {
     const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
     const displayTitle = isGroup
       ? item.title ?? 'Untitled Group'
-      : (counterpartyId ? participantNameLookup.get(counterpartyId) ?? 'Unknown user' : 'Unknown user');
+      : (counterpartyId ? participantNameLookup.get(counterpartyId) ?? 'Thryft user' : 'Thryft user');
 
     return (
       <Reanimated.View
@@ -276,8 +271,8 @@ export default function InboxScreen() {
                       isUnread={item.unread}
                       ringWidth={2}
                       fallbackInitials={
-                        displayTitle === 'Unknown user'
-                          ? '?'
+                        displayTitle === 'Thryft user'
+                          ? 'T'
                           : displayTitle.slice(0, 2).toUpperCase()
                       }
                     />

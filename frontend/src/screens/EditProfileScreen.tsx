@@ -22,6 +22,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
+import { EmptyState } from '../components/EmptyState';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import {
   setStoredUserAvatar,
@@ -40,7 +41,7 @@ export default function EditProfileScreen() {
   const updateUserAvatar = useStore((state) => state.updateUserAvatar);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
 
-  const user = currentUser ? { ...MY_USER, ...currentUser } : MY_USER;
+  const user = currentUser as any;
 
   const [name, setName] = useState(user?.username ?? '');
   const [username, setUsername] = useState(user?.username ?? '');
@@ -111,7 +112,25 @@ export default function EditProfileScreen() {
     navigation.goBack();
   };
 
-  const currentAvatar = userAvatar || user.avatar;
+  const currentAvatar = userAvatar || user?.avatar;
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar
+          barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+          backgroundColor={Colors.background}
+        />
+        <EmptyState
+          icon="person-outline"
+          title="Not signed in"
+          subtitle="Sign in to edit your profile."
+          ctaLabel="Sign In"
+          onCtaPress={() => (navigation as any).navigate('Login')}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

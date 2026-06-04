@@ -31,7 +31,6 @@ import type { Message as ConversationMessage } from '../data/mockData';
 import { useBackendData } from '../context/BackendDataContext';
 import { getListingCoverUri, isVideoUri } from '../utils/media';
 import { useStore } from '../store/useStore';
-import { MOCK_USERS } from '../data/mockData';
 import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
@@ -162,9 +161,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (currentUser?.id) {
       map.set(currentUser.id, currentUser.username);
     }
-    for (const u of MOCK_USERS) {
-      map.set(u.id, u.username);
-    }
     return map;
   }, [currentUser?.id, currentUser?.username]);
 
@@ -180,7 +176,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       const sender: 'me' | 'them' = isCurrentUserSender ? 'me' : 'them';
       const senderLabel = botLookup.get(resolvedSenderId)
         ?? userLookup.get(resolvedSenderId)
-        ?? (resolvedSenderId === 'system' ? 'System' : resolvedSenderId);
+        ?? (resolvedSenderId === 'system' ? 'System' : 'Thryft user');
 
       if (entry.offerPrice !== undefined && entry.originalPrice !== undefined) {
         return {
@@ -297,8 +293,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const deployedBotIds = conversation?.botIds ?? [];
   const sellerHandle = resolvedPartnerId
-    ? userLookup.get(resolvedPartnerId) ?? 'Unknown user'
-    : 'Unknown user';
+    ? userLookup.get(resolvedPartnerId) ?? 'Thryft user'
+    : 'Thryft user';
   const sellerLocation = '';
   const sellerLastSeen = '';
 
@@ -779,7 +775,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 ? (() => {
                     const parent = messages.find((m) => m.id === msg.replyToMessageId);
                     return parent
-                      ? { senderName: parent.senderLabel ?? 'Unknown', text: parent.text ?? '' }
+                      ? { senderName: parent.senderLabel ?? 'Thryft user', text: parent.text ?? '' }
                       : null;
                   })()
                 : null
@@ -958,7 +954,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         <View style={[styles.composerWrap, { paddingBottom: Math.max(insets.bottom, Space.sm) + 8 }]}>
           {replyTo ? (
             <ReplyQuote
-              senderName={replyTo.senderLabel ?? 'Unknown'}
+              senderName={replyTo.senderLabel ?? 'Thryft user'}
               text={replyTo.text ?? ''}
               onClose={() => setReplyTo(null)}
             />

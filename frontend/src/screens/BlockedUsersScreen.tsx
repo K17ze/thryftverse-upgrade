@@ -18,7 +18,6 @@ import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Typography } from '../constants/typography';
 import { EmptyState } from '../components/EmptyState';
-import { MOCK_USERS } from '../data/mockData';
 
 type Props = StackScreenProps<RootStackParamList, 'BlockedUsers'>;
 
@@ -27,15 +26,9 @@ export default function BlockedUsersScreen({ navigation }: Props) {
   const blockedIds = useStore((s) => s.blockedUsers);
   const toggleBlocked = useStore((s) => s.toggleBlockedUser);
 
-  const blockedUsers = useMemo(() => {
-    return blockedIds
-      .map((id) => MOCK_USERS.find((u) => u.id === id))
-      .filter(Boolean);
-  }, [blockedIds]);
-
-  const handleUnblock = (userId: string, username: string) => {
+  const handleUnblock = (userId: string) => {
     toggleBlocked(userId);
-    show(`${username} unblocked`, 'success');
+    show('User unblocked', 'success');
   };
 
   return (
@@ -62,7 +55,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {blockedUsers.length === 0 ? (
+        {blockedIds.length === 0 ? (
           <EmptyState
             icon="shield-checkmark-outline"
             title="No blocked users"
@@ -71,42 +64,25 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         ) : (
           <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
             <View style={styles.rowGroup}>
-              {blockedUsers.map((user, index) => (
+              {blockedIds.map((userId, index) => (
                 <View
-                  key={user!.id}
+                  key={userId}
                   style={[
                     styles.userRow,
-                    index < blockedUsers.length - 1 && styles.userRowBorder,
+                    index < blockedIds.length - 1 && styles.userRowBorder,
                   ]}
                 >
                   <View style={styles.avatar}>
-                    {user!.avatar ? (
-                      <AnimatedPressable
-                        onPress={() =>
-                          navigation.navigate('UserProfile', { userId: user!.id })
-                        }
-                        activeOpacity={0.85}
-                        scaleValue={0.98}
-                        hapticFeedback="light"
-                      >
-                        <View style={styles.avatarCircle}>
-                          <Text style={styles.avatarInitial}>
-                            {user!.username.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                      </AnimatedPressable>
-                    ) : (
-                      <View style={styles.avatarCircle}>
-                        <Ionicons name="person" size={18} color={Colors.textMuted} />
-                      </View>
-                    )}
+                    <View style={styles.avatarCircle}>
+                      <Ionicons name="person" size={18} color={Colors.textMuted} />
+                    </View>
                   </View>
                   <View style={styles.userText}>
-                    <Text style={styles.userName}>{user!.username}</Text>
-                    <Text style={styles.userMeta}>{user!.location}</Text>
+                    <Text style={styles.userName}>Thryft user</Text>
+                    <Text style={styles.userMeta}>Blocked user</Text>
                   </View>
                   <AnimatedPressable
-                    onPress={() => handleUnblock(user!.id, user!.username)}
+                    onPress={() => handleUnblock(userId)}
                     activeOpacity={0.75}
                     scaleValue={0.96}
                     hapticFeedback="light"

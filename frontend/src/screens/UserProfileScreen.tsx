@@ -26,7 +26,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Listing, MY_USER, User } from '../data/mockData';
+import { Listing, MY_USER, User, MOCK_USERS } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
@@ -115,31 +115,30 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const profileUser = React.useMemo(
     () =>
       route.params.isMe
-        ? MY_USER
-        : null as any,
-    [route.params.isMe, route.params.userId]
+        ? (currentUser as any ?? MY_USER)
+        : (mockFind(MOCK_USERS, u => u.id === route.params.userId) as any),
+    [route.params.isMe, route.params.userId, currentUser]
   );
 
   const isSelfProfile =
     route.params.isMe ||
-    route.params.userId === currentUser?.id ||
-    route.params.userId === MY_USER.id;
+    route.params.userId === currentUser?.id;
 
   const mediaOverride =
     profileMediaOverrides[route.params.userId]
-    ?? profileMediaOverrides[profileUser.id]
+    ?? (profileUser ? profileMediaOverrides[profileUser.id] : undefined)
     ?? null;
 
   const displayUsername = isSelfProfile
     ? currentUser?.username ?? MY_USER.username
-    : profileUser.username;
+    : profileUser?.username ?? 'Thryft user';
   const displayHandle = `@${displayUsername}`;
   const displayAvatar = isSelfProfile
     ? userAvatar || mediaOverride?.avatar || MY_USER.avatar
-    : mediaOverride?.avatar || profileUser.avatar;
+    : mediaOverride?.avatar || profileUser?.avatar || undefined;
   const displayCover = isSelfProfile
     ? userCover || mediaOverride?.cover || MY_USER.coverPhoto || COVER_IMAGE
-    : mediaOverride?.cover || profileUser.coverPhoto || COVER_IMAGE;
+    : mediaOverride?.cover || profileUser?.coverPhoto || COVER_IMAGE;
 
   const handleShare = React.useCallback(async () => {
     try {
@@ -152,6 +151,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const primaryListingId = profileListings[0]?.id;
 
   const handleMessageProfile = React.useCallback(() => {
+    if (!profileUser?.id) return;
     const conversationId = primaryListingId
       ? `${profileUser.id}_${primaryListingId}`
       : `profile_${profileUser.id}`;
@@ -161,7 +161,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       focusQuery: displayUsername,
       partnerUserId: profileUser.id,
     });
-  }, [displayUsername, navigation, primaryListingId, profileUser.id]);
+  }, [displayUsername, navigation, primaryListingId, profileUser?.id]);
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -300,17 +300,17 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           
           <View style={styles.statsCard}>
             <View style={styles.statCol}>
-              <Text style={styles.statValue}>{profileUser.followers}</Text>
+              <Text style={styles.statValue}>{profileUser?.followers ?? 0}</Text>
               <Text style={styles.statLabel}>Followers</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statValue}>{profileUser.following}</Text>
+              <Text style={styles.statValue}>{profileUser?.following ?? 0}</Text>
               <Text style={styles.statLabel}>Following</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statValue}>{profileUser.listingCount}</Text>
+              <Text style={styles.statValue}>{profileUser?.listingCount ?? 0}</Text>
               <Text style={styles.statLabel}>Active Items</Text>
             </View>
           </View>
@@ -485,6 +485,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               </View>
               
               <Text style={styles.aboutBigName}>{displayUsername}</Text>
+              {(!profileUser && !isSelfProfile) ? (
+                <Text style={styles.honestNote}>Full profile data is fetched from the server when available.</Text>
+              ) : null}
               
               <View style={styles.aboutInfoCard}>
                 <Text style={styles.aboutSectionHeading}>Verified Details</Text>
@@ -502,11 +505,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
                 <Text style={styles.aboutSectionHeading}>Location & Activity</Text>
                 <View style={styles.aboutRow}>
                   <Ionicons name="location" size={20} color={MUTED} />
-                  <Text style={styles.aboutRowText}>{profileUser.location}</Text>
+                  <Text style={styles.aboutRowText}>{profileUser?.location ?? 'Unknown location'}</Text>
                 </View>
                 <View style={styles.aboutRow}>
                   <Ionicons name="time" size={20} color={MUTED} />
-                  <Text style={styles.aboutRowText}>Last seen {profileUser.lastSeen}</Text>
+                  <Text style={styles.aboutRowText}>Last seen {profileUser?.lastSeen ?? 'unknown'}</Text>
                 </View>
               </View>
 
@@ -879,6 +882,14 @@ const styles = StyleSheet.create({
   },
   aboutSectionHeading: { fontSize: Typography.size.caption + 1, fontFamily: Typography.family.bold, color: MUTED, textTransform: 'uppercase', letterSpacing: Typography.tracking.caps, marginBottom: 20 },
   aboutRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
+  honestNote: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 24,
+  },
   aboutRowText: { fontSize: Typography.size.body, fontFamily: Typography.family.medium, color: TEXT },
 });
 

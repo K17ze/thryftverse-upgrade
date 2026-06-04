@@ -8,6 +8,7 @@ import {
   Dimensions,
   Share,
 } from 'react-native';
+import { EmptyState } from '../components/EmptyState';
 import { Video, ResizeMode } from '../components/compat/Video';
 import * as ImagePicker from 'expo-image-picker';
 import Reanimated, {
@@ -84,8 +85,7 @@ export default function MyProfileScreen() {
   const userAvatar = useStore((state) => state.userAvatar);
   const userCover = useStore((state) => state.userCover);
   const currentUser = useStore((state) => state.currentUser);
-  // Merge currentUser (from store) with MY_USER defaults - allows edits to persist
-  const user = currentUser ? { ...MY_USER, ...currentUser } : MY_USER;
+  const user = currentUser as any;
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const updateUserAvatar = useStore((state) => state.updateUserAvatar);
   const updateUserCover = useStore((state) => state.updateUserCover);
@@ -306,6 +306,21 @@ export default function MyProfileScreen() {
   );
 
   const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
+
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <EmptyState
+          icon="person-outline"
+          title="Not signed in"
+          subtitle="Sign in to view your profile, listings, and wallet."
+          ctaLabel="Sign In"
+          onCtaPress={() => navigation.navigate('Login')}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
