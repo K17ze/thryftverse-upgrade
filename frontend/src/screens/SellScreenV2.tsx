@@ -253,10 +253,23 @@ export default function SellScreenV2() {
     if (sellDraft.title) setTitle(sellDraft.title);
     if (sellDraft.description) setDesc(sellDraft.description);
     if (sellDraft.price) setPrice(sellDraft.price);
+    if (sellDraft.originalPrice) setOriginalPrice(sellDraft.originalPrice);
     if (sellDraft.brand) setBrand(sellDraft.brand);
     if (sellDraft.size) setSize(sellDraft.size);
     if (sellDraft.condition) setCondition(sellDraft.condition);
     if (sellDraft.categoryId) setCategory(sellDraft.categoryId);
+    if (sellDraft.tags) setTags(sellDraft.tags);
+    if (sellDraft.listingMode) setListingMode(sellDraft.listingMode);
+    if (sellDraft.shippingMethod) setShippingMethod(sellDraft.shippingMethod);
+    if (sellDraft.shippingPayer) setShippingPayer(sellDraft.shippingPayer);
+    if (sellDraft.startingBid) setStartingBid(sellDraft.startingBid);
+    if (sellDraft.reservePrice) setReservePrice(sellDraft.reservePrice);
+    if (sellDraft.auctionDurationHours) setAuctionDurationHours(sellDraft.auctionDurationHours);
+    if (sellDraft.coOwnEnabled !== undefined) setCoOwnEnabled(sellDraft.coOwnEnabled);
+    if (sellDraft.shareCountInput) setShareCountInput(sellDraft.shareCountInput);
+    if (sellDraft.sharePriceInput) setSharePriceInput(sellDraft.sharePriceInput);
+    if (sellDraft.offeringWindowHours) setOfferingWindowHours(sellDraft.offeringWindowHours);
+    if (sellDraft.authPhotos) setAuthPhotos(sellDraft.authPhotos);
   }, []);
 
   /* ── persist draft on change ── */
@@ -266,16 +279,29 @@ export default function SellScreenV2() {
       title,
       description: desc,
       price,
+      originalPrice,
       brand,
       size,
       condition,
       categoryId: category,
+      tags,
+      listingMode,
+      shippingMethod,
+      shippingPayer,
+      startingBid,
+      reservePrice,
+      auctionDurationHours,
+      coOwnEnabled,
+      shareCountInput,
+      sharePriceInput,
+      offeringWindowHours,
+      authPhotos,
     });
-  }, [photos, title, desc, price, brand, size, condition, category]);
+  }, [photos, title, desc, price, originalPrice, brand, size, condition, category, tags, listingMode, shippingMethod, shippingPayer, startingBid, reservePrice, auctionDurationHours, coOwnEnabled, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, updateSellDraft]);
 
   /* ── co-own bidirectional math: price = shareCount * sharePrice ── */
   useEffect(() => {
-    if (listingMode !== 'co_own' || !coOwnEnabled) return;
+    if (listingMode !== 'co_own') return;
     const listingPrice = Number(sanitizeDecimalInput(price));
     const shareCount = Math.min(20, Math.max(1, Math.floor(Number(shareCountInput))));
     const sharePrice = Number(sanitizeDecimalInput(sharePriceInput));
@@ -289,7 +315,12 @@ export default function SellScreenV2() {
       const calculatedSharePrice = (listingPrice / shareCount).toFixed(2);
       if (calculatedSharePrice !== sharePriceInput) setSharePriceInput(calculatedSharePrice);
     }
-  }, [price, shareCountInput, sharePriceInput, listingMode, coOwnEnabled]);
+  }, [price, shareCountInput, sharePriceInput, listingMode]);
+
+  /* ── auto-sync coOwnEnabled with listingMode ── */
+  useEffect(() => {
+    setCoOwnEnabled(listingMode === 'co_own');
+  }, [listingMode]);
 
   /* ── readiness bar (mode-specific) ── */
   const readiness = useMemo(() => {
@@ -337,8 +368,8 @@ export default function SellScreenV2() {
   const hasValidShareCount = Number.isFinite(parsedShareCount) && parsedShareCount > 0;
   const parsedSharePrice = Number(sanitizeDecimalInput(sharePriceInput));
   const hasValidSharePrice = Number.isFinite(parsedSharePrice) && parsedSharePrice > 0;
-  const coOwnFinancialReady = !coOwnEnabled || (hasValidShareCount && hasValidSharePrice);
-  const coOwnAuthReady = !coOwnEnabled || authPhotos.length > 0;
+  const coOwnFinancialReady = listingMode !== 'co_own' || (hasValidShareCount && hasValidSharePrice);
+  const coOwnAuthReady = listingMode !== 'co_own' || authPhotos.length > 0;
 
   const readinessItems = [
     { key: 'photos', label: 'Media', done: hasBasePhotos },
@@ -533,41 +564,61 @@ export default function SellScreenV2() {
     const trimmedTitle = title.trim();
     const trimmedDescription = desc.trim();
     const numericPrice = Number(sanitizeDecimalInput(price));
+    const nextErrors: Record<string, string> = {};
 
     if (photos.length === 0) {
-      setErrorMsg('Add at least one photo or video before publishing.');
-      triggerShake();
-      haptics.error();
-      return;
+      nextErrors.photos = 'Add at least one photo or video before publishing.';
     }
 
-    if (!trimmedTitle || !category) {
-      setErrorMsg('Please provide a title and category.');
-      triggerShake();
-      haptics.error();
-      return;
+    if (!trimmedTitle) {
+      nextErrors.title = 'Please provide a title.';
     }
-
-    if (!size || !condition) {
-      setErrorMsg('Please choose both size and condition.');
-      triggerShake();
-      haptics.error();
-      return;
+    if (!category) {
+      nextErrors.category = 'Please select a category.';
     }
-
+    if (!size) {
+      nextErrors.size = 'Please choose a size.';
+    }
+    if (!condition) {
+      nextErrors.condition = 'Please choose a condition.';
+    }
     if (!trimmedDescription || trimmedDescription.length < 10) {
-      setErrorMsg('Add a description with at least 10 characters.');
+      nextErrors.description = 'Add a description with at least 10 characters.';
+    }
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+      nextErrors.price = 'Enter a valid price greater than 0.';
+    }
+
+    if (listingMode === 'co_own') {
+      const shareCount = Math.floor(Number(shareCountInput));
+      const sharePrice = Number(sanitizeDecimalInput(sharePriceInput));
+      if (!Number.isFinite(shareCount) || shareCount <= 0) {
+        nextErrors.shareCount = 'Enter a valid share count.';
+      }
+      if (!Number.isFinite(sharePrice) || sharePrice <= 0) {
+        nextErrors.sharePrice = 'Enter a valid share price.';
+      }
+      if (authPhotos.length === 0) {
+        nextErrors.authPhotos = 'Attach authentication photos before issuing co-own units.';
+      }
+    }
+
+    if (listingMode === 'auction') {
+      const bid = Number(sanitizeDecimalInput(startingBid));
+      if (!Number.isFinite(bid) || bid <= 0) {
+        nextErrors.startingBid = 'Enter a valid starting bid greater than 0.';
+      }
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      setErrorMsg('Please fix the errors above before publishing.');
       triggerShake();
       haptics.error();
       return;
     }
 
-    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
-      setErrorMsg('Enter a valid price greater than 0.');
-      triggerShake();
-      haptics.error();
-      return;
-    }
+    setErrors({});
 
     if (listingMode === 'co_own') {
       const prefillResult = buildCreateCoOwnPrefillFromSell({
@@ -588,16 +639,6 @@ export default function SellScreenV2() {
       haptics.success();
       navigation.replace('CreateCoOwn', prefillResult.params);
       return;
-    }
-
-    if (listingMode === 'auction') {
-      const bid = Number(sanitizeDecimalInput(startingBid));
-      if (!Number.isFinite(bid) || bid <= 0) {
-        setErrorMsg('Enter a valid starting bid greater than 0.');
-        triggerShake();
-        haptics.error();
-        return;
-      }
     }
 
     setIsPublishing(true);
@@ -907,26 +948,12 @@ export default function SellScreenV2() {
                       Create fractional shares for the Co-Own marketplace.
                     </T.Caption>
                   </View>
-                  <View style={styles.toggleRow}>
-                    {(['off', 'on'] as const).map((mode) => {
-                      const active = (mode === 'on') === coOwnEnabled;
-                      return (
-                        <AnimatedPressable
-                          key={mode}
-                          style={[styles.togglePill, active && styles.togglePillActive]}
-                          onPress={() => { setCoOwnEnabled(mode === 'on'); haptics.press(); }}
-                        >
-                          <T.Caption color={active ? '#fff' : Colors.textPrimary} style={active ? { fontWeight: '700' } : {}}>
-                            {mode === 'on' ? 'On' : 'Off'}
-                          </T.Caption>
-                        </AnimatedPressable>
-                      );
-                    })}
+                  <View style={[styles.togglePill, styles.togglePillActive]}>
+                    <T.Caption color="#fff" style={{ fontWeight: '700' }}>On</T.Caption>
                   </View>
                 </View>
 
-                {coOwnEnabled ? (
-                  <>
+                <>
                     <View style={styles.priceInputWrap}>
                       <T.Headline color={Colors.textMuted} style={styles.priceCurrency}>{currencySymbol}</T.Headline>
                       <TextInput
@@ -963,6 +990,7 @@ export default function SellScreenV2() {
                       prefix={currencySymbol}
                       value={sharePriceInput}
                       onChangeText={(t) => { setSharePriceInput(sanitizeDecimalInput(t)); setErrors((p) => ({ ...p, sharePrice: '' })); }}
+                      errorText={errors.sharePrice}
                       containerStyle={{ marginTop: INNER_GAP }}
                     />
 
@@ -992,12 +1020,10 @@ export default function SellScreenV2() {
                         );
                       })}
                     </View>
+                    {errors.authPhotos ? (
+                      <T.Caption color={Colors.danger} style={{ marginTop: 8 }}>{errors.authPhotos}</T.Caption>
+                    ) : null}
                   </>
-                ) : (
-                  <T.Caption color={Colors.textMuted} style={{ marginTop: INNER_GAP }}>
-                    Enable this to route publishing into the Co-Own issuer flow.
-                  </T.Caption>
-                )}
 
                 <TrustChip text="Clear valuation builds investor confidence" icon="shield-checkmark-outline" />
               </GlassCard>
@@ -1112,7 +1138,7 @@ export default function SellScreenV2() {
               <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
             </AnimatedPressable>
 
-            <AnimatedPressable style={[styles.selectorRow, { marginTop: 12 }]} onPress={() => setPickerMode('Size')}>
+            <AnimatedPressable style={[styles.selectorRow, errors.size ? { borderColor: Colors.danger } : {}, { marginTop: 12 }]} onPress={() => setPickerMode('Size')}>
               <View style={styles.selectorRowInner}>
                 <Ionicons name="resize-outline" size={18} color={Colors.textMuted} />
                 <View style={{ marginLeft: 12, flex: 1 }}>
@@ -1122,6 +1148,9 @@ export default function SellScreenV2() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
             </AnimatedPressable>
+            {errors.size ? (
+              <T.Caption color={Colors.danger} style={{ marginTop: 4 }}>{errors.size}</T.Caption>
+            ) : null}
           </GlassCard>
         </Animated.View>
 
@@ -1361,6 +1390,14 @@ export default function SellScreenV2() {
         <View style={{ height: 100 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ── error banner ── */}
+      {errorMsg ? (
+        <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(200)} style={styles.errorBanner}>
+          <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+          <T.Caption color={Colors.danger} style={{ marginLeft: 8, flex: 1 }}>{errorMsg}</T.Caption>
+        </Animated.View>
+      ) : null}
 
       {/* ── floating publish CTA ── */}
       <Animated.View style={[styles.floatingCtaWrap, shakeStyle]}>
@@ -1781,6 +1818,21 @@ const styles = StyleSheet.create({
   },
   publishBtn: {
     width: '100%',
+  },
+  errorBanner: {
+    position: 'absolute',
+    bottom: 86,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    zIndex: 10,
   },
 
   /* ── staged trust reveal ── */

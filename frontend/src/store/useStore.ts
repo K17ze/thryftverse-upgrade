@@ -36,7 +36,20 @@ interface DraftListing {
   title?: string;
   description?: string;
   price?: string;
+  originalPrice?: string;
   photos?: string[];
+  tags?: string[];
+  listingMode?: 'sell_now' | 'co_own' | 'auction';
+  shippingMethod?: 'standard' | 'express' | null;
+  shippingPayer?: 'buyer' | 'seller' | null;
+  startingBid?: string;
+  reservePrice?: string;
+  auctionDurationHours?: number;
+  coOwnEnabled?: boolean;
+  shareCountInput?: string;
+  sharePriceInput?: string;
+  offeringWindowHours?: number;
+  authPhotos?: string[];
 }
 
 export interface UserLook {
