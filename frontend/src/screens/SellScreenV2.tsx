@@ -5,7 +5,6 @@ import {
   ScrollView,
   Dimensions,
   Image,
-  Alert,
   TextInput,
   Pressable,
   KeyboardAvoidingView,
@@ -35,7 +34,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type } from '../theme/designTokens';
 import { Typography } from '../constants/typography';
 import { T } from '../components/ui/Text';
 import { GlassCard } from '../components/ui/GlassSurface';
@@ -53,7 +52,6 @@ import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { filterImageUris } from '../utils/media';
 import { haptics } from '../utils/haptics';
 
-const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_PADDING = 20;
 const SECTION_GAP = 28;
 const INNER_GAP = 16;
@@ -106,7 +104,7 @@ function TrustReveal({
     if (score === 0) {
       tip = { text: 'Start with a great photo to boost views', icon: 'camera-outline' };
     } else if (!steps[0]) {
-      tip = { text: 'Add 2+ photos for up to 3x more views', icon: 'images-outline' };
+      tip = { text: 'Add 2+ photos so buyers can see details', icon: 'images-outline' };
     } else if (!steps[1]) {
       tip = { text: 'A clear title helps buyers find your item', icon: 'text-outline' };
     } else if (!steps[3]) {
@@ -364,6 +362,8 @@ export default function SellScreenV2() {
   const hasDescription = desc.trim().length >= 10;
   const numericPrice = Number(sanitizeDecimalInput(price));
   const hasValidPrice = Number.isFinite(numericPrice) && numericPrice > 0;
+  const numericStartingBid = Number(sanitizeDecimalInput(startingBid));
+  const hasValidStartingBid = Number.isFinite(numericStartingBid) && numericStartingBid > 0;
   const parsedShareCount = Math.floor(Number(shareCountInput));
   const hasValidShareCount = Number.isFinite(parsedShareCount) && parsedShareCount > 0;
   const parsedSharePrice = Number(sanitizeDecimalInput(sharePriceInput));
@@ -375,7 +375,7 @@ export default function SellScreenV2() {
     { key: 'photos', label: 'Media', done: hasBasePhotos },
     { key: 'details', label: 'Details', done: hasRequiredDetails },
     { key: 'description', label: 'Description', done: hasDescription },
-    { key: 'price', label: 'Price', done: hasValidPrice },
+    { key: 'price', label: listingMode === 'auction' ? 'Starting bid' : 'Price', done: listingMode === 'auction' ? hasValidStartingBid : hasValidPrice },
     { key: 'coOwnPrice', label: 'Share setup', done: coOwnFinancialReady },
     { key: 'coOwnAuth', label: 'Auth proof', done: coOwnAuthReady },
   ];
@@ -394,7 +394,7 @@ export default function SellScreenV2() {
   const flowSteps = [
     { key: 'media', label: 'Media', done: hasBasePhotos },
     { key: 'details', label: 'Details', done: hasRequiredDetails && hasDescription },
-    { key: 'pricing', label: 'Pricing', done: hasValidPrice },
+    { key: 'pricing', label: 'Pricing', done: listingMode === 'auction' ? hasValidStartingBid : hasValidPrice },
     { key: 'launch', label: listingMode === 'co_own' ? 'Issue' : listingMode === 'auction' ? 'Auction' : 'Publish', done: publishReady },
   ];
 
@@ -410,14 +410,14 @@ export default function SellScreenV2() {
       ? 'Complete title, category, size, and condition.'
       : !hasDescription
         ? 'Add a description with key details buyers care about.'
-        : !hasValidPrice
-          ? 'Set a valid price to enable publishing.'
-          : listingMode === 'co_own' && !coOwnFinancialReady
-            ? 'Complete share count and share price for co-own.'
-            : listingMode === 'co_own' && !coOwnAuthReady
-              ? 'Attach authentication photos before issuing co-own units.'
-              : listingMode === 'auction' && !startingBid
-                ? 'Set a starting bid to start your auction.'
+        : listingMode === 'auction' && !hasValidStartingBid
+          ? 'Set a starting bid to start your auction.'
+          : listingMode !== 'auction' && !hasValidPrice
+            ? 'Set a valid price to enable publishing.'
+            : listingMode === 'co_own' && !coOwnFinancialReady
+              ? 'Complete share count and share price for co-own.'
+              : listingMode === 'co_own' && !coOwnAuthReady
+                ? 'Attach authentication photos before issuing co-own units.'
                 : 'Everything is ready. You can continue now.';
 
   const missingReadinessItems = visibleReadinessItems.filter((item) => !item.done);
@@ -436,8 +436,11 @@ export default function SellScreenV2() {
 
   /* ── clear error when publish-ready ── */
   useEffect(() => {
-    if (publishReady && errorMsg) setErrorMsg(null);
-  }, [publishReady, errorMsg]);
+    if (publishReady && (errorMsg || Object.keys(errors).length > 0)) {
+      setErrorMsg(null);
+      setErrors({});
+    }
+  }, [publishReady, errorMsg, errors]);
 
   /* ── spring progress fill ── */
   const progressWidth = useSharedValue(0);
@@ -514,7 +517,7 @@ export default function SellScreenV2() {
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         appendPhotoUri(result.assets[0].uri);
-        setErrorMsg('');
+        setErrorMsg(null);
         haptics.success();
       }
     } catch { /* noop */ }
@@ -534,7 +537,7 @@ export default function SellScreenV2() {
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         appendPhotoUri(result.assets[0].uri);
-        setErrorMsg('');
+        setErrorMsg(null);
         haptics.success();
       }
     } catch { /* noop */ }
@@ -635,14 +638,14 @@ export default function SellScreenV2() {
         return;
       }
 
-      setErrorMsg('');
+      setErrorMsg(null);
       haptics.success();
       navigation.replace('CreateCoOwn', prefillResult.params);
       return;
     }
 
     setIsPublishing(true);
-    setErrorMsg('');
+    setErrorMsg(null);
 
     try {
       await new Promise((r) => setTimeout(r, 1200));
@@ -786,7 +789,7 @@ export default function SellScreenV2() {
               </View>
               <T.BodyEmphasis style={styles.mediaEmptyTitle}>Add photos to get started</T.BodyEmphasis>
               <T.Caption color={Colors.textMuted} style={styles.mediaEmptySub}>
-                Listings with 3+ photos get up to 3x more views
+                Adding more photos helps buyers see details
               </T.Caption>
               <View style={styles.mediaEmptyActions}>
                 <AnimatedPressable style={styles.mediaActionBtn} onPress={handlePickFromCamera}>
@@ -920,7 +923,7 @@ export default function SellScreenV2() {
                     prefix={currencySymbol}
                     keyboardType="decimal-pad"
                     value={originalPrice}
-                    onChangeText={(t) => setOriginalPrice(t.replace(/[^0-9.]/g, ''))}
+                    onChangeText={(t) => setOriginalPrice(sanitizeDecimalInput(t))}
                     containerStyle={{ flex: 1 }}
                   />
                   {hasDiscount && (
@@ -930,7 +933,7 @@ export default function SellScreenV2() {
                   )}
                 </View>
 
-                <TrustChip text="Most sellers in your area list similar items at £25–£45" icon="trending-up-outline" />
+                <TrustChip text="Research similar listings to price competitively" icon="trending-up-outline" />
               </GlassCard>
             </Animated.View>
           </Animated.View>
@@ -1196,7 +1199,7 @@ export default function SellScreenV2() {
               })}
             </View>
 
-            <TrustChip text="Free shipping listings sell up to 30% faster" icon="flash-outline" />
+            <TrustChip text="Free shipping can help your listing stand out" icon="flash-outline" />
           </GlassCard>
         </Animated.View>
 
