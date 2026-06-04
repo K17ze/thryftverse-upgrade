@@ -12,12 +12,15 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 
+import { Text } from 'react-native';
+
 interface AvatarRingProps {
   uri?: string;
   size?: number;
   isOnline?: boolean;
   isUnread?: boolean;
   ringWidth?: number;
+  fallbackInitials?: string;
 }
 
 export function AvatarRing({
@@ -26,6 +29,7 @@ export function AvatarRing({
   isOnline = false,
   isUnread = false,
   ringWidth = 2,
+  fallbackInitials,
 }: AvatarRingProps) {
   const pulse = useSharedValue(0);
 
@@ -86,15 +90,32 @@ export function AvatarRing({
           },
         ]}
       >
-        <CachedImage
-          uri={uri ?? ''}
-          style={{
-            width: size - (isUnread ? ringWidth * 2 : 0),
-            height: size - (isUnread ? ringWidth * 2 : 0),
-            borderRadius: (size - (isUnread ? ringWidth * 2 : 0)) / 2,
-          }}
-          contentFit="cover"
-        />
+        {uri ? (
+          <CachedImage
+            uri={uri}
+            style={{
+              width: size - (isUnread ? ringWidth * 2 : 0),
+              height: size - (isUnread ? ringWidth * 2 : 0),
+              borderRadius: (size - (isUnread ? ringWidth * 2 : 0)) / 2,
+            }}
+            contentFit="cover"
+          />
+        ) : fallbackInitials ? (
+          <View
+            style={{
+              width: size - (isUnread ? ringWidth * 2 : 0),
+              height: size - (isUnread ? ringWidth * 2 : 0),
+              borderRadius: (size - (isUnread ? ringWidth * 2 : 0)) / 2,
+              backgroundColor: Colors.surface,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontSize: size * 0.35, color: Colors.textPrimary, fontWeight: '600' }}>
+              {fallbackInitials}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Online dot */}

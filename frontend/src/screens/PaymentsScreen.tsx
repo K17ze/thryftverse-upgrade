@@ -6,6 +6,7 @@ import {
   ScrollView,
   StatusBar,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,14 +19,15 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { formatCountryPolicyScope, isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { AddCardSheet } from '../components/checkout/AddCardSheet';
-import { CommercePaymentMethod, listUserPaymentMethods } from '../services/commerceApi';
+import { CommercePaymentMethod, listUserPaymentMethods, updateUserPaymentMethod, deleteUserPaymentMethod } from '../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { useToast } from '../context/ToastContext';
 import { AppButton } from '../components/ui/AppButton';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'Payments'>;
@@ -38,6 +40,7 @@ export default function PaymentsScreen({ navigation }: Props) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [addCardSheetVisible, setAddCardSheetVisible] = useState(false);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
+  const [isUpdatingDefault, setIsUpdatingDefault] = useState(false);
   const currentUser = useStore((state) => state.currentUser);
   const savedPaymentMethod = useStore((state) => state.savedPaymentMethod);
   const { formatFromFiat } = useFormattedPrice();
@@ -89,6 +92,97 @@ export default function PaymentsScreen({ navigation }: Props) {
   const allowBankAccounts = isPaymentMethodAllowed(countryCapabilities, 'bank_account');
   const policyLabel = formatCountryPolicyScope(countryCapabilities);
 
+  const handleSetDefault = async (methodId: number) => {
+    if (isUpdatingDefault) return;
+    setIsUpdatingDefault(true);
+    const previous = [...backendPaymentMethods];
+    setBackendPaymentMethods((prev) =>
+      prev.map((m) => (m.id === methodId ? { ...m, isDefault: true } : { ...m, isDefault: false }))
+    );
+    try {
+      const userId = currentUser?.id ?? 'u1';
+      await updateUserPaymentMethod(userId, methodId, { isDefault: true });
+      show('Default payment method updated', 'success');
+    } catch {
+      show('Failed to update default on server. Reverting...', 'error');
+      setBackendPaymentMethods(previous);
+    } finally {
+      setIsUpdatingDefault(false);
+    }
+  };
+
+  const handleEditLabel = (method: CommercePaymentMethod) => {
+    Alert.prompt(
+      'Edit Nickname',
+      'Enter a new nickname for this payment method.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: async (value?: string) => {
+            const trimmed = value?.trim();
+            if (!trimmed) return;
+            const previous = [...backendPaymentMethods];
+            setBackendPaymentMethods((prev) =>
+              prev.map((m) => (m.id === method.id ? { ...m, label: trimmed } : m))
+            );
+            try {
+              const userId = currentUser?.id ?? 'u1';
+              await updateUserPaymentMethod(userId, method.id, { label: trimmed });
+              show('Nickname updated', 'success');
+            } catch {
+              show('Failed to update nickname on server. Reverting...', 'error');
+              setBackendPaymentMethods(previous);
+            }
+          },
+        },
+      ],
+      'plain-text',
+      method.label
+    );
+  };
+
+  const handleRemovePaymentMethod = (method: CommercePaymentMethod) => {
+    Alert.alert(
+      'Remove payment method?',
+      `Are you sure you want to remove ${method.label}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const previous = backendPaymentMethods;
+            setBackendPaymentMethods((prev) => prev.filter((m) => m.id !== method.id));
+            show('Payment method removed', 'info');
+            try {
+              const userId = currentUser?.id ?? 'u1';
+              await deleteUserPaymentMethod(userId, method.id);
+            } catch {
+              show('Failed to remove on server. Restoring...', 'error');
+              setBackendPaymentMethods(previous);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePaymentMethodPress = (method: CommercePaymentMethod) => {
+    Alert.alert(
+      method.label,
+      method.details ?? 'Saved payment method',
+      [
+        ...(method.isDefault
+          ? []
+          : [{ text: 'Set as default', onPress: () => handleSetDefault(method.id) }]),
+        { text: 'Edit nickname', onPress: () => handleEditLabel(method) },
+        { text: 'Remove', style: 'destructive', onPress: () => handleRemovePaymentMethod(method) },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   const renderPaymentMethodRows = (
     methods: CommercePaymentMethod[],
     fallback: CommercePaymentMethod | null,
@@ -102,12 +196,8 @@ export default function PaymentsScreen({ navigation }: Props) {
   ) => {
     if (!allow) {
       return (
-        <AnimatedPressable
+        <View
           style={styles.paymentRow}
-          onPress={() => show('Payment method options coming soon', 'info')}
-          scaleValue={0.98}
-          hapticFeedback="light"
-          activeOpacity={0.8}
         >
           <View style={styles.iconCircle}>
             <Ionicons name={iconOutline as any} size={20} color={Colors.textPrimary} />
@@ -116,7 +206,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             <Text style={styles.paymentTitle}>{unavailableTitle}</Text>
             <Text style={styles.paymentSub}>{unavailableSub}</Text>
           </View>
-        </AnimatedPressable>
+        </View>
       );
     }
     if (methods.length > 0) {
@@ -124,7 +214,7 @@ export default function PaymentsScreen({ navigation }: Props) {
         <AnimatedPressable
           key={method.id}
           style={[styles.paymentRow, idx < methods.length - 1 && styles.paymentRowBorder]}
-          onPress={() => show('Payment method options coming soon', 'info')}
+          onPress={() => handlePaymentMethodPress(method)}
           scaleValue={0.98}
           hapticFeedback="light"
           activeOpacity={0.8}
@@ -148,7 +238,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       return (
         <AnimatedPressable
           style={styles.paymentRow}
-          onPress={() => show('Payment method options coming soon', 'info')}
+          onPress={() => handlePaymentMethodPress(fallback)}
           scaleValue={0.98}
           hapticFeedback="light"
           activeOpacity={0.8}
@@ -179,17 +269,20 @@ export default function PaymentsScreen({ navigation }: Props) {
         backgroundColor={Colors.background}
       />
 
-      <SettingsHeader title="Payments" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Payments" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {policyLabel ? (
           <Text style={styles.policyLabel}>Payment policy: {policyLabel}</Text>
         ) : null}
 
-        {isSyncing && (
-          <View style={styles.syncingRow}>
-            <ActivityIndicator size="small" color={Colors.textMuted} />
-            <Text style={styles.syncingText}>Syncing payment methods...</Text>
+        {isSyncing && backendPaymentMethods.length === 0 && (
+          <View style={styles.skeletonWrap}>
+            <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+            <View style={{ height: Space.sm }} />
+            <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+            <View style={{ height: Space.sm }} />
+            <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
           </View>
         )}
 
@@ -314,11 +407,8 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
     marginBottom: Space.sm,
   },
-  syncingText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    letterSpacing: Type.caption.letterSpacing,
+  skeletonWrap: {
+    marginBottom: Space.md,
   },
   sectionTitle: {
     fontSize: Type.meta.size,
@@ -336,15 +426,13 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md - Space.xs,
   },
   paymentRowBorder: {
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   iconCircle: {
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
     backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
@@ -367,8 +455,6 @@ const styles = StyleSheet.create({
   },
   defaultBadge: {
     backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: Radius.md,

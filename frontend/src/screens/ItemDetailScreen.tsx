@@ -1,9 +1,6 @@
 import { Typography } from '../constants/typography';
 import React, { useState, useCallback } from 'react';
 import {
-  AnimatedPressable
-} from '../components/AnimatedPressable';
-import {
   View,
   Text,
   StyleSheet,
@@ -14,6 +11,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { BlurView } from 'expo-blur';
 import { CachedImage } from '../components/CachedImage';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import Reanimated, {
   useAnimatedScrollHandler,
   useSharedValue,
@@ -27,8 +25,8 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { MOCK_LISTINGS, MOCK_USERS, Listing, User } from '../data/mockData';
-import { mockFind, mockFallback } from '../utils/mockGate';
+import { MOCK_LISTINGS, Listing, User } from '../data/mockData';
+import { mockFind } from '../utils/mockGate';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { ImageViewer } from '../components/ImageViewer';
@@ -50,9 +48,9 @@ import { Space, Radius } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 
 const { width, height } = Dimensions.get('window');
-const PANEL_BG = Colors.glassBg;
-const PANEL_ALT_BG = Colors.glassBg;
-const PANEL_BORDER = Colors.glassBorder;
+const PANEL_BG = Colors.surfaceAlt;
+const PANEL_ALT_BG = Colors.surfaceAlt;
+const PANEL_BORDER = Colors.border;
 const TOP_SCRIM_BG = 'rgba(0,0,0,0.2)';
 
 export default function ItemDetailScreen() {
@@ -73,8 +71,8 @@ export default function ItemDetailScreen() {
   const mockItem = mockFind(MOCK_LISTINGS, l => l.id === itemId);
   const fallbackItem = listings[0] ?? mockFind(MOCK_LISTINGS, () => true);
   const item: Listing = backendItem ?? mockItem ?? fallbackItem!;
-  const seller: User = mockFind(MOCK_USERS, u => u.id === item.sellerId) ?? MOCK_USERS[0];
-  const sellerItems = listings.filter(l => l.sellerId === seller.id && l.id !== item.id);
+  const seller = null as any;
+  const sellerItems = listings.filter(l => l.sellerId === (seller?.id ?? item.sellerId) && l.id !== item.id);
   const otherListings = listings.filter(l => l.id !== item.id).slice(0, 12);
 
   const { formatFromFiat } = useFormattedPrice();
@@ -409,7 +407,7 @@ const styles = StyleSheet.create({
     width: width,
     height: height * 0.65,
     position: 'relative',
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     overflow: 'hidden',
   },
   heroTopScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 132, backgroundColor: TOP_SCRIM_BG },
@@ -421,7 +419,7 @@ const styles = StyleSheet.create({
   blurBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   detailsContainer: { paddingHorizontal: 20, paddingTop: 24 },
   price: { fontSize: 38, fontFamily: Typography.family.semibold, color: Colors.textPrimary, letterSpacing: -0.9, marginBottom: 2 },
-  brand: { fontSize: 15, fontFamily: Typography.family.light, color: Colors.textSecondary, letterSpacing: 0.34, marginBottom: 8 },
+  brand: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, letterSpacing: 0.34, marginBottom: 8 },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -435,7 +433,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
     backgroundColor: PANEL_ALT_BG,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm - Space.xs,
@@ -541,7 +539,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 0.5,
     borderColor: PANEL_BORDER,
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
   },
   messageSellerBtnText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
   sellerItemsSection: { marginTop: 28, paddingBottom: 8 },

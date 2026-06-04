@@ -66,7 +66,7 @@ const GRID_GAP = 10;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const IS_LIGHT = ActiveTheme === 'light';
-const PANEL_BG = Colors.glassBg;
+const PANEL_BG = Colors.surfaceAlt;
 
 // Masonry grid: Varied aspect ratios for visual interest
 const TILE_RATIO_SEQUENCE = [1.28, 0.94, 1.16, 0.86, 1.06, 1.22] as const;
@@ -903,9 +903,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
     ...Elevation.subtle, // ELEVATED: Subtle shadow
   },
   feedContent: {
@@ -1058,8 +1058,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
-    backgroundColor: Colors.glassBg,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
   },
   lookImageWrap: {
     width: '100%',
@@ -1074,8 +1074,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
-    backgroundColor: Colors.glassBg,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
   },
   lookFeedImageWrap: {
     width: '100%',
@@ -1178,7 +1178,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 5,
     position: 'relative',
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
   },
   posterTileUnseen: {
     borderWidth: 2,
@@ -1186,7 +1186,7 @@ const styles = StyleSheet.create({
   },
   posterTileSeen: {
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
   },
   posterImage: {
     width: '100%',
@@ -1347,7 +1347,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: PANEL_BG,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1399,8 +1399,8 @@ const styles = StyleSheet.create({
     minHeight: 28,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.glassBorder,
-    backgroundColor: Colors.glassBg,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1423,7 +1423,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
   },
   exploreSellerText: {
     flex: 1,
@@ -1437,8 +1437,8 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.glassBorder,
-    backgroundColor: Colors.glassBg,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     ...Elevation.subtle, // ELEVATED: Use design system
@@ -1482,13 +1482,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
-    backgroundColor: Colors.glassBg,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
   },
   peekMediaWrap: {
     width: '100%',
     height: 340,
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
   },
   peekMedia: {
     width: '100%',

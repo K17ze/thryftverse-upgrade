@@ -29,8 +29,8 @@ import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { GlassCard } from '../components/ui/GlassSurface';
 import { useBackendData } from '../context/BackendDataContext';
+import { MOCK_LISTINGS, User } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
-import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
 import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'MakeOffer'>;
@@ -62,7 +62,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     || mockFind(MOCK_LISTINGS, (listingItem) => listingItem.id === itemId)
     || listings[0]
     || MOCK_LISTINGS[0];
-  const seller = mockFind(MOCK_USERS, (user) => user.id === listing.sellerId) || MOCK_USERS[0];
+  const seller = null as any;
 
   React.useEffect(() => {
     const defaultOffer = convertGbpToDisplayAmount(price, currencyCode, goldRates);

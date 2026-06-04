@@ -27,7 +27,7 @@ import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { CURRENCIES } from '../constants/currencies';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { GlassCard } from '../components/ui/GlassSurface';
 import { AppInput } from '../components/ui/AppInput';
 import { SettingsCell } from '../components/SettingsCell';
@@ -202,7 +202,7 @@ export default function EditListingScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <SettingsHeader title="Edit Listing" onBack={() => navigation.goBack()} rightAction={saveBtn} />
+      <ScreenHeader title="Edit Listing" onBack={() => navigation.goBack()} rightAction={saveBtn} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>

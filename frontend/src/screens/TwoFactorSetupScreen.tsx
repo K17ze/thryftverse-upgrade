@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import {
@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,8 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { requestTwoFactorEnrollment, verifyTwoFactorEnrollment } from '../services/authApi';
 import { Typography } from '../constants/typography';
+import QRCode from 'qrcode';
+import * as Clipboard from 'expo-clipboard';
 
 type Props = StackScreenProps<RootStackParamList, 'TwoFactorSetup'>;
 const PANEL_BG = Colors.surface;
@@ -31,6 +34,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const [errorMsg, setErrorMsg] = useState('');
   const [manualKey, setManualKey] = useState('');
   const [otpauthUrl, setOtpauthUrl] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
   const [isLoadingEnrollment, setIsLoadingEnrollment] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
@@ -40,6 +44,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const fetchEnrollment = async () => {
     setIsLoadingEnrollment(true);
     setErrorMsg('');
+    setQrDataUrl('');
 
     try {
       const result = await requestTwoFactorEnrollment();
@@ -53,9 +58,22 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     void fetchEnrollment();
   }, []);
+
+  useEffect(() => {
+    if (!otpauthUrl) return;
+    let cancelled = false;
+    QRCode.toDataURL(otpauthUrl, { width: 220, margin: 2, errorCorrectionLevel: 'M' })
+      .then((url) => {
+        if (!cancelled) setQrDataUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl('');
+      });
+    return () => { cancelled = true; };
+  }, [otpauthUrl]);
 
   const handleEnable = async () => {
     if (code.trim().length !== 6) {
@@ -68,9 +86,12 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
     try {
       const result = await verifyTwoFactorEnrollment(code.trim());
       setTwoFactorEnabled(true);
+      const recoveryCodesText = result.recoveryCodes.join('\n');
+      void Clipboard.setStringAsync(recoveryCodesText);
+      show('Recovery codes copied to clipboard', 'success');
       Alert.alert(
         '2FA Enabled',
-        `Save these recovery codes in a secure location:\n\n${result.recoveryCodes.join('\n')}`,
+        `Save these recovery codes in a secure location:\n\n${recoveryCodesText}`,
         [
           {
             text: 'Done',
@@ -107,11 +128,21 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         <View style={styles.qrCard}>
           {isLoadingEnrollment ? (
             <ActivityIndicator color={Colors.textPrimary} size="large" />
+          ) : qrDataUrl ? (
+            <Image source={{ uri: qrDataUrl }} style={styles.qrImage} />
           ) : (
-            <Ionicons name="qr-code-outline" size={88} color={Colors.textPrimary} />
+            <View style={styles.qrError}>
+              <Ionicons name="alert-circle-outline" size={32} color={Colors.danger} />
+              <Text style={styles.qrErrorText}>Could not generate QR code</Text>
+              <Text style={styles.qrHint}>You can still use the manual key below.</Text>
+            </View>
           )}
-          <Text style={styles.qrHint} numberOfLines={3}>{otpauthUrl || 'Generating secure enrollment secret...'}</Text>
-          {!!manualKey && <Text style={styles.manualKeyText}>Manual key: {manualKey}</Text>}
+          {!isLoadingEnrollment && (
+            <>
+              <Text style={styles.qrHint} numberOfLines={3}>{otpauthUrl || 'Generating secure enrollment secret...'}</Text>
+              {!!manualKey && <Text style={styles.manualKeyText}>Manual key: {manualKey}</Text>}
+            </>
+          )}
         </View>
 
         <Text style={styles.inputLabel}>Verification code</Text>
@@ -206,6 +237,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
+  },
+  qrImage: {
+    width: 220,
+    height: 220,
+    borderRadius: 12,
+  },
+  qrError: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 20,
+  },
+  qrErrorText: {
+    color: Colors.danger,
+    fontSize: 14,
+    fontFamily: Typography.family.medium,
   },
   manualKeyText: {
     marginTop: 10,

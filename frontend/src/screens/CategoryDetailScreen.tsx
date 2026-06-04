@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { MOCK_CATEGORIES, MOCK_USERS } from '../data/mockData';
+import { MOCK_CATEGORIES } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
@@ -32,7 +32,7 @@ export default function CategoryDetailScreen() {
   const { listings } = useBackendData();
   const { categoryId } = route.params || {};
   
-  const category = mockFind(MOCK_CATEGORIES, (c) => c.id === categoryId) || MOCK_CATEGORIES[0];
+  const category = mockFind(MOCK_CATEGORIES, (c: any) => c.id === categoryId) || MOCK_CATEGORIES[0];
   // Filter listings based on the selected category for the grid preview.
   const gridData = listings.filter(l => l.category.toLowerCase() === category.name.toLowerCase() || categoryId === 'cat1');
 
@@ -57,7 +57,7 @@ export default function CategoryDetailScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Horizontal Subcategory Pills */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
-          {category.subItems?.map((sub, idx) => (
+          {category.subItems?.map((sub: any, idx: number) => (
             <AnimatedPressable 
               key={idx} style={styles.chip}
               onPress={() => navigation.navigate('Browse', { categoryId: category.id, subcategoryId: sub.id, title: sub.name })}
@@ -73,7 +73,7 @@ export default function CategoryDetailScreen() {
         {/* Dense Grid - Restored Navigation & Real Data Mapping */}
         <View style={styles.grid}>
           {gridData.map((item) => {
-            const seller = mockFind(MOCK_USERS, (user) => user.id === item.sellerId);
+            const seller = null as any;
             const sellerHandle = seller?.username ?? item.sellerId;
 
             return (

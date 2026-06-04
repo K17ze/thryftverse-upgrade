@@ -147,15 +147,9 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to save card right now.');
-      if (parsed.isNetworkError) {
-        savePaymentMethod(localPaymentMethod);
-        show('Card saved locally. Backend sync unavailable.', 'info');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      } else {
-        shouldDismiss = false;
-        show(parsed.message, 'error');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      }
+      shouldDismiss = false;
+      show(parsed.message, 'error');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsSaving(false);
       if (shouldDismiss) {

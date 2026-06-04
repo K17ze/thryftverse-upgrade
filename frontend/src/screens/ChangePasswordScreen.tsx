@@ -22,7 +22,7 @@ import { changePassword } from '../services/authApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar';
 import { Typography } from '../constants/typography';
@@ -74,7 +74,7 @@ export default function ChangePasswordScreen() {
         backgroundColor={Colors.background}
       />
 
-      <SettingsHeader title="Change Password" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Change Password" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}

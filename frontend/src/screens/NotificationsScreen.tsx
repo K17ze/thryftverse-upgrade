@@ -19,7 +19,6 @@ import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { AvatarRing } from '../components/chat/AvatarRing';
-import { PulseDot } from '../components/chat/PulseDot';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -28,8 +27,6 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { MOCK_USERS } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -330,7 +327,7 @@ export default function NotificationsScreen() {
           const icon = getNotifIcon(item.type);
           const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
           const actorUserId = getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
-          const actorUser = actorUserId ? mockFind(MOCK_USERS, (user) => user.id === actorUserId) : null;
+          const actorUser = null as any;
           const actorHandle = actorUser?.username ?? actorUserId;
 
           return (
@@ -351,7 +348,7 @@ export default function NotificationsScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`${item.read ? '' : 'Unread: '}${item.text}, ${item.time}`}
                 >
-                  {!item.read && <PulseDot size={8} color={Colors.brand} />}
+                  {!item.read && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.brand }} />}
 
                   <View style={styles.notifImageWrap}>
                     <SharedTransitionView

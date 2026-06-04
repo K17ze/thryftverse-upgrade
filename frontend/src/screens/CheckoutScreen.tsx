@@ -14,7 +14,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
+import { MOCK_LISTINGS, User } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -49,9 +49,9 @@ import { t } from '../i18n';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 const BRAND = Colors.brand;
-const PANEL_BG = Colors.glassBg;
-const PANEL_SOFT_BG = Colors.glassBg;
-const PANEL_BORDER = Colors.glassBorder;
+const PANEL_BG = Colors.surfaceAlt;
+const PANEL_SOFT_BG = Colors.surfaceAlt;
+const PANEL_BORDER = Colors.border;
 const FOOTER_BG = Colors.background;
 
 interface CheckoutPostageOption {
@@ -155,7 +155,7 @@ export default function CheckoutScreen() {
   const { formatFromFiat } = useFormattedPrice();
 
   const item = listings.find((l) => l.id === itemId) || mockFind(MOCK_LISTINGS, (l) => l.id === itemId) || listings[0] || MOCK_LISTINGS[0];
-  const seller = mockFind(MOCK_USERS, u => u.id === item.sellerId) || MOCK_USERS[0];
+  const seller = null as any;
 
   const PLATFORM_CHARGE = calculatePlatformChargeGbp(item.price);
   const POSTAGE_FEE = postageOption.priceFromGbp;
@@ -725,8 +725,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   readinessChipReady: {
-    backgroundColor: Colors.glassBg,
-    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.surfaceAlt,
+    borderColor: Colors.border,
   },
   readinessChipPending: {
     backgroundColor: PANEL_SOFT_BG,

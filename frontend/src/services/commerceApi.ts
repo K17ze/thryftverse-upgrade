@@ -298,6 +298,22 @@ export async function createUserPaymentMethod(
   return payload.item;
 }
 
+export async function updateUserPaymentMethod(
+  userId: string,
+  paymentMethodId: number,
+  input: Partial<CreatePaymentMethodInput>
+): Promise<CommercePaymentMethod> {
+  const payload = await fetchJson<CreatePaymentMethodResponse>(
+    `/users/${encodeURIComponent(userId)}/payment-methods/${paymentMethodId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+  return payload.item;
+}
+
 export async function deleteUserPaymentMethod(userId: string, paymentMethodId: number): Promise<void> {
   await fetchJson<{ ok: true }>(
     `/users/${encodeURIComponent(userId)}/payment-methods/${paymentMethodId}`,

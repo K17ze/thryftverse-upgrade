@@ -24,7 +24,7 @@ import { CachedImage } from '../components/CachedImage';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import {
   setStoredUserAvatar,
@@ -141,7 +141,7 @@ export default function EditProfileScreen() {
         backgroundColor={Colors.background}
       />
 
-      <SettingsHeader title="Edit Profile" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Edit Profile" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

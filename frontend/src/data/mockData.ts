@@ -98,6 +98,9 @@ export interface Message {
   offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' };
   reactions?: MessageReaction[];
   replyToMessageId?: string;
+  mediaUri?: string;
+  mediaType?: 'image' | 'video';
+  uploadStatus?: 'uploading' | 'failed' | 'sent';
 }
 
 export type ConversationType = 'dm' | 'group';

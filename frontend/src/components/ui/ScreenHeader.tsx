@@ -17,6 +17,7 @@ interface ScreenHeaderProps {
   showBackButton?: boolean;
   backButtonColor?: string;
   backIcon?: React.ComponentProps<typeof Ionicons>['name'];
+  subtitle?: string;
 }
 
 export function ScreenHeader({
@@ -28,6 +29,7 @@ export function ScreenHeader({
   showBackButton = true,
   backButtonColor = Colors.textPrimary,
   backIcon = 'arrow-back',
+  subtitle,
 }: ScreenHeaderProps) {
   const titleSize = variant === 'large' ? Type.title.size : Type.subtitle.size;
   const titleFamily = variant === 'large' ? Typography.family.bold : Typography.family.semibold;
@@ -88,9 +90,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },

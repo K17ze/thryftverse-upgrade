@@ -6,7 +6,6 @@ import {
   ScrollView,
   StatusBar,
   Linking,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,10 +39,9 @@ import {
 } from '../theme/themePreference';
 import { t } from '../i18n';
 import { Space, Radius, Type } from '../theme/designTokens';
-import { GlassCard } from '../components/ui/GlassSurface';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { MY_USER } from '../data/mockData';
+import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'Settings'>;
@@ -178,11 +176,14 @@ export default function SettingsScreen({ navigation }: Props) {
     }
   }, [show]);
 
-  // Profile preview data
-  const user = currentUser ? { ...MY_USER, ...currentUser } : MY_USER;
-  const avatarUri = userAvatar || user.avatar;
-  const displayName = user.username || 'User';
-  const reputationLabel = `${user.rating?.toFixed(1) ?? '0.0'} · ${user.reviewCount ?? 0} reviews`;
+  // Profile preview data — use real user only, no mock fallback for authenticated users
+  const user = currentUser;
+  const avatarUri = userAvatar || user?.avatar || null;
+  const displayName = user?.username ?? 'Not signed in';
+  const hasRealReputation = user != null && ((user as any).rating != null || (user as any).reviewCount != null);
+  const reputationLabel = hasRealReputation
+    ? `${(user as any).rating?.toFixed(1) ?? '0.0'} · ${(user as any).reviewCount ?? 0} reviews`
+    : null;
 
   // Search filter helper
   const matchesSearch = (text: string) => {
@@ -190,166 +191,90 @@ export default function SettingsScreen({ navigation }: Props) {
     return text.toLowerCase().includes(searchQuery.toLowerCase().trim());
   };
 
-  // Build sections as renderable content
+  // Build sections as renderable content — 4 card groups
   const sections: SettingsSectionDef[] = React.useMemo(() => {
     const list: SettingsSectionDef[] = [];
 
-    // Account
-    const accountItems = (
+    // IDENTITY CARD
+    const identityItems = (
       <SettingsGroup>
         <SettingsCell
           icon="person-outline"
-          iconColor={Colors.brand}
+          iconColor={Colors.textPrimary}
           title="Personal Information"
-          value={user.username}
+          value={user?.username ?? 'Not signed in'}
           isFirst
           onPress={() => navigation.navigate('EditProfile')}
         />
         <SettingsCell
-          icon="lock-closed-outline"
-          iconColor={Colors.success}
-          title="Password"
-          value="••••••••"
-          onPress={() => navigation.navigate('ChangePassword')}
-        />
-        <SettingsCell
-          icon="card-outline"
-          iconColor="#4CAF50"
-          title="Payment Methods"
-          value={savedPaymentMethod ? '1 saved' : 'None'}
-          onPress={() => navigation.navigate('Payments')}
-        />
-        <SettingsCell
           icon="location-outline"
-          iconColor="#FF9800"
+          iconColor={Colors.textPrimary}
           title="Addresses"
-          value={savedAddress ? '1 saved' : 'None'}
-          isLast
+          value={savedAddress ? 'Manage' : 'None'}
           onPress={() => navigation.navigate('AccountSettings')}
         />
-      </SettingsGroup>
-    );
-    if (matchesSearch('Account Personal Information Password Payment Methods Addresses')) {
-      list.push({ key: 'account', header: 'Account', items: accountItems });
-    }
-
-    // Preferences
-    const prefItems = (
-      <SettingsGroup>
-        <SettingsCell
-          icon="swap-horizontal-outline"
-          iconColor={Colors.brand}
-          title="Currency Display"
-          value={displayModeLabel}
-          isFirst
-          onPress={cycleDisplayMode}
-        />
-        <SettingsCell
-          icon="globe-outline"
-          iconColor="#64B5F6"
-          title="Local Currency"
-          value={`${currencyCode} (${CURRENCIES[currencyCode].symbol})`}
-          onPress={() => setCurrencyPickerVisible(true)}
-        />
-        <SettingsCell
-          icon="color-palette-outline"
-          iconColor="#BB86FC"
-          title="Theme"
-          value={getThemePreferenceLabel(themePreference)}
-          onPress={() => setThemePickerVisible(true)}
-        />
-        <SettingsCell
-          icon="language-outline"
-          iconColor="#FFD700"
-          title="Language"
-          value={selectedLanguage}
-          isLast
-          onPress={() => setLanguagePickerVisible(true)}
-        />
-      </SettingsGroup>
-    );
-    if (matchesSearch('Preferences Currency Local Currency Theme Language')) {
-      list.push({ key: 'preferences', header: 'Preferences', items: prefItems });
-    }
-
-    // Commerce
-    const commerceItems = (
-      <SettingsGroup>
-        <SettingsCell
-          icon="wallet-outline"
-          iconColor={Colors.success}
-          title="Payout Method"
-          value="Bank •••• 4242"
-          isFirst
-          onPress={() => navigation.navigate('Payments')}
-        />
-        <SettingsCell
-          icon="cube-outline"
-          iconColor="#FF9800"
-          title="Shipping Profiles"
-          value="2 saved"
-          isLast
-          onPress={() => navigation.navigate('Postage')}
-        />
-      </SettingsGroup>
-    );
-    if (matchesSearch('Commerce Payout Method Shipping Profiles')) {
-      list.push({ key: 'commerce', header: 'Commerce', items: commerceItems });
-    }
-
-    // Closet
-    const closetItems = (
-      <SettingsGroup>
         <SettingsCell
           icon="shirt-outline"
-          iconColor={Colors.brand}
+          iconColor={Colors.textPrimary}
           title="Closet"
           subtitle="Saved, Wishlist & Collections"
-          isFirst
           isLast
           onPress={() => navigation.navigate('Closet')}
         />
       </SettingsGroup>
     );
-    if (matchesSearch('Closet Saved Wishlist Collections')) {
-      list.push({ key: 'closet', header: 'Closet', items: closetItems });
+    if (matchesSearch('Identity Personal Information Addresses Closet')) {
+      list.push({ key: 'identity', header: 'Identity', items: identityItems });
     }
 
-    // Notifications
-    const notifItems = (
+    // COMMERCE CARD
+    const commerceItems = (
       <SettingsGroup>
         <SettingsCell
-          icon="notifications-outline"
+          icon="card-outline"
           iconColor={Colors.brand}
-          title="Push Notifications"
-          subtitle={pushNotificationsSubtitle}
+          title="Payment Methods"
+          value={savedPaymentMethod ? 'Manage' : 'None'}
           isFirst
-          onPress={() => navigation.navigate('PushNotifications')}
+          onPress={() => navigation.navigate('Payments')}
         />
         <SettingsCell
-          icon="mail-outline"
-          iconColor="#4CAF50"
-          title="Email Notifications"
-          variant="toggle"
-          toggleValue={emailNotificationsEnabled}
-          onToggle={handleToggleEmailNotifications}
+          icon="wallet-outline"
+          iconColor={Colors.brand}
+          title="Payout Method"
+          value={savedPaymentMethod ? 'Manage' : 'None'}
+          onPress={() => navigation.navigate('Payments')}
+        />
+        <SettingsCell
+          icon="cube-outline"
+          iconColor={Colors.brand}
+          title="Shipping Profiles"
+          value="Manage"
           isLast
+          onPress={() => navigation.navigate('Postage')}
         />
       </SettingsGroup>
     );
-    if (matchesSearch('Notifications Push Email')) {
-      list.push({ key: 'notifications', header: 'Notifications', items: notifItems });
+    if (matchesSearch('Commerce Payment Methods Payout Method Shipping Profiles')) {
+      list.push({ key: 'commerce', header: 'Commerce', items: commerceItems });
     }
 
-    // Security
+    // SECURITY CARD
     const securityItems = (
       <SettingsGroup>
         <SettingsCell
           icon="lock-closed-outline"
-          iconColor={Colors.success}
+          iconColor={Colors.brand}
+          title="Password"
+          value="••••••••"
+          isFirst
+          onPress={() => navigation.navigate('ChangePassword')}
+        />
+        <SettingsCell
+          icon="shield-checkmark-outline"
+          iconColor={Colors.brand}
           title="Two-Factor Authentication"
           value={twoFactorEnabled ? 'On' : 'Off'}
-          isFirst
           onPress={() => navigation.navigate('TwoFactorSetup')}
         />
         <SettingsCell
@@ -362,50 +287,63 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       </SettingsGroup>
     );
-    if (matchesSearch('Security Two-Factor Active Devices')) {
-      list.push({
-        key: 'security',
-        header: 'Security',
-        footer: 'Secure your account with additional protection.',
-        items: securityItems,
-      });
+    if (matchesSearch('Security Password Two-Factor Active Devices')) {
+      list.push({ key: 'security', header: 'Security', items: securityItems });
     }
 
-    // Storage
-    const storageItems = (
+    // PREFERENCES CARD
+    const prefItems = (
       <SettingsGroup>
         <SettingsCell
-          icon="cloud-download-outline"
-          iconColor={Colors.brand}
-          title="Manage Downloads"
+          icon="swap-horizontal-outline"
+          title="Currency Display"
+          value={displayModeLabel}
           isFirst
-          onPress={() => show('Downloads managed automatically', 'info')}
+          onPress={cycleDisplayMode}
         />
         <SettingsCell
-          icon="trash-outline"
-          iconColor={Colors.danger}
-          title="Clear Cache"
-          value="Auto"
+          icon="globe-outline"
+          title="Local Currency"
+          value={`${currencyCode} (${CURRENCIES[currencyCode].symbol})`}
+          onPress={() => setCurrencyPickerVisible(true)}
+        />
+        <SettingsCell
+          icon="color-palette-outline"
+          title="Theme"
+          value={getThemePreferenceLabel(themePreference)}
+          onPress={() => setThemePickerVisible(true)}
+        />
+        <SettingsCell
+          icon="language-outline"
+          title="Language"
+          value={selectedLanguage}
+          onPress={() => setLanguagePickerVisible(true)}
+        />
+        <SettingsCell
+          icon="notifications-outline"
+          title="Push Notifications"
+          subtitle={pushNotificationsSubtitle}
+          onPress={() => navigation.navigate('PushNotifications')}
+        />
+        <SettingsCell
+          icon="mail-outline"
+          title="Email Notifications"
+          variant="toggle"
+          toggleValue={emailNotificationsEnabled}
+          onToggle={handleToggleEmailNotifications}
           isLast
-          onPress={handleClearCache}
         />
       </SettingsGroup>
     );
-    if (matchesSearch('Storage Manage Downloads Clear Cache')) {
-      list.push({
-        key: 'storage',
-        header: 'Storage',
-        footer: 'Clear cached images and downloaded content.',
-        items: storageItems,
-      });
+    if (matchesSearch('Preferences Currency Local Currency Theme Language Notifications Push Email')) {
+      list.push({ key: 'preferences', header: 'Preferences', items: prefItems });
     }
 
-    // Support
+    // SUPPORT CARD
     const supportItems = (
       <SettingsGroup>
         <SettingsCell
           icon="help-circle-outline"
-          iconColor={Colors.brand}
           title="Help & Support"
           subtitle="FAQs, contact us, and more"
           isFirst
@@ -413,13 +351,11 @@ export default function SettingsScreen({ navigation }: Props) {
         />
         <SettingsCell
           icon="document-text-outline"
-          iconColor="#a0a0a0"
           title="Terms of Service"
           onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
         />
         <SettingsCell
           icon="shield-checkmark-outline"
-          iconColor="#a0a0a0"
           title="Privacy Policy"
           isLast
           onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
@@ -427,23 +363,21 @@ export default function SettingsScreen({ navigation }: Props) {
       </SettingsGroup>
     );
     if (matchesSearch('Support Help Terms Privacy')) {
-      list.push({
-        key: 'support',
-        header: 'Support',
-        footer: 'By using ThryftVerse, you agree to our Terms of Service and Privacy Policy.',
-        items: supportItems,
-      });
+      list.push({ key: 'support', header: 'Support', items: supportItems });
     }
 
     return list;
   }, [
-    user.username,
+    user?.username,
+    savedPaymentMethod,
+    savedAddress,
     displayModeLabel,
     currencyCode,
     themePreference,
     selectedLanguage,
     pushNotificationsSubtitle,
     emailNotificationsEnabled,
+    twoFactorEnabled,
     searchQuery,
     handleToggleEmailNotifications,
     handleOpenExternal,
@@ -487,7 +421,7 @@ export default function SettingsScreen({ navigation }: Props) {
       >
         {/* Profile Preview Card */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <GlassCard intensity={30} style={styles.profileCard}>
+          <View style={styles.profileCard}>
             <AnimatedPressable
               onPress={() => navigation.navigate('EditProfile')}
               activeOpacity={0.85}
@@ -496,15 +430,15 @@ export default function SettingsScreen({ navigation }: Props) {
               style={styles.profileRow}
             >
               <AvatarRing
-                uri={avatarUri}
+                uri={avatarUri ?? undefined}
                 size={56}
-                isUnread={user.isVerified}
+                isUnread={(user as any)?.isVerified ?? false}
                 ringWidth={2}
               />
               <View style={styles.profileText}>
                 <Text style={styles.profileName}>{displayName}</Text>
-                <Text style={styles.profileMeta}>{reputationLabel}</Text>
-                {user.isVerified && (
+                {reputationLabel ? <Text style={styles.profileMeta}>{reputationLabel}</Text> : null}
+                {(user as any)?.isVerified && (
                   <View style={styles.verifiedRow}>
                     <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
                     <Text style={styles.verifiedLabel}>Verified</Text>
@@ -513,46 +447,42 @@ export default function SettingsScreen({ navigation }: Props) {
               </View>
               <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
             </AnimatedPressable>
-          </GlassCard>
+          </View>
         </Reanimated.View>
 
         {/* Search */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.searchWrap}>
-          <GlassCard intensity={25} style={{ borderRadius: 16, overflow: 'hidden' }}>
-            <View style={styles.searchInputRow}>
-            <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search settings..."
-              placeholderTextColor={Colors.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              accessibilityLabel="Search settings"
-              accessibilityRole="search"
-            />
-            {searchQuery.length > 0 && (
-              <AnimatedPressable onPress={() => setSearchQuery('')} hapticFeedback="light">
-                <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
-              </AnimatedPressable>
-            )}
-          </View>
-          </GlassCard>
+          <AppSearchBar
+            placeholder="Search settings..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            containerStyle={{ borderRadius: Radius.full, backgroundColor: Colors.surfaceAlt }}
+          />
         </Reanimated.View>
 
         {/* Sections */}
         {hasResults ? (
-          sections.map((section, idx) => (
-            <Reanimated.View
-              key={section.key}
-              entering={FadeInDown.duration(350).delay(120 + idx * 60)}
-            >
-              <SettingsSectionHeader title={section.header} />
-              {section.items}
-              {section.footer ? (
-                <SettingsSectionFooter text={section.footer} />
-              ) : null}
-            </Reanimated.View>
-          ))
+          sections.map((section, idx) => {
+            const importanceMap: Record<string, 'high' | 'medium' | 'low' | 'lowest'> = {
+              identity: 'high',
+              commerce: 'medium',
+              security: 'medium',
+              preferences: 'low',
+              support: 'lowest',
+            };
+            return (
+              <Reanimated.View
+                key={section.key}
+                entering={FadeInDown.duration(350).delay(120 + idx * 60)}
+              >
+                <SettingsSectionHeader title={section.header} importance={importanceMap[section.key] ?? 'medium'} />
+                {section.items}
+                {section.footer ? (
+                  <SettingsSectionFooter text={section.footer} />
+                ) : null}
+              </Reanimated.View>
+            );
+          })
         ) : (
           <View style={styles.emptySearch}>
             <Ionicons name="search-outline" size={40} color={Colors.textMuted} />
@@ -624,12 +554,10 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.glassBg,
-    borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -648,7 +576,8 @@ const styles = StyleSheet.create({
     lineHeight: Type.title.lineHeight,
   },
   scrollContent: {
-    padding: Space.md,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
     paddingBottom: Space.xl,
   },
 
@@ -656,6 +585,13 @@ const styles = StyleSheet.create({
   profileCard: {
     marginBottom: Space.md,
     padding: Space.md,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
   profileRow: {
     flexDirection: 'row',
@@ -706,25 +642,6 @@ const styles = StyleSheet.create({
   // Search
   searchWrap: {
     marginBottom: Space.md,
-  },
-  searchInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-    borderRadius: Radius.lg,
-    borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
-    paddingHorizontal: Space.sm + Space.xs,
-    paddingVertical: Space.sm,
-    gap: Space.xs + Space.xs,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    paddingVertical: 0,
   },
 
   // Empty search

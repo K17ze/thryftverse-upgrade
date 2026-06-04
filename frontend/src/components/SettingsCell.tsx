@@ -52,26 +52,18 @@ export function SettingsCell({
   style,
   accessibilityHint,
 }: SettingsCellProps) {
-  // Determine border radius based on position in group
-  const borderRadiusStyle = {
-    borderTopLeftRadius: isFirst ? Radius.lg : 0,
-    borderTopRightRadius: isFirst ? Radius.lg : 0,
-    borderBottomLeftRadius: isLast ? Radius.lg : 0,
-    borderBottomRightRadius: isLast ? Radius.lg : 0,
-  };
-
-  // Determine if we show chevron
   const showChevron = variant === 'default' || variant === 'value';
+  const isInteractive = variant !== 'toggle' && variant !== 'custom';
 
   const renderContent = () => (
-    <View style={[styles.container, borderRadiusStyle, style]}>
-      {/* Icon */}
+    <View style={[styles.container, !isLast && styles.rowBorder, style]}>
+      {/* Icon — fixed-width monochrome column */}
       {icon && (
-        <View style={[styles.iconContainer, { backgroundColor: iconColor ? `${iconColor}20` : Colors.surface }]}>
+        <View style={styles.iconCol}>
           <Ionicons
             name={icon as any}
-            size={22}
-            color={iconColor || Colors.textMuted}
+            size={20}
+            color={iconColor ? `${iconColor}cc` : Colors.textMuted}
           />
         </View>
       )}
@@ -124,7 +116,7 @@ export function SettingsCell({
         {showChevron && (
           <Ionicons
             name="chevron-forward"
-            size={18}
+            size={16}
             color={Colors.textMuted}
             style={styles.chevron}
           />
@@ -133,7 +125,7 @@ export function SettingsCell({
     </View>
   );
 
-  if (variant === 'toggle' || variant === 'custom') {
+  if (!isInteractive) {
     return renderContent();
   }
 
@@ -142,7 +134,7 @@ export function SettingsCell({
       onPress={onPress}
       disabled={disabled || !onPress}
       activeOpacity={0.7}
-      scaleValue={0.985}
+      scaleValue={0.99}
       hapticFeedback='light'
     >
       {renderContent()}
@@ -153,11 +145,14 @@ export function SettingsCell({
 // Section Header Component
 interface SettingsSectionHeaderProps {
   title: string;
+  importance?: 'high' | 'medium' | 'low' | 'lowest';
 }
 
-export function SettingsSectionHeader({ title }: SettingsSectionHeaderProps) {
+export function SettingsSectionHeader({ title, importance = 'medium' }: SettingsSectionHeaderProps) {
   return (
-    <Text style={styles.sectionHeader}>{title.toUpperCase()}</Text>
+    <Text style={[styles.sectionHeader, styles[`sectionHeader_${importance}` as keyof typeof styles]]}>
+      {title.toUpperCase()}
+    </Text>
   );
 }
 
@@ -188,27 +183,33 @@ export function SettingsGroup({ children, style }: SettingsGroupProps) {
 
 const styles = StyleSheet.create({
   group: {
-    marginHorizontal: Space.md,
     marginBottom: Space.md,
     backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.sm + Space.xs,
+    paddingVertical: Space.sm + 6,
     paddingHorizontal: Space.md,
     minHeight: 52,
     backgroundColor: Colors.surface,
   },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    justifyContent: 'center',
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  iconCol: {
+    width: 28,
     alignItems: 'center',
-    marginRight: Space.sm,
+    justifyContent: 'center',
+    marginRight: Space.sm + 2,
   },
   textContainer: {
     flex: 1,
@@ -216,7 +217,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: 'Inter_500Medium',
     color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
@@ -231,7 +232,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
     marginTop: 2,
     lineHeight: Type.caption.lineHeight,
@@ -240,17 +241,17 @@ const styles = StyleSheet.create({
   rightContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + Space.xs,
+    gap: Space.xs,
   },
   valueText: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
     maxWidth: 150,
     letterSpacing: Type.body.letterSpacing,
   },
   chevron: {
-    marginLeft: 4,
+    marginLeft: 2,
   },
   badge: {
     backgroundColor: Colors.brand,
@@ -263,25 +264,44 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: '#FFFFFF',
     letterSpacing: Type.caption.letterSpacing,
   },
   sectionHeader: {
     fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.textMuted,
     marginHorizontal: Space.md,
-    marginTop: Space.lg + Space.sm,
-    marginBottom: Space.xs + Space.xs,
+    marginTop: Space.lg,
+    marginBottom: Space.sm,
     letterSpacing: Type.meta.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  sectionHeader_high: {
+    color: Colors.textSecondary,
+    fontSize: Type.caption.size,
+    marginTop: Space.lg + Space.sm,
+    marginBottom: Space.sm + 2,
+  },
+  sectionHeader_medium: {
+    // defaults
+  },
+  sectionHeader_low: {
+    fontFamily: 'Inter_500Medium',
+    marginTop: Space.md,
+  },
+  sectionHeader_lowest: {
+    fontFamily: 'Inter_500Medium',
+    color: `${Colors.textMuted}99`,
+    marginTop: Space.md,
   },
   sectionFooter: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: 'Inter_400Regular',
     color: Colors.textMuted,
     marginHorizontal: Space.md,
-    marginTop: Space.xs + Space.xs,
+    marginTop: Space.sm,
     marginBottom: Space.md,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,

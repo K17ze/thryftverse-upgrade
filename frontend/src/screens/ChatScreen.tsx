@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   View,
@@ -8,6 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, {
@@ -18,23 +20,26 @@ import Reanimated, {
   Layout,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import NetInfo from '@react-native-community/netinfo';
+import { AppState } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
+import { Typography } from '../constants/typography';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { MOCK_USERS, MOCK_LISTINGS } from '../data/mockData';
 import type { Message as ConversationMessage } from '../data/mockData';
-import { mockArrayOrEmpty, mockFind } from '../utils/mockGate';
 import { useBackendData } from '../context/BackendDataContext';
-import { getListingCoverUri } from '../utils/media';
+import { getListingCoverUri, isVideoUri } from '../utils/media';
 import { useStore } from '../store/useStore';
 import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
+  deleteConversationMessageOnApi,
 } from '../services/chatApi';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { AppStatusPill } from '../components/ui/AppStatusPill';
+import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { ChatHeader } from '../components/chat/ChatHeader';
@@ -56,7 +61,7 @@ import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 
 type Props = StackScreenProps<RootStackParamList, 'Chat'>;
 
-type MsgType = 'text' | 'offer' | 'offer_declined' | 'purchase_status';
+type MsgType = 'text' | 'offer' | 'offer_declined' | 'purchase_status' | 'media';
 
 interface Message {
   id: string;
@@ -68,30 +73,13 @@ interface Message {
   date?: string;
   replyToMessageId?: string;
   reactions?: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
+  mediaUri?: string;
+  mediaType?: 'image' | 'video';
+  uploadStatus?: 'uploading' | 'failed' | 'sent';
+  status?: 'sending' | 'sent' | 'failed';
 }
 
-const INITIAL_MESSAGES: Message[] = [
-  { id: 'd1', type: 'text', sender: 'me', text: '', date: '19/03/2026' },
-  {
-    id: 'm1',
-    type: 'offer',
-    sender: 'me',
-    offer: { price: 30, originalPrice: 48, status: 'declined' },
-  },
-  {
-    id: 'm2',
-    type: 'offer',
-    sender: 'them',
-    offer: { price: 35, originalPrice: 48 },
-  },
-  {
-    id: 's1',
-    type: 'purchase_status',
-    sender: 'them',
-    text: "Purchase successful\nmariefullery has to send it before 26 Mar. We'll keep you updated on the progress.",
-    date: '20/03/2026',
-  },
-];
+const INITIAL_MESSAGES: Message[] = [];
 
 const CHAT_ORDER_ID = 'ord1';
 
@@ -107,7 +95,7 @@ function TaggedItemCard({
   const { listings } = useBackendData();
   const listing = useMemo(() => {
     if (!itemId) return null;
-    return listings.find((l) => l.id === itemId) || mockFind(MOCK_LISTINGS, (l) => l.id === itemId);
+    return listings.find((l) => l.id === itemId) || null;
   }, [itemId, listings]);
 
   if (!listing) return null;
@@ -169,9 +157,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const userLookup = useMemo(() => {
     const map = new Map<string, string>();
-    for (const user of mockArrayOrEmpty(MOCK_USERS)) {
-      map.set(user.id, user.username);
-    }
     map.set('me', currentUser?.username ?? 'you');
     if (currentUser?.id) {
       map.set(currentUser.id, currentUser.username);
@@ -181,7 +166,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const hydratedMessages = useMemo<Message[]>(() => {
     if (!conversation?.messages.length) {
-      return INITIAL_MESSAGES;
+      return [];
     }
     return conversation.messages.map((entry) => {
       const resolvedSenderId = entry.senderId;
@@ -207,7 +192,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       }
       return {
         id: entry.id,
-        type: 'text',
+        type: entry.mediaUri ? 'media' : 'text',
         sender,
         senderLabel,
         text: entry.text ?? entry.systemTitle ?? '',
@@ -217,6 +202,9 @@ export default function ChatScreen({ navigation, route }: Props) {
           count: r.userIds.length,
           reactedByMe: r.userIds.includes(currentUser?.id ?? 'me'),
         })),
+        mediaUri: entry.mediaUri,
+        mediaType: entry.mediaType,
+        uploadStatus: entry.uploadStatus,
       };
     });
   }, [botLookup, conversation?.messages, currentUser?.id, userLookup]);
@@ -232,8 +220,53 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
   const [isSyncing, setIsSyncing] = useState(false);
   const [attachmentPickerVisible, setAttachmentPickerVisible] = useState(false);
+  const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
+  const undoTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deleteApiStatusRef = useRef<'pending' | 'success' | 'error'>('pending');
+  const wasOfflineRef = useRef(false);
+  const [searchQuery, setSearchQuery] = useState(route.params.focusQuery ?? '');
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
+  const [isSearchActive, setIsSearchActive] = useState(!!route.params.focusQuery);
+  const [isOffline, setIsOffline] = useState(false);
+  const [composerSending, setComposerSending] = useState(false);
   const listRef = React.useRef<FlatList>(null);
   const { formatFromFiat } = useFormattedPrice();
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state: { isConnected: boolean | null }) => {
+      const isNowOffline = !state.isConnected;
+      setIsOffline(isNowOffline);
+      // Reconcile on reconnect
+      if (wasOfflineRef.current && !isNowOffline) {
+        void syncMessagesFromApi();
+      }
+      wasOfflineRef.current = isNowOffline;
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const syncMessagesFromApi = async () => {
+    setIsSyncing(true);
+    try {
+      const syncedMessages = await fetchConversationMessagesFromApi(conversationId);
+      if (!syncedMessages.length) return;
+      replaceConversationMessages(conversationId, syncedMessages);
+    } catch {
+      // Keep local state when sync unavailable
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        void syncMessagesFromApi();
+      }
+    };
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [conversationId]);
 
   useEffect(() => {
     setMessages(hydratedMessages);
@@ -247,23 +280,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     setConversationDraft(conversationId, input);
   }, [input, conversationId, setConversationDraft]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const syncMessagesFromApi = async () => {
-      setIsSyncing(true);
-      try {
-        const syncedMessages = await fetchConversationMessagesFromApi(conversationId);
-        if (cancelled || !syncedMessages.length) return;
-        replaceConversationMessages(conversationId, syncedMessages);
-      } catch {
-        // Keep local state when sync unavailable
-      } finally {
-        if (!cancelled) setIsSyncing(false);
-      }
-    };
-    void syncMessagesFromApi();
-    return () => { cancelled = true; };
-  }, [conversationId, replaceConversationMessages]);
+
 
   const resolvedPartnerId = useMemo(() => {
     if (isGroup) return null;
@@ -273,14 +290,30 @@ export default function ChatScreen({ navigation, route }: Props) {
   }, [conversation?.participantIds, conversation?.sellerId, currentUser?.id, isGroup, route.params.partnerUserId]);
 
   const deployedBotIds = conversation?.botIds ?? [];
-  const sellerUser = resolvedPartnerId
-    ? mockArrayOrEmpty(MOCK_USERS).find((user) => user.id === resolvedPartnerId)
-    : undefined;
   const sellerHandle = resolvedPartnerId
-    ? userLookup.get(resolvedPartnerId) ?? sellerUser?.username ?? resolvedPartnerId
+    ? userLookup.get(resolvedPartnerId) ?? resolvedPartnerId
     : 'profile';
-  const sellerLocation = sellerUser?.location ?? 'South Elmsall, UK';
-  const sellerLastSeen = sellerUser?.lastSeen ?? '2h ago';
+  const sellerLocation = '';
+  const sellerLastSeen = '';
+
+  const searchMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return messages
+      .map((m, idx) => ({ msg: m, idx }))
+      .filter(({ msg }) => (msg.text ?? '').toLowerCase().includes(q));
+  }, [messages, searchQuery]);
+
+  useEffect(() => {
+    if (searchMatches.length > 0 && listRef.current) {
+      const targetIndex = searchMatches[Math.min(searchMatchIndex, searchMatches.length - 1)]?.idx ?? 0;
+      try {
+        listRef.current.scrollToIndex({ index: targetIndex, animated: true, viewPosition: 0.5 });
+      } catch {
+        // FlatList may not have rendered the item yet
+      }
+    }
+  }, [searchMatchIndex, searchMatches]);
 
   const pushMessage = (next: Message) => {
     setMessages((prev) => [...prev, next]);
@@ -296,31 +329,54 @@ export default function ChatScreen({ navigation, route }: Props) {
       offerStatus: next.offer?.status === 'countered' ? 'pending' : next.offer?.status,
       isSystem: senderIdOverride === 'system',
       timestamp: 'just now',
-      type: next.type === 'offer' ? 'offer' : 'text',
+      type: next.type === 'offer' ? 'offer' : next.type === 'media' ? 'text' : 'text',
       sender: next.sender === 'me' ? 'me' : 'other',
+      mediaUri: next.mediaUri,
+      mediaType: next.mediaType,
+      uploadStatus: next.uploadStatus,
     });
   };
 
   const sendMessage = () => {
     const trimmed = input.trim();
     if (!trimmed) return;
+    setComposerSending(true);
 
+    const localId = String(Date.now()) + '_' + Math.random().toString(36).slice(2, 7);
     const outgoing: Message = {
-      id: String(Date.now()),
+      id: localId,
       type: 'text',
       sender: 'me',
       senderLabel: currentUser?.username ?? 'you',
       text: trimmed,
+      status: 'sending',
     };
     if (replyTo) {
       outgoing.replyToMessageId = replyTo.id;
     }
     pushMessage(outgoing);
     appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
 
-    if (isGroup) {
-      void sendConversationMessageOnApi(conversationId, trimmed).catch(() => {});
-    }
+    sendConversationMessageOnApi(conversationId, trimmed)
+      .then((serverMsg) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === localId
+              ? { ...m, id: serverMsg.id, status: 'sent' as const }
+              : m
+          )
+        );
+      })
+      .catch(() => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === localId ? { ...m, status: 'failed' as const } : m
+          )
+        );
+        show('Message failed to send. Tap to retry.', 'error');
+      })
+      .finally(() => setComposerSending(false));
 
     if (isGroup && trimmed.startsWith('/') && deployedBotIds.length > 0) {
       const botId = deployedBotIds[0];
@@ -382,18 +438,88 @@ export default function ChatScreen({ navigation, route }: Props) {
     setSelectedMessageIds(new Set());
   };
 
+  const scheduleUndoClear = () => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setRecentlyDeleted([]), 5000);
+  };
+
+  const handleUndoDelete = () => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    if (deleteApiStatusRef.current === 'success') {
+      show('Messages were deleted on the server and cannot be restored.', 'info');
+      setRecentlyDeleted([]);
+      return;
+    }
+    setMessages((prev) => {
+      const restored = [...recentlyDeleted];
+      const all = [...prev, ...restored];
+      all.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+      return all;
+    });
+    setRecentlyDeleted([]);
+    show('Messages restored', 'success');
+  };
+
   const handleBulkDelete = () => {
-    haptic.medium();
     const idsToDelete = new Set(selectedMessageIds);
-    setMessages((prev) => prev.filter((m) => !idsToDelete.has(m.id)));
-    show('Deleted ' + idsToDelete.size + ' message' + (idsToDelete.size === 1 ? '' : 's'), 'info');
-    exitSelectionMode();
+    const toDelete = messages.filter((m) => idsToDelete.has(m.id));
+    if (toDelete.length === 0) { exitSelectionMode(); return; }
+    Alert.alert(
+      'Delete messages?',
+      `This will remove ${toDelete.length} message${toDelete.length === 1 ? '' : 's'}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            haptic.medium();
+            deleteApiStatusRef.current = 'pending';
+            setRecentlyDeleted(toDelete);
+            setMessages((prev) => prev.filter((m) => !idsToDelete.has(m.id)));
+            exitSelectionMode();
+            scheduleUndoClear();
+            try {
+              await Promise.all(
+                toDelete.map((m) => deleteConversationMessageOnApi(conversationId, m.id))
+              );
+              deleteApiStatusRef.current = 'success';
+            } catch {
+              deleteApiStatusRef.current = 'error';
+              show('Some messages may not have been deleted on the server.', 'error');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteMessage = (msg: Message) => {
-    haptic.medium();
-    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-    show('Message deleted', 'info');
+    Alert.alert(
+      'Delete message?',
+      'This message will be removed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            haptic.medium();
+            deleteApiStatusRef.current = 'pending';
+            setRecentlyDeleted([msg]);
+            setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+            scheduleUndoClear();
+            try {
+              await deleteConversationMessageOnApi(conversationId, msg.id);
+              deleteApiStatusRef.current = 'success';
+            } catch {
+              deleteApiStatusRef.current = 'error';
+              show('Message deleted locally. It may still be visible to others.', 'info');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const scrollToBottom = () => {
@@ -401,23 +527,109 @@ export default function ChatScreen({ navigation, route }: Props) {
     setShowScrollToBottom(false);
   };
 
+  const sendMediaMessage = (msgId: string, uri: string, mediaType: 'image' | 'video') => {
+    sendConversationMessageOnApi(conversationId, '', {
+      mediaUri: uri,
+      mediaType,
+    })
+      .then((serverMsg) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId
+              ? { ...m, id: serverMsg.id, uploadStatus: 'sent' as const }
+              : m
+          )
+        );
+      })
+      .catch(() => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId ? { ...m, uploadStatus: 'failed' as const } : m
+          )
+        );
+        show('Upload failed. Tap media to retry.', 'error');
+      });
+  };
+
+  const handleRetryUpload = (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    if (!msg?.mediaUri || !msg.mediaType) return;
+    if (msg.uploadStatus === 'uploading') return; // Guard against in-flight retry spam
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId ? { ...m, uploadStatus: 'uploading' as const } : m
+      )
+    );
+    sendMediaMessage(msgId, msg.mediaUri, msg.mediaType);
+    haptic.light();
+  };
+
+  const createMediaMessage = (uri: string): Message => {
+    const mediaType = isVideoUri(uri) ? 'video' : 'image';
+    return {
+      id: String(Date.now()) + '_' + mediaType + '_' + Math.random().toString(36).slice(2, 7),
+      type: 'media',
+      sender: 'me',
+      senderLabel: currentUser?.username ?? 'you',
+      text: '',
+      mediaUri: uri,
+      mediaType,
+      uploadStatus: 'uploading',
+    };
+  };
+
   const handleAttachmentSelect = async (type: AttachmentType) => {
     if (type === 'gallery') {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) { show('Allow gallery access to upload media.', 'error'); return; }
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], allowsMultipleSelection: false, quality: 0.9 });
-      if (!result.canceled && result.assets?.[0]?.uri) { show('Photo attached', 'success'); haptic.success(); }
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        const uri = result.assets[0].uri;
+        const outgoing = createMediaMessage(uri);
+        pushMessage(outgoing);
+        appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+        show(mediaTypeLabel(outgoing.mediaType!) + ' attached', 'success');
+        haptic.success();
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+        sendMediaMessage(outgoing.id, uri, outgoing.mediaType!);
+      }
     } else if (type === 'camera') {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) { show('Allow camera access to capture media.', 'error'); return; }
       const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.9 });
-      if (!result.canceled && result.assets?.[0]?.uri) { show('Photo captured', 'success'); haptic.success(); }
-    } else if (type === 'file') { show('File upload coming soon', 'info'); }
-    else if (type === 'location') { show('Location sharing coming soon', 'info'); }
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        const uri = result.assets[0].uri;
+        const outgoing = createMediaMessage(uri);
+        pushMessage(outgoing);
+        appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+        show(mediaTypeLabel(outgoing.mediaType!) + ' captured', 'success');
+        haptic.success();
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+        sendMediaMessage(outgoing.id, uri, outgoing.mediaType!);
+      }
+    }
   };
 
-  const renderMessage = (msg: Message) => {
+  const mediaTypeLabel = (t: 'image' | 'video') => t === 'video' ? 'Video' : 'Photo';
+
+  const renderMessage = (msg: Message, index: number) => {
     const layoutAnimation = reducedMotionEnabled ? undefined : Layout.springify();
+
+    // Clustering logic
+    const prevMsg = messages[index - 1];
+    const nextMsg = messages[index + 1];
+    const isFirstInCluster = !prevMsg || prevMsg.sender !== msg.sender;
+    const isLastInCluster = !nextMsg || nextMsg.sender !== msg.sender;
+
+    // Spacing tiers (8px base grid)
+    let spacingTop: number = Space.sm; // normal medium = 8px
+    if (!prevMsg) spacingTop = Space.md; // first message = 16px
+    else if (prevMsg.sender === msg.sender) spacingTop = 2; // same sender = tight
+    else spacingTop = Space.md; // sender switch = large = 16px
+
+    // Cluster rhythm: tight bottom inside cluster, normal at cluster end
+    let marginBottom: number = 2;
+    if (isLastInCluster) marginBottom = Space.sm;
 
     if (msg.date && !msg.text && !msg.offer) {
       return (
@@ -467,9 +679,8 @@ export default function ChatScreen({ navigation, route }: Props) {
       return (
         <Reanimated.View
           key={msg.id}
-          entering={reducedMotionEnabled ? undefined : ZoomIn.duration(400).springify()}
           layout={layoutAnimation}
-          style={[styles.msgRow, isMe && styles.msgRowRight]}
+          style={[styles.msgRow, isMe && styles.msgRowRight, { marginTop: spacingTop, marginBottom }]}
         >
           <GlassCard intensity={isMe ? 35 : 30} style={[styles.offerCard, isMe && styles.offerCardMe]}>
             {isGroup && !isMe && msg.senderLabel ? (
@@ -519,8 +730,9 @@ export default function ChatScreen({ navigation, route }: Props) {
       );
     }
 
-    if (!msg.text) return null;
     const isMe = msg.sender === 'me';
+    const isMedia = msg.type === 'media' && msg.mediaUri;
+    if (!msg.text && !isMedia) return null;
     return (
       <View style={[styles.selectionRow, isMe && styles.selectionRowRight]}>
         {selectionMode ? (
@@ -537,20 +749,48 @@ export default function ChatScreen({ navigation, route }: Props) {
         ) : null}
         <Reanimated.View
           key={msg.id}
-          entering={reducedMotionEnabled ? undefined : (isMe ? SlideInRight.springify() : SlideInLeft.springify())}
           layout={layoutAnimation}
-          style={[styles.msgRow, isMe && styles.msgRowRight]}
+          style={[styles.msgRow, isMe && styles.msgRowRight, { marginTop: spacingTop, marginBottom }]}
         >
           <MessageBubble
-            text={msg.text}
+            text={msg.text ?? ''}
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
             timestamp={msg.date || 'just now'}
-            status={isMe ? 'sent' : undefined}
+            status={
+              isMe
+                ? (msg.status === 'sending' ? 'sending'
+                  : msg.status === 'failed' ? 'failed'
+                  : msg.uploadStatus === 'uploading' ? 'sending'
+                  : msg.uploadStatus === 'failed' ? 'failed'
+                  : 'sent')
+                : undefined
+            }
             onLongPress={() => handleMessageLongPress(msg)}
+            onReactionPress={() => setReactingToMessage(msg)}
+            replyTo={
+              msg.replyToMessageId
+                ? (() => {
+                    const parent = messages.find((m) => m.id === msg.replyToMessageId);
+                    return parent
+                      ? { senderName: parent.senderLabel ?? 'Unknown', text: parent.text ?? '' }
+                      : null;
+                  })()
+                : null
+            }
             reactions={msg.reactions}
+            mediaUri={msg.mediaUri}
+            mediaType={msg.mediaType}
+            uploadStatus={msg.uploadStatus}
+            onRetry={msg.uploadStatus === 'failed' ? () => handleRetryUpload(msg.id) : undefined}
+            isFirstInCluster={isFirstInCluster}
+            isLastInCluster={isLastInCluster}
+            showAvatar={!isMe && isFirstInCluster}
+            avatarUri={undefined}
+            enteringDelay={0}
+            isRecent={index >= messages.length - 3}
           />
-          {(() => {
+          {!isMedia && (() => {
             const url = extractFirstUrl(msg.text ?? '');
             return url ? (
               <View style={[styles.linkPreviewWrap, isMe && styles.linkPreviewWrapRight]}>
@@ -574,10 +814,10 @@ export default function ChatScreen({ navigation, route }: Props) {
         subtitle={
           isGroup
             ? (conversation?.participantIds?.length ?? 0) + ' members'
-            : sellerLocation + ' \u00b7 ' + sellerLastSeen
+            : ''
         }
-        avatarUrl={isGroup ? null : sellerUser?.avatar ?? null}
-        isOnline={!isGroup}
+        avatarUrl={isGroup ? null : null}
+        isOnline={false}
         onTitlePress={
           isGroup
             ? undefined
@@ -588,20 +828,65 @@ export default function ChatScreen({ navigation, route }: Props) {
               }
         }
         rightAction={
-          isGroup ? (
+          <View style={{ flexDirection: 'row', gap: Space.sm }}>
             <AnimatedPressable
               style={styles.headerIconBtn}
-              onPress={() => navigation.navigate('GroupBotDirectory', { conversationId })}
+              onPress={() => setIsSearchActive((v) => !v)}
               accessibilityRole="button"
               activeOpacity={0.7}
               scaleValue={0.9}
               hapticFeedback="light"
             >
-              <Ionicons name="hardware-chip-outline" size={22} color={Colors.textPrimary} />
+              <Ionicons name={isSearchActive ? 'close-outline' : 'search-outline'} size={22} color={Colors.textPrimary} />
             </AnimatedPressable>
-          ) : null
+            {isGroup ? (
+              <AnimatedPressable
+                style={styles.headerIconBtn}
+                onPress={() => navigation.navigate('GroupBotDirectory', { conversationId })}
+                accessibilityRole="button"
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light"
+              >
+                <Ionicons name="hardware-chip-outline" size={22} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            ) : null}
+          </View>
         }
       />
+
+      {isSearchActive && (
+        <View style={styles.searchBarRow}>
+          <AppSearchBar
+            placeholder="Search in chat"
+            value={searchQuery}
+            onChangeText={(q: string) => { setSearchQuery(q); setSearchMatchIndex(0); }}
+            containerStyle={styles.searchBar}
+            inputProps={{}}
+          />
+          {searchMatches.length > 0 && (
+            <View style={styles.searchNav}>
+              <Text style={styles.searchCount}>{searchMatchIndex + 1}/{searchMatches.length}</Text>
+              <AnimatedPressable
+                onPress={() => setSearchMatchIndex((i) => Math.max(0, i - 1))}
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light"
+              >
+                <Ionicons name="chevron-up" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => setSearchMatchIndex((i) => Math.min(searchMatches.length - 1, i + 1))}
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light"
+              >
+                <Ionicons name="chevron-down" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
+          )}
+        </View>
+      )}
 
       {selectionMode ? (
         <View style={styles.selectionToolbar}>
@@ -632,7 +917,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           <FlatList
             ref={listRef}
             data={messages}
-            renderItem={({ item }) => renderMessage(item)}
+            renderItem={({ item, index }) => renderMessage(item, index)}
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingVertical: Space.md }}
             showsVerticalScrollIndicator={false}
@@ -647,8 +932,17 @@ export default function ChatScreen({ navigation, route }: Props) {
           />
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons name="chatbubble-ellipses-outline" size={40} color={Colors.textMuted} />
-            <Caption color={Colors.textMuted} style={styles.emptySubtitle}>Start the conversation</Caption>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="chatbubbles-outline" size={32} color={Colors.brand} />
+            </View>
+            <Text style={styles.emptyTitle}>No messages yet</Text>
+            <Text style={styles.emptyBody}>
+              Send a message or photo to get the conversation started.
+            </Text>
+            <View style={styles.emptyCtaRow}>
+              <Ionicons name="arrow-down" size={16} color={Colors.textMuted} />
+              <Caption color={Colors.textMuted}>Type below</Caption>
+            </View>
           </View>
         )}
 
@@ -672,6 +966,28 @@ export default function ChatScreen({ navigation, route }: Props) {
               onShowMore={() => setReactingToMessage(null)}
             />
           ) : null}
+          {isOffline && (
+            <View style={styles.offlineBanner}>
+              <Ionicons name="cloud-offline-outline" size={16} color={Colors.textInverse} />
+              <Text style={styles.offlineBannerText}>You are offline. Messages will be sent when you reconnect.</Text>
+            </View>
+          )}
+          {recentlyDeleted.length > 0 && (
+            <View style={styles.undoBanner}>
+              <Text style={styles.undoBannerText}>
+                {recentlyDeleted.length} message{recentlyDeleted.length === 1 ? '' : 's'} deleted
+              </Text>
+              <AnimatedPressable
+                onPress={handleUndoDelete}
+                activeOpacity={0.7}
+                scaleValue={0.95}
+                hapticFeedback="light"
+                accessibilityLabel="Undo message deletion"
+              >
+                <Text style={styles.undoBannerAction}>Undo</Text>
+              </AnimatedPressable>
+            </View>
+          )}
           <ComposerInput
             value={input}
             onChangeText={setInput}
@@ -680,6 +996,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             onCameraPress={() => handleAttachmentSelect('camera')}
             placeholder="Message..."
             returnKeyType="send"
+            isSending={composerSending}
           />
         </View>
       </KeyboardAvoidingView>
@@ -712,9 +1029,6 @@ export default function ChatScreen({ navigation, route }: Props) {
             case 'react':
               setReactingToMessage(selectedMessage);
               break;
-            case 'forward':
-              show('Forwarded: ' + (selectedMessage.text?.slice(0, 20) ?? ''), 'info');
-              break;
             case 'delete':
               handleDeleteMessage(selectedMessage);
               break;
@@ -734,12 +1048,10 @@ const styles = StyleSheet.create({
   headerIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.glassBg,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
   },
 
   selectionToolbar: {
@@ -748,9 +1060,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.glassBorder,
+    borderBottomColor: Colors.border,
   },
 
   contextGallery: {
@@ -766,7 +1078,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     overflow: 'hidden',
   },
   itemThumbImage: {
@@ -784,9 +1096,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
+    paddingHorizontal: Space.xl,
   },
-  emptySubtitle: {
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Space.sm,
+  },
+  emptyTitle: {
+    fontSize: Type.title.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  emptyBody: {
     fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: Type.body.lineHeight,
+    marginTop: Space.xs,
+  },
+  emptyCtaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.md,
   },
 
   dateWrap: {
@@ -794,7 +1133,7 @@ const styles = StyleSheet.create({
     marginVertical: Space.sm + 4,
   },
   datePill: {
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 4,
     paddingVertical: Space.xs + 2,
@@ -821,7 +1160,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    marginVertical: Space.xs,
   },
   msgRowRight: {
     flexDirection: 'row-reverse',
@@ -865,11 +1203,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.md,
     paddingVertical: 10,
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
   },
   passBtnText: {
     fontSize: Type.caption.size,
@@ -916,8 +1254,8 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: Radius.sm,
     borderWidth: 2,
-    borderColor: Colors.glassBorder,
-    backgroundColor: Colors.glassBg,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: Space.sm,
@@ -932,7 +1270,77 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm + 4,
     paddingTop: Space.xs,
     backgroundColor: Colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.glassBorder,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  undoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.textPrimary,
+    marginHorizontal: -Space.md,
+    marginTop: -Space.xs,
+    marginBottom: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  undoBannerText: {
+    color: Colors.textInverse,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  undoBannerAction: {
+    color: Colors.brand,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+  },
+  searchBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    backgroundColor: Colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  searchBar: {
+    flex: 1,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.md,
+    minHeight: 40,
+  },
+  searchNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  searchCount: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    minWidth: 32,
+    textAlign: 'center',
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    backgroundColor: Colors.textPrimary,
+    marginHorizontal: -Space.md,
+    marginTop: -Space.xs,
+    marginBottom: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  offlineBannerText: {
+    color: Colors.textInverse,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
   },
 });

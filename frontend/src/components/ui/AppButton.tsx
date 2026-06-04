@@ -52,7 +52,7 @@ function resolveVariantTokens(variant: AppButtonVariant): VariantTokens {
     case 'secondary':
       return {
         backgroundColor: 'transparent',
-        borderColor: Colors.glassBorder,
+        borderColor: Colors.border,
         titleColor: Colors.textPrimary,
         subtitleColor: Colors.textSecondary,
         iconBackgroundColor: 'transparent',

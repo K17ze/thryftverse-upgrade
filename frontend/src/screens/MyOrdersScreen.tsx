@@ -144,7 +144,7 @@ export default function MyOrdersScreen() {
         item: fallbackListing,
         status: normalizedStatusLabel,
         isDone: order.status === 'delivered' || order.status === 'cancelled',
-        buyer: mockFind(MOCK_USERS, (user) => user.id === order.buyerId),
+        buyer: undefined as any,
       };
     });
   }, [backendOrders, listingPool]);
@@ -294,7 +294,7 @@ export default function MyOrdersScreen() {
                 : null;
               const counterparty = activeTab === 'selling'
                 ? order.buyer
-                : mockFind(MOCK_USERS, (user) => user.id === order.item.sellerId);
+                : null;
               const counterpartyRole = activeTab === 'selling' ? 'Buyer' : 'Seller';
 
               return (

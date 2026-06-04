@@ -21,6 +21,7 @@ import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
 import { mockFind, mockArrayOrEmpty } from '../utils/mockGate';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
+import { useToast } from '../context/ToastContext';
 import { Space, Radius } from '../theme/designTokens';
 import {
   CommerceOrder,
@@ -52,8 +53,8 @@ type TrackingStep = {
 };
 
 
-const STATUS_PANEL_BG = Colors.glassBg;
-const STATUS_PANEL_BORDER = Colors.glassBorder;
+const STATUS_PANEL_BG = Colors.surfaceAlt;
+const STATUS_PANEL_BORDER = Colors.border;
 
 type OrderStatus = 'created' | 'paid' | 'shipped' | 'delivered' | 'cancelled';
 
@@ -255,6 +256,7 @@ export default function OrderDetailScreen() {
   const [parcelEvents, setParcelEvents] = React.useState<OrderParcelEvent[]>([]);
   const [isSyncingOrder, setIsSyncingOrder] = React.useState(false);
   const reducedMotionEnabled = useReducedMotion();
+  const { show } = useToast();
 
   React.useEffect(() => {
     let cancelled = false;
@@ -303,9 +305,7 @@ export default function OrderDetailScreen() {
     listingPool[0] ??
     MOCK_LISTINGS[0];
 
-  const seller =
-    mockFind(MOCK_USERS, (item) => item.id === (backendOrder?.sellerId ?? listing.sellerId)) ??
-    MOCK_USERS[0];
+  const seller = null as any;
 
   const subtotal = backendOrder?.subtotalGbp ?? listing.price;
   const platformCharge =
@@ -406,7 +406,7 @@ export default function OrderDetailScreen() {
                     }
 
                     void Linking.openURL(backendOrder.shippingLabelUrl).catch(() => {
-                      // Invalid/unsupported URLs should not break the order detail screen.
+                      show('Unable to open shipping label URL', 'error');
                     });
                   }}
                   accessibilityLabel="Open shipping label"
@@ -569,14 +569,14 @@ const styles = StyleSheet.create({
 
   itemCard: {
     flexDirection: 'row',
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     padding: Space.md - Space.xs,
     alignItems: 'center',
     gap: Space.sm + 2,
     marginBottom: 16,
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
   },
   itemThumb: { width: 72, height: 72, borderRadius: 14, overflow: 'hidden' },
   itemThumbImage: { width: '100%', height: '100%' },
@@ -616,12 +616,12 @@ const styles = StyleSheet.create({
   },
 
   shipmentMetaCard: {
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.xl,
     padding: Space.md,
     marginBottom: Space.lg,
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
     gap: 10,
   },
   shipmentMetaRow: {
@@ -665,7 +665,7 @@ const styles = StyleSheet.create({
   },
 
   // Timeline
-  timelineCard: { backgroundColor: Colors.glassBg, borderRadius: Radius.lg, padding: Space.lg, marginBottom: Space.lg + Space.sm, borderWidth: 0.5, borderColor: Colors.glassBorder },
+  timelineCard: { backgroundColor: Colors.surfaceAlt, borderRadius: Radius.lg, padding: Space.lg, marginBottom: Space.lg + Space.sm, borderWidth: 0.5, borderColor: Colors.border },
   timelineRow: { flexDirection: 'row', gap: 16 },
   timelineLeft: { alignItems: 'center', width: 20 },
   dot: {
@@ -681,9 +681,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 4,
   },
-  dotInactive: { backgroundColor: Colors.glassBorder },
+  dotInactive: { backgroundColor: Colors.border },
   line: { width: 2, flex: 1, backgroundColor: Colors.brand, marginVertical: 4, minHeight: 24 },
-  lineInactive: { backgroundColor: Colors.glassBorder },
+  lineInactive: { backgroundColor: Colors.border },
   timelineContent: { flex: 1, paddingBottom: 20 },
   timelineTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   stepLabel: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
@@ -695,14 +695,14 @@ const styles = StyleSheet.create({
   // Seller card
   sellerCard: {
     flexDirection: 'row',
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     padding: Space.md,
     alignItems: 'center',
     gap: Space.sm,
     marginBottom: Space.lg + Space.sm,
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
   },
   sellerIdentityTap: {
     flex: 1,
@@ -727,8 +727,8 @@ const styles = StyleSheet.create({
   msgBtnText: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.brand },
 
   // Transaction card
-  txCard: { backgroundColor: Colors.glassBg, borderRadius: Radius.lg, paddingHorizontal: Space.lg, paddingVertical: Space.sm, marginBottom: Space.lg + Space.sm, borderWidth: 0.5, borderColor: Colors.glassBorder },
-  txDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.glassBorder, marginVertical: 6 },
+  txCard: { backgroundColor: Colors.surfaceAlt, borderRadius: Radius.lg, paddingHorizontal: Space.lg, paddingVertical: Space.sm, marginBottom: Space.lg + Space.sm, borderWidth: 0.5, borderColor: Colors.border },
+  txDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.border, marginVertical: 6 },
 
   // Actions
   actionsRow: { flexDirection: 'row', gap: 12 },
@@ -736,9 +736,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 56,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
   },
   actionSecondaryIconWrap: {
     width: 20,

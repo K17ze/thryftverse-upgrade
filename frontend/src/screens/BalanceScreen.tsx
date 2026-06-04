@@ -42,8 +42,8 @@ const TX_FILTERS: TxFilter[] = ['all', 'sale', 'purchase', 'withdrawal'];
 const LOAD_IZE_FEE_RATE = 0.01;
 const CONVERT_FEE_RATE = 0.005; // 0.5% fee for converting 1ze to fiat
 
-const TINT_CARD_BG = Colors.glassBg;
-const TINT_CARD_BORDER = Colors.glassBorder;
+const TINT_CARD_BG = Colors.surfaceAlt;
+const TINT_CARD_BORDER = Colors.border;
 const TINT_TEXT = Colors.brand;
 
 export default function BalanceScreen({ navigation }: Props) {
@@ -580,12 +580,12 @@ const styles = StyleSheet.create({
   },
 
   heroGroup: { marginBottom: 22, gap: 12 },
-  balanceHero: { backgroundColor: Colors.glassBg, borderRadius: 28, borderWidth: 0.5, borderColor: Colors.glassBorder, paddingTop: 22, paddingBottom: 18, alignItems: 'center' },
-  balanceLabel: { fontSize: 10, fontFamily: Typography.family.light, color: Colors.textMuted, letterSpacing: 0.92, marginBottom: 12, textTransform: 'uppercase' },
+  balanceHero: { backgroundColor: Colors.surfaceAlt, borderRadius: 28, borderWidth: 0.5, borderColor: Colors.border, paddingTop: 22, paddingBottom: 18, alignItems: 'center' },
+  balanceLabel: { fontSize: 10, fontFamily: Typography.family.regular, color: Colors.textMuted, letterSpacing: 0.92, marginBottom: 12, textTransform: 'uppercase' },
   balanceAmount: {
     fontSize: 96,
     lineHeight: 98,
-    fontFamily: Typography.family.light,
+    fontFamily: Typography.family.regular,
     color: Colors.brand,
     letterSpacing: -3.4,
     fontVariant: ['tabular-nums'],
@@ -600,24 +600,24 @@ const styles = StyleSheet.create({
   },
   balanceActions: { flexDirection: 'row', gap: 14, marginTop: 4 },
   actionBtn: { alignItems: 'center', gap: 8 },
-  actionCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.glassBg, borderWidth: 0.5, borderColor: Colors.glassBorder, alignItems: 'center', justifyContent: 'center' },
+  actionCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surfaceAlt, borderWidth: 0.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
   actionText: { fontSize: 11, fontFamily: Typography.family.medium, color: Colors.textSecondary },
 
-  pendingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.glassBg, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.glassBorder, padding: 18 },
+  pendingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surfaceAlt, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.border, padding: 18 },
   pendingTitle: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textSecondary },
   pendingAmount: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   pendingAmountCol: { alignItems: 'flex-end' },
   pendingIze: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textSecondary, marginTop: 3 },
 
-  loadCard: { backgroundColor: Colors.glassBg, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.glassBorder, padding: 18, marginBottom: 22 },
+  loadCard: { backgroundColor: Colors.surfaceAlt, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.border, padding: 18, marginBottom: 22 },
   loadTitle: { color: Colors.textPrimary, fontSize: 18, fontFamily: Typography.family.bold },
   loadHint: { marginTop: 4, color: Colors.textSecondary, fontSize: 13, fontFamily: Typography.family.medium, marginBottom: 12, lineHeight: 18 },
   loadInputLabel: { color: Colors.textMuted, fontSize: 11, fontFamily: Typography.family.bold, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   loadInput: {
     borderRadius: 12,
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
-    backgroundColor: Colors.glassBg,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     color: Colors.textPrimary,
     fontSize: 18,
     fontFamily: Typography.family.bold,
@@ -628,7 +628,7 @@ const styles = StyleSheet.create({
   loadSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, gap: 10 },
   loadSummaryLabel: { color: Colors.textMuted, fontSize: 13, fontFamily: Typography.family.medium },
   loadSummaryValue: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.bold, textAlign: 'right', maxWidth: '70%' },
-  loadSummaryRowTotal: { marginTop: 4, borderTopWidth: 0.5, borderTopColor: Colors.glassBorder, paddingTop: 9 },
+  loadSummaryRowTotal: { marginTop: 4, borderTopWidth: 0.5, borderTopColor: Colors.border, paddingTop: 9 },
   loadSummaryTotalLabel: { color: Colors.textPrimary, fontSize: 14, fontFamily: Typography.family.bold },
   loadSummaryTotalValue: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.bold, textAlign: 'right', maxWidth: '70%' },
   loadBtn: {
@@ -645,12 +645,12 @@ const styles = StyleSheet.create({
   tabContainer: {
     flexDirection: 'row',
     marginBottom: 16,
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: 12,
     padding: 4,
     gap: 4,
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
   },
   tab: {
     flex: 1,
@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
     color: Colors.background,
   },
 
-  historyCard: { backgroundColor: Colors.glassBg, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.glassBorder, padding: 18, marginBottom: 22 },
+  historyCard: { backgroundColor: Colors.surfaceAlt, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.border, padding: 18, marginBottom: 22 },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12 },
   historyTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
   historyDate: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
@@ -692,15 +692,15 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginLeft: 6, marginBottom: 12 },
   filterRow: { flexDirection: 'row', gap: 8, marginBottom: 10, paddingHorizontal: 6 },
-  filterChip: { borderRadius: 999, borderWidth: 0.5, borderColor: Colors.glassBorder, backgroundColor: Colors.glassBg, paddingHorizontal: 10, paddingVertical: 6 },
+  filterChip: { borderRadius: 999, borderWidth: 0.5, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt, paddingHorizontal: 10, paddingVertical: 6 },
   filterChipActive: { borderColor: Colors.brand, backgroundColor: Colors.brand },
   filterChipText: { color: Colors.textSecondary, fontSize: 11, fontFamily: Typography.family.bold, letterSpacing: 0.4 },
   filterChipTextActive: { color: Colors.background },
 
-  cardGroup: { backgroundColor: Colors.glassBg, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.glassBorder, paddingVertical: 12, paddingHorizontal: 16 },
+  cardGroup: { backgroundColor: Colors.surfaceAlt, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.border, paddingVertical: 12, paddingHorizontal: 16 },
   transactionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   txLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 16 },
-  iconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.glassBg, borderWidth: 0.5, borderColor: Colors.glassBorder, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  iconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceAlt, borderWidth: 0.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
   txTitle: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4, lineHeight: 18 },
   txDate: { fontSize: 12, color: Colors.textSecondary, fontFamily: Typography.family.regular, textTransform: 'capitalize', lineHeight: 16 },
   txStatusPending: { color: Colors.brand },

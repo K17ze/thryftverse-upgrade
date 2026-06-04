@@ -10,7 +10,7 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { Typography } from '../constants/typography';
@@ -90,7 +90,7 @@ export default function PersonalisationScreen() {
         backgroundColor={Colors.background}
       />
 
-      <SettingsHeader title="Personalisation" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Personalisation" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Hero */}

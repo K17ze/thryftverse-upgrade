@@ -1,15 +1,14 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { View, Text, StyleSheet, StatusBar, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, RefreshControl, Alert } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import NetInfo from '@react-native-community/netinfo';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { MOCK_USERS } from '../data/mockData';
 import type { Conversation } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
 import { RootStackParamList } from '../navigation/types';
 import { Swipeable } from 'react-native-gesture-handler';
 import Reanimated, { FadeInDown, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -18,8 +17,8 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { useBackendData } from '../context/BackendDataContext';
-import { fetchConversationsFromApi } from '../services/chatApi';
-import { AppInput } from '../components/ui/AppInput';
+import { fetchConversationsFromApi, deleteConversationOnApi } from '../services/chatApi';
+import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
@@ -28,7 +27,7 @@ import { Space, Radius, Type } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 import { GlassCard } from '../components/ui/GlassSurface';
 import { AvatarRing } from '../components/chat/AvatarRing';
-import { PulseDot } from '../components/chat/PulseDot';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -55,6 +54,9 @@ export default function InboxScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [segment, setSegment] = useState<InboxSegment>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [syncError, setSyncError] = useState('');
+  const [isOffline, setIsOffline] = useState(false);
   const reducedMotionEnabled = useReducedMotion();
 
   const scrollY = useSharedValue(0);
@@ -64,16 +66,43 @@ export default function InboxScreen() {
     },
   });
 
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsOffline(!state.isConnected);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const loadConversations = async () => {
+    setSyncError('');
+    setIsLoading(true);
+    try {
+      const remoteConversations = await fetchConversationsFromApi();
+      for (const conversation of remoteConversations) {
+        upsertConversation(conversation);
+      }
+    } catch (error) {
+      setSyncError((error as Error).message || 'Unable to load conversations.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadConversations();
+  }, []);
+
   const handleRefresh = async () => {
     setRefreshing(true);
+    setSyncError('');
     await refreshListings();
     try {
       const remoteConversations = await fetchConversationsFromApi();
       for (const conversation of remoteConversations) {
         upsertConversation(conversation);
       }
-    } catch {
-      // Keep existing local conversations when backend sync is unavailable.
+    } catch (error) {
+      setSyncError((error as Error).message || 'Unable to refresh conversations.');
     }
     setTimeout(() => setRefreshing(false), 400);
   };
@@ -82,9 +111,7 @@ export default function InboxScreen() {
 
   const participantNameLookup = useMemo(() => {
     const map = new Map<string, string>();
-    for (const user of MOCK_USERS) {
-      map.set(user.id, user.username);
-    }
+
     map.set('me', currentUser?.username ?? 'you');
     if (currentUser?.id) {
       map.set(currentUser.id, currentUser.username);
@@ -99,11 +126,11 @@ export default function InboxScreen() {
       if (segment === 'groups' && conversation.type !== 'group') return false;
       if (!normalizedQuery) return true;
 
-      const seller = mockFind(MOCK_USERS, (user) => user.id === conversation.sellerId);
+      const seller = null as any;
       const counterpartyId = conversation.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
       const title = conversation.type === 'group'
         ? conversation.title ?? 'group chat'
-        : seller?.username ?? (counterpartyId ? participantNameLookup.get(counterpartyId) ?? counterpartyId : 'direct message');
+        : (counterpartyId ? participantNameLookup.get(counterpartyId) ?? 'Unknown user' : 'Unknown user');
 
       const corpus = [
         title,
@@ -128,9 +155,31 @@ export default function InboxScreen() {
 
   const handleDelete = useCallback((id: string) => {
     haptic.medium();
-    deleteConversation(id);
-    show('Conversation deleted', 'error');
-  }, [deleteConversation, show, haptic]);
+    Alert.alert(
+      'Delete conversation?',
+      'This conversation will be removed from your inbox.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const previous = conversations.find((c) => c.id === id);
+            deleteConversation(id);
+            show('Conversation deleted', 'error');
+            try {
+              await deleteConversationOnApi(id);
+            } catch {
+              show('Failed to delete on server. Restoring conversation.', 'error');
+              if (previous) {
+                upsertConversation(previous);
+              }
+            }
+          },
+        },
+      ]
+    );
+  }, [conversations, deleteConversation, upsertConversation, show, haptic]);
 
   const handlePin = useCallback((id: string) => {
     haptic.medium();
@@ -168,11 +217,11 @@ export default function InboxScreen() {
 
   const renderItem = ({ item, index }: { item: ConvoItem; index: number }) => {
     const isGroup = item.type === 'group';
-    const seller = mockFind(MOCK_USERS, (u) => u.id === item.sellerId);
+    const seller = null as any;
     const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
     const displayTitle = isGroup
       ? item.title ?? 'Untitled Group'
-      : seller?.username ?? (counterpartyId ? participantNameLookup.get(counterpartyId) ?? counterpartyId : 'Unknown user');
+      : (counterpartyId ? participantNameLookup.get(counterpartyId) ?? 'Unknown user' : 'Unknown user');
 
     return (
       <Reanimated.View
@@ -191,7 +240,6 @@ export default function InboxScreen() {
           renderRightActions={() => renderRightActions(item.id)}
           renderLeftActions={() => renderLeftActions(item.id)}
         >
-          <GlassCard intensity={30} style={styles.glassCard}>
             <AnimatedPressable
               onPress={() => {
                 markConversationRead(item.id);
@@ -207,7 +255,7 @@ export default function InboxScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens the conversation thread"
             >
-              <View style={styles.cardInner}>
+              <View style={styles.rowInner}>
                 <View style={styles.avatarWrap}>
                   {isGroup ? (
                     <View style={styles.groupAvatar}>
@@ -215,11 +263,12 @@ export default function InboxScreen() {
                     </View>
                   ) : (
                     <AvatarRing
-                      uri={seller?.avatar ?? ''}
-                      size={52}
-                      isOnline={!isGroup}
+                      uri={undefined}
+                      size={48}
+                      isOnline={false}
                       isUnread={item.unread}
                       ringWidth={2}
+                      fallbackInitials={displayTitle.slice(0, 2).toUpperCase()}
                     />
                   )}
                 </View>
@@ -227,7 +276,7 @@ export default function InboxScreen() {
                 <View style={styles.messageBody}>
                   <View style={styles.messageTop}>
                     <View style={styles.titleRow}>
-                      <BodyEmphasis style={item.unread ? styles.titleUnread : undefined}>{displayTitle}</BodyEmphasis>
+                      <Text style={[styles.nameText, item.unread && styles.nameUnread]}>{displayTitle}</Text>
                       {item.isPinned ? <Ionicons name="pin" size={12} color={Colors.brand} style={styles.pinIcon} /> : null}
                     </View>
                     <Caption color={item.unread ? Colors.textPrimary : Colors.textMuted}>{item.lastMessageTime}</Caption>
@@ -242,12 +291,11 @@ export default function InboxScreen() {
                         </Text>
                       ) : item.lastMessage}
                     </Text>
-                    {item.unread ? <PulseDot size={8} color={Colors.brand} /> : null}
+                    {item.unread ? <View style={styles.unreadDot} /> : null}
                   </View>
                 </View>
               </View>
             </AnimatedPressable>
-          </GlassCard>
         </Swipeable>
       </Reanimated.View>
     );
@@ -286,29 +334,16 @@ export default function InboxScreen() {
           </View>
         </View>
 
-        <AppInput
+        <AppSearchBar
+          placeholder="Search"
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search"
-          autoCapitalize="none"
-          autoCorrect={false}
-          accessibilityLabel="Search conversations"
-          inputContainerStyle={styles.searchWrap}
-          inputStyle={styles.searchInput}
-          prefix={<Ionicons name="search" size={18} color={Colors.textMuted} />}
-          suffix={searchQuery.length > 0 ? (
-            <AnimatedPressable
-              onPress={() => setSearchQuery('')}
-              style={styles.clearSearchBtn}
-              accessibilityLabel="Clear search"
-              accessibilityRole="button"
-              activeOpacity={0.7}
-              scaleValue={0.9}
-              hapticFeedback="light"
-            >
-              <Ionicons name="close" size={16} color={Colors.textSecondary} />
-            </AnimatedPressable>
-          ) : null}
+          containerStyle={styles.searchWrap}
+          inputProps={{
+            autoCapitalize: 'none',
+            autoCorrect: false,
+            accessibilityLabel: 'Search conversations',
+          }}
         />
 
         <AppSegmentControl
@@ -323,39 +358,76 @@ export default function InboxScreen() {
         />
       </View>
 
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline-outline" size={16} color={Colors.textInverse} />
+          <Text style={styles.offlineBannerText}>You are offline</Text>
+        </View>
+      )}
+
+      {!!syncError && (
+        <View style={styles.errorBanner}>
+          <Ionicons name="alert-circle-outline" size={18} color={Colors.danger} />
+          <Text style={styles.errorBannerText}>{syncError}</Text>
+          <AnimatedPressable
+            onPress={() => void loadConversations()}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityLabel="Retry loading conversations"
+          >
+            <Text style={styles.errorBannerRetry}>Retry</Text>
+          </AnimatedPressable>
+        </View>
+      )}
+
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
 
-        <AnimatedFlashList
-          data={visibleConversations}
-          keyExtractor={(c: any) => c.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={{ height: Space.sm + 2 }} />}
-          renderItem={renderItem as any}
-          onScroll={scrollHandler}
-          scrollEventThrottle={16}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor="transparent"
-              colors={['transparent']}
-              progressBackgroundColor="transparent"
-            />
-          }
-          ListEmptyComponent={
-            <EmptyState
-              icon="chatbubbles-outline"
-              title={searchQuery || segment !== 'all' ? 'No matching conversations' : 'No conversations yet'}
-              subtitle={searchQuery || segment !== 'all'
-                ? 'Try another keyword or filter.'
-                : 'Message a seller to start a chat.'}
-              ctaLabel="Browse listings"
-              onCtaPress={() => navigation.navigate('MainTabs')}
-            />
-          }
-        />
+        {isLoading && !visibleConversations.length ? (
+          <View style={styles.skeletonList}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <View key={i} style={styles.skeletonRow}>
+                <SkeletonLoader width={52} height={52} borderRadius={Radius.full} />
+                <View style={styles.skeletonText}>
+                  <SkeletonLoader width="70%" height={16} borderRadius={Radius.sm} />
+                  <SkeletonLoader width="40%" height={14} borderRadius={Radius.sm} />
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <AnimatedFlashList
+            data={visibleConversations}
+            keyExtractor={(c: any) => c.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+            ItemSeparatorComponent={() => <View style={{ height: Space.sm + 2 }} />}
+            renderItem={renderItem as any}
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor="transparent"
+                colors={['transparent']}
+                progressBackgroundColor="transparent"
+              />
+            }
+            ListEmptyComponent={
+              <EmptyState
+                icon="chatbubbles-outline"
+                title={searchQuery || segment !== 'all' ? 'No matching conversations' : 'No conversations yet'}
+                subtitle={searchQuery || segment !== 'all'
+                  ? 'Try another keyword or filter.'
+                  : 'Message a seller to start a chat.'}
+                ctaLabel="Browse listings"
+                onCtaPress={() => navigation.navigate('MainTabs')}
+              />
+            }
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -391,31 +463,15 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.full,
-    backgroundColor: Colors.glassBg,
-    borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   searchWrap: {
-    backgroundColor: Colors.glassBg,
-    borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.md - 4,
-    minHeight: 44,
-  },
-  searchInput: {
-    fontSize: Type.body.size,
-    color: Colors.textPrimary,
-    paddingVertical: 0,
-  },
-  clearSearchBtn: {
-    width: 24,
-    height: 24,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    minHeight: 44,
   },
   segmentStrip: {
     marginTop: Space.xs,
@@ -439,29 +495,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
   },
   listContent: {
-    paddingHorizontal: Space.md + 4,
     paddingBottom: Space.xxl + 24,
     flexGrow: 1,
   },
-  glassCard: {
-    marginVertical: 0,
-  },
-  cardInner: {
+  rowInner: {
     flexDirection: 'row',
     gap: Space.sm + 6,
-    alignItems: 'flex-start',
-    padding: Space.md,
+    alignItems: 'center',
+    paddingVertical: Space.sm + 6,
+    paddingHorizontal: Space.md + 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   avatarWrap: { position: 'relative' },
   groupAvatar: {
-    width: 52,
-    height: 52,
+    width: 48,
+    height: 48,
     borderRadius: Radius.full,
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
   },
   messageBody: { flex: 1 },
   messageTop: {
@@ -475,7 +528,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
   },
-  titleUnread: {
+  nameText: {
+    fontSize: Type.body.size,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  nameUnread: {
     fontFamily: 'Inter_700Bold',
   },
   pinIcon: {
@@ -498,28 +557,80 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontFamily: 'Inter_500Medium',
   },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.brand,
+    marginLeft: Space.xs,
+  },
   draftLabel: {
     color: Colors.brand,
     fontFamily: 'Inter_600SemiBold',
   },
   swipeDelete: {
-    backgroundColor: 'rgba(255,77,77,0.15)',
+    backgroundColor: 'rgba(255,77,77,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     width: 72,
-    borderRadius: Radius.xl + 4,
+    borderRadius: Radius.xl,
     marginLeft: Space.sm,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,77,77,0.25)',
   },
   swipePin: {
-    backgroundColor: 'rgba(212,175,55,0.15)',
+    backgroundColor: 'rgba(212,175,55,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     width: 72,
-    borderRadius: Radius.xl + 4,
+    borderRadius: Radius.xl,
     marginRight: Space.sm,
-    borderWidth: 0.5,
-    borderColor: 'rgba(212,175,55,0.25)',
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    backgroundColor: Colors.textPrimary,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.md,
+  },
+  offlineBannerText: {
+    color: Colors.textInverse,
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_500Medium',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: Colors.danger,
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_500Medium',
+  },
+  errorBannerRetry: {
+    color: Colors.brand,
+    fontSize: Type.caption.size,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  skeletonList: {
+    paddingHorizontal: Space.md + 4,
+    paddingTop: Space.md,
+    gap: Space.md,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 6,
+  },
+  skeletonText: {
+    flex: 1,
+    gap: Space.xs + 2,
   },
 });

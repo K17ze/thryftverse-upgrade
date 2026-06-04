@@ -7,6 +7,7 @@ import {
   StatusBar,
   Platform,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
@@ -23,7 +24,7 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
 import { deactivateNotificationDevice, registerNotificationDevice } from '../services/notificationsApi';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -46,6 +47,11 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const [isSyncingDevice, setIsSyncingDevice] = React.useState(false);
   const [registeredToken, setRegisteredToken] = React.useState<string | null>(null);
   const [isDeviceRegistered, setIsDeviceRegistered] = React.useState(false);
+  const [pushPermissionStatus, setPushPermissionStatus] = React.useState<Notifications.NotificationPermissionsStatus | null>(null);
+
+  React.useEffect(() => {
+    Notifications.getPermissionsAsync().then(setPushPermissionStatus);
+  }, []);
 
   const resolvePushPlatform = React.useCallback((): 'ios' | 'android' | 'web' => {
     if (Platform.OS === 'ios') return 'ios';
@@ -164,7 +170,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         backgroundColor={Colors.background}
       />
 
-      <SettingsHeader
+      <ScreenHeader
         title="Push Notifications"
         onBack={() => navigation.goBack()}
         rightAction={
@@ -187,6 +193,24 @@ export default function PushNotificationsScreen({ navigation }: Props) {
           </AnimatedPressable>
         }
       />
+
+      {pushPermissionStatus?.status === 'denied' && (
+        <View style={styles.permissionBanner}>
+          <Ionicons name="notifications-off-outline" size={18} color={Colors.danger} />
+          <Text style={styles.permissionBannerText}>
+            Push notifications are blocked. Enable them in Settings to receive alerts.
+          </Text>
+          <AnimatedPressable
+            onPress={() => Linking.openSettings()}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityLabel="Open device settings"
+          >
+            <Text style={styles.permissionBannerAction}>Open Settings</Text>
+          </AnimatedPressable>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Progress indicator */}
@@ -299,5 +323,26 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     marginHorizontal: Space.xs,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  permissionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  permissionBannerText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  permissionBannerAction: {
+    color: Colors.brand,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
   },
 });

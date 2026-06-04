@@ -6,6 +6,7 @@ import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tr
 import type { ChatBot, Conversation, Message as ConversationMessage } from '../data/mockData';
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS, MY_USER } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+import { updateUserAccountPreferences, updateUserPostagePreferences } from '../services/accountApi';
 
 export interface User {
   id: string;
@@ -810,10 +811,12 @@ export const useStore = create<StoreState>()(
   },
 
   accountPreferences: { holidayMode: false, privateProfile: false },
-  updateAccountPreferences: (updates) =>
+  updateAccountPreferences: (updates) => {
     set((state) => ({
       accountPreferences: { ...state.accountPreferences, ...updates },
-    })),
+    }));
+    void updateUserAccountPreferences(updates);
+  },
 
   paymentPreferences: { useBalance: true },
   updatePaymentPreferences: (updates) =>
@@ -822,10 +825,12 @@ export const useStore = create<StoreState>()(
     })),
 
   postagePreferences: { carrierKey: 'evri', freeShipping: false, bundleDiscount: true },
-  updatePostagePreferences: (updates) =>
+  updatePostagePreferences: (updates) => {
     set((state) => ({
       postagePreferences: { ...state.postagePreferences, ...updates },
-    })),
+    }));
+    void updateUserPostagePreferences(updates);
+  },
 
   personalisationPreferences: {
     genderFilter: ['Women', 'Men'],
@@ -1016,6 +1021,7 @@ export const useStore = create<StoreState>()(
         }
 
         const nextLastMessage = message.text
+          ?? (message.mediaType === 'image' ? '📷 Photo' : message.mediaType === 'video' ? '🎥 Video' : undefined)
           ?? message.systemTitle
           ?? (message.offerPrice ? `Offer ${message.offerPrice}` : 'New message');
 

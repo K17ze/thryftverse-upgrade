@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   Linking,
@@ -18,11 +17,9 @@ import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { Typography } from '../constants/typography';
 
@@ -31,11 +28,9 @@ type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
 export default function HelpSupportScreen({ navigation }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [message, setMessage] = useState('');
   const [faqSearch, setFaqSearch] = useState('');
   const scrollRef = useRef<ScrollView>(null);
-  const messageInputRef = useRef<TextInput>(null);
-  const { show } = useToast();
+
 
   const handleOpenExternal = React.useCallback(async (url: string) => {
     try {
@@ -56,18 +51,6 @@ export default function HelpSupportScreen({ navigation }: Props) {
   const handleOpenEmail = React.useCallback(() => {
     void handleOpenExternal('mailto:support@thryftverse.com?subject=Thryftverse%20Support');
   }, [handleOpenExternal]);
-
-  const handleOpenTickets = React.useCallback(() => {
-    scrollRef.current?.scrollTo({ y: 760, animated: true });
-    setTimeout(() => messageInputRef.current?.focus(), 220);
-    show('No open tickets. Start a new support message below.', 'info');
-  }, [show]);
-
-  const handleSendMessage = React.useCallback(() => {
-    if (!message.trim()) return;
-    setMessage('');
-    show('Support message sent. We usually reply within 2 hours.', 'success');
-  }, [message, show]);
 
   const fixedFeeLabel = formatFromFiat(0.7, 'GBP', { displayMode: 'fiat' });
 
@@ -110,7 +93,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
         backgroundColor={Colors.background}
       />
 
-      <SettingsHeader title="Help & Support" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Help & Support" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -131,13 +114,6 @@ export default function HelpSupportScreen({ navigation }: Props) {
                   onPress: handleOpenEmail,
                   accessibilityLabel: 'Email support',
                   accessibilityHint: 'Opens your email app with a prefilled support address.',
-                },
-                {
-                  icon: 'document-text-outline',
-                  label: 'My Tickets',
-                  onPress: handleOpenTickets,
-                  accessibilityLabel: 'View support tickets',
-                  accessibilityHint: 'Scrolls to the message form to create a new support ticket.',
                 },
               ].map((a) => (
                 <AnimatedPressable
@@ -203,37 +179,8 @@ export default function HelpSupportScreen({ navigation }: Props) {
             </SettingsCard>
           </Reanimated.View>
 
-          {/* Contact form */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-            <Text style={styles.sectionTitle}>Send a Message</Text>
-            <SettingsCard>
-              <AppInput
-                ref={messageInputRef}
-                label="Your message"
-                placeholder="Describe your issue..."
-                value={message}
-                onChangeText={setMessage}
-                multiline
-                numberOfLines={4}
-                accessibilityLabel="Support message"
-                accessibilityHint="Type details about your issue so support can help you."
-              />
-              <AppButton
-                title="Send message"
-                icon={<Ionicons name="send" size={16} color={Colors.textInverse} />}
-                onPress={handleSendMessage}
-                disabled={!message.trim()}
-                variant="primary"
-                size="sm"
-                style={[!message.trim() && styles.sendBtnDisabled]}
-                accessibilityLabel="Send support message"
-                accessibilityHint="Sends your message to the support team."
-              />
-            </SettingsCard>
-          </Reanimated.View>
-
           {/* Links */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
             <SettingsCard>
               {[
                 { icon: 'document-text-outline', label: 'Terms of Service', url: 'https://thryftverse.app/terms' },
@@ -337,35 +284,35 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     lineHeight: Type.caption.lineHeight,
-    paddingBottom: Space.sm,
     letterSpacing: Type.caption.letterSpacing,
+    marginTop: Space.xs,
+    paddingBottom: Space.sm,
   },
   divider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
-  },
-  sendBtnDisabled: {
-    opacity: 0.4,
+    marginLeft: Space.xs,
   },
   linkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + Space.xs,
+    gap: Space.sm + 2,
     paddingVertical: Space.md - Space.xs,
   },
   linkText: {
     flex: 1,
     fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
-    fontFamily: Typography.family.regular,
+    lineHeight: Type.body.lineHeight,
     letterSpacing: Type.body.letterSpacing,
   },
   version: {
     fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     textAlign: 'center',
-    marginTop: Space.sm,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    marginTop: Space.lg,
+    marginBottom: Space.md,
   },
 });

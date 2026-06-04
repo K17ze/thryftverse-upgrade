@@ -93,3 +93,45 @@ export async function deleteMyAccount(reason?: string): Promise<DeleteAccountRes
     message: payload.message,
   };
 }
+
+export interface UpdateProfileInput {
+  email?: string;
+  phone?: string;
+  fullName?: string;
+  birthday?: string;
+}
+
+export async function updateUserProfile(input: UpdateProfileInput): Promise<void> {
+  await fetchJson<{ ok: true }>('/users/me', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export interface UpdateAccountPreferencesInput {
+  holidayMode?: boolean;
+  privateProfile?: boolean;
+}
+
+export async function updateUserAccountPreferences(input: UpdateAccountPreferencesInput): Promise<void> {
+  await fetchJson<{ ok: true }>('/users/me/preferences', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export interface UpdatePostagePreferencesInput {
+  carrierKey?: string;
+  freeShipping?: boolean;
+  bundleDiscount?: boolean;
+}
+
+export async function updateUserPostagePreferences(input: UpdatePostagePreferencesInput): Promise<void> {
+  await fetchJson<{ ok: true }>('/users/me/postage', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}

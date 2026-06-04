@@ -16,7 +16,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
 import { deployBotToConversationOnApi, undeployBotFromConversationOnApi } from '../services/chatApi';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
 import { Space, Radius, Type } from '../theme/designTokens';
@@ -91,7 +91,7 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
         backgroundColor={Colors.background}
       />
 
-      <SettingsHeader
+      <ScreenHeader
         title="Group Bots"
         onBack={() => navigation.goBack()}
       />

@@ -14,11 +14,11 @@ import { AnimatedPressable } from './AnimatedPressable';
 const { height, width } = Dimensions.get('window');
 const IS_LIGHT = ActiveTheme === 'light';
 const OVERLAY_BG = IS_LIGHT ? 'rgba(14, 12, 10, 0.34)' : 'rgba(0,0,0,0.6)';
-const SHEET_BG = Colors.glassBg;
-const HANDLE_BG = Colors.glassBorder;
-const SEARCH_BG = Colors.glassBg;
-const SEARCH_BORDER = Colors.glassBorder;
-const OPTION_BORDER = Colors.glassBorder;
+const SHEET_BG = Colors.surfaceAlt;
+const HANDLE_BG = Colors.border;
+const SEARCH_BG = Colors.surfaceAlt;
+const SEARCH_BORDER = Colors.border;
+const OPTION_BORDER = Colors.border;
 
 interface Props {
   visible: boolean;

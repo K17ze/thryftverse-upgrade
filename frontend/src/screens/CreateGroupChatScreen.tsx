@@ -18,7 +18,7 @@ import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { createGroupConversationOnApi } from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
@@ -106,7 +106,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         backgroundColor={Colors.background}
       />
 
-      <SettingsHeader
+      <ScreenHeader
         title="Create Group Chat"
         onBack={() => navigation.goBack()}
       />

@@ -21,7 +21,6 @@ import { RouteProp, useNavigation, useRoute, useScrollToTop } from '@react-navig
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Skeleton } from '../components/ui/Skeleton';
 import { MasonryGrid } from '../components/ProductCardV2';
 import { ProductCardV2 } from '../components/ProductCardV2';
 import { SyncStatusPill } from '../components/SyncStatusPill';
@@ -38,8 +37,7 @@ import { Space, Radius } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { MOCK_USERS } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
+
 import { Typography } from '../constants/typography';
 
 const { width } = Dimensions.get('window');
@@ -80,7 +78,7 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, showToast, formatPrice, reducedMotionEnabled }: any) => {
   const isWishlisted = wishlist?.includes(item.id) ?? false;
   const haptic = useHaptic();
-  const seller = mockFind(MOCK_USERS, (user) => user.id === item.sellerId);
+  const seller = null as any;
   const sellerHandle = seller?.username ?? item.sellerId ?? 'seller';
   const heartScale = useSharedValue(0);
   const likeBtnScale = useSharedValue(1);
@@ -366,10 +364,10 @@ export default function BrowseScreen() {
     <View style={styles.loadingStateWrap}>
       {Array.from({ length: 6 }).map((_, index) => (
         <View key={`browse_loading_${index}`} style={[styles.loadingCard, index % 2 === 1 && styles.loadingCardOffset]}>
-          <Skeleton variant="image" height={ITEM_WIDTH * 1.35} />
+          <SkeletonLoader width={ITEM_WIDTH} height={ITEM_WIDTH * 1.35} borderRadius={Radius.lg} />
           <View style={styles.loadingCardBody}>
-            <Skeleton variant="text" width="58%" />
-            <Skeleton variant="text" width="40%" style={{ marginTop: Space.xs }} />
+            <SkeletonLoader width="58%" height={14} borderRadius={4} />
+            <SkeletonLoader width="40%" height={14} borderRadius={4} style={{ marginTop: Space.xs }} />
           </View>
         </View>
       ))}

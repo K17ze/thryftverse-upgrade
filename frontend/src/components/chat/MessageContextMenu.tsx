@@ -12,7 +12,7 @@ import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'forward' | 'delete' | 'info' | 'select';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'select';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -32,8 +32,6 @@ const ACTIONS: Array<{
   { id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' },
   { id: 'react', label: 'React', icon: 'happy-outline' },
   { id: 'copy', label: 'Copy', icon: 'copy-outline' },
-  { id: 'forward', label: 'Forward', icon: 'arrow-redo-outline' },
-  { id: 'info', label: 'Message Info', icon: 'information-circle-outline' },
   { id: 'delete', label: 'Delete', icon: 'trash-outline', color: Colors.danger, destructive: true },
 ];
 
@@ -161,7 +159,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
@@ -171,19 +169,19 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: Colors.glassBorder,
+    backgroundColor: Colors.border,
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
   previewRow: {
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     padding: Space.sm + 4,
     marginBottom: Space.sm + 4,
   },
   actionsList: {
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     marginBottom: Space.sm + 4,
@@ -195,13 +193,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.glassBorder,
+    borderBottomColor: Colors.border,
   },
   actionLabel: {
     flex: 1,
   },
   cancelBtn: {
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     alignItems: 'center',

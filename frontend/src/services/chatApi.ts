@@ -65,6 +65,8 @@ function mapApiMessageToConversationMessage(payload: ApiMessagePayload): Message
       ? payload.senderUserId ?? 'system'
       : 'system';
 
+  const meta = payload.metadata || {};
+
   return {
     id: payload.id,
     senderId,
@@ -74,6 +76,8 @@ function mapApiMessageToConversationMessage(payload: ApiMessagePayload): Message
     systemTitle: payload.senderType === 'system' ? 'System' : undefined,
     type: payload.senderType === 'system' ? 'system' : 'text',
     sender: payload.senderType === 'system' ? 'system' : 'other',
+    mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
+    mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
   };
 }
 
@@ -184,6 +188,23 @@ export async function sendConversationMessageOnApi(
   });
 
   return mapApiMessageToConversationMessage(payload.message);
+}
+
+export async function deleteConversationMessageOnApi(
+  conversationId: string,
+  messageId: string
+): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
+    { method: 'DELETE' }
+  );
+}
+
+export async function deleteConversationOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}`,
+    { method: 'DELETE' }
+  );
 }
 
 export async function deployBotToConversationOnApi(conversationId: string, botId: string) {

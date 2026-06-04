@@ -29,8 +29,6 @@ interface AttachmentOption {
 const OPTIONS: AttachmentOption[] = [
   { id: 'gallery', label: 'Photo & Video', icon: 'images-outline', color: '#3B82F6' },
   { id: 'camera', label: 'Camera', icon: 'camera-outline', color: '#10B981' },
-  { id: 'file', label: 'File', icon: 'document-outline', color: '#8B5CF6' },
-  { id: 'location', label: 'Location', icon: 'location-outline', color: '#EF4444' },
 ];
 
 interface AttachmentPickerSheetProps {
@@ -142,7 +140,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
@@ -154,7 +152,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.glassBorder,
+    backgroundColor: Colors.border,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
@@ -182,7 +180,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cancelBtn: {
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     alignItems: 'center',

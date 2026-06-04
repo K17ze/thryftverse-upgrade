@@ -239,14 +239,14 @@ const styles = StyleSheet.create({
   heroBigText: {
     fontSize: 72,
     lineHeight: 74,
-    fontFamily: Typography.family.extrabold,
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -2.8,
     marginBottom: 6,
   },
   heroSubText: {
     fontSize: 14,
-    fontFamily: Typography.family.light,
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     letterSpacing: 0.14,
   },

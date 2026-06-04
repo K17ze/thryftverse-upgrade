@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,15 +20,15 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore, User } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { parseApiError } from '../lib/apiClient';
-import { requestMyDataExport, deleteMyAccount } from '../services/accountApi';
+import { requestMyDataExport, deleteMyAccount, updateUserProfile as updateUserProfileApi } from '../services/accountApi';
 import { disableTwoFactor, logoutFromSession } from '../services/authApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { GlassCard } from '../components/ui/GlassSurface';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
-import { MY_USER } from '../data/mockData';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../constants/typography';
 
 export default function AccountSettingsScreen() {
@@ -42,7 +42,7 @@ export default function AccountSettingsScreen() {
   const updateUserProfile = useStore((state) => state.updateUserProfile);
   const { show } = useToast();
 
-  const user = currentUser ?? MY_USER;
+  const user = currentUser;
 
   // Personal details (User type extensions are cast for settings forms)
   const userAny = user as any;
@@ -55,17 +55,20 @@ export default function AccountSettingsScreen() {
   const holidayMode = accountPreferences.holidayMode;
   const privateProfile = accountPreferences.privateProfile;
 
-  // Linked accounts
-  const facebookLinked = false;
-  const googleLinked = false;
-
   // Async states
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isTogglingTwoFactor, setIsTogglingTwoFactor] = useState(false);
   const [disableTwoFactorModalVisible, setDisableTwoFactorModalVisible] = useState(false);
   const [disableTwoFactorCode, setDisableTwoFactorCode] = useState('');
   const [disableTwoFactorRecoveryCode, setDisableTwoFactorRecoveryCode] = useState('');
+  const [isHydrating, setIsHydrating] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsHydrating(false), 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleToggleTwoFactor = async (enabled: boolean) => {
     if (isTogglingTwoFactor) return;
@@ -107,14 +110,6 @@ export default function AccountSettingsScreen() {
     } finally {
       setIsTogglingTwoFactor(false);
     }
-  };
-
-  const handleFacebookLink = () => {
-    show('Facebook account linking is not available yet. Use Help Centre for support.', 'info');
-  };
-
-  const handleGoogleLink = () => {
-    show('Google sign-in is available from the auth landing screen.', 'info');
   };
 
   const handleDownloadData = async () => {
@@ -175,12 +170,35 @@ export default function AccountSettingsScreen() {
     );
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
+    if (isSaving) return;
+    const previousEmail = email;
+    const previousPhone = phone;
+    const previousFullName = fullName;
+    const previousBirthday = birthday;
+
     updateUserProfile({ email, phone, fullName, birthday });
-    show('Account details saved', 'success');
+    show('Saving account details…', 'info');
+    setIsSaving(true);
+
+    try {
+      await updateUserProfileApi({ email, phone, fullName, birthday });
+      show('Account details saved', 'success');
+    } catch (error) {
+      const parsed = parseApiError(error, 'Unable to save account details.');
+      show(parsed.message, 'error');
+      // Rollback optimistic update
+      setEmail(previousEmail);
+      setPhone(previousPhone);
+      setFullName(previousFullName);
+      setBirthday(previousBirthday);
+      updateUserProfile({ email: previousEmail, phone: previousPhone, fullName: previousFullName, birthday: previousBirthday });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const isBusy = isExporting || isDeleting;
+  const isBusy = isExporting || isDeleting || isSaving;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -189,13 +207,24 @@ export default function AccountSettingsScreen() {
         backgroundColor={Colors.background}
       />
 
-      <SettingsHeader title="Account" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Account" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Personal Details */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
           <Text style={styles.sectionTitle}>Personal Details</Text>
-          <GlassCard intensity={25} style={styles.glassCard}>
+          {isHydrating ? (
+            <View style={styles.skeletonWrap}>
+              <SkeletonLoader width="100%" height={72} borderRadius={Radius.lg} />
+              <View style={{ height: Space.sm }} />
+              <SkeletonLoader width="100%" height={72} borderRadius={Radius.lg} />
+              <View style={{ height: Space.sm }} />
+              <SkeletonLoader width="100%" height={72} borderRadius={Radius.lg} />
+              <View style={{ height: Space.sm }} />
+              <SkeletonLoader width="100%" height={72} borderRadius={Radius.lg} />
+            </View>
+          ) : (
+          <View style={styles.surfaceCard}>
             <AppInput
               label="Email Address"
               value={email}
@@ -224,13 +253,14 @@ export default function AccountSettingsScreen() {
               onChangeText={setBirthday}
               suffix={<Ionicons name="calendar-outline" size={20} color={Colors.textMuted} />}
             />
-          </GlassCard>
+          </View>
+          )}
         </Reanimated.View>
 
         {/* Preferences */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
           <Text style={styles.sectionTitle}>Preferences</Text>
-          <GlassCard intensity={25} style={styles.glassCard}>
+          <View style={styles.surfaceCard}>
             <SettingsCell
               icon="sunny-outline"
               iconColor={Colors.brand}
@@ -251,13 +281,13 @@ export default function AccountSettingsScreen() {
               onToggle={((v: boolean) => updateAccountPreferences({ privateProfile: v }))}
               isLast
             />
-          </GlassCard>
+          </View>
         </Reanimated.View>
 
         {/* Security */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
           <Text style={styles.sectionTitle}>Security</Text>
-          <GlassCard intensity={25} style={styles.glassCard}>
+          <View style={styles.surfaceCard}>
             <SettingsCell
               icon="key-outline"
               iconColor={Colors.textSecondary}
@@ -276,34 +306,8 @@ export default function AccountSettingsScreen() {
               onToggle={(value) => void handleToggleTwoFactor(value)}
               isLast
             />
-          </GlassCard>
+          </View>
         </Reanimated.View>
-
-        {/* Linked Accounts */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
-          <Text style={styles.sectionTitle}>Linked Accounts</Text>
-          <GlassCard intensity={25} style={styles.glassCard}>
-            <SettingsCell
-              icon="logo-facebook"
-              iconColor="#1877F2"
-              title="Facebook"
-              value={facebookLinked ? 'Linked' : 'Link'}
-              isFirst
-              onPress={handleFacebookLink}
-              disabled
-            />
-            <SettingsCell
-              icon="logo-google"
-              iconColor="#EA4335"
-              title="Google"
-              value={googleLinked ? 'Linked' : 'Link'}
-              isLast
-              onPress={handleGoogleLink}
-              disabled
-            />
-          </GlassCard>
-        </Reanimated.View>
-
 
         {/* Footer Actions */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(400)}>
@@ -365,8 +369,9 @@ export default function AccountSettingsScreen() {
         {/* Save */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(320)}>
           <AppButton
-            title="Save Changes"
-            onPress={handleSaveChanges}
+            title={isSaving ? 'Saving…' : 'Save Changes'}
+            onPress={() => void handleSaveChanges()}
+            disabled={isSaving}
             variant="primary"
             size="md"
             style={styles.saveBtn}
@@ -454,6 +459,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
   },
+  skeletonWrap: {
+    marginBottom: Space.sm,
+  },
   sectionTitle: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
@@ -464,11 +472,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: Type.meta.letterSpacing,
   },
-  glassCard: {
+  surfaceCard: {
     marginHorizontal: 0,
     marginBottom: Space.sm,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     padding: Space.md,
+    backgroundColor: Colors.surface,
   },
   inputSpacing: {
     marginBottom: Space.sm,
@@ -479,10 +488,8 @@ const styles = StyleSheet.create({
   },
   footerActionBtn: {
     marginTop: Space.md,
-    backgroundColor: Colors.glassBg,
-    borderRadius: Radius.lg,
-    borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.xl,
   },
   footerActionIconWrap: {
     width: 34,
@@ -490,9 +497,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.glassBg,
-    borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.surface,
   },
   footerActionChevronWrap: {
     width: 22,
@@ -508,9 +513,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 77, 77, 0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 77, 77, 0.28)',
+    backgroundColor: 'rgba(255, 77, 77, 0.12)',
   },
   footerActionChevronWrapDanger: {
     width: 22,
@@ -535,10 +538,8 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   dangerActionBtn: {
-    borderWidth: 1,
-    borderColor: 'rgba(255, 77, 77, 0.26)',
-    backgroundColor: 'rgba(255, 77, 77, 0.1)',
-    borderRadius: Radius.lg,
+    backgroundColor: 'rgba(255, 77, 77, 0.08)',
+    borderRadius: Radius.xl,
     marginTop: Space.md,
   },
   dangerText: {
@@ -587,9 +588,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalBtnMuted: {
-    backgroundColor: Colors.glassBg,
-    borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.surfaceAlt,
   },
   modalBtnMutedText: {
     color: Colors.textPrimary,

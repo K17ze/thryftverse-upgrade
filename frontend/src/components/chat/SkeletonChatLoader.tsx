@@ -89,15 +89,15 @@ const styles = StyleSheet.create({
     marginRight: Space.sm,
   },
   bubble: {
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md - 2,
     paddingVertical: Space.sm + 2,
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
   },
   bar: {
-    backgroundColor: Colors.glassBorder,
+    backgroundColor: Colors.border,
     borderRadius: Radius.sm,
   },
 });

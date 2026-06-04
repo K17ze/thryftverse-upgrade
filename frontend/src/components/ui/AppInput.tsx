@@ -94,8 +94,8 @@ const styles = StyleSheet.create({
   inputWrap: {
     borderRadius: 10,
     borderWidth: 0.5,
-    borderColor: Colors.glassBorder,
-    backgroundColor: Colors.glassBg,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: 12,
     minHeight: 46,
     flexDirection: 'row',

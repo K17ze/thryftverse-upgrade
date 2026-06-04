@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   borderOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.glassBorder,
+    borderColor: Colors.border,
     zIndex: 2,
     pointerEvents: 'none',
   },

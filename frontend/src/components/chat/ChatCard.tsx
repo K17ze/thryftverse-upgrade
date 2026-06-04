@@ -16,19 +16,19 @@ function resolveChatCardStyle(variant: ChatCardVariant) {
   switch (variant) {
     case 'tint':
       return {
-        backgroundColor: Colors.glassBg,
-        borderColor: Colors.glassBorder,
+        backgroundColor: Colors.surfaceAlt,
+        borderColor: Colors.border,
       };
     case 'elevated':
       return {
-        backgroundColor: Colors.glassBg,
-        borderColor: Colors.glassBorder,
+        backgroundColor: Colors.surfaceAlt,
+        borderColor: Colors.border,
       };
     case 'surface':
     default:
       return {
-        backgroundColor: Colors.glassBg,
-        borderColor: Colors.glassBorder,
+        backgroundColor: Colors.surfaceAlt,
+        borderColor: Colors.border,
       };
   }
 }

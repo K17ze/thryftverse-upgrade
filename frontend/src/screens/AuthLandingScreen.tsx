@@ -28,7 +28,6 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken } from '../services/authApi';
-import { AmbientGradientMesh } from '../components/ui/AmbientGradient';
 import { GlassCard } from '../components/ui/GlassSurface';
 import { GlowSurface } from '../components/ui/GlowSurface';
 
@@ -232,12 +231,8 @@ export default function AuthLandingScreen() {
         priority="high"
       />
 
-      {/* Animated ambient gradient overlay for atmosphere */}
-      <AmbientGradientMesh
-        colors={[Colors.brand, Colors.surfaceAlt, Colors.surface, 'transparent']}
-        speed={18}
-        style={StyleSheet.absoluteFill}
-      />
+      {/* Background overlay */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.background }]} />
 
       {/* Dark gradient overlay for text readability */}
       <LinearGradient
@@ -379,7 +374,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 72,
-    fontFamily: Typography.family.extrabold,
+    fontFamily: Typography.family.bold,
     color: '#f6f2ea',
     lineHeight: 74,
     letterSpacing: -2.4,
@@ -387,7 +382,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 13,
-    fontFamily: Typography.family.light,
+    fontFamily: Typography.family.regular,
     color: 'rgba(245,239,230,0.72)',
     lineHeight: 18,
     letterSpacing: 0.24,

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Switch,
   ScrollView,
   StatusBar,
 } from 'react-native';
@@ -19,11 +18,12 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { formatCountryPolicyScope } from '../utils/capabilityPolicy';
 import { CapabilityCarrier, getUserCountryCapabilities } from '../services/capabilitiesApi';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { RadioButton } from '../components/settings/RadioButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../constants/typography';
 
 type Props = StackScreenProps<RootStackParamList, 'Postage'>;
@@ -52,13 +52,16 @@ export default function PostageScreen({ navigation }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const [carriers, setCarriers] = useState(CARRIERS);
   const [carrierScopeLabel, setCarrierScopeLabel] = useState<string | null>(null);
+  const [isHydrating, setIsHydrating] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     const hydrateCountryCarriers = async () => {
+      setIsHydrating(true);
       if (!currentUser?.id) {
         setCarriers(CARRIERS);
         setCarrierScopeLabel(null);
+        setIsHydrating(false);
         return;
       }
       try {
@@ -75,6 +78,8 @@ export default function PostageScreen({ navigation }: Props) {
           setCarriers(CARRIERS.map((c) => ({ ...c, selected: c.key === postagePreferences.carrierKey })));
           setCarrierScopeLabel(null);
         }
+      } finally {
+        if (!cancelled) setIsHydrating(false);
       }
     };
     void hydrateCountryCarriers();
@@ -99,13 +104,13 @@ export default function PostageScreen({ navigation }: Props) {
         backgroundColor={Colors.background}
       />
 
-      <SettingsHeader
+      <ScreenHeader
         title="Postage"
         onBack={() => navigation.goBack()}
         rightAction={
-          <AnimatedPressable onPress={() => { show('Postage preferences saved', 'success'); navigation.goBack(); }} hapticFeedback="light" scaleValue={0.98}>
+          <AnimatedPressable onPress={() => navigation.goBack()} hapticFeedback="light" scaleValue={0.98}>
             <View style={styles.saveBtnContainer}>
-              <Text style={styles.saveBtnText}>Save</Text>
+              <Text style={styles.saveBtnText}>Done</Text>
             </View>
           </AnimatedPressable>
         }
@@ -118,6 +123,15 @@ export default function PostageScreen({ navigation }: Props) {
           {carrierScopeLabel ? (
             <Text style={styles.scopeLabel}>Region policy: {carrierScopeLabel}</Text>
           ) : null}
+          {isHydrating ? (
+            <View style={styles.skeletonWrap}>
+              <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
+              <View style={{ height: Space.sm }} />
+              <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
+              <View style={{ height: Space.sm }} />
+              <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
+            </View>
+          ) : (
           <SettingsCard>
             {carriers.map((c, idx) => (
               <AnimatedPressable
@@ -144,6 +158,7 @@ export default function PostageScreen({ navigation }: Props) {
               </AnimatedPressable>
             ))}
           </SettingsCard>
+          )}
         </Reanimated.View>
 
         {/* Shipping Options */}
@@ -205,6 +220,9 @@ const styles = StyleSheet.create({
   content: {
     padding: Space.md,
     paddingBottom: Space.xl,
+  },
+  skeletonWrap: {
+    marginBottom: Space.md,
   },
   sectionTitle: {
     fontSize: Type.meta.size,

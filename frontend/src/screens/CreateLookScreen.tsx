@@ -39,7 +39,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
-import { SettingsHeader } from '../components/settings/SettingsHeader';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { CachedImage } from '../components/CachedImage';
 import { Listing } from '../data/mockData';
 
@@ -224,7 +224,7 @@ export default function CreateLookScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={Colors.background === '#FFFFFF' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-      <SettingsHeader title="Create Look" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Create Look" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">

@@ -1,11 +1,16 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+} from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppInput } from '../ui/AppInput';
-import { GlassSurface } from '../ui/GlassSurface';
 
 interface ComposerInputProps {
   value: string;
@@ -17,6 +22,7 @@ interface ComposerInputProps {
   returnKeyType?: 'send' | 'default';
   style?: ViewStyle;
   inputContainerStyle?: ViewStyle;
+  isSending?: boolean;
 }
 
 export function ComposerInput({
@@ -29,17 +35,47 @@ export function ComposerInput({
   returnKeyType = 'send',
   style,
   inputContainerStyle,
+  isSending = false,
 }: ComposerInputProps) {
   const canSend = value.trim().length > 0;
+  const [uiState, setUiState] = React.useState<'idle' | 'sending' | 'sent'>('idle');
+
+  React.useEffect(() => {
+    if (isSending) {
+      setUiState('sending');
+    } else if (uiState === 'sending') {
+      setUiState('sent');
+      const t = setTimeout(() => setUiState('idle'), 700);
+      return () => clearTimeout(t);
+    }
+  }, [isSending]);
+
+  const sendScale = useSharedValue(1);
+  React.useEffect(() => {
+    if (isSending) {
+      sendScale.value = withTiming(0.99, { duration: 120 });
+    } else {
+      sendScale.value = withSpring(1, { damping: 18, stiffness: 420 });
+    }
+  }, [isSending]);
+
+  const pillAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: sendScale.value }],
+  }));
+
+  const renderSendIcon = () => {
+    if (uiState === 'sending') {
+      return <ActivityIndicator size="small" color={Colors.textInverse} />;
+    }
+    if (uiState === 'sent') {
+      return <Ionicons name="checkmark" size={18} color={Colors.textInverse} />;
+    }
+    return <Ionicons name="arrow-up" size={20} color={canSend ? Colors.background : Colors.textMuted} />;
+  };
 
   return (
     <View style={[styles.container, style]}>
-      <GlassSurface
-        intensity={25}
-        tint="default"
-        borderRadius={Radius.full}
-        style={[styles.glassPill, inputContainerStyle]}
-      >
+      <Reanimated.View style={[styles.pill, inputContainerStyle, pillAnimStyle]}>
         {onAttachmentPress && (
           <AnimatedPressable
             style={styles.iconBtn}
@@ -79,10 +115,15 @@ export function ComposerInput({
           inputStyle={styles.input}
           accessibilityLabel="Message input"
           accessibilityHint="Type your message here"
+          multiline
+          numberOfLines={1}
+          maxLength={2000}
+          textAlignVertical="center"
+          blurOnSubmit={false}
         />
 
         <AnimatedPressable
-          style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+          style={[styles.sendBtn, !canSend && uiState === 'idle' && styles.sendBtnDisabled]}
           onPress={onSend}
           disabled={!canSend}
           accessibilityRole="button"
@@ -91,9 +132,9 @@ export function ComposerInput({
           scaleValue={0.9}
           hapticFeedback="light"
         >
-          <Ionicons name="arrow-up" size={20} color={canSend ? Colors.background : Colors.textMuted} />
+          {renderSendIcon()}
         </AnimatedPressable>
-      </GlassSurface>
+      </Reanimated.View>
     </View>
   );
 }
@@ -102,12 +143,14 @@ const styles = StyleSheet.create({
   container: {
     paddingVertical: Space.sm + 2,
   },
-  glassPill: {
+  pill: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: Space.sm,
     paddingRight: Space.xs,
     minHeight: 48,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.full,
   },
   iconBtn: {
     width: 40,
@@ -138,6 +181,6 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   sendBtnDisabled: {
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
   },
 });

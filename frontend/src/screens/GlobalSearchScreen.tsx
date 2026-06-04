@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   ScrollView,
   StatusBar,
   Dimensions,
@@ -31,6 +30,7 @@ import { CachedImage } from '../components/CachedImage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
+import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { MOCK_USERS } from '../data/mockData';
 
@@ -223,7 +223,7 @@ function getRecencyBoost(createdAt?: string) {
 export default function GlobalSearchScreen({ navigation }: Props) {
   const [query, setQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<any>(null);
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const resetBrowseFilters = useStore((state) => state.resetBrowseFilters);
@@ -523,28 +523,22 @@ export default function GlobalSearchScreen({ navigation }: Props) {
         </AnimatedPressable>
 
         <Reanimated.View style={[styles.inputContainer, animatedSearchShellStyle]}>
-          <Ionicons name="search" size={20} color={Colors.textMuted} style={{ marginRight: 8 }} />
-          <TextInput
+          <AppSearchBar
             ref={inputRef}
-            style={styles.searchInput}
             placeholder="Search Thryftverse"
-            placeholderTextColor={Colors.textMuted}
             value={query}
             onChangeText={setQuery}
-            onSubmitEditing={handleSearchSubmit}
-            onFocus={() => setIsSearchFocused(true)}
-            onBlur={() => setIsSearchFocused(false)}
-            returnKeyType="search"
-            autoCapitalize="none"
-            selectionColor={Colors.brand}
+            containerStyle={{ flex: 1, borderWidth: 0, backgroundColor: 'transparent' }}
+            rightNode={<Ionicons name="camera" size={24} color={Colors.textMuted} />}
+            inputProps={{
+              onSubmitEditing: handleSearchSubmit,
+              onFocus: () => setIsSearchFocused(true),
+              onBlur: () => setIsSearchFocused(false),
+              returnKeyType: 'search',
+              autoCapitalize: 'none',
+              selectionColor: Colors.brand,
+            }}
           />
-          {query.length > 0 ? (
-            <AnimatedPressable style={styles.clearBtn} onPress={() => setQuery('')}>
-              <Ionicons name="close-circle" size={20} color={Colors.textSecondary} />
-            </AnimatedPressable>
-          ) : (
-            <Ionicons name="camera" size={24} color={Colors.textMuted} style={{ marginLeft: 8 }} />
-          )}
         </Reanimated.View>
       </View>
 
@@ -868,16 +862,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.08,
-  },
-  clearBtn: {
-    padding: 2,
   },
   statusPillWrap: {
     paddingHorizontal: 20,

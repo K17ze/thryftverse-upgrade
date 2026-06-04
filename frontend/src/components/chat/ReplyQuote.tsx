@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.glassBg,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.md,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.sm,
