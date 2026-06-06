@@ -19,7 +19,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Listing } from '../data/mockData';
 import { isVideoUri } from '../utils/media';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { StaggeredItem } from './StaggeredGridEntrance';
 
 const ASPECT_RATIOS = [0.75, 1.0, 1.25, 1.5]; // Masonry varied heights

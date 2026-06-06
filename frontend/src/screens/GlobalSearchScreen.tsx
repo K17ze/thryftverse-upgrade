@@ -38,7 +38,7 @@ import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
 import { EditorialSection } from '../components/discover/EditorialSection';
 import { FeaturedBoardCard, FeaturedBoard } from '../components/discover/FeaturedBoardCard';
 import { EditorialImageRow, EditorialImage } from '../components/discover/EditorialImageRow';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'GlobalSearch'>;
 

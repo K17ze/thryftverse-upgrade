@@ -13,8 +13,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
-import { Elevation } from '../theme/designTokens';
+import { Typography , Elevation  } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 

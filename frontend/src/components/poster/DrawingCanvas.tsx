@@ -13,7 +13,7 @@ import {
 // when the package is intentionally missing during development. When the
 // library is unavailable we render a harmless fallback so the app can run.
 import { Ionicons } from '@expo/vector-icons';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 export interface BrushStroke {
   id: string;

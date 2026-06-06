@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 export type SyncStatusTone = 'live' | 'syncing' | 'offline';
 

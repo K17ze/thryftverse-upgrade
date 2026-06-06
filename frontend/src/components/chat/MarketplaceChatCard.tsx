@@ -2,8 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type } from '../../theme/designTokens';
-import { Typography } from '../../constants/typography';
+import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface OfferData {
@@ -69,9 +68,6 @@ export function MarketplaceChatCard({
       <View style={[styles.card, styles.statusCard]}>
         <Text style={styles.statusTitle}>{lines[0]}</Text>
         <Text style={styles.statusBody}>{lines.slice(1).join('\n')}</Text>
-        <AnimatedPressable onPress={() => {}} activeOpacity={0.7} scaleValue={0.98} hapticFeedback="light">
-          <Text style={styles.statusLink}>Tracking information</Text>
-        </AnimatedPressable>
       </View>
     );
   }

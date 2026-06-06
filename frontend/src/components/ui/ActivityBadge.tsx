@@ -16,7 +16,6 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Type } from '../../theme/designTokens';
-import { GlassCard } from './GlassSurface';
 
 export type ActivityBadgeVariant =
   | 'viewers'
@@ -141,13 +140,12 @@ export function ActivityBadge({
 
   return (
     <Reanimated.View entering={FadeInDown.duration(300)} style={style}>
-      <GlassCard
-        intensity={25}
+      <View
         style={[
           styles.badge,
           config.accent && styles.badgeAccent,
+          styles.badgeContent,
         ]}
-        contentStyle={styles.badgeContent}
       >
         <View style={styles.row}>
           {config.accent && (
@@ -171,7 +169,7 @@ export function ActivityBadge({
         {subtitle && (
           <Text style={styles.subtitle}>{subtitle}</Text>
         )}
-      </GlassCard>
+      </View>
     </Reanimated.View>
   );
 }
@@ -179,10 +177,13 @@ export function ActivityBadge({
 const styles = StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
   },
   badgeAccent: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(212,168,83,0.15)',
+    borderColor: Colors.brand,
   },
   badgeContent: {
     paddingHorizontal: Space.sm + 2,

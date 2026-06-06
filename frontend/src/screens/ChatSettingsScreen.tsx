@@ -18,7 +18,7 @@ import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { PremiumToggle } from '../components/PremiumToggle';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'ChatSettings'>;
 

@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Type, Space, Radius } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { PremiumToggle } from './settings/PremiumToggle';
 

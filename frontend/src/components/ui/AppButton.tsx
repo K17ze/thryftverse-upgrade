@@ -1,17 +1,16 @@
 import React from 'react';
 import { AccessibilityRole, ActivityIndicator, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Colors } from '../../constants/colors';
-import { Type } from '../../theme/designTokens';
+import { Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Typography } from '../../constants/typography';
 
 // ============================================================================
-// SIMPLIFIED BUTTON COMPONENT (Phase 2 Cleanup)
-// 5 variants: primary | secondary | gold | contrast | danger
+// SIMPLIFIED BUTTON COMPONENT (Phase 0 Cleanup)
+// 4 variants: primary | secondary | danger | ghost
 // Uses 5-core color palette
 // ============================================================================
 
-export type AppButtonVariant = 'primary' | 'secondary' | 'gold' | 'contrast' | 'danger';
+export type AppButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
 export type AppButtonSize = 'sm' | 'md' | 'lg';
 type AppButtonHapticFeedback = 'none' | 'light' | 'medium' | 'heavy' | 'selection';
 
@@ -51,27 +50,19 @@ function resolveVariantTokens(variant: AppButtonVariant): VariantTokens {
   switch (variant) {
     case 'secondary':
       return {
-        backgroundColor: 'transparent',
+        backgroundColor: Colors.surface,
         borderColor: Colors.border,
         titleColor: Colors.textPrimary,
         subtitleColor: Colors.textSecondary,
         iconBackgroundColor: 'transparent',
       };
-    case 'gold':
+    case 'ghost':
       return {
-        backgroundColor: Colors.brand,
-        borderColor: Colors.brand,
-        titleColor: Colors.textInverse,
-        subtitleColor: Colors.textInverse,
-        iconBackgroundColor: 'rgba(0,0,0,0.15)',
-      };
-    case 'contrast':
-      return {
-        backgroundColor: Colors.textPrimary,
-        borderColor: Colors.textPrimary,
-        titleColor: Colors.background,
-        subtitleColor: Colors.background,
-        iconBackgroundColor: 'rgba(255,255,255,0.15)',
+        backgroundColor: 'transparent',
+        borderColor: 'transparent',
+        titleColor: Colors.textPrimary,
+        subtitleColor: Colors.textSecondary,
+        iconBackgroundColor: 'transparent',
       };
     case 'danger':
       return {

@@ -37,7 +37,7 @@ import { t } from '../i18n';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'Settings'>;
 

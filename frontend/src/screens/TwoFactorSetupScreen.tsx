@@ -21,7 +21,7 @@ import { ActiveTheme, Colors } from '../constants/colors';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { requestTwoFactorEnrollment, verifyTwoFactorEnrollment } from '../services/authApi';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import QRCode from 'qrcode';
 import * as Clipboard from 'expo-clipboard';
 

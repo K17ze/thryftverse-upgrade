@@ -21,7 +21,7 @@ import { getFreshPosters } from '../data/posters';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { SharedTransitionView } from '../components/SharedTransitionView';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const AUTO_ADVANCE_MS = 5000;

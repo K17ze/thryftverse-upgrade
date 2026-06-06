@@ -8,7 +8,7 @@ import Reanimated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 interface AnimatedBadgeProps {
   count: number;

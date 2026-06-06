@@ -30,12 +30,11 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
-import { GlassCard } from '../components/ui/GlassSurface';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { haptics } from '../utils/haptics';
 import { AppButton } from '../components/ui/AppButton';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 import { Space, Radius, Type } from '../theme/designTokens';
 import {
@@ -422,7 +421,7 @@ export default function OutfitBuilderScreen() {
         {/* AI Suggestion */}
         {aiSuggestion && (
           <Reanimated.View entering={FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
-            <GlassCard style={styles.aiCard}>
+            <View style={styles.aiCard}>
               <View style={styles.aiRow}>
                 <Ionicons name="sparkles" size={18} color={Colors.brand} />
                 <T.Caption color={Colors.brand} style={{ fontFamily: Typography.family.bold }}>
@@ -439,7 +438,7 @@ export default function OutfitBuilderScreen() {
                 onPress={handleAiSuggest}
                 icon={<Ionicons name="add-circle-outline" size={16} color={Colors.brand} />}
               />
-            </GlassCard>
+            </View>
           </Reanimated.View>
         )}
 
@@ -555,6 +554,9 @@ const styles = StyleSheet.create({
   aiCard: {
     padding: Space.md,
     borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   aiRow: {
     flexDirection: 'row',

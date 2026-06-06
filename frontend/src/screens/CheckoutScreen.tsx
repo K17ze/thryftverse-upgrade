@@ -1,4 +1,4 @@
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import React, { useEffect, useState } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
@@ -38,7 +38,6 @@ import {
 import { CapabilityCarrier, getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { CachedImage } from '../components/CachedImage';
 import { AppButton } from '../components/ui/AppButton';
-import { GlassCard } from '../components/ui/GlassSurface';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { Body, Caption, Meta, Headline } from '../components/ui/Text';
 import { haptics } from '../utils/haptics';
@@ -407,7 +406,7 @@ export default function CheckoutScreen() {
         
         {/* Item Summary Card */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
-        <GlassCard style={styles.itemCard}>
+        <View style={styles.itemCard}>
           <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/checkout-item-fallback/300/400')} style={styles.itemThumb} contentFit="cover" />
           <View style={styles.itemInfo}>
             <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
@@ -442,11 +441,11 @@ export default function CheckoutScreen() {
             </View>
             <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP')}</Text>
           </View>
-        </GlassCard>
+        </View>
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(60)}>
-        <GlassCard style={styles.readinessCard}>
+        <View style={styles.readinessCard}>
           <View style={styles.readinessTopRow}>
             <Text style={styles.readinessTitle}>{t('checkout.readiness.title')}</Text>
             <SyncStatusPill tone={checkoutStatus.tone} label={checkoutStatus.label} compact />
@@ -469,7 +468,7 @@ export default function CheckoutScreen() {
               </Text>
             </View>
           </View>
-        </GlassCard>
+        </View>
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}>
@@ -549,7 +548,7 @@ export default function CheckoutScreen() {
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}>
         <Text style={styles.sectionTitle}>{t('checkout.section.orderSummary')}</Text>
-        <GlassCard style={styles.summaryCard}>
+        <View style={styles.summaryCard}>
           <SummaryRow label={t('checkout.summary.itemPrice')} value={formatFromFiat(item.price, 'GBP')} />
           <SummaryRow label={t('checkout.summary.platformCharge')} value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} info />
           <SummaryRow
@@ -562,7 +561,7 @@ export default function CheckoutScreen() {
           />
           <View style={styles.divider} />
           <SummaryRow label={t('checkout.summary.total')} value={formatFromFiat(TOTAL, 'GBP')} bold />
-        </GlassCard>
+        </View>
         </Reanimated.View>
 
         <Text style={styles.termsText}>

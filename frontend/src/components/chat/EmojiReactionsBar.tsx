@@ -2,8 +2,7 @@ import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors } from '../../constants/colors';
-import { Typography } from '../../constants/typography';
-import { Space, Radius } from '../../theme/designTokens';
+import { Typography , Space, Radius  } from '../../theme/designTokens';
 import { Caption } from '../ui/Text';
 
 export type EmojiReaction = {

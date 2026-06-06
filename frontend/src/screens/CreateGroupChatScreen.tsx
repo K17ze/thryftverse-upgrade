@@ -10,7 +10,7 @@ import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -23,10 +23,8 @@ import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { Motion } from '../constants/motion';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateGroupChat'>;
 
@@ -34,9 +32,9 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const createGroupConversation = useStore((state) => state.createGroupConversation);
   const upsertConversation = useStore((state) => state.upsertConversation);
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [title, setTitle] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -54,7 +52,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         }
       }
     }
-    return Array.from(participantIds).map((id) => ({ id, username: id.slice(0, 8) }));
+    return Array.from(participantIds).map((id) => ({ id, username: 'Contact' }));
   }, [conversations, currentUser?.id]);
 
   const filteredMembers = useMemo(() => {
@@ -110,7 +108,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={Colors.background}
       />
 
@@ -172,15 +170,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           renderItem={({ item, index }) => {
             const selected = selectedIds.includes(item.id);
             return (
-              <Reanimated.View
-                entering={
-                  reducedMotionEnabled
-                    ? undefined
-                    : FadeInDown
-                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                      .duration(Motion.list.enterDuration)
-                }
-              >
+              <View>
                 <ChatCard
                   variant={selected ? 'tint' : 'surface'}
                   style={[styles.memberRow, selected && styles.memberRowSelected]}
@@ -224,7 +214,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
                     <Ionicons name="person-circle-outline" size={20} color={Colors.textPrimary} />
                   </AnimatedPressable>
                 </ChatCard>
-              </Reanimated.View>
+              </View>
             );
           }}
           contentContainerStyle={styles.memberList}

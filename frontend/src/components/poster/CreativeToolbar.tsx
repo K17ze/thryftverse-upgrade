@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 export type CreativeTool = 'text' | 'stickers' | 'draw' | 'filter' | 'preview' | null;
 

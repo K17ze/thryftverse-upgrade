@@ -1,4 +1,4 @@
-﻿import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppInput } from '../components/ui/AppInput';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
 

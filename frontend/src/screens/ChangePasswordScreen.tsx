@@ -25,7 +25,7 @@ import { AppInput } from '../components/ui/AppInput';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 export default function ChangePasswordScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();

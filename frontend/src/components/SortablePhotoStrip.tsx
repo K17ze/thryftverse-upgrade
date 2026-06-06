@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from './AnimatedPressable';
 import { isVideoUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = 80;

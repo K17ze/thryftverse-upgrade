@@ -8,7 +8,7 @@ import Reanimated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 
 const { height, width } = Dimensions.get('window');

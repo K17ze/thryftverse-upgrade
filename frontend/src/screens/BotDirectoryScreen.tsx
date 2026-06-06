@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -20,11 +20,9 @@ import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { Typography } from '../constants/typography';
-import { Motion } from '../constants/motion';
+import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'BotDirectory'>;
 
@@ -48,16 +46,15 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_COLOR: Record<string, string> = {
   available: Colors.brand,
-  'local-only': '#F59E0B',
+  'local-only': Colors.textSecondary,
   'backend-required': Colors.textMuted,
 };
 
 export default function BotDirectoryScreen({ navigation }: Props) {
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
   const [selectedCategory, setSelectedCategory] = useState<BotCategory>('all');
-  const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
 
   const bots = useStore((state) => state.availableChatBots);
   const enabledBotIds = useStore((state) => state.enabledBotIds);
@@ -68,11 +65,6 @@ export default function BotDirectoryScreen({ navigation }: Props) {
     if (selectedCategory === 'all') return bots;
     return bots.filter((b) => b.category === selectedCategory);
   }, [bots, selectedCategory]);
-
-  const selectedBot = useMemo(
-    () => bots.find((b) => b.id === selectedBotId) ?? null,
-    [bots, selectedBotId]
-  );
 
   const handleToggle = (botId: string) => {
     haptic.medium();
@@ -87,7 +79,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={Colors.background}
       />
 
@@ -96,6 +88,16 @@ export default function BotDirectoryScreen({ navigation }: Props) {
         subtitle="Marketplace bots & assistants"
         onBack={() => navigation.goBack()}
       />
+
+      {/* What are bots explanation */}
+      <View style={styles.infoBanner}>
+        <Ionicons name="information-circle-outline" size={18} color={Colors.textMuted} />
+        <Caption color={Colors.textMuted} style={styles.infoText}>
+          Bots are automated assistants that can help moderate, sell, or style in your group chats.
+          {' '}{STATUS_LABEL['local-only']} bots work on this device.
+          {' '}{STATUS_LABEL['backend-required']} bots need a server connection.
+        </Caption>
+      </View>
 
       {/* Category filter */}
       <ScrollView
@@ -149,16 +151,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           {filteredBots.map((bot, index) => {
             const enabled = isBotEnabled(bot.id);
             return (
-              <Reanimated.View
-                key={bot.id}
-                entering={
-                  reducedMotionEnabled
-                    ? undefined
-                    : FadeInDown
-                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                      .duration(Motion.list.enterDuration)
-                }
-              >
+              <View key={bot.id}>
                 <ChatCard variant="surface" style={styles.botCard}>
                   <View style={styles.botHeadRow}>
                     <View style={styles.botIconWrap}>
@@ -208,48 +201,44 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                     {bot.description}
                   </Caption>
 
-                  <AnimatedPressable
-                    onPress={() => setSelectedBotId(selectedBotId === bot.id ? null : bot.id)}
-                    activeOpacity={0.8}
-                    scaleValue={0.98}
-                  >
-                    <View style={styles.detailToggle}>
-                      <Caption color={Colors.brand} style={styles.detailToggleText}>
-                        {selectedBotId === bot.id ? 'Hide details' : 'View details'}
-                      </Caption>
-                      <Ionicons
-                        name={selectedBotId === bot.id ? 'chevron-up' : 'chevron-down'}
-                        size={14}
-                        color={Colors.brand}
-                      />
-                    </View>
-                  </AnimatedPressable>
-
-                  {selectedBotId === bot.id && selectedBot && (
-                    <View style={styles.detailPanel}>
-                      <DetailRow icon="key-outline" label="Permissions" value={bot.permissions.join(', ')} />
-                      <DetailRow icon="terminal-outline" label="Command" value={bot.commandHint} />
-                      <DetailRow
-                        icon="server-outline"
-                        label="Backend"
-                        value={
-                          bot.status === 'available'
-                            ? 'Connected'
-                            : bot.status === 'local-only'
-                              ? 'Local-only (no backend)'
-                              : 'Requires backend connection'
-                        }
-                      />
-                      <View style={styles.safetyNote}>
-                        <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
-                        <Caption color={Colors.textMuted} style={styles.safetyNoteText}>
-                          Bots can be disabled at any time in Chat Settings.
+                  {bot.permissions.length > 0 && (
+                    <View style={styles.permissionsRow}>
+                      {bot.permissions.slice(0, 2).map((perm) => (
+                        <View key={perm} style={styles.permissionPill}>
+                          <Caption color={Colors.textSecondary} style={styles.permissionPillText}>
+                            {perm}
+                          </Caption>
+                        </View>
+                      ))}
+                      {bot.permissions.length > 2 && (
+                        <Caption color={Colors.textMuted} style={styles.permissionPillText}>
+                          +{bot.permissions.length - 2}
                         </Caption>
-                      </View>
+                      )}
                     </View>
                   )}
+
+                  <View style={styles.cardActions}>
+                    <AnimatedPressable
+                      onPress={() => navigation.navigate('BotDetail', { botId: bot.id })}
+                      activeOpacity={0.8}
+                      scaleValue={0.98}
+                      hapticFeedback="light"
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${bot.name} details`}
+                    >
+                      <View style={styles.viewDetailBtn}>
+                        <Caption color={Colors.brand} style={styles.viewDetailText}>View details</Caption>
+                        <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+                      </View>
+                    </AnimatedPressable>
+
+                    <Caption color={Colors.textMuted} style={styles.toggleHint}>
+                      {enabled ? 'Enabled in account' : 'Disabled in account'}
+                    </Caption>
+                  </View>
                 </ChatCard>
-              </Reanimated.View>
+              </View>
             );
           })}
           <View style={{ height: Space.xl }} />
@@ -259,18 +248,23 @@ export default function BotDirectoryScreen({ navigation }: Props) {
   );
 }
 
-function DetailRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <Ionicons name={icon} size={14} color={Colors.textMuted} style={styles.detailIcon} />
-      <Caption color={Colors.textSecondary} style={styles.detailLabel}>{label}</Caption>
-      <Caption color={Colors.textPrimary} style={styles.detailValue} numberOfLines={2}>{value}</Caption>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.lg,
+  },
+  infoText: {
+    flex: 1,
+    lineHeight: 18,
+  },
   categoryStrip: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -341,49 +335,39 @@ const styles = StyleSheet.create({
     marginTop: Space.sm + 4,
     lineHeight: 19,
   },
-  detailToggle: {
+  permissionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: Space.xs,
     marginTop: Space.sm,
-    alignSelf: 'flex-start',
   },
-  detailToggleText: {
-    fontFamily: Typography.family.medium,
+  permissionPill: {
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
   },
-  detailPanel: {
-    marginTop: Space.md,
-    paddingTop: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    gap: Space.sm,
+  permissionPillText: {
+    fontSize: 11,
   },
-  detailRow: {
+  cardActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
-  detailIcon: {
-    width: 18,
-  },
-  detailLabel: {
-    width: 80,
-  },
-  detailValue: {
-    flex: 1,
-    textAlign: 'right',
-  },
-  safetyNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
+    justifyContent: 'space-between',
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
   },
-  safetyNoteText: {
-    flex: 1,
-    lineHeight: 16,
+  viewDetailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  viewDetailText: {
+    fontFamily: Typography.family.medium,
+  },
+  toggleHint: {
+    fontSize: 11,
   },
 });

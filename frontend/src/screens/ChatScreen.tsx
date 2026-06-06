@@ -26,19 +26,7 @@ import {
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import Reanimated, {
-
-  SlideInRight,
-
-  SlideInLeft,
-
-  ZoomIn,
-
-  FadeIn,
-
-  Layout,
-
-} from 'react-native-reanimated';
+import Reanimated from 'react-native-reanimated';
 
 import { Ionicons } from '@expo/vector-icons';
 
@@ -50,9 +38,11 @@ import { StackScreenProps } from '@react-navigation/stack';
 
 import { RootStackParamList } from '../navigation/types';
 
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
+
+import { useAppTheme } from '../theme/ThemeContext';
 
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
@@ -81,8 +71,6 @@ import { CachedImage } from '../components/CachedImage';
 import { AppStatusPill } from '../components/ui/AppStatusPill';
 
 import { AppSearchBar } from '../components/ui/AppSearchBar';
-
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 import { useHaptic } from '../hooks/useHaptic';
 
@@ -286,8 +274,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const isGroup = conversation?.type === 'group';
 
-  const reducedMotionEnabled = useReducedMotion();
-
 
 
   const botLookup = useMemo(() => {
@@ -455,6 +441,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [isSearchActive, setIsSearchActive] = useState(!!route.params?.focusQuery);
 
   const [isOffline, setIsOffline] = useState(false);
+
+  const { isDark } = useAppTheme();
 
   const [composerSending, setComposerSending] = useState(false);
 
@@ -1254,8 +1242,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const renderMessage = (msg: Message, index: number) => {
 
-    const layoutAnimation = reducedMotionEnabled ? undefined : Layout.springify();
-
 
 
     // Clustering logic
@@ -1298,9 +1284,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           key={msg.id + '_date'}
 
-          entering={reducedMotionEnabled ? undefined : FadeIn}
 
-          layout={layoutAnimation}
 
           style={styles.dateWrap}
 
@@ -1330,9 +1314,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           key={msg.id}
 
-          entering={reducedMotionEnabled ? undefined : FadeIn.delay(200)}
 
-          layout={layoutAnimation}
 
           style={styles.statusWrap}
 
@@ -1385,8 +1367,6 @@ export default function ChatScreen({ navigation, route }: Props) {
         <Reanimated.View
 
           key={msg.id}
-
-          layout={layoutAnimation}
 
           style={[styles.msgRow, isMe && styles.msgRowRight, { marginTop: spacingTop, marginBottom }]}
 
@@ -1526,8 +1506,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           key={msg.id}
 
-          layout={layoutAnimation}
-
           style={[styles.msgRow, isMe && styles.msgRowRight, { marginTop: spacingTop, marginBottom }]}
 
         >
@@ -1632,7 +1610,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
 
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
 
 
@@ -1652,9 +1630,31 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         initials={isGroup ? 'G' : (sellerHandle?.[0]?.toUpperCase() ?? '?')}
 
+        variant={isGroup ? 'group' : 'dm'}
+
         onBack={() => navigation.goBack()}
 
         onSearch={() => setIsSearchActive((v) => !v)}
+
+        onTitlePress={
+
+          isGroup && conversation
+
+            ? () => navigation.navigate('GroupChatInfo', { conversationId: conversation.id })
+
+            : undefined
+
+        }
+
+        onInfo={
+
+          isGroup && conversation
+
+            ? () => navigation.navigate('GroupChatInfo', { conversationId: conversation.id })
+
+            : undefined
+
+        }
 
       />
 
@@ -1960,13 +1960,71 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           if (action === 'gallery' || action === 'camera') {
 
-            handleAttachmentSelect(action as any);
+            handleAttachmentSelect(action);
+
+          } else if (action === 'report') {
+
+            navigation.navigate('Report', { type: 'user' });
+
+          } else if (action === 'makeOffer') {
+
+            const linkedItemId = routeItemId || conversation?.itemId;
+
+            if (linkedItemId) {
+
+              // Navigate to item detail where offer can be made
+
+              navigation.navigate('ItemDetail', { itemId: linkedItemId });
+
+            } else {
+
+              show('No linked item found', 'error');
+
+            }
+
+          } else if (action === 'shareListing') {
+
+            const linkedItemId = routeItemId || conversation?.itemId;
+
+            if (linkedItemId) {
+
+              show('Listing link copied to clipboard', 'success');
+
+            } else {
+
+              show('No linked item found', 'error');
+
+            }
+
+          } else if (action === 'orderStatus') {
+
+            show('Order status: not linked to an order', 'info');
+
+          } else if (action === 'bot') {
+
+            if (conversation) {
+
+              navigation.navigate('GroupBotManagement', { conversationId: conversation.id });
+
+            }
+
+          } else if (action === 'groupInfo') {
+
+            if (conversation) {
+
+              navigation.navigate('GroupChatInfo', { conversationId: conversation.id });
+
+            }
 
           }
 
         }}
 
         isGroup={isGroup}
+
+        hasLinkedItem={!!(routeItemId || conversation?.itemId)}
+
+        hasOrder={false}
 
       />
 

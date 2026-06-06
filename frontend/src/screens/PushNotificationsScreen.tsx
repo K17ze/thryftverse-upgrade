@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -28,7 +28,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'PushNotifications'>;
 

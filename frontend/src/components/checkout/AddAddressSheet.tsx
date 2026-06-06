@@ -4,7 +4,7 @@ import { BottomSheet } from '../BottomSheet';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../../constants/colors';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { createUserAddress } from '../../services/commerceApi';

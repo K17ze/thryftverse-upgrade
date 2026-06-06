@@ -1,8 +1,7 @@
 import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Elevation } from '../../theme/designTokens';
-import { GlassCard } from '../ui/GlassSurface';
+import { Space, Radius } from '../../theme/designTokens';
 
 interface TradeCardProps {
   children: React.ReactNode;
@@ -25,7 +24,7 @@ export function TradeCard({
   variant,
 }: TradeCardProps) {
   return (
-    <GlassCard
+    <View
       style={[
         styles.base,
         fullWidth && styles.fullWidth,
@@ -35,7 +34,7 @@ export function TradeCard({
       ]}
     >
       {children}
-    </GlassCard>
+    </View>
   );
 }
 
@@ -44,6 +43,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   fullWidth: {
     marginHorizontal: Space.md,

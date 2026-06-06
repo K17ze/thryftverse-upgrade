@@ -30,7 +30,7 @@ import {
   setStoredUserCoverForUser,
 } from '../preferences/profileMediaPreferences';
 import { persistProfileMediaUri } from '../utils/profileMediaAsset';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 const GENDER_OPTIONS = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
 

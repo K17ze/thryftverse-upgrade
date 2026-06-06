@@ -15,11 +15,10 @@ import { Type, Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppInput } from '../ui/AppInput';
 import { AppButton } from '../ui/AppButton';
-import { GlassCard } from '../ui/GlassSurface';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useStore, Collection } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 interface Props {
   visible: boolean;
@@ -116,7 +115,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
       >
-        <GlassCard style={styles.card}>
+        <View style={styles.card}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Save</Text>
@@ -198,7 +197,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
               <Text style={styles.createTriggerText}>Create New Collection</Text>
             </AnimatedPressable>
           )}
-        </GlassCard>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -217,6 +216,9 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   header: {
     flexDirection: 'row',

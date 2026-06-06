@@ -16,7 +16,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { MOCK_USERS } from '../data/mockData';
 import { CachedImage } from '../components/CachedImage';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type RouteT = RouteProp<RootStackParamList, 'CategoryTree'>;
 const HEADER_BORDER = Colors.border;

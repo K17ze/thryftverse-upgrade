@@ -14,7 +14,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
+
+import { useAppTheme } from '../theme/ThemeContext';
+
 import { Motion } from '../constants/motion';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute, useScrollToTop } from '@react-navigation/native';
@@ -39,7 +42,7 @@ import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 16;
@@ -216,6 +219,7 @@ const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, sho
 };
 
 export default function BrowseScreen() {
+  const { isDark } = useAppTheme();
   const navigation = useNavigation<any>();
   const route = useRoute<BrowseRoute>();
   const { title, categoryId, subcategoryId, searchQuery } = route.params || { title: 'Browse All', categoryId: 'search' };
@@ -368,7 +372,7 @@ export default function BrowseScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
       
       {/* Heavy Typography Header */}
       <View style={styles.header}>

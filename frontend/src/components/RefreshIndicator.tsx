@@ -60,7 +60,7 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
 }
 
 import { Text } from 'react-native';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 const styles = StyleSheet.create({
   container: {

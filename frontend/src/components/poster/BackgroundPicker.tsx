@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Pressable, Text, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 interface BackgroundPickerProps {
   visible: boolean;

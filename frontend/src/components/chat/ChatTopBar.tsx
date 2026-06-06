@@ -3,8 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type } from '../../theme/designTokens';
-import { Typography } from '../../constants/typography';
+import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface ChatTopBarProps {
@@ -16,6 +15,7 @@ interface ChatTopBarProps {
   onSearch?: () => void;
   onInfo?: () => void;
   variant?: 'dm' | 'group';
+  onTitlePress?: () => void;
 }
 
 export function ChatTopBar({
@@ -27,6 +27,7 @@ export function ChatTopBar({
   onSearch,
   onInfo,
   variant = 'dm',
+  onTitlePress,
 }: ChatTopBarProps) {
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
@@ -43,7 +44,16 @@ export function ChatTopBar({
           <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
         </AnimatedPressable>
 
-        <View style={styles.center}>
+        <AnimatedPressable
+          style={styles.center}
+          onPress={onTitlePress}
+          activeOpacity={0.7}
+          scaleValue={0.98}
+          hapticFeedback="light"
+          disabled={!onTitlePress}
+          accessibilityRole={onTitlePress ? 'button' : undefined}
+          accessibilityLabel={onTitlePress ? 'Open group info' : undefined}
+        >
           <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
             <Text style={styles.avatarText}>{initials ?? '?'}</Text>
           </View>
@@ -53,7 +63,10 @@ export function ChatTopBar({
               <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
             ) : null}
           </View>
-        </View>
+          {onTitlePress && (
+            <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} style={{ marginLeft: 2 }} />
+          )}
+        </AnimatedPressable>
 
         <View style={styles.actions}>
           {onSearch ? (

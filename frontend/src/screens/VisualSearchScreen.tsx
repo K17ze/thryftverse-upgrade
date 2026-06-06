@@ -16,8 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { Typography } from '../constants/typography';
+import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -153,7 +152,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
             {!isScanning && !hasScanned && (
               <AppButton
                 title="Find Similar Items"
-                variant="contrast"
+                variant="primary"
                 size="lg"
                 onPress={handleScan}
                 style={{ marginTop: Space.md }}

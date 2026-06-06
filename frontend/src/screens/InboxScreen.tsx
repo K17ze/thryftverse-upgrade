@@ -16,9 +16,11 @@ import { StackNavigationProp } from '@react-navigation/stack';
 
 import NetInfo from '@react-native-community/netinfo';
 
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
+
+import { useAppTheme } from '../theme/ThemeContext';
 
 import type { Conversation } from '../data/mockData';
 
@@ -26,7 +28,7 @@ import { RootStackParamList } from '../navigation/types';
 
 import { Swipeable } from 'react-native-gesture-handler';
 
-import Reanimated, { FadeInDown, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 
 import { EmptyState } from '../components/EmptyState';
 
@@ -44,17 +46,11 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 
-import { useReducedMotion } from '../hooks/useReducedMotion';
-
 import { useHaptic } from '../hooks/useHaptic';
-
-import { Motion } from '../constants/motion';
 
 import { Space, Radius, Type } from '../theme/designTokens';
 
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
-
-import { GlassCard } from '../components/ui/GlassSurface';
 
 import { AvatarRing } from '../components/chat/AvatarRing';
 
@@ -136,9 +132,7 @@ export default function InboxScreen() {
 
   const [isOffline, setIsOffline] = useState(false);
 
-  const reducedMotionEnabled = useReducedMotion();
-
-
+  const { isDark } = useAppTheme();
 
   const scrollY = useSharedValue(0);
 
@@ -728,7 +722,21 @@ export default function InboxScreen() {
 
               <View style={styles.groupAvatar}>
 
-                <Ionicons name="people" size={20} color={Colors.textPrimary} />
+                <Text style={styles.groupAvatarText}>
+
+                  {item.title?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? 'G'}
+
+                </Text>
+
+                {(item.botIds?.length ?? 0) > 0 && (
+
+                  <View style={styles.botIndicator}>
+
+                    <Ionicons name="hardware-chip-outline" size={10} color={Colors.brand} />
+
+                  </View>
+
+                )}
 
               </View>
 
@@ -790,6 +798,16 @@ export default function InboxScreen() {
 
             <View style={styles.snippetRow}>
 
+              {isGroup && (
+
+                <Caption color={Colors.textMuted} style={styles.memberCount}>
+
+                  {item.participantIds?.length ?? 0} members
+
+                </Caption>
+
+              )}
+
               <Text style={[styles.snippet, item.unread && styles.snippetUnread]} numberOfLines={1}>
 
                 {item.draftText ? (
@@ -822,23 +840,7 @@ export default function InboxScreen() {
 
     return (
 
-      <Reanimated.View
-
-        entering={
-
-          reducedMotionEnabled
-
-            ? undefined
-
-            : FadeInDown
-
-              .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-
-              .duration(Motion.list.enterDuration)
-
-        }
-
-      >
+      <View>
 
         {isRequest ? (
 
@@ -866,7 +868,7 @@ export default function InboxScreen() {
 
         )}
 
-      </Reanimated.View>
+      </View>
 
     );
 
@@ -878,7 +880,7 @@ export default function InboxScreen() {
 
     <SafeAreaView style={styles.container} edges={['top']}>
 
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
 
 
@@ -1102,51 +1104,135 @@ export default function InboxScreen() {
 
             ListEmptyComponent={
 
-              <EmptyState
+              (() => {
 
-                icon="chatbubbles-outline"
+                if (searchQuery.trim()) {
 
-                title={searchQuery || segment !== 'all' ? 'No matching conversations' : 'No conversations yet'}
+                  return (
 
-                subtitle={searchQuery || segment !== 'all'
+                    <EmptyState
 
-                  ? 'Try another keyword or filter.'
+                      icon="search-outline"
 
-                  : 'Message a seller to start a chat.'}
+                      title="No matching conversations"
 
-                ctaLabel={
+                      subtitle="Try another keyword or filter."
 
-                  segment === 'requests'
+                      ctaLabel="Clear search"
 
-                    ? 'No pending requests'
+                      onCtaPress={() => setSearchQuery('')}
 
-                    : segment === 'archived'
+                    />
 
-                      ? 'No archived conversations'
-
-                      : segment === 'unread'
-
-                        ? 'No unread messages'
-
-                        : 'Browse listings'
+                  );
 
                 }
 
-                onCtaPress={() => {
+                switch (segment) {
 
-                  if (segment === 'requests' || segment === 'archived' || segment === 'unread') {
+                  case 'unread':
 
-                    setSegment('all');
+                    return (
 
-                    return;
+                      <EmptyState
 
-                  }
+                        icon="mail-open-outline"
 
-                  navigation.navigate('MainTabs');
+                        title="No unread messages"
 
-                }}
+                        subtitle="You're all caught up."
 
-              />
+                        ctaLabel="View all"
+
+                        onCtaPress={() => setSegment('all')}
+
+                      />
+
+                    );
+
+                  case 'requests':
+
+                    return (
+
+                      <EmptyState
+
+                        icon="mail-unread-outline"
+
+                        title="No message requests"
+
+                        subtitle="Requests from people you don't follow will appear here."
+
+                        ctaLabel="View all"
+
+                        onCtaPress={() => setSegment('all')}
+
+                      />
+
+                    );
+
+                  case 'archived':
+
+                    return (
+
+                      <EmptyState
+
+                        icon="archive-outline"
+
+                        title="No archived conversations"
+
+                        subtitle="Archived chats will appear here."
+
+                        ctaLabel="View all"
+
+                        onCtaPress={() => setSegment('all')}
+
+                      />
+
+                    );
+
+                  case 'groups':
+
+                    return (
+
+                      <EmptyState
+
+                        icon="people-outline"
+
+                        title="No groups yet"
+
+                        subtitle="Create a group to chat with multiple people."
+
+                        ctaLabel="Create group"
+
+                        onCtaPress={() => navigation.navigate('CreateGroupChat')}
+
+                      />
+
+                    );
+
+                  default:
+
+                    return (
+
+                      <EmptyState
+
+                        icon="chatbubbles-outline"
+
+                        title="No conversations yet"
+
+                        subtitle="Message a seller to start a chat."
+
+                        ctaLabel="Browse listings"
+
+                        onCtaPress={() => navigation.navigate('MainTabs')}
+
+                      />
+
+                    );
+
+                }
+
+              })()
 
             }
 
@@ -1304,27 +1390,13 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    paddingVertical: Space.sm + 8,
+    paddingVertical: Space.md,
 
-    paddingHorizontal: Space.md + 4,
+    paddingHorizontal: Space.md,
 
-    backgroundColor: Colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
 
-    borderRadius: Radius.lg,
-
-    marginHorizontal: Space.md - 4,
-
-    marginVertical: Space.xs + 2,
-
-    shadowColor: '#000',
-
-    shadowOffset: { width: 0, height: 1 },
-
-    shadowOpacity: 0.04,
-
-    shadowRadius: 4,
-
-    elevation: 1,
+    borderBottomColor: Colors.border,
 
   },
 
@@ -1343,6 +1415,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
 
     justifyContent: 'center',
+
+    position: 'relative',
+
+  },
+
+  groupAvatarText: {
+
+    fontSize: 15,
+
+    fontFamily: Typography.family.bold,
+
+    color: Colors.textPrimary,
+
+  },
+
+  botIndicator: {
+
+    position: 'absolute',
+
+    bottom: -2,
+
+    right: -2,
+
+    width: 18,
+
+    height: 18,
+
+    borderRadius: Radius.full,
+
+    backgroundColor: Colors.surface,
+
+    borderWidth: 1.5,
+
+    borderColor: Colors.border,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
 
   },
 
@@ -1398,11 +1508,25 @@ const styles = StyleSheet.create({
 
     flexDirection: 'row',
 
-    alignItems: 'flex-end',
-
-    justifyContent: 'space-between',
+    alignItems: 'center',
 
     gap: Space.sm,
+
+  },
+
+  memberCount: {
+
+    fontSize: 11,
+
+    backgroundColor: Colors.surfaceAlt,
+
+    paddingHorizontal: 6,
+
+    paddingVertical: 1,
+
+    borderRadius: Radius.sm,
+
+    overflow: 'hidden',
 
   },
 
@@ -1430,25 +1554,15 @@ const styles = StyleSheet.create({
 
   unreadDot: {
 
-    width: 10,
+    width: 8,
 
-    height: 10,
+    height: 8,
 
-    borderRadius: 5,
+    borderRadius: 4,
 
-    backgroundColor: Colors.brand,
+    backgroundColor: Colors.textPrimary,
 
     marginLeft: Space.xs,
-
-    shadowColor: Colors.brand,
-
-    shadowOffset: { width: 0, height: 0 },
-
-    shadowOpacity: 0.4,
-
-    shadowRadius: 4,
-
-    elevation: 2,
 
   },
 
@@ -1496,7 +1610,7 @@ const styles = StyleSheet.create({
 
   swipePin: {
 
-    backgroundColor: 'rgba(212,175,55,0.12)',
+    backgroundColor: Colors.surfaceAlt,
 
     justifyContent: 'center',
 

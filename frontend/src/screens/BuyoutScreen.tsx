@@ -145,7 +145,7 @@ export default function BuyoutScreen() {
             icon={<Ionicons name="diamond-outline" size={16} color={Colors.textInverse} />}
             onPress={handleBuyout}
             disabled={isSubmitting}
-            variant="gold"
+            variant="primary"
             size="md"
             hapticFeedback="heavy"
             accessibilityLabel={sharesNeeded > 0 ? 'Initiate buyout' : 'Claim full ownership'}

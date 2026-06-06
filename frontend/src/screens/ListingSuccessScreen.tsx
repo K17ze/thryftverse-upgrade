@@ -22,7 +22,7 @@ import { CachedImage } from '../components/CachedImage';
 import { MY_USER, MOCK_USERS } from '../data/mockData';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { useToast } from '../context/ToastContext';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
 

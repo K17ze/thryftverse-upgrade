@@ -11,7 +11,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import {
   loginWithPassword,
   requestEmailOtp,
@@ -458,7 +458,7 @@ export default function LoginScreen() {
                 title={isSubmitting ? 'Logging in...' : 'Log In'}
                 style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
                 titleStyle={styles.primaryText}
-                variant="contrast"
+                variant="primary"
                 size="md"
                 onPress={handleLogin}
                 disabled={!canSubmit}

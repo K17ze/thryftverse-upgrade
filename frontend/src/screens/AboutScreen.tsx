@@ -16,7 +16,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'About'>;
 

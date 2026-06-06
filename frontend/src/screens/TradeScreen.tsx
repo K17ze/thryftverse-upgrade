@@ -26,7 +26,6 @@ import {
 import { parseApiError } from '../lib/apiClient';
 import { placeCoOwnOrder } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
-import { GlassCard } from '../components/ui/GlassSurface';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AppStatusPill } from '../components/ui/AppStatusPill';

@@ -16,8 +16,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { Typography } from '../constants/typography';
+
+import { useAppTheme } from '../theme/ThemeContext';
+
+import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useToast } from '../context/ToastContext';
 
@@ -28,11 +30,11 @@ const CANVAS_H = CANVAS_W * (16 / 9);
 type Props = StackScreenProps<RootStackParamList, 'CreatePoster'>;
 
 export default function CreatePosterScreenV2({ navigation }: Props) {
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const [phase, setPhase] = useState<'landing' | 'editing' | 'preview'>('landing');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
-  const [filter, setFilter] = useState<'normal' | 'bw' | 'warm' | 'cool'>('normal');
   const [hasChanges, setHasChanges] = useState(false);
   const [recentPhotos, setRecentPhotos] = useState<string[]>([]);
 
@@ -88,19 +90,10 @@ export default function CreatePosterScreenV2({ navigation }: Props) {
     }
   };
 
-  const applyFilterStyle = () => {
-    switch (filter) {
-      case 'bw': return { filter: 'grayscale(100%)' } as any;
-      case 'warm': return { filter: 'sepia(30%) saturate(120%)' } as any;
-      case 'cool': return { filter: 'hue-rotate(10deg) brightness(1.05)' } as any;
-      default: return {};
-    }
-  };
-
   if (phase === 'landing') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <View style={styles.topBar}>
           <AnimatedPressable onPress={handleClose} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
             <Ionicons name="close" size={26} color={Colors.textPrimary} />
@@ -119,7 +112,6 @@ export default function CreatePosterScreenV2({ navigation }: Props) {
           <View style={styles.actionsRow}>
             <ActionButton icon="images-outline" label="Gallery" onPress={loadRecentPhotos} />
             <ActionButton icon="camera-outline" label="Camera" onPress={openCamera} />
-            <ActionButton icon="text-outline" label="Text" onPress={() => { setPhase('editing'); setHasChanges(true); }} />
           </View>
         </View>
       </SafeAreaView>
@@ -129,7 +121,7 @@ export default function CreatePosterScreenV2({ navigation }: Props) {
   if (phase === 'editing') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <View style={styles.topBar}>
           <AnimatedPressable onPress={handleClose} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
             <Ionicons name="close" size={26} color={Colors.textPrimary} />
@@ -149,7 +141,7 @@ export default function CreatePosterScreenV2({ navigation }: Props) {
         <View style={styles.editorBody}>
           <View style={[styles.canvas, { width: CANVAS_W, height: CANVAS_H }]}>
             {imageUri ? (
-              <Image source={{ uri: imageUri }} style={[StyleSheet.absoluteFill, applyFilterStyle()]} resizeMode="cover" />
+              <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
             ) : (
               <View style={styles.emptyCanvas}>
                 <Ionicons name="color-wand-outline" size={32} color={Colors.textMuted} />
@@ -163,23 +155,6 @@ export default function CreatePosterScreenV2({ navigation }: Props) {
           </View>
         </View>
 
-        <View style={styles.toolbar}>
-          <Text style={styles.toolbarLabel}>Filter</Text>
-          <FlatList
-            horizontal
-            data={FILTERS}
-            keyExtractor={(f) => f.key}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: Space.sm }}
-            renderItem={({ item }) => (
-              <Pressable onPress={() => { setFilter(item.key as any); setHasChanges(true); }}>
-                <View style={[styles.filterChip, filter === item.key && styles.filterChipActive]}>
-                  <Text style={[styles.filterChipText, filter === item.key && styles.filterChipTextActive]}>{item.label}</Text>
-                </View>
-              </Pressable>
-            )}
-          />
-        </View>
       </SafeAreaView>
     );
   }
@@ -187,7 +162,7 @@ export default function CreatePosterScreenV2({ navigation }: Props) {
   // preview
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.topBar}>
         <AnimatedPressable onPress={() => setPhase('editing')} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
           <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
@@ -195,7 +170,7 @@ export default function CreatePosterScreenV2({ navigation }: Props) {
         <Text style={styles.topTitle}>Preview</Text>
         <AnimatedPressable
           onPress={() => {
-            show('Poster saved!', 'success');
+            show('Draft saved locally', 'info');
             navigation.goBack();
           }}
           style={styles.iconBtn}
@@ -210,7 +185,7 @@ export default function CreatePosterScreenV2({ navigation }: Props) {
       <View style={styles.previewBody}>
         <View style={[styles.canvas, { width: CANVAS_W, height: CANVAS_H }]}>
           {imageUri ? (
-            <Image source={{ uri: imageUri }} style={[StyleSheet.absoluteFill, applyFilterStyle()]} resizeMode="cover" />
+            <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           ) : (
             <View style={styles.emptyCanvas}>
               <Ionicons name="color-wand-outline" size={32} color={Colors.textMuted} />

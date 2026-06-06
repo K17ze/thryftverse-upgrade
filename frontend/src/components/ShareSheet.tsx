@@ -16,13 +16,11 @@ import { View, Text, StyleSheet, Share, Pressable, Platform } from 'react-native
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { Space, Radius } from '../theme/designTokens';
-import { Typography } from '../constants/typography';
+import { Space, Radius , Typography  } from '../theme/designTokens';
 import { BottomSheet } from './BottomSheet';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { GlassCard } from './ui/GlassSurface';
 
 interface ShareOption {
   id: string;
@@ -109,7 +107,7 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
 
         {/* Preview card */}
         {imageUri && (
-          <GlassCard intensity={20} style={styles.previewCard}>
+          <View style={styles.previewCard}>
             <View style={styles.previewRow}>
               <View style={styles.previewIconWrap}>
                 <Ionicons name="image-outline" size={24} color={Colors.textPrimary} />
@@ -119,7 +117,7 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
                 <Text style={styles.previewUrl} numberOfLines={1}>{url}</Text>
               </View>
             </View>
-          </GlassCard>
+          </View>
         )}
 
         {/* Share options grid */}
@@ -171,6 +169,10 @@ const styles = StyleSheet.create({
   },
   previewCard: {
     padding: Space.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
   },
   previewRow: {
     flexDirection: 'row',

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 export interface FeaturedBoard {
   id: string;

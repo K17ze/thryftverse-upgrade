@@ -25,7 +25,7 @@ import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesCo
 import { ToastContainer } from './src/components/Toast';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { BrandedSplash } from './src/components/BrandedSplash';
-import { Typography } from './src/constants/typography';
+import { Typography } from './src/theme/designTokens';
 import { ThemeProvider } from './src/theme/ThemeContext';
 import {
   applyThemePreference,

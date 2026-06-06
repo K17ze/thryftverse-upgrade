@@ -16,7 +16,7 @@ import { Colors } from '../../constants/colors';
 import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.55;

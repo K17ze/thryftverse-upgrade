@@ -14,7 +14,7 @@ import { Confetti } from '../components/Confetti';
 import { useToast } from '../context/ToastContext';
 import { MOCK_USERS } from '../data/mockData';
 import { CachedImage } from '../components/CachedImage';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 export default function SuccessScreen() {
   const navigation = useNavigation<any>();

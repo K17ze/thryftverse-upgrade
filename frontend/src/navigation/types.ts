@@ -41,7 +41,11 @@ export type RootStackParamList = {
   };
   CreateGroupChat: undefined;
   GroupBotDirectory: { conversationId: string };
+  GroupChatInfo: { conversationId: string };
+  GroupMembers: { conversationId: string };
+  GroupBotManagement: { conversationId: string };
   BotDirectory: undefined;
+  BotDetail: { botId: string; conversationId?: string };
   UserProfile: { userId: string; isMe?: boolean };
   // Profile sub-screens
   Balance: undefined;

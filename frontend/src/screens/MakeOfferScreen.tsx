@@ -1,5 +1,5 @@
-﻿import React, { useState } from 'react';
-import { Typography } from '../constants/typography';
+import React, { useState } from 'react';
+import { Typography } from '../theme/designTokens';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import {
@@ -27,7 +27,6 @@ import {
 } from '../utils/currencyAuthoringFlows';
 import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { GlassCard } from '../components/ui/GlassSurface';
 import { useBackendData } from '../context/BackendDataContext';
 import { MOCK_LISTINGS, User } from '../data/mockData';
 import { mockFind } from '../utils/mockGate';
@@ -119,7 +118,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Item Info Context */}
-        <GlassCard style={styles.itemCard}>
+        <View style={styles.itemCard}>
           <View style={styles.itemThumb}>
             <Ionicons name="shirt-outline" size={24} color={MUTED} />
           </View>
@@ -156,7 +155,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             </View>
             <Text style={styles.itemListingPrice}>Listed at {formatFromFiat(price, 'GBP')}</Text>
           </View>
-        </GlassCard>
+        </View>
 
         {/* Floating Input Block */}
         <View style={styles.section}>
@@ -177,7 +176,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 
         {/* Spaced Anti-list Platform Charge */}
         <Text style={styles.sectionLabel}>Summary</Text>
-        <GlassCard style={styles.protectionCard}>
+        <View style={styles.protectionCard}>
           <View style={styles.protectionRow}>
             <Ionicons name="shield-checkmark" size={18} color={BRAND} />
             <Text style={styles.protectionLabel}>Platform charge</Text>
@@ -192,17 +191,17 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           <Text style={styles.protectionNote}>
             Includes our platform charge for secure settlement and support.
           </Text>
-        </GlassCard>
+        </View>
 
         {/* Tip Pill */}
-        <GlassCard style={styles.tipCard}>
+        <View style={styles.tipCard}>
           <View style={styles.tipIconBox}>
             <Ionicons name="bulb" size={16} color={Colors.textInverse} />
           </View>
           <Text style={styles.tipText}>
             Offers within 10% of the listing price are <Text style={{ fontFamily: Typography.family.bold, color: TEXT }}>3x</Text> more likely to be accepted.
           </Text>
-        </GlassCard>
+        </View>
 
         {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
       </ScrollView>

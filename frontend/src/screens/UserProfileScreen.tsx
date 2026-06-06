@@ -30,7 +30,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { Space, Radius } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SharedTransitionView } from '../components/SharedTransitionView';

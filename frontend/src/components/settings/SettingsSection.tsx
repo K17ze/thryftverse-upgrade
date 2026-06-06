@@ -1,8 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Radius } from '../../theme/designTokens';
-import { Typography } from '../../constants/typography';
+import { Space, Type, Radius , Typography  } from '../../theme/designTokens';
 
 export interface SettingsSectionProps {
   title: string;

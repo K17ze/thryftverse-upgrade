@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -22,14 +22,12 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
 import { Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
+import { Typography, Radius } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken } from '../services/authApi';
-import { GlassCard } from '../components/ui/GlassSurface';
-import { GlowSurface } from '../components/ui/GlowSurface';
 
 const { width, height } = Dimensions.get('window');
 
@@ -280,7 +278,7 @@ export default function AuthLandingScreen() {
           }
           style={styles.footer}
         >
-          <GlowSurface intensity={0.15} spread={1.1} animated>
+          <View>
             <AnimatedPressable
               style={styles.primaryBtn}
               activeOpacity={0.9}
@@ -288,9 +286,9 @@ export default function AuthLandingScreen() {
             >
               <Text style={styles.primaryText}>create account</Text>
             </AnimatedPressable>
-          </GlowSurface>
+          </View>
 
-          <GlassCard intensity={25} style={styles.glassCard}>
+          <View style={styles.glassCard}>
             <AnimatedPressable
               style={styles.secondaryBtnGlass}
               activeOpacity={0.8}
@@ -298,7 +296,7 @@ export default function AuthLandingScreen() {
             >
               <Text style={styles.secondaryText}>i already have an account</Text>
             </AnimatedPressable>
-          </GlassCard>
+          </View>
 
           {/* Social login row */}
           <View style={styles.socialRow}>
@@ -414,6 +412,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     padding: 0,
     overflow: 'hidden',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
   },
   secondaryBtnGlass: {
     height: 52,

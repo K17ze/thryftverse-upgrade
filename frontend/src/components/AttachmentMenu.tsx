@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { Caption, Headline } from './ui/Text';
 
 interface AttachmentOption {

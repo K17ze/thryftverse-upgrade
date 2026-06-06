@@ -33,10 +33,6 @@ const DARK_COLORS = {
   border: '#262626',
   borderLight: '#333333',
 
-  // Glassmorphism (theme-adaptive translucent surfaces)
-  glassBg: 'rgba(255,255,255,0.04)',
-  glassBorder: 'rgba(255,255,255,0.08)',
-
   // Status (minimal set)
   danger: '#DC2626',
   success: '#16A34A',
@@ -64,10 +60,6 @@ const LIGHT_COLORS = {
   // 5. BORDERS - Subtle separators
   border: '#E5E5E5',
   borderLight: '#F0F0F0',
-
-  // Glassmorphism (theme-adaptive translucent surfaces)
-  glassBg: 'rgba(0,0,0,0.04)',
-  glassBorder: 'rgba(0,0,0,0.08)',
 
   // Status (minimal set)
   danger: '#DC2626',

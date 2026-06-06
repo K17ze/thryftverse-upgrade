@@ -11,7 +11,7 @@ import { signupWithPassword } from '../services/authApi';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 export default function SignUpScreen() {
   const navigation = useNavigation<any>();

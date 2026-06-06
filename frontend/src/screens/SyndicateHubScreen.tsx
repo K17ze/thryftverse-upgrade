@@ -157,7 +157,7 @@ export default function CoOwnHubScreen() {
       <View style={styles.quickActionsWrap}>
         <AppButton
           style={styles.quickActionBtn}
-          variant="gold"
+          variant="primary"
           size="sm"
           align="center"
           icon={<Ionicons name="pie-chart-outline" size={14} color={Colors.textInverse} />}
@@ -167,7 +167,7 @@ export default function CoOwnHubScreen() {
         />
         <AppButton
           style={styles.quickActionBtn}
-          variant="gold"
+          variant="primary"
           size="sm"
           align="center"
           icon={<Ionicons name="list-outline" size={14} color={Colors.textInverse} />}
@@ -177,7 +177,7 @@ export default function CoOwnHubScreen() {
         />
         <AppButton
           style={styles.quickActionBtn}
-          variant="gold"
+          variant="primary"
           size="sm"
           align="center"
           icon={<Ionicons name="time-outline" size={14} color={Colors.textInverse} />}

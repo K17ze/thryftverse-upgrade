@@ -30,7 +30,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_BG = Colors.surface;

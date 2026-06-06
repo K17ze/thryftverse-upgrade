@@ -1,4 +1,4 @@
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -9,7 +9,6 @@ import {
   Dimensions,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { BlurView } from 'expo-blur';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import Reanimated, {
@@ -24,7 +23,10 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
+
+import { useAppTheme } from '../theme/ThemeContext';
+
 import { Listing, MOCK_USERS } from '../data/mockData';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
@@ -53,6 +55,7 @@ const PANEL_BORDER = Colors.border;
 const TOP_SCRIM_BG = 'rgba(0,0,0,0.2)';
 
 export default function ItemDetailScreen() {
+  const { isDark } = useAppTheme();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -169,7 +172,7 @@ export default function ItemDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar translucent backgroundColor="transparent" barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
@@ -394,7 +397,7 @@ export default function ItemDetailScreen() {
       {/* ── Floating Buy Bar ── */}
       {!item.isSold && (
         <Reanimated.View style={[styles.floatingBuyBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <BlurView intensity={85} tint={ActiveTheme === 'light' ? 'light' : 'dark'} style={StyleSheet.absoluteFillObject} />
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Colors.surfaceAlt }]} />
           <AppButton
             style={styles.actionBtn}
             variant="primary"

@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../../constants/colors';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 export type AppStatusTone = 'neutral' | 'accent' | 'positive' | 'negative' | 'warning';
 export type AppStatusSize = 'sm' | 'md';

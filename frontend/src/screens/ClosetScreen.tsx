@@ -34,7 +34,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { CollectionCard } from '../components/closet/CollectionCard';
 import { AppButton } from '../components/ui/AppButton';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS';
 type SortOption = 'Recently Added' | 'Price: Low to High' | 'Price: High to Low' | 'Newest';

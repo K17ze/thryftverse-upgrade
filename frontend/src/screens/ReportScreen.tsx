@@ -12,7 +12,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 const REASONS = [
   "Spam or misleading",

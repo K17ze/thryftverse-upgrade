@@ -16,7 +16,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { EmptyState } from '../components/EmptyState';
 
 type Props = StackScreenProps<RootStackParamList, 'BlockedUsers'>;

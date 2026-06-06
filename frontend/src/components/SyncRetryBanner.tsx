@@ -3,7 +3,7 @@ import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-n
 import { Colors } from '../constants/colors';
 import { AnimatedPressable } from './AnimatedPressable';
 import { trackTelemetryEvent } from '../lib/telemetry';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 interface SyncRetryBannerProps {
   message: string;

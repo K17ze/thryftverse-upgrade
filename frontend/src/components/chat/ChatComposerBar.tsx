@@ -2,8 +2,7 @@ import React from 'react';
 import { View, TextInput, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type } from '../../theme/designTokens';
-import { Typography } from '../../constants/typography';
+import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface ChatComposerBarProps {

@@ -14,7 +14,6 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
 import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
-import { GlassCard } from '../components/ui/GlassSurface';
 import { CachedImage } from '../components/CachedImage';
 import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';

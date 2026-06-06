@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';

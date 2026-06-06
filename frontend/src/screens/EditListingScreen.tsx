@@ -19,8 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { Typography } from '../constants/typography';
+import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
@@ -28,7 +27,6 @@ import { CURRENCIES } from '../constants/currencies';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { GlassCard } from '../components/ui/GlassSurface';
 import { AppInput } from '../components/ui/AppInput';
 import { SettingsCell } from '../components/SettingsCell';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -251,7 +249,7 @@ export default function EditListingScreen() {
           {/* Basics */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
             <Text style={styles.sectionLabel}>Basics</Text>
-            <GlassCard intensity={20} style={styles.glassCard}>
+            <View style={styles.glassCard}>
               <AppInput
                 label="Title"
                 value={title}
@@ -270,13 +268,13 @@ export default function EditListingScreen() {
                 containerStyle={styles.inputGap}
                 inputStyle={{ minHeight: 100, paddingTop: 12 }}
               />
-            </GlassCard>
+            </View>
           </Reanimated.View>
 
           {/* Details */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
             <Text style={styles.sectionLabel}>Details</Text>
-            <GlassCard intensity={20} style={styles.glassCard}>
+            <View style={styles.glassCard}>
               <SettingsCell
                 icon="grid-outline"
                 iconColor={Colors.brand}
@@ -307,13 +305,13 @@ export default function EditListingScreen() {
                 isLast
                 onPress={() => setPickerMode('Condition')}
               />
-            </GlassCard>
+            </View>
           </Reanimated.View>
 
           {/* Pricing */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
             <Text style={styles.sectionLabel}>Pricing</Text>
-            <GlassCard intensity={20} style={styles.glassCard}>
+            <View style={styles.glassCard}>
               <AppInput
                 label="Price"
                 value={price}
@@ -323,7 +321,7 @@ export default function EditListingScreen() {
                 prefix={<Text style={styles.currencyPrefix}>{currencySymbol}</Text>}
                 inputStyle={styles.priceInput}
               />
-            </GlassCard>
+            </View>
           </Reanimated.View>
 
           {/* Error */}
@@ -472,6 +470,10 @@ const styles = StyleSheet.create({
   glassCard: {
     marginHorizontal: Space.md,
     padding: Space.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
   },
   inputGap: {
     marginBottom: Space.sm,

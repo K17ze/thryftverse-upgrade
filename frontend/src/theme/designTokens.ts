@@ -51,6 +51,37 @@ interface TypeStyle {
 }
 
 // ============================================================================
+// FONT FAMILIES (Inter set)
+// ============================================================================
+export const FontFamily = {
+  light: 'Inter_300Light',
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semibold: 'Inter_600SemiBold',
+  bold: 'Inter_700Bold',
+  extrabold: 'Inter_800ExtraBold',
+} as const;
+
+export const FontSize = {
+  micro: 10,
+  caption: 12,
+  body: 15,
+  bodyLarge: 16,
+  title: 21,
+  heading: 30,
+  display: 40,
+  hero: 56,
+  giant: 72,
+} as const;
+
+export const LetterSpacing = {
+  tight: -0.42,
+  normal: 0,
+  wide: 0.12,
+  caps: 0.82,
+} as const;
+
+// ============================================================================
 // SIMPLIFIED TYPOGRAPHY - 5 VARIANTS ONLY (Phase 1 Cleanup)
 // Reference: Luxury e-commerce uses strict hierarchy
 // ============================================================================
@@ -98,6 +129,86 @@ export const Type: Record<string, TypeStyle> = {
 // - headline (renamed to subtitle)
 // - title3, title2, title1 (consolidated to title only)
 // - Multiple letterSpacing values (standardized)
+
+// ============================================================================
+// BACKWARD-COMPATIBLE TYPOGRAPHY RE-EXPORT (Phase 0 Migration)
+// Use FontFamily / Type / FontSize directly in new code.
+// ============================================================================
+export const Typography = {
+  family: FontFamily,
+  size: FontSize,
+  tracking: LetterSpacing,
+} as const;
+
+export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
+  display: {
+    fontFamily: FontFamily.extrabold,
+    fontSize: FontSize.display,
+    letterSpacing: LetterSpacing.tight,
+    lineHeight: 46,
+  },
+  hero: {
+    fontFamily: FontFamily.extrabold,
+    fontSize: FontSize.hero,
+    letterSpacing: -1.1,
+    lineHeight: 60,
+  },
+  heroDisplay: {
+    fontFamily: FontFamily.extrabold,
+    fontSize: FontSize.hero,
+    letterSpacing: -1.4,
+    lineHeight: 60,
+  },
+  giantDisplay: {
+    fontFamily: FontFamily.extrabold,
+    fontSize: FontSize.giant,
+    letterSpacing: -2,
+    lineHeight: 74,
+  },
+  heading: {
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.heading,
+    letterSpacing: LetterSpacing.tight,
+    lineHeight: 36,
+  },
+  title: {
+    fontFamily: FontFamily.semibold,
+    fontSize: FontSize.title,
+    letterSpacing: LetterSpacing.normal,
+    lineHeight: 28,
+  },
+  body: {
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.body,
+    letterSpacing: LetterSpacing.normal,
+    lineHeight: 22,
+  },
+  caption: {
+    fontFamily: FontFamily.light,
+    fontSize: FontSize.caption,
+    letterSpacing: LetterSpacing.wide,
+    lineHeight: 18,
+  },
+  metadata: {
+    fontFamily: FontFamily.light,
+    fontSize: FontSize.caption,
+    letterSpacing: 0.4,
+    lineHeight: 18,
+  },
+  overline: {
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.micro,
+    letterSpacing: LetterSpacing.caps,
+    textTransform: 'uppercase',
+    lineHeight: 14,
+  },
+  button: {
+    fontFamily: FontFamily.semibold,
+    fontSize: FontSize.bodyLarge,
+    letterSpacing: LetterSpacing.wide,
+    lineHeight: 20,
+  },
+};
 
 // ============================================================================
 // ELEVATION / SHADOWS
@@ -151,19 +262,6 @@ export const Elevation: Record<string, ShadowConfig> = {
     shadowRadius: 24,
     elevation: 16,
   },
-  /** Glow - Brand-colored halo for active CTAs, avatars, unread indicators */
-  glow: {
-    shadowColor: '#F4F0E8',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 0,
-  },
-  /** Legacy aliases for backward compatibility */
-  sm: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2, elevation: 2 },
-  md: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 4 },
-  lg: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.16, shadowRadius: 8, elevation: 8 },
-  xl: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 16 },
 } as const;
 
 // ============================================================================
@@ -222,7 +320,7 @@ export const CommonStyles = {
   card: {
     padding: Space.md,
     borderRadius: Radius.lg,
-    ...Elevation.sm,
+    ...Elevation.card,
   },
   /** Standard screen container */
   screen: {

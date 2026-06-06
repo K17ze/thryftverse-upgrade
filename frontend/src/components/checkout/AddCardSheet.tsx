@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, Platform } from 'react-native';
 import { BottomSheet } from '../BottomSheet';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -12,7 +12,7 @@ import { createUserPaymentMethod } from '../../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../../services/capabilitiesApi';
 import { parseApiError } from '../../lib/apiClient';
 import * as Haptics from 'expo-haptics';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 const IS_LIGHT = ActiveTheme === 'light';
 const BG = Colors.background;

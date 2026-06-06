@@ -15,7 +15,7 @@ import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
 import { deactivateNotificationDevice, registerNotificationDevice } from '../services/notificationsApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { SettingsPage } from '../components/settings/SettingsPage';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';

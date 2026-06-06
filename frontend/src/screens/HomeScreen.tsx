@@ -22,13 +22,15 @@ import Reanimated, {
   interpolate,
   Extrapolation,
 } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { ImageContentFit } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
+
+import { useAppTheme } from '../theme/ThemeContext';
+
 // Typography simplified - using direct font names
 import { getFreshPosters } from '../data/posters';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
@@ -49,13 +51,12 @@ import { ThryftCartIcon } from '../components/icons/ThryftCartIcon';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { MasonryGrid, ProductCardV2 } from '../components/ProductCardV2';
 import { DoubleTapHeart } from '../components/DoubleTapHeart';
-import { StaggeredItem } from '../components/StaggeredGridEntrance';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Elevation } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -64,7 +65,6 @@ const HEADER_COLLAPSED = 56;
 const GRID_GAP = 10;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-const IS_LIGHT = ActiveTheme === 'light';
 const PANEL_BG = Colors.surfaceAlt;
 
 // Masonry grid: Varied aspect ratios for visual interest
@@ -241,6 +241,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
 });
 
 export default function HomeScreen() {
+  const { isDark } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -632,14 +633,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       <Reanimated.View style={[styles.floatingHeaderShell, headerHeightStyle, headerShadowStyle]}>
-        <BlurView
-          intensity={IS_LIGHT ? 74 : 58}
-          tint={IS_LIGHT ? 'light' : 'dark'}
-          style={StyleSheet.absoluteFill}
-        />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surfaceAlt }]} />
 
         <View style={[styles.headerForeground, { paddingTop: insets.top + 2, paddingBottom: 8 }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
@@ -694,7 +691,7 @@ export default function HomeScreen() {
           <View style={styles.masonryGrid}>
             <View style={styles.masonryColumn}>
               {masonryColumns[0].map(({ tile: item, originalIndex }) => (
-                <StaggeredItem key={item.id} index={originalIndex} animation="fadeDown" staggerMs={40}>
+                <View key={item.id}>
                   <ExploreGridItem
                     item={item}
                     tileWidth={gridTileWidth}
@@ -704,12 +701,12 @@ export default function HomeScreen() {
                     onPressSellerProfile={handleSellerProfilePress}
                     onPressSellerMessage={handleSellerMessagePress}
                   />
-                </StaggeredItem>
+                </View>
               ))}
             </View>
             <View style={styles.masonryColumn}>
               {masonryColumns[1].map(({ tile: item, originalIndex }) => (
-                <StaggeredItem key={item.id} index={originalIndex} animation="fadeDown" staggerMs={40}>
+                <View key={item.id}>
                   <ExploreGridItem
                     item={item}
                     tileWidth={gridTileWidth}
@@ -719,7 +716,7 @@ export default function HomeScreen() {
                     onPressSellerProfile={handleSellerProfilePress}
                     onPressSellerMessage={handleSellerMessagePress}
                   />
-                </StaggeredItem>
+                </View>
               ))}
             </View>
           </View>
@@ -733,7 +730,7 @@ export default function HomeScreen() {
         onRequestClose={closePeek}
       >
         <Pressable style={styles.peekBackdrop} onPress={closePeek}>
-          <BlurView intensity={44} tint={IS_LIGHT ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.75)' }]} />
 
           {peekItem ? (
             <Pressable style={styles.peekCard} onPress={(event) => event.stopPropagation()}>

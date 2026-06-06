@@ -29,14 +29,13 @@ import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { MasonryGrid } from '../components/ProductCardV2';
-import { GlassCard } from '../components/ui/GlassSurface';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -356,7 +355,7 @@ function RenameCollectionSheet({
       <View style={renameStyles.backdrop}>
         <AnimatedPressable style={StyleSheet.absoluteFill} onPress={onCancel} activeOpacity={1} />
       </View>
-      <GlassCard style={renameStyles.card}>
+      <View style={renameStyles.card}>
         <Text style={renameStyles.title}>Rename Collection</Text>
         <AppInput
           value={value}
@@ -370,7 +369,7 @@ function RenameCollectionSheet({
           <AppButton title="Cancel" variant="secondary" size="sm" onPress={onCancel} style={{ flex: 1 }} />
           <AppButton title="Rename" size="sm" onPress={onSubmit} disabled={!value.trim()} style={{ flex: 1, marginLeft: Space.sm }} />
         </View>
-      </GlassCard>
+      </View>
     </View>
   );
 }
@@ -392,6 +391,9 @@ const renameStyles = StyleSheet.create({
     borderBottomRightRadius: 0,
     padding: Space.md,
     paddingBottom: Space.xl,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   title: {
     fontSize: 18,

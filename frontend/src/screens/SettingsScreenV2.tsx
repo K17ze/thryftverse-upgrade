@@ -1,7 +1,7 @@
 import React from 'react';
-import { Linking } from 'react-native';
+import { Linking, View } from 'react-native';
 import { Colors } from '../constants/colors';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -141,18 +141,18 @@ export default function SettingsScreenV2({ navigation }: Props) {
   return (
     <SettingsPage title="Settings" onBack={() => navigation.goBack()}>
       {/* Search */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)} style={{ marginBottom: 16, paddingHorizontal: 16 }}>
+      <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
         <AppSearchBar
           placeholder="Search settings"
           value={searchQuery}
           onChangeText={setSearchQuery}
           containerStyle={{ borderRadius: 999, backgroundColor: Colors.surface, height: 48 }}
         />
-      </Reanimated.View>
+      </View>
 
       {/* Account Centre */}
       {matchesSearch('account centre profile avatar addresses closet') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+        <View>
           <SettingsSection title="Account Centre">
             <IdentityCard
               user={currentUser}
@@ -173,16 +173,15 @@ export default function SettingsScreenV2({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </Reanimated.View>
+        </View>
       )}
 
       {/* Seller Hub */}
       {matchesSearch('seller hub balance wallet payments shipping payouts') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <View>
           <SettingsSection title="Seller Hub">
             <SettingsRow
               icon="wallet-outline"
-              iconColor="#c9a86c"
               title="Balance & Wallet"
               value="Manage"
               onPress={() => navigation.navigate('Wallet')}
@@ -190,33 +189,30 @@ export default function SettingsScreenV2({ navigation }: Props) {
             />
             <SettingsRow
               icon="card-outline"
-              iconColor="#c9a86c"
               title="Payment Methods"
               value={savedPaymentMethod ? 'Manage' : 'None'}
               onPress={() => navigation.navigate('Payments')}
             />
             <SettingsRow
               icon="cash-outline"
-              iconColor="#c9a86c"
               title="Payouts"
               value="Manage"
               onPress={() => navigation.navigate('BalanceHistory')}
             />
             <SettingsRow
               icon="cube-outline"
-              iconColor="#c9a86c"
               title="Shipping"
               value="Manage"
               onPress={() => navigation.navigate('Postage')}
               isLast
             />
           </SettingsSection>
-        </Reanimated.View>
+        </View>
       )}
 
       {/* Trust & Security */}
       {matchesSearch('trust security password 2fa devices sessions blocked privacy') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <View>
           <SettingsSection title="Trust & Security">
             <SettingsRow
               icon="person-circle-outline"
@@ -257,12 +253,12 @@ export default function SettingsScreenV2({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </Reanimated.View>
+        </View>
       )}
 
       {/* Preferences */}
       {matchesSearch('preferences currency language theme notifications push personalisation') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+        <View>
           <SettingsSection title="Preferences">
             <SettingsRow
               icon="swap-horizontal-outline"
@@ -309,12 +305,12 @@ export default function SettingsScreenV2({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </Reanimated.View>
+        </View>
       )}
 
       {/* Support */}
       {matchesSearch('support help terms privacy about') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
+        <View>
           <SettingsSection title="Support">
             <SettingsRow
               icon="help-circle-outline"
@@ -341,39 +337,12 @@ export default function SettingsScreenV2({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </Reanimated.View>
-      )}
-
-      {/* Dev-only Diagnostics */}
-      {__DEV__ && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(220)}>
-          <SettingsSection title="Dev">
-            <SettingsRow
-              icon="color-palette-outline"
-              title="Theme Debug"
-              subtitle={`Pref: ${themePreference} · Resolved: ${resolvedTheme}`}
-              value={resolvedTheme === 'dark' ? '🌙' : '☀️'}
-              isFirst
-              isLast
-            />
-            {matchesSearch('diagnostics smoke test') && (
-              <SettingsRow
-                icon="bug-outline"
-                iconColor={Colors.brand}
-                title="Runtime Smoke Test"
-                subtitle="Dev-only diagnostic navigation"
-                onPress={() => navigation.navigate('RuntimeSmokeTest')}
-                isFirst
-                isLast
-              />
-            )}
-          </SettingsSection>
-        </Reanimated.View>
+        </View>
       )}
 
       {/* Logout */}
       {matchesSearch('log out') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={{ marginTop: 12, paddingHorizontal: 16 }}>
+        <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
           <SettingsRow
             icon="log-out-outline"
             iconColor="#ff3b30"
@@ -383,7 +352,7 @@ export default function SettingsScreenV2({ navigation }: Props) {
             isFirst
             isLast
           />
-        </Reanimated.View>
+        </View>
       )}
 
       <BottomSheetPicker

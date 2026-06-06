@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.6;

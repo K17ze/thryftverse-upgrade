@@ -29,7 +29,7 @@ import {
   PayoutAccountPayload,
 } from '../services/walletApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import {
   convertDisplayToGbpAmount,
   getDefaultWithdrawDisplayAmount,

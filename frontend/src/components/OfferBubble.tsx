@@ -12,7 +12,7 @@ import { CachedImage } from './CachedImage';
 import { AppButton } from './ui/AppButton';
 import { ChatCard } from './chat/ChatCard';
 import { Caption, BodyEmphasis, Meta } from './ui/Text';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 
 export type OfferType = 'offer' | 'counter' | 'accept' | 'decline' | 'expired';

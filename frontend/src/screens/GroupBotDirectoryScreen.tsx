@@ -10,7 +10,7 @@ import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -21,19 +21,17 @@ import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { Typography } from '../constants/typography';
-import { Motion } from '../constants/motion';
+import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'GroupBotDirectory'>;
 
 export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
   const [pendingBotId, setPendingBotId] = useState<string | null>(null);
 
   const conversations = useStore((state) => state.conversations);
@@ -87,7 +85,7 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={Colors.background}
       />
 
@@ -113,15 +111,7 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
             const isPending = pendingBotId === item.id;
 
             return (
-              <Reanimated.View
-                entering={
-                  reducedMotionEnabled
-                    ? undefined
-                    : FadeInDown
-                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                      .duration(Motion.list.enterDuration)
-                }
-              >
+              <View>
                 <ChatCard variant="surface">
                   <View style={styles.botHeadRow}>
                     <View style={styles.botIconWrap}>
@@ -157,7 +147,7 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
                     <Caption color={Colors.textPrimary} style={styles.commandText}>{item.commandHint}</Caption>
                   </View>
                 </ChatCard>
-              </Reanimated.View>
+              </View>
             );
           }}
         />

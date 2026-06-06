@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useToast, ToastType } from '../context/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS } from 'react-native-reanimated';
 

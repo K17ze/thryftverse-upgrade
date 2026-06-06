@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors, ActiveTheme } from '../../constants/colors';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 

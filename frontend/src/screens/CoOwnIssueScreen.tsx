@@ -12,8 +12,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { Typography } from '../constants/typography';
+import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -141,7 +140,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
 
         <AppButton
           title={isSubmitting ? 'Recording...' : 'Record Report'}
-          variant="contrast"
+          variant="primary"
           size="lg"
           onPress={handleSubmit}
           disabled={isSubmitting}

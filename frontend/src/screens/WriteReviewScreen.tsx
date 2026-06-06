@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { useToast } from '../context/ToastContext';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 export default function WriteReviewScreen() {
   const navigation = useNavigation<any>();

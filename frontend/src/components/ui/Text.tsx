@@ -6,9 +6,8 @@
 
 import React from 'react';
 import { Text as RNText, TextProps as RNTextProps, StyleSheet, StyleProp, TextStyle } from 'react-native';
-import { Type } from '../../theme/designTokens';
+import { Type, Typography } from '../../theme/designTokens';
 import { Colors } from '../../constants/colors';
-import { Typography } from '../../constants/typography';
 
 interface TextComponentProps extends RNTextProps {
   children: React.ReactNode;

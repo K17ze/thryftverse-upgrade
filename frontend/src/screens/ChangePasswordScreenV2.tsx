@@ -20,7 +20,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import { SettingsPage } from '../components/settings/SettingsPage';
 import { SettingsSection } from '../components/settings/SettingsSection';
 

@@ -19,7 +19,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { SharedTransitionView } from '../components/SharedTransitionView';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 2;

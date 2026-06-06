@@ -24,10 +24,9 @@ import { requestMyDataExport, deleteMyAccount, updateUserProfile as updateUserPr
 import { disableTwoFactor, logoutFromSession } from '../services/authApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import { GlassCard } from '../components/ui/GlassSurface';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 export default function AccountSettingsScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -450,7 +449,7 @@ export default function AccountSettingsScreen() {
         onRequestClose={closeEdit}
       >
         <View style={styles.editModalOverlay}>
-          <GlassCard intensity={40} style={styles.editModalCard}>
+          <View style={styles.editModalCard}>
             <Text style={styles.editModalTitle}>
               Edit {editingField === 'fullName' ? 'name' : editingField}
             </Text>
@@ -468,7 +467,7 @@ export default function AccountSettingsScreen() {
                 <Text style={[styles.editModalBtnText, styles.editModalBtnPrimaryText]}>Save</Text>
               </AnimatedPressable>
             </View>
-          </GlassCard>
+          </View>
         </View>
       </Modal>
 
@@ -480,7 +479,7 @@ export default function AccountSettingsScreen() {
         onRequestClose={closeDisableTwoFactorModal}
       >
         <View style={styles.modalOverlay}>
-          <GlassCard intensity={35} style={{ marginHorizontal: 0, marginBottom: 0 }}>
+          <View style={{ marginHorizontal: 0, marginBottom: 0, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.lg }}>
             <Text style={styles.modalTitle}>Disable 2FA</Text>
             <Text style={styles.modalCopy}>
               Confirm with your authenticator code or a recovery code.
@@ -526,7 +525,7 @@ export default function AccountSettingsScreen() {
                 )}
               </AnimatedPressable>
             </View>
-          </GlassCard>
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -626,6 +625,9 @@ const styles = StyleSheet.create({
   editModalCard: {
     padding: Space.lg,
     borderRadius: Radius.xl,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   editModalTitle: {
     fontSize: Type.subtitle.size,

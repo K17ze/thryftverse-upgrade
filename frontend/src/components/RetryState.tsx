@@ -5,7 +5,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 interface RetryStateProps {
   onRetry: () => void;

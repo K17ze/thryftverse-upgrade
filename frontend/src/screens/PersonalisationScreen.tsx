@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 
 type PreferencePickerMode = 'categories' | 'brands' | 'members' | null;
 

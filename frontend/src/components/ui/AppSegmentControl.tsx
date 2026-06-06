@@ -3,7 +3,7 @@ import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-n
 import { Colors } from '../../constants/colors';
 // Typography using direct font names
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Typography } from '../../constants/typography';
+import { Typography } from '../../theme/designTokens';
 
 export interface AppSegmentOption<T extends string> {
   value: T;

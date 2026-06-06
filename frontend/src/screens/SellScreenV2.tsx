@@ -34,11 +34,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { Typography } from '../constants/typography';
+import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
-import { GlassCard } from '../components/ui/GlassSurface';
-import { GlowSurface } from '../components/ui/GlowSurface';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -783,7 +780,7 @@ export default function SellScreenV2() {
           <SectionHeader step={2} title="Photos" subtitle="First photo is your cover" />
 
           {photos.length === 0 ? (
-            <GlassCard style={styles.mediaEmptyCard} contentStyle={styles.mediaEmptyInner}>
+            <View style={[styles.mediaEmptyCard, styles.mediaEmptyInner]}>
               <View style={styles.mediaEmptyIconCircle}>
                 <Ionicons name="camera" size={32} color={Colors.brand} />
               </View>
@@ -805,7 +802,7 @@ export default function SellScreenV2() {
               {errors.photos ? (
                 <T.Caption color={Colors.danger} style={{ marginTop: 12 }}>{errors.photos}</T.Caption>
               ) : null}
-            </GlassCard>
+            </View>
           ) : (
             <View>
               <Animated.View entering={ZoomIn.springify().dampingRatio(0.6).stiffness(200)} style={styles.heroWrap}>
@@ -834,7 +831,7 @@ export default function SellScreenV2() {
         {/* ═══════ SECTION 2 — CORE PRODUCT IDENTITY ═══════ */}
         <Animated.View entering={FadeInUp.delay(100).duration(300)} style={{ marginTop: SECTION_GAP }}>
           <SectionHeader step={3} title="What are you selling?" />
-          <GlassCard style={styles.identityCard}>
+          <View style={styles.identityCard}>
             <AppInput
               label="Title"
               placeholder="e.g. Vintage Levi's 501 Denim Jacket"
@@ -889,7 +886,7 @@ export default function SellScreenV2() {
             ) : null}
 
             <TrustChip text="Buyers filter by condition — be honest" icon="shield-checkmark-outline" />
-          </GlassCard>
+          </View>
         </Animated.View>
 
         {/* ═══════ SECTION 3 — MODE-SPECIFIC PRICING ═══════ */}
@@ -897,7 +894,7 @@ export default function SellScreenV2() {
           <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ marginTop: SECTION_GAP }}>
             <SectionHeader step={4} title="Pricing" />
             <Animated.View style={[styles.pricingWrap, priceFocusStyle]}>
-              <GlassCard style={styles.pricingCard}>
+              <View style={styles.pricingCard}>
                 <View style={styles.priceInputWrap}>
                   <T.Headline color={Colors.textMuted} style={styles.priceCurrency}>{currencySymbol}</T.Headline>
                   <TextInput
@@ -934,7 +931,7 @@ export default function SellScreenV2() {
                 </View>
 
                 <TrustChip text="Research similar listings to price competitively" icon="trending-up-outline" />
-              </GlassCard>
+              </View>
             </Animated.View>
           </Animated.View>
         )}
@@ -943,7 +940,7 @@ export default function SellScreenV2() {
           <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ marginTop: SECTION_GAP }}>
             <SectionHeader step={4} title="Valuation & Shares" />
             <Animated.View style={[styles.pricingWrap, priceFocusStyle]}>
-              <GlassCard style={styles.pricingCard}>
+              <View style={styles.pricingCard}>
                 <View style={styles.coOwnTopRow}>
                   <View style={{ flex: 1 }}>
                     <T.BodyEmphasis>Tokenize this item</T.BodyEmphasis>
@@ -1029,7 +1026,7 @@ export default function SellScreenV2() {
                   </>
 
                 <TrustChip text="Clear valuation builds investor confidence" icon="shield-checkmark-outline" />
-              </GlassCard>
+              </View>
             </Animated.View>
           </Animated.View>
         )}
@@ -1038,7 +1035,7 @@ export default function SellScreenV2() {
           <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ marginTop: SECTION_GAP }}>
             <SectionHeader step={4} title="Auction Setup" />
             <Animated.View style={[styles.pricingWrap, priceFocusStyle]}>
-              <GlassCard style={styles.pricingCard}>
+              <View style={styles.pricingCard}>
                 <View style={styles.priceInputWrap}>
                   <T.Headline color={Colors.textMuted} style={styles.priceCurrency}>{currencySymbol}</T.Headline>
                   <TextInput
@@ -1086,7 +1083,7 @@ export default function SellScreenV2() {
                 </View>
 
                 <TrustChip text="Low starting bids drive more competitive bidding" icon="trending-up-outline" />
-              </GlassCard>
+              </View>
             </Animated.View>
           </Animated.View>
         )}
@@ -1094,7 +1091,7 @@ export default function SellScreenV2() {
         {/* ═══════ SECTION 4 — DETAILS ═══════ */}
         <Animated.View entering={FadeInUp.delay(300).duration(300)} style={{ marginTop: SECTION_GAP }}>
           <SectionHeader step={5} title="Details" subtitle="Help buyers find your item" />
-          <GlassCard style={styles.detailsCard}>
+          <View style={styles.detailsCard}>
             <AppInput
               label="Description"
               placeholder="Describe the fit, fabric, flaws, and why you love it..."
@@ -1154,13 +1151,13 @@ export default function SellScreenV2() {
             {errors.size ? (
               <T.Caption color={Colors.danger} style={{ marginTop: 4 }}>{errors.size}</T.Caption>
             ) : null}
-          </GlassCard>
+          </View>
         </Animated.View>
 
         {/* ═══════ SECTION 5 — DELIVERY / SHIPPING ═══════ */}
         <Animated.View entering={FadeInUp.delay(400).duration(300)} style={{ marginTop: SECTION_GAP }}>
           <SectionHeader step={6} title="Delivery" />
-          <GlassCard style={styles.deliveryCard}>
+          <View style={styles.deliveryCard}>
             <T.Caption color={Colors.textMuted} style={{ marginBottom: 10 }}>Shipping method</T.Caption>
             <View style={styles.toggleRow}>
               {(['standard', 'express'] as const).map((m) => {
@@ -1200,7 +1197,7 @@ export default function SellScreenV2() {
             </View>
 
             <TrustChip text="Free shipping can help your listing stand out" icon="flash-outline" />
-          </GlassCard>
+          </View>
         </Animated.View>
 
         {/* ═══════ SECTION 6 — MODE-SPECIFIC PREVIEW EVOLUTION ═══════ */}
@@ -1208,7 +1205,7 @@ export default function SellScreenV2() {
           <SectionHeader step={listingMode === 'sell_now' ? 5 : listingMode === 'co_own' ? 6 : 6} title="Preview" subtitle={listingMode === 'sell_now' ? 'This is how buyers will see your listing' : listingMode === 'co_own' ? 'Investors will see this proposal' : 'Bidders will see this auction'} />
 
           {listingMode === 'sell_now' && (
-            <GlassCard style={styles.previewCard}>
+            <View style={styles.previewCard}>
               <View style={styles.previewFeedCard}>
                 <View style={styles.previewImageWrap}>
                   {photos.length > 0 ? (
@@ -1267,11 +1264,11 @@ export default function SellScreenV2() {
                   </View>
                 </View>
               </View>
-            </GlassCard>
+            </View>
           )}
 
           {listingMode === 'co_own' && (
-            <GlassCard style={styles.previewCard}>
+            <View style={styles.previewCard}>
               <View style={styles.previewFeedCard}>
                 <View style={styles.previewImageWrap}>
                   {photos.length > 0 ? (
@@ -1321,11 +1318,11 @@ export default function SellScreenV2() {
                   </View>
                 </View>
               </View>
-            </GlassCard>
+            </View>
           )}
 
           {listingMode === 'auction' && (
-            <GlassCard style={styles.previewCard}>
+            <View style={styles.previewCard}>
               <View style={styles.previewFeedCard}>
                 <View style={styles.previewImageWrap}>
                   {photos.length > 0 ? (
@@ -1385,7 +1382,7 @@ export default function SellScreenV2() {
                   </View>
                 </View>
               </View>
-            </GlassCard>
+            </View>
           )}
         </Animated.View>
 
@@ -1404,7 +1401,7 @@ export default function SellScreenV2() {
 
       {/* ── floating publish CTA ── */}
       <Animated.View style={[styles.floatingCtaWrap, shakeStyle]}>
-        <GlowSurface intensity={0.08} color={Colors.brand} style={styles.floatingCtaGlow}>
+        <View style={styles.floatingCtaGlow}>
           <AppButton
             title={
               isPublishing
@@ -1417,7 +1414,7 @@ export default function SellScreenV2() {
             style={styles.publishBtn}
             size="lg"
           />
-        </GlowSurface>
+        </View>
       </Animated.View>
 
       {/* ── picker ── */}
@@ -1534,6 +1531,10 @@ const styles = StyleSheet.create({
 
   /* ── media ── */
   mediaEmptyCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
     marginHorizontal: 4,
   },
   mediaEmptyInner: {
@@ -1598,6 +1599,10 @@ const styles = StyleSheet.create({
 
   /* ── identity ── */
   identityCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
     padding: CARD_PADDING,
   },
   selectorRow: {
@@ -1633,6 +1638,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   pricingCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
     padding: CARD_PADDING,
   },
   priceInputWrap: {
@@ -1670,6 +1679,10 @@ const styles = StyleSheet.create({
 
   /* ── details ── */
   detailsCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
     padding: CARD_PADDING,
   },
   tagWrap: {
@@ -1698,6 +1711,10 @@ const styles = StyleSheet.create({
 
   /* ── delivery ── */
   deliveryCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
     padding: CARD_PADDING,
   },
   toggleRow: {
@@ -1765,6 +1782,10 @@ const styles = StyleSheet.create({
 
   /* ── preview ── */
   previewCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
     padding: CARD_PADDING,
   },
   previewFeedCard: {
@@ -1817,6 +1838,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.01)',
   },
   floatingCtaGlow: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
     borderRadius: Radius.xl,
   },
   publishBtn: {

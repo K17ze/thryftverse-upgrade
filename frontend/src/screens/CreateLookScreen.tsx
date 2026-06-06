@@ -27,8 +27,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../constants/colors';
-import { Type, Space, Radius } from '../theme/designTokens';
-import { Typography } from '../constants/typography';
+import { Type, Space, Radius , Typography  } from '../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -397,7 +396,7 @@ export default function CreateLookScreen() {
           )}
 
           <Reanimated.View entering={FadeInDown.duration(300).delay(200)} style={{ marginTop: Space.lg }}>
-            <AppButton title="Post Look" variant="contrast" size="lg" onPress={handleSubmit} disabled={!imageUri || !title.trim()} />
+            <AppButton title="Post Look" variant="primary" size="lg" onPress={handleSubmit} disabled={!imageUri || !title.trim()} />
           </Reanimated.View>
 
           <View style={{ height: 120 }} />

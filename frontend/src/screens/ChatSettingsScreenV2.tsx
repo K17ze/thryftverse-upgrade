@@ -1,6 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { Alert, View } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -71,7 +70,7 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
   return (
     <SettingsPage title="Chat Settings" onBack={() => navigation.goBack()}>
       {/* Privacy */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+      <View>
         <SettingsSection title="Privacy">
           <SettingsRow
             icon="lock-closed-outline"
@@ -95,10 +94,10 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
+      </View>
 
       {/* Conversations */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <View>
         <SettingsSection title="Conversations">
           <SettingsRow
             icon="volume-mute-outline"
@@ -127,10 +126,10 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
+      </View>
 
       {/* Marketplace chat */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(90)}>
+      <View>
         <SettingsSection title="Marketplace Chat">
           <SettingsRow
             icon="pricetag-outline"
@@ -155,10 +154,10 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
+      </View>
 
       {/* Bots */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+      <View>
         <SettingsSection title="Bots & Automation">
           <SettingsRow
             icon="hardware-chip-outline"
@@ -187,10 +186,10 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
+      </View>
 
       {/* Message requests */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(150)}>
+      <View>
         <SettingsSection title="Message Requests">
           <SettingsRow
             icon="mail-unread-outline"
@@ -207,10 +206,10 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
+      </View>
 
       {/* Notifications */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+      <View>
         <SettingsSection title="Notifications">
           <SettingsRow
             icon="notifications-outline"
@@ -221,7 +220,7 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
+      </View>
     </SettingsPage>
   );
 }

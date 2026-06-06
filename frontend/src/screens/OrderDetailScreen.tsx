@@ -1,4 +1,4 @@
-import { Typography } from '../constants/typography';
+import { Typography } from '../theme/designTokens';
 import React from 'react';
 import {
   AnimatedPressable,
