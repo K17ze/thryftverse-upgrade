@@ -37,6 +37,9 @@ import GroupMembersScreen from '../screens/GroupMembersScreen';
 import GroupBotManagementScreen from '../screens/GroupBotManagementScreen';
 import BotDirectoryScreen from '../screens/BotDirectoryScreen';
 import BotDetailScreen from '../screens/BotDetailScreen';
+import CustomBotsScreen from '../screens/CustomBotsScreen';
+import BotBuilderScreen from '../screens/BotBuilderScreen';
+import EditGroupScreen from '../screens/EditGroupScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 
 // Profile Subs
@@ -202,6 +205,9 @@ export default function AppNavigator() {
       <Stack.Screen name="GroupBotManagement" component={GroupBotManagementScreen} />
       <Stack.Screen name="BotDirectory" component={BotDirectoryScreen} />
       <Stack.Screen name="BotDetail" component={BotDetailScreen} />
+      <Stack.Screen name="CustomBots" component={CustomBotsScreen} />
+      <Stack.Screen name="BotBuilder" component={BotBuilderScreen} options={modalScreenOptions} />
+      <Stack.Screen name="EditGroup" component={EditGroupScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
       <Stack.Screen name="Balance" component={BalanceScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />

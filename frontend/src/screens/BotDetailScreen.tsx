@@ -31,19 +31,26 @@ export default function BotDetailScreen({ navigation, route }: Props) {
   const haptic = useHaptic();
 
   const bots = useStore((state) => state.availableChatBots);
+  const customBots = useStore((state) => state.customBots);
   const conversations = useStore((state) => state.conversations);
   const deployBotToConversation = useStore((state) => state.deployBotToConversation);
   const undeployBotFromConversation = useStore((state) => state.undeployBotFromConversation);
   const isBotEnabled = useStore((state) => state.isBotEnabled);
   const toggleEnabledBot = useStore((state) => state.toggleEnabledBot);
 
-  const bot = useMemo(() => bots.find((b) => b.id === botId), [bots, botId]);
+  const allBots = useMemo(() => [...bots, ...customBots], [bots, customBots]);
+  const bot = useMemo(() => allBots.find((b) => b.id === botId), [allBots, botId]);
 
   const isDeployedInGroup = useMemo(() => {
     if (!conversationId) return false;
     const convo = conversations.find((c) => c.id === conversationId);
     return convo?.botIds?.includes(botId) ?? false;
   }, [conversations, conversationId, botId]);
+
+  const deployedGroups = useMemo(
+    () => conversations.filter((c) => c.type === 'group' && c.botIds?.includes(botId)),
+    [conversations, botId]
+  );
 
   const [isToggling, setIsToggling] = useState(false);
 
@@ -58,6 +65,8 @@ export default function BotDetailScreen({ navigation, route }: Props) {
       </SafeAreaView>
     );
   }
+
+  const isCustomBot = bot.type === 'custom';
 
   const statusLabel =
     bot.status === 'available'
@@ -138,7 +147,26 @@ export default function BotDetailScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader title="Bot Details" onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title="Bot Details"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          isCustomBot ? (
+            <AnimatedPressable
+              onPress={() => navigation.navigate({ name: 'BotBuilder', params: { botId: bot.id } })}
+              activeOpacity={0.7}
+              scaleValue={0.92}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Edit bot"
+            >
+              <View style={styles.headerActionBtn}>
+                <Ionicons name="create-outline" size={20} color={Colors.textPrimary} />
+              </View>
+            </AnimatedPressable>
+          ) : undefined
+        }
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Identity */}
@@ -159,7 +187,14 @@ export default function BotDetailScreen({ navigation, route }: Props) {
             />
           </View>
           <BodyEmphasis style={styles.botName}>{bot.name}</BodyEmphasis>
-          <Caption color={Colors.textMuted}>{categoryLabel}</Caption>
+          <View style={styles.typeRow}>
+            <Caption color={Colors.textMuted}>{categoryLabel}</Caption>
+            <View style={[styles.typeBadge, { backgroundColor: isCustomBot ? Colors.brand + '18' : Colors.surfaceAlt }]}>
+              <Text style={[styles.typeBadgeText, { color: isCustomBot ? Colors.brand : Colors.textSecondary }]}>
+                {isCustomBot ? 'Custom' : 'System'}
+              </Text>
+            </View>
+          </View>
           <View style={[styles.statusPill, { backgroundColor: statusColor + '18' }]}>
             <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
           </View>
@@ -241,6 +276,25 @@ export default function BotDetailScreen({ navigation, route }: Props) {
             </Caption>
           </Card>
         </Section>
+
+        {/* Deployed groups */}
+        {deployedGroups.length > 0 && (
+          <Section title="Deployed in">
+            <Card>
+              {deployedGroups.map((group) => (
+                <View key={group.id} style={styles.deployedRow}>
+                  <Ionicons name="people-outline" size={16} color={Colors.textSecondary} />
+                  <Caption color={Colors.textPrimary} style={styles.deployedText}>
+                    {group.title ?? 'Untitled group'}
+                  </Caption>
+                  <Caption color={Colors.textMuted}>
+                    {group.participantIds?.length ?? 0} members
+                  </Caption>
+                </View>
+              ))}
+            </Card>
+          </Section>
+        )}
 
         {/* Group action */}
         {conversationId && (
@@ -388,5 +442,37 @@ const styles = StyleSheet.create({
   },
   groupAction: {
     marginTop: Space.md,
+  },
+  headerActionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  typeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginTop: 2,
+  },
+  typeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  typeBadgeText: {
+    fontSize: 11,
+    fontFamily: Typography.family.bold,
+  },
+  deployedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: 6,
+  },
+  deployedText: {
+    flex: 1,
   },
 });

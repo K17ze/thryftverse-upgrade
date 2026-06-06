@@ -87,6 +87,20 @@ export default function BotDirectoryScreen({ navigation }: Props) {
         title="Bot Directory"
         subtitle="Marketplace bots & assistants"
         onBack={() => navigation.goBack()}
+        rightAction={
+          <AnimatedPressable
+            onPress={() => navigation.navigate({ name: 'CustomBots', params: undefined })}
+            activeOpacity={0.7}
+            scaleValue={0.92}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="My bots"
+          >
+            <View style={styles.headerActionBtn}>
+              <Ionicons name="person-outline" size={20} color={Colors.textPrimary} />
+            </View>
+          </AnimatedPressable>
+        }
       />
 
       {/* What are bots explanation */}
@@ -175,6 +189,9 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                     <View style={styles.botTextWrap}>
                       <BodyEmphasis>{bot.name}</BodyEmphasis>
                       <View style={styles.metaRow}>
+                        <View style={[styles.typeBadge, { backgroundColor: Colors.surfaceAlt }]}>
+                          <Text style={[styles.typeBadgeText, { color: Colors.textSecondary }]}>System</Text>
+                        </View>
                         <Caption
                           color={STATUS_COLOR[bot.status] ?? Colors.textMuted}
                           style={styles.statusLabel}
@@ -369,5 +386,22 @@ const styles = StyleSheet.create({
   },
   toggleHint: {
     fontSize: 11,
+  },
+  headerActionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  typeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
   },
 });

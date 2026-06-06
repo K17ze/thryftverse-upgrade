@@ -46,6 +46,9 @@ export type RootStackParamList = {
   GroupBotManagement: { conversationId: string };
   BotDirectory: undefined;
   BotDetail: { botId: string; conversationId?: string };
+  CustomBots: undefined;
+  BotBuilder: { botId?: string };
+  EditGroup: { conversationId: string };
   UserProfile: { userId: string; isMe?: boolean };
   // Profile sub-screens
   Balance: undefined;

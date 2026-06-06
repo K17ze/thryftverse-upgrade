@@ -140,6 +140,16 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           )}
         </View>
 
+        {/* Edit group */}
+        <Section title="Settings">
+          <RowItem
+            icon="create-outline"
+            label="Edit group"
+            onPress={() => navigation.navigate({ name: 'EditGroup', params: { conversationId } })}
+            showChevron
+          />
+        </Section>
+
         {/* Members */}
         <Section title="Members">
           <RowItem
@@ -156,6 +166,26 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             icon="hardware-chip-outline"
             label="Manage bots"
             onPress={() => navigation.navigate('GroupBotManagement', { conversationId })}
+            showChevron
+          />
+        </Section>
+
+        {/* Media & shared */}
+        <Section title="Media & shared">
+          <RowItem
+            icon="images-outline"
+            label="Photos & videos"
+            onPress={() => {
+              // Future: open shared media gallery when backend supports it
+            }}
+            showChevron
+          />
+          <RowItem
+            icon="document-outline"
+            label="Shared links"
+            onPress={() => {
+              // Future: open shared links when backend supports it
+            }}
             showChevron
           />
         </Section>

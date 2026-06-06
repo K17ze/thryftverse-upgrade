@@ -349,6 +349,11 @@ interface StoreState {
   enabledBotIds: string[];
   toggleEnabledBot: (botId: string) => void;
   isBotEnabled: (botId: string) => boolean;
+  // Custom user bots
+  customBots: ChatBot[];
+  createCustomBot: (bot: Omit<ChatBot, 'id' | 'type' | 'creatorId'>) => string;
+  updateCustomBot: (botId: string, updates: Partial<ChatBot>) => void;
+  deleteCustomBot: (botId: string) => void;
 
   userLooks: UserLook[];
   addUserLook: (look: Omit<UserLook, 'id' | 'createdAt'>) => string;
@@ -992,7 +997,8 @@ export const useStore = create<StoreState>()(
           return conversation;
         }
 
-        const bot = state.availableChatBots.find((item) => item.id === botId);
+        const allBots = [...state.availableChatBots, ...state.customBots];
+        const bot = allBots.find((item) => item.id === botId);
         const deployedText = bot
           ? `${bot.name} deployed. Try ${bot.commandHint}`
           : 'A bot was deployed to this group.';
@@ -1029,7 +1035,8 @@ export const useStore = create<StoreState>()(
           return conversation;
         }
 
-        const bot = state.availableChatBots.find((item) => item.id === botId);
+        const allBots = [...state.availableChatBots, ...state.customBots];
+        const bot = allBots.find((item) => item.id === botId);
         const removedText = bot
           ? `${bot.name} removed from the group.`
           : 'A bot was removed from this group.';
@@ -1161,6 +1168,39 @@ export const useStore = create<StoreState>()(
       };
     }),
   isBotEnabled: (botId) => get().enabledBotIds.includes(botId),
+
+  customBots: [],
+  createCustomBot: (bot) => {
+    const id = `custom-bot-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const newBot: ChatBot = {
+      ...bot,
+      id,
+      type: 'custom',
+      creatorId: get().currentUser?.id ?? 'me',
+      status: 'local-only',
+    };
+    set((state) => ({
+      customBots: [...state.customBots, newBot],
+      enabledBotIds: [...state.enabledBotIds, id],
+    }));
+    return id;
+  },
+  updateCustomBot: (botId, updates) =>
+    set((state) => ({
+      customBots: state.customBots.map((b) =>
+        b.id === botId && b.type === 'custom' ? { ...b, ...updates } : b
+      ),
+    })),
+  deleteCustomBot: (botId) =>
+    set((state) => ({
+      customBots: state.customBots.filter((b) => b.id !== botId),
+      enabledBotIds: state.enabledBotIds.filter((id) => id !== botId),
+      conversations: state.conversations.map((c) =>
+        c.botIds?.includes(botId)
+          ? { ...c, botIds: c.botIds.filter((id) => id !== botId) }
+          : c
+      ),
+    })),
 
   addMessageReaction: (conversationId, messageId, reaction) =>
     set((state) => ({
@@ -1329,6 +1369,7 @@ export const useStore = create<StoreState>()(
         offersInChatEnabled: state.offersInChatEnabled,
         orderUpdatesInChatEnabled: state.orderUpdatesInChatEnabled,
         enabledBotIds: state.enabledBotIds,
+        customBots: state.customBots,
       }),
     },
   ),

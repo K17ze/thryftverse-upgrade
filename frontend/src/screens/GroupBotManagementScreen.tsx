@@ -31,6 +31,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
 
   const conversations = useStore((state) => state.conversations);
   const bots = useStore((state) => state.availableChatBots);
+  const customBots = useStore((state) => state.customBots);
   const deployBotToConversation = useStore((state) => state.deployBotToConversation);
   const undeployBotFromConversation = useStore((state) => state.undeployBotFromConversation);
 
@@ -40,15 +41,16 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
   );
 
   const deployedBotIds = conversation?.botIds ?? [];
+  const allBots = useMemo(() => [...bots, ...customBots], [bots, customBots]);
 
   const deployedBots = useMemo(
-    () => bots.filter((b) => deployedBotIds.includes(b.id)),
-    [bots, deployedBotIds]
+    () => allBots.filter((b) => deployedBotIds.includes(b.id)),
+    [allBots, deployedBotIds]
   );
 
   const availableToDeploy = useMemo(
-    () => bots.filter((b) => !deployedBotIds.includes(b.id)),
-    [bots, deployedBotIds]
+    () => allBots.filter((b) => !deployedBotIds.includes(b.id) && !b.isDraft && !b.isDisabled && b.status !== 'backend-required'),
+    [allBots, deployedBotIds]
   );
 
   const handleRemove = (botId: string, botName: string) => {
@@ -79,7 +81,24 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader title="Bots" onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title="Bots"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          <AnimatedPressable
+            onPress={() => navigation.navigate({ name: 'CustomBots', params: undefined })}
+            activeOpacity={0.7}
+            scaleValue={0.92}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="My bots"
+          >
+            <View style={styles.headerActionBtn}>
+              <Ionicons name="hardware-chip-outline" size={20} color={Colors.textPrimary} />
+            </View>
+          </AnimatedPressable>
+        }
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Deployed bots */}
@@ -145,7 +164,7 @@ function BotRow({
   onDeploy,
   onView,
 }: {
-  bot: { id: string; name: string; category: string; status: string; description: string; commandHint: string };
+  bot: { id: string; name: string; category: string; status: string; description: string; commandHint: string; type?: 'system' | 'custom' };
   deployed?: boolean;
   onRemove?: () => void;
   onDeploy?: () => void;
@@ -194,8 +213,15 @@ function BotRow({
         <View style={styles.botText}>
           <View style={styles.botNameRow}>
             <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
-            <View style={[styles.statusPill, { backgroundColor: statusColor + '18' }]}>
-              <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
+            <View style={styles.badgeRow}>
+              <View style={[styles.typeBadge, { backgroundColor: bot.type === 'custom' ? Colors.brand + '18' : Colors.surfaceAlt }]}>
+                <Text style={[styles.typeBadgeText, { color: bot.type === 'custom' ? Colors.brand : Colors.textSecondary }]}>
+                  {bot.type === 'custom' ? 'Custom' : 'System'}
+                </Text>
+              </View>
+              <View style={[styles.statusPill, { backgroundColor: statusColor + '18' }]}>
+                <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
+              </View>
             </View>
           </View>
           <Caption color={Colors.textMuted} numberOfLines={1}>
@@ -311,5 +337,27 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
+  },
+  headerActionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  typeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
   },
 });

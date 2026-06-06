@@ -114,6 +114,16 @@ export interface ChatBot {
   category: 'moderation' | 'commerce' | 'automation' | 'assistant' | 'safety' | 'styling';
   status: 'available' | 'local-only' | 'backend-required';
   permissions: string[];
+  /** 'system' = built-in Thryftverse bot; 'custom' = user-created */
+  type?: 'system' | 'custom';
+  /** Present only for custom bots */
+  creatorId?: string;
+  /** Present only for custom bots */
+  isDraft?: boolean;
+  /** Present only for custom bots */
+  isDisabled?: boolean;
+  /** Avatar/icon emoji or ionicon name for custom bots */
+  icon?: string;
 }
 
 export interface Conversation {
