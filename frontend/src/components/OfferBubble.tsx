@@ -64,9 +64,9 @@ export function OfferBubble({
       case 'counter':
         return {
           icon: 'swap-horizontal',
-          color: '#FF9800',
+          color: Colors.textSecondary,
           label: 'Counter Offer',
-          bgColor: '#FF980015',
+          bgColor: Colors.surfaceAlt,
         };
       case 'accept':
         return {

@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Poster } from '../data/posters';
 import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tradeHub';
 import type { ChatBot, Conversation, Message as ConversationMessage } from '../data/mockData';
-import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS, MY_USER } from '../data/mockData';
+import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { updateUserAccountPreferences, updateUserPostagePreferences } from '../services/accountApi';
 
@@ -1240,20 +1240,13 @@ export const useStore = create<StoreState>()(
     }),
   updateUserAvatar: (uri) =>
     set((state) => {
-      const targetIds = new Set<string>([MY_USER.id]);
-      if (state.currentUser?.id) {
-        targetIds.add(state.currentUser.id);
+      const userId = state.currentUser?.id;
+      if (!userId) {
+        return { userAvatar: uri };
       }
-
       const nextOverrides = { ...state.profileMediaOverrides };
-      targetIds.forEach((targetId) => {
-        const existing = nextOverrides[targetId] ?? { avatar: null, cover: null };
-        nextOverrides[targetId] = {
-          ...existing,
-          avatar: uri,
-        };
-      });
-
+      const existing = nextOverrides[userId] ?? { avatar: null, cover: null };
+      nextOverrides[userId] = { ...existing, avatar: uri };
       return {
         userAvatar: uri,
         profileMediaOverrides: nextOverrides,
@@ -1290,20 +1283,13 @@ export const useStore = create<StoreState>()(
 
   updateUserCover: (uri) =>
     set((state) => {
-      const targetIds = new Set<string>([MY_USER.id]);
-      if (state.currentUser?.id) {
-        targetIds.add(state.currentUser.id);
+      const userId = state.currentUser?.id;
+      if (!userId) {
+        return { userCover: uri };
       }
-
       const nextOverrides = { ...state.profileMediaOverrides };
-      targetIds.forEach((targetId) => {
-        const existing = nextOverrides[targetId] ?? { avatar: null, cover: null };
-        nextOverrides[targetId] = {
-          ...existing,
-          cover: uri,
-        };
-      });
-
+      const existing = nextOverrides[userId] ?? { avatar: null, cover: null };
+      nextOverrides[userId] = { ...existing, cover: uri };
       return {
         userCover: uri,
         profileMediaOverrides: nextOverrides,

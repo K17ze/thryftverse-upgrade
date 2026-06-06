@@ -153,7 +153,7 @@ export const Elevation: Record<string, ShadowConfig> = {
   },
   /** Glow - Brand-colored halo for active CTAs, avatars, unread indicators */
   glow: {
-    shadowColor: '#D4AF37',
+    shadowColor: '#F4F0E8',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.25,
     shadowRadius: 16,

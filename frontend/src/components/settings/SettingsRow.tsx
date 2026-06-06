@@ -100,9 +100,9 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: Space.md,
-    minHeight: 56,
+    minHeight: 60,
     gap: Space.sm + 4,
   },
   iconWrap: {
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
   },

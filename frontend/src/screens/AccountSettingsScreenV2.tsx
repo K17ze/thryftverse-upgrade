@@ -20,7 +20,6 @@ import { requestMyDataExport, deleteMyAccount, updateUserProfile as updateUserPr
 import { disableTwoFactor, logoutFromSession } from '../services/authApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import { GlassCard } from '../components/ui/GlassSurface';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../constants/typography';
@@ -357,7 +356,7 @@ export default function AccountSettingsScreenV2() {
       {/* Inline Edit Modal */}
       <Modal visible={editingField !== null} transparent animationType="slide" onRequestClose={closeEdit}>
         <View style={styles.editModalOverlay}>
-          <GlassCard intensity={40} style={styles.editModalCard}>
+          <View style={[styles.editModalCard, { backgroundColor: Colors.surface }]}>
             <Text style={styles.editModalTitle}>
               Edit {editingField === 'fullName' ? 'name' : editingField}
             </Text>
@@ -375,14 +374,14 @@ export default function AccountSettingsScreenV2() {
                 <Text style={[styles.editModalBtnText, styles.editModalBtnPrimaryText]}>Save</Text>
               </AnimatedPressable>
             </View>
-          </GlassCard>
+          </View>
         </View>
       </Modal>
 
       {/* Disable 2FA Modal */}
       <Modal visible={disableTwoFactorModalVisible} transparent animationType="fade" onRequestClose={closeDisableTwoFactorModal}>
         <View style={styles.modalOverlay}>
-          <GlassCard intensity={35} style={{ marginHorizontal: 0, marginBottom: 0 }}>
+          <View style={[styles.modalCard, { backgroundColor: Colors.surface }]}>
             <Text style={styles.modalTitle}>Disable 2FA</Text>
             <Text style={styles.modalCopy}>
               Confirm with your authenticator code or a recovery code.
@@ -428,7 +427,7 @@ export default function AccountSettingsScreenV2() {
                 )}
               </AnimatedPressable>
             </View>
-          </GlassCard>
+          </View>
         </View>
       </Modal>
     </SettingsPage>
@@ -476,6 +475,12 @@ const styles = StyleSheet.create({
   },
   editModalBtnPrimaryText: {
     color: Colors.textInverse,
+  },
+  modalCard: {
+    padding: Space.lg,
+    borderRadius: Radius.xl,
+    marginHorizontal: 0,
+    marginBottom: 0,
   },
   modalOverlay: {
     flex: 1,

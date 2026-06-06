@@ -24,9 +24,9 @@ export const Motion = {
     maxStaggerItems: 10,
   },
   navigation: {
-    pushOpenDuration: 280,
-    pushCloseDuration: 240,
-    modalOpenDuration: 320,
-    modalCloseDuration: 280,
+    pushOpenDuration: 220,
+    pushCloseDuration: 180,
+    modalOpenDuration: 220,
+    modalCloseDuration: 180,
   },
 } as const;

@@ -64,7 +64,7 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
   return (
     <View style={{ flexDirection: 'row', gap: 2 }}>
       {[1, 2, 3, 4, 5].map(i => (
-        <Ionicons key={i} name={i <= rating ? 'star' : 'star-outline'} size={size} color="#FFD700" />
+        <Ionicons key={i} name={i <= rating ? 'star' : 'star-outline'} size={size} color={Colors.textSecondary} />
       ))}
     </View>
   );

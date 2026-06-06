@@ -15,7 +15,6 @@ import {
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   runOnJS,
   interpolate,
@@ -119,11 +118,11 @@ export default function FilterScreen() {
   const contextY = useSharedValue(0);
 
   useEffect(() => {
-    translateY.value = withSpring(SNAP_HALF, { damping: 20, stiffness: 200 });
+    translateY.value = withTiming(SNAP_HALF, { duration: 200 });
   }, []);
 
   const closeBottomSheet = () => {
-    translateY.value = withSpring(height, { damping: 20, stiffness: 200 }, () => {
+    translateY.value = withTiming(height, { duration: 180 }, () => {
       runOnJS(navigation.goBack)();
     });
   };
@@ -142,10 +141,10 @@ export default function FilterScreen() {
         runOnJS(closeBottomSheet)();
       } else if (translateY.value < SNAP_HALF - 50) {
         // Snap to full (90% height)
-        translateY.value = withSpring(SNAP_FULL, { damping: 20, stiffness: 200 });
+        translateY.value = withTiming(SNAP_FULL, { duration: 180 });
       } else {
         // Snap back to half
-        translateY.value = withSpring(SNAP_HALF, { damping: 20, stiffness: 200 });
+        translateY.value = withTiming(SNAP_HALF, { duration: 180 });
       }
     });
 

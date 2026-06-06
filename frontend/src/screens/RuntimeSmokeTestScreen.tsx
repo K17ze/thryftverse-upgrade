@@ -16,6 +16,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DevSettings } from 'react-native';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
 
@@ -126,6 +128,35 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
     { label: 'ItemDetail', screen: 'ItemDetail', needsData: 'listing' },
   ];
 
+  const handleResetLocalState = async () => {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const appKeys = keys.filter((k) =>
+        k.startsWith('thryftverse') || k.startsWith('persist:') || k.startsWith('zustand')
+      );
+      if (appKeys.length > 0) {
+        await AsyncStorage.multiRemove(appKeys);
+      }
+      Alert.alert(
+        'Local State Cleared',
+        `Removed ${appKeys.length} persisted keys. Reload the app to apply.`,
+        [
+          {
+            text: 'Reload Now',
+            onPress: () => {
+              try { DevSettings.reload(); } catch {
+                Alert.alert('Please manually reload the app (shake + Reload)');
+              }
+            },
+          },
+          { text: 'Later', style: 'cancel' },
+        ]
+      );
+    } catch (e) {
+      Alert.alert('Reset Failed', String(e));
+    }
+  };
+
   const handlePress = (btn: TestButton) => {
     const params = buildParams(btn);
     if (btn.needsData && !params) {
@@ -180,6 +211,19 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
             value={knownUserId ? knownUserId.slice(0, 12) : 'none'}
           />
         </View>
+
+        <AnimatedPressable
+          style={styles.resetTile}
+          onPress={handleResetLocalState}
+          activeOpacity={0.8}
+          scaleValue={0.96}
+          hapticFeedback="heavy"
+          accessibilityRole="button"
+          accessibilityLabel="Reset local app state"
+        >
+          <Text style={styles.resetTileLabel}>Reset local app state</Text>
+          <Caption style={styles.resetTileCaption}>Clears persisted stores + AsyncStorage</Caption>
+        </AnimatedPressable>
 
         <View style={styles.grid}>
           {buttons.map((btn) => {
@@ -310,5 +354,29 @@ const styles = StyleSheet.create({
   tileMissing: {
     fontSize: 10,
     color: Colors.danger,
+  },
+  resetTile: {
+    width: '100%',
+    backgroundColor: Colors.danger + '18',
+    borderRadius: Radius.lg,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.danger + '40',
+    marginBottom: Space.md,
+    gap: Space.xs,
+  },
+  resetTileLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.danger,
+    textAlign: 'center',
+  },
+  resetTileCaption: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    textAlign: 'center',
   },
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type } from '../../theme/designTokens';
+import { Space, Type, Radius } from '../../theme/designTokens';
 import { Typography } from '../../constants/typography';
 
 export interface SettingsSectionProps {
@@ -27,7 +27,7 @@ export function SettingsSection({
       {noCard ? (
         <View style={styles.noCard}>{children}</View>
       ) : (
-        <View style={[styles.card, { backgroundColor: colors.surface, shadowColor: colors.shadow }]}>{children}</View>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>{children}</View>
       )}
     </View>
   );
@@ -54,13 +54,11 @@ const styles = StyleSheet.create({
     letterSpacing: Type.caption.letterSpacing,
   },
   card: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     marginHorizontal: Space.md,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    elevation: 0,
   },
   noCard: {
     marginHorizontal: Space.md,

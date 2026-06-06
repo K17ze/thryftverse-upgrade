@@ -12,7 +12,7 @@ import { View,
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
-import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withDelay, useAnimatedScrollHandler, FadeInDown, runOnJS } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Motion } from '../constants/motion';
@@ -89,15 +89,15 @@ const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, sho
     
     // Bubble big heart overlaid on image
     heartScale.value = withSequence(
-      withSpring(1.2, Motion.spring.flagshipPop),
-      withSpring(1, Motion.spring.flagship),
-      withDelay(600, withSpring(0, Motion.spring.flagship))
+      withTiming(1.2, { duration: 120 }),
+      withTiming(1, { duration: 120 }),
+      withDelay(400, withTiming(0, { duration: 180 }))
     );
 
-    // Spring the mini corner button
+    // Scale the mini corner button
     likeBtnScale.value = withSequence(
-      withSpring(1.35, Motion.spring.flagshipPop),
-      withSpring(1, Motion.spring.flagship)
+      withTiming(1.2, { duration: 120 }),
+      withTiming(1, { duration: 120 })
     );
 
     if (!isWishlisted) {
@@ -134,13 +134,6 @@ const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, sho
 
   return (
     <Reanimated.View 
-      entering={
-        reducedMotionEnabled
-          ? undefined
-          : FadeInDown
-              .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-              .duration(Motion.list.enterDuration)
-      }
       style={[styles.gridItem, index % 2 === 0 ? { marginTop: 0 } : { marginTop: 24 }]}
     >
       <View style={styles.imageWrap}>

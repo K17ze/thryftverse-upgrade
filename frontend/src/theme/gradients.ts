@@ -13,11 +13,11 @@ import { Colors } from '../constants/colors';
 // GRADIENT COLOR ARRAYS (for expo-linear-gradient)
 // ============================================================================
 
-/** Gold accent gradient — primary brand direction */
-export const GoldGradient = ['#C8A545', '#D4AF37'] as const;
+/** Brand accent gradient — warm neutral direction */
+export const BrandGradient = ['#D8D0C3', '#F4F0E8'] as const;
 
-/** Gold gradient — horizontal variant */
-export const GoldGradientH = ['#C8A545', '#D4AF37'] as const;
+/** Brand gradient — horizontal variant */
+export const BrandGradientH = ['#D8D0C3', '#F4F0E8'] as const;
 
 /** Dark surface gradient — subtle depth on backgrounds */
 export const DarkGradient = ['#0A0A0A', '#121212'] as const;
@@ -39,7 +39,7 @@ export const GLASS_BG = 'rgba(255,255,255,0.025)';
 export const GLASS_BORDER = 'rgba(255,255,255,0.06)';
 
 /** Slightly stronger glass border — for focused/active states */
-export const GLASS_BORDER_FOCUS = 'rgba(212,175,55,0.30)';
+export const GLASS_BORDER_FOCUS = 'rgba(244,240,232,0.30)';
 
 /** Light-mode glass background — barely visible black tint */
 export const GLASS_BG_LIGHT = 'rgba(0,0,0,0.03)';
@@ -52,7 +52,7 @@ export const GLASS_BORDER_LIGHT = 'rgba(0,0,0,0.08)';
 // ============================================================================
 
 /** Brand glow halo color */
-export const BRAND_GLOW = 'rgba(212,175,55,0.15)';
+export const BRAND_GLOW = 'rgba(244,240,232,0.15)';
 
 /** Danger glow halo color */
 export const DANGER_GLOW = 'rgba(255,77,77,0.20)';
@@ -65,8 +65,8 @@ export const SUCCESS_GLOW = 'rgba(76,175,80,0.15)';
 // ============================================================================
 
 export const Gradients = {
-  gold: [...GoldGradient],
-  goldH: [...GoldGradientH],
+  brand: [...BrandGradient],
+  brandH: [...BrandGradientH],
   dark: [...DarkGradient],
   danger: [...DangerGradient],
   success: [...SuccessGradient],

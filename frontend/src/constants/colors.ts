@@ -19,9 +19,9 @@ const DARK_COLORS = {
   // 2b. SURFACE ALT - More elevated tier (replaces `cardAlt`)
   surfaceAlt: '#1F1F1F',
 
-  // 3. BRAND/PRIMARY - Gold accent (replaces `accent` / `accentGold` / `star`)
-  brand: '#D4A853',
-  brandPressed: '#B8944F',
+  // 3. BRAND/PRIMARY - Warm off-white luxury accent (replaces gold)
+  brand: '#F4F0E8',
+  brandPressed: '#D8D0C3',
 
   // 4. TEXT - Three levels of hierarchy + inverse for on-brand surfaces
   textPrimary: '#FFFFFF',
@@ -51,9 +51,9 @@ const LIGHT_COLORS = {
   // 2b. SURFACE ALT - More elevated tier (replaces `cardAlt`)
   surfaceAlt: '#EBEBEB',
 
-  // 3. BRAND/PRIMARY - Gold accent (replaces `accent` / `accentGold` / `star`)
-  brand: '#C9A227',
-  brandPressed: '#A68B4B',
+  // 3. BRAND/PRIMARY - Dark neutral luxury accent (replaces gold)
+  brand: '#111111',
+  brandPressed: '#333333',
 
   // 4. TEXT - Three levels of hierarchy + inverse for on-brand surfaces
   textPrimary: '#000000',

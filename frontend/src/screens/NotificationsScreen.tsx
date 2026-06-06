@@ -55,7 +55,7 @@ function getNotifIcon(type: NotificationCardType): { name: string; color: string
     case 'like':
       return { name: 'heart', color: '#e74c3c', bg: Colors.surfaceAlt };
     case 'review':
-      return { name: 'star', color: '#FFD700', bg: Colors.surfaceAlt };
+      return { name: 'star', color: Colors.textSecondary, bg: Colors.surfaceAlt };
     case 'order':
       return { name: 'cube-outline', color: Colors.success, bg: Colors.surfaceAlt };
     case 'price':

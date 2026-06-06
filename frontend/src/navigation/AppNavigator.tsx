@@ -14,7 +14,7 @@ import ItemDetailScreen from '../screens/ItemDetailScreen';
 import ClosetScreen from '../screens/ClosetScreen';
 import CollectionDetailScreen from '../screens/CollectionDetailScreen';
 import PosterViewerScreen from '../screens/PosterViewerScreen';
-import CreatePosterScreen from '../screens/CreatePosterScreen';
+import CreatePosterScreen from '../screens/CreatePosterScreenV2';
 
 import CreateAuctionScreen from '../screens/CreateAuctionScreen';
 import CreateCoOwnScreen from '../screens/CreateSyndicateScreen';

@@ -31,7 +31,7 @@ interface AttachmentMenuProps {
 const ATTACHMENT_OPTIONS: AttachmentOption[] = [
   { id: 'gallery', icon: 'images', label: 'Gallery', color: '#4CAF50' },
   { id: 'camera', icon: 'camera', label: 'Camera', color: '#2196F3' },
-  { id: 'file', icon: 'document', label: 'File', color: '#FF9800' },
+  { id: 'file', icon: 'document', label: 'File', color: Colors.textSecondary },
   { id: 'location', icon: 'location', label: 'Location', color: '#9C27B0' },
   { id: 'contact', icon: 'person', label: 'Contact', color: '#00BCD4' },
   { id: 'product', icon: 'pricetag', label: 'Product', color: '#E91E63' },
