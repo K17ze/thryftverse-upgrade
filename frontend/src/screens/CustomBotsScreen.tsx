@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -30,9 +30,22 @@ export default function CustomBotsScreen({ navigation }: Props) {
 
   const customBots = useStore((state) => state.customBots);
   const deleteCustomBot = useStore((state) => state.deleteCustomBot);
+  const loadBotsFromApi = useStore((state) => state.loadBotsFromApi);
   const isBotEnabled = useStore((state) => state.isBotEnabled);
   const toggleEnabledBot = useStore((state) => state.toggleEnabledBot);
   const conversations = useStore((state) => state.conversations);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    loadBotsFromApi().finally(() => {
+      if (!cancelled) setIsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [loadBotsFromApi]);
 
   const active = useMemo(() => customBots.filter((b) => !b.isDraft && !b.isDisabled), [customBots]);
   const drafts = useMemo(() => customBots.filter((b) => b.isDraft), [customBots]);
@@ -50,10 +63,17 @@ export default function CustomBotsScreen({ navigation }: Props) {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.heavy();
-            deleteCustomBot(bot.id);
-            show(`${bot.name} deleted`, 'info');
+            setDeletingId(bot.id);
+            try {
+              await deleteCustomBot(bot.id);
+              show(`${bot.name} deleted`, 'info');
+            } catch {
+              show('Failed to delete bot', 'error');
+            } finally {
+              setDeletingId(null);
+            }
           },
         },
       ]

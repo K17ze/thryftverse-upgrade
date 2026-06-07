@@ -162,6 +162,8 @@ export default function InboxScreen() {
 
 
 
+  const loadBotsFromApi = useStore((state) => state.loadBotsFromApi);
+
   const loadConversations = async () => {
 
     setSyncError('');
@@ -170,7 +172,10 @@ export default function InboxScreen() {
 
     try {
 
-      const remoteConversations = await fetchConversationsFromApi();
+      const [remoteConversations] = await Promise.all([
+        fetchConversationsFromApi(),
+        loadBotsFromApi(),
+      ]);
 
       for (const conversation of remoteConversations) {
 
@@ -210,7 +215,10 @@ export default function InboxScreen() {
 
     try {
 
-      const remoteConversations = await fetchConversationsFromApi();
+      const [remoteConversations] = await Promise.all([
+        fetchConversationsFromApi(),
+        loadBotsFromApi(),
+      ]);
 
       for (const conversation of remoteConversations) {
 

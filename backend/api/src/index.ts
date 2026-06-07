@@ -1246,6 +1246,7 @@ async function listChatBotIds(client: DbQueryable, conversationId: string): Prom
       SELECT bot_id
       FROM chat_bot_installs
       WHERE conversation_id = $1
+        AND status = 'active'
       ORDER BY installed_at ASC
     `,
     [conversationId]
@@ -14856,7 +14857,8 @@ app.post('/chat/groups/join', async (request, reply) => {
   };
 });
 
-app.get('/chat/bots', async () => {
+app.get('/chat/bots', async (request) => {
+  const authUserId = request.authUser?.userId;
   const result = await db.query<{
     id: string;
     slug: string;
@@ -14864,13 +14866,37 @@ app.get('/chat/bots', async () => {
     description: string;
     command_hint: string;
     category: 'moderation' | 'commerce' | 'automation';
+    type: 'system' | 'custom';
+    status: string;
+    runtime_mode: string;
+    is_draft: boolean;
+    is_active: boolean;
+    permissions: unknown;
+    icon: string | null;
+    owner_id: string | null;
   }>(
     `
-      SELECT id, slug, name, description, command_hint, category
+      SELECT
+        id,
+        slug,
+        name,
+        description,
+        command_hint,
+        category,
+        type,
+        status,
+        runtime_mode,
+        is_draft,
+        is_active,
+        permissions,
+        icon,
+        owner_id
       FROM chat_bots
-      WHERE is_active = TRUE
-      ORDER BY name ASC
-    `
+      WHERE (type = 'system' AND is_active = TRUE)
+         OR (type = 'custom' AND owner_id = $1 AND status != 'disabled' AND is_draft = FALSE)
+      ORDER BY type ASC, name ASC
+    `,
+    [authUserId ?? '']
   );
 
   return {
@@ -14882,6 +14908,14 @@ app.get('/chat/bots', async () => {
       description: row.description,
       commandHint: row.command_hint,
       category: row.category,
+      type: row.type,
+      status: row.status,
+      runtimeMode: row.runtime_mode,
+      isDraft: row.is_draft,
+      isActive: row.is_active,
+      permissions: row.permissions,
+      icon: row.icon,
+      ownerId: row.owner_id,
     })),
   };
 });
@@ -14902,7 +14936,15 @@ app.get('/chat/conversations/:conversationId/bots', async (request) => {
     description: string;
     command_hint: string;
     category: 'moderation' | 'commerce' | 'automation';
+    type: 'system' | 'custom';
+    status: string;
+    runtime_mode: string;
+    is_draft: boolean;
+    permissions: unknown;
+    icon: string | null;
+    owner_id: string | null;
     installed_at: string;
+    install_status: string;
   }>(
     `
       SELECT
@@ -14912,11 +14954,20 @@ app.get('/chat/conversations/:conversationId/bots', async (request) => {
         b.description,
         b.command_hint,
         b.category,
-        cbi.installed_at::text
+        b.type,
+        b.status,
+        b.runtime_mode,
+        b.is_draft,
+        b.permissions,
+        b.icon,
+        b.owner_id,
+        cbi.installed_at::text,
+        cbi.status AS install_status
       FROM chat_bot_installs cbi
       INNER JOIN chat_bots b
         ON b.id = cbi.bot_id
       WHERE cbi.conversation_id = $1
+        AND cbi.status = 'active'
       ORDER BY cbi.installed_at ASC
     `,
     [conversationId]
@@ -14932,7 +14983,15 @@ app.get('/chat/conversations/:conversationId/bots', async (request) => {
       description: row.description,
       commandHint: row.command_hint,
       category: row.category,
+      type: row.type,
+      status: row.status,
+      runtimeMode: row.runtime_mode,
+      isDraft: row.is_draft,
+      permissions: row.permissions,
+      icon: row.icon,
+      ownerId: row.owner_id,
       installedAt: row.installed_at,
+      installStatus: row.install_status,
     })),
   };
 });
@@ -14947,9 +15006,18 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
   const { conversationId, botId } = paramsSchema.parse(request.params);
   await ensureGroupConversationAccess(db, conversationId, actorUserId);
 
-  const botResult = await db.query<{ id: string; name: string; command_hint: string }>(
+  const botResult = await db.query<{
+    id: string;
+    name: string;
+    command_hint: string;
+    type: 'system' | 'custom';
+    status: string;
+    runtime_mode: string;
+    is_draft: boolean;
+    permissions: unknown;
+  }>(
     `
-      SELECT id, name, command_hint
+      SELECT id, name, command_hint, type, status, runtime_mode, is_draft, permissions
       FROM chat_bots
       WHERE id = $1
         AND is_active = TRUE
@@ -14965,6 +15033,20 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
   }
 
   const bot = botResult.rows[0];
+
+  if (bot.is_draft) {
+    throw createApiError('CHAT_BOT_DEPLOY_BLOCKED', 'Draft bots cannot be deployed. Publish the bot first.');
+  }
+
+  if (bot.status === 'backend-required') {
+    throw createApiError('CHAT_BOT_DEPLOY_BLOCKED', 'This bot requires a backend runtime that is not currently connected.');
+  }
+
+  if (bot.runtime_mode === 'ai' || bot.runtime_mode === 'backend') {
+    // Honest limitation: backend/ai runtime not available yet
+    // We still allow deployment as metadata, but warn
+  }
+
   const client = await db.connect();
   let installed = false;
   let updateMessage: { id: string; createdAt: string } | null = null;
@@ -14975,12 +15057,13 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
 
     const installResult = await client.query<{ bot_id: string }>(
       `
-        INSERT INTO chat_bot_installs (conversation_id, bot_id, installed_by)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (conversation_id, bot_id) DO NOTHING
+        INSERT INTO chat_bot_installs (conversation_id, bot_id, installed_by, permissions_snapshot)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (conversation_id, bot_id) DO UPDATE
+        SET status = 'active', updated_at = NOW()
         RETURNING bot_id
       `,
-      [conversationId, botId, actorUserId]
+      [conversationId, botId, actorUserId, toJsonString(bot.permissions ?? [])]
     );
 
     installed = Boolean(installResult.rowCount);
@@ -14992,6 +15075,9 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
           event: 'group_bot_deployed',
           actorUserId,
           botId,
+          botType: bot.type,
+          runtimeMode: bot.runtime_mode,
+          runtimeAvailable: false,
         },
       });
 
@@ -15002,6 +15088,21 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
           WHERE id = $1
         `,
         [conversationId]
+      );
+
+      await client.query(
+        `
+          INSERT INTO chat_bot_audit_events (id, bot_id, conversation_id, actor_user_id, event_type, metadata)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          createRuntimeId('baev'),
+          botId,
+          conversationId,
+          actorUserId,
+          'deployed',
+          toJsonString({ runtimeMode: bot.runtime_mode, runtimeAvailable: false }),
+        ]
       );
     }
 
@@ -15023,6 +15124,8 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
         botId,
         actorUserId,
         messageId: updateMessage.id,
+        runtimeMode: bot.runtime_mode,
+        runtimeAvailable: false,
       },
     });
   }
@@ -15033,6 +15136,8 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
     botId,
     installed,
     botIds,
+    runtimeMode: bot.runtime_mode,
+    runtimeAvailable: false,
   };
 });
 
@@ -15071,17 +15176,19 @@ app.delete('/chat/conversations/:conversationId/bots/:botId', async (request) =>
   try {
     await client.query('BEGIN');
 
-    const deleteResult = await client.query<{ bot_id: string }>(
+    const updateResult = await client.query<{ bot_id: string }>(
       `
-        DELETE FROM chat_bot_installs
+        UPDATE chat_bot_installs
+        SET status = 'removed', updated_at = NOW()
         WHERE conversation_id = $1
           AND bot_id = $2
+          AND status = 'active'
         RETURNING bot_id
       `,
       [conversationId, botId]
     );
 
-    removed = Boolean(deleteResult.rowCount);
+    removed = Boolean(updateResult.rowCount);
     if (removed) {
       updateMessage = await appendSystemChatMessage(client, {
         conversationId,
@@ -15100,6 +15207,21 @@ app.delete('/chat/conversations/:conversationId/bots/:botId', async (request) =>
           WHERE id = $1
         `,
         [conversationId]
+      );
+
+      await client.query(
+        `
+          INSERT INTO chat_bot_audit_events (id, bot_id, conversation_id, actor_user_id, event_type, metadata)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          createRuntimeId('baev'),
+          botId,
+          conversationId,
+          actorUserId,
+          'removed',
+          toJsonString({}),
+        ]
       );
     }
 
@@ -15131,6 +15253,621 @@ app.delete('/chat/conversations/:conversationId/bots/:botId', async (request) =>
     botId,
     removed,
     botIds,
+  };
+});
+
+// ── Bot runtime placeholder ──────────────────────────────────────────
+app.post('/chat/conversations/:conversationId/bots/:botId/command', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    botId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    command: z.string().min(1).max(200),
+    args: z.array(z.string()).default([]),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, botId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+  await ensureGroupConversationAccess(db, conversationId, actorUserId);
+
+  const botResult = await db.query<{ id: string; name: string; runtime_mode: string }>(
+    `
+      SELECT id, name, runtime_mode
+      FROM chat_bots
+      WHERE id = $1
+        AND is_active = TRUE
+      LIMIT 1
+    `,
+    [botId]
+  );
+
+  if (!botResult.rowCount) {
+    throw createApiError('CHAT_BOT_NOT_FOUND', 'Chat bot not found', { botId });
+  }
+
+  const bot = botResult.rows[0];
+
+  await db.query(
+    `
+      INSERT INTO chat_bot_audit_events (id, bot_id, conversation_id, actor_user_id, event_type, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `,
+    [
+      createRuntimeId('baev'),
+      botId,
+      conversationId,
+      actorUserId,
+      'command_attempted',
+      toJsonString({ command: payload.command, args: payload.args, runtimeMode: bot.runtime_mode }),
+    ]
+  );
+
+  reply.code(200);
+  return {
+    ok: true,
+    runtimeAvailable: false,
+    reason: 'Backend bot runtime is not connected. Commands are recorded but not executed.',
+    botId,
+    conversationId,
+    command: payload.command,
+    args: payload.args,
+  };
+});
+
+// ── Custom bots ──────────────────────────────────────────────────────
+app.get('/bots/system', async () => {
+  const result = await db.query<{
+    id: string;
+    slug: string;
+    name: string;
+    description: string;
+    command_hint: string;
+    category: 'moderation' | 'commerce' | 'automation';
+    type: 'system' | 'custom';
+    status: string;
+    runtime_mode: string;
+    is_draft: boolean;
+    permissions: unknown;
+    icon: string | null;
+  }>(
+    `
+      SELECT
+        id, slug, name, description, command_hint, category,
+        type, status, runtime_mode, is_draft, permissions, icon
+      FROM chat_bots
+      WHERE type = 'system' AND is_active = TRUE
+      ORDER BY name ASC
+    `
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      description: row.description,
+      commandHint: row.command_hint,
+      category: row.category,
+      type: row.type,
+      status: row.status,
+      runtimeMode: row.runtime_mode,
+      isDraft: row.is_draft,
+      permissions: row.permissions,
+      icon: row.icon,
+    })),
+  };
+});
+
+app.get('/bots', async (request) => {
+  if (!request.authUser) {
+    throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const userId = request.authUser.userId;
+  const result = await db.query<{
+    id: string;
+    slug: string;
+    name: string;
+    description: string;
+    command_hint: string;
+    category: 'moderation' | 'commerce' | 'automation';
+    type: 'system' | 'custom';
+    status: string;
+    runtime_mode: string;
+    is_draft: boolean;
+    permissions: unknown;
+    icon: string | null;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT
+        id, slug, name, description, command_hint, category,
+        type, status, runtime_mode, is_draft, permissions, icon,
+        created_at, updated_at
+      FROM chat_bots
+      WHERE type = 'custom' AND owner_id = $1
+      ORDER BY created_at DESC
+    `,
+    [userId]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      description: row.description,
+      commandHint: row.command_hint,
+      category: row.category,
+      type: row.type,
+      status: row.status,
+      runtimeMode: row.runtime_mode,
+      isDraft: row.is_draft,
+      permissions: row.permissions,
+      icon: row.icon,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  };
+});
+
+app.get('/bots/:botId', async (request) => {
+  if (!request.authUser) {
+    throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const paramsSchema = z.object({ botId: z.string().min(2).max(120) });
+  const { botId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    id: string;
+    slug: string;
+    name: string;
+    description: string;
+    command_hint: string;
+    category: 'moderation' | 'commerce' | 'automation';
+    type: 'system' | 'custom';
+    status: string;
+    runtime_mode: string;
+    is_draft: boolean;
+    permissions: unknown;
+    icon: string | null;
+    owner_id: string | null;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT
+        id, slug, name, description, command_hint, category,
+        type, status, runtime_mode, is_draft, permissions, icon, owner_id,
+        created_at, updated_at
+      FROM chat_bots
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [botId]
+  );
+
+  if (!result.rowCount) {
+    throw createApiError('CHAT_BOT_NOT_FOUND', 'Bot not found', { botId });
+  }
+
+  const bot = result.rows[0];
+
+  if (bot.type === 'custom' && bot.owner_id !== request.authUser.userId) {
+    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the bot owner can view this bot');
+  }
+
+  return {
+    ok: true,
+    item: {
+      id: bot.id,
+      slug: bot.slug,
+      name: bot.name,
+      description: bot.description,
+      commandHint: bot.command_hint,
+      category: bot.category,
+      type: bot.type,
+      status: bot.status,
+      runtimeMode: bot.runtime_mode,
+      isDraft: bot.is_draft,
+      permissions: bot.permissions,
+      icon: bot.icon,
+      ownerId: bot.owner_id,
+      createdAt: bot.created_at,
+      updatedAt: bot.updated_at,
+    },
+  };
+});
+
+app.post('/bots', async (request, reply) => {
+  if (!request.authUser) {
+    throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const userId = request.authUser.userId;
+  const bodySchema = z.object({
+    name: z.string().trim().min(2).max(80),
+    slug: z.string().trim().min(2).max(40).optional(),
+    description: z.string().trim().min(2).max(500),
+    commandHint: z.string().trim().min(1).max(120),
+    category: z.enum(['moderation', 'commerce', 'automation', 'safety', 'assistant']),
+    permissions: z.array(z.string()).default([]),
+    icon: z.string().trim().max(120).optional(),
+    isDraft: z.boolean().default(false),
+  });
+
+  const payload = bodySchema.parse(request.body);
+  const botId = createRuntimeId('bot');
+  const slug = payload.slug ?? botId;
+
+  await db.query(
+    `
+      INSERT INTO chat_bots (
+        id, slug, name, description, command_hint, category,
+        type, status, runtime_mode, is_draft, permissions, icon, owner_id
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    `,
+    [
+      botId,
+      slug,
+      payload.name,
+      payload.description,
+      payload.commandHint,
+      payload.category,
+      'custom',
+      'local-only',
+      'config-only',
+      payload.isDraft,
+      toJsonString(payload.permissions),
+      payload.icon ?? null,
+      userId,
+    ]
+  );
+
+  await db.query(
+    `
+      INSERT INTO chat_bot_audit_events (id, bot_id, actor_user_id, event_type, metadata)
+      VALUES ($1, $2, $3, $4, $5)
+    `,
+    [
+      createRuntimeId('baev'),
+      botId,
+      userId,
+      'created',
+      toJsonString({ isDraft: payload.isDraft }),
+    ]
+  );
+
+  reply.code(201);
+  return {
+    ok: true,
+    id: botId,
+    slug,
+    name: payload.name,
+    type: 'custom',
+    status: 'local-only',
+    runtimeMode: 'config-only',
+    isDraft: payload.isDraft,
+  };
+});
+
+app.patch('/bots/:botId', async (request) => {
+  if (!request.authUser) {
+    throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const paramsSchema = z.object({ botId: z.string().min(2).max(120) });
+  const bodySchema = z.object({
+    name: z.string().trim().min(2).max(80).optional(),
+    description: z.string().trim().min(2).max(500).optional(),
+    commandHint: z.string().trim().min(1).max(120).optional(),
+    category: z.enum(['moderation', 'commerce', 'automation', 'safety', 'assistant']).optional(),
+    permissions: z.array(z.string()).optional(),
+    icon: z.string().trim().max(120).optional(),
+    isDraft: z.boolean().optional(),
+    status: z.enum(['available', 'local-only', 'backend-required', 'disabled']).optional(),
+    runtimeMode: z.enum(['local', 'config-only', 'backend', 'ai']).optional(),
+  });
+
+  const { botId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+  const userId = request.authUser.userId;
+
+  const existing = await db.query<{ owner_id: string; type: 'system' | 'custom' }>(
+    `SELECT owner_id, type FROM chat_bots WHERE id = $1 LIMIT 1`,
+    [botId]
+  );
+
+  if (!existing.rowCount) {
+    throw createApiError('CHAT_BOT_NOT_FOUND', 'Bot not found', { botId });
+  }
+
+  const bot = existing.rows[0];
+  if (bot.type !== 'custom' || bot.owner_id !== userId) {
+    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the bot owner can update this bot');
+  }
+
+  const updates: string[] = [];
+  const values: unknown[] = [];
+  let paramIndex = 1;
+
+  if (payload.name !== undefined) {
+    updates.push(`name = $${paramIndex++}`);
+    values.push(payload.name);
+  }
+  if (payload.description !== undefined) {
+    updates.push(`description = $${paramIndex++}`);
+    values.push(payload.description);
+  }
+  if (payload.commandHint !== undefined) {
+    updates.push(`command_hint = $${paramIndex++}`);
+    values.push(payload.commandHint);
+  }
+  if (payload.category !== undefined) {
+    updates.push(`category = $${paramIndex++}`);
+    values.push(payload.category);
+  }
+  if (payload.permissions !== undefined) {
+    updates.push(`permissions = $${paramIndex++}`);
+    values.push(toJsonString(payload.permissions));
+  }
+  if (payload.icon !== undefined) {
+    updates.push(`icon = $${paramIndex++}`);
+    values.push(payload.icon);
+  }
+  if (payload.isDraft !== undefined) {
+    updates.push(`is_draft = $${paramIndex++}`);
+    values.push(payload.isDraft);
+  }
+  if (payload.status !== undefined) {
+    updates.push(`status = $${paramIndex++}`);
+    values.push(payload.status);
+  }
+  if (payload.runtimeMode !== undefined) {
+    updates.push(`runtime_mode = $${paramIndex++}`);
+    values.push(payload.runtimeMode);
+  }
+
+  if (updates.length === 0) {
+    throw createApiError('CHAT_BOT_INVALID', 'No fields to update');
+  }
+
+  updates.push(`updated_at = $${paramIndex++}`);
+  values.push(new Date().toISOString());
+  values.push(botId);
+
+  await db.query(
+    `UPDATE chat_bots SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+    values
+  );
+
+  await db.query(
+    `
+      INSERT INTO chat_bot_audit_events (id, bot_id, actor_user_id, event_type, metadata)
+      VALUES ($1, $2, $3, $4, $5)
+    `,
+    [
+      createRuntimeId('baev'),
+      botId,
+      userId,
+      'updated',
+      toJsonString({ fields: Object.keys(payload) }),
+    ]
+  );
+
+  return {
+    ok: true,
+    id: botId,
+  };
+});
+
+app.delete('/bots/:botId', async (request) => {
+  if (!request.authUser) {
+    throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const paramsSchema = z.object({ botId: z.string().min(2).max(120) });
+  const { botId } = paramsSchema.parse(request.params);
+  const userId = request.authUser.userId;
+
+  const existing = await db.query<{ owner_id: string; type: 'system' | 'custom'; name: string }>(
+    `SELECT owner_id, type, name FROM chat_bots WHERE id = $1 LIMIT 1`,
+    [botId]
+  );
+
+  if (!existing.rowCount) {
+    throw createApiError('CHAT_BOT_NOT_FOUND', 'Bot not found', { botId });
+  }
+
+  const bot = existing.rows[0];
+  if (bot.type !== 'custom' || bot.owner_id !== userId) {
+    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the bot owner can delete this bot');
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Mark all group installs as removed
+    await client.query(
+      `UPDATE chat_bot_installs SET status = 'removed', updated_at = NOW() WHERE bot_id = $1`,
+      [botId]
+    );
+
+    await client.query(
+      `DELETE FROM chat_bots WHERE id = $1`,
+      [botId]
+    );
+
+    await client.query(
+      `
+        INSERT INTO chat_bot_audit_events (id, bot_id, actor_user_id, event_type, metadata)
+        VALUES ($1, $2, $3, $4, $5)
+      `,
+      [createRuntimeId('baev'), botId, userId, 'deleted', toJsonString({ name: bot.name })]
+    );
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  return {
+    ok: true,
+    id: botId,
+    deleted: true,
+  };
+});
+
+// ── Group conversation management ────────────────────────────────────
+app.get('/chat/conversations/:conversationId', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const result = await db.query<{
+    id: string;
+    type: 'dm' | 'group';
+    title: string | null;
+    owner_id: string;
+    item_id: string | null;
+    metadata: unknown;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT id, type, title, owner_id, item_id, metadata, created_at, updated_at
+      FROM chat_conversations
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [conversationId]
+  );
+
+  const conversation = result.rows[0];
+  const memberResult = await db.query<{ user_id: string; role: string; joined_at: string }>(
+    `
+      SELECT user_id, role, joined_at
+      FROM chat_members
+      WHERE conversation_id = $1
+      ORDER BY joined_at ASC
+    `,
+    [conversationId]
+  );
+
+  const botResult = await db.query<{
+    bot_id: string;
+    installed_at: string;
+    install_status: string;
+  }>(
+    `
+      SELECT bot_id, installed_at::text, status AS install_status
+      FROM chat_bot_installs
+      WHERE conversation_id = $1
+        AND status = 'active'
+      ORDER BY installed_at ASC
+    `,
+    [conversationId]
+  );
+
+  return {
+    ok: true,
+    conversation: {
+      id: conversation.id,
+      type: conversation.type,
+      title: conversation.title,
+      ownerId: conversation.owner_id,
+      itemId: conversation.item_id,
+      metadata: conversation.metadata,
+      createdAt: conversation.created_at,
+      updatedAt: conversation.updated_at,
+      participantIds: memberResult.rows.map((r) => r.user_id),
+      memberRoles: memberResult.rows.reduce((acc, r) => {
+        acc[r.user_id] = r.role;
+        return acc;
+      }, {} as Record<string, string>),
+      botIds: botResult.rows.map((r) => r.bot_id),
+      botInstalls: botResult.rows.map((r) => ({
+        botId: r.bot_id,
+        installedAt: r.installed_at,
+        status: r.install_status,
+      })),
+    },
+  };
+});
+
+app.patch('/chat/conversations/:conversationId', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    title: z.string().trim().min(2).max(80).optional(),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+  const conversation = await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
+
+  if (payload.title !== undefined) {
+    await db.query(
+      `UPDATE chat_conversations SET title = $1, updated_at = NOW() WHERE id = $2`,
+      [payload.title, conversationId]
+    );
+  }
+
+  return {
+    ok: true,
+    conversationId,
+    updated: payload.title !== undefined ? { title: payload.title } : {},
+  };
+});
+
+app.get('/chat/conversations/:conversationId/members', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const result = await db.query<{
+    user_id: string;
+    role: string;
+    joined_at: string;
+  }>(
+    `
+      SELECT user_id, role, joined_at::text
+      FROM chat_members
+      WHERE conversation_id = $1
+      ORDER BY joined_at ASC
+    `,
+    [conversationId]
+  );
+
+  return {
+    ok: true,
+    conversationId,
+    items: result.rows.map((row) => ({
+      userId: row.user_id,
+      role: row.role,
+      joinedAt: row.joined_at,
+    })),
   };
 });
 

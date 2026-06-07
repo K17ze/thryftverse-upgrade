@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   StatusBar,
@@ -58,6 +58,11 @@ export default function BotDirectoryScreen({ navigation }: Props) {
 
   const bots = useStore((state) => state.availableChatBots);
   const enabledBotIds = useStore((state) => state.enabledBotIds);
+  const loadBotsFromApi = useStore((state) => state.loadBotsFromApi);
+
+  useEffect(() => {
+    void loadBotsFromApi();
+  }, [loadBotsFromApi]);
   const toggleEnabledBot = useStore((state) => state.toggleEnabledBot);
   const isBotEnabled = useStore((state) => state.isBotEnabled);
 

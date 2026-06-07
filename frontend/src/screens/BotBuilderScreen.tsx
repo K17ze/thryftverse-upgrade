@@ -73,13 +73,15 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
     return initial;
   });
   const [isDraft, setIsDraft] = useState(existingBot?.isDraft ?? false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const selectedPermissions = PERMISSION_OPTIONS.filter((p) => permissions[p.key]).map((p) => p.key);
 
-  const canSave = name.trim().length > 0 && description.trim().length > 0;
+  const canSave = name.trim().length > 0 && description.trim().length > 0 && !isSaving;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canSave) return;
+    setIsSaving(true);
     haptic.success();
 
     const botData = {
@@ -93,14 +95,20 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
       isDraft,
     };
 
-    if (isEditing && existingBot) {
-      updateCustomBot(existingBot.id, botData);
-      show(`${name.trim()} updated`, 'success');
-    } else {
-      const newId = createCustomBot(botData);
-      show(`${name.trim()} created`, 'success');
+    try {
+      if (isEditing && existingBot) {
+        await updateCustomBot(existingBot.id, botData);
+        show(`${name.trim()} updated`, 'success');
+      } else {
+        await createCustomBot(botData);
+        show(`${name.trim()} created`, 'success');
+      }
+      navigation.goBack();
+    } catch (error) {
+      show('Failed to save bot. Please try again.', 'error');
+    } finally {
+      setIsSaving(false);
     }
-    navigation.goBack();
   };
 
   const togglePermission = (key: string) => {
@@ -273,6 +281,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
           align="center"
           onPress={handleSave}
           disabled={!canSave}
+          loading={isSaving}
         />
       </ScrollView>
     </SafeAreaView>

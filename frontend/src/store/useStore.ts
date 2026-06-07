@@ -7,6 +7,14 @@ import type { ChatBot, Conversation, Message as ConversationMessage } from '../d
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { updateUserAccountPreferences, updateUserPostagePreferences } from '../services/accountApi';
+import {
+  fetchSystemBotsFromApi,
+  fetchCustomBotsFromApi,
+  createCustomBotOnApi,
+  updateCustomBotOnApi,
+  deleteCustomBotOnApi,
+} from '../services/botsApi';
+import { fetchChatBotsFromApi } from '../services/chatApi';
 
 export interface User {
   id: string;
@@ -349,11 +357,12 @@ interface StoreState {
   enabledBotIds: string[];
   toggleEnabledBot: (botId: string) => void;
   isBotEnabled: (botId: string) => boolean;
-  // Custom user bots
+  // Custom user bots (backend-backed)
   customBots: ChatBot[];
-  createCustomBot: (bot: Omit<ChatBot, 'id' | 'type' | 'creatorId'>) => string;
-  updateCustomBot: (botId: string, updates: Partial<ChatBot>) => void;
-  deleteCustomBot: (botId: string) => void;
+  createCustomBot: (bot: Omit<ChatBot, 'id' | 'type' | 'creatorId'>) => Promise<string>;
+  updateCustomBot: (botId: string, updates: Partial<ChatBot>) => Promise<void>;
+  deleteCustomBot: (botId: string) => Promise<void>;
+  loadBotsFromApi: () => Promise<void>;
 
   userLooks: UserLook[];
   addUserLook: (look: Omit<UserLook, 'id' | 'createdAt'>) => string;
@@ -1170,28 +1179,57 @@ export const useStore = create<StoreState>()(
   isBotEnabled: (botId) => get().enabledBotIds.includes(botId),
 
   customBots: [],
-  createCustomBot: (bot) => {
-    const id = `custom-bot-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  createCustomBot: async (bot) => {
+    const result = await createCustomBotOnApi({
+      name: bot.name,
+      slug: bot.slug,
+      description: bot.description,
+      commandHint: bot.commandHint,
+      category: bot.category,
+      permissions: bot.permissions,
+      icon: bot.icon,
+      isDraft: bot.isDraft,
+    });
+
     const newBot: ChatBot = {
       ...bot,
-      id,
+      id: result.id,
       type: 'custom',
       creatorId: get().currentUser?.id ?? 'me',
-      status: 'local-only',
+      ownerId: get().currentUser?.id ?? 'me',
+      status: result.status as ChatBot['status'],
+      runtimeMode: result.runtimeMode,
     };
+
     set((state) => ({
       customBots: [...state.customBots, newBot],
-      enabledBotIds: [...state.enabledBotIds, id],
+      enabledBotIds: [...state.enabledBotIds, result.id],
     }));
-    return id;
+
+    return result.id;
   },
-  updateCustomBot: (botId, updates) =>
+  updateCustomBot: async (botId, updates) => {
+    await updateCustomBotOnApi(botId, {
+      name: updates.name,
+      description: updates.description,
+      commandHint: updates.commandHint,
+      category: updates.category,
+      permissions: updates.permissions,
+      icon: updates.icon,
+      isDraft: updates.isDraft,
+      status: updates.status,
+      runtimeMode: updates.runtimeMode,
+    });
+
     set((state) => ({
       customBots: state.customBots.map((b) =>
         b.id === botId && b.type === 'custom' ? { ...b, ...updates } : b
       ),
-    })),
-  deleteCustomBot: (botId) =>
+    }));
+  },
+  deleteCustomBot: async (botId) => {
+    await deleteCustomBotOnApi(botId);
+
     set((state) => ({
       customBots: state.customBots.filter((b) => b.id !== botId),
       enabledBotIds: state.enabledBotIds.filter((id) => id !== botId),
@@ -1200,7 +1238,23 @@ export const useStore = create<StoreState>()(
           ? { ...c, botIds: c.botIds.filter((id) => id !== botId) }
           : c
       ),
-    })),
+    }));
+  },
+  loadBotsFromApi: async () => {
+    try {
+      const [systemBots, customBots] = await Promise.all([
+        fetchChatBotsFromApi(),
+        fetchCustomBotsFromApi(),
+      ]);
+
+      set(() => ({
+        availableChatBots: systemBots,
+        customBots,
+      }));
+    } catch {
+      // If API fails, keep existing persisted state as fallback
+    }
+  },
 
   addMessageReaction: (conversationId, messageId, reaction) =>
     set((state) => ({

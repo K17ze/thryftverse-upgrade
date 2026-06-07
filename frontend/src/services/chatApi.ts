@@ -34,8 +34,15 @@ interface ApiBotPayload {
   description: string;
   commandHint: string;
   category: 'moderation' | 'commerce' | 'automation' | 'assistant' | 'safety' | 'styling';
+  type?: 'system' | 'custom';
   status?: 'available' | 'local-only' | 'backend-required';
+  runtimeMode?: string;
+  isDraft?: boolean;
   permissions?: string[];
+  icon?: string | null;
+  ownerId?: string | null;
+  installedAt?: string;
+  installStatus?: string;
 }
 
 interface ApiGroupInvitePayload {
@@ -246,9 +253,94 @@ export async function fetchChatBotsFromApi(): Promise<ChatBot[]> {
     description: item.description,
     commandHint: item.commandHint,
     category: item.category,
+    type: item.type ?? 'system',
     status: item.status ?? 'backend-required',
+    runtimeMode: item.runtimeMode ?? 'backend',
+    isDraft: item.isDraft ?? false,
     permissions: item.permissions ?? ['read_messages', 'send_messages'],
+    icon: item.icon ?? undefined,
+    ownerId: item.ownerId ?? undefined,
   }));
+}
+
+export async function fetchConversationBotsFromApi(conversationId: string): Promise<ChatBot[]> {
+  const payload = await fetchJson<{
+    ok: true;
+    items: ApiBotPayload[];
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/bots`);
+
+  return payload.items.map((item) => ({
+    id: item.id,
+    slug: item.slug,
+    name: item.name,
+    description: item.description,
+    commandHint: item.commandHint,
+    category: item.category,
+    type: item.type ?? 'system',
+    status: item.status ?? 'backend-required',
+    runtimeMode: item.runtimeMode ?? 'backend',
+    isDraft: item.isDraft ?? false,
+    permissions: item.permissions ?? ['read_messages', 'send_messages'],
+    icon: item.icon ?? undefined,
+    ownerId: item.ownerId ?? undefined,
+  }));
+}
+
+export async function fetchConversationFromApi(conversationId: string): Promise<{
+  id: string;
+  type: 'dm' | 'group';
+  title: string | null;
+  ownerId: string;
+  itemId: string | null;
+  metadata: Record<string, unknown>;
+  participantIds: string[];
+  memberRoles: Record<string, string>;
+  botIds: string[];
+  botInstalls: { botId: string; installedAt: string; status: string }[];
+  createdAt: string;
+  updatedAt: string;
+}> {
+  const payload = await fetchJson<{
+    ok: true;
+    conversation: {
+      id: string;
+      type: 'dm' | 'group';
+      title: string | null;
+      ownerId: string;
+      itemId: string | null;
+      metadata: Record<string, unknown>;
+      participantIds: string[];
+      memberRoles: Record<string, string>;
+      botIds: string[];
+      botInstalls: { botId: string; installedAt: string; status: string }[];
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}`);
+
+  return payload.conversation;
+}
+
+export async function updateConversationOnApi(
+  conversationId: string,
+  updates: { title?: string }
+): Promise<void> {
+  await fetchJson<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function fetchConversationMembersFromApi(conversationId: string): Promise<
+  { userId: string; role: string; joinedAt: string }[]
+> {
+  const payload = await fetchJson<{
+    ok: true;
+    items: { userId: string; role: string; joinedAt: string }[];
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/members`);
+
+  return payload.items;
 }
 
 export async function createGroupInviteLinkOnApi(

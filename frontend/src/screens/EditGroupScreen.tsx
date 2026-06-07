@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { updateConversationOnApi } from '../services/chatApi';
 import {
   View,
   Text,
@@ -41,8 +42,6 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const [name, setName] = useState(conversation?.title ?? '');
   const [isSaving, setIsSaving] = useState(false);
 
-  const backendSupportsEdit = false; // Honest product truth
-
   if (!conversation || conversation.type !== 'group') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -55,7 +54,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     );
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) {
       show('Group name is required', 'error');
       return;
@@ -63,17 +62,19 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     haptic.success();
     setIsSaving(true);
 
-    // Local-only update — no backend
-    upsertConversation({
-      ...conversation,
-      title: name.trim(),
-    });
-
-    show('Group name updated locally', 'success');
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await updateConversationOnApi(conversationId, { title: name.trim() });
+      upsertConversation({
+        ...conversation,
+        title: name.trim(),
+      });
+      show('Group name updated', 'success');
       navigation.goBack();
-    }, 300);
+    } catch {
+      show('Failed to update group name', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const initials = name
@@ -111,16 +112,6 @@ export default function EditGroupScreen({ navigation, route }: Props) {
             accessibilityLabel="Group name"
           />
         </Section>
-
-        {/* Backend limitation notice */}
-        {!backendSupportsEdit && (
-          <View style={styles.limitationBanner}>
-            <Ionicons name="information-circle-outline" size={18} color={Colors.textMuted} />
-            <Caption color={Colors.textMuted} style={styles.limitationText}>
-              Group editing is local-only. Changes are saved on this device but may not sync to other members until backend group management is available.
-            </Caption>
-          </View>
-        )}
 
         <AppButton
           title={isSaving ? 'Saving...' : 'Save changes'}

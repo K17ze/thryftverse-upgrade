@@ -119,9 +119,13 @@ export interface ChatBot {
   /** Present only for custom bots */
   creatorId?: string;
   /** Present only for custom bots */
+  ownerId?: string;
+  /** Present only for custom bots */
   isDraft?: boolean;
   /** Present only for custom bots */
   isDisabled?: boolean;
+  /** How the bot executes: local, config-only, backend, ai */
+  runtimeMode?: string;
   /** Avatar/icon emoji or ionicon name for custom bots */
   icon?: string;
 }
