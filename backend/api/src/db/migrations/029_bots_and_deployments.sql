@@ -8,6 +8,11 @@ ALTER TABLE chat_bots
   ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS icon TEXT;
 
+-- Fix category check constraint to include all valid categories
+ALTER TABLE chat_bots DROP CONSTRAINT IF EXISTS chat_bots_category_check;
+ALTER TABLE chat_bots ADD CONSTRAINT chat_bots_category_check
+  CHECK (category IN ('moderation', 'commerce', 'automation', 'assistant', 'safety', 'styling'));
+
 -- Add helpful indexes for custom bot lookups
 CREATE INDEX IF NOT EXISTS chat_bots_owner_id_idx ON chat_bots (owner_id, type);
 CREATE INDEX IF NOT EXISTS chat_bots_type_status_idx ON chat_bots (type, status, is_draft);
@@ -36,7 +41,7 @@ CREATE TRIGGER chat_bot_installs_updated_at_trigger
 -- Bot audit events table
 CREATE TABLE IF NOT EXISTS chat_bot_audit_events (
   id TEXT PRIMARY KEY,
-  bot_id TEXT NOT NULL REFERENCES chat_bots(id) ON DELETE CASCADE,
+  bot_id TEXT,
   conversation_id TEXT REFERENCES chat_conversations(id) ON DELETE SET NULL,
   actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   event_type TEXT NOT NULL CHECK (event_type IN ('created', 'updated', 'deleted', 'deployed', 'removed', 'disabled', 'command_attempted')),

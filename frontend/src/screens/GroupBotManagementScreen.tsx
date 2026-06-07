@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { deployBotToConversationOnApi, undeployBotFromConversationOnApi } from '../services/chatApi';
 import {
   View,
   Text,
@@ -53,6 +54,8 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
     [allBots, deployedBotIds]
   );
 
+  const [pendingBotId, setPendingBotId] = useState<string | null>(null);
+
   const handleRemove = (botId: string, botName: string) => {
     Alert.alert(
       'Remove bot?',
@@ -62,20 +65,38 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.medium();
-            undeployBotFromConversation(conversationId, botId);
-            show(`${botName} removed`, 'info');
+            setPendingBotId(botId);
+            try {
+              await undeployBotFromConversationOnApi(conversationId, botId);
+              undeployBotFromConversation(conversationId, botId);
+              show(`${botName} removed`, 'info');
+            } catch {
+              undeployBotFromConversation(conversationId, botId);
+              show('Backend unavailable. Removed locally for now.', 'info');
+            } finally {
+              setPendingBotId(null);
+            }
           },
         },
       ]
     );
   };
 
-  const handleDeploy = (botId: string) => {
+  const handleDeploy = async (botId: string) => {
     haptic.success();
-    deployBotToConversation(conversationId, botId);
-    show('Bot deployed', 'success');
+    setPendingBotId(botId);
+    try {
+      await deployBotToConversationOnApi(conversationId, botId);
+      deployBotToConversation(conversationId, botId);
+      show('Bot deployed', 'success');
+    } catch {
+      deployBotToConversation(conversationId, botId);
+      show('Backend unavailable. Deployed locally for now.', 'info');
+    } finally {
+      setPendingBotId(null);
+    }
   };
 
   return (

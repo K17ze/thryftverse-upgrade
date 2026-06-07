@@ -15702,16 +15702,16 @@ app.delete('/bots/:botId', async (request) => {
     );
 
     await client.query(
-      `DELETE FROM chat_bots WHERE id = $1`,
-      [botId]
-    );
-
-    await client.query(
       `
         INSERT INTO chat_bot_audit_events (id, bot_id, actor_user_id, event_type, metadata)
         VALUES ($1, $2, $3, $4, $5)
       `,
       [createRuntimeId('baev'), botId, userId, 'deleted', toJsonString({ name: bot.name })]
+    );
+
+    await client.query(
+      `DELETE FROM chat_bots WHERE id = $1`,
+      [botId]
     );
 
     await client.query('COMMIT');

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { deployBotToConversationOnApi, undeployBotFromConversationOnApi } from '../services/chatApi';
 import {
   View,
   Text,
@@ -82,12 +83,24 @@ export default function BotDetailScreen({ navigation, route }: Props) {
       ? Colors.textSecondary
       : Colors.textMuted;
 
-  const handleDeploy = () => {
+  const [isDeploying, setIsDeploying] = useState(false);
+
+  const handleDeploy = async () => {
     if (!conversationId) return;
+    setIsDeploying(true);
     haptic.success();
-    deployBotToConversation(conversationId, botId);
-    show(`${bot.name} deployed to group`, 'success');
-    navigation.goBack();
+    try {
+      await deployBotToConversationOnApi(conversationId, botId);
+      deployBotToConversation(conversationId, botId);
+      show(`${bot.name} deployed to group`, 'success');
+      navigation.goBack();
+    } catch {
+      deployBotToConversation(conversationId, botId);
+      show('Backend unavailable. Deployed locally for now.', 'info');
+      navigation.goBack();
+    } finally {
+      setIsDeploying(false);
+    }
   };
 
   const handleRemove = () => {
@@ -100,11 +113,21 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.medium();
-            undeployBotFromConversation(conversationId, botId);
-            show(`${bot.name} removed`, 'info');
-            navigation.goBack();
+            setIsDeploying(true);
+            try {
+              await undeployBotFromConversationOnApi(conversationId, botId);
+              undeployBotFromConversation(conversationId, botId);
+              show(`${bot.name} removed`, 'info');
+              navigation.goBack();
+            } catch {
+              undeployBotFromConversation(conversationId, botId);
+              show('Backend unavailable. Removed locally for now.', 'info');
+              navigation.goBack();
+            } finally {
+              setIsDeploying(false);
+            }
           },
         },
       ]
