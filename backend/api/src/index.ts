@@ -77,6 +77,7 @@ import {
   registerSseClient,
   registerWsClient,
 } from './lib/realtime.js';
+import { executeBotCommand } from './botRuntime/index.js';
 import { assertS3BucketConnectivity, createUploadUrl, putJsonObject } from './lib/s3.js';
 import {
   metricsContentType,
@@ -213,7 +214,7 @@ app.addContentTypeParser(
   app.getDefaultJsonParser('error', 'error')
 );
 
-function toJsonString(value: unknown): string {
+export function toJsonString(value: unknown): string {
   return JSON.stringify(value);
 }
 
@@ -1109,7 +1110,7 @@ interface OnezeReconciliationRow {
   created_at: string;
 }
 
-function createRuntimeId(prefix: string): string {
+export function createRuntimeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
 }
 
@@ -14224,6 +14225,22 @@ app.post('/chat/conversations/:conversationId/messages', async (request, reply) 
     },
   });
 
+  // Bot runtime: check if message triggers any deployed bot commands
+  if (conversation.type === 'group') {
+    try {
+      await executeBotCommand(db, {
+        conversationId,
+        conversationType: conversation.type,
+        conversationTitle: conversation.title ?? null,
+        actorUserId,
+        actorUserName: null,
+        messageText: payload.text,
+      });
+    } catch (err) {
+      request.log.error({ err, conversationId, actorUserId }, 'Bot runtime execution failed');
+    }
+  }
+
   reply.code(201);
   return {
     ok: true,
@@ -15256,7 +15273,7 @@ app.delete('/chat/conversations/:conversationId/bots/:botId', async (request) =>
   };
 });
 
-// ── Bot runtime placeholder ──────────────────────────────────────────
+// ── Bot command execution ──────────────────────────────────────────
 app.post('/chat/conversations/:conversationId/bots/:botId/command', async (request, reply) => {
   const paramsSchema = z.object({
     conversationId: z.string().min(2).max(120),
@@ -15270,7 +15287,7 @@ app.post('/chat/conversations/:conversationId/bots/:botId/command', async (reque
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId, botId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body);
-  await ensureGroupConversationAccess(db, conversationId, actorUserId);
+  const conversation = await ensureGroupConversationAccess(db, conversationId, actorUserId);
 
   const botResult = await db.query<{ id: string; name: string; runtime_mode: string }>(
     `
@@ -15289,26 +15306,24 @@ app.post('/chat/conversations/:conversationId/bots/:botId/command', async (reque
 
   const bot = botResult.rows[0];
 
-  await db.query(
-    `
-      INSERT INTO chat_bot_audit_events (id, bot_id, conversation_id, actor_user_id, event_type, metadata)
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `,
-    [
-      createRuntimeId('baev'),
-      botId,
-      conversationId,
-      actorUserId,
-      'command_attempted',
-      toJsonString({ command: payload.command, args: payload.args, runtimeMode: bot.runtime_mode }),
-    ]
-  );
+  const execution = await executeBotCommand(db, {
+    conversationId,
+    conversationType: 'group',
+    conversationTitle: conversation.title ?? null,
+    actorUserId,
+    actorUserName: null,
+    messageText: [payload.command, ...payload.args].join(' '),
+    targetBotId: botId,
+    command: payload.command,
+    args: payload.args,
+  });
 
   reply.code(200);
   return {
     ok: true,
-    runtimeAvailable: false,
-    reason: 'Backend bot runtime is not connected. Commands are recorded but not executed.',
+    runtimeAvailable: true,
+    executed: execution.messageId !== null,
+    messageId: execution.messageId,
     botId,
     conversationId,
     command: payload.command,
