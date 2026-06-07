@@ -73,8 +73,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
               undeployBotFromConversation(conversationId, botId);
               show(`${botName} removed`, 'info');
             } catch {
-              undeployBotFromConversation(conversationId, botId);
-              show('Backend unavailable. Removed locally for now.', 'info');
+              show('Failed to remove bot. Please try again.', 'error');
             } finally {
               setPendingBotId(null);
             }
@@ -92,8 +91,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
       deployBotToConversation(conversationId, botId);
       show('Bot deployed', 'success');
     } catch {
-      deployBotToConversation(conversationId, botId);
-      show('Backend unavailable. Deployed locally for now.', 'info');
+      show('Failed to deploy bot. Please try again.', 'error');
     } finally {
       setPendingBotId(null);
     }

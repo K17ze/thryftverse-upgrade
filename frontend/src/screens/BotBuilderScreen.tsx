@@ -129,7 +129,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
         <View style={styles.safetyBanner}>
           <Ionicons name="warning-outline" size={18} color={Colors.textMuted} />
           <Caption color={Colors.textMuted} style={styles.safetyText}>
-            Custom bots are saved locally only. They cannot execute AI logic until a backend bot runtime is connected.
+            Custom bots are saved to your account. They become active once deployed to a group chat.
           </Caption>
         </View>
 

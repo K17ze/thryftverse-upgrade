@@ -95,9 +95,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
       show(`${bot.name} deployed to group`, 'success');
       navigation.goBack();
     } catch {
-      deployBotToConversation(conversationId, botId);
-      show('Backend unavailable. Deployed locally for now.', 'info');
-      navigation.goBack();
+      show('Failed to deploy bot. Please try again.', 'error');
     } finally {
       setIsDeploying(false);
     }
@@ -122,9 +120,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
               show(`${bot.name} removed`, 'info');
               navigation.goBack();
             } catch {
-              undeployBotFromConversation(conversationId, botId);
-              show('Backend unavailable. Removed locally for now.', 'info');
-              navigation.goBack();
+              show('Failed to remove bot. Please try again.', 'error');
             } finally {
               setIsDeploying(false);
             }

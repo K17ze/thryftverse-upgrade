@@ -69,14 +69,7 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
       haptic.success();
       return;
     } catch {
-      if (isDeployed) {
-        undeployBotFromConversation(conversation.id, botId);
-        show('Backend unavailable. Removed locally for now.', 'info');
-        return;
-      }
-
-      deployBotToConversation(conversation.id, botId);
-      show('Backend unavailable. Deployed locally for now.', 'info');
+      show('Failed to sync bot. Please try again.', 'error');
     } finally {
       setPendingBotId(null);
     }
