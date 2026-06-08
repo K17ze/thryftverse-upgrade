@@ -1,143 +1,124 @@
 import React from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
   View,
   Text,
   StyleSheet,
   StatusBar,
-  ScrollView
+  ScrollView,
+  Share,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Confetti } from '../components/Confetti';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useBackendData } from '../context/BackendDataContext';
-import { SyncStatusPill } from '../components/SyncStatusPill';
-import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { CachedImage } from '../components/CachedImage';
-import { MY_USER, MOCK_USERS } from '../data/mockData';
-import { getBackendSyncStatus } from '../utils/syncStatus';
-import { useToast } from '../context/ToastContext';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Typography } from '../theme/designTokens';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
 
 const PANEL_BG = Colors.surface;
 const PANEL_ALT_BG = Colors.surfaceAlt;
 const PANEL_BORDER = Colors.border;
-const BADGE_BG = Colors.brand;
-const BADGE_TEXT = Colors.textInverse;
 
 export default function ListingSuccessScreen({ navigation, route }: Props) {
+  const { isDark } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
-  const { source, isSyncing, lastError, refreshListings } = useBackendData();
-  const { show } = useToast();
-  const supportUser = MOCK_USERS[0];
-  const bumpFeeLabel = formatFromFiat(1.99, 'GBP', { displayMode: 'fiat' });
+
   const listingId = route.params?.listingId;
   const listingTitle = route.params?.title || 'your listing';
-  const listingPrice =
-    typeof route.params?.price === 'number'
-      ? formatFromFiat(route.params.price, 'GBP', { displayMode: 'fiat' })
-      : null;
+  const listingPriceRaw =
+    typeof route.params?.price === 'number' ? route.params.price : null;
+  const listingPrice = listingPriceRaw
+    ? formatFromFiat(listingPriceRaw, 'GBP', { displayMode: 'fiat' })
+    : null;
   const listingCategory = route.params?.categoryId;
   const listingPhoto = route.params?.photoUri;
 
-  const publishStatus = React.useMemo(
-    () =>
-      getBackendSyncStatus({
-        isSyncing,
-        source,
-        hasError: Boolean(lastError),
-        labels: {
-          syncing: 'Syncing',
-          live: 'Published',
-          error: 'Queued locally',
+  const handleShare = React.useCallback(async () => {
+    if (!listingId) return;
+    const url = `https://thryftverse.com/listing/${listingId}`;
+    try {
+      await Share.share(
+        {
+          url: Platform.OS === 'ios' ? url : undefined,
+          message:
+            Platform.OS === 'android'
+              ? `Check out "${listingTitle}" on Thryftverse\n${url}`
+              : `Check out "${listingTitle}" on Thryftverse`,
         },
-      }),
-    [isSyncing, lastError, source],
-  );
+        { dialogTitle: 'Share listing' }
+      );
+    } catch {
+      // User cancelled share
+    }
+  }, [listingId, listingTitle]);
 
-  const handleOpenPublishSupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'listing publish support',
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for listing publishing help.', 'info');
-  }, [navigation, show, supportUser.id]);
+  const handleCreateAnother = React.useCallback(() => {
+    navigation.replace('MainTabs', { screen: 'Sell' } as any);
+  }, [navigation]);
+
+  const handleViewListing = React.useCallback(() => {
+    if (listingId) {
+      navigation.push('ItemDetail', { itemId: listingId });
+    }
+  }, [navigation, listingId]);
+
+  const handleManageListing = React.useCallback(() => {
+    if (listingId) {
+      navigation.push('ManageListing', { itemId: listingId });
+    }
+  }, [navigation, listingId]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={Colors.background}
+      />
       <Confetti />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Celebration Header */}
         <View style={styles.heroSection}>
           <View style={styles.iconCircle}>
             <Ionicons name="checkmark" size={64} color={Colors.brand} />
           </View>
           <Text style={styles.heroBigText}>Published</Text>
-          <Text style={styles.heroSubText}>Your item is now visible.</Text>
-          {listingPrice ? <Text style={styles.heroMicroCopy}>Price: {listingPrice}</Text> : null}
-        </View>
-
-        <View style={styles.syncCard}>
-          <View style={styles.syncTopRow}>
-            <SyncStatusPill tone={publishStatus.tone} label={publishStatus.label} compact />
-          </View>
-          <Text style={styles.syncHint}>
-            {lastError
-              ? 'Sync is delayed. Your listing will publish when connection returns.'
-              : 'Publishing across devices.'}
+          <Text style={styles.heroSubText}>
+            Your item is now live on Thryftverse.
           </Text>
-          {lastError ? (
-            <SyncRetryBanner
-              message="Retry sync now."
-              onRetry={() => void refreshListings()}
-              isRetrying={isSyncing}
-              telemetryContext="listing_success_publish_sync"
-              containerStyle={styles.syncRetryBanner}
-            />
+          {listingPrice ? (
+            <Text style={styles.heroMicroCopy}>{listingPrice}</Text>
           ) : null}
         </View>
 
-        <View style={styles.supportRow}>
-          <AnimatedPressable
-            style={styles.supportIdentity}
-            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Open @${supportUser.username} profile`}
-            accessibilityHint="Shows publishing support profile"
-          >
-            <CachedImage
-              uri={supportUser.avatar}
-              style={styles.supportAvatar}
-              containerStyle={styles.supportAvatarWrap}
-              contentFit="cover"
+        {/* Published status */}
+        <View style={styles.statusRow}>
+          <View style={styles.statusBadge}>
+            <Ionicons
+              name="checkmark-circle"
+              size={14}
+              color={Colors.success}
             />
-            <Text style={styles.supportText}>Need listing help? @{supportUser.username}</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={styles.supportMessageBtn}
-            onPress={handleOpenPublishSupport}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Message listing support"
-            accessibilityHint="Opens support chat for publish issues"
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-          </AnimatedPressable>
+            <Text style={styles.statusText}>Live now</Text>
+          </View>
+          {listingId ? (
+            <Text style={styles.idText} numberOfLines={1}>
+              ID: {listingId}
+            </Text>
+          ) : null}
         </View>
 
+        {/* Product preview card */}
         <View style={styles.summaryCard}>
           {listingPhoto ? (
             <CachedImage
@@ -147,8 +128,14 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               contentFit="cover"
             />
           ) : (
-            <View style={[styles.summaryImageWrap, styles.summaryImageFallback]}>
-              <Ionicons name="bag-handle-outline" size={20} color={Colors.textMuted} />
+            <View
+              style={[styles.summaryImageWrap, styles.summaryImageFallback]}
+            >
+              <Ionicons
+                name="bag-handle-outline"
+                size={20}
+                color={Colors.textMuted}
+              />
             </View>
           )}
           <View style={styles.summaryBody}>
@@ -163,40 +150,28 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           </View>
         </View>
 
-        {/* Promotion Upsell Card */}
-        <View style={styles.promoCard}>
-          <View style={styles.promoBadge}>
-            <Ionicons name="flash" size={12} color={BADGE_TEXT} />
-            <Text style={styles.promoBadgeText}>sell 3x faster</Text>
-          </View>
-          <Text style={styles.promoTitle}>bump your listing</Text>
-          <Text style={styles.promoDesc}>
-            push your item to the top of feed and search for 3 days.
-          </Text>
-
-          <AnimatedPressable
-            style={styles.bumpBtn}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('CreatePoster')}
-          >
-            <Text style={styles.bumpBtnText}>promote for {bumpFeeLabel}</Text>
-          </AnimatedPressable>
-        </View>
-
-        {/* Standard Actions */}
+        {/* Actions */}
         {listingId ? (
           <AnimatedPressable
             style={styles.actionRowBtn}
             activeOpacity={0.8}
-            onPress={() => navigation.push('ItemDetail', { itemId: listingId })}
+            onPress={handleViewListing}
           >
             <View style={styles.actionLeft}>
               <View style={styles.actionIconBox}>
-                <Ionicons name="eye-outline" size={20} color={Colors.textPrimary} />
+                <Ionicons
+                  name="eye-outline"
+                  size={20}
+                  color={Colors.textPrimary}
+                />
               </View>
               <Text style={styles.actionText}>view listing</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={Colors.textMuted}
+            />
           </AnimatedPressable>
         ) : null}
 
@@ -204,17 +179,71 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           <AnimatedPressable
             style={styles.actionRowBtn}
             activeOpacity={0.8}
-            onPress={() => navigation.push('ManageListing', { itemId: listingId })}
+            onPress={handleManageListing}
           >
             <View style={styles.actionLeft}>
               <View style={styles.actionIconBox}>
-                <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
+                <Ionicons
+                  name="settings-outline"
+                  size={20}
+                  color={Colors.textPrimary}
+                />
               </View>
               <Text style={styles.actionText}>manage listing</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={Colors.textMuted}
+            />
           </AnimatedPressable>
         ) : null}
+
+        {listingId ? (
+          <AnimatedPressable
+            style={styles.actionRowBtn}
+            activeOpacity={0.8}
+            onPress={handleShare}
+          >
+            <View style={styles.actionLeft}>
+              <View style={styles.actionIconBox}>
+                <Ionicons
+                  name="share-outline"
+                  size={20}
+                  color={Colors.textPrimary}
+                />
+              </View>
+              <Text style={styles.actionText}>share listing</Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={Colors.textMuted}
+            />
+          </AnimatedPressable>
+        ) : null}
+
+        <AnimatedPressable
+          style={styles.actionRowBtn}
+          activeOpacity={0.8}
+          onPress={handleCreateAnother}
+        >
+          <View style={styles.actionLeft}>
+            <View style={styles.actionIconBox}>
+              <Ionicons
+                name="add-circle-outline"
+                size={20}
+                color={Colors.textPrimary}
+              />
+            </View>
+            <Text style={styles.actionText}>create another listing</Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={Colors.textMuted}
+          />
+        </AnimatedPressable>
 
         <AnimatedPressable
           style={styles.actionRowBtn}
@@ -223,13 +252,32 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         >
           <View style={styles.actionLeft}>
             <View style={styles.actionIconBox}>
-              <Ionicons name="home-outline" size={20} color={Colors.textPrimary} />
+              <Ionicons
+                name="home-outline"
+                size={20}
+                color={Colors.textPrimary}
+              />
             </View>
             <Text style={styles.actionText}>back to feed</Text>
           </View>
           <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
         </AnimatedPressable>
 
+        {/* Support link */}
+        <AnimatedPressable
+          style={styles.supportLink}
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate('HelpSupport')}
+        >
+          <Ionicons
+            name="help-circle-outline"
+            size={14}
+            color={Colors.textMuted}
+          />
+          <Text style={styles.supportLinkText}>
+            Need help? Visit the Help Centre
+          </Text>
+        </AnimatedPressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -237,12 +285,12 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  
+
   content: { paddingHorizontal: 20, paddingTop: 40, paddingBottom: 60 },
 
   heroSection: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 32,
   },
   iconCircle: {
     width: 104,
@@ -256,11 +304,11 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   heroBigText: {
-    fontSize: 72,
-    lineHeight: 74,
+    fontSize: 56,
+    lineHeight: 60,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    letterSpacing: -2.8,
+    letterSpacing: -2.2,
     marginBottom: 6,
   },
   heroSubText: {
@@ -271,80 +319,43 @@ const styles = StyleSheet.create({
   },
   heroMicroCopy: {
     marginTop: 8,
-    fontSize: 12,
+    fontSize: 14,
     color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
-  syncCard: {
-    marginBottom: 18,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  syncTopRow: {
+
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 20,
     gap: 8,
   },
-  syncHint: {
-    marginTop: 8,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
-  syncRetryBanner: {
-    marginTop: 10,
-  },
-  supportRow: {
-    marginBottom: 14,
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  supportIdentity: {
-    flex: 1,
-    minHeight: 36,
-    borderRadius: 14,
+    gap: 6,
+    backgroundColor: Colors.success + '14',
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
+    borderColor: Colors.success + '33',
     paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
-  supportAvatarWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+  statusText: {
+    fontSize: 12,
+    fontFamily: Typography.family.bold,
+    color: Colors.success,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  supportAvatar: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  supportText: {
-    flex: 1,
-    color: Colors.textPrimary,
+  idText: {
     fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    flexShrink: 1,
   },
-  supportMessageBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
   summaryCard: {
     flexDirection: 'row',
     gap: 12,
@@ -354,11 +365,11 @@ const styles = StyleSheet.create({
     backgroundColor: PANEL_BG,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    marginBottom: 24,
+    marginBottom: 28,
   },
   summaryImageWrap: {
-    width: 62,
-    height: 78,
+    width: 72,
+    height: 90,
     borderRadius: 12,
     backgroundColor: PANEL_ALT_BG,
     borderWidth: 1,
@@ -376,6 +387,7 @@ const styles = StyleSheet.create({
   },
   summaryBody: {
     flex: 1,
+    justifyContent: 'center',
   },
   summaryLabel: {
     color: Colors.textMuted,
@@ -396,42 +408,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 12,
     fontFamily: Typography.family.medium,
-  },
-
-  promoCard: {
-    backgroundColor: PANEL_BG,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 40,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-  },
-  promoBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: BADGE_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginBottom: 16,
-  },
-  promoBadgeText: { fontSize: 12, fontFamily: Typography.family.bold, color: BADGE_TEXT, textTransform: 'uppercase', letterSpacing: 0.5 },
-  promoTitle: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 8, letterSpacing: -0.5 },
-  promoDesc: { fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary, lineHeight: 22, marginBottom: 24 },
-  
-  bumpBtn: {
-    backgroundColor: Colors.textPrimary,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bumpBtnText: {
-    color: Colors.background,
-    fontSize: 16,
-    fontFamily: Typography.family.bold,
   },
 
   actionRowBtn: {
@@ -461,5 +437,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
+  },
+
+  supportLink: {
+    marginTop: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+  },
+  supportLinkText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
   },
 });

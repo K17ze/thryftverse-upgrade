@@ -651,6 +651,13 @@ export default function SellScreenV2() {
       return;
     }
 
+    if (!currentUser?.id) {
+      setErrorMsg('Sign in to publish a listing.');
+      triggerShake();
+      haptics.error();
+      return;
+    }
+
     setIsPublishing(true);
     setErrorMsg(null);
 
@@ -673,7 +680,7 @@ export default function SellScreenV2() {
       // 2. Create listing
       await createListingOnApi({
         id: listingId,
-        sellerId: currentUser?.id ?? 'unknown',
+        sellerId: currentUser.id,
         title: trimmedTitle,
         description: trimmedDescription,
         priceGbp: numericPrice,
