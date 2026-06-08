@@ -29,10 +29,12 @@ import { ProductCardV2 } from '../components/ProductCardV2';
 import { SyncStatusPill } from '../components/SyncStatusPill';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { RootStackParamList } from '../navigation/types';
+import { Listing } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
+import { fetchFilteredListings } from '../services/listingsApi';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
@@ -81,7 +83,6 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, showToast, formatPrice, reducedMotionEnabled }: any) => {
   const isWishlisted = wishlist?.includes(item.id) ?? false;
   const haptic = useHaptic();
-  const sellerHandle = item.sellerId ? `@${item.sellerId.slice(0, 8)}` : 'Seller';
   const heartScale = useSharedValue(0);
   const likeBtnScale = useSharedValue(1);
 
@@ -200,6 +201,10 @@ export default function BrowseScreen() {
   const scrollY = useSharedValue(0);
   const scrollRef = React.useRef<any>(null);
 
+  const [backendListings, setBackendListings] = useState<Listing[] | null>(null);
+  const [backendLoading, setBackendLoading] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
+
   useScrollToTop(scrollRef);
 
   useEffect(() => {
@@ -212,6 +217,51 @@ export default function BrowseScreen() {
       updateBrowseFilters({ query: '' });
     }
   }, [categoryId, searchQuery, browseFilters.query, updateBrowseFilters]);
+
+  useEffect(() => {
+    const sortMap: Record<string, 'newest' | 'price_asc' | 'price_desc'> = {
+      Newest: 'newest',
+      'Price: Low to High': 'price_asc',
+      'Price: High to Low': 'price_desc',
+    };
+
+    const hasBackendFilters =
+      browseFilters.brands.length > 0 ||
+      browseFilters.sizes.length > 0 ||
+      browseFilters.condition !== 'Any' ||
+      browseFilters.sort !== 'Recommended' ||
+      (categoryId && categoryId !== 'search' && categoryId !== 'all');
+
+    if (!hasBackendFilters) {
+      setBackendListings(null);
+      return;
+    }
+
+    let cancelled = false;
+    setBackendLoading(true);
+    setBackendError(null);
+
+    fetchFilteredListings({
+      category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
+      brand: browseFilters.brands[0],
+      size: browseFilters.sizes[0],
+      condition: browseFilters.condition !== 'Any' ? browseFilters.condition : undefined,
+      sort: sortMap[browseFilters.sort] || 'newest',
+    })
+      .then((result) => {
+        if (cancelled) return;
+        setBackendListings(result.listings);
+        setBackendError(result.error ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setBackendError('Failed to load filtered results');
+      })
+      .finally(() => {
+        if (!cancelled) setBackendLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [browseFilters, categoryId]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -332,6 +382,10 @@ export default function BrowseScreen() {
     </View>
   );
 
+  const displayListings = backendListings ?? dataToRender;
+  const displayCount = displayListings.length;
+  const isBackendActive = backendListings !== null;
+
   const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
 
   return (
@@ -351,7 +405,7 @@ export default function BrowseScreen() {
       <View style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
         <View style={styles.titleMetaRow}>
-          <Text style={styles.itemCountText}>{dataToRender.length} items found</Text>
+          <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items found`}</Text>
           <SyncStatusPill tone={browseStatus.tone} label={browseStatus.label} compact />
         </View>
       </View>
@@ -419,11 +473,27 @@ export default function BrowseScreen() {
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={40} />
         
-        {showBrowseLoadingSkeleton ? (
+        {backendLoading || showBrowseLoadingSkeleton ? (
           renderBrowseLoadingState()
-        ) : dataToRender.length > 0 ? (
+        ) : backendError ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Filter unavailable"
+            subtitle={backendError}
+            ctaLabel="Clear filters"
+            onCtaPress={() =>
+              updateBrowseFilters({
+                query: '',
+                sort: 'Recommended',
+                brands: [],
+                sizes: [],
+                condition: 'Any',
+              })
+            }
+          />
+        ) : displayListings.length > 0 ? (
           <MasonryGrid
-            items={dataToRender}
+            items={displayListings}
             onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
             numColumns={2}
           />

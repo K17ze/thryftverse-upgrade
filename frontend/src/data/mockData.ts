@@ -38,6 +38,15 @@ export interface Transaction {
   description: string;
 }
 
+export interface ListingSeller {
+  id: string;
+  username: string | null;
+  avatar: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  location?: string | null;
+}
+
 export interface Listing {
   id: string;
   title: string;
@@ -53,6 +62,7 @@ export interface Listing {
   isBumped?: boolean;
   isSold?: boolean;
   sellerId: string;
+  seller?: ListingSeller | null;
   category: string;
   subcategory: string;
   description: string;

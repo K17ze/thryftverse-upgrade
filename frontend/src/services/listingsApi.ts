@@ -1,6 +1,7 @@
-import { Listing } from '../data/mockData';
+import { Listing, ListingSeller } from '../data/mockData';
 import { fetchJson } from '../lib/apiClient';
-import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+
+export { ListingSeller };
 
 interface ApiListingRow {
   id: string;
@@ -17,6 +18,7 @@ interface ApiListingRow {
   condition: string | null;
   originalPriceGbp: number | null;
   createdAt: string;
+  seller?: ListingSeller | null;
 }
 
 interface ApiListingsResponse {
@@ -41,34 +43,32 @@ function getFallbackImage(_id: string) {
   return '';
 }
 
-function mapApiListingToApp(row: ApiListingRow, fallback?: Listing): Listing {
-  const price = Number(row.priceGbp ?? fallback?.price ?? 0);
+function mapApiListingToApp(row: ApiListingRow): Listing {
+  const price = Number(row.priceGbp ?? 0);
   const protectionFee = Number((price * 0.05 + 0.7).toFixed(2));
   const resolvedImages = row.images?.length
     ? row.images
     : row.imageUrl
       ? [row.imageUrl]
-      : (fallback?.images ?? []).filter((uri) => typeof uri === 'string' && uri.length > 0).length > 0
-        ? fallback!.images
-        : [getFallbackImage(row.id)];
+      : [getFallbackImage(row.id)];
 
   return {
     id: row.id,
-    title: row.title || fallback?.title || 'Untitled listing',
-    brand: row.brand || fallback?.brand || deriveBrand(row.title),
-    size: row.size || fallback?.size || 'One size',
-    condition: (row.condition as Listing['condition']) || fallback?.condition || 'Very good',
+    title: row.title || 'Untitled listing',
+    brand: row.brand || deriveBrand(row.title),
+    size: row.size || 'One size',
+    condition: (row.condition as Listing['condition']) || 'Very good',
     price,
     priceWithProtection: Number((price + protectionFee).toFixed(2)),
     images: resolvedImages,
-    likes: fallback?.likes ?? 0,
-    isBumped: fallback?.isBumped,
+    likes: 0,
     isSold: row.status === 'sold',
-    sellerId: row.sellerId || fallback?.sellerId || 'u1',
-    category: row.category || fallback?.category || 'women',
-    subcategory: fallback?.subcategory || 'Clothing',
-    description: row.description || fallback?.description || 'No description provided.',
-    createdAt: row.createdAt || fallback?.createdAt,
+    sellerId: row.sellerId || 'u1',
+    seller: row.seller ?? null,
+    category: row.category || 'women',
+    subcategory: 'Clothing',
+    description: row.description || 'No description provided.',
+    createdAt: row.createdAt,
   };
 }
 
@@ -166,6 +166,7 @@ export interface ListingApiItem {
   shippingMethod: string | null;
   shippingPayer: string | null;
   createdAt: string;
+  seller?: ListingSeller | null;
 }
 
 export interface ListingSingleResponse {
@@ -219,4 +220,17 @@ export async function createListingImageOnApi(body: { id: string; listingId: str
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+export async function fetchRelatedListings(listingId: string): Promise<{ ok: boolean; items?: Listing[]; error?: string }> {
+  try {
+    const payload = await fetchJson<{ ok: boolean; items: ApiListingRow[] }>(`/listings/${listingId}/related`);
+    if (!payload.ok) return { ok: false, error: 'Related listings request failed' };
+    return {
+      ok: true,
+      items: payload.items.map((row) => mapApiListingToApp(row)),
+    };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
 }

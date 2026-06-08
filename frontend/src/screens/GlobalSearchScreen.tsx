@@ -28,6 +28,7 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { CachedImage } from '../components/CachedImage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
@@ -43,8 +44,7 @@ import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'GlobalSearch'>;
 
-const RECENT_SEARCHES = ['stussy hoodie', 'arcteryx alpha sv', 'carhartt detroit', 'vintage levis 501'];
-const TRENDING_TAGS = ['#y2k', '#gorpcore', 'archive', 'japanese denim', 'techwear', '#streetwear'];
+const RECENT_SEARCHES_KEY = '@thryftverse_recent_searches';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface RankedListing {
@@ -319,7 +319,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const trendingTags = useMemo(() => {
     const affinityBrands = [...affinityProfile.brandSet];
     const queryBoost = normalizedQuery ? [normalizedQuery] : [];
-    return [...new Set([...queryBoost, ...affinityBrands, ...TRENDING_TAGS])].slice(0, 8);
+    const suggestedCategories = ['women', 'men', 'shoes', 'accessories', 'vintage', 'streetwear'];
+    return [...new Set([...queryBoost, ...affinityBrands, ...suggestedCategories])].slice(0, 8);
   }, [affinityProfile.brandSet, normalizedQuery]);
 
   const activeFilterCount =
@@ -393,10 +394,35 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     };
   });
 
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(RECENT_SEARCHES_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) setRecentSearches(parsed);
+        } catch { /* noop */ }
+      }
+    });
+  }, []);
+
+  const saveRecentSearch = async (term: string) => {
+    const updated = [term, ...recentSearches.filter((s) => s !== term)].slice(0, 10);
+    setRecentSearches(updated);
+    await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+  };
+
+  const clearRecentSearches = async () => {
+    setRecentSearches([]);
+    await AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
+  };
+
   const handleSearchSubmit = () => {
     const trimmedQuery = query.trim();
     if (!trimmedQuery) return;
     updateBrowseFilters({ query: trimmedQuery });
+    saveRecentSearch(trimmedQuery);
     navigation.navigate('Browse', {
       categoryId: 'search',
       title: `Search: "${trimmedQuery}"`,
@@ -589,23 +615,29 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 </EditorialSection>
 
                 {/* Recent searches */}
-                <EditorialSection kicker="Your history" title="Recent searches">
-                  <View style={styles.recentPillsWrap}>
-                    {RECENT_SEARCHES.map((term, idx) => (
-                      <AnimatedPressable
-                        key={idx}
-                        style={styles.recentPill}
-                        activeOpacity={0.8}
-                        onPress={() => handlePillPress(term)}
-                      >
-                        <Text style={styles.recentPillText}>{term}</Text>
+                {recentSearches.length > 0 && (
+                  <EditorialSection kicker="Your history" title="Recent searches">
+                    <View style={styles.recentPillsWrap}>
+                      {recentSearches.map((term, idx) => (
+                        <AnimatedPressable
+                          key={idx}
+                          style={styles.recentPill}
+                          activeOpacity={0.8}
+                          onPress={() => handlePillPress(term)}
+                        >
+                          <Text style={styles.recentPillText}>{term}</Text>
+                        </AnimatedPressable>
+                      ))}
+                      <AnimatedPressable style={[styles.recentPill, styles.clearRecentPill]} activeOpacity={0.8} onPress={clearRecentSearches}>
+                        <Ionicons name="close-circle" size={14} color={Colors.textMuted} />
+                        <Text style={[styles.recentPillText, { color: Colors.textMuted }]}>Clear</Text>
                       </AnimatedPressable>
-                    ))}
-                  </View>
-                </EditorialSection>
+                    </View>
+                  </EditorialSection>
+                )}
 
-                {/* Top searches - colorful cards */}
-                <EditorialSection title="Top searches">
+                {/* Suggested categories */}
+                <EditorialSection title="Suggested categories">
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topSearchesScroll}>
                     {TOP_SEARCH_CARDS.map((card, idx) => (
                       <AnimatedPressable
@@ -623,8 +655,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </ScrollView>
                 </EditorialSection>
 
-                {/* Trending */}
-                <EditorialSection title="Trending now">
+                {/* Explore categories */}
+                <EditorialSection title="Explore categories">
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
                     {trendingTags.map((tag, idx) => (
                       <AnimatedPressable key={idx} style={styles.trendingPill} activeOpacity={0.8} onPress={() => handlePillPress(tag)}>
@@ -913,6 +945,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 22,
+  },
+  clearRecentPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   recentPillText: {
     fontSize: 14,

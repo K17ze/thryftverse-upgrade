@@ -388,6 +388,11 @@ export default function HomeScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshListings();
+    setPostersLoading(true);
+    fetchPostersFromApi({ status: 'published', limit: 12 })
+      .then((res) => setRealPosters(res.items))
+      .catch(() => {})
+      .finally(() => setPostersLoading(false));
     acknowledgeNewListings();
     setTimeout(() => setRefreshing(false), 380);
   };

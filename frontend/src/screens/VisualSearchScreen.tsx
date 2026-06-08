@@ -23,6 +23,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
+import { fetchJson } from '../lib/apiClient';
 import { MasonryGrid } from '../components/ProductCardV2';
 import { EmptyState } from '../components/EmptyState';
 
@@ -88,15 +89,21 @@ export default function VisualSearchScreen({ navigation }: Props) {
     setIsScanning(false);
   }, []);
 
-  const handleScan = useCallback(() => {
+  const handleScan = useCallback(async () => {
     if (!imageUri) return;
     setIsScanning(true);
     setHasScanned(false);
-    // Simulate scan duration for UX, then reveal honest state
-    setTimeout(() => {
-      setIsScanning(false);
-      setHasScanned(true);
-    }, 1800);
+    try {
+      await fetchJson('/visual-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: imageUri }),
+      });
+    } catch {
+      // 503 is expected — backend records request and returns honest unavailable
+    }
+    setIsScanning(false);
+    setHasScanned(true);
   }, [imageUri]);
 
   const handleBrowseSimilar = useCallback(() => {

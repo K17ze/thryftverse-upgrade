@@ -70,9 +70,29 @@ export default function ItemDetailScreen() {
 
   const { itemId } = route.params || {};
   const item = listings.find(l => l.id === itemId);
-  const resolvedSeller = item ? { id: item.sellerId, username: item.sellerId.slice(0, 8), avatar: '', rating: 0, reviewCount: 0, location: '' } : undefined;
+  const resolvedSeller = item
+    ? (item.seller ?? { id: item.sellerId, username: item.sellerId.slice(0, 8), avatar: '', rating: 0, reviewCount: 0, location: '' })
+    : undefined;
   const sellerItems = item ? listings.filter(l => l.sellerId === item.sellerId && l.id !== item.id) : [];
   const otherListings = listings.filter(l => l.id !== itemId).slice(0, 12);
+
+  const [relatedListings, setRelatedListings] = React.useState<Listing[]>([]);
+  const [relatedLoading, setRelatedLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!itemId) return;
+    let cancelled = false;
+    setRelatedLoading(true);
+    import('../services/listingsApi').then(({ fetchRelatedListings }) =>
+      fetchRelatedListings(itemId)
+        .then((res) => {
+          if (!cancelled && res.ok && res.items) setRelatedListings(res.items);
+        })
+        .catch(() => {})
+        .finally(() => { if (!cancelled) setRelatedLoading(false); })
+    );
+    return () => { cancelled = true; };
+  }, [itemId]);
 
   const { formatFromFiat } = useFormattedPrice();
 
@@ -298,16 +318,16 @@ export default function ItemDetailScreen() {
                 onPress={() => navigation.navigate('UserProfile', { userId: resolvedSeller.id })}
                 activeOpacity={0.86}
                 accessibilityRole="button"
-                accessibilityLabel={`Open @${resolvedSeller.username} profile`}
+                accessibilityLabel={`Open @${resolvedSeller.username || 'seller'} profile`}
               >
-                <CachedImage uri={resolvedSeller.avatar} style={styles.sellerAvatar} containerStyle={{ width: 52, height: 52, borderRadius: 26 }} contentFit="cover" />
+                <CachedImage uri={resolvedSeller.avatar || ''} style={styles.sellerAvatar} containerStyle={{ width: 52, height: 52, borderRadius: 26 }} contentFit="cover" />
                 <View style={styles.sellerInfo}>
-                  <Text style={styles.sellerName}>@{resolvedSeller.username}</Text>
+                  <Text style={styles.sellerName}>@{resolvedSeller.username || 'Seller'}</Text>
                   <View style={styles.sellerMetaRow}>
                     <Ionicons name="star" size={12} color={Colors.brand} />
-                    <Text style={styles.sellerStats}>{resolvedSeller.rating} · {resolvedSeller.reviewCount} reviews</Text>
+                    <Text style={styles.sellerStats}>{resolvedSeller.rating ?? 0} · {resolvedSeller.reviewCount ?? 0} reviews</Text>
                   </View>
-                  <Text style={styles.sellerLastSeen}>{resolvedSeller.location}</Text>
+                  <Text style={styles.sellerLastSeen}>{resolvedSeller.location || ''}</Text>
                 </View>
               </AnimatedPressable>
 
@@ -343,7 +363,7 @@ export default function ItemDetailScreen() {
           {sellerItems.length > 0 && resolvedSeller && (
             <View style={styles.sellerItemsSection}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>More from @{resolvedSeller.username}</Text>
+                <Text style={styles.sectionTitle}>More from @{resolvedSeller.username || 'Seller'}</Text>
                 <AnimatedPressable onPress={() => navigation.navigate('UserProfile', { userId: resolvedSeller.id })}>
                   <Text style={styles.sectionLink}>See all</Text>
                 </AnimatedPressable>
@@ -368,24 +388,24 @@ export default function ItemDetailScreen() {
             </View>
           )}
 
-          {/* ── You may also like ── */}
-          {otherListings.length > 0 && (
+          {/* ── Related listings ── */}
+          {relatedListings.length > 0 && (
             <View style={styles.sellerItemsSection}>
-              <Text style={styles.sectionTitle}>You may also like</Text>
+              <Text style={styles.sectionTitle}>Related items</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
-                {otherListings.map(oItem => (
+                {relatedListings.map(rItem => (
                   <AnimatedPressable
-                    key={oItem.id}
+                    key={rItem.id}
                     style={styles.sellerItemCard}
-                    onPress={() => navigation.push('ItemDetail', { itemId: oItem.id })}
+                    onPress={() => navigation.push('ItemDetail', { itemId: rItem.id })}
                   >
                     <SharedTransitionView
                       style={styles.sellerItemMediaWrap}
-                      sharedTransitionTag={`image-${oItem.id}-0`}
+                      sharedTransitionTag={`image-${rItem.id}-0`}
                     >
-                      <CachedImage uri={oItem.images?.[0] ?? ''} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 14 }} contentFit="cover" />
+                      <CachedImage uri={rItem.images?.[0] ?? ''} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 14 }} contentFit="cover" />
                     </SharedTransitionView>
-                    <Text style={styles.sellerItemPrice}>{formatFromFiat(oItem.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                    <Text style={styles.sellerItemPrice}>{formatFromFiat(rItem.price, 'GBP', { displayMode: 'fiat' })}</Text>
                   </AnimatedPressable>
                 ))}
               </ScrollView>

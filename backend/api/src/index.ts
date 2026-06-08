@@ -13125,12 +13125,15 @@ app.get('/listings', async (request) => {
     condition: string | null;
     original_price_gbp: number | string | null;
     created_at: string;
+    seller_username: string | null;
   }>(
     `
       SELECT
-        id, seller_id, title, description, price_gbp, image_url,
-        status, category, brand, size, condition, original_price_gbp, created_at
-      FROM listings
+        l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+        l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
+        u.username AS seller_username
+      FROM listings l
+      LEFT JOIN users u ON u.id = l.seller_id
       WHERE ${conditions.join(' AND ')}
       ORDER BY ${orderBy}
       LIMIT $${args.length + 1}
@@ -13173,6 +13176,16 @@ app.get('/listings', async (request) => {
       condition: row.condition,
       originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
       createdAt: row.created_at,
+      seller: row.seller_username
+        ? {
+            id: row.seller_id,
+            username: row.seller_username,
+            avatar: null,
+            rating: null,
+            reviewCount: null,
+            location: null,
+          }
+        : null,
     })),
   };
 });
@@ -13184,6 +13197,7 @@ app.get('/search/listings', async (request) => {
   });
 
   const { q, limit } = querySchema.parse(request.query);
+  const pattern = `%${q}%`;
 
   const result = await readDb.query<{
     id: string;
@@ -13194,23 +13208,32 @@ app.get('/search/listings', async (request) => {
     image_url: string | null;
     created_at: string;
     rank_score: string;
+    seller_username: string | null;
   }>(
     `
       SELECT
-        id,
-        seller_id,
-        title,
-        description,
-        price_gbp::text,
-        image_url,
-        created_at::text,
-        ts_rank_cd(search_vector, websearch_to_tsquery('simple', $1))::text AS rank_score
-      FROM listings
-      WHERE search_vector @@ websearch_to_tsquery('simple', $1)
-      ORDER BY rank_score::numeric DESC, created_at DESC
+        l.id,
+        l.seller_id,
+        l.title,
+        l.description,
+        l.price_gbp::text,
+        l.image_url,
+        l.created_at::text,
+        ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1))::text AS rank_score,
+        u.username AS seller_username
+      FROM listings l
+      LEFT JOIN users u ON u.id = l.seller_id
+      WHERE (
+        l.search_vector @@ websearch_to_tsquery('simple', $1)
+        OR l.brand ILIKE $3
+        OR l.category ILIKE $3
+        OR l.size ILIKE $3
+        OR l.condition ILIKE $3
+      )
+      ORDER BY rank_score::numeric DESC, l.created_at DESC
       LIMIT $2
     `,
-    [q, limit]
+    [q, limit, pattern]
   );
 
   if (result.rowCount && result.rowCount > 0) {
@@ -13226,6 +13249,16 @@ app.get('/search/listings', async (request) => {
         imageUrl: row.image_url,
         rank: Number(row.rank_score),
         createdAt: row.created_at,
+        seller: row.seller_username
+          ? {
+              id: row.seller_id,
+              username: row.seller_username,
+              avatar: null,
+              rating: null,
+              reviewCount: null,
+              location: null,
+            }
+          : null,
       })),
     };
   }
@@ -13238,15 +13271,20 @@ app.get('/search/listings', async (request) => {
     price_gbp: string;
     image_url: string | null;
     created_at: string;
+    seller_username: string | null;
   }>(
     `
-      SELECT id, seller_id, title, description, price_gbp::text, image_url, created_at::text
-      FROM listings
-      WHERE title ILIKE $1 OR description ILIKE $1
-      ORDER BY created_at DESC
+      SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp::text, l.image_url, l.created_at::text,
+        u.username AS seller_username
+      FROM listings l
+      LEFT JOIN users u ON u.id = l.seller_id
+      WHERE l.title ILIKE $1 OR l.description ILIKE $1
+         OR l.brand ILIKE $1 OR l.category ILIKE $1
+         OR l.size ILIKE $1 OR l.condition ILIKE $1
+      ORDER BY l.created_at DESC
       LIMIT $2
     `,
-    [`%${q}%`, limit]
+    [pattern, limit]
   );
 
   return {
@@ -13262,6 +13300,16 @@ app.get('/search/listings', async (request) => {
       imageUrl: row.image_url,
       rank: 0,
       createdAt: row.created_at,
+      seller: row.seller_username
+        ? {
+            id: row.seller_id,
+            username: row.seller_username,
+            avatar: null,
+            rating: null,
+            reviewCount: null,
+            location: null,
+          }
+        : null,
     })),
   };
 });
@@ -13946,14 +13994,17 @@ app.get('/listings/:listingId', async (request, reply) => {
     shipping_method: string | null;
     shipping_payer: string | null;
     created_at: string;
+    seller_username: string | null;
   }>(
     `
       SELECT
-        id, seller_id, title, description, price_gbp, image_url,
-        status, category, brand, size, condition,
-        original_price_gbp, shipping_method, shipping_payer, created_at
-      FROM listings
-      WHERE id = $1
+        l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+        l.status, l.category, l.brand, l.size, l.condition,
+        l.original_price_gbp, l.shipping_method, l.shipping_payer, l.created_at,
+        u.username AS seller_username
+      FROM listings l
+      LEFT JOIN users u ON u.id = l.seller_id
+      WHERE l.id = $1
       LIMIT 1
     `,
     [listingId]
@@ -13993,7 +14044,114 @@ app.get('/listings/:listingId', async (request, reply) => {
       shippingMethod: row.shipping_method,
       shippingPayer: row.shipping_payer,
       createdAt: row.created_at,
+      seller: row.seller_username
+        ? {
+            id: row.seller_id,
+            username: row.seller_username,
+            avatar: null,
+            rating: null,
+            reviewCount: null,
+            location: null,
+          }
+        : null,
     },
+  };
+});
+
+app.get('/listings/:listingId/related', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+
+  const sourceResult = await readDb.query<{ category: string | null; brand: string | null }>(
+    `SELECT category, brand FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId]
+  );
+
+  const source = sourceResult.rows[0];
+  if (!source) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  const result = await readDb.query<{
+    id: string;
+    seller_id: string;
+    title: string;
+    description: string;
+    price_gbp: number | string;
+    image_url: string | null;
+    status: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    original_price_gbp: number | string | null;
+    created_at: string;
+    seller_username: string | null;
+  }>(
+    `
+      SELECT
+        l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+        l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
+        u.username AS seller_username
+      FROM listings l
+      LEFT JOIN users u ON u.id = l.seller_id
+      WHERE l.id != $1
+        AND l.status = 'active'
+        AND (l.category = $2 OR l.brand ILIKE $3)
+      ORDER BY l.created_at DESC
+      LIMIT 8
+    `,
+    [listingId, source.category ?? '', `%${source.brand ?? ''}%`]
+  );
+
+  const listingIds = result.rows.map((r) => r.id);
+  const imagesResult = listingIds.length
+    ? await readDb.query<{
+        listing_id: string;
+        image_url: string;
+        sort_order: number;
+      }>(
+        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
+        [listingIds]
+      )
+    : { rows: [] };
+
+  const imagesByListing = new Map<string, string[]>();
+  for (const img of imagesResult.rows) {
+    const arr = imagesByListing.get(img.listing_id) ?? [];
+    arr.push(img.image_url);
+    imagesByListing.set(img.listing_id, arr);
+  }
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      sellerId: row.seller_id,
+      title: row.title,
+      description: row.description,
+      priceGbp: Number(row.price_gbp),
+      imageUrl: row.image_url,
+      images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      status: row.status,
+      category: row.category,
+      brand: row.brand,
+      size: row.size,
+      condition: row.condition,
+      originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+      createdAt: row.created_at,
+      seller: row.seller_username
+        ? {
+            id: row.seller_id,
+            username: row.seller_username,
+            avatar: null,
+            rating: null,
+            reviewCount: null,
+            location: null,
+          }
+        : null,
+    })),
   };
 });
 
@@ -14108,15 +14266,18 @@ app.get('/users/:userId/listings', async (request) => {
     condition: string | null;
     original_price_gbp: number | string | null;
     created_at: string;
+    seller_username: string | null;
   }>(
     `
       SELECT
-        id, seller_id, title, description, price_gbp, image_url,
-        status, category, brand, size, condition,
-        original_price_gbp, created_at
-      FROM listings
+        l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+        l.status, l.category, l.brand, l.size, l.condition,
+        l.original_price_gbp, l.created_at,
+        u.username AS seller_username
+      FROM listings l
+      LEFT JOIN users u ON u.id = l.seller_id
       WHERE ${conditions.join(' AND ')}
-      ORDER BY created_at DESC
+      ORDER BY l.created_at DESC
       LIMIT $${args.length + 1}
     `,
     [...args, limit]
@@ -14157,6 +14318,16 @@ app.get('/users/:userId/listings', async (request) => {
       condition: row.condition,
       originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
       createdAt: row.created_at,
+      seller: row.seller_username
+        ? {
+            id: row.seller_id,
+            username: row.seller_username,
+            avatar: null,
+            rating: null,
+            reviewCount: null,
+            location: null,
+          }
+        : null,
     })),
   };
 });

@@ -242,4 +242,60 @@ describe('VisualSearchScreen static smoke', () => {
   it('shows honest unavailable state', () => {
     expect(src).toContain('not connected yet');
   });
+
+  it('calls backend visual-search endpoint', () => {
+    expect(src).toContain("'/visual-search'");
+  });
+});
+
+describe('FilterScreen static smoke', () => {
+  const src = readSrc('screens/FilterScreen.tsx');
+
+  it('has a default export', () => {
+    expect(src).toMatch(/export default function FilterScreen/);
+  });
+
+  it('does not import ActiveTheme', () => {
+    expect(src).not.toContain('ActiveTheme');
+  });
+});
+
+describe('BrowseScreen static smoke', () => {
+  const src = readSrc('screens/BrowseScreen.tsx');
+
+  it('uses fetchFilteredListings', () => {
+    expect(src).toContain('fetchFilteredListings');
+  });
+
+  it('does not show raw seller ID slices', () => {
+    expect(src).not.toContain("sellerId.slice(0");
+  });
+});
+
+describe('ItemDetailScreen static smoke', () => {
+  const src = readSrc('screens/ItemDetailScreen.tsx');
+
+  it('uses backend seller object', () => {
+    expect(src).toContain('item.seller');
+  });
+
+  it('fetches related listings from backend', () => {
+    expect(src).toContain('fetchRelatedListings');
+  });
+});
+
+describe('GlobalSearchScreen static smoke', () => {
+  const src = readSrc('screens/GlobalSearchScreen.tsx');
+
+  it('does not contain hardcoded RECENT_SEARCHES array', () => {
+    expect(src).not.toContain("const RECENT_SEARCHES = [");
+  });
+
+  it('uses AsyncStorage for recent searches', () => {
+    expect(src).toContain('AsyncStorage');
+  });
+
+  it('does not claim fake trends', () => {
+    expect(src).not.toContain('Trending now');
+  });
 });
