@@ -12,23 +12,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Confetti } from '../components/Confetti';
 import { useToast } from '../context/ToastContext';
-import { MOCK_USERS } from '../data/mockData';
 import { CachedImage } from '../components/CachedImage';
 import { Typography } from '../theme/designTokens';
 
 export default function SuccessScreen() {
   const navigation = useNavigation<any>();
   const { show } = useToast();
-  const supportUser = MOCK_USERS[0];
 
-  const handleOpenOrderSupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'post-checkout support',
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for your order.', 'info');
-  }, [navigation, show, supportUser.id]);
+  const handleOpenSupport = React.useCallback(() => {
+    navigation.navigate('HelpSupport');
+    show('Opening support.', 'info');
+  }, [navigation, show]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -49,30 +43,27 @@ export default function SuccessScreen() {
         <View style={styles.supportRow}>
           <AnimatedPressable
             style={styles.supportIdentity}
-            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
+            onPress={handleOpenSupport}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel={`Open @${supportUser.username} profile`}
-            accessibilityHint="Shows support profile"
+            accessibilityLabel="Open help and support"
+            accessibilityHint="Shows help and support options"
           >
-            <CachedImage
-              uri={supportUser.avatar}
-              style={styles.supportAvatar}
-              containerStyle={styles.supportAvatarWrap}
-              contentFit="cover"
-            />
-            <Text style={styles.supportText}>Need help? @{supportUser.username}</Text>
+            <View style={[styles.supportAvatarWrap, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
+              <Ionicons name="help-circle-outline" size={20} color={Colors.textSecondary} />
+            </View>
+            <Text style={styles.supportText}>Need help? Visit support</Text>
           </AnimatedPressable>
 
           <AnimatedPressable
             style={styles.supportMessageBtn}
-            onPress={handleOpenOrderSupport}
+            onPress={handleOpenSupport}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Message support"
-            accessibilityHint="Opens support chat for order help"
+            accessibilityLabel="Open help and support"
+            accessibilityHint="Opens help and support"
           >
-            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+            <Ionicons name="chevron-forward" size={14} color={Colors.textPrimary} />
           </AnimatedPressable>
         </View>
       </View>
@@ -132,11 +123,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   supportAvatarWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-  },
-  supportAvatar: {
     width: 22,
     height: 22,
     borderRadius: 11,

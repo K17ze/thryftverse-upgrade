@@ -299,3 +299,125 @@ describe('GlobalSearchScreen static smoke', () => {
     expect(src).not.toContain('Trending now');
   });
 });
+
+describe('CheckoutScreen static smoke', () => {
+  const src = readSrc('screens/CheckoutScreen.tsx');
+
+  it('does not import MOCK_LISTINGS', () => {
+    expect(src).not.toContain("import { MOCK_LISTINGS");
+  });
+
+  it('does not use mockFind', () => {
+    expect(src).not.toContain('mockFind');
+  });
+
+  it('does not use picsum fallback', () => {
+    expect(src).not.toContain('picsum.photos');
+  });
+
+  it('calls createOrder backend API', () => {
+    expect(src).toContain('createOrder');
+  });
+
+  it('calls createCommercePaymentIntent backend API', () => {
+    expect(src).toContain('createCommercePaymentIntent');
+  });
+});
+
+describe('MyOrdersScreen static smoke', () => {
+  const src = readSrc('screens/MyOrdersScreen.tsx');
+
+  it('does not import MOCK_LISTINGS or MOCK_USERS', () => {
+    expect(src).not.toContain("import { MOCK_LISTINGS");
+    expect(src).not.toContain("import { MOCK_USERS");
+  });
+
+  it('calls listUserOrders backend API', () => {
+    expect(src).toContain('listUserOrders');
+  });
+
+  it('does not use mockFind', () => {
+    expect(src).not.toContain('mockFind');
+  });
+});
+
+describe('OrderDetailScreen static smoke', () => {
+  const src = readSrc('screens/OrderDetailScreen.tsx');
+
+  it('does not import MOCK_LISTINGS or MOCK_USERS', () => {
+    expect(src).not.toContain("import { MOCK_LISTINGS");
+    expect(src).not.toContain("import { MOCK_USERS");
+  });
+
+  it('calls getOrder backend API', () => {
+    expect(src).toContain('getOrder');
+  });
+
+  it('does not use picsum fallback', () => {
+    expect(src).not.toContain('picsum.photos');
+  });
+});
+
+describe('PaymentsScreen static smoke', () => {
+  const src = readSrc('screens/PaymentsScreen.tsx');
+
+  it('calls listUserPaymentMethods backend API', () => {
+    expect(src).toContain('listUserPaymentMethods');
+  });
+
+  it('does not hardcode a balance amount', () => {
+    expect(src).not.toContain('120.5');
+  });
+});
+
+describe('BalanceScreen static smoke', () => {
+  const src = readSrc('screens/BalanceScreen.tsx');
+
+  it('does not hardcode availableBalance', () => {
+    expect(src).not.toContain('useState(120.5)');
+  });
+
+  it('does not hardcode availableIzeBalance', () => {
+    expect(src).not.toContain('useState(50000)');
+  });
+
+  it('calls getIzePosition backend API', () => {
+    expect(src).toContain('getIzePosition');
+  });
+
+  it('does not contain fake transaction data', () => {
+    expect(src).not.toContain('Y2K Hoodie');
+    expect(src).not.toContain('Vintage Tee');
+  });
+});
+
+describe('WithdrawScreen static smoke', () => {
+  const src = readSrc('screens/WithdrawScreen.tsx');
+
+  it('does not hardcode availableBalance', () => {
+    expect(src).not.toContain('useState(120.5)');
+  });
+
+  it('calls getWalletSnapshot or listPayoutAccounts backend API', () => {
+    const hasSnapshot = src.includes('getWalletSnapshot');
+    const hasPayoutAccounts = src.includes('listPayoutAccounts');
+    expect(hasSnapshot || hasPayoutAccounts).toBe(true);
+  });
+});
+
+describe('BalanceHistoryScreen static smoke', () => {
+  const src = readSrc('screens/BalanceHistoryScreen.tsx');
+
+  it('does not contain fake transaction months', () => {
+    expect(src).not.toContain('March 2026');
+    expect(src).not.toContain('February 2026');
+  });
+});
+
+describe('SuccessScreen static smoke', () => {
+  const src = readSrc('screens/SuccessScreen.tsx');
+
+  it('does not import MOCK_USERS', () => {
+    expect(src).not.toContain("import { MOCK_USERS");
+  });
+});

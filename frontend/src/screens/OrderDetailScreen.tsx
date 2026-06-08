@@ -17,8 +17,6 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
-import { mockFind, mockArrayOrEmpty } from '../utils/mockGate';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
@@ -296,16 +294,33 @@ export default function OrderDetailScreen() {
     };
   }, [orderId]);
 
-  const listingPool = listings.length > 0 ? listings : mockArrayOrEmpty(MOCK_LISTINGS);
   const listingId = backendOrder?.listingId;
-  const listing =
-    (listingId
-      ? listingPool.find((item) => item.id === listingId) ?? mockFind(MOCK_LISTINGS, (item) => item.id === listingId)
-      : undefined) ??
-    listingPool[0] ??
-    MOCK_LISTINGS[0];
+  const existingListing = listingId ? listings.find((item) => item.id === listingId) : undefined;
+  const listing = existingListing ?? {
+    id: listingId ?? '',
+    title: backendOrder ? `Order item` : 'Order',
+    brand: '',
+    size: '',
+    condition: 'Very good' as const,
+    price: backendOrder?.subtotalGbp ?? 0,
+    priceWithProtection: backendOrder?.totalGbp ?? 0,
+    images: [''],
+    likes: 0,
+    sellerId: backendOrder?.sellerId ?? '',
+    category: '',
+    subcategory: '',
+    description: '',
+  };
 
-  const seller = null as any;
+  const resolvedSeller = existingListing?.seller ?? {
+    id: backendOrder?.sellerId ?? listing.sellerId ?? '',
+    username: null,
+    avatar: null,
+    rating: null,
+    reviewCount: null,
+    location: null,
+  };
+  const sellerName = resolvedSeller.username ?? `Seller ${resolvedSeller.id.slice(0, 8)}`;
 
   const subtotal = backendOrder?.subtotalGbp ?? listing.price;
   const platformCharge =
@@ -316,8 +331,8 @@ export default function OrderDetailScreen() {
   const totalPaid = backendOrder?.totalGbp ?? subtotal + platformCharge + postageFee;
 
   const orderStatus = normalizeOrderStatus(backendOrder?.status);
-  const trackingSteps = buildTrackingSteps(orderStatus, seller.username, backendOrder, parcelEvents);
-  const statusBanner = getStatusBanner(orderStatus, seller.username);
+  const trackingSteps = buildTrackingSteps(orderStatus, sellerName, backendOrder, parcelEvents);
+  const statusBanner = getStatusBanner(orderStatus, sellerName);
   const latestParcelEvent = parcelEvents.length > 0 ? parcelEvents[parcelEvents.length - 1] : null;
   const shipmentLastUpdated = formatTimelineDate(
     latestParcelEvent?.occurredAt ?? latestParcelEvent?.receivedAt ?? backendOrder?.updatedAt
@@ -353,11 +368,13 @@ export default function OrderDetailScreen() {
             style={styles.itemThumb}
             sharedTransitionTag={`image-${listing.id}-0`}
           >
-            <CachedImage uri={getListingCoverUri(listing.images, 'https://picsum.photos/seed/order-detail-fallback/300/400')} style={styles.itemThumbImage} contentFit="cover" />
+            <CachedImage uri={getListingCoverUri(listing.images, '')} style={styles.itemThumbImage} contentFit="cover" />
           </SharedTransitionView>
           <View style={styles.itemInfo}>
             <Text style={styles.itemTitle} numberOfLines={2}>{listing.title}</Text>
-            <Text style={styles.itemMeta}>{listing.size} - {listing.condition}</Text>
+            {listing.size || listing.condition ? (
+              <Text style={styles.itemMeta}>{[listing.size, listing.condition].filter(Boolean).join(' - ')}</Text>
+            ) : null}
             <Text style={styles.itemPrice}>{formatFromFiat(subtotal, 'GBP', { displayMode: 'fiat' })}</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
@@ -452,45 +469,50 @@ export default function OrderDetailScreen() {
         </Reanimated.View>
 
         {/* -- Seller Info -- */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}>
-        <Text style={styles.sectionTitle}>Seller</Text>
-        <View style={styles.sellerCard}>
-          <AnimatedPressable
-            style={styles.sellerIdentityTap}
-            onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: seller.id }); }}
-            activeOpacity={0.88}
-            accessibilityRole="button"
-            accessibilityLabel={`Open @${seller.username} profile`}
-            accessibilityHint="Shows seller profile details"
-          >
-            <CachedImage uri={seller.avatar} style={styles.sellerAvatar} contentFit="cover" />
-            <View style={styles.sellerInfo}>
-              <Text style={styles.sellerName}>@{seller.username}</Text>
-              <Text style={styles.sellerLocation} numberOfLines={1}>{seller.location}</Text>
-              <View style={styles.sellerMeta}>
-                <Ionicons name="star" size={13} color={Colors.brand} />
-                <Text style={styles.sellerRating}>{seller.rating} ({seller.reviewCount} reviews)</Text>
+        {resolvedSeller.id && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}>
+          <Text style={styles.sectionTitle}>Seller</Text>
+          <View style={styles.sellerCard}>
+            <AnimatedPressable
+              style={styles.sellerIdentityTap}
+              onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: resolvedSeller.id }); }}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel={`Open @${sellerName} profile`}
+              accessibilityHint="Shows seller profile details"
+            >
+              <CachedImage uri={resolvedSeller.avatar ?? ''} style={styles.sellerAvatar} contentFit="cover" />
+              <View style={styles.sellerInfo}>
+                <Text style={styles.sellerName}>@{sellerName}</Text>
+                {resolvedSeller.location && (
+                  <Text style={styles.sellerLocation} numberOfLines={1}>{resolvedSeller.location}</Text>
+                )}
+                {resolvedSeller.rating != null && resolvedSeller.reviewCount != null && (
+                  <View style={styles.sellerMeta}>
+                    <Ionicons name="star" size={13} color={Colors.brand} />
+                    <Text style={styles.sellerRating}>{resolvedSeller.rating} ({resolvedSeller.reviewCount} reviews)</Text>
+                  </View>
+                )}
               </View>
-              <Text style={styles.sellerLastSeen}>Last seen {seller.lastSeen}</Text>
-            </View>
-          </AnimatedPressable>
+            </AnimatedPressable>
 
-          <AppButton
-            title="Message"
-            style={styles.msgBtn}
-            titleStyle={styles.msgBtnText}
-            variant="secondary"
-            size="sm"
-            onPress={() => navigation.navigate('Chat', {
-              conversationId: `${seller.id}_${listing.id}`,
-              focusQuery: seller.username,
-              partnerUserId: seller.id,
-            })}
-            accessibilityLabel="Message seller"
-            accessibilityHint="Opens conversation with this seller"
-          />
-        </View>
-        </Reanimated.View>
+            <AppButton
+              title="Message"
+              style={styles.msgBtn}
+              titleStyle={styles.msgBtnText}
+              variant="secondary"
+              size="sm"
+              onPress={() => navigation.navigate('Chat', {
+                conversationId: `${resolvedSeller.id}_${listing.id}`,
+                focusQuery: sellerName,
+                partnerUserId: resolvedSeller.id,
+              })}
+              accessibilityLabel="Message seller"
+              accessibilityHint="Opens conversation with this seller"
+            />
+          </View>
+          </Reanimated.View>
+        )}
 
         {/* -- Transaction Info -- */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(300)}>

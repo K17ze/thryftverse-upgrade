@@ -488,3 +488,25 @@ export async function buyIze(input: {
     }),
   });
 }
+
+interface WalletSnapshotResponse {
+  ok: true;
+  keyVersion: number;
+  createdAt: string;
+  snapshot: {
+    userId: string;
+    balanceGbp: number;
+    availableGbp: number;
+    pendingGbp: number;
+    currency: string;
+    updatedAt?: string;
+  };
+  payoutSummary: {
+    currentPendingWithdrawalGbp: number;
+    cumulativeWithdrawnGbp: number;
+  };
+}
+
+export async function getWalletSnapshot(userId: string) {
+  return fetchJson<WalletSnapshotResponse>(`/wallets/${encodeURIComponent(userId)}/snapshot`);
+}

@@ -14,8 +14,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { MOCK_LISTINGS, User } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
+import { EmptyState } from '../components/EmptyState';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -153,8 +152,27 @@ export default function CheckoutScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
 
-  const item = listings.find((l) => l.id === itemId) || mockFind(MOCK_LISTINGS, (l) => l.id === itemId) || listings[0] || MOCK_LISTINGS[0];
-  const seller = null as any;
+  const item = listings.find((l) => l.id === itemId);
+
+  if (!item) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <ScreenHeader title={t('checkout.header.title')} onBack={() => navigation.goBack()} backIcon="close" />
+        <EmptyState icon="cube-outline" title="Item not found" subtitle="This listing is no longer available." ctaLabel="Go back" onCtaPress={() => navigation.goBack()} />
+      </SafeAreaView>
+    );
+  }
+
+  const resolvedSeller = item.seller ?? {
+    id: item.sellerId ?? '',
+    username: null,
+    avatar: null,
+    rating: null,
+    reviewCount: null,
+    location: null,
+  };
+  const sellerName = resolvedSeller.username ?? resolvedSeller.id.slice(0, 8);
 
   const PLATFORM_CHARGE = calculatePlatformChargeGbp(item.price);
   const POSTAGE_FEE = postageOption.priceFromGbp;
@@ -384,13 +402,14 @@ export default function CheckoutScreen() {
   };
 
   const handleMessageSeller = React.useCallback(() => {
+    if (!resolvedSeller.id || !item) return;
     navigation.navigate('Chat', {
-      conversationId: `checkout_${seller.id}_${item.id}`,
+      conversationId: `checkout_${resolvedSeller.id}_${item.id}`,
       focusQuery: item.title,
-      partnerUserId: seller.id,
+      partnerUserId: resolvedSeller.id,
     });
     show('Opening seller chat.', 'info');
-  }, [item.id, item.title, navigation, seller.id, show]);
+  }, [item, navigation, resolvedSeller.id, show]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -407,37 +426,43 @@ export default function CheckoutScreen() {
         {/* Item Summary Card */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
         <View style={styles.itemCard}>
-          <CachedImage uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/checkout-item-fallback/300/400')} style={styles.itemThumb} contentFit="cover" />
+          <CachedImage uri={getListingCoverUri(item.images, '')} style={styles.itemThumb} contentFit="cover" />
           <View style={styles.itemInfo}>
             <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
             <View style={styles.itemSellerRow}>
-              <AnimatedPressable
-                style={styles.sellerIdentityChip}
-                onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: seller.id }); }}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Open @${seller.username} profile`}
-                accessibilityHint="Shows seller profile"
-              >
-                <CachedImage
-                  uri={seller.avatar}
-                  style={styles.sellerIdentityAvatar}
-                  containerStyle={styles.sellerIdentityAvatarWrap}
-                  contentFit="cover"
-                />
-                <Text style={styles.itemSeller}>{t('checkout.header.fromSeller', { seller: seller.username })}</Text>
-              </AnimatedPressable>
+              {resolvedSeller.id ? (
+                <AnimatedPressable
+                  style={styles.sellerIdentityChip}
+                  onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: resolvedSeller.id }); }}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open @${sellerName} profile`}
+                  accessibilityHint="Shows seller profile"
+                >
+                  <CachedImage
+                    uri={resolvedSeller.avatar ?? ''}
+                    style={styles.sellerIdentityAvatar}
+                    containerStyle={styles.sellerIdentityAvatarWrap}
+                    contentFit="cover"
+                  />
+                  <Text style={styles.itemSeller}>{t('checkout.header.fromSeller', { seller: sellerName })}</Text>
+                </AnimatedPressable>
+              ) : (
+                <Text style={styles.itemSeller}>{t('checkout.header.fromSeller', { seller: sellerName })}</Text>
+              )}
 
-              <AnimatedPressable
-                style={styles.sellerMessageBtn}
-                onPress={() => { haptics.tap(); handleMessageSeller(); }}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Message seller"
-                accessibilityHint="Opens chat with this seller"
-              >
-                <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-              </AnimatedPressable>
+              {resolvedSeller.id && (
+                <AnimatedPressable
+                  style={styles.sellerMessageBtn}
+                  onPress={() => { haptics.tap(); handleMessageSeller(); }}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Message seller"
+                  accessibilityHint="Opens chat with this seller"
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+                </AnimatedPressable>
+              )}
             </View>
             <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP')}</Text>
           </View>

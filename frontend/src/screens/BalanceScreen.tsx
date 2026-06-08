@@ -22,6 +22,7 @@ import { convertDisplayToGbpAmount } from '../utils/currencyAuthoringFlows';
 import { OnezeCoinIcon } from '../components/icons/OnezeCoinIcon';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
+import { getIzePosition } from '../services/walletApi';
 import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { Type } from '../theme/designTokens';
@@ -50,8 +51,9 @@ export default function BalanceScreen({ navigation }: Props) {
   const [activeTxFilter, setActiveTxFilter] = useState<TxFilter>('all');
   const [loadFiatInput, setLoadFiatInput] = useState('');
   const [isLoadingIze, setIsLoadingIze] = useState(false);
-  const [availableBalance, setAvailableBalance] = useState(120.5); // Fiat balance
-  const [availableIzeBalance, setAvailableIzeBalance] = useState(50000); // 1ze balance in mg (50 1ze)
+  const [availableBalance, setAvailableBalance] = useState(0);
+  const [availableIzeBalance, setAvailableIzeBalance] = useState(0);
+  const [isHydratingBalance, setIsHydratingBalance] = useState(true);
   const [convertTab, setConvertTab] = useState<'load' | 'buy' | 'convert'>('load');
   const [buyFiatInput, setBuyFiatInput] = useState('');
   const [convertIzeInput, setConvertIzeInput] = useState('');
@@ -66,7 +68,7 @@ export default function BalanceScreen({ navigation }: Props) {
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
 
-  const pendingBalance = 45;
+  const pendingBalance = 0;
 
   const availableIze = availableIzeBalance / 1000; // Convert mg to 1ze units
   const pendingIze = toIze(pendingBalance, 'GBP', goldRates);
@@ -91,17 +93,7 @@ export default function BalanceScreen({ navigation }: Props) {
   const convertNetFiat = Math.max(0, convertFiatValue - convertFee);
   const canConvertIze = Number.isFinite(convertIzeValue) && convertIzeValue > 0 && convertIzeValue <= availableIze && !isProcessing;
 
-  const transactions = [
-    { id: '1', type: 'sale', amount: 45.0, title: 'Item sold: Y2K Hoodie', date: 'Today, 14:30', status: 'pending' },
-    { id: '2', type: 'purchase', amount: 25.0, title: 'Bought: Vintage Tee', date: 'Yesterday, 09:12', status: 'completed' },
-    { id: '3', type: 'withdrawal', amount: 100.0, title: 'Withdrawal to Monzo Bank', date: '12 Mar 2026', status: 'completed' },
-    { id: '4', type: 'sale', amount: 35.0, title: 'Item sold: Carhartt Cargos', date: '10 Mar 2026', status: 'completed' },
-  ] as const;
-
-  const filteredTransactions = useMemo(
-    () => (activeTxFilter === 'all' ? transactions : transactions.filter((tx) => tx.type === activeTxFilter)),
-    [activeTxFilter]
-  );
+  const filteredTransactions: { id: string; type: string; amount: number; title: string; date: string; status: string }[] = [];
   const txFilterOptions = useMemo(
     () =>
       TX_FILTERS.map((filter) => ({
@@ -111,6 +103,36 @@ export default function BalanceScreen({ navigation }: Props) {
       })),
     []
   );
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const hydrateBalance = async () => {
+      if (!currentUser?.id) {
+        setIsHydratingBalance(false);
+        return;
+      }
+      setIsHydratingBalance(true);
+      try {
+        const position = await getIzePosition(currentUser.id, currencyCode);
+        if (cancelled) return;
+        setAvailableIzeBalance(position.balances.userIze);
+        setAvailableBalance(position.balances.userFiatValue);
+      } catch {
+        if (!cancelled) {
+          setAvailableIzeBalance(0);
+          setAvailableBalance(0);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsHydratingBalance(false);
+        }
+      }
+    };
+    void hydrateBalance();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, currencyCode]);
 
   const handleConvertPress = () => {
     scrollRef.current?.scrollTo({ y: 460, animated: true });
@@ -290,6 +312,11 @@ export default function BalanceScreen({ navigation }: Props) {
             <Text style={styles.balanceAmount}>{formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}</Text>
             <Text style={styles.balanceIze}>{formatIzeAmount(availableIze)}</Text>
             <Text style={styles.balanceLabel}>available balance</Text>
+            {isHydratingBalance && (
+              <Text style={{ fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: 4 }}>
+                Syncing balance...
+              </Text>
+            )}
 
             <View style={styles.balanceActions}>
               <AnimatedPressable
@@ -339,7 +366,6 @@ export default function BalanceScreen({ navigation }: Props) {
             </View>
             <View style={styles.pendingAmountCol}>
               <Text style={styles.pendingAmount}>{formatFromFiat(pendingBalance, 'GBP', { displayMode: 'fiat' })}</Text>
-              <Text style={styles.pendingIze}>{formatIzeAmount(pendingIze)}</Text>
             </View>
           </View>
         </View>
@@ -493,10 +519,8 @@ export default function BalanceScreen({ navigation }: Props) {
         <View style={styles.historyCard}>
           <View style={styles.historyRow}>
             <View>
-              <Text style={styles.historyTitle}>Start balance</Text>
-              <Text style={styles.historyDate}>Mar 1, 2026</Text>
+              <Text style={styles.historyTitle}>Balance history</Text>
             </View>
-            <Text style={styles.historyTitle}>{formatFromFiat(0, 'GBP', { displayMode: 'fiat' })}</Text>
           </View>
           <AppButton
             title="History"
@@ -526,30 +550,14 @@ export default function BalanceScreen({ navigation }: Props) {
           optionTextActiveStyle={styles.filterChipTextActive}
         />
 
-        <View style={styles.cardGroup}>
-          {filteredTransactions.map((tx) => (
-            <View key={tx.id} style={styles.transactionRow}>
-              <View style={styles.txLeft}>
-                <View style={styles.iconCircle}>
-                  <Ionicons
-                    name={tx.type === 'sale' ? 'arrow-up' : tx.type === 'purchase' ? 'arrow-down' : 'log-out'}
-                    size={18}
-                    color={tx.type === 'sale' ? Colors.success : tx.type === 'purchase' ? Colors.danger : Colors.textPrimary}
-                  />
-                </View>
-                <View>
-                  <Text style={styles.txTitle}>{tx.title}</Text>
-                  <Text style={styles.txDate}>
-                      {tx.date} | <Text style={tx.status === 'pending' ? styles.txStatusPending : styles.txStatusCompleted}>{tx.status}</Text>
-                  </Text>
-                </View>
-              </View>
-              <Text style={[styles.txAmount, { color: tx.type === 'sale' ? Colors.success : Colors.textPrimary }]}>
-                {tx.type === 'sale' ? '+' : '-'}{formatFromFiat(tx.amount, 'GBP', { displayMode: 'fiat' })}
-              </Text>
-            </View>
-          ))}
-        </View>
+        {filteredTransactions.length === 0 && (
+          <View style={[styles.cardGroup, { paddingVertical: 24, alignItems: 'center' }]}>
+            <Ionicons name="receipt-outline" size={32} color={Colors.textMuted} style={{ marginBottom: 8 }} />
+            <Text style={{ fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary }}>
+              No recent transactions
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

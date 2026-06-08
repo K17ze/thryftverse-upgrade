@@ -15,7 +15,6 @@ import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { Listing, User } from '../data/mockData';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { EmptyState } from '../components/EmptyState';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -35,10 +34,11 @@ const { width } = Dimensions.get('window');
 
 type OrderItem = {
   id: string;
-  item: Listing;
+  title: string;
+  images: string[];
+  price: number;
   status: string;
   isDone: boolean;
-  buyer?: User;
 };
 
 type OrdersTab = 'buying' | 'selling';
@@ -84,33 +84,17 @@ export default function MyOrdersScreen() {
 
   // No mock fallback — only backend orders are shown
 
-  const backendOrderCards: OrderItem[] = React.useMemo(() => {
-    const statusLabelByState: Record<string, string> = {
-      created: 'Awaiting Payment',
-      paid: 'Paid',
-      shipped: 'Shipped',
-      delivered: 'Delivered',
-      cancelled: 'Cancelled',
-    };
+  const statusLabelByState: Record<string, string> = {
+    created: 'Awaiting Payment',
+    paid: 'Paid',
+    shipped: 'Shipped',
+    delivered: 'Delivered',
+    cancelled: 'Cancelled',
+  };
 
+  const backendOrderCards: OrderItem[] = React.useMemo(() => {
     return backendOrders.map((order) => {
       const existingListing = listingPool.find((entry) => entry.id === order.listingId);
-      const fallbackListing: Listing = existingListing ?? {
-        id: order.listingId,
-        title: order.listingTitle || 'Ordered item',
-        brand: 'Thryftverse',
-        size: 'One size',
-        condition: 'Very good',
-        price: order.totalGbp,
-        priceWithProtection: order.totalGbp,
-        images: [order.listingImageUrl ?? ''],
-        likes: 0,
-        sellerId: order.sellerId,
-        category: 'general',
-        subcategory: 'General',
-        description: order.listingTitle || 'Order item',
-      };
-
       const normalizedStatusLabel =
         order.status === 'shipped' && order.trackingNumber
           ? 'In Transit'
@@ -118,10 +102,11 @@ export default function MyOrdersScreen() {
 
       return {
         id: order.id,
-        item: fallbackListing,
+        title: existingListing?.title || order.listingTitle || 'Ordered item',
+        images: existingListing?.images || [order.listingImageUrl ?? ''],
+        price: existingListing?.price ?? order.totalGbp,
         status: normalizedStatusLabel,
         isDone: order.status === 'delivered' || order.status === 'cancelled',
-        buyer: undefined as any,
       };
     });
   }, [backendOrders, listingPool]);
@@ -278,11 +263,6 @@ export default function MyOrdersScreen() {
               const trackingSnippet = backendMeta?.trackingNumber
                 ? `${backendMeta.shippingProvider ? `${backendMeta.shippingProvider.toUpperCase()} · ` : ''}${backendMeta.trackingNumber}`
                 : null;
-              const counterparty = activeTab === 'selling'
-                ? order.buyer
-                : null;
-              const counterpartyRole = activeTab === 'selling' ? 'Buyer' : 'Seller';
-
               return (
                 <Reanimated.View
                   key={order.id}
@@ -300,63 +280,24 @@ export default function MyOrdersScreen() {
                       onPress={() => navigation.navigate('OrderDetail', { orderId: order.id })}
                       activeOpacity={0.9}
                       accessibilityRole="button"
-                      accessibilityLabel={`Open order ${order.item.title}`}
+                      accessibilityLabel={`Open order ${order.title}`}
                       accessibilityHint={`View details for this ${order.status.toLowerCase()} order`}
                     >
                       <View style={styles.orderRow}>
-                        <CachedImage uri={getListingCoverUri(order.item.images, '')} style={styles.orderThumb} contentFit="cover" />
+                        <CachedImage uri={getListingCoverUri(order.images, '')} style={styles.orderThumb} contentFit="cover" />
                         <View style={styles.orderInfo}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '15' }]}>
                               <Text style={[styles.orderStatus, { color: getStatusColor(order.status) }]}>{order.status}</Text>
                             </View>
-                            {order.buyer && <Text style={styles.buyerText}>to {order.buyer.username}</Text>}
                           </View>
-                          <Text style={styles.orderTitle} numberOfLines={1}>{order.item.title}</Text>
+                          <Text style={styles.orderTitle} numberOfLines={1}>{order.title}</Text>
                           {trackingSnippet ? <Text style={styles.orderTracking} numberOfLines={1}>Tracking: {trackingSnippet}</Text> : null}
-                          <Text style={styles.orderPrice}>{formatFromFiat(order.item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                          <Text style={styles.orderPrice}>{formatFromFiat(order.price, 'GBP', { displayMode: 'fiat' })}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
                       </View>
                     </AnimatedPressable>
-
-                    {counterparty ? (
-                      <View style={styles.counterpartyRow}>
-                        <AnimatedPressable
-                          style={styles.counterpartyIdentity}
-                          onPress={() => navigation.navigate('UserProfile', { userId: counterparty.id })}
-                          activeOpacity={0.85}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Open ${counterpartyRole.toLowerCase()} profile`}
-                          accessibilityHint={`Shows ${counterparty.username} profile details`}
-                        >
-                          <CachedImage
-                            uri={counterparty.avatar}
-                            style={styles.counterpartyAvatar}
-                            containerStyle={{ width: 24, height: 24, borderRadius: 12 }}
-                            contentFit="cover"
-                          />
-                          <Text style={styles.counterpartyText} numberOfLines={1}>
-                            {counterpartyRole}: @{counterparty.username}
-                          </Text>
-                        </AnimatedPressable>
-
-                        <AppButton
-                          title="Message"
-                          style={styles.counterpartyMessageBtn}
-                          titleStyle={styles.counterpartyMessageBtnText}
-                          variant="secondary"
-                          size="sm"
-                          onPress={() =>
-                            navigation.navigate('Chat', {
-                              conversationId: `${counterparty.id}_${order.item.id}`,
-                              focusQuery: counterparty.username,
-                              partnerUserId: counterparty.id,
-                            })}
-                          accessibilityLabel={`Message ${counterparty.username}`}
-                        />
-                      </View>
-                    ) : null}
                   </View>
                 </Reanimated.View>
               );

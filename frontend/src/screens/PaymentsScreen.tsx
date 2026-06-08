@@ -294,7 +294,7 @@ export default function PaymentsScreen({ navigation }: Props) {
               icon="wallet-outline"
               iconColor={Colors.brand}
               title="Use Thryftverse Balance"
-              subtitle={`Automatically apply ${formatFromFiat(120.5, 'GBP', { displayMode: 'fiat' })} to purchases`}
+              subtitle="Automatically apply your available balance to purchases"
               variant="toggle"
               toggleValue={useBalance}
               onToggle={(v) => updatePaymentPreferences({ useBalance: v })}

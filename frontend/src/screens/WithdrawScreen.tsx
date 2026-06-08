@@ -26,6 +26,7 @@ import {
   createPayoutRequest,
   getIzeFxQuote,
   listPayoutAccounts,
+  getWalletSnapshot,
   PayoutAccountPayload,
 } from '../services/walletApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
@@ -44,7 +45,8 @@ import {
 export default function WithdrawScreen() {
   const navigation = useNavigation<any>();
   const [amount, setAmount] = useState('');
-  const [availableBalance, setAvailableBalance] = useState(120.5);
+  const [availableBalance, setAvailableBalance] = useState(0);
+  const [isHydratingBalance, setIsHydratingBalance] = useState(true);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [payoutAccount, setPayoutAccount] = useState<PayoutAccountPayload | null>(null);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
@@ -59,6 +61,38 @@ export default function WithdrawScreen() {
     const displayAmount = getDefaultWithdrawDisplayAmount(availableBalance, currencyCode, goldRates);
     setAmount(displayAmount.toFixed(2));
   }, [availableBalance, currencyCode, goldRates]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const hydrateBalance = async () => {
+      if (!currentUser?.id) {
+        setIsHydratingBalance(false);
+        return;
+      }
+      setIsHydratingBalance(true);
+      try {
+        const snapshot = await getWalletSnapshot(currentUser.id);
+        if (!isCancelled) {
+          setAvailableBalance(snapshot.snapshot.availableGbp);
+        }
+      } catch {
+        if (!isCancelled) {
+          setAvailableBalance(0);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsHydratingBalance(false);
+        }
+      }
+    };
+
+    void hydrateBalance();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUser?.id]);
 
   useEffect(() => {
     let isCancelled = false;
