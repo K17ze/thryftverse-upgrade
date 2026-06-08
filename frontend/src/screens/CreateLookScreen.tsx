@@ -35,6 +35,8 @@ import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
+import { uploadMedia } from '../services/mediaUpload';
+import { createLookOnApi } from '../services/looksApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
@@ -85,8 +87,6 @@ export default function CreateLookScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
-  const currentUser = useStore((s) => s.currentUser);
-  const addUserLook = useStore((s) => s.addUserLook);
   const { listings } = useBackendData();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -99,6 +99,7 @@ export default function CreateLookScreen() {
   const [photoSize, setPhotoSize] = useState({ width: SCREEN_W, height: PHOTO_H });
   const [isPicking, setIsPicking] = useState(false);
   const [isPreview, setIsPreview] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; tags?: string }>({});
 
   const drawerY = useRef(new RNAnimated.Value(DRAWER_H)).current;
@@ -230,18 +231,35 @@ export default function CreateLookScreen() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) { haptic.error(); return; }
     if (!imageUri) return;
+    setIsPublishing(true);
     haptic.medium();
-    const name = currentUser?.username ?? 'Thryft user';
-    const avatar = currentUser?.avatar ?? null;
-    addUserLook({
-      title: title.trim(), coverImage: imageUri,
-      items: tags.map((t) => ({ id: t.listingId ?? t.id, label: t.label, x: t.x, y: t.y })),
-      creator: { name, avatar: avatar ?? undefined }, likes: 0, comments: 0,
-    });
-    navigation.goBack();
+    try {
+      const mediaUrl = await uploadMedia(imageUri, 'looks');
+      const lookId = `look_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      await createLookOnApi({
+        id: lookId,
+        title: title.trim(),
+        mediaUrl,
+        tags: tags.map((t) => ({
+          id: t.id,
+          listingId: t.listingId,
+          label: t.label,
+          x: t.x,
+          y: t.y,
+        })),
+        status: 'published',
+      });
+      show('Look published', 'success');
+      navigation.goBack();
+    } catch (e) {
+      show(typeof e === 'object' && e && 'message' in e ? String((e as Error).message) : 'Failed to publish look', 'error');
+      haptic.error();
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -396,7 +414,7 @@ export default function CreateLookScreen() {
           )}
 
           <Reanimated.View entering={FadeInDown.duration(300).delay(200)} style={{ marginTop: Space.lg }}>
-            <AppButton title="Post Look" variant="primary" size="lg" onPress={handleSubmit} disabled={!imageUri || !title.trim()} />
+            <AppButton title={isPublishing ? 'Publishing...' : 'Post Look'} variant="primary" size="lg" onPress={handleSubmit} disabled={!imageUri || !title.trim() || isPublishing} />
           </Reanimated.View>
 
           <View style={{ height: 120 }} />

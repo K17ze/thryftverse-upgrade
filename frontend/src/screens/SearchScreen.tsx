@@ -268,9 +268,10 @@ export default function SearchScreen() {
             <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('CreateLook')}>
               <Ionicons name="camera-outline" size={18} color={Colors.textPrimary} />
             </AnimatedPressable>
-            <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('OutfitBuilder')}>
+            {/* OutfitBuilder hidden — no backend */}
+            {/* <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('OutfitBuilder')}>
               <Ionicons name="shirt-outline" size={18} color={Colors.textPrimary} />
-            </AnimatedPressable>
+            </AnimatedPressable> */}
             <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('GlobalSearch')}>
               <Ionicons name="compass-outline" size={18} color={Colors.textPrimary} />
             </AnimatedPressable>

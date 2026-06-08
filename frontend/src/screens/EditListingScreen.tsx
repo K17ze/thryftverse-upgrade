@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type , Typography  } from '../theme/designTokens';
-import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { CURRENCIES } from '../constants/currencies';
@@ -32,6 +31,7 @@ import { SettingsCell } from '../components/SettingsCell';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
+import { fetchListingByIdFromApi, patchListingOnApi } from '../services/listingsApi';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -47,27 +47,49 @@ export default function EditListingScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { itemId } = route.params;
-  const { listings, updateListing } = useBackendData();
   const { show: showToast } = useToast();
   const { currencyCode } = useCurrencyPref();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
 
-  const listing = useMemo(() => listings.find((l) => l.id === itemId), [listings, itemId]);
+  const [listing, setListing] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Form state
-  const [title, setTitle] = useState(listing?.title ?? '');
-  const [description, setDescription] = useState(listing?.description ?? '');
-  const [price, setPrice] = useState(listing?.price ? String(listing.price) : '');
-  const [photos, setPhotos] = useState<string[]>(listing?.images ?? []);
-  const [category, setCategory] = useState(
-    listing?.category ? listing.category.charAt(0).toUpperCase() + listing.category.slice(1) : ''
-  );
-  const [brand, setBrand] = useState(listing?.brand ?? '');
-  const [size, setSize] = useState(listing?.size ?? '');
-  const [condition, setCondition] = useState(listing?.condition ?? '');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [price, setPrice] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [category, setCategory] = useState('');
+  const [brand, setBrand] = useState('');
+  const [size, setSize] = useState('');
+  const [condition, setCondition] = useState('');
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    setIsLoading(true);
+    fetchListingByIdFromApi(itemId)
+      .then((res) => {
+        if (!mounted) return;
+        if (res.ok && res.listing) {
+          const l = res.listing;
+          setListing(l);
+          setTitle(l.title ?? '');
+          setDescription(l.description ?? '');
+          setPrice(String(l.priceGbp ?? ''));
+          setPhotos(l.images ?? (l.imageUrl ? [l.imageUrl] : []));
+          setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
+          setBrand(l.brand ?? '');
+          setSize(l.size ?? '');
+          setCondition(l.condition ?? '');
+        }
+      })
+      .catch(() => { if (mounted) showToast('Could not load listing', 'error'); })
+      .finally(() => { if (mounted) setIsLoading(false); });
+    return () => { mounted = false; };
+  }, [itemId, showToast]);
 
   const hasChanges = useMemo(() => {
     if (!listing) return false;
@@ -77,13 +99,13 @@ export default function EditListingScreen() {
     return (
       title !== listing.title ||
       description !== (listing.description ?? '') ||
-      price !== String(listing.price) ||
+      price !== String(listing.priceGbp ?? '') ||
       photos.length !== (listing.images?.length ?? 0) ||
-      photos.some((p, i) => p !== listing.images?.[i]) ||
+      photos.some((p: string, i: number) => p !== listing.images?.[i]) ||
       category !== originalCategory ||
-      brand !== listing.brand ||
-      size !== listing.size ||
-      condition !== listing.condition
+      brand !== (listing.brand ?? '') ||
+      size !== (listing.size ?? '') ||
+      condition !== (listing.condition ?? '')
     );
   }, [listing, title, description, price, photos, category, brand, size, condition]);
 
@@ -133,24 +155,25 @@ export default function EditListingScreen() {
     }
     setErrorMsg('');
     setIsSaving(true);
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await new Promise((resolve) => setTimeout(resolve, 400));
 
-    updateListing(itemId, {
-      title: title.trim(),
-      description: description.trim(),
-      price: Number(sanitizeDecimalInput(price)),
-      images: photos,
-      brand,
-      size,
-      condition: condition as any,
-      category: category.toLowerCase(),
-    });
-
-    setIsSaving(false);
-    showToast('Listing updated successfully.', 'success');
-    navigation.goBack();
-  }, [validate, itemId, title, description, price, photos, brand, size, condition, category, updateListing, showToast, navigation]);
+    try {
+      await patchListingOnApi(itemId, {
+        title: title.trim(),
+        description: description.trim(),
+        priceGbp: Number(sanitizeDecimalInput(price)),
+        category: category.toLowerCase(),
+        brand: brand || undefined,
+        size: size || undefined,
+        condition: condition || undefined,
+      });
+      showToast('Listing updated successfully.', 'success');
+      navigation.goBack();
+    } catch (e) {
+      showToast('Failed to update listing. Please try again.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [validate, itemId, title, description, price, brand, size, condition, category, showToast, navigation]);
 
   const getPickerOptions = () => {
     switch (pickerMode) {

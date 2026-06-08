@@ -13064,10 +13064,68 @@ app.delete('/users/me', async (request, reply) => {
 });
 
 app.get('/listings', async () => {
-  const result = await readDb.query(
-    'SELECT id, seller_id, title, description, price_gbp, image_url, created_at FROM listings ORDER BY created_at DESC'
+  const result = await readDb.query<{
+    id: string;
+    seller_id: string;
+    title: string;
+    description: string;
+    price_gbp: number | string;
+    image_url: string | null;
+    status: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    original_price_gbp: number | string | null;
+    created_at: string;
+  }>(
+    `
+      SELECT
+        id, seller_id, title, description, price_gbp, image_url,
+        status, category, brand, size, condition, original_price_gbp, created_at
+      FROM listings
+      WHERE status = 'active'
+      ORDER BY created_at DESC
+    `
   );
-  return { items: result.rows };
+
+  const listingIds = result.rows.map((r) => r.id);
+  const imagesResult = listingIds.length
+    ? await readDb.query<{
+        listing_id: string;
+        image_url: string;
+        sort_order: number;
+      }>(
+        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
+        [listingIds]
+      )
+    : { rows: [] };
+
+  const imagesByListing = new Map<string, string[]>();
+  for (const img of imagesResult.rows) {
+    const arr = imagesByListing.get(img.listing_id) ?? [];
+    arr.push(img.image_url);
+    imagesByListing.set(img.listing_id, arr);
+  }
+
+  return {
+    items: result.rows.map((row) => ({
+      id: row.id,
+      sellerId: row.seller_id,
+      title: row.title,
+      description: row.description,
+      priceGbp: Number(row.price_gbp),
+      imageUrl: row.image_url,
+      images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      status: row.status,
+      category: row.category,
+      brand: row.brand,
+      size: row.size,
+      condition: row.condition,
+      originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+      createdAt: row.created_at,
+    })),
+  };
 });
 
 app.get('/search/listings', async (request) => {
@@ -13160,102 +13218,533 @@ app.get('/search/listings', async (request) => {
 });
 
 app.get('/feed/looks', async () => {
-  const listingRows = await db.query<{
-    listing_id: string;
-    seller_id: string;
-    seller_username: string | null;
+  const now = Date.now();
+
+  // 1. Fetch real looks from the DB first
+  const realLooksResult = await db.query<{
+    id: string;
+    creator_id: string;
     title: string;
-    image_url: string | null;
+    media_url: string;
     created_at: string;
   }>(
     `
-      SELECT
-        l.id AS listing_id,
-        l.seller_id,
-        u.username AS seller_username,
-        l.title,
-        l.image_url,
-        l.created_at::text
-      FROM listings l
-      LEFT JOIN users u ON u.id = l.seller_id
-      ORDER BY l.created_at DESC
-      LIMIT 18
+      SELECT id, creator_id, title, media_url, created_at
+      FROM looks
+      WHERE status = 'published'
+      ORDER BY created_at DESC
+      LIMIT 6
     `
   );
 
-  const rows = listingRows.rows;
-  if (!rows.length) {
-    return {
-      items: [],
-    };
-  }
-
-  const now = Date.now();
-  const looks: Array<{
-    id: string;
-    rank: number;
-    creator: {
-      id: string;
-      name: string;
-      avatar: string;
-      isVerified: boolean;
-    };
-    title: string;
-    description: string;
-    coverImage: string;
-    items: Array<{ id: string; label: string }>;
-    likes: number;
-    comments: number;
-    timeAgo: string;
-  }> = [];
-
-  for (let index = 0; index < rows.length; index += 3) {
-    const chunk = rows.slice(index, index + 3);
-    if (!chunk.length) {
-      continue;
-    }
-
-    const lead = chunk[0];
-    const createdAtMs = new Date(lead.created_at).getTime();
+  const realLooks = realLooksResult.rows.map((row, idx) => {
+    const createdAtMs = new Date(row.created_at).getTime();
     const ageHours = Math.max(1, Math.floor((now - createdAtMs) / (60 * 60 * 1000)));
     const timeAgo = ageHours < 24 ? `${ageHours}h ago` : `${Math.floor(ageHours / 24)}d ago`;
-    const coverImage =
-      chunk.find((item) => item.image_url && item.image_url.trim().length > 0)?.image_url
-      ?? `https://picsum.photos/seed/feed-${encodeURIComponent(lead.listing_id)}/800/800`;
-    const rank = looks.length + 1;
-    const likes = chunk.reduce((sum, item) => sum + Math.max(12, item.title.length * 2), 0);
-
-    looks.push({
-      id: `look_${lead.listing_id}`,
-      rank,
+    return {
+      id: row.id,
+      rank: idx + 1,
       creator: {
-        id: lead.seller_id,
-        name: lead.seller_username ?? lead.seller_id,
-        avatar: `https://picsum.photos/seed/${encodeURIComponent(lead.seller_id)}/200/200`,
-        isVerified: true,
+        id: row.creator_id,
+        name: row.creator_id,
+        avatar: ``,
+        isVerified: false,
       },
-      title: lead.title,
-      description: `Curated from ${chunk.length} recent listings.`,
-      coverImage,
-      items: chunk.map((item) => ({
-        id: item.listing_id,
-        label: item.title,
-      })),
-      likes,
-      comments: Math.max(1, Math.round(likes / 10)),
+      title: row.title,
+      description: '',
+      coverImage: row.media_url,
+      items: [] as Array<{ id: string; label: string }>,
+      likes: 0,
+      comments: 0,
       timeAgo,
-    });
+    };
+  });
 
-    if (looks.length >= 6) {
-      break;
+  // 2. Fill remaining slots with listing-based looks
+  const slotsRemaining = Math.max(0, 6 - realLooks.length);
+  if (slotsRemaining > 0) {
+    const listingRows = await db.query<{
+      listing_id: string;
+      seller_id: string;
+      seller_username: string | null;
+      title: string;
+      image_url: string | null;
+      created_at: string;
+    }>(
+      `
+        SELECT
+          l.id AS listing_id,
+          l.seller_id,
+          u.username AS seller_username,
+          l.title,
+          l.image_url,
+          l.created_at::text
+        FROM listings l
+        LEFT JOIN users u ON u.id = l.seller_id
+        ORDER BY l.created_at DESC
+        LIMIT ${slotsRemaining * 3}
+      `
+    );
+
+    const rows = listingRows.rows;
+    for (let index = 0; index < rows.length; index += 3) {
+      const chunk = rows.slice(index, index + 3);
+      if (!chunk.length) continue;
+
+      const lead = chunk[0];
+      const createdAtMs = new Date(lead.created_at).getTime();
+      const ageHours = Math.max(1, Math.floor((now - createdAtMs) / (60 * 60 * 1000)));
+      const timeAgo = ageHours < 24 ? `${ageHours}h ago` : `${Math.floor(ageHours / 24)}d ago`;
+      const coverImage =
+        chunk.find((item) => item.image_url && item.image_url.trim().length > 0)?.image_url
+        ?? `https://picsum.photos/seed/feed-${encodeURIComponent(lead.listing_id)}/800/800`;
+      const rank = realLooks.length + 1;
+      const likes = chunk.reduce((sum, item) => sum + Math.max(12, item.title.length * 2), 0);
+
+      realLooks.push({
+        id: `look_${lead.listing_id}`,
+        rank,
+        creator: {
+          id: lead.seller_id,
+          name: lead.seller_username ?? lead.seller_id,
+          avatar: ``,
+          isVerified: false,
+        },
+        title: lead.title,
+        description: `Curated from ${chunk.length} recent listings.`,
+        coverImage,
+        items: chunk.map((item) => ({
+          id: item.listing_id,
+          label: item.title,
+        })),
+        likes,
+        comments: Math.max(1, Math.round(likes / 10)),
+        timeAgo,
+      });
+
+      if (realLooks.length >= 6) break;
     }
   }
 
   return {
-    items: looks.sort((a, b) => a.rank - b.rank),
+    items: realLooks.sort((a, b) => a.rank - b.rank),
   };
 });
 
+// ── Posters API ────────────────────────────────────────────────────
+
+app.post('/posters', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120),
+    mediaUrl: z.string().url().min(3),
+    caption: z.string().max(500).default(''),
+    textOverlay: z.record(z.unknown()).optional(),
+    backgroundColor: z.string().max(30).optional(),
+    layout: z.string().max(30).default('single'),
+    status: z.enum(['draft', 'published', 'archived']).default('published'),
+    expiryHours: z.number().int().min(1).max(720).default(24),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  await db.query(
+    `
+      INSERT INTO posters (id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (id) DO UPDATE
+      SET media_url = EXCLUDED.media_url,
+          caption = EXCLUDED.caption,
+          text_overlay = EXCLUDED.text_overlay,
+          background_color = EXCLUDED.background_color,
+          layout = EXCLUDED.layout,
+          status = EXCLUDED.status,
+          expiry_hours = EXCLUDED.expiry_hours
+    `,
+    [
+      payload.id,
+      actorUserId,
+      payload.mediaUrl,
+      payload.caption,
+      payload.textOverlay ? JSON.stringify(payload.textOverlay) : null,
+      payload.backgroundColor ?? null,
+      payload.layout,
+      payload.status,
+      payload.expiryHours,
+    ]
+  );
+
+  reply.code(201);
+  return { ok: true, posterId: payload.id };
+});
+
+app.get('/posters', async (request) => {
+  const querySchema = z.object({
+    creatorId: z.string().optional(),
+    status: z.enum(['draft', 'published', 'archived']).optional(),
+    limit: z.coerce.number().int().min(1).max(120).default(40),
+  });
+  const params = querySchema.parse(request.query ?? {});
+
+  const conditions: string[] = ['1 = 1'];
+  const args: unknown[] = [];
+
+  if (params.creatorId) {
+    conditions.push(`creator_id = $${args.length + 1}`);
+    args.push(params.creatorId);
+  }
+  if (params.status) {
+    conditions.push(`status = $${args.length + 1}`);
+    args.push(params.status);
+  }
+
+  const result = await db.query<{
+    id: string;
+    creator_id: string;
+    media_url: string;
+    caption: string;
+    text_overlay: string | null;
+    background_color: string | null;
+    layout: string;
+    status: string;
+    expiry_hours: number;
+    created_at: string;
+  }>(
+    `
+      SELECT id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, created_at
+      FROM posters
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY created_at DESC
+      LIMIT $${args.length + 1}
+    `,
+    [...args, params.limit]
+  );
+
+  return {
+    items: result.rows.map((row) => ({
+      id: row.id,
+      creatorId: row.creator_id,
+      mediaUrl: row.media_url,
+      caption: row.caption,
+      textOverlay: row.text_overlay
+        ? (typeof row.text_overlay === 'string' ? JSON.parse(row.text_overlay) : row.text_overlay)
+        : null,
+      backgroundColor: row.background_color,
+      layout: row.layout,
+      status: row.status,
+      expiryHours: row.expiry_hours,
+      createdAt: row.created_at,
+    })),
+  };
+});
+
+app.get('/posters/:posterId', async (request, reply) => {
+  const paramsSchema = z.object({ posterId: z.string().min(2).max(120) });
+  const { posterId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    id: string;
+    creator_id: string;
+    media_url: string;
+    caption: string;
+    text_overlay: string | null;
+    background_color: string | null;
+    layout: string;
+    status: string;
+    expiry_hours: number;
+    created_at: string;
+  }>(
+    `
+      SELECT id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, created_at
+      FROM posters
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [posterId]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Poster not found' };
+  }
+
+  const row = result.rows[0];
+  return {
+    ok: true,
+    poster: {
+      id: row.id,
+      creatorId: row.creator_id,
+      mediaUrl: row.media_url,
+      caption: row.caption,
+      textOverlay: row.text_overlay
+        ? (typeof row.text_overlay === 'string' ? JSON.parse(row.text_overlay) : row.text_overlay)
+        : null,
+      backgroundColor: row.background_color,
+      layout: row.layout,
+      status: row.status,
+      expiryHours: row.expiry_hours,
+      createdAt: row.created_at,
+    },
+  };
+});
+
+app.delete('/posters/:posterId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ posterId: z.string().min(2).max(120) });
+  const { posterId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
+    [posterId]
+  );
+
+  const owner = ownerResult.rows[0];
+  if (!owner) {
+    reply.code(404);
+    return { ok: false, error: 'Poster not found' };
+  }
+
+  if (owner.creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(`DELETE FROM posters WHERE id = $1`, [posterId]);
+  return { ok: true };
+});
+
+
+// ── Looks API ──────────────────────────────────────────────────────
+
+app.post('/looks', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120),
+    title: z.string().min(1).max(120),
+    mediaUrl: z.string().url().min(3),
+    tags: z.array(
+      z.object({
+        id: z.string().min(2).max(120),
+        listingId: z.string().max(120).optional(),
+        label: z.string().max(200).default(''),
+        x: z.number().min(0).max(1),
+        y: z.number().min(0).max(1),
+      })
+    ).default([]),
+    status: z.enum(['draft', 'published', 'archived']).default('published'),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `
+        INSERT INTO looks (id, creator_id, title, media_url, status)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (id) DO UPDATE
+        SET title = EXCLUDED.title,
+            media_url = EXCLUDED.media_url,
+            status = EXCLUDED.status
+      `,
+      [payload.id, actorUserId, payload.title, payload.mediaUrl, payload.status]
+    );
+
+    await client.query(`DELETE FROM look_tags WHERE look_id = $1`, [payload.id]);
+
+    for (const tag of payload.tags) {
+      const tagId = `${payload.id}_${tag.id}`;
+      await client.query(
+        `
+          INSERT INTO look_tags (id, look_id, listing_id, label, x, y)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          ON CONFLICT (id) DO UPDATE
+          SET look_id = EXCLUDED.look_id,
+              listing_id = EXCLUDED.listing_id,
+              label = EXCLUDED.label,
+              x = EXCLUDED.x,
+              y = EXCLUDED.y
+        `,
+        [tagId, payload.id, tag.listingId ?? null, tag.label, tag.x, tag.y]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  reply.code(201);
+  return { ok: true, lookId: payload.id };
+});
+
+app.get('/looks', async (request) => {
+  const querySchema = z.object({
+    creatorId: z.string().optional(),
+    status: z.enum(['draft', 'published', 'archived']).optional(),
+    limit: z.coerce.number().int().min(1).max(120).default(40),
+  });
+  const params = querySchema.parse(request.query ?? {});
+
+  const conditions: string[] = ['1 = 1'];
+  const args: unknown[] = [];
+
+  if (params.creatorId) {
+    conditions.push(`l.creator_id = $${args.length + 1}`);
+    args.push(params.creatorId);
+  }
+  if (params.status) {
+    conditions.push(`l.status = $${args.length + 1}`);
+    args.push(params.status);
+  }
+
+  const looksResult = await db.query<{
+    id: string;
+    creator_id: string;
+    title: string;
+    media_url: string;
+    status: string;
+    created_at: string;
+  }>(
+    `
+      SELECT id, creator_id, title, media_url, status, created_at
+      FROM looks l
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY created_at DESC
+      LIMIT $${args.length + 1}
+    `,
+    [...args, params.limit]
+  );
+
+  const lookIds = looksResult.rows.map((r) => r.id);
+  const tagsResult = lookIds.length
+    ? await db.query<{
+        look_id: string;
+        id: string;
+        listing_id: string | null;
+        label: string;
+        x: string;
+        y: string;
+      }>(
+        `
+          SELECT look_id, id, listing_id, label, x, y
+          FROM look_tags
+          WHERE look_id = ANY($1)
+        `,
+        [lookIds]
+      )
+    : { rows: [] };
+
+  const tagsByLook = new Map<string, Array<Record<string, unknown>>>();
+  for (const t of tagsResult.rows) {
+    const arr = tagsByLook.get(t.look_id) ?? [];
+    arr.push({
+      id: t.id,
+      listingId: t.listing_id,
+      label: t.label,
+      x: Number(t.x),
+      y: Number(t.y),
+    });
+    tagsByLook.set(t.look_id, arr);
+  }
+
+  return {
+    items: looksResult.rows.map((row) => ({
+      id: row.id,
+      creatorId: row.creator_id,
+      title: row.title,
+      mediaUrl: row.media_url,
+      status: row.status,
+      createdAt: row.created_at,
+      tags: tagsByLook.get(row.id) ?? [],
+    })),
+  };
+});
+
+app.get('/looks/:lookId', async (request, reply) => {
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const lookResult = await db.query<{
+    id: string;
+    creator_id: string;
+    title: string;
+    media_url: string;
+    status: string;
+    created_at: string;
+  }>(
+    `SELECT id, creator_id, title, media_url, status, created_at FROM looks WHERE id = $1 LIMIT 1`,
+    [lookId]
+  );
+
+  if (!lookResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  const look = lookResult.rows[0];
+
+  const tagsResult = await db.query<{
+    id: string;
+    listing_id: string | null;
+    label: string;
+    x: string;
+    y: string;
+  }>(
+    `SELECT id, listing_id, label, x, y FROM look_tags WHERE look_id = $1`,
+    [lookId]
+  );
+
+  return {
+    ok: true,
+    look: {
+      id: look.id,
+      creatorId: look.creator_id,
+      title: look.title,
+      mediaUrl: look.media_url,
+      status: look.status,
+      createdAt: look.created_at,
+      tags: tagsResult.rows.map((t) => ({
+        id: t.id,
+        listingId: t.listing_id,
+        label: t.label,
+        x: Number(t.x),
+        y: Number(t.y),
+      })),
+    },
+  };
+});
+
+app.delete('/looks/:lookId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM looks WHERE id = $1 LIMIT 1`,
+    [lookId]
+  );
+
+  const owner = ownerResult.rows[0];
+  if (!owner) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  if (owner.creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(`DELETE FROM looks WHERE id = $1`, [lookId]);
+  return { ok: true };
+});
+
+
+// ── Listings API ───────────────────────────────────────────────────
 app.post('/listings', async (request, reply) => {
   const bodySchema = z.object({
     id: z.string().min(2),
@@ -13264,20 +13753,41 @@ app.post('/listings', async (request, reply) => {
     description: z.string().min(10),
     priceGbp: z.number().nonnegative(),
     imageUrl: z.string().url().optional(),
+    status: z.enum(['draft', 'active', 'paused', 'sold', 'deleted']).optional(),
+    category: z.string().min(1).optional(),
+    brand: z.string().min(1).optional(),
+    size: z.string().min(1).optional(),
+    condition: z.string().min(1).optional(),
+    originalPriceGbp: z.number().nonnegative().optional(),
+    shippingMethod: z.string().min(1).optional(),
+    shippingPayer: z.string().min(1).optional(),
   });
 
   const payload = bodySchema.parse(request.body);
 
   await db.query(
     `
-      INSERT INTO listings (id, seller_id, title, description, price_gbp, image_url)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO listings (
+        id, seller_id, title, description, price_gbp, image_url,
+        status, category, brand, size, condition,
+        original_price_gbp, shipping_method, shipping_payer
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       ON CONFLICT (id) DO UPDATE
       SET seller_id = EXCLUDED.seller_id,
           title = EXCLUDED.title,
           description = EXCLUDED.description,
           price_gbp = EXCLUDED.price_gbp,
-          image_url = EXCLUDED.image_url
+          image_url = EXCLUDED.image_url,
+          status = EXCLUDED.status,
+          category = EXCLUDED.category,
+          brand = EXCLUDED.brand,
+          size = EXCLUDED.size,
+          condition = EXCLUDED.condition,
+          original_price_gbp = EXCLUDED.original_price_gbp,
+          shipping_method = EXCLUDED.shipping_method,
+          shipping_payer = EXCLUDED.shipping_payer,
+          updated_at = NOW()
     `,
     [
       payload.id,
@@ -13286,7 +13796,276 @@ app.post('/listings', async (request, reply) => {
       payload.description,
       payload.priceGbp,
       payload.imageUrl ?? null,
+      payload.status ?? 'active',
+      payload.category ?? null,
+      payload.brand ?? null,
+      payload.size ?? null,
+      payload.condition ?? null,
+      payload.originalPriceGbp ?? null,
+      payload.shippingMethod ?? null,
+      payload.shippingPayer ?? null,
     ]
+  );
+
+  reply.code(201);
+  return { ok: true, listingId: payload.id };
+});
+
+app.get('/listings/:listingId', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+
+  const result = await readDb.query<{
+    id: string;
+    seller_id: string;
+    title: string;
+    description: string;
+    price_gbp: number | string;
+    image_url: string | null;
+    status: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    original_price_gbp: number | string | null;
+    shipping_method: string | null;
+    shipping_payer: string | null;
+    created_at: string;
+  }>(
+    `
+      SELECT
+        id, seller_id, title, description, price_gbp, image_url,
+        status, category, brand, size, condition,
+        original_price_gbp, shipping_method, shipping_payer, created_at
+      FROM listings
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [listingId]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  const row = result.rows[0];
+
+  const imagesResult = await readDb.query<{
+    image_url: string;
+    sort_order: number;
+  }>(
+    `SELECT image_url, sort_order FROM listing_images WHERE listing_id = $1 ORDER BY sort_order`,
+    [listingId]
+  );
+
+  return {
+    ok: true,
+    listing: {
+      id: row.id,
+      sellerId: row.seller_id,
+      title: row.title,
+      description: row.description,
+      priceGbp: Number(row.price_gbp),
+      imageUrl: row.image_url,
+      images: imagesResult.rows.map((r) => r.image_url),
+      status: row.status,
+      category: row.category,
+      brand: row.brand,
+      size: row.size,
+      condition: row.condition,
+      originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+      shippingMethod: row.shipping_method,
+      shippingPayer: row.shipping_payer,
+      createdAt: row.created_at,
+    },
+  };
+});
+
+app.patch('/listings/:listingId', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    title: z.string().min(3).optional(),
+    description: z.string().min(10).optional(),
+    priceGbp: z.number().nonnegative().optional(),
+    imageUrl: z.string().url().optional(),
+    status: z.enum(['draft', 'active', 'paused', 'sold', 'deleted']).optional(),
+    category: z.string().min(1).optional(),
+    brand: z.string().min(1).optional(),
+    size: z.string().min(1).optional(),
+    condition: z.string().min(1).optional(),
+    originalPriceGbp: z.number().nonnegative().optional(),
+    shippingMethod: z.string().min(1).optional(),
+    shippingPayer: z.string().min(1).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body);
+
+  const existing = await db.query('SELECT id FROM listings WHERE id = $1 LIMIT 1', [listingId]);
+  if (!existing.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  let idx = 1;
+
+  const add = (col: string, val: unknown) => {
+    if (val !== undefined) { sets.push(`${col} = $${idx++}`); values.push(val); }
+  };
+
+  add('title', payload.title);
+  add('description', payload.description);
+  add('price_gbp', payload.priceGbp);
+  add('image_url', payload.imageUrl);
+  add('status', payload.status);
+  add('category', payload.category);
+  add('brand', payload.brand);
+  add('size', payload.size);
+  add('condition', payload.condition);
+  add('original_price_gbp', payload.originalPriceGbp);
+  add('shipping_method', payload.shippingMethod);
+  add('shipping_payer', payload.shippingPayer);
+
+  if (sets.length === 0) {
+    return { ok: true, listingId };
+  }
+
+  sets.push('updated_at = NOW()');
+  values.push(listingId);
+
+  await db.query(
+    `UPDATE listings SET ${sets.join(', ')} WHERE id = $${idx}`,
+    values
+  );
+
+  return { ok: true, listingId };
+});
+
+app.delete('/listings/:listingId', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+
+  const existing = await db.query('SELECT id FROM listings WHERE id = $1 LIMIT 1', [listingId]);
+  if (!existing.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  await db.query(`DELETE FROM listing_images WHERE listing_id = $1`, [listingId]);
+  await db.query(`DELETE FROM listings WHERE id = $1`, [listingId]);
+
+  return { ok: true };
+});
+
+app.get('/users/:userId/listings', async (request) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const querySchema = z.object({
+    status: z.enum(['draft', 'active', 'paused', 'sold', 'deleted']).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(60),
+  });
+
+  const { userId } = paramsSchema.parse(request.params);
+  const { status, limit } = querySchema.parse(request.query);
+
+  const conditions: string[] = ['seller_id = $1'];
+  const args: unknown[] = [userId];
+
+  if (status) {
+    conditions.push(`status = $${args.length + 1}`);
+    args.push(status);
+  }
+
+  const result = await readDb.query<{
+    id: string;
+    seller_id: string;
+    title: string;
+    description: string;
+    price_gbp: number | string;
+    image_url: string | null;
+    status: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    original_price_gbp: number | string | null;
+    created_at: string;
+  }>(
+    `
+      SELECT
+        id, seller_id, title, description, price_gbp, image_url,
+        status, category, brand, size, condition,
+        original_price_gbp, created_at
+      FROM listings
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY created_at DESC
+      LIMIT $${args.length + 1}
+    `,
+    [...args, limit]
+  );
+
+  const listingIds = result.rows.map((r) => r.id);
+  const imagesResult = listingIds.length
+    ? await readDb.query<{
+        listing_id: string;
+        image_url: string;
+        sort_order: number;
+      }>(
+        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
+        [listingIds]
+      )
+    : { rows: [] };
+
+  const imagesByListing = new Map<string, string[]>();
+  for (const img of imagesResult.rows) {
+    const arr = imagesByListing.get(img.listing_id) ?? [];
+    arr.push(img.image_url);
+    imagesByListing.set(img.listing_id, arr);
+  }
+
+  return {
+    items: result.rows.map((row) => ({
+      id: row.id,
+      sellerId: row.seller_id,
+      title: row.title,
+      description: row.description,
+      priceGbp: Number(row.price_gbp),
+      imageUrl: row.image_url,
+      images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      status: row.status,
+      category: row.category,
+      brand: row.brand,
+      size: row.size,
+      condition: row.condition,
+      originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+      createdAt: row.created_at,
+    })),
+  };
+});
+
+app.post('/listing-images', async (request, reply) => {
+  const bodySchema = z.object({
+    id: z.string().min(2),
+    listingId: z.string().min(2),
+    imageUrl: z.string().url(),
+    sortOrder: z.number().int().min(0).default(0),
+  });
+
+  const payload = bodySchema.parse(request.body);
+
+  await db.query(
+    `
+      INSERT INTO listing_images (id, listing_id, image_url, sort_order)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (id) DO UPDATE
+      SET listing_id = EXCLUDED.listing_id,
+          image_url = EXCLUDED.image_url,
+          sort_order = EXCLUDED.sort_order
+    `,
+    [payload.id, payload.listingId, payload.imageUrl, payload.sortOrder]
   );
 
   reply.code(201);

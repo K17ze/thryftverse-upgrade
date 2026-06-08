@@ -9,6 +9,7 @@ import {
   Dimensions,
   Share,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,15 +23,13 @@ import Reanimated, {
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { MOCK_LISTINGS } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography } from '../theme/designTokens';
+import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_BG = Colors.surface;
@@ -48,22 +47,50 @@ export default function ManageListingScreen() {
   const route = useRoute<RouteT>();
   const insets = useSafeAreaInsets();
   const { formatFromFiat } = useFormattedPrice();
-  const { listings } = useBackendData();
   const { show } = useToast();
   const { itemId } = route.params;
+
+  const [item, setItem] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isSold, setIsSold] = React.useState(false);
+  const [hasRecentBoost, setHasRecentBoost] = React.useState(false);
+  const [imgIndex, setImgIndex] = React.useState(0);
+  const bumpFeeLabel = formatFromFiat(1.95, 'GBP', { displayMode: 'fiat' });
+
+  React.useEffect(() => {
+    let mounted = true;
+    setIsLoading(true);
+    fetchListingByIdFromApi(itemId)
+      .then((res) => {
+        if (!mounted) return;
+        if (res.ok && res.listing) {
+          setItem(res.listing);
+          setIsSold(res.listing.status === 'sold');
+        }
+      })
+      .catch(() => { if (mounted) show('Could not load listing', 'error'); })
+      .finally(() => { if (mounted) setIsLoading(false); });
+    return () => { mounted = false; };
+  }, [itemId, show]);
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollY.value = event.contentOffset.y;
   });
 
-  const item = listings.find((l) => l.id === itemId) || mockFind(MOCK_LISTINGS, (l) => l.id === itemId) || listings[0] || MOCK_LISTINGS[0];
-  const [isSold, setIsSold] = React.useState(Boolean(item.isSold));
-  const [hasRecentBoost, setHasRecentBoost] = React.useState(false);
-  const [imgIndex, setImgIndex] = React.useState(0);
-  const bumpFeeLabel = formatFromFiat(1.95, 'GBP', { displayMode: 'fiat' });
+  const images = React.useMemo(() => {
+    if (!item) return [];
+    return item.images?.length ? item.images : (item.imageUrl ? [item.imageUrl] : []);
+  }, [item]);
 
-  const images = React.useMemo(() => item.images?.length ? item.images : [`https://picsum.photos/seed/ml-${item.id}/800/800`], [item.images, item.id]);
+  if (isLoading || !item) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+        <ActivityIndicator size="large" color={Colors.brand} />
+      </View>
+    );
+  }
 
   const headerBgStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
@@ -78,12 +105,12 @@ export default function ManageListingScreen() {
   const handleShare = React.useCallback(async () => {
     try {
       await Share.share({
-        message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}.`,
+        message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}.`,
       });
     } catch {
       // silently fail
     }
-  }, [item.title, item.price, formatFromFiat]);
+  }, [item.title, item.priceGbp, formatFromFiat]);
 
   const handleBumpListing = () => {
     Alert.alert('Bump Listing', `Push this item to the top of the feed for ${bumpFeeLabel}?`, [
@@ -105,9 +132,14 @@ export default function ManageListingScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => {
-          show('Listing deleted.', 'success');
-          navigation.goBack();
+        onPress: async () => {
+          try {
+            await deleteListingOnApi(itemId);
+            show('Listing deleted.', 'success');
+            navigation.goBack();
+          } catch {
+            show('Failed to delete listing', 'error');
+          }
         },
       },
     ]);
@@ -120,12 +152,21 @@ export default function ManageListingScreen() {
         {
           text: 'Mark Sold',
           style: 'default',
-          onPress: () => { setIsSold(true); show('Listing marked as sold.', 'success'); },
+          onPress: async () => {
+            try {
+              await patchListingOnApi(itemId, { status: 'sold' });
+              setIsSold(true);
+              show('Listing marked as sold.', 'success');
+            } catch {
+              show('Failed to update listing', 'error');
+            }
+          },
         },
       ]);
     } else {
-      setIsSold(false);
-      show('Item relisted', 'success');
+      patchListingOnApi(itemId, { status: 'active' })
+        .then(() => { setIsSold(false); show('Item relisted', 'success'); })
+        .catch(() => show('Failed to update listing', 'error'));
     }
   };
 
@@ -163,7 +204,7 @@ export default function ManageListingScreen() {
             }}
             scrollEventThrottle={32}
           >
-            {images.map((uri, i) => (
+            {images.map((uri: string, i: number) => (
               <CachedImage key={i} uri={uri} style={styles.heroImage} contentFit="cover" />
             ))}
           </ScrollView>
@@ -176,7 +217,7 @@ export default function ManageListingScreen() {
 
           {images.length > 1 && (
             <View style={styles.dotRow}>
-              {images.map((_, i) => (
+              {images.map((_u: string, i: number) => (
                 <View key={i} style={[styles.dot, i === imgIndex && styles.dotActive]} />
               ))}
             </View>
@@ -186,20 +227,20 @@ export default function ManageListingScreen() {
         {/* Info Card */}
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.infoPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+          <Text style={styles.infoPrice}>{formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}</Text>
 
           <View style={styles.attrRow}>
             <View style={styles.attrChip}>
               <Text style={styles.attrLabel}>Brand</Text>
-              <Text style={styles.attrValue}>{item.brand}</Text>
+              <Text style={styles.attrValue}>{item.brand ?? '-'}</Text>
             </View>
             <View style={styles.attrChip}>
               <Text style={styles.attrLabel}>Size</Text>
-              <Text style={styles.attrValue}>{item.size}</Text>
+              <Text style={styles.attrValue}>{item.size ?? '-'}</Text>
             </View>
             <View style={styles.attrChip}>
               <Text style={styles.attrLabel}>Condition</Text>
-              <Text style={styles.attrValue}>{item.condition}</Text>
+              <Text style={styles.attrValue}>{item.condition ?? '-'}</Text>
             </View>
           </View>
         </View>

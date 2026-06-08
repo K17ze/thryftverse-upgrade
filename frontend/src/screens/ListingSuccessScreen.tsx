@@ -38,6 +38,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const supportUser = MOCK_USERS[0];
   const bumpFeeLabel = formatFromFiat(1.99, 'GBP', { displayMode: 'fiat' });
+  const listingId = route.params?.listingId;
   const listingTitle = route.params?.title || 'your listing';
   const listingPrice =
     typeof route.params?.price === 'number'
@@ -183,22 +184,40 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         </View>
 
         {/* Standard Actions */}
-        <AnimatedPressable 
-          style={styles.actionRowBtn} 
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('UserProfile', { userId: MY_USER.id, isMe: true })}
-        >
-          <View style={styles.actionLeft}>
-            <View style={styles.actionIconBox}>
-              <Ionicons name="eye-outline" size={20} color={Colors.textPrimary} />
+        {listingId ? (
+          <AnimatedPressable
+            style={styles.actionRowBtn}
+            activeOpacity={0.8}
+            onPress={() => navigation.push('ItemDetail', { itemId: listingId })}
+          >
+            <View style={styles.actionLeft}>
+              <View style={styles.actionIconBox}>
+                <Ionicons name="eye-outline" size={20} color={Colors.textPrimary} />
+              </View>
+              <Text style={styles.actionText}>view listing</Text>
             </View>
-            <Text style={styles.actionText}>view my listing</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-        </AnimatedPressable>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </AnimatedPressable>
+        ) : null}
 
-        <AnimatedPressable 
-          style={styles.actionRowBtn} 
+        {listingId ? (
+          <AnimatedPressable
+            style={styles.actionRowBtn}
+            activeOpacity={0.8}
+            onPress={() => navigation.push('ManageListing', { itemId: listingId })}
+          >
+            <View style={styles.actionLeft}>
+              <View style={styles.actionIconBox}>
+                <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
+              </View>
+              <Text style={styles.actionText}>manage listing</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </AnimatedPressable>
+        ) : null}
+
+        <AnimatedPressable
+          style={styles.actionRowBtn}
           activeOpacity={0.8}
           onPress={() => navigation.replace('MainTabs')}
         >

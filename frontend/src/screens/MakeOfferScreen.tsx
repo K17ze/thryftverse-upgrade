@@ -27,10 +27,8 @@ import {
 } from '../utils/currencyAuthoringFlows';
 import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { useBackendData } from '../context/BackendDataContext';
-import { MOCK_LISTINGS, User } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
 import { CachedImage } from '../components/CachedImage';
+import { fetchListingByIdFromApi } from '../services/listingsApi';
 
 type Props = StackScreenProps<RootStackParamList, 'MakeOffer'>;
 
@@ -48,26 +46,33 @@ const FOOTER_BG = Colors.background;
 
 export default function MakeOfferScreen({ navigation, route }: Props) {
   const { itemId, price, title } = route.params;
-  const { listings } = useBackendData();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const [offerPrice, setOfferPrice] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [listing, setListing] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const listing =
-    listings.find((listingItem) => listingItem.id === itemId)
-    || mockFind(MOCK_LISTINGS, (listingItem) => listingItem.id === itemId)
-    || listings[0]
-    || MOCK_LISTINGS[0];
-  const seller = null as any;
+  React.useEffect(() => {
+    let mounted = true;
+    setIsLoading(true);
+    fetchListingByIdFromApi(itemId)
+      .then((res) => {
+        if (!mounted) return;
+        if (res.ok && res.listing) setListing(res.listing);
+      })
+      .catch(() => { if (mounted) show('Could not load listing', 'error'); })
+      .finally(() => { if (mounted) setIsLoading(false); });
+    return () => { mounted = false; };
+  }, [itemId, show]);
 
   React.useEffect(() => {
     const defaultOffer = convertGbpToDisplayAmount(price, currencyCode, goldRates);
     setOfferPrice((Number.isFinite(defaultOffer) ? defaultOffer : price).toFixed(2));
   }, [currencyCode, goldRates, price]);
-  
+
   const numericOffer = parseFloat(offerPrice) || 0;
   const {
     offerGbp: numericOfferGbp,
@@ -77,9 +82,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 
   const handleOfferChange = (value: string) => {
     setOfferPrice(sanitizeDecimalInput(value));
-    if (errorMsg) {
-      setErrorMsg('');
-    }
+    if (errorMsg) setErrorMsg('');
   };
 
   const handleSendOffer = () => {
@@ -87,24 +90,22 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       setErrorMsg('Enter a valid offer amount.');
       return;
     }
-
     if (numericOfferGbp > price * 2) {
       setErrorMsg('Offer seems too high. Please review the amount.');
       return;
     }
-
-    setErrorMsg('');
-    navigation.navigate('MainTabs', { screen: 'Inbox' } as any);
+    setErrorMsg('Offers require backend offer support. Message the seller instead.');
   };
 
   const handleMessageSeller = React.useCallback(() => {
+    if (!listing?.sellerId) return;
     navigation.navigate('Chat', {
-      conversationId: `offer_${seller.id}_${itemId}`,
+      conversationId: `offer_${listing.sellerId}_${itemId}`,
       focusQuery: title,
-      partnerUserId: seller.id,
+      partnerUserId: listing.sellerId,
     });
-    show('Opening seller chat for your offer.', 'info');
-  }, [itemId, navigation, seller.id, show, title]);
+    show('Opening seller chat.', 'info');
+  }, [itemId, navigation, listing?.sellerId, show, title]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -126,23 +127,6 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             <Text style={styles.itemTitle} numberOfLines={1}>{title}</Text>
             <View style={styles.sellerActionRow}>
               <AnimatedPressable
-                style={styles.sellerIdentityChip}
-                onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Open @${seller.username} profile`}
-                accessibilityHint="Shows seller profile"
-              >
-                <CachedImage
-                  uri={seller.avatar}
-                  style={styles.sellerAvatar}
-                  containerStyle={styles.sellerAvatarWrap}
-                  contentFit="cover"
-                />
-                <Text style={styles.sellerHandle}>@{seller.username}</Text>
-              </AnimatedPressable>
-
-              <AnimatedPressable
                 style={styles.sellerMessageBtn}
                 onPress={handleMessageSeller}
                 activeOpacity={0.85}
@@ -151,6 +135,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                 accessibilityHint="Opens chat with the seller"
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+                <Text style={styles.sellerHandle}>Message seller</Text>
               </AnimatedPressable>
             </View>
             <Text style={styles.itemListingPrice}>Listed at {formatFromFiat(price, 'GBP')}</Text>

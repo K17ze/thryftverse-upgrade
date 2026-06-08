@@ -14,13 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
-import { useBackendData } from '../context/BackendDataContext';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { getFreshPosters } from '../data/posters';
+import { fetchPostersFromApi, deletePosterOnApi } from '../services/postersApi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Typography } from '../theme/designTokens';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -29,75 +27,106 @@ const TICK_MS = 50;
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
+interface ViewerPoster {
+  id: string;
+  creatorId: string;
+  mediaUrl: string;
+  caption: string;
+  createdAtMs: number;
+  remainingHours: number;
+  textOverlay?: { text: string; color: string; position: string; alignment?: string } | null;
+}
+
 export default function PosterViewerScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<any>();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
-  const markPosterSeen = useStore((state) => state.markPosterSeen);
-  const customPosters = useStore((state) => state.customPosters);
-  const removePoster = useStore((state) => state.removePoster);
-
-  const posters = React.useMemo(
-    () => getFreshPosters(Date.now(), 24, customPosters),
-    [customPosters]
-  );
-  const initialIndex = React.useMemo(() => {
-    const idx = posters.findIndex((poster) => poster.id === route.params?.posterId);
-    return idx >= 0 ? idx : 0;
-  }, [posters, route.params?.posterId]);
-
-  const [currentIndex, setCurrentIndex] = React.useState(initialIndex);
+  const [posters, setPosters] = React.useState<ViewerPoster[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [currentIndex, setCurrentIndex] = React.useState(0);
   const [progress, setProgress] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);
 
+  React.useEffect(() => {
+    let mounted = true;
+    setIsLoading(true);
+    fetchPostersFromApi({ status: 'published', limit: 40 })
+      .then((res) => {
+        if (!mounted) return;
+        const now = Date.now();
+        const mapped = res.items.map((p) => {
+          const createdAtMs = new Date(p.createdAt).getTime();
+          const expiresAtMs = createdAtMs + (p.expiryHours ?? 24) * 60 * 60 * 1000;
+          const remainingHours = Math.max(0, Math.ceil((expiresAtMs - now) / (60 * 60 * 1000)));
+          return {
+            id: p.id,
+            creatorId: p.creatorId,
+            mediaUrl: p.mediaUrl,
+            caption: p.caption,
+            createdAtMs,
+            remainingHours,
+            textOverlay: p.textOverlay ? {
+              text: String(p.textOverlay.text ?? ''),
+              color: String(p.textOverlay.color ?? '#ffffff'),
+              position: String(p.textOverlay.position ?? 'bottom'),
+              alignment: String(p.textOverlay.alignment ?? 'center'),
+            } : null,
+          };
+        }).filter((p) => p.remainingHours > 0);
+        setPosters(mapped);
+        const idx = mapped.findIndex((poster) => poster.id === route.params?.posterId);
+        setCurrentIndex(idx >= 0 ? idx : 0);
+      })
+      .catch(() => {
+        if (mounted) show('Could not load posters', 'error');
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [route.params?.posterId, show]);
+
   const activePoster = posters[currentIndex];
-  const isCustomPoster = !!activePoster && customPosters.some((poster) => poster.id === activePoster.id);
-  const isOwnedCustomPoster = isCustomPoster && !!currentUser && activePoster?.uploaderId === currentUser.id;
+  const isOwnedPoster = !!activePoster && !!currentUser && activePoster.creatorId === currentUser.id;
 
   const goNext = React.useCallback(() => {
     setProgress(0);
-
     if (currentIndex >= posters.length - 1) {
       navigation.goBack();
       return;
     }
-
-    setCurrentIndex((prev) => Math.min(prev + 1, posters.length - 1));
+    setCurrentIndex((prev: number) => Math.min(prev + 1, posters.length - 1));
   }, [currentIndex, navigation, posters.length]);
 
   const goPrevious = React.useCallback(() => {
     setProgress(0);
-    setCurrentIndex((prev) => Math.max(0, prev - 1));
+    setCurrentIndex((prev: number) => Math.max(0, prev - 1));
   }, []);
 
-  const handleDeletePoster = () => {
-    if (!activePoster || !isOwnedCustomPoster) {
-      return;
+  const handleDeletePoster = async () => {
+    if (!activePoster || !isOwnedPoster) return;
+    try {
+      await deletePosterOnApi(activePoster.id);
+      show('Poster deleted', 'info');
+      navigation.goBack();
+    } catch {
+      show('Failed to delete poster', 'error');
     }
-
-    removePoster(activePoster.id);
-    show('Poster deleted', 'info');
-    navigation.goBack();
   };
 
   React.useEffect(() => {
     if (!posters.length) {
-      navigation.goBack();
+      if (!isLoading) navigation.goBack();
       return;
     }
-
     if (currentIndex > posters.length - 1) {
       setCurrentIndex(posters.length - 1);
       setProgress(0);
       return;
     }
-
-    if (activePoster) {
-      markPosterSeen(activePoster.id);
-      setProgress(0);
-    }
-  }, [activePoster?.id, currentIndex, markPosterSeen, navigation, posters.length]);
+    setProgress(0);
+  }, [activePoster?.id, currentIndex, navigation, posters.length, isLoading]);
 
   React.useEffect(() => {
     if (!activePoster || isPaused) {
@@ -126,35 +155,24 @@ export default function PosterViewerScreen() {
 
   const minutesSincePosted = Math.max(1, Math.floor((Date.now() - activePoster.createdAtMs) / (60 * 1000)));
   const postedTimeLabel = minutesSincePosted < 60 ? `${minutesSincePosted}m` : `${Math.floor(minutesSincePosted / 60)}h`;
-  const uploaderHandle = activePoster.uploader?.username ?? activePoster.uploaderId;
-  const storyOverlayPositionStyle =
-    activePoster.storyOverlay?.position === 'top'
+  const uploaderHandle = activePoster.creatorId;
+  const textOverlayPositionStyle =
+    activePoster.textOverlay?.position === 'top'
       ? styles.storyOverlayTop
-      : activePoster.storyOverlay?.position === 'center'
+      : activePoster.textOverlay?.position === 'center'
         ? styles.storyOverlayCenter
         : styles.storyOverlayBottom;
-
-  const { listings } = useBackendData();
-  const posterImageUri =
-    activePoster.image ||
-    listings.find((listing) => listing.id === activePoster.listingId)?.images?.[0] ||
-    '';
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <SharedTransitionView
-        style={StyleSheet.absoluteFillObject}
-        sharedTransitionTag={`image-${activePoster.listingId}-0`}
-      >
-        <CachedImage uri={posterImageUri} style={styles.posterImage} contentFit="cover" priority="high" containerStyle={StyleSheet.absoluteFillObject} />
-      </SharedTransitionView>
+      <CachedImage uri={activePoster.mediaUrl} style={styles.posterImage} contentFit="cover" priority="high" containerStyle={StyleSheet.absoluteFillObject} />
       <View style={styles.backdropOverlay} />
 
       <SafeAreaView style={styles.overlay} edges={['top', 'bottom']}>
         <View style={styles.progressRow}>
-          {posters.map((poster, index) => {
+          {posters.map((poster: ViewerPoster, index: number) => {
             const fillPercent = index < currentIndex ? 100 : index === currentIndex ? progress * 100 : 0;
             return (
               <View key={poster.id} style={styles.progressTrack}>
@@ -164,7 +182,6 @@ export default function PosterViewerScreen() {
           })}
         </View>
 
-        {/* Tap layer rendered BEFORE top controls so buttons sit on top */}
         <View style={styles.tapLayer} pointerEvents="box-none">
           <Pressable
             style={styles.tapLeft}
@@ -183,47 +200,25 @@ export default function PosterViewerScreen() {
         <View style={styles.topMetaRow}>
           <AnimatedPressable
             style={styles.authorIdentityBtn}
-            onPress={() => navigation.navigate('UserProfile', { userId: activePoster.uploaderId })}
+            onPress={() => navigation.navigate('UserProfile', { userId: activePoster.creatorId })}
             activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityLabel={`Open @${uploaderHandle} profile`}
             accessibilityHint="Shows poster creator profile"
           >
-            <CachedImage
-              uri={activePoster.uploader?.avatar ?? ''}
-              style={styles.authorAvatar}
-              containerStyle={{ width: 30, height: 30, borderRadius: 15 }}
-              contentFit="cover"
-            />
+            <View style={[styles.authorAvatar, { backgroundColor: Colors.surfaceAlt }]} />
             <Text style={styles.authorName}>@{uploaderHandle}</Text>
             <Text style={styles.postedTime}>| {postedTimeLabel}</Text>
           </AnimatedPressable>
 
           <View style={styles.topControlRow}>
-            <AnimatedPressable
-              style={styles.topIconBtn}
-              onPress={() =>
-                navigation.navigate('Chat', {
-                  conversationId: `${activePoster.uploaderId}_${activePoster.listingId}`,
-                  focusQuery: uploaderHandle,
-                  partnerUserId: activePoster.uploaderId,
-                  itemId: activePoster.listingId,
-                })}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={`Message @${uploaderHandle}`}
-              accessibilityHint="Opens chat with poster creator"
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
-            </AnimatedPressable>
-
             <AnimatedPressable style={styles.closeBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
               <Ionicons name="close" size={22} color="#fff" />
             </AnimatedPressable>
           </View>
         </View>
 
-        {isOwnedCustomPoster ? (
+        {isOwnedPoster ? (
           <View style={styles.ownerActionsRow}>
             <AnimatedPressable style={styles.deleteBtn} onPress={handleDeletePoster} activeOpacity={0.85}>
               <Ionicons name="trash-outline" size={14} color="#ffd4d4" />
@@ -232,22 +227,15 @@ export default function PosterViewerScreen() {
           </View>
         ) : null}
 
-        {activePoster.storyOverlay?.text ? (
-          <View style={[styles.storyOverlayWrap, storyOverlayPositionStyle]}>
-            <Text style={[styles.storyOverlayText, { color: activePoster.storyOverlay.color }]} numberOfLines={2}>
-              {activePoster.storyOverlay.text}
+        {activePoster.textOverlay?.text ? (
+          <View style={[styles.storyOverlayWrap, textOverlayPositionStyle]}>
+            <Text style={[styles.storyOverlayText, { color: activePoster.textOverlay.color }]} numberOfLines={2}>
+              {activePoster.textOverlay.text}
             </Text>
           </View>
         ) : null}
 
         <View style={styles.bottomMetaWrap}>
-          {activePoster.sharedFrom ? (
-            <View style={styles.sharedFromPill}>
-              <Ionicons name="repeat-outline" size={14} color={Colors.brand} />
-              <Text style={styles.sharedFromText}>Shared poster for @{activePoster.sharedFrom.username}</Text>
-            </View>
-          ) : null}
-
           <Text style={styles.captionText}>{activePoster.caption}</Text>
 
           <View style={styles.bottomActionRow}>
@@ -255,15 +243,6 @@ export default function PosterViewerScreen() {
               <Ionicons name="time-outline" size={14} color="#fff" />
               <Text style={styles.expiryText}>Expires in {activePoster.remainingHours}h</Text>
             </View>
-
-            <AnimatedPressable
-              style={styles.viewListingBtn}
-              activeOpacity={0.9}
-              onPress={() => navigation.push('ItemDetail', { itemId: activePoster.listingId })}
-            >
-              <Text style={styles.viewListingText}>View Listing</Text>
-              <Ionicons name="arrow-forward" size={14} color={Colors.background} />
-            </AnimatedPressable>
           </View>
         </View>
       </SafeAreaView>

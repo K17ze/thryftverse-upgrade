@@ -95,6 +95,7 @@ export type RootStackParamList = {
     | undefined;
   ListingSuccess:
     | {
+        listingId?: string;
         title?: string;
         price?: number;
         categoryId?: string;

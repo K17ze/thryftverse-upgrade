@@ -44,10 +44,13 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { CURRENCIES } from '../constants/currencies';
 import { useStore } from '../store/useStore';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
+import { useToast } from '../context/ToastContext';
 import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAuthoringFlows';
 import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { filterImageUris } from '../utils/media';
 import { haptics } from '../utils/haptics';
+import { uploadMedia } from '../services/mediaUpload';
+import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 
 const CARD_PADDING = 20;
 const SECTION_GAP = 28;
@@ -559,7 +562,7 @@ export default function SellScreenV2() {
     setShareCountInput(String(Math.min(20, parsed)));
   }, []);
 
-  /* ── publish (mode-specific validation + original business logic) ── */
+  /* ── publish (mode-specific validation + real backend) ── */
   const handlePublish = useCallback(async () => {
     const trimmedTitle = title.trim();
     const trimmedDescription = desc.trim();
@@ -641,25 +644,78 @@ export default function SellScreenV2() {
       return;
     }
 
+    if (listingMode === 'auction') {
+      setErrorMsg('Auction publishing requires backend auction support. Use Sell Now for now.');
+      triggerShake();
+      haptics.error();
+      return;
+    }
+
     setIsPublishing(true);
     setErrorMsg(null);
 
     try {
-      await new Promise((r) => setTimeout(r, 1200));
-      clearSellDraft();
-      navigation.replace('ListingSuccess', {
+      // 1. Upload all media
+      const uploadedUrls: string[] = [];
+      for (let i = 0; i < photos.length; i++) {
+        const uri = photos[i];
+        if (uri.startsWith('http')) {
+          uploadedUrls.push(uri);
+        } else {
+          const url = await uploadMedia(uri, 'listings');
+          uploadedUrls.push(url);
+        }
+      }
+
+      const coverImage = uploadedUrls[0] ?? '';
+      const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+      // 2. Create listing
+      await createListingOnApi({
+        id: listingId,
+        sellerId: currentUser?.id ?? 'unknown',
         title: trimmedTitle,
-        price: listingMode === 'auction' ? Number(sanitizeDecimalInput(startingBid)) : numericPrice,
+        description: trimmedDescription,
+        priceGbp: numericPrice,
+        imageUrl: coverImage,
+        status: 'active',
+        category,
+        brand: brand || undefined,
+        size,
+        condition,
+        originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
+        shippingMethod: shippingMethod || undefined,
+        shippingPayer: shippingPayer || undefined,
+      });
+
+      // 3. Create listing_images for all photos
+      for (let i = 0; i < uploadedUrls.length; i++) {
+        await createListingImageOnApi({
+          id: `${listingId}_img_${i}`,
+          listingId,
+          imageUrl: uploadedUrls[i],
+          sortOrder: i,
+        });
+      }
+
+      clearSellDraft();
+      haptics.success();
+      navigation.replace('ListingSuccess', {
+        listingId,
+        title: trimmedTitle,
+        price: numericPrice,
         categoryId: category,
-        photoUri: photos[0],
+        photoUri: coverImage,
       });
     } catch (e: unknown) {
-      setErrorMsg(typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Something went wrong');
+      const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Please try again.';
+      setErrorMsg(msg);
       triggerShake();
+      haptics.error();
     } finally {
       setIsPublishing(false);
     }
-  }, [listingMode, photos, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, triggerShake, clearSellDraft, navigation]);
+  }, [listingMode, photos, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, triggerShake, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer]);
 
   /* ── picker helpers ── */
   const getPickerOptions = useCallback(() => {
