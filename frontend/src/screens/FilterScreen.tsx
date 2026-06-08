@@ -205,7 +205,7 @@ export default function FilterScreen() {
     [isSyncing, lastError, source],
   );
 
-  const showFilterLoadingState = isSyncing && source === 'mock' && listings.length === 0 && !lastError;
+  const showFilterLoadingState = isSyncing && listings.length === 0 && !lastError;
 
   const renderLoadingState = () => (
     <View style={styles.loadingStateWrap}>

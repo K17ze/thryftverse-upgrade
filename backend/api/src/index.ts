@@ -13063,7 +13063,54 @@ app.delete('/users/me', async (request, reply) => {
   };
 });
 
-app.get('/listings', async () => {
+app.get('/listings', async (request) => {
+  const querySchema = z.object({
+    category: z.string().optional(),
+    brand: z.string().optional(),
+    size: z.string().optional(),
+    condition: z.string().optional(),
+    minPrice: z.coerce.number().nonnegative().optional(),
+    maxPrice: z.coerce.number().nonnegative().optional(),
+    sort: z.enum(['newest', 'price_asc', 'price_desc']).optional().default('newest'),
+    limit: z.coerce.number().int().min(1).max(200).optional().default(100),
+  });
+  const params = querySchema.parse(request.query ?? {});
+
+  const conditions: string[] = ["status = 'active'"];
+  const args: unknown[] = [];
+
+  if (params.category) {
+    conditions.push(`category = $${args.length + 1}`);
+    args.push(params.category);
+  }
+  if (params.brand) {
+    conditions.push(`brand ILIKE $${args.length + 1}`);
+    args.push(`%${params.brand}%`);
+  }
+  if (params.size) {
+    conditions.push(`size ILIKE $${args.length + 1}`);
+    args.push(`%${params.size}%`);
+  }
+  if (params.condition) {
+    conditions.push(`condition ILIKE $${args.length + 1}`);
+    args.push(`%${params.condition}%`);
+  }
+  if (params.minPrice !== undefined) {
+    conditions.push(`price_gbp >= $${args.length + 1}`);
+    args.push(params.minPrice);
+  }
+  if (params.maxPrice !== undefined) {
+    conditions.push(`price_gbp <= $${args.length + 1}`);
+    args.push(params.maxPrice);
+  }
+
+  const orderBy =
+    params.sort === 'price_asc'
+      ? 'price_gbp ASC'
+      : params.sort === 'price_desc'
+        ? 'price_gbp DESC'
+        : 'created_at DESC';
+
   const result = await readDb.query<{
     id: string;
     seller_id: string;
@@ -13084,9 +13131,11 @@ app.get('/listings', async () => {
         id, seller_id, title, description, price_gbp, image_url,
         status, category, brand, size, condition, original_price_gbp, created_at
       FROM listings
-      WHERE status = 'active'
-      ORDER BY created_at DESC
-    `
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY ${orderBy}
+      LIMIT $${args.length + 1}
+    `,
+    [...args, params.limit]
   );
 
   const listingIds = result.rows.map((r) => r.id);
@@ -13220,8 +13269,108 @@ app.get('/search/listings', async (request) => {
 app.get('/feed/looks', async () => {
   const now = Date.now();
 
-  // 1. Fetch real looks from the DB first
   const realLooksResult = await db.query<{
+    id: string;
+    creator_id: string;
+    title: string;
+    media_url: string;
+    created_at: string;
+  }>(
+    `
+      SELECT id, creator_id, title, media_url, created_at
+      FROM looks
+      WHERE status = 'published'
+      ORDER BY created_at DESC
+      LIMIT 12
+    `
+  );
+
+  const realLooks = realLooksResult.rows.map((row, idx) => {
+    const createdAtMs = new Date(row.created_at).getTime();
+    const ageHours = Math.max(1, Math.floor((now - createdAtMs) / (60 * 60 * 1000)));
+    const timeAgo = ageHours < 24 ? `${ageHours}h ago` : `${Math.floor(ageHours / 24)}d ago`;
+    return {
+      id: row.id,
+      rank: idx + 1,
+      creator: {
+        id: row.creator_id,
+        name: row.creator_id,
+        avatar: '',
+        isVerified: false,
+      },
+      title: row.title,
+      description: '',
+      coverImage: row.media_url,
+      items: [] as Array<{ id: string; label: string }>,
+      likes: 0,
+      comments: 0,
+      timeAgo,
+    };
+  });
+
+  return {
+    items: realLooks.sort((a, b) => a.rank - b.rank),
+  };
+});
+
+app.get('/feed/home', async () => {
+  const listingsResult = await readDb.query<{
+    id: string;
+    seller_id: string;
+    title: string;
+    description: string;
+    price_gbp: number | string;
+    image_url: string | null;
+    status: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    original_price_gbp: number | string | null;
+    created_at: string;
+  }>(
+    `
+      SELECT id, seller_id, title, description, price_gbp, image_url,
+        status, category, brand, size, condition, original_price_gbp, created_at
+      FROM listings
+      WHERE status = 'active'
+      ORDER BY created_at DESC
+      LIMIT 20
+    `
+  );
+
+  const listingIds = listingsResult.rows.map((r) => r.id);
+  const imagesResult = listingIds.length
+    ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
+        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
+        [listingIds]
+      )
+    : { rows: [] };
+
+  const imagesByListing = new Map<string, string[]>();
+  for (const img of imagesResult.rows) {
+    const arr = imagesByListing.get(img.listing_id) ?? [];
+    arr.push(img.image_url);
+    imagesByListing.set(img.listing_id, arr);
+  }
+
+  const postersResult = await readDb.query<{
+    id: string;
+    creator_id: string;
+    media_url: string;
+    caption: string;
+    created_at: string;
+  }>(
+    `
+      SELECT id, creator_id, media_url, caption, created_at
+      FROM posters
+      WHERE status = 'published'
+      ORDER BY created_at DESC
+      LIMIT 6
+    `
+  );
+
+  const looksResult = await readDb.query<{
     id: string;
     creator_id: string;
     title: string;
@@ -13237,97 +13386,63 @@ app.get('/feed/looks', async () => {
     `
   );
 
-  const realLooks = realLooksResult.rows.map((row, idx) => {
-    const createdAtMs = new Date(row.created_at).getTime();
-    const ageHours = Math.max(1, Math.floor((now - createdAtMs) / (60 * 60 * 1000)));
-    const timeAgo = ageHours < 24 ? `${ageHours}h ago` : `${Math.floor(ageHours / 24)}d ago`;
-    return {
-      id: row.id,
-      rank: idx + 1,
-      creator: {
-        id: row.creator_id,
-        name: row.creator_id,
-        avatar: ``,
-        isVerified: false,
-      },
-      title: row.title,
-      description: '',
-      coverImage: row.media_url,
-      items: [] as Array<{ id: string; label: string }>,
-      likes: 0,
-      comments: 0,
-      timeAgo,
-    };
-  });
-
-  // 2. Fill remaining slots with listing-based looks
-  const slotsRemaining = Math.max(0, 6 - realLooks.length);
-  if (slotsRemaining > 0) {
-    const listingRows = await db.query<{
-      listing_id: string;
-      seller_id: string;
-      seller_username: string | null;
-      title: string;
-      image_url: string | null;
-      created_at: string;
-    }>(
-      `
-        SELECT
-          l.id AS listing_id,
-          l.seller_id,
-          u.username AS seller_username,
-          l.title,
-          l.image_url,
-          l.created_at::text
-        FROM listings l
-        LEFT JOIN users u ON u.id = l.seller_id
-        ORDER BY l.created_at DESC
-        LIMIT ${slotsRemaining * 3}
-      `
-    );
-
-    const rows = listingRows.rows;
-    for (let index = 0; index < rows.length; index += 3) {
-      const chunk = rows.slice(index, index + 3);
-      if (!chunk.length) continue;
-
-      const lead = chunk[0];
-      const createdAtMs = new Date(lead.created_at).getTime();
-      const ageHours = Math.max(1, Math.floor((now - createdAtMs) / (60 * 60 * 1000)));
-      const timeAgo = ageHours < 24 ? `${ageHours}h ago` : `${Math.floor(ageHours / 24)}d ago`;
-      const coverImage =
-        chunk.find((item) => item.image_url && item.image_url.trim().length > 0)?.image_url
-        ?? `https://picsum.photos/seed/feed-${encodeURIComponent(lead.listing_id)}/800/800`;
-      const rank = realLooks.length + 1;
-      const likes = chunk.reduce((sum, item) => sum + Math.max(12, item.title.length * 2), 0);
-
-      realLooks.push({
-        id: `look_${lead.listing_id}`,
-        rank,
-        creator: {
-          id: lead.seller_id,
-          name: lead.seller_username ?? lead.seller_id,
-          avatar: ``,
-          isVerified: false,
-        },
-        title: lead.title,
-        description: `Curated from ${chunk.length} recent listings.`,
-        coverImage,
-        items: chunk.map((item) => ({
-          id: item.listing_id,
-          label: item.title,
-        })),
-        likes,
-        comments: Math.max(1, Math.round(likes / 10)),
-        timeAgo,
-      });
-
-      if (realLooks.length >= 6) break;
-    }
-  }
-
   return {
-    items: realLooks.sort((a, b) => a.rank - b.rank),
+    listings: listingsResult.rows.map((row) => ({
+      id: row.id,
+      sellerId: row.seller_id,
+      title: row.title,
+      description: row.description,
+      priceGbp: Number(row.price_gbp),
+      imageUrl: row.image_url,
+      images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      status: row.status,
+      category: row.category,
+      brand: row.brand,
+      size: row.size,
+      condition: row.condition,
+      originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+      createdAt: row.created_at,
+    })),
+    posters: postersResult.rows.map((row) => ({
+      id: row.id,
+      creatorId: row.creator_id,
+      mediaUrl: row.media_url,
+      caption: row.caption,
+      createdAt: row.created_at,
+    })),
+    looks: looksResult.rows.map((row) => ({
+      id: row.id,
+      creatorId: row.creator_id,
+      title: row.title,
+      mediaUrl: row.media_url,
+      createdAt: row.created_at,
+    })),
+  };
+});
+
+app.post('/visual-search', async (request, reply) => {
+  const bodySchema = z.object({
+    imageUrl: z.string().url(),
+    imageBase64: z.string().optional(),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  // Honest placeholder: store the request for future ML integration
+  await db.query(
+    `INSERT INTO visual_search_requests (id, image_url, created_at) VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING`,
+    [`vs_${Date.now()}`, payload.imageUrl]
+  );
+
+  reply.code(503);
+  return {
+    ok: false,
+    runtimeAvailable: false,
+    reason: 'Visual matching model is not deployed yet.',
+    fallback: {
+      textSearch: true,
+      browseCategories: true,
+    },
+    storedRequestId: `vs_${Date.now()}`,
   };
 });
 

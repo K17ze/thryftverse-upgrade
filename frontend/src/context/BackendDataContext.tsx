@@ -1,12 +1,11 @@
 import React from 'react';
-import { Listing, MOCK_LISTINGS } from '../data/mockData';
+import { Listing } from '../data/mockData';
 import { getApiBaseUrl } from '../lib/apiClient';
-import { fetchListingsFromApiWithFallback } from '../services/listingsApi';
-import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+import { fetchListingsFromApi } from '../services/listingsApi';
 
 interface BackendDataContextValue {
   listings: Listing[];
-  source: 'api' | 'mock';
+  source: 'api';
   apiBaseUrl: string;
   isSyncing: boolean;
   lastError: string | null;
@@ -18,17 +17,16 @@ interface BackendDataContextValue {
 const BackendDataContext = React.createContext<BackendDataContextValue | undefined>(undefined);
 
 export function BackendDataProvider({ children }: { children: React.ReactNode }) {
-  const [listings, setListings] = React.useState<Listing[]>(ENABLE_RUNTIME_MOCKS ? MOCK_LISTINGS : []);
-  const [source, setSource] = React.useState<'api' | 'mock'>(ENABLE_RUNTIME_MOCKS ? 'mock' : 'api');
+  const [listings, setListings] = React.useState<Listing[]>([]);
+  const [source] = React.useState<'api'>('api');
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [lastError, setLastError] = React.useState<string | null>(null);
   const apiBaseUrl = React.useMemo(() => getApiBaseUrl(), []);
 
   const refreshListings = React.useCallback(async () => {
     setIsSyncing(true);
-    const result = await fetchListingsFromApiWithFallback(ENABLE_RUNTIME_MOCKS ? MOCK_LISTINGS : []);
+    const result = await fetchListingsFromApi();
     setListings(result.listings);
-    setSource(result.source);
     setLastError(result.error ?? null);
     setIsSyncing(false);
   }, []);

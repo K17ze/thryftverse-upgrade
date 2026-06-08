@@ -32,7 +32,7 @@ import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
-import { getFreshPosters } from '../data/posters';
+import { fetchPostersFromApi } from '../services/postersApi';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -139,9 +139,9 @@ const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
 
 const STORY_STATUS_GRADIENT: Record<StoryStatus, [string, string]> = {
   'new-listing': [Colors.brand, Colors.brandPressed],
-  'live-auction': ['#f3c17c', '#dd6a33'],
-  'co-own-launching': ['#d4a94a', '#8f6721'],
-  'sold-recently': ['#f2ddaa', '#d69044'],
+  'live-auction': [Colors.textSecondary, Colors.textMuted],
+  'co-own-launching': [Colors.success, Colors.success + '99'],
+  'sold-recently': [Colors.danger, Colors.danger + '99'],
 };
 
 // Trend clips removed — demo-only content, not real data
@@ -392,10 +392,20 @@ export default function HomeScreen() {
     setTimeout(() => setRefreshing(false), 380);
   };
 
-  const freshPosters = React.useMemo(
-    () => getFreshPosters(Date.now(), 24, customPosters),
-    [customPosters],
-  );
+  const [realPosters, setRealPosters] = React.useState<Array<{ id: string; mediaUrl: string; caption: string; creatorId: string }>>([]);
+  const [postersLoading, setPostersLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    let mounted = true;
+    setPostersLoading(true);
+    fetchPostersFromApi({ status: 'published', limit: 12 })
+      .then((res) => {
+        if (mounted) setRealPosters(res.items);
+      })
+      .catch(() => { /* noop */ })
+      .finally(() => { if (mounted) setPostersLoading(false); });
+    return () => { mounted = false; };
+  }, []);
 
   const feedStatus = React.useMemo(
     () =>
@@ -407,7 +417,7 @@ export default function HomeScreen() {
     [isSyncing, lastError, source],
   );
 
-  const showFeedLoadingSkeleton = isSyncing && source === 'mock' && !lastError;
+  const showFeedLoadingSkeleton = isSyncing && !lastError;
 
   const gridTileWidth = React.useMemo(
     () => (windowWidth - GRID_GAP * 3) / 2,
@@ -483,21 +493,20 @@ export default function HomeScreen() {
           </View>
         </AnimatedPressable>
 
-        {freshPosters.map((poster) => (
+        {realPosters.map((poster) => (
           <AnimatedPressable
             key={poster.id}
             style={styles.posterCard}
             activeOpacity={0.9}
             onPress={() => navigation.navigate('PosterViewer', { posterId: poster.id })}
             accessibilityRole="button"
-            accessibilityLabel={`Open poster from @${poster.uploader?.username ?? 'seller'}`}
-            accessibilityHint="Opens poster details with countdown and listing context"
+            accessibilityLabel={`Open poster`}
+            accessibilityHint="Opens poster details"
           >
             <View style={[styles.posterTile, hasSeenPoster(poster.id) ? styles.posterTileSeen : styles.posterTileUnseen]}>
-              {/* Video/Image with auto-play support */}
-              {isVideoUri(poster.image) ? (
+              {isVideoUri(poster.mediaUrl) ? (
                 <Video
-                  source={{ uri: poster.image }}
+                  source={{ uri: poster.mediaUrl }}
                   style={styles.posterImage}
                   resizeMode={ResizeMode.COVER}
                   shouldPlay
@@ -506,26 +515,12 @@ export default function HomeScreen() {
                 />
               ) : (
                 <CachedImage
-                  uri={
-                    poster.image
-                    || listings.find((listing) => listing.id === poster.listingId)?.images?.[0]
-                    || ''
-                  }
+                  uri={poster.mediaUrl || ''}
                   style={styles.posterImage}
                   contentFit="cover"
                 />
               )}
               <View style={styles.posterShade} />
-
-              {/* User PFP overlay in top left corner */}
-              <View style={styles.posterAvatarOverlay}>
-                <CachedImage
-                  uri={poster.uploader?.avatar ?? ''}
-                  style={styles.posterAvatarOverlayImage}
-                  containerStyle={styles.posterAvatarOverlayWrap}
-                  contentFit="cover"
-                />
-              </View>
 
               <View style={styles.posterBottomOverlay}>
                 <Text style={styles.posterCaption} numberOfLines={2}>{poster.caption}</Text>

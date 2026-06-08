@@ -27,7 +27,7 @@ import { Colors } from '../constants/colors';
 
 import { useAppTheme } from '../theme/ThemeContext';
 
-import { Listing, MOCK_USERS } from '../data/mockData';
+import { Listing } from '../data/mockData';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { ImageViewer } from '../components/ImageViewer';
@@ -70,7 +70,7 @@ export default function ItemDetailScreen() {
 
   const { itemId } = route.params || {};
   const item = listings.find(l => l.id === itemId);
-  const resolvedSeller = item ? MOCK_USERS.find(u => u.id === item.sellerId) : undefined;
+  const resolvedSeller = item ? { id: item.sellerId, username: item.sellerId.slice(0, 8), avatar: '', rating: 0, reviewCount: 0, location: '' } : undefined;
   const sellerItems = item ? listings.filter(l => l.sellerId === item.sellerId && l.id !== item.id) : [];
   const otherListings = listings.filter(l => l.id !== itemId).slice(0, 12);
 

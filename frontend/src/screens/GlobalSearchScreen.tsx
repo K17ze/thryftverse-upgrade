@@ -16,7 +16,8 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Motion } from '../constants/motion';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -45,8 +46,6 @@ type Props = StackScreenProps<RootStackParamList, 'GlobalSearch'>;
 const RECENT_SEARCHES = ['stussy hoodie', 'arcteryx alpha sv', 'carhartt detroit', 'vintage levis 501'];
 const TRENDING_TAGS = ['#y2k', '#gorpcore', 'archive', 'japanese denim', 'techwear', '#streetwear'];
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const IS_LIGHT = ActiveTheme === 'light';
 
 interface RankedListing {
   id: string;
@@ -432,7 +431,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     [isSyncing, lastError, source],
   );
 
-  const showSearchLoadingSkeleton = isSyncing && source === 'mock' && listings.length === 0 && !lastError;
+  const showSearchLoadingSkeleton = isSyncing && listings.length === 0 && !lastError;
 
   const handleCycleSort = () => {
     const activeSortIndex = DISCOVER_SORT_OPTIONS.indexOf(browseFilters.sort);
@@ -508,11 +507,12 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     }
   };
 
+  const { isDark } = useAppTheme();
   const isDiscoverLanding = !normalizedQuery;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={IS_LIGHT ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       {/* Hero Search Header */}
       <View style={styles.header}>

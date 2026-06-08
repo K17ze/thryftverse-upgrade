@@ -16,7 +16,8 @@ import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MasonryGrid } from '../components/ProductCardV2';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -254,9 +255,11 @@ export default function SearchScreen() {
     [listingIdSet, listings]
   );
 
+  const { isDark } = useAppTheme();
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       {/* -- Header -- */}
       <View style={styles.headerRow}>

@@ -15,7 +15,8 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -30,6 +31,7 @@ type Props = StackScreenProps<RootStackParamList, 'VisualSearch'>;
 const { width: SCREEN_W } = Dimensions.get('window');
 
 export default function VisualSearchScreen({ navigation }: Props) {
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const { listings } = useBackendData();
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
       <ScreenHeader title="Visual Search" onBack={() => navigation.goBack()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>

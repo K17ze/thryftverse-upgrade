@@ -29,7 +29,6 @@ import { ProductCardV2 } from '../components/ProductCardV2';
 import { SyncStatusPill } from '../components/SyncStatusPill';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { RootStackParamList } from '../navigation/types';
-import { MOCK_USERS } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -82,8 +81,7 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, showToast, formatPrice, reducedMotionEnabled }: any) => {
   const isWishlisted = wishlist?.includes(item.id) ?? false;
   const haptic = useHaptic();
-  const seller = item.sellerId ? MOCK_USERS.find((u: { id: string }) => u.id === item.sellerId) : undefined;
-  const sellerHandle = seller?.username ?? 'Seller';
+  const sellerHandle = item.sellerId ? `@${item.sellerId.slice(0, 8)}` : 'Seller';
   const heartScale = useSharedValue(0);
   const likeBtnScale = useSharedValue(1);
 
@@ -180,40 +178,6 @@ const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, sho
         </View>
       </AnimatedPressable>
 
-      {seller ? (
-        <View style={styles.sellerActionRow}>
-          <AnimatedPressable
-            style={styles.sellerIdentityChip}
-            onPress={() => navigation.navigate('UserProfile', { userId: seller.id })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Open @${seller.username} profile`}
-            accessibilityHint="Shows seller profile details"
-          >
-            <CachedImage
-              uri={seller.avatar}
-              style={styles.sellerActionAvatar}
-              containerStyle={styles.sellerActionAvatarWrap}
-              contentFit="cover"
-            />
-            <Text style={styles.sellerActionHandle} numberOfLines={1}>@{seller.username}</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={styles.sellerMessageBtn}
-            onPress={() => navigation.navigate('Chat', {
-              conversationId: `${seller.id}_${item.id}`,
-              focusQuery: seller.username,
-              partnerUserId: seller.id,
-            })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Message @${seller.username}`}
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
-      ) : null}
     </Reanimated.View>
   );
 };
@@ -352,7 +316,7 @@ export default function BrowseScreen() {
     [isSyncing, lastError, source],
   );
 
-  const showBrowseLoadingSkeleton = isSyncing && source === 'mock' && dataToRender.length === 0 && !lastError;
+  const showBrowseLoadingSkeleton = isSyncing && dataToRender.length === 0 && !lastError;
 
   const renderBrowseLoadingState = () => (
     <View style={styles.loadingStateWrap}>

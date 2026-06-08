@@ -159,3 +159,87 @@ describe('ListingSuccessScreen static smoke', () => {
     expect(src).not.toMatch(/#(?:f0ad4e|ffd700|ffdf00|gold|yellow)/i);
   });
 });
+
+describe('HomeScreen static smoke', () => {
+  const src = readSrc('screens/HomeScreen.tsx');
+
+  it('has a default export', () => {
+    expect(src).toMatch(/export default function HomeScreen/);
+  });
+
+  it('does not import getFreshPosters mock', () => {
+    expect(src).not.toContain("import { getFreshPosters }");
+  });
+
+  it('uses real poster API', () => {
+    expect(src).toContain('fetchPostersFromApi');
+  });
+
+  it('has no gold/yellow gradient colors', () => {
+    expect(src).not.toMatch(/#(?:f3c17c|d4a94a|f2ddaa|ffd700|ffdf00)/i);
+  });
+});
+
+describe('BrowseScreen static smoke', () => {
+  const src = readSrc('screens/BrowseScreen.tsx');
+
+  it('has a default export', () => {
+    expect(src).toMatch(/export default function BrowseScreen/);
+  });
+
+  it('does not import MOCK_USERS', () => {
+    expect(src).not.toContain('MOCK_USERS');
+  });
+});
+
+describe('ItemDetailScreen static smoke', () => {
+  const src = readSrc('screens/ItemDetailScreen.tsx');
+
+  it('has a default export', () => {
+    expect(src).toMatch(/export default function ItemDetailScreen/);
+  });
+
+  it('does not import MOCK_USERS', () => {
+    expect(src).not.toContain('MOCK_USERS');
+  });
+});
+
+describe('SearchScreen static smoke', () => {
+  const src = readSrc('screens/SearchScreen.tsx');
+
+  it('has a default export', () => {
+    expect(src).toMatch(/export default function SearchScreen/);
+  });
+
+  it('does not import ActiveTheme', () => {
+    expect(src).not.toContain('ActiveTheme');
+  });
+});
+
+describe('GlobalSearchScreen static smoke', () => {
+  const src = readSrc('screens/GlobalSearchScreen.tsx');
+
+  it('has a default export', () => {
+    expect(src).toMatch(/export default function GlobalSearchScreen/);
+  });
+
+  it('does not import ActiveTheme', () => {
+    expect(src).not.toContain('ActiveTheme');
+  });
+});
+
+describe('VisualSearchScreen static smoke', () => {
+  const src = readSrc('screens/VisualSearchScreen.tsx');
+
+  it('has a default export', () => {
+    expect(src).toMatch(/export default function VisualSearchScreen/);
+  });
+
+  it('does not import ActiveTheme', () => {
+    expect(src).not.toContain('ActiveTheme');
+  });
+
+  it('shows honest unavailable state', () => {
+    expect(src).toContain('not connected yet');
+  });
+});

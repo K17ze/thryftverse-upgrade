@@ -72,52 +72,59 @@ function mapApiListingToApp(row: ApiListingRow, fallback?: Listing): Listing {
   };
 }
 
-export async function fetchListingsFromApiWithFallback(
-  fallbackListings: Listing[]
-): Promise<ListingsSyncResult> {
-  const fallbackPool = ENABLE_RUNTIME_MOCKS ? fallbackListings : [];
-  const fallbackById = new Map(fallbackListings.map((listing) => [listing.id, listing]));
-
+export async function fetchListingsFromApi(): Promise<ListingsSyncResult> {
   try {
     const payload = await fetchJson<ApiListingsResponse>('/listings');
     const rows = Array.isArray(payload.items) ? payload.items : [];
 
-    if (rows.length === 0) {
-      if (fallbackPool.length > 0) {
-        return {
-          listings: fallbackPool,
-          source: 'mock',
-          error: 'API returned zero listings; using mock fallback.',
-        };
-      }
-
-      return {
-        listings: [],
-        source: 'api',
-        error: 'API returned zero listings.',
-      };
-    }
-
-    const mapped = rows.map((row) => mapApiListingToApp(row, fallbackById.get(row.id)));
-    const mappedIds = new Set(mapped.map((listing) => listing.id));
-    const merged = [...mapped, ...fallbackPool.filter((listing) => !mappedIds.has(listing.id))];
-
     return {
-      listings: merged,
+      listings: rows.map((row) => mapApiListingToApp(row)),
       source: 'api',
+      error: rows.length === 0 ? 'API returned zero listings.' : undefined,
     };
   } catch (error) {
-    if (fallbackPool.length === 0) {
-      return {
-        listings: [],
-        source: 'api',
-        error: (error as Error).message,
-      };
-    }
+    return {
+      listings: [],
+      source: 'api',
+      error: (error as Error).message,
+    };
+  }
+}
+
+export async function fetchFilteredListings(options?: {
+  category?: string;
+  brand?: string;
+  size?: string;
+  condition?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sort?: 'newest' | 'price_asc' | 'price_desc';
+  limit?: number;
+}): Promise<ListingsSyncResult> {
+  const params = new URLSearchParams();
+  if (options?.category) params.set('category', options.category);
+  if (options?.brand) params.set('brand', options.brand);
+  if (options?.size) params.set('size', options.size);
+  if (options?.condition) params.set('condition', options.condition);
+  if (options?.minPrice !== undefined) params.set('minPrice', String(options.minPrice));
+  if (options?.maxPrice !== undefined) params.set('maxPrice', String(options.maxPrice));
+  if (options?.sort) params.set('sort', options.sort);
+  if (options?.limit) params.set('limit', String(options.limit));
+  const qs = params.toString();
+
+  try {
+    const payload = await fetchJson<ApiListingsResponse>(`/listings${qs ? `?${qs}` : ''}`);
+    const rows = Array.isArray(payload.items) ? payload.items : [];
 
     return {
-      listings: fallbackPool,
-      source: 'mock',
+      listings: rows.map((row) => mapApiListingToApp(row)),
+      source: 'api',
+      error: rows.length === 0 ? 'No listings match your filters.' : undefined,
+    };
+  } catch (error) {
+    return {
+      listings: [],
+      source: 'api',
       error: (error as Error).message,
     };
   }
