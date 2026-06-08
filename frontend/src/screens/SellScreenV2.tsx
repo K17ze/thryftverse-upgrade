@@ -224,10 +224,12 @@ export default function SellScreenV2() {
   const currencySymbol = CURRENCIES[currency.currencyCode].symbol;
 
   /* ── scroll ref ── */
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<Animated.ScrollView>(null);
 
   /* ── scroll momentum ── */
   const scrollY = useSharedValue(0);
+  // SAFETY: useAnimatedScrollHandler returns an object; it must be passed to
+  // Animated.ScrollView (from react-native-reanimated), NOT a regular ScrollView.
   const onScroll = useAnimatedScrollHandler({
     onScroll: (event) => { scrollY.value = event.contentOffset.y; },
   });
@@ -776,7 +778,7 @@ export default function SellScreenV2() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
+        <Animated.ScrollView
           ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -1451,7 +1453,7 @@ export default function SellScreenV2() {
 
         {/* ── bottom spacer for floating CTA ── */}
         <View style={{ height: 100 }} />
-        </ScrollView>
+        </Animated.ScrollView>
       </KeyboardAvoidingView>
 
       {/* ── error banner ── */}

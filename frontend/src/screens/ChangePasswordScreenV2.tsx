@@ -7,7 +7,6 @@ import {
   Platform,
   TouchableOpacity,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -17,12 +16,12 @@ import { Space, Radius, Type } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { changePassword } from '../services/authApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { AppButton } from '../components/ui/AppButton';
-import { AppInput } from '../components/ui/AppInput';
+import { PremiumTextField } from '../components/ui/PremiumTextField';
+import { PremiumFormCard } from '../components/ui/PremiumFormCard';
+import { PremiumActionFooter } from '../components/ui/PremiumActionFooter';
 import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar';
 import { Typography } from '../theme/designTokens';
 import { SettingsPage } from '../components/settings/SettingsPage';
-import { SettingsSection } from '../components/settings/SettingsSection';
 
 export default function ChangePasswordScreenV2() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -79,36 +78,35 @@ export default function ChangePasswordScreenV2() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <SettingsSection title="Security">
-            <Text style={styles.infoText}>Enter your current password to confirm your identity.</Text>
-            <AppInput
+        <View style={{ flex: 1, paddingHorizontal: Space.md }}>
+          <PremiumFormCard
+            title="Security"
+            subtitle="Enter your current password to confirm your identity."
+          >
+            <PremiumTextField
               label="Current Password"
               value={currentPassword}
               onChangeText={setCurrentPassword}
               secureTextEntry={isSecure}
               placeholder="Enter current password"
-              containerStyle={styles.inputSpacing}
-              suffix={eyeIcon}
+              rightAction={eyeIcon}
             />
-            <AppInput
+            <PremiumTextField
               label="New Password"
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry={isSecure}
               placeholder="Enter new password"
-              containerStyle={styles.inputSpacing}
             />
-            <View style={{ marginTop: Space.xs }}>
+            <View style={{ marginTop: Space.xs, marginBottom: Space.sm }}>
               <PasswordStrengthBar password={newPassword} />
             </View>
-            <AppInput
+            <PremiumTextField
               label="Confirm New Password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry={isSecure}
               placeholder="Re-enter new password"
-              containerStyle={styles.inputSpacing}
             />
             <TouchableOpacity
               onPress={() => navigation.navigate('ForgotPassword')}
@@ -117,20 +115,14 @@ export default function ChangePasswordScreenV2() {
             >
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
-          </SettingsSection>
-        </Reanimated.View>
+          </PremiumFormCard>
+        </View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={{ paddingHorizontal: 16, marginTop: 16 }}>
-          <AppButton
-            title="Update Password"
-            onPress={handleUpdate}
-            variant="primary"
-            size="md"
-            style={{ borderRadius: Radius.xl }}
-            disabled={isUpdating}
-            accessibilityLabel="Update password"
-          />
-        </Reanimated.View>
+        <PremiumActionFooter
+          primaryLabel="Update Password"
+          onPrimaryPress={handleUpdate}
+          primaryLoading={isUpdating}
+        />
       </KeyboardAvoidingView>
     </SettingsPage>
   );
@@ -144,11 +136,6 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
-    paddingHorizontal: 16,
-  },
-  inputSpacing: {
-    marginBottom: Space.sm,
-    paddingHorizontal: 16,
   },
   forgotPasswordLink: {
     marginTop: Space.sm,

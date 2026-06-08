@@ -12,7 +12,8 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -23,6 +24,9 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
+import { PremiumTextField } from '../components/ui/PremiumTextField';
+import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
+import { PremiumFormCard } from '../components/ui/PremiumFormCard';
 import {
   setStoredUserAvatar,
   setStoredUserAvatarForUser,
@@ -35,6 +39,7 @@ import { Typography } from '../theme/designTokens';
 const GENDER_OPTIONS = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
 
 export default function EditProfileScreen() {
+  const { isDark } = useAppTheme();
   const navigation = useNavigation();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
@@ -159,7 +164,7 @@ export default function EditProfileScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar
-          barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+          barStyle={isDark ? 'light-content' : 'dark-content'}
           backgroundColor={Colors.background}
         />
         <EmptyState
@@ -176,7 +181,7 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={Colors.background}
       />
 
@@ -266,92 +271,62 @@ export default function EditProfileScreen() {
 
           {/* Form */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-            <View style={styles.formGroup}>
-              <View style={styles.inputBlock}>
-                <Text style={styles.inputLabel}>Name</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Your name"
-                  placeholderTextColor={Colors.textMuted}
-                  autoCapitalize="words"
-                />
-              </View>
-
-              <View style={styles.inputDivider} />
-
-              <View style={styles.inputBlock}>
-                <Text style={styles.inputLabel}>Username</Text>
-                <TextInput
-                  style={[styles.inputField, { color: Colors.textMuted }]}
-                  value={username}
-                  onChangeText={setUsername}
-                  placeholder="username"
-                  placeholderTextColor={Colors.textMuted}
-                  autoCapitalize="none"
-                  editable={true}
-                />
-              </View>
-
-              <View style={styles.inputDivider} />
-
-              <View style={styles.inputBlock}>
-                <Text style={styles.inputLabel}>Website</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={website}
-                  onChangeText={setWebsite}
-                  onBlur={() => validateWebsite(website)}
-                  placeholder="https://"
-                  placeholderTextColor={Colors.textMuted}
-                  autoCapitalize="none"
-                  keyboardType="url"
-                />
-              </View>
-              {websiteError ? (
-                <Text style={styles.errorText}>{websiteError}</Text>
-              ) : null}
-            </View>
+            <PremiumFormCard>
+              <PremiumTextField
+                label="Name"
+                value={name}
+                onChangeText={setName}
+                placeholder="Your name"
+                autoCapitalize="words"
+              />
+              <PremiumTextField
+                label="Username"
+                value={username}
+                onChangeText={setUsername}
+                placeholder="username"
+                autoCapitalize="none"
+                helperText="This is how people find you on Thryftverse."
+              />
+              <PremiumTextField
+                label="Website"
+                value={website}
+                onChangeText={setWebsite}
+                onBlur={() => validateWebsite(website)}
+                placeholder="https://"
+                autoCapitalize="none"
+                keyboardType="url"
+                errorText={websiteError || undefined}
+              />
+            </PremiumFormCard>
           </Reanimated.View>
 
-          {/* Bio row */}
+          {/* Bio */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
-            <View style={styles.formGroup}>
-              <View style={styles.inputBlock}>
-                <Text style={styles.inputLabel}>Bio</Text>
-                <TextInput
-                  style={[styles.inputField, { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 }]}
-                  value={bio}
-                  onChangeText={setBio}
-                  placeholder="Tell people about yourself..."
-                  placeholderTextColor={Colors.textMuted}
-                  multiline
-                  maxLength={200}
-                />
-              </View>
-              <Text style={styles.charCount}>{bio.length}/200</Text>
-            </View>
+            <PremiumFormCard>
+              <PremiumTextField
+                label="Bio"
+                value={bio}
+                onChangeText={setBio}
+                placeholder="Tell people about yourself..."
+                multiline
+                minHeight={100}
+                maxLength={200}
+                helperText={`${bio.length}/200`}
+              />
+            </PremiumFormCard>
           </Reanimated.View>
 
-          {/* Gender row */}
+          {/* Gender */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-            <AnimatedPressable
-              onPress={() => setGenderPickerVisible(true)}
-              activeOpacity={0.8}
-              scaleValue={0.98}
-              hapticFeedback="light"
-            >
-              <View style={styles.formGroup}>
-                <View style={styles.rowBlock}>
-                  <Text style={styles.inputLabel}>Gender</Text>
-                  <View style={styles.rowValue}>
-                    <Text style={styles.rowValueText}>{gender}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-                  </View>
-                </View>
-              </View>
-            </AnimatedPressable>
+            <PremiumFormCard>
+              <PremiumSelectRow
+                label="Gender"
+                value={gender}
+                placeholder="Select gender"
+                icon="person-outline"
+                onPress={() => setGenderPickerVisible(true)}
+              />
+            </PremiumFormCard>
           </Reanimated.View>
 
           <View style={{ height: Space.xl }} />
@@ -517,77 +492,4 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
 
-  // Form
-  formGroup: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    marginBottom: Space.md,
-  },
-  inputBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: Space.md,
-    minHeight: 56,
-  },
-  inputDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginLeft: Space.md,
-  },
-  inputLabel: {
-    width: 100,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
-  inputField: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-    padding: 0,
-  },
-  rowBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: Space.md,
-    minHeight: 56,
-  },
-  rowValue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  rowValueText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  charCount: {
-    alignSelf: 'flex-end',
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: -Space.xs,
-    marginRight: Space.md,
-    marginBottom: Space.sm,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-  errorText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.danger,
-    marginLeft: Space.md,
-    marginBottom: Space.sm,
-    letterSpacing: Type.caption.letterSpacing,
-  },
 });
