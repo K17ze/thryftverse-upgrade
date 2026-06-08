@@ -88,6 +88,73 @@ describe('SellScreenV2 static smoke', () => {
     expect(src).toContain('Sign in to publish a listing');
   });
 
+  it('does not send sellerId with unknown fallback', () => {
+    expect(src).not.toContain("?? 'unknown'");
+    expect(src).not.toContain('?? "unknown"');
+  });
+
+  it('blocks publish if currentUser is missing', () => {
+    expect(src).toMatch(/if\s*\(\s*!currentUser\?\.id\s*\)/);
+  });
+
+  it('has no hardcoded gold/yellow colors', () => {
+    expect(src).not.toMatch(/#(?:f0ad4e|ffd700|ffdf00|gold|yellow)/i);
+  });
+});
+
+describe('ListingSuccessScreen static smoke', () => {
+  const src = readSrc('screens/ListingSuccessScreen.tsx');
+
+  it('has a default export', () => {
+    expect(src).toMatch(/export default function ListingSuccessScreen/);
+  });
+
+  it('does not import MOCK_USERS', () => {
+    expect(src).not.toContain('MOCK_USERS');
+  });
+
+  it('does not import MY_USER', () => {
+    expect(src).not.toContain('MY_USER');
+  });
+
+  it('does not import ActiveTheme', () => {
+    expect(src).not.toContain('ActiveTheme');
+  });
+
+  it('does not contain fake conversationId', () => {
+    expect(src).not.toContain("conversationId: 'c1'");
+  });
+
+  it('does not contain fake growth claim', () => {
+    expect(src).not.toContain('sell 3x faster');
+  });
+
+  it('does not contain fake support chat navigation', () => {
+    expect(src).not.toContain('ChatConversation');
+  });
+
+  it('uses reactive theme (useAppTheme)', () => {
+    expect(src).toContain('useAppTheme');
+  });
+
+  it('has real ItemDetail navigation', () => {
+    expect(src).toContain("'ItemDetail'");
+  });
+
+  it('has real ManageListing navigation', () => {
+    expect(src).toContain("'ManageListing'");
+  });
+
+  it('has real HelpSupport navigation', () => {
+    expect(src).toContain("'HelpSupport'");
+  });
+
+  it('uses design tokens (Space, Type, Radius)', () => {
+    expect(src).toContain('Space.');
+    expect(src).toContain('Type.');
+    expect(src).toContain('Radius.');
+  });
+
   it('has no hardcoded gold/yellow colors', () => {
     expect(src).not.toMatch(/#(?:f0ad4e|ffd700|ffdf00|gold|yellow)/i);
   });

@@ -17,14 +17,11 @@ import { Confetti } from '../components/Confetti';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography } from '../theme/designTokens';
+import { Typography, Space, Type, Radius, FontSize } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
 
-const PANEL_BG = Colors.surface;
-const PANEL_ALT_BG = Colors.surfaceAlt;
-const PANEL_BORDER = Colors.border;
 
 export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { isDark } = useAppTheme();
@@ -113,7 +110,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           </View>
           {listingId ? (
             <Text style={styles.idText} numberOfLines={1}>
-              ID: {listingId}
+              {listingId}
             </Text>
           ) : null}
         </View>
@@ -286,94 +283,99 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
-  content: { paddingHorizontal: 20, paddingTop: 40, paddingBottom: 60 },
+  content: { paddingHorizontal: Space.lg, paddingTop: Space.xxl, paddingBottom: Space.xxl },
 
   heroSection: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: Space.xl,
   },
   iconCircle: {
     width: 104,
     height: 104,
-    borderRadius: 52,
-    backgroundColor: PANEL_ALT_BG,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
+    marginBottom: Space.md,
   },
   heroBigText: {
-    fontSize: 56,
-    lineHeight: 60,
+    fontSize: FontSize.hero,
+    lineHeight: FontSize.hero + 4,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -2.2,
-    marginBottom: 6,
+    marginBottom: Space.xs,
   },
   heroSubText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    letterSpacing: 0.14,
+    letterSpacing: Type.body.letterSpacing,
+    lineHeight: Type.body.lineHeight,
   },
   heroMicroCopy: {
-    marginTop: 8,
-    fontSize: 14,
+    marginTop: Space.sm,
+    fontSize: Type.body.size,
     color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
+    lineHeight: Type.body.lineHeight,
   },
 
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
-    gap: 8,
+    marginBottom: Space.lg,
+    gap: Space.sm,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs,
     backgroundColor: Colors.success + '14',
     borderWidth: 1,
     borderColor: Colors.success + '33',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.md,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
     color: Colors.success,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
   idText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     flexShrink: 1,
+    lineHeight: Type.meta.lineHeight,
+    letterSpacing: Type.meta.letterSpacing,
   },
 
   summaryCard: {
     flexDirection: 'row',
-    gap: 12,
-    borderRadius: 18,
+    gap: Space.sm,
+    borderRadius: Radius.xl,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    marginBottom: 28,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    marginBottom: Space.xl,
   },
   summaryImageWrap: {
     width: 72,
     height: 90,
-    borderRadius: 12,
-    backgroundColor: PANEL_ALT_BG,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -383,7 +385,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   summaryImageFallback: {
-    backgroundColor: PANEL_ALT_BG,
+    backgroundColor: Colors.surfaceAlt,
   },
   summaryBody: {
     flex: 1,
@@ -391,65 +393,72 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: Type.meta.letterSpacing,
+    lineHeight: Type.meta.lineHeight,
   },
   summaryTitle: {
-    marginTop: 4,
+    marginTop: Space.xs,
     color: Colors.textPrimary,
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
   },
   summaryMeta: {
-    marginTop: 6,
+    marginTop: Space.xs,
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
   },
 
   actionRowBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: Space.md,
     borderBottomWidth: 1,
-    borderBottomColor: PANEL_BORDER,
+    borderBottomColor: Colors.border,
   },
   actionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: Space.md,
   },
   actionIconBox: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: PANEL_ALT_BG,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionText: {
-    fontSize: 16,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
+    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
 
   supportLink: {
-    marginTop: 24,
+    marginTop: Space.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
+    gap: Space.xs,
+    paddingVertical: Space.sm,
   },
   supportLinkText: {
-    fontSize: 13,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: Colors.textMuted,
+    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });
