@@ -26036,31 +26036,41 @@ app.get('/orders/:orderId', async (request, reply) => {
     delivered_at: string | null;
     created_at: string;
     updated_at: string;
+    buyer_username: string | null;
+    buyer_avatar: string | null;
+    seller_username: string | null;
+    seller_avatar: string | null;
   }>(
     `
       SELECT
-        id,
-        buyer_id,
-        seller_id,
-        listing_id,
-        subtotal_gbp,
-        buyer_protection_fee_gbp,
-        postage_fee_gbp,
-        total_gbp,
-        status,
-        address_id,
-        payment_method_id,
-        shipping_carrier_id,
-        shipping_provider,
-        tracking_number,
-        shipping_label_url,
-        shipping_quote_gbp,
-        shipped_at::text,
-        delivered_at::text,
-        created_at::text,
-        updated_at::text
-      FROM orders
-      WHERE id = $1
+        o.id,
+        o.buyer_id,
+        o.seller_id,
+        o.listing_id,
+        o.subtotal_gbp,
+        o.buyer_protection_fee_gbp,
+        o.postage_fee_gbp,
+        o.total_gbp,
+        o.status,
+        o.address_id,
+        o.payment_method_id,
+        o.shipping_carrier_id,
+        o.shipping_provider,
+        o.tracking_number,
+        o.shipping_label_url,
+        o.shipping_quote_gbp,
+        o.shipped_at::text,
+        o.delivered_at::text,
+        o.created_at::text,
+        o.updated_at::text,
+        bu.username AS buyer_username,
+        bu.avatar AS buyer_avatar,
+        su.username AS seller_username,
+        su.avatar AS seller_avatar
+      FROM orders o
+      LEFT JOIN users bu ON bu.id = o.buyer_id
+      LEFT JOIN users su ON su.id = o.seller_id
+      WHERE o.id = $1
       LIMIT 1
     `,
     [orderId]
@@ -26097,6 +26107,8 @@ app.get('/orders/:orderId', async (request, reply) => {
       deliveredAt: row.delivered_at,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      buyer: row.buyer_username ? { id: row.buyer_id, username: row.buyer_username, avatar: row.buyer_avatar ?? null } : null,
+      seller: row.seller_username ? { id: row.seller_id, username: row.seller_username, avatar: row.seller_avatar ?? null } : null,
     },
   };
 });
@@ -26176,6 +26188,330 @@ app.get('/users/:userId/orders', async (request) => {
       shippedAt: row.shipped_at,
       deliveredAt: row.delivered_at,
       createdAt: row.created_at,
+    })),
+  };
+});
+
+/* ── Order consumer actions ── */
+
+app.post('/orders/:orderId/cancel', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+  const userId = (request as any).user?.id as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query<{
+      buyer_id: string;
+      seller_id: string;
+      status: string;
+      total_gbp: number | string;
+      payment_intent_id: string | null;
+    }>(
+      `SELECT buyer_id, seller_id, status, total_gbp, payment_intent_id FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [orderId]
+    );
+
+    const order = orderResult.rows[0];
+    if (!order) {
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+
+    if (order.buyer_id !== userId) {
+      reply.code(403);
+      return { ok: false, error: 'Only the buyer can cancel this order' };
+    }
+
+    if (order.status === 'shipped' || order.status === 'delivered' || order.status === 'cancelled') {
+      reply.code(409);
+      return { ok: false, error: `Cannot cancel an order that is already ${order.status}` };
+    }
+
+    await client.query(`UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`, [orderId]);
+
+    if (order.payment_intent_id && order.status === 'paid') {
+      await postCommerceOrderRefundLedgerReversal(client, orderId, userId, Number(order.total_gbp));
+    }
+
+    await client.query('COMMIT');
+    return { ok: true, orderId, status: 'cancelled' };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders/:orderId/ship', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    trackingNumber: z.string().min(1).max(128).optional(),
+    shippingProvider: z.string().min(1).max(64).optional(),
+  });
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body);
+  const userId = (request as any).user?.id as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query<{
+      buyer_id: string;
+      seller_id: string;
+      status: string;
+      subtotal_gbp: number | string;
+      shipping_provider: string | null;
+      tracking_number: string | null;
+    }>(
+      `SELECT buyer_id, seller_id, status, subtotal_gbp, shipping_provider, tracking_number FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [orderId]
+    );
+
+    const order = orderResult.rows[0];
+    if (!order) {
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+
+    if (order.seller_id !== userId) {
+      reply.code(403);
+      return { ok: false, error: 'Only the seller can mark this order as shipped' };
+    }
+
+    if (order.status !== 'paid') {
+      reply.code(409);
+      return { ok: false, error: `Cannot mark as shipped from status: ${order.status}` };
+    }
+
+    const provider = body.shippingProvider ?? order.shipping_provider ?? 'manual';
+    const tracking = body.trackingNumber ?? order.tracking_number ?? `TV-${orderId.slice(0, 8).toUpperCase()}`;
+
+    await client.query(
+      `UPDATE orders SET status = 'shipped', shipped_at = NOW(), shipping_provider = $2, tracking_number = $3, updated_at = NOW() WHERE id = $1`,
+      [orderId, provider, tracking]
+    );
+
+    await client.query('COMMIT');
+    return { ok: true, orderId, status: 'shipped', trackingNumber: tracking, shippingProvider: provider };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders/:orderId/deliver', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+  const userId = (request as any).user?.id as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query<{
+      buyer_id: string;
+      seller_id: string;
+      status: string;
+      subtotal_gbp: number | string;
+      shipping_provider: string | null;
+    }>(
+      `SELECT buyer_id, seller_id, status, subtotal_gbp, shipping_provider FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [orderId]
+    );
+
+    const order = orderResult.rows[0];
+    if (!order) {
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+
+    if (order.buyer_id !== userId) {
+      reply.code(403);
+      return { ok: false, error: 'Only the buyer can confirm delivery' };
+    }
+
+    if (order.status !== 'shipped') {
+      reply.code(409);
+      return { ok: false, error: `Cannot confirm delivery from status: ${order.status}` };
+    }
+
+    await client.query(
+      `UPDATE orders SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [orderId]
+    );
+
+    await releaseCommerceOrderEscrowToSeller(client, {
+      orderId,
+      sellerId: order.seller_id,
+      subtotalGbp: Number(order.subtotal_gbp),
+      parcelProvider: order.shipping_provider ?? 'manual',
+      parcelEventType: 'delivered',
+    });
+
+    await client.query('COMMIT');
+    return { ok: true, orderId, status: 'delivered' };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders/:orderId/refund', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    reason: z.string().min(1).max(500).optional(),
+  });
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body);
+  const userId = (request as any).user?.id as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query<{
+      buyer_id: string;
+      seller_id: string;
+      status: string;
+      total_gbp: number | string;
+    }>(
+      `SELECT buyer_id, seller_id, status, total_gbp FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [orderId]
+    );
+
+    const order = orderResult.rows[0];
+    if (!order) {
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+
+    if (order.buyer_id !== userId) {
+      reply.code(403);
+      return { ok: false, error: 'Only the buyer can request a refund' };
+    }
+
+    if (order.status !== 'paid' && order.status !== 'shipped') {
+      reply.code(409);
+      return { ok: false, error: `Cannot request refund for order in status: ${order.status}` };
+    }
+
+    await postCommerceOrderRefundLedgerReversal(client, orderId, userId, Number(order.total_gbp));
+    await client.query(`UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`, [orderId]);
+
+    await client.query('COMMIT');
+    return { ok: true, orderId, status: 'cancelled', refunded: true, reason: body.reason ?? null };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+/* ── Unified transaction history ── */
+
+app.get('/users/:userId/transactions', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  });
+  const { userId } = paramsSchema.parse(request.params);
+  const { limit, offset } = querySchema.parse(request.query);
+  const callerId = (request as any).user?.id as string | undefined;
+
+  if (!callerId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  if (callerId !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
+  const entries = await db.query<{
+    id: number;
+    direction: string;
+    amount_gbp: number | string;
+    source_type: string;
+    source_id: string;
+    line_type: string;
+    created_at: string;
+    metadata: Record<string, unknown> | null;
+  }>(
+    `
+      SELECT
+        le.id,
+        le.direction,
+        le.amount_gbp,
+        le.source_type,
+        le.source_id,
+        le.line_type,
+        le.created_at::text,
+        le.metadata
+      FROM ledger_entries le
+      INNER JOIN ledger_accounts la ON la.id = le.account_id
+      WHERE la.owner_type = 'user' AND la.owner_id = $1
+      ORDER BY le.created_at DESC
+      LIMIT $2 OFFSET $3
+    `,
+    [userId, limit, offset]
+  );
+
+  const totalResult = await db.query<{ count: number }>(
+    `
+      SELECT COUNT(*)::int AS count
+      FROM ledger_entries le
+      INNER JOIN ledger_accounts la ON la.id = le.account_id
+      WHERE la.owner_type = 'user' AND la.owner_id = $1
+    `,
+    [userId]
+  );
+
+  return {
+    ok: true,
+    total: totalResult.rows[0]?.count ?? 0,
+    items: entries.rows.map((row) => ({
+      id: String(row.id),
+      type: row.source_type,
+      lineType: row.line_type,
+      amount: Number(row.amount_gbp),
+      currency: 'GBP',
+      direction: row.direction,
+      sourceId: row.source_id,
+      status: 'completed',
+      createdAt: row.created_at,
+      description: row.metadata && typeof row.metadata === 'object' ? (row.metadata as any).description ?? null : null,
     })),
   };
 });

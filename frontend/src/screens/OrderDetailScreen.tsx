@@ -20,14 +20,20 @@ import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
+import { useStore } from '../store/useStore';
 import { Space, Radius } from '../theme/designTokens';
 import {
   CommerceOrder,
   OrderParcelEvent,
   getOrder,
   getOrderParcelEvents,
+  cancelOrder,
+  shipOrder,
+  deliverOrder,
+  refundOrder,
 } from '../services/commerceApi';
 import { calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
+import { parseApiError } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { getListingCoverUri } from '../utils/media';
@@ -256,43 +262,33 @@ export default function OrderDetailScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const { show } = useToast();
 
+  const syncOrder = React.useCallback(async () => {
+    setIsSyncingOrder(true);
+    try {
+      const [order, events] = await Promise.all([
+        getOrder(orderId),
+        getOrderParcelEvents(orderId).catch(() => [] as OrderParcelEvent[]),
+      ]);
+      setBackendOrder(order);
+      setParcelEvents(events);
+    } catch {
+      setBackendOrder(null);
+      setParcelEvents([]);
+    } finally {
+      setIsSyncingOrder(false);
+    }
+  }, [orderId]);
+
   React.useEffect(() => {
-    let cancelled = false;
-
-    const syncOrder = async () => {
-      setIsSyncingOrder(true);
-      try {
-        const [order, events] = await Promise.all([
-          getOrder(orderId),
-          getOrderParcelEvents(orderId).catch(() => [] as OrderParcelEvent[]),
-        ]);
-
-        if (!cancelled) {
-          setBackendOrder(order);
-          setParcelEvents(events);
-        }
-      } catch {
-        if (!cancelled) {
-          setBackendOrder(null);
-          setParcelEvents([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsSyncingOrder(false);
-        }
-      }
-    };
-
     void syncOrder();
     const refreshInterval = setInterval(() => {
       void syncOrder();
     }, 30_000);
 
     return () => {
-      cancelled = true;
       clearInterval(refreshInterval);
     };
-  }, [orderId]);
+  }, [syncOrder]);
 
   const listingId = backendOrder?.listingId;
   const existingListing = listingId ? listings.find((item) => item.id === listingId) : undefined;
@@ -312,7 +308,9 @@ export default function OrderDetailScreen() {
     description: '',
   };
 
-  const resolvedSeller = existingListing?.seller ?? {
+  const orderStatus = normalizeOrderStatus(backendOrder?.status);
+
+  const resolvedSeller = backendOrder?.seller ?? existingListing?.seller ?? {
     id: backendOrder?.sellerId ?? listing.sellerId ?? '',
     username: null,
     avatar: null,
@@ -322,6 +320,14 @@ export default function OrderDetailScreen() {
   };
   const sellerName = resolvedSeller.username ?? `Seller ${resolvedSeller.id.slice(0, 8)}`;
 
+  const currentUser = useStore((state) => state.currentUser);
+  const isBuyer = currentUser?.id === backendOrder?.buyerId;
+  const isSeller = currentUser?.id === backendOrder?.sellerId;
+  const canCancel = isBuyer && (orderStatus === 'paid' || orderStatus === 'created');
+  const canShip = isSeller && orderStatus === 'paid';
+  const canDeliver = isBuyer && orderStatus === 'shipped';
+  const canRefund = isBuyer && (orderStatus === 'paid' || orderStatus === 'shipped');
+
   const subtotal = backendOrder?.subtotalGbp ?? listing.price;
   const platformCharge =
     backendOrder?.platformChargeGbp ??
@@ -330,7 +336,6 @@ export default function OrderDetailScreen() {
   const postageFee = backendOrder?.postageFeeGbp ?? 2.89;
   const totalPaid = backendOrder?.totalGbp ?? subtotal + platformCharge + postageFee;
 
-  const orderStatus = normalizeOrderStatus(backendOrder?.status);
   const trackingSteps = buildTrackingSteps(orderStatus, sellerName, backendOrder, parcelEvents);
   const statusBanner = getStatusBanner(orderStatus, sellerName);
   const latestParcelEvent = parcelEvents.length > 0 ? parcelEvents[parcelEvents.length - 1] : null;
@@ -484,13 +489,13 @@ export default function OrderDetailScreen() {
               <CachedImage uri={resolvedSeller.avatar ?? ''} style={styles.sellerAvatar} contentFit="cover" />
               <View style={styles.sellerInfo}>
                 <Text style={styles.sellerName}>@{sellerName}</Text>
-                {resolvedSeller.location && (
-                  <Text style={styles.sellerLocation} numberOfLines={1}>{resolvedSeller.location}</Text>
+                {(resolvedSeller as any).location && (
+                  <Text style={styles.sellerLocation} numberOfLines={1}>{(resolvedSeller as any).location}</Text>
                 )}
-                {resolvedSeller.rating != null && resolvedSeller.reviewCount != null && (
+                {(resolvedSeller as any).rating != null && (resolvedSeller as any).reviewCount != null && (
                   <View style={styles.sellerMeta}>
                     <Ionicons name="star" size={13} color={Colors.brand} />
-                    <Text style={styles.sellerRating}>{resolvedSeller.rating} ({resolvedSeller.reviewCount} reviews)</Text>
+                    <Text style={styles.sellerRating}>{(resolvedSeller as any).rating} ({(resolvedSeller as any).reviewCount} reviews)</Text>
                   </View>
                 )}
               </View>
@@ -529,26 +534,101 @@ export default function OrderDetailScreen() {
         {/* -- Actions -- */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(360)}>
         <View style={styles.actionsRow}>
-          <AppButton
-            title="Report issue"
-            icon={<Ionicons name="alert-circle-outline" size={18} color={Colors.textPrimary} />}
-            style={styles.actionBtnSecondary}
-            titleStyle={styles.actionBtnSecondaryText}
-            iconContainerStyle={styles.actionSecondaryIconWrap}
-            variant="secondary"
-            size="md"
-            onPress={() => navigation.navigate('Report', { type: 'item' })}
-            accessibilityLabel="Report issue"
-          />
-          <AppButton
-            title="Mark as received"
-            style={styles.actionBtnPrimary}
-            titleStyle={styles.actionBtnPrimaryText}
-            variant="primary"
-            size="md"
-            onPress={() => navigation.navigate('WriteReview', { orderId })}
-            accessibilityLabel="Mark order as received"
-          />
+          {canCancel && (
+            <AppButton
+              title="Cancel order"
+              icon={<Ionicons name="close-circle-outline" size={18} color={Colors.danger} />}
+              style={[styles.actionBtnSecondary, { borderColor: Colors.danger }]}
+              titleStyle={[styles.actionBtnSecondaryText, { color: Colors.danger }]}
+              iconContainerStyle={styles.actionSecondaryIconWrap}
+              variant="secondary"
+              size="md"
+              onPress={async () => {
+                try {
+                  await cancelOrder(orderId);
+                  show('Order cancelled', 'info');
+                  void syncOrder();
+                } catch (e) {
+                  show(parseApiError(e).message, 'error');
+                }
+              }}
+              accessibilityLabel="Cancel order"
+            />
+          )}
+          {canShip && (
+            <AppButton
+              title="Mark shipped"
+              icon={<Ionicons name="cube-outline" size={18} color={Colors.textPrimary} />}
+              style={styles.actionBtnSecondary}
+              titleStyle={styles.actionBtnSecondaryText}
+              iconContainerStyle={styles.actionSecondaryIconWrap}
+              variant="secondary"
+              size="md"
+              onPress={async () => {
+                try {
+                  await shipOrder(orderId);
+                  show('Order marked as shipped', 'success');
+                  void syncOrder();
+                } catch (e) {
+                  show(parseApiError(e).message, 'error');
+                }
+              }}
+              accessibilityLabel="Mark order as shipped"
+            />
+          )}
+          {canDeliver && (
+            <AppButton
+              title="Mark delivered"
+              style={styles.actionBtnPrimary}
+              titleStyle={styles.actionBtnPrimaryText}
+              variant="primary"
+              size="md"
+              onPress={async () => {
+                try {
+                  await deliverOrder(orderId);
+                  show('Delivery confirmed', 'success');
+                  void syncOrder();
+                } catch (e) {
+                  show(parseApiError(e).message, 'error');
+                }
+              }}
+              accessibilityLabel="Confirm delivery"
+            />
+          )}
+          {canRefund && (
+            <AppButton
+              title="Request refund"
+              icon={<Ionicons name="refresh-outline" size={18} color={Colors.danger} />}
+              style={[styles.actionBtnSecondary, { borderColor: Colors.danger }]}
+              titleStyle={[styles.actionBtnSecondaryText, { color: Colors.danger }]}
+              iconContainerStyle={styles.actionSecondaryIconWrap}
+              variant="secondary"
+              size="md"
+              onPress={async () => {
+                try {
+                  await refundOrder(orderId);
+                  show('Refund processed', 'info');
+                  void syncOrder();
+                } catch (e) {
+                  show(parseApiError(e).message, 'error');
+                }
+              }}
+              accessibilityLabel="Request refund"
+            />
+          )}
+          {!canCancel && !canShip && !canDeliver && !canRefund && (
+            <AppButton
+              title="Report issue"
+              icon={<Ionicons name="alert-circle-outline" size={18} color={Colors.textPrimary} />}
+              style={styles.actionBtnSecondary}
+              titleStyle={styles.actionBtnSecondaryText}
+              iconContainerStyle={styles.actionSecondaryIconWrap}
+              variant="secondary"
+              size="md"
+              onPress={() => navigation.navigate('Report', { type: 'item' })}
+              accessibilityLabel="Report issue"
+            />
+          )}
         </View>
         </Reanimated.View>
 

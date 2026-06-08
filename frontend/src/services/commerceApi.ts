@@ -51,6 +51,8 @@ export interface CommerceOrder {
   deliveredAt: string | null;
   createdAt: string;
   updatedAt: string;
+  buyer: { id: string; username: string; avatar: string | null } | null;
+  seller: { id: string; username: string; avatar: string | null } | null;
 }
 
 export interface ShippingQuoteItem {
@@ -404,4 +406,59 @@ export async function listUserOrders(
     `/users/${encodeURIComponent(userId)}/orders?role=${encodeURIComponent(role)}&limit=${limit}`
   );
   return payload.items;
+}
+
+export async function cancelOrder(orderId: string) {
+  return fetchJson<{ ok: true; orderId: string; status: string }>(`/orders/${encodeURIComponent(orderId)}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function shipOrder(orderId: string, input?: { trackingNumber?: string; shippingProvider?: string }) {
+  return fetchJson<{ ok: true; orderId: string; status: string; trackingNumber: string; shippingProvider: string }>(
+    `/orders/${encodeURIComponent(orderId)}/ship`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input ?? {}),
+    }
+  );
+}
+
+export async function deliverOrder(orderId: string) {
+  return fetchJson<{ ok: true; orderId: string; status: string }>(`/orders/${encodeURIComponent(orderId)}/deliver`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function refundOrder(orderId: string, reason?: string) {
+  return fetchJson<{ ok: true; orderId: string; status: string; refunded: boolean; reason: string | null }>(
+    `/orders/${encodeURIComponent(orderId)}/refund`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    }
+  );
+}
+
+export interface UserTransaction {
+  id: string;
+  type: string;
+  lineType: string;
+  amount: number;
+  currency: string;
+  direction: string;
+  sourceId: string;
+  status: string;
+  createdAt: string;
+  description: string | null;
+}
+
+export async function listUserTransactions(userId: string, limit = 50, offset = 0) {
+  return fetchJson<{ ok: true; total: number; items: UserTransaction[] }>(
+    `/users/${encodeURIComponent(userId)}/transactions?limit=${limit}&offset=${offset}`
+  );
 }
