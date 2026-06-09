@@ -55,4 +55,38 @@ describe('profile media truth rules', () => {
     const src = readSrc('screens/OrderDetailScreen.tsx');
     expect(src).toContain('backendOrder?.listingTitle');
   });
+
+  it('MyProfileScreen prioritizes backend coverPhoto over local userCover', () => {
+    const src = readSrc('screens/MyProfileScreen.tsx');
+    expect(src).toContain('user.coverPhoto || userCover');
+  });
+
+  it('UserProfileScreen uses targetProfile coverPhoto for non-self profiles', () => {
+    const src = readSrc('screens/UserProfileScreen.tsx');
+    expect(src).toContain('targetProfile?.coverPhoto || COVER_IMAGE');
+  });
+
+  it('EditProfileScreen prioritizes backend avatar/cover over local state', () => {
+    const src = readSrc('screens/EditProfileScreen.tsx');
+    expect(src).toContain('user?.avatar || userAvatar');
+    expect(src).toContain('user?.coverPhoto || userCover');
+  });
+
+  it('fetchMyProfile does not fallback to stale local userCover', () => {
+    const src = readSrc('store/useStore.ts');
+    expect(src).not.toContain('userCover: profile.coverPhoto ?? state.userCover');
+    expect(src).toContain('userCover: profile.coverPhoto ?? null');
+  });
+
+  it('CachedImage supports cacheBuster prop for media refresh', () => {
+    const src = readSrc('components/CachedImage.tsx');
+    expect(src).toContain('cacheBuster?: string');
+    expect(src).toContain('sourceUri');
+  });
+
+  it('no file:// URI is persisted as saved profile media in store', () => {
+    const src = readSrc('store/useStore.ts');
+    // userAvatar/userCover should be overwritten by backend, not fall back to local file URIs
+    expect(src).toContain('userAvatar: profile.avatar ?? null');
+  });
 });

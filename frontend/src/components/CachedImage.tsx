@@ -26,6 +26,7 @@ interface CachedImageProps {
   blurhash?: string;
   priority?: 'low' | 'normal' | 'high';
   isVisible?: boolean;
+  cacheBuster?: string;
 }
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
@@ -40,6 +41,7 @@ export function CachedImage({
   blurhash,
   priority = 'normal',
   isVisible = true,
+  cacheBuster,
 }: CachedImageProps) {
   const [loaded, setLoaded] = useState(false);
   const reducedMotionEnabled = useReducedMotion();
@@ -87,6 +89,12 @@ export function CachedImage({
   const effectiveTransition = reducedMotionEnabled ? 0 : transition;
   const isVideoSource = isVideoUri(uri);
   const useNativeImage = !isVideoSource && /^content:\/\//i.test(uri);
+
+  const sourceUri = React.useMemo(() => {
+    if (!cacheBuster || !uri) return uri;
+    const separator = uri.includes('?') ? '&' : '?';
+    return `${uri}${separator}cb=${encodeURIComponent(cacheBuster)}`;
+  }, [uri, cacheBuster]);
 
   const nativeResizeMode = React.useMemo(() => {
     switch (contentFit) {
@@ -139,7 +147,7 @@ export function CachedImage({
             transition={0}
             cachePolicy="memory-disk"
             priority={effectivePriority}
-            recyclingKey={`preview-${uri}`}
+            recyclingKey={`preview-${sourceUri}`}
           />
         </Reanimated.View>
       )}
@@ -147,7 +155,7 @@ export function CachedImage({
       <Reanimated.View style={[StyleSheet.absoluteFill, imageStyle]}>
         {isVideoSource ? (
           <Video
-            source={{ uri }}
+            source={{ uri: sourceUri }}
             style={[styles.image, style as StyleProp<ViewStyle>]}
             resizeMode={ResizeMode.COVER}
             shouldPlay={false}
@@ -161,7 +169,7 @@ export function CachedImage({
           />
         ) : useNativeImage ? (
           <NativeImage
-            source={{ uri }}
+            source={{ uri: sourceUri }}
             style={[styles.image, style]}
             resizeMode={nativeResizeMode}
             onLoad={handleLoad}
@@ -169,7 +177,7 @@ export function CachedImage({
           />
         ) : (
           <ExpoImage
-            source={{ uri }}
+            source={{ uri: sourceUri }}
             style={[styles.image, style]}
             contentFit={contentFit}
             transition={effectiveTransition}
@@ -178,7 +186,7 @@ export function CachedImage({
             priority={effectivePriority}
             onLoad={handleLoad}
             onError={handleError}
-            recyclingKey={uri}
+            recyclingKey={sourceUri}
           />
         )}
       </Reanimated.View>

@@ -129,11 +129,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const displayUsername = targetProfile?.username ?? 'Thryft user';
   const displayHandle = targetProfile ? `@${targetProfile.username}` : '';
   const displayAvatar = isSelfProfile
-    ? userAvatar || mediaOverride?.avatar || targetProfile?.avatar || undefined
+    ? targetProfile?.avatar || userAvatar || mediaOverride?.avatar || undefined
     : targetProfile?.avatar || undefined;
   const displayCover = isSelfProfile
-    ? userCover || mediaOverride?.cover || COVER_IMAGE
-    : COVER_IMAGE;
+    ? targetProfile?.coverPhoto || userCover || mediaOverride?.cover || COVER_IMAGE
+    : targetProfile?.coverPhoto || COVER_IMAGE;
 
   const handleShare = React.useCallback(async () => {
     try {

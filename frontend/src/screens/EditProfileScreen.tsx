@@ -199,8 +199,8 @@ export default function EditProfileScreen() {
     }
   };
 
-  const currentAvatar = userAvatar || user?.avatar || '';
-  const currentCover = userCover || user?.coverPhoto || '';
+  const currentAvatar = user?.avatar || userAvatar || '';
+  const currentCover = user?.coverPhoto || userCover || '';
 
   if (!user) {
     return (

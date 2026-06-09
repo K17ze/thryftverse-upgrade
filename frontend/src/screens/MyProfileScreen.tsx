@@ -463,9 +463,9 @@ export default function MyProfileScreen() {
 
   const profileMediaOverride = profileMediaOverrides[profileUserId] ?? null;
 
-  const displayCover = userCover || profileMediaOverride?.cover || COVER_IMAGE;
+  const displayCover = user.coverPhoto || userCover || profileMediaOverride?.cover || COVER_IMAGE;
 
-  const displayAvatar = userAvatar || profileMediaOverride?.avatar || user.avatar;
+  const displayAvatar = user.avatar || userAvatar || profileMediaOverride?.avatar || null;
 
 
 

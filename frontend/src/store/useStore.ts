@@ -431,7 +431,8 @@ export const useStore = create<StoreState>()(
               updatedAt: profile.updatedAt,
             }
           : null,
-        userCover: profile.coverPhoto ?? state.userCover,
+        userAvatar: profile.avatar ?? null,
+        userCover: profile.coverPhoto ?? null,
       }));
     } catch {
       // Silently fail; profile will remain as cached or null.
