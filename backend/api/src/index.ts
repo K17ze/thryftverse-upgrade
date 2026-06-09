@@ -674,6 +674,10 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && /^\/users\/[^/]+\/profile$/.test(path)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -711,7 +715,7 @@ function resolveActorUserId(requestPath: string, request: { params?: unknown; bo
   }
 
   const userPathMatch = requestPath.match(/^\/users\/([^/]+)/);
-  if (userPathMatch?.[1]) {
+  if (userPathMatch?.[1] && userPathMatch[1] !== 'me') {
     return decodeURIComponent(userPathMatch[1]);
   }
 

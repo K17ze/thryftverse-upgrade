@@ -4,9 +4,10 @@ const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:4000';
 
 async function request(path, opts = {}) {
   const url = `${API_BASE_URL}${path}`;
+  const { headers: optsHeaders, ...restOpts } = opts;
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...opts.headers },
-    ...opts,
+    ...restOpts,
+    headers: { 'Content-Type': 'application/json', ...optsHeaders },
   });
   const body = await res.json().catch(() => ({}));
   return { status: res.status, body };
