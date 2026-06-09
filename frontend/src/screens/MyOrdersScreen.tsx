@@ -28,7 +28,9 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { Type } from '../theme/designTokens';
+import { Type, Radius } from '../theme/designTokens';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 
 const { width } = Dimensions.get('window');
 
@@ -165,22 +167,22 @@ export default function MyOrdersScreen() {
 
   const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
 
-  // Helper to get status color
-  const getStatusColor = (status: string): string => {
-    const statusColors: Record<string, string> = {
-      'pending': '#F59E0B',
-      'awaiting payment': '#F59E0B',
-      'paid': '#3B82F6',
-      'confirmed': '#3B82F6',
-      'shipped': '#8B5CF6',
-      'in transit': '#8B5CF6',
-      'delivered': '#22C55E',
-      'completed': '#22C55E',
-      'cancelled': '#EF4444',
-      'refunded': '#6B7280',
-      'in progress': '#3B82F6',
+  // Map order status to premium pill tone
+  const getStatusTone = (status: string): import('../components/ui/PremiumStatusPill').StatusPillTone => {
+    const toneMap: Record<string, import('../components/ui/PremiumStatusPill').StatusPillTone> = {
+      'pending': 'pending',
+      'awaiting payment': 'pending',
+      'paid': 'paid',
+      'confirmed': 'paid',
+      'shipped': 'shipped',
+      'in transit': 'shipped',
+      'delivered': 'delivered',
+      'completed': 'delivered',
+      'cancelled': 'error',
+      'refunded': 'refunded',
+      'in progress': 'pending',
     };
-    return statusColors[status.toLowerCase()] || Colors.textMuted;
+    return toneMap[status.toLowerCase()] || 'neutral';
   };
 
   return (
@@ -218,6 +220,8 @@ export default function MyOrdersScreen() {
         optionTextStyle={styles.filterText}
         optionTextActiveStyle={styles.activeFilterText}
       />
+
+      <View style={{ height: 8 }} />
 
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={10} />
@@ -274,7 +278,7 @@ export default function MyOrdersScreen() {
                           .duration(Motion.list.enterDuration)
                   }
                 >
-                  <View style={styles.cardGroup}>
+                  <ElevatedSurface variant="surface" style={styles.cardGroup}>
                     <AnimatedPressable
                       style={styles.orderSummaryTap}
                       onPress={() => navigation.navigate('OrderDetail', { orderId: order.id })}
@@ -287,18 +291,16 @@ export default function MyOrdersScreen() {
                         <CachedImage uri={getListingCoverUri(order.images, '')} style={styles.orderThumb} contentFit="cover" />
                         <View style={styles.orderInfo}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '15' }]}>
-                              <Text style={[styles.orderStatus, { color: getStatusColor(order.status) }]}>{order.status}</Text>
-                            </View>
+                            <PremiumStatusPill tone={getStatusTone(order.status)} label={order.status} compact />
                           </View>
                           <Text style={styles.orderTitle} numberOfLines={1}>{order.title}</Text>
-                          {trackingSnippet ? <Text style={styles.orderTracking} numberOfLines={1}>Tracking: {trackingSnippet}</Text> : null}
+                          {trackingSnippet ? <Text style={styles.orderTracking} numberOfLines={1}>{trackingSnippet}</Text> : null}
                           <Text style={styles.orderPrice}>{formatFromFiat(order.price, 'GBP', { displayMode: 'fiat' })}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
                       </View>
                     </AnimatedPressable>
-                  </View>
+                  </ElevatedSurface>
                 </Reanimated.View>
               );
             })
@@ -319,7 +321,7 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textMuted },
   activeTabText: { color: Colors.textPrimary },
 
-  filterStrip: { marginBottom: 16, marginHorizontal: 20, gap: 10 },
+  filterStrip: { marginHorizontal: 20, gap: 10 },
   filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   activeFilterPill: { backgroundColor: Colors.textPrimary, borderColor: Colors.textPrimary },
   filterText: { fontSize: 13, fontFamily: Typography.family.medium, color: Colors.textSecondary },
@@ -330,7 +332,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: 16 },
   emptySub: { fontSize: 14, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', marginTop: 8 },
 
-  cardGroup: { backgroundColor: Colors.surface, borderRadius: 24, padding: 16, marginBottom: 16 },
+  cardGroup: { borderRadius: Radius.lg, padding: 16, marginBottom: 16, marginHorizontal: 0 },
   orderSummaryTap: {
     borderRadius: 16,
   },

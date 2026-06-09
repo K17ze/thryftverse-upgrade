@@ -44,6 +44,8 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getListingCoverUri } from '../utils/media';
 import { t } from '../i18n';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { PremiumActionBar } from '../components/ui/PremiumActionBar';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 const BRAND = Colors.brand;
@@ -425,7 +427,7 @@ export default function CheckoutScreen() {
         
         {/* Item Summary Card */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
-        <View style={styles.itemCard}>
+        <ElevatedSurface variant="surface" style={styles.itemCard}>
           <CachedImage uri={getListingCoverUri(item.images, '')} style={styles.itemThumb} contentFit="cover" />
           <View style={styles.itemInfo}>
             <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
@@ -466,11 +468,11 @@ export default function CheckoutScreen() {
             </View>
             <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP')}</Text>
           </View>
-        </View>
+        </ElevatedSurface>
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(60)}>
-        <View style={styles.readinessCard}>
+        <ElevatedSurface variant="tint" style={styles.readinessCard}>
           <View style={styles.readinessTopRow}>
             <Text style={styles.readinessTitle}>{t('checkout.readiness.title')}</Text>
             <SyncStatusPill tone={checkoutStatus.tone} label={checkoutStatus.label} compact />
@@ -493,13 +495,13 @@ export default function CheckoutScreen() {
               </Text>
             </View>
           </View>
-        </View>
+        </ElevatedSurface>
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}>
         <Text style={styles.sectionTitle}>{t('checkout.section.delivery')}</Text>
+        <ElevatedSurface variant="surface" style={styles.blockBtn}>
         <AnimatedPressable
-          style={styles.blockBtn}
           activeOpacity={0.8}
           onPress={() => setAddAddressSheetVisible(true)}
           accessibilityLabel={savedAddress
@@ -521,8 +523,10 @@ export default function CheckoutScreen() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
         </AnimatedPressable>
+        </ElevatedSurface>
 
-        <AnimatedPressable style={styles.blockBtn} activeOpacity={0.8} onPress={() => navigation.navigate('Postage')}>
+        <ElevatedSurface variant="surface" style={styles.blockBtn}>
+        <AnimatedPressable activeOpacity={0.8} onPress={() => navigation.navigate('Postage')}>
           <View style={styles.blockLeft}>
             <Ionicons name="cube-outline" size={24} color={Colors.textPrimary} />
             <View style={styles.blockTextCol}>
@@ -536,6 +540,7 @@ export default function CheckoutScreen() {
           </View>
           <Text style={styles.blockRightPrice}>{formatFromFiat(POSTAGE_FEE, 'GBP')}</Text>
         </AnimatedPressable>
+        </ElevatedSurface>
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}>
@@ -543,8 +548,8 @@ export default function CheckoutScreen() {
         {paymentPolicyLabel ? (
           <Text style={styles.policyHint}>{t('checkout.payment.policyScope', { scope: paymentPolicyLabel })}</Text>
         ) : null}
+        <ElevatedSurface variant="surface" style={styles.blockBtn}>
         <AnimatedPressable
-          style={styles.blockBtn}
           activeOpacity={0.8}
           onPress={() => {
             if (!allowCardPayments) {
@@ -569,11 +574,12 @@ export default function CheckoutScreen() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
         </AnimatedPressable>
+        </ElevatedSurface>
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}>
         <Text style={styles.sectionTitle}>{t('checkout.section.orderSummary')}</Text>
-        <View style={styles.summaryCard}>
+        <ElevatedSurface variant="surface" style={styles.summaryCard}>
           <SummaryRow label={t('checkout.summary.itemPrice')} value={formatFromFiat(item.price, 'GBP')} />
           <SummaryRow label={t('checkout.summary.platformCharge')} value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} info />
           <SummaryRow
@@ -586,7 +592,7 @@ export default function CheckoutScreen() {
           />
           <View style={styles.divider} />
           <SummaryRow label={t('checkout.summary.total')} value={formatFromFiat(TOTAL, 'GBP')} bold />
-        </View>
+        </ElevatedSurface>
         </Reanimated.View>
 
         <Text style={styles.termsText}>
@@ -604,29 +610,13 @@ export default function CheckoutScreen() {
       </ScrollView>
 
       {/* Sticky Bottom Footer */}
-      <View style={styles.footer}>
-        <View style={styles.footerPriceCol}>
-          <Text style={styles.footerTotalLabel}>{t('checkout.footer.total')}</Text>
-          <Text style={styles.footerTotalPrice}>{formatFromFiat(TOTAL, 'GBP')}</Text>
-        </View>
-        <AppButton
-          style={styles.payBtn}
-          variant="primary"
-          size="md"
-          align="center"
-          title={isSubmittingPayment ? t('checkout.cta.processing') : t('checkout.cta.paySecurely')}
-          onPress={() => { haptics.press(); handlePay(); }}
-          disabled={!checkoutReady || isSubmittingPayment}
-          accessibilityLabel={isSubmittingPayment
-            ? t('checkout.a11y.processing')
-            : checkoutReady
-              ? t('checkout.a11y.paySecurely', { amount: formatFromFiat(TOTAL, 'GBP') })
-              : t('checkout.a11y.completeDetails')}
-          accessibilityHint={checkoutReady
-            ? t('checkout.a11y.hint.doubleTapConfirm')
-            : t('checkout.a11y.hint.addAddressPayment')}
-        />
-      </View>
+      <PremiumActionBar
+        primaryLabel={isSubmittingPayment ? t('checkout.cta.processing') : t('checkout.cta.paySecurely')}
+        onPrimaryPress={() => { haptics.press(); handlePay(); }}
+        primaryLoading={isSubmittingPayment}
+        primaryDisabled={!checkoutReady || isSubmittingPayment}
+        errorText={!checkoutReady && !isHydratingCheckout ? t('checkout.requirement') : undefined}
+      />
 
       <AddCardSheet visible={addCardSheetVisible} onDismiss={() => setAddCardSheetVisible(false)} />
       <AddAddressSheet visible={addAddressSheetVisible} onDismiss={() => setAddAddressSheetVisible(false)} />
@@ -818,7 +808,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: PANEL_BORDER,
-    backgroundColor: FOOTER_BG, 
+    backgroundColor: FOOTER_BG,
     paddingHorizontal: 20, paddingTop: 20, paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
   footerPriceCol: { flex: 1 },

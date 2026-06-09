@@ -27,6 +27,7 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
 import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
 import { PremiumFormCard } from '../components/ui/PremiumFormCard';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import {
   setStoredUserAvatar,
   setStoredUserAvatarForUser,
@@ -214,7 +215,8 @@ export default function EditProfileScreen() {
 
           {/* Cover */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.coverSection}>
-            <AnimatedPressable style={styles.coverWrap} onPress={pickCover} activeOpacity={0.85} scaleValue={0.98}>
+            <ElevatedSurface variant="elevated" style={styles.coverWrap}>
+            <AnimatedPressable onPress={pickCover} activeOpacity={0.85} scaleValue={0.98} style={{ width: '100%', height: '100%' }}>
               <CachedImage
                 key={`edit-cover-${currentCover}`}
                 uri={currentCover}
@@ -236,6 +238,7 @@ export default function EditProfileScreen() {
                 </View>
               )}
             </AnimatedPressable>
+            </ElevatedSurface>
             <AnimatedPressable onPress={pickCover} activeOpacity={0.8} scaleValue={0.98}>
               <Text style={styles.changeText}>Change cover photo</Text>
             </AnimatedPressable>
@@ -243,7 +246,8 @@ export default function EditProfileScreen() {
 
           {/* Avatar */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(40)} style={styles.avatarSection}>
-            <AnimatedPressable style={styles.avatarWrap} onPress={pickAvatar} activeOpacity={0.85} scaleValue={0.97}>
+            <ElevatedSurface variant="elevated" style={[styles.avatarWrap, { borderRadius: 60, overflow: 'hidden' }]}>
+            <AnimatedPressable onPress={pickAvatar} activeOpacity={0.85} scaleValue={0.97} style={{ width: 120, height: 120 }}>
               <CachedImage
                 uri={currentAvatar}
                 style={styles.avatarImage}
@@ -264,6 +268,7 @@ export default function EditProfileScreen() {
                 </View>
               )}
             </AnimatedPressable>
+            </ElevatedSurface>
             <AnimatedPressable onPress={pickAvatar} activeOpacity={0.8} scaleValue={0.98}>
               <Text style={styles.changeText}>Change profile photo</Text>
             </AnimatedPressable>
@@ -400,7 +405,6 @@ const styles = StyleSheet.create({
     height: 140,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
   },
   coverContainer: {
     width: '100%',
@@ -446,6 +450,7 @@ const styles = StyleSheet.create({
   avatarWrap: {
     position: 'relative',
     marginBottom: Space.sm,
+    borderRadius: 60,
   },
   avatarContainer: {
     width: 120,

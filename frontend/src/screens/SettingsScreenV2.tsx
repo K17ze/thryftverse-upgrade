@@ -26,6 +26,7 @@ import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { IdentityCard } from '../components/settings/IdentityCard';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 
 type Props = StackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -153,11 +154,13 @@ export default function SettingsScreenV2({ navigation }: Props) {
       {/* Account Centre */}
       {matchesSearch('account centre profile avatar addresses closet') && (
         <View>
-          <SettingsSection title="Account Centre">
+          <ElevatedSurface variant="elevated" style={{ marginHorizontal: 16, marginBottom: 12 }}>
             <IdentityCard
               user={currentUser}
               onPress={() => navigation.navigate('EditProfile')}
             />
+          </ElevatedSurface>
+          <SettingsSection title="Account Centre">
             <SettingsRow
               icon="location-outline"
               title="Addresses"
@@ -343,15 +346,17 @@ export default function SettingsScreenV2({ navigation }: Props) {
       {/* Logout */}
       {matchesSearch('log out') && (
         <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
-          <SettingsRow
-            icon="log-out-outline"
-            iconColor="#ff3b30"
-            title="Log Out"
-            danger
-            onPress={handleLogout}
-            isFirst
-            isLast
-          />
+          <ElevatedSurface variant="surface" style={{ marginBottom: 0 }}>
+            <SettingsRow
+              icon="log-out-outline"
+              iconColor="#ff3b30"
+              title="Log Out"
+              danger
+              onPress={handleLogout}
+              isFirst
+              isLast
+            />
+          </ElevatedSurface>
         </View>
       )}
 

@@ -49,6 +49,7 @@ import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAut
 import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { filterImageUris } from '../utils/media';
 import { haptics } from '../utils/haptics';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { uploadMedia } from '../services/mediaUpload';
 import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 
@@ -896,7 +897,7 @@ export default function SellScreenV2() {
         {/* ═══════ SECTION 2 — CORE PRODUCT IDENTITY ═══════ */}
         <Animated.View entering={FadeInUp.delay(100).duration(300)} style={{ marginTop: SECTION_GAP }}>
           <SectionHeader step={3} title="What are you selling?" />
-          <View style={styles.identityCard}>
+          <ElevatedSurface variant="surface" style={[styles.identityCard, { marginBottom: 0 }]}>
             <AppInput
               label="Title"
               placeholder="e.g. Vintage Levi's 501 Denim Jacket"
@@ -951,7 +952,7 @@ export default function SellScreenV2() {
             ) : null}
 
             <TrustChip text="Buyers filter by condition — be honest" icon="shield-checkmark-outline" />
-          </View>
+          </ElevatedSurface>
         </Animated.View>
 
         {/* ═══════ SECTION 3 — MODE-SPECIFIC PRICING ═══════ */}
@@ -959,7 +960,7 @@ export default function SellScreenV2() {
           <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ marginTop: SECTION_GAP }}>
             <SectionHeader step={4} title="Pricing" />
             <Animated.View style={[styles.pricingWrap, priceFocusStyle]}>
-              <View style={styles.pricingCard}>
+              <ElevatedSurface variant="surface" style={[styles.pricingCard, { marginBottom: 0 }]}>
                 <View style={styles.priceInputWrap}>
                   <T.Headline color={Colors.textMuted} style={styles.priceCurrency}>{currencySymbol}</T.Headline>
                   <TextInput
@@ -996,7 +997,7 @@ export default function SellScreenV2() {
                 </View>
 
                 <TrustChip text="Research similar listings to price competitively" icon="trending-up-outline" />
-              </View>
+              </ElevatedSurface>
             </Animated.View>
           </Animated.View>
         )}
@@ -1005,7 +1006,7 @@ export default function SellScreenV2() {
           <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ marginTop: SECTION_GAP }}>
             <SectionHeader step={4} title="Valuation & Shares" />
             <Animated.View style={[styles.pricingWrap, priceFocusStyle]}>
-              <View style={styles.pricingCard}>
+              <ElevatedSurface variant="surface" style={[styles.pricingCard, { marginBottom: 0 }]}>
                 <View style={styles.coOwnTopRow}>
                   <View style={{ flex: 1 }}>
                     <T.BodyEmphasis>Tokenize this item</T.BodyEmphasis>
@@ -1091,7 +1092,7 @@ export default function SellScreenV2() {
                   </>
 
                 <TrustChip text="Clear valuation builds investor confidence" icon="shield-checkmark-outline" />
-              </View>
+              </ElevatedSurface>
             </Animated.View>
           </Animated.View>
         )}
@@ -1100,7 +1101,7 @@ export default function SellScreenV2() {
           <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ marginTop: SECTION_GAP }}>
             <SectionHeader step={4} title="Auction Setup" />
             <Animated.View style={[styles.pricingWrap, priceFocusStyle]}>
-              <View style={styles.pricingCard}>
+              <ElevatedSurface variant="surface" style={[styles.pricingCard, { marginBottom: 0 }]}>
                 <View style={styles.priceInputWrap}>
                   <T.Headline color={Colors.textMuted} style={styles.priceCurrency}>{currencySymbol}</T.Headline>
                   <TextInput
@@ -1148,7 +1149,7 @@ export default function SellScreenV2() {
                 </View>
 
                 <TrustChip text="Low starting bids drive more competitive bidding" icon="trending-up-outline" />
-              </View>
+              </ElevatedSurface>
             </Animated.View>
           </Animated.View>
         )}
@@ -1156,7 +1157,7 @@ export default function SellScreenV2() {
         {/* ═══════ SECTION 4 — DETAILS ═══════ */}
         <Animated.View entering={FadeInUp.delay(300).duration(300)} style={{ marginTop: SECTION_GAP }}>
           <SectionHeader step={5} title="Details" subtitle="Help buyers find your item" />
-          <View style={styles.detailsCard}>
+          <ElevatedSurface variant="surface" style={[styles.detailsCard, { marginBottom: 0 }]}>
             <AppInput
               label="Description"
               placeholder="Describe the fit, fabric, flaws, and why you love it..."
@@ -1216,13 +1217,13 @@ export default function SellScreenV2() {
             {errors.size ? (
               <T.Caption color={Colors.danger} style={{ marginTop: 4 }}>{errors.size}</T.Caption>
             ) : null}
-          </View>
+          </ElevatedSurface>
         </Animated.View>
 
         {/* ═══════ SECTION 5 — DELIVERY / SHIPPING ═══════ */}
         <Animated.View entering={FadeInUp.delay(400).duration(300)} style={{ marginTop: SECTION_GAP }}>
           <SectionHeader step={6} title="Delivery" />
-          <View style={styles.deliveryCard}>
+          <ElevatedSurface variant="surface" style={[styles.deliveryCard, { marginBottom: 0 }]}>
             <T.Caption color={Colors.textMuted} style={{ marginBottom: 10 }}>Shipping method</T.Caption>
             <View style={styles.toggleRow}>
               {(['standard', 'express'] as const).map((m) => {
@@ -1262,7 +1263,7 @@ export default function SellScreenV2() {
             </View>
 
             <TrustChip text="Free shipping can help your listing stand out" icon="flash-outline" />
-          </View>
+          </ElevatedSurface>
         </Animated.View>
 
         {/* ═══════ SECTION 6 — MODE-SPECIFIC PREVIEW EVOLUTION ═══════ */}
@@ -1270,7 +1271,7 @@ export default function SellScreenV2() {
           <SectionHeader step={listingMode === 'sell_now' ? 5 : listingMode === 'co_own' ? 6 : 6} title="Preview" subtitle={listingMode === 'sell_now' ? 'This is how buyers will see your listing' : listingMode === 'co_own' ? 'Investors will see this proposal' : 'Bidders will see this auction'} />
 
           {listingMode === 'sell_now' && (
-            <View style={styles.previewCard}>
+            <ElevatedSurface variant="surface" style={[styles.previewCard, { marginBottom: 0 }]}>
               <View style={styles.previewFeedCard}>
                 <View style={styles.previewImageWrap}>
                   {photos.length > 0 ? (
@@ -1329,11 +1330,11 @@ export default function SellScreenV2() {
                   </View>
                 </View>
               </View>
-            </View>
+            </ElevatedSurface>
           )}
 
           {listingMode === 'co_own' && (
-            <View style={styles.previewCard}>
+            <ElevatedSurface variant="surface" style={[styles.previewCard, { marginBottom: 0 }]}>
               <View style={styles.previewFeedCard}>
                 <View style={styles.previewImageWrap}>
                   {photos.length > 0 ? (
@@ -1383,11 +1384,11 @@ export default function SellScreenV2() {
                   </View>
                 </View>
               </View>
-            </View>
+            </ElevatedSurface>
           )}
 
           {listingMode === 'auction' && (
-            <View style={styles.previewCard}>
+            <ElevatedSurface variant="surface" style={[styles.previewCard, { marginBottom: 0 }]}>
               <View style={styles.previewFeedCard}>
                 <View style={styles.previewImageWrap}>
                   {photos.length > 0 ? (
@@ -1447,7 +1448,7 @@ export default function SellScreenV2() {
                   </View>
                 </View>
               </View>
-            </View>
+            </ElevatedSurface>
           )}
         </Animated.View>
 
@@ -1664,9 +1665,6 @@ const styles = StyleSheet.create({
 
   /* ── identity ── */
   identityCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: Radius.lg,
     padding: CARD_PADDING,
   },
@@ -1703,9 +1701,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   pricingCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: Radius.lg,
     padding: CARD_PADDING,
   },
@@ -1744,9 +1739,6 @@ const styles = StyleSheet.create({
 
   /* ── details ── */
   detailsCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: Radius.lg,
     padding: CARD_PADDING,
   },
@@ -1776,9 +1768,6 @@ const styles = StyleSheet.create({
 
   /* ── delivery ── */
   deliveryCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: Radius.lg,
     padding: CARD_PADDING,
   },
@@ -1847,9 +1836,6 @@ const styles = StyleSheet.create({
 
   /* ── preview ── */
   previewCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: Radius.lg,
     padding: CARD_PADDING,
   },

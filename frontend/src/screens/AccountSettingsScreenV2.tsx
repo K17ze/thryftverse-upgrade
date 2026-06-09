@@ -239,104 +239,104 @@ export default function AccountSettingsScreenV2() {
   return (
     <SettingsPage title="Account details" onBack={() => navigation.goBack()}>
       {/* User Details */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
         <SettingsSection title="User details">
-          {isHydrating ? (
-            <View style={{ padding: 16 }}>
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: 8 }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: 8 }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-            </View>
-          ) : (
-            <>
-              <DetailRow label="Username" value={user?.username ?? '—'} />
-              <DetailRow label="Email" value={email} onPress={() => openEdit('email', email)} />
-              <DetailRow
-                label="Picture"
-                value={user?.avatar ? 'Change' : 'Add'}
-                onPress={() => navigation.navigate('EditProfile')}
-                isLast
-              />
-            </>
-          )}
+            {isHydrating ? (
+              <View style={{ padding: 16 }}>
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+                <View style={{ height: 8 }} />
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+                <View style={{ height: 8 }} />
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+              </View>
+            ) : (
+              <>
+                <DetailRow label="Username" value={user?.username ?? '—'} />
+                <DetailRow label="Email" value={email} onPress={() => openEdit('email', email)} />
+                <DetailRow
+                  label="Picture"
+                  value={user?.avatar ? 'Change' : 'Add'}
+                  onPress={() => navigation.navigate('EditProfile')}
+                  isLast
+                />
+              </>
+            )}
         </SettingsSection>
       </Reanimated.View>
 
       {/* About me */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
         <SettingsSection title="About me">
-          {isHydrating ? (
-            <View style={{ padding: 16 }}>
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: 8 }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: 8 }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-            </View>
-          ) : (
-            <>
-              <DetailRow label="Full name" value={fullName} onPress={() => openEdit('fullName', fullName)} />
-              <DetailRow label="Date of birth" value={birthday} onPress={() => openEdit('birthday', birthday)} />
-              <DetailRow label="Phone" value={phone} onPress={() => openEdit('phone', phone)} />
-              <DetailRow
-                label="Country"
-                value={(userAny?.country as string) || '—'}
-                isLast
-              />
-            </>
-          )}
+            {isHydrating ? (
+              <View style={{ padding: 16 }}>
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+                <View style={{ height: 8 }} />
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+                <View style={{ height: 8 }} />
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+              </View>
+            ) : (
+              <>
+                <DetailRow label="Full name" value={fullName} onPress={() => openEdit('fullName', fullName)} />
+                <DetailRow label="Date of birth" value={birthday} onPress={() => openEdit('birthday', birthday)} />
+                <DetailRow label="Phone" value={phone} onPress={() => openEdit('phone', phone)} />
+                <DetailRow
+                  label="Country"
+                  value={(userAny?.country as string) || '—'}
+                  isLast
+                />
+              </>
+            )}
         </SettingsSection>
       </Reanimated.View>
 
       {/* Preferences */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
         <SettingsSection title="Preferences">
-          <DetailRow
-            label="Holiday Mode"
-            value={holidayMode ? 'On' : 'Off'}
-            onPress={() => updateAccountPreferences({ holidayMode: !holidayMode })}
-          />
-          <DetailRow
-            label="Private Profile"
-            value={privateProfile ? 'On' : 'Off'}
-            onPress={() => updateAccountPreferences({ privateProfile: !privateProfile })}
-            isLast
-          />
+            <DetailRow
+              label="Holiday Mode"
+              value={holidayMode ? 'On' : 'Off'}
+              onPress={() => updateAccountPreferences({ holidayMode: !holidayMode })}
+            />
+            <DetailRow
+              label="Private Profile"
+              value={privateProfile ? 'On' : 'Off'}
+              onPress={() => updateAccountPreferences({ privateProfile: !privateProfile })}
+              isLast
+            />
         </SettingsSection>
       </Reanimated.View>
 
       {/* Security */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
         <SettingsSection title="Security">
-          <DetailRow label="Password" value="••••••••" onPress={() => navigation.navigate('ChangePassword')} />
-          <DetailRow
-            label="Two-Factor Authentication"
-            value={twoFactorEnabled ? 'On' : 'Off'}
-            onPress={() => handleToggleTwoFactor(!twoFactorEnabled)}
-            isLast
-          />
+            <DetailRow label="Password" value="••••••••" onPress={() => navigation.navigate('ChangePassword')} />
+            <DetailRow
+              label="Two-Factor Authentication"
+              value={twoFactorEnabled ? 'On' : 'Off'}
+              onPress={() => handleToggleTwoFactor(!twoFactorEnabled)}
+              isLast
+            />
         </SettingsSection>
       </Reanimated.View>
 
       {/* Manage */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
         <SettingsSection title="Manage">
-          <DetailRow
-            label="Download my data"
-            value=""
-            onPress={() => void handleDownloadData()}
-            loading={isExporting}
-          />
-          <DetailRow
-            label="Delete account"
-            value=""
-            onPress={handleDeleteAccount}
-            danger
-            loading={isDeleting}
-            isLast
-          />
+            <DetailRow
+              label="Download my data"
+              value=""
+              onPress={() => void handleDownloadData()}
+              loading={isExporting}
+            />
+            <DetailRow
+              label="Delete account"
+              value=""
+              onPress={handleDeleteAccount}
+              danger
+              loading={isDeleting}
+              isLast
+            />
         </SettingsSection>
       </Reanimated.View>
 

@@ -43,6 +43,8 @@ import { Body, Caption, Meta, Headline } from '../components/ui/Text';
 import { haptics } from '../utils/haptics';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
@@ -364,8 +366,8 @@ export default function OrderDetailScreen() {
 
         {/* -- Item Card -- */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
+        <ElevatedSurface variant="surface" style={styles.itemCard}>
         <AnimatedPressable
-          style={styles.itemCard}
           onPress={() => { haptics.tap(); navigation.push('ItemDetail', { itemId: listing.id }); }}
           activeOpacity={0.88}
         >
@@ -384,17 +386,21 @@ export default function OrderDetailScreen() {
           </View>
           <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
         </AnimatedPressable>
+        </ElevatedSurface>
         </Reanimated.View>
 
         {/* -- Status Banner -- */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(60)}>
-        <View style={styles.statusBanner}>
-          <Ionicons name="cube-outline" size={20} color={Colors.brand} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.statusLabel}>{statusBanner.label}</Text>
+        <ElevatedSurface variant="tint" style={styles.statusBanner}>
+          <PremiumStatusPill
+            tone={orderStatus === 'cancelled' ? 'error' : orderStatus === 'delivered' ? 'delivered' : orderStatus === 'paid' ? 'paid' : orderStatus === 'shipped' ? 'shipped' : 'pending'}
+            label={statusBanner.label}
+            icon="cube-outline"
+          />
+          <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.statusSub}>{statusBanner.subtitle}</Text>
           </View>
-        </View>
+        </ElevatedSurface>
         </Reanimated.View>
         {isSyncingOrder ? <Text style={styles.syncHint}>Syncing live order status...</Text> : null}
 
@@ -402,7 +408,7 @@ export default function OrderDetailScreen() {
           <>
             <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}>
             <Text style={styles.sectionTitle}>Shipment details</Text>
-            <View style={styles.shipmentMetaCard}>
+            <ElevatedSurface variant="surface" style={styles.shipmentMetaCard}>
               {backendOrder?.shippingProvider ? (
                 <ShipmentMetaRow label="Carrier" value={backendOrder.shippingProvider} />
               ) : null}
@@ -434,7 +440,7 @@ export default function OrderDetailScreen() {
                   accessibilityLabel="Open shipping label"
                 />
               ) : null}
-            </View>
+            </ElevatedSurface>
             </Reanimated.View>
           </>
         ) : null}
@@ -442,7 +448,7 @@ export default function OrderDetailScreen() {
         {/* -- Tracking Timeline -- */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}>
         <Text style={styles.sectionTitle}>Tracking</Text>
-        <View style={styles.timelineCard}>
+        <ElevatedSurface variant="surface" style={styles.timelineCard}>
           {trackingSteps.map((step, index) => (
             <View key={step.id} style={styles.timelineRow}>
               {/* Left column: dot + line */}
@@ -470,14 +476,14 @@ export default function OrderDetailScreen() {
               </View>
             </View>
           ))}
-        </View>
+        </ElevatedSurface>
         </Reanimated.View>
 
         {/* -- Seller Info -- */}
         {resolvedSeller.id && (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}>
           <Text style={styles.sectionTitle}>Seller</Text>
-          <View style={styles.sellerCard}>
+          <ElevatedSurface variant="surface" style={styles.sellerCard}>
             <AnimatedPressable
               style={styles.sellerIdentityTap}
               onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: resolvedSeller.id }); }}
@@ -515,25 +521,25 @@ export default function OrderDetailScreen() {
               accessibilityLabel="Message seller"
               accessibilityHint="Opens conversation with this seller"
             />
-          </View>
+          </ElevatedSurface>
           </Reanimated.View>
         )}
 
         {/* -- Transaction Info -- */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(300)}>
         <Text style={styles.sectionTitle}>Transaction</Text>
-        <View style={styles.txCard}>
+        <ElevatedSurface variant="surface" style={styles.txCard}>
           <TxRow label="Item price" value={formatFromFiat(subtotal, 'GBP', { displayMode: 'fiat' })} />
           <TxRow label="Platform charge" value={formatFromFiat(platformCharge, 'GBP', { displayMode: 'fiat' })} />
           <TxRow label="Postage" value={`from ${formatFromFiat(postageFee, 'GBP', { displayMode: 'fiat' })}`} />
           <View style={styles.txDivider} />
           <TxRow label="Total paid" value={formatFromFiat(totalPaid, 'GBP', { displayMode: 'fiat' })} bold />
-        </View>
+        </ElevatedSurface>
         </Reanimated.View>
 
         {/* -- Actions -- */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(360)}>
-        <View style={styles.actionsRow}>
+        <ElevatedSurface variant="subtle" style={styles.actionsRow}>
           {canCancel && (
             <AppButton
               title="Cancel order"
@@ -629,7 +635,7 @@ export default function OrderDetailScreen() {
               accessibilityLabel="Report issue"
             />
           )}
-        </View>
+        </ElevatedSurface>
         </Reanimated.View>
 
         <View style={{ height: 40 }} />

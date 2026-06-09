@@ -27,6 +27,8 @@ import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { Type } from '../theme/designTokens';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { PremiumListSection } from '../components/ui/PremiumListSection';
 import {
   confirmPaymentIntent,
   createPaymentIntent,
@@ -308,7 +310,7 @@ export default function BalanceScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.heroGroup}>
-          <View style={styles.balanceHero}>
+          <ElevatedSurface variant="elevated" style={styles.balanceHero} contentStyle={{ alignItems: 'center' }}>
             <Text style={styles.balanceAmount}>{formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}</Text>
             <Text style={styles.balanceIze}>{formatIzeAmount(availableIze)}</Text>
             <Text style={styles.balanceLabel}>available balance</Text>
@@ -358,19 +360,19 @@ export default function BalanceScreen({ navigation }: Props) {
                 <Text style={styles.actionText}>shop</Text>
               </AnimatedPressable>
             </View>
-          </View>
+          </ElevatedSurface>
 
-          <View style={styles.pendingCard}>
+          <ElevatedSurface variant="subtle" style={styles.pendingCard} contentStyle={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View>
               <Text style={styles.pendingTitle}>pending balance</Text>
             </View>
             <View style={styles.pendingAmountCol}>
               <Text style={styles.pendingAmount}>{formatFromFiat(pendingBalance, 'GBP', { displayMode: 'fiat' })}</Text>
             </View>
-          </View>
+          </ElevatedSurface>
         </View>
 
-        <View style={styles.loadCard}>
+        <ElevatedSurface variant="surface" style={styles.loadCard}>
           {/* Tab Navigation */}
           <View style={styles.tabContainer}>
             <AnimatedPressable
@@ -514,9 +516,9 @@ export default function BalanceScreen({ navigation }: Props) {
               />
             </>
           )}
-        </View>
+        </ElevatedSurface>
 
-        <View style={styles.historyCard}>
+        <ElevatedSurface variant="surface" style={styles.historyCard}>
           <View style={styles.historyRow}>
             <View>
               <Text style={styles.historyTitle}>Balance history</Text>
@@ -535,9 +537,9 @@ export default function BalanceScreen({ navigation }: Props) {
             accessibilityLabel="Open balance history"
             accessibilityHint="Shows all wallet transactions and balance activity."
           />
-        </View>
+        </ElevatedSurface>
 
-        <Text style={styles.sectionTitle}>Recent Transactions</Text>
+        <PremiumListSection title="Recent Transactions">
 
         <AppSegmentControl
           style={styles.filterRow}
@@ -551,13 +553,14 @@ export default function BalanceScreen({ navigation }: Props) {
         />
 
         {filteredTransactions.length === 0 && (
-          <View style={[styles.cardGroup, { paddingVertical: 24, alignItems: 'center' }]}>
+          <View style={[{ paddingVertical: 24, alignItems: 'center' }]}>
             <Ionicons name="receipt-outline" size={32} color={Colors.textMuted} style={{ marginBottom: 8 }} />
             <Text style={{ fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary }}>
               No recent transactions
             </Text>
           </View>
         )}
+        </PremiumListSection>
       </ScrollView>
     </SafeAreaView>
   );

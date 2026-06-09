@@ -29,6 +29,7 @@ import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../theme/designTokens';
+import { PremiumListSection } from '../components/ui/PremiumListSection';
 
 type Props = StackScreenProps<RootStackParamList, 'Payments'>;
 
@@ -288,86 +289,83 @@ export default function PaymentsScreen({ navigation }: Props) {
 
         {/* Preferences */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
-          <SettingsCard>
+          <PremiumListSection title="Preferences">
             <SettingsCell
-              icon="wallet-outline"
-              iconColor={Colors.brand}
-              title="Use Thryftverse Balance"
-              subtitle="Automatically apply your available balance to purchases"
-              variant="toggle"
-              toggleValue={useBalance}
-              onToggle={(v) => updatePaymentPreferences({ useBalance: v })}
-              isFirst
-              isLast
-            />
-          </SettingsCard>
+                icon="wallet-outline"
+                iconColor={Colors.brand}
+                title="Use Thryftverse Balance"
+                subtitle="Automatically apply your available balance to purchases"
+                variant="toggle"
+                toggleValue={useBalance}
+                onToggle={(v) => updatePaymentPreferences({ useBalance: v })}
+                isFirst
+                isLast
+              />
+          </PremiumListSection>
         </Reanimated.View>
 
         {/* Cards */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-          <Text style={styles.sectionTitle}>Cards</Text>
-          <SettingsCard>
-            {renderPaymentMethodRows(
-              cardMethods,
-              fallbackCard as CommercePaymentMethod | null,
-              allowCards,
-              'No cards saved yet',
-              'Add your first card to checkout faster',
-              'Cards unavailable in your region',
-              'Switching compliance country will refresh payment rails.',
-              'card',
-              'card-outline'
-            )}
-            {allowCards ? (
-              <AppButton
-                title="Add new card"
-                icon={<Ionicons name="add" size={18} color={Colors.textPrimary} />}
-                style={styles.addBtn}
-                variant="secondary"
-                size="sm"
-                titleStyle={styles.addText}
-                contentStyle={styles.addBtnContent}
-                iconContainerStyle={styles.addIconWrap}
-                onPress={() => setAddCardSheetVisible(true)}
-                accessibilityLabel="Add new card"
-                accessibilityHint="Opens card setup"
-              />
-            ) : null}
-          </SettingsCard>
+          <PremiumListSection title="Cards">
+              {renderPaymentMethodRows(
+                cardMethods,
+                fallbackCard as CommercePaymentMethod | null,
+                allowCards,
+                'No cards saved yet',
+                'Add your first card to checkout faster',
+                'Cards unavailable in your region',
+                'Switching compliance country will refresh payment rails.',
+                'card',
+                'card-outline'
+              )}
+              {allowCards ? (
+                <AppButton
+                  title="Add new card"
+                  icon={<Ionicons name="add" size={18} color={Colors.textPrimary} />}
+                  style={styles.addBtn}
+                  variant="secondary"
+                  size="sm"
+                  titleStyle={styles.addText}
+                  contentStyle={styles.addBtnContent}
+                  iconContainerStyle={styles.addIconWrap}
+                  onPress={() => setAddCardSheetVisible(true)}
+                  accessibilityLabel="Add new card"
+                  accessibilityHint="Opens card setup"
+                />
+              ) : null}
+          </PremiumListSection>
         </Reanimated.View>
 
         {/* Bank Accounts */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-          <Text style={styles.sectionTitle}>Bank Accounts</Text>
-          <SettingsCard>
-            {renderPaymentMethodRows(
-              bankMethods,
-              fallbackBank as CommercePaymentMethod | null,
-              allowBankAccounts,
-              'No linked bank accounts',
-              'Add one for withdrawals and payouts',
-              'Bank payouts unavailable in your region',
-              'Supported rails will appear when available for your country.',
-              'business',
-              'business-outline'
-            )}
-            {allowBankAccounts ? (
-              <AppButton
-                title="Add new bank account"
-                icon={<Ionicons name="add" size={18} color={Colors.textPrimary} />}
-                style={styles.addBtn}
-                variant="secondary"
-                size="sm"
-                titleStyle={styles.addText}
-                contentStyle={styles.addBtnContent}
-                iconContainerStyle={styles.addIconWrap}
-                onPress={() => navigation.navigate('AddBankAccount')}
-                accessibilityLabel="Add new bank account"
-                accessibilityHint="Opens bank account setup"
-              />
-            ) : null}
-          </SettingsCard>
+          <PremiumListSection title="Bank Accounts">
+              {renderPaymentMethodRows(
+                bankMethods,
+                fallbackBank as CommercePaymentMethod | null,
+                allowBankAccounts,
+                'No linked bank accounts',
+                'Add one for withdrawals and payouts',
+                'Bank payouts unavailable in your region',
+                'Supported rails will appear when available for your country.',
+                'business',
+                'business-outline'
+              )}
+              {allowBankAccounts ? (
+                <AppButton
+                  title="Add new bank account"
+                  icon={<Ionicons name="add" size={18} color={Colors.textPrimary} />}
+                  style={styles.addBtn}
+                  variant="secondary"
+                  size="sm"
+                  titleStyle={styles.addText}
+                  contentStyle={styles.addBtnContent}
+                  iconContainerStyle={styles.addIconWrap}
+                  onPress={() => navigation.navigate('AddBankAccount')}
+                  accessibilityLabel="Add new bank account"
+                  accessibilityHint="Opens bank account setup"
+                />
+              ) : null}
+          </PremiumListSection>
         </Reanimated.View>
       </ScrollView>
 

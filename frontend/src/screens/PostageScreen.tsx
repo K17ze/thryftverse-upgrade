@@ -25,6 +25,7 @@ import { RadioButton } from '../components/settings/RadioButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../theme/designTokens';
+import { PremiumListSection } from '../components/ui/PremiumListSection';
 
 type Props = StackScreenProps<RootStackParamList, 'Postage'>;
 
@@ -119,73 +120,70 @@ export default function PostageScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Default Carrier */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <Text style={styles.sectionTitle}>Default Carrier</Text>
-          {carrierScopeLabel ? (
-            <Text style={styles.scopeLabel}>Region policy: {carrierScopeLabel}</Text>
-          ) : null}
-          {isHydrating ? (
-            <View style={styles.skeletonWrap}>
-              <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
-              <View style={{ height: Space.sm }} />
-              <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
-              <View style={{ height: Space.sm }} />
-              <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
-            </View>
-          ) : (
-          <SettingsCard>
-            {carriers.map((c, idx) => (
-              <AnimatedPressable
-                key={c.key}
-                style={[styles.carrierRow, c.selected && { backgroundColor: `${Colors.brand}10` }, idx < carriers.length - 1 && styles.carrierRowBorder]}
-                onPress={() => selectCarrier(c.key)}
-                hapticFeedback="light"
-                accessibilityRole="radio"
-                accessibilityState={{ checked: c.selected }}
-                accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}`}
-              >
-                <View style={styles.carrierText}>
-                  <Text style={[styles.carrierLabel, c.selected && { fontFamily: Typography.family.semibold }]}>{c.label}</Text>
-                  <Text style={styles.carrierPrice}>
-                    from {formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}
-                  </Text>
-                </View>
-                {c.selected ? (
-                  <View style={styles.selectedBadge}>
-                    <Text style={styles.selectedBadgeText}>Selected</Text>
-                  </View>
-                ) : null}
-                <RadioButton selected={c.selected} />
-              </AnimatedPressable>
-            ))}
-          </SettingsCard>
-          )}
+          <PremiumListSection title="Default Carrier" subtitle={carrierScopeLabel ? `Region policy: ${carrierScopeLabel}` : undefined}>
+            {isHydrating ? (
+              <View style={styles.skeletonWrap}>
+                <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
+                <View style={{ height: Space.sm }} />
+                <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
+                <View style={{ height: Space.sm }} />
+                <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
+              </View>
+            ) : (
+              <>
+                {carriers.map((c, idx) => (
+                  <AnimatedPressable
+                    key={c.key}
+                    style={[styles.carrierRow, c.selected && { backgroundColor: `${Colors.brand}08` }, idx < carriers.length - 1 && styles.carrierRowBorder]}
+                    onPress={() => selectCarrier(c.key)}
+                    hapticFeedback="light"
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: c.selected }}
+                    accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}`}
+                  >
+                    <View style={styles.carrierText}>
+                      <Text style={[styles.carrierLabel, c.selected && { fontFamily: Typography.family.semibold }]}>{c.label}</Text>
+                      <Text style={styles.carrierPrice}>
+                        from {formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}
+                      </Text>
+                    </View>
+                    {c.selected ? (
+                      <View style={styles.selectedBadge}>
+                        <Text style={styles.selectedBadgeText}>Selected</Text>
+                      </View>
+                    ) : null}
+                    <RadioButton selected={c.selected} />
+                  </AnimatedPressable>
+                ))}
+              </>
+            )}
+          </PremiumListSection>
         </Reanimated.View>
 
         {/* Shipping Options */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-          <Text style={styles.sectionTitle}>Shipping Options</Text>
-          <SettingsCard>
+          <PremiumListSection title="Shipping Options">
             <SettingsCell
-              icon="gift-outline"
-              iconColor={Colors.brand}
-              title="Offer free shipping"
-              subtitle="You'll cover the postage cost for buyers"
-              variant="toggle"
-              toggleValue={freeShipping}
-              onToggle={(v) => updatePostagePreferences({ freeShipping: v })}
-              isFirst
-            />
-            <SettingsCell
-              icon="cube-outline"
-              iconColor={Colors.brand}
-              title="Bundle discount on postage"
-              subtitle="Buyers save when buying multiple items"
-              variant="toggle"
-              toggleValue={bundleDiscount}
-              onToggle={(v) => updatePostagePreferences({ bundleDiscount: v })}
-              isLast
-            />
-          </SettingsCard>
+                icon="gift-outline"
+                iconColor={Colors.brand}
+                title="Offer free shipping"
+                subtitle="You'll cover the postage cost for buyers"
+                variant="toggle"
+                toggleValue={freeShipping}
+                onToggle={(v) => updatePostagePreferences({ freeShipping: v })}
+                isFirst
+              />
+              <SettingsCell
+                icon="cube-outline"
+                iconColor={Colors.brand}
+                title="Bundle discount on postage"
+                subtitle="Buyers save when buying multiple items"
+                variant="toggle"
+                toggleValue={bundleDiscount}
+                onToggle={(v) => updatePostagePreferences({ bundleDiscount: v })}
+                isLast
+              />
+          </PremiumListSection>
         </Reanimated.View>
 
         {/* Footer note */}

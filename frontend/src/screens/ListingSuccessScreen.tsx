@@ -19,6 +19,8 @@ import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Typography, Space, Type, Radius, FontSize } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
 
@@ -100,14 +102,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
         {/* Published status */}
         <View style={styles.statusRow}>
-          <View style={styles.statusBadge}>
-            <Ionicons
-              name="checkmark-circle"
-              size={14}
-              color={Colors.success}
-            />
-            <Text style={styles.statusText}>Live now</Text>
-          </View>
+          <PremiumStatusPill tone="success" label="Live now" icon="checkmark-circle" />
           {listingId ? (
             <Text style={styles.idText} numberOfLines={1}>
               {listingId}
@@ -116,7 +111,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         </View>
 
         {/* Product preview card */}
-        <View style={styles.summaryCard}>
+        <ElevatedSurface variant="elevated" style={styles.summaryCard}>
           {listingPhoto ? (
             <CachedImage
               uri={listingPhoto}
@@ -145,9 +140,10 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               {listingCategory ? ` • ${listingCategory}` : ''}
             </Text>
           </View>
-        </View>
+        </ElevatedSurface>
 
         {/* Actions */}
+        <ElevatedSurface variant="surface" style={{ marginBottom: Space.xl }}>
         {listingId ? (
           <AnimatedPressable
             style={styles.actionRowBtn}
@@ -260,6 +256,8 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
         </AnimatedPressable>
 
+        </ElevatedSurface>
+
         {/* Support link */}
         <AnimatedPressable
           style={styles.supportLink}
@@ -362,9 +360,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Space.sm,
     borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     marginBottom: Space.xl,
