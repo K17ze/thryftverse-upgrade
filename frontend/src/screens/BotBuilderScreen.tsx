@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
   StatusBar,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -20,6 +19,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
+import { AppInput } from '../components/ui/AppInput';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 
 type Props = StackScreenProps<RootStackParamList, 'BotBuilder'>;
@@ -135,8 +135,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
 
         {/* Bot name */}
         <Section title="BOT NAME">
-          <TextInput
-            style={styles.input}
+          <AppInput
             value={name}
             onChangeText={setName}
             placeholder="e.g. My Deal Assistant"
@@ -185,8 +184,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
 
         {/* Description */}
         <Section title="DESCRIPTION">
-          <TextInput
-            style={[styles.input, styles.textArea]}
+          <AppInput
             value={description}
             onChangeText={setDescription}
             placeholder="What does this bot do?"
@@ -196,6 +194,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
             textAlignVertical="top"
             maxLength={200}
             accessibilityLabel="Bot description"
+            inputContainerStyle={{ minHeight: 80, alignItems: 'flex-start' }}
           />
           <Caption color={Colors.textMuted} style={styles.charCount}>
             {description.length}/200
@@ -204,8 +203,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
 
         {/* Command hint */}
         <Section title="COMMAND PREFIX">
-          <TextInput
-            style={styles.input}
+          <AppInput
             value={commandHint}
             onChangeText={setCommandHint}
             placeholder="e.g. /deal or !help"
@@ -328,21 +326,6 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     letterSpacing: Type.meta.letterSpacing,
     marginLeft: Space.xs,
-  },
-  input: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    paddingHorizontal: Space.md,
-    paddingVertical: 14,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-  },
-  textArea: {
-    minHeight: 80,
-    paddingTop: 14,
   },
   charCount: {
     textAlign: 'right',

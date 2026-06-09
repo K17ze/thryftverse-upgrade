@@ -53,10 +53,10 @@ export function ChatBubbleV2({
   onReactionPress,
   onRetry,
 }: ChatBubbleV2Props) {
-  const bubbleRadius = getBubbleRadius(isMe, isFirstInCluster, isLastInCluster);
   const bgColor = isMe ? Colors.brand : Colors.surfaceAlt;
   const textColor = isMe ? Colors.textInverse : Colors.textPrimary;
-  const metaColor = isMe ? 'rgba(0,0,0,0.5)' : Colors.textMuted;
+  const metaColor = isMe ? Colors.textInverse : Colors.textMuted;
+  const replyBorderColor = isMe ? Colors.textInverse : Colors.border;
 
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
@@ -76,7 +76,7 @@ export function ChatBubbleV2({
         delayLongPress={350}
         style={({ pressed }) => [
           styles.bubble,
-          { backgroundColor: bgColor, borderRadius: bubbleRadius, opacity: pressed ? 0.9 : 1 },
+          { backgroundColor: bgColor, opacity: pressed ? 0.9 : 1 },
         ]}
       >
         {senderLabel && !isMe && isFirstInCluster ? (
@@ -84,11 +84,11 @@ export function ChatBubbleV2({
         ) : null}
 
         {replyTo ? (
-          <View style={[styles.replyBlock, { borderLeftColor: isMe ? 'rgba(0,0,0,0.3)' : Colors.border }]}>
-            <Text style={[styles.replyName, { color: isMe ? 'rgba(0,0,0,0.6)' : Colors.textSecondary }]}>
+          <View style={[styles.replyBlock, { borderLeftColor: replyBorderColor }]}>
+            <Text style={[styles.replyName, { color: metaColor }]}>
               {replyTo.senderName}
             </Text>
-            <Text style={[styles.replyText, { color: isMe ? 'rgba(0,0,0,0.5)' : Colors.textMuted }]} numberOfLines={2}>
+            <Text style={[styles.replyText, { color: metaColor }]} numberOfLines={2}>
               {replyTo.text}
             </Text>
           </View>
@@ -114,7 +114,7 @@ export function ChatBubbleV2({
           <Text style={[styles.messageText, { color: textColor }]}>{text}</Text>
         ) : null}
 
-        <View style={styles.metaRow}>
+        <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
           <Text style={[styles.timestamp, { color: metaColor }]}>{timestamp}</Text>
           {isMe && status ? (
             <View style={styles.statusWrap}>
@@ -123,7 +123,7 @@ export function ChatBubbleV2({
               ) : hasFailed ? (
                 <Ionicons name="alert-circle" size={12} color={Colors.danger} />
               ) : (
-                <Ionicons name="checkmark-done" size={12} color={metaColor} />
+                <Ionicons name="checkmark" size={12} color={metaColor} />
               )}
             </View>
           ) : null}
@@ -149,21 +149,6 @@ export function ChatBubbleV2({
       ) : null}
     </View>
   );
-}
-
-function getBubbleRadius(isMe: boolean, isFirst: boolean, isLast: boolean): number {
-  const r = Radius.lg;
-  const s = Radius.sm;
-  if (isMe) {
-    if (isFirst && isLast) return r;
-    if (isFirst) return [r, r, s, r] as unknown as number;
-    if (isLast) return [s, r, r, r] as unknown as number;
-    return [s, r, s, r] as unknown as number;
-  }
-  if (isFirst && isLast) return r;
-  if (isFirst) return [r, r, r, s] as unknown as number;
-  if (isLast) return [r, s, r, r] as unknown as number;
-  return [r, s, r, s] as unknown as number;
 }
 
 const styles = StyleSheet.create({
@@ -198,6 +183,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     gap: 4,
+    borderRadius: Radius.lg,
   },
   senderName: {
     fontSize: Type.caption.size,
@@ -231,6 +217,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 4,
     marginTop: 2,
+  },
+  metaRowMe: {
+    opacity: 0.7,
   },
   timestamp: {
     fontSize: 10,

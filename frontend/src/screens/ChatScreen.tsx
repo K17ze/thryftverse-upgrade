@@ -1886,7 +1886,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
             <View style={styles.offlineBanner}>
 
-              <Ionicons name="cloud-offline-outline" size={16} color={Colors.textInverse} />
+              <Ionicons name="cloud-offline-outline" size={16} color={Colors.textSecondary} />
 
               <Text style={styles.offlineBannerText}>You are offline. Messages will be sent when you reconnect.</Text>
 
@@ -2634,7 +2634,11 @@ const styles = StyleSheet.create({
 
     justifyContent: 'space-between',
 
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: Colors.surfaceAlt,
+
+    borderTopWidth: StyleSheet.hairlineWidth,
+
+    borderTopColor: Colors.border,
 
     marginHorizontal: -Space.md,
 
@@ -2650,7 +2654,7 @@ const styles = StyleSheet.create({
 
   undoBannerText: {
 
-    color: Colors.textInverse,
+    color: Colors.textSecondary,
 
     fontSize: Type.caption.size,
 
@@ -2736,7 +2740,11 @@ const styles = StyleSheet.create({
 
     gap: Space.xs,
 
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: Colors.surfaceAlt,
+
+    borderTopWidth: StyleSheet.hairlineWidth,
+
+    borderTopColor: Colors.border,
 
     marginHorizontal: -Space.md,
 
@@ -2752,7 +2760,7 @@ const styles = StyleSheet.create({
 
   offlineBannerText: {
 
-    color: Colors.textInverse,
+    color: Colors.textSecondary,
 
     fontSize: Type.caption.size,
 

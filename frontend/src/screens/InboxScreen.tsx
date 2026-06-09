@@ -1002,7 +1002,7 @@ export default function InboxScreen() {
 
         <View style={styles.offlineBanner}>
 
-          <Ionicons name="cloud-offline-outline" size={16} color={Colors.textInverse} />
+          <Ionicons name="cloud-offline-outline" size={16} color={Colors.textSecondary} />
 
           <Text style={styles.offlineBannerText}>You are offline</Text>
 
@@ -1734,7 +1734,11 @@ const styles = StyleSheet.create({
 
     gap: Space.xs,
 
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: Colors.surfaceAlt,
+
+    borderBottomWidth: StyleSheet.hairlineWidth,
+
+    borderBottomColor: Colors.border,
 
     paddingVertical: Space.xs + 2,
 
@@ -1744,7 +1748,7 @@ const styles = StyleSheet.create({
 
   offlineBannerText: {
 
-    color: Colors.textInverse,
+    color: Colors.textSecondary,
 
     fontSize: Type.caption.size,
 

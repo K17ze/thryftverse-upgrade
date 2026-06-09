@@ -52,7 +52,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         }
       }
     }
-    return Array.from(participantIds).map((id) => ({ id, username: 'Contact' }));
+    return Array.from(participantIds).map((id) => ({ id, username: id.slice(0, 8) }));
   }, [conversations, currentUser?.id]);
 
   const filteredMembers = useMemo(() => {
