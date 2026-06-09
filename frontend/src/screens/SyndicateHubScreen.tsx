@@ -23,11 +23,11 @@ import { Space, Radius } from '../theme/designTokens';
 import {
   TradeHeader,
   MetricGrid,
-  CoOwnAssetCard,
 } from '../components/trade';
 import { AppInput } from '../components/ui/AppInput';
 import { Meta, BodyEmphasis } from '../components/ui/Text';
 import { CachedImage } from '../components/CachedImage';
+import { FlagshipAssetCard, FlagshipEmptyGraphic } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -267,49 +267,24 @@ export default function CoOwnHubScreen() {
           const openValue = item.availableUnits * item.unitPriceGBP;
 
           return (
-            <Reanimated.View
-              entering={
-                reducedMotionEnabled
-                  ? undefined
-                  : FadeInDown
-                      .duration(Motion.list.enterDuration)
-                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-              }
-            >
-              <CoOwnAssetCard
-                id={item.id}
-                title={item.title}
-                image={item.image}
-                unitPrice={formatFromFiat(item.unitPriceGBP, 'GBP')}
-                marketValue={formatFromFiat(marketValue, 'GBP', { displayMode: 'fiat' })}
-                openValue={formatFromFiat(openValue, 'GBP', { displayMode: 'fiat' })}
-                availableUnits={item.availableUnits}
-                totalUnits={item.totalUnits}
-                marketMovePct24h={item.marketMovePct24h}
-                issuerHandle={issuerHandle}
-                issuerAvatar={undefined}
-                yourUnits={item.yourUnits}
-                isOpen={item.isOpen}
-                onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-                onBuy={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
-                onSell={() => navigation.navigate('Trade', { assetId: item.id, side: 'sell' })}
-                onDetails={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-                onMessageIssuer={() =>
-                  navigation.navigate('Chat', {
-                    conversationId: `${item.issuerId}_${item.listingId}`,
-                    focusQuery: issuerHandle,
-                    partnerUserId: item.issuerId,
-                  })
-                }
-                onViewIssuer={() => navigation.navigate('UserProfile', { userId: item.issuerId })}
-                canMessageIssuer={canMessageIssuer}
-              />
-            </Reanimated.View>
+            <FlagshipAssetCard
+              key={item.id}
+              imageUri={item.image}
+              name={item.title}
+              unitPrice={formatFromFiat(item.unitPriceGBP, 'GBP')}
+              yourUnits={item.yourUnits}
+              totalUnits={item.totalUnits}
+              status={item.isOpen ? 'active' : 'paused'}
+              onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
+              onAction={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
+              actionLabel="Trade"
+              index={index}
+            />
           );
         }}
         ListEmptyComponent={
           <EmptyState
-            icon="pie-chart-outline"
+            graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
             title="No co-own assets"
             subtitle="Assets will appear here once pools are issued."
           />

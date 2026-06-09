@@ -27,6 +27,7 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
 import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
 import { AppButton } from '../components/ui/AppButton';
+import { FlagshipProfileMedia, FlagshipActionCluster } from '../components/flagship';
 import { updateMyProfile } from '../services/profileApi';
 import { uploadMedia } from '../services/mediaUpload';
 import {
@@ -234,53 +235,16 @@ export default function EditProfileScreen() {
 
           {/* Hero Media Section */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
-            <View style={styles.heroSection}>
-              <AnimatedPressable onPress={pickCover} activeOpacity={0.92} scaleValue={0.985}>
-                <View style={styles.coverFrame}>
-                  {currentCover ? (
-                    <CachedImage uri={currentCover} style={styles.coverImage} contentFit="cover" />
-                  ) : (
-                    <View style={[styles.coverImage, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                      <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
-                    </View>
-                  )}
-                  {isUploadingCover && (
-                    <View style={styles.uploadOverlay}>
-                      <ActivityIndicator color="#fff" />
-                    </View>
-                  )}
-                  {!isUploadingCover && (
-                    <View style={styles.coverEditBadge}>
-                      <Ionicons name="camera" size={14} color="#fff" />
-                    </View>
-                  )}
-                </View>
-              </AnimatedPressable>
-
-              <View style={styles.avatarOuter}>
-                <AnimatedPressable onPress={pickAvatar} activeOpacity={0.92} scaleValue={0.97}>
-                  <View style={styles.avatarFrame}>
-                    {currentAvatar ? (
-                      <CachedImage uri={currentAvatar} style={styles.avatarImage} contentFit="cover" />
-                    ) : (
-                      <View style={[styles.avatarImage, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                        <Ionicons name="person" size={32} color={Colors.textMuted} />
-                      </View>
-                    )}
-                    {isUploadingAvatar && (
-                      <View style={styles.uploadOverlay}>
-                        <ActivityIndicator color="#fff" size="small" />
-                      </View>
-                    )}
-                    {!isUploadingAvatar && (
-                      <View style={styles.avatarEditBadge}>
-                        <Ionicons name="camera" size={12} color="#fff" />
-                      </View>
-                    )}
-                  </View>
-                </AnimatedPressable>
-              </View>
-            </View>
+            <FlagshipProfileMedia
+              coverUri={currentCover}
+              avatarUri={currentAvatar}
+              isSelf
+              onEditCover={pickCover}
+              onEditAvatar={pickAvatar}
+              isUploadingCover={isUploadingCover}
+              isUploadingAvatar={isUploadingAvatar}
+              style={{ marginBottom: Space.lg }}
+            />
           </Reanimated.View>
 
           {/* Identity Fields */}
@@ -348,13 +312,16 @@ export default function EditProfileScreen() {
 
       {/* Sticky Save Action */}
       <View style={styles.actionBar}>
-        <AppButton
-          title={isSaving ? 'Saving...' : 'Save Changes'}
-          variant="primary"
-          onPress={handleSave}
-          disabled={!hasChanges || isSaving}
-          loading={isSaving}
-          hapticFeedback="medium"
+        <FlagshipActionCluster
+          actions={[
+            {
+              label: isSaving ? 'Saving...' : 'Save Changes',
+              onPress: handleSave,
+              variant: 'primary',
+              disabled: !hasChanges || isSaving,
+              loading: isSaving,
+            },
+          ]}
         />
       </View>
 

@@ -24,6 +24,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
+import { FlagshipEmptyGraphic } from '../components/flagship';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RefreshIndicator } from '../components/RefreshIndicator';
@@ -231,7 +232,7 @@ export default function ClosetScreen() {
     if (filteredSaved.length === 0) {
       return (
         <EmptyState
-          icon="bookmark-outline"
+          graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
           title="No saved products yet"
           subtitle="Tap the bookmark on any product to save it here."
           ctaLabel="Browse"
@@ -262,7 +263,7 @@ export default function ClosetScreen() {
     if (filteredWishlist.length === 0) {
       return (
         <EmptyState
-          icon="heart-outline"
+          graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
           title="Your wishlist is empty"
           subtitle="Heart items to track them."
           ctaLabel="Browse"
@@ -292,7 +293,7 @@ export default function ClosetScreen() {
     if (filteredCollections.length === 0) {
       return (
         <EmptyState
-          icon="folder-open-outline"
+          graphic={<FlagshipEmptyGraphic variant="box" size={120} />}
           title="No collections yet"
           subtitle="Group your saved items into boards."
           ctaLabel="Create Collection"

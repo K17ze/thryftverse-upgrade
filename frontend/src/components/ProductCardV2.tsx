@@ -221,15 +221,17 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
 
-  // Image - Subtle radius for modern feel
+  // Image - Flagship radius with subtle shadow for depth
   imageWrap: {
     position: 'relative',
     overflow: 'hidden',
-    borderRadius: Radius.sm,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceAlt,
+    ...Elevation.card,
   },
   image: {
     width: '100%',
-    borderRadius: Radius.sm,
+    borderRadius: Radius.lg,
   },
 
   // Overlays

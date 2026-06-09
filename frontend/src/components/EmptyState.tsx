@@ -23,7 +23,7 @@ interface SuggestedAction {
 }
 
 interface Props {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
   ctaLabel?: string;
@@ -32,8 +32,9 @@ interface Props {
   onSecondaryCtaPress?: () => void;
   suggestedActions?: SuggestedAction[];
   iconColor?: string;
+  graphic?: React.ReactNode;
 }
-export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor = Colors.brand }: Props) {
+export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor = Colors.brand, graphic }: Props) {
   const reducedMotionEnabled = useReducedMotion();
 
   // Floating animation on the icon ring
@@ -90,12 +91,18 @@ export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, second
 
   return (
     <View style={styles.container}>
-      <Reanimated.View
-        entering={iconEnterAnimation}
-        style={[styles.iconRing, { borderColor: iconColor + '25' }, floatStyle]}
-      >
-        <Ionicons name={icon} size={38} color={iconColor} />
-      </Reanimated.View>
+      {graphic ? (
+        <Reanimated.View entering={iconEnterAnimation}>
+          {graphic}
+        </Reanimated.View>
+      ) : (
+        <Reanimated.View
+          entering={iconEnterAnimation}
+          style={[styles.iconRing, { borderColor: iconColor + '25' }, floatStyle]}
+        >
+          <Ionicons name={icon ?? 'cube-outline'} size={38} color={iconColor} />
+        </Reanimated.View>
+      )}
 
       <Reanimated.Text
         entering={titleEnterAnimation}

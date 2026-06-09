@@ -20,9 +20,9 @@ import { Space, Radius } from '../theme/designTokens';
 import {
   TradeHeader,
   MetricGrid,
-  CoOwnAssetCard,
 } from '../components/trade';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { FlagshipAssetCard, FlagshipEmptyGraphic } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -90,34 +90,17 @@ export default function PortfolioScreen() {
                 .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
         }
       >
-        <CoOwnAssetCard
-          id={item.id}
-          title={item.title}
-          image={item.image}
+        <FlagshipAssetCard
+          imageUri={item.image}
+          name={item.title}
           unitPrice={formatFromFiat(item.unitPriceGBP, 'GBP')}
-          marketValue={formatFromFiat(value, 'GBP', { displayMode: 'fiat' })}
-          openValue={formatFromFiat(item.availableUnits * item.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}
-          availableUnits={item.availableUnits}
-          totalUnits={item.totalUnits}
-          marketMovePct24h={item.marketMovePct24h}
-          issuerHandle={issuerHandle}
-          issuerAvatar={undefined}
           yourUnits={item.yourUnits}
-          isOpen={item.isOpen}
-          compact
+          totalUnits={item.totalUnits}
+          status={item.isOpen ? 'active' : 'paused'}
           onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-          onBuy={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
-          onSell={() => navigation.navigate('Trade', { assetId: item.id, side: 'sell' })}
-          onDetails={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-          onMessageIssuer={() =>
-            navigation.navigate('Chat', {
-              conversationId: `${item.issuerId}_${item.listingId}`,
-              focusQuery: issuerHandle,
-              partnerUserId: item.issuerId,
-            })
-          }
-          onViewIssuer={() => navigation.navigate('UserProfile', { userId: item.issuerId })}
-          canMessageIssuer={canMessageIssuer}
+          onAction={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
+          actionLabel="Trade"
+          index={index}
         />
       </Reanimated.View>
     );
@@ -189,7 +172,7 @@ export default function PortfolioScreen() {
         }
         ListEmptyComponent={
           <EmptyState
-            icon="wallet-outline"
+            graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
             title="No holdings"
             subtitle="Your co-own portfolio will appear here once you purchase units."
             ctaLabel="Browse Assets"

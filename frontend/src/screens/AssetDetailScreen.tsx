@@ -21,6 +21,7 @@ import { Space, Radius, Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { FlagshipActionCluster } from '../components/flagship';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -287,36 +288,30 @@ export default function AssetDetailScreen() {
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(350)}>
-          <View style={styles.actionRow}>
-            <AppButton
-              title="Trade"
-              icon={<Ionicons name="swap-horizontal-outline" size={16} color={Colors.background} />}
-              onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' })}
-              variant="primary"
-              size="md"
-              style={styles.actionBtn}
-              hapticFeedback="medium"
-            />
-            <AppButton
-              title="Buyout"
-              icon={<Ionicons name="diamond-outline" size={16} color={Colors.brand} />}
-              onPress={() => navigation.navigate('Buyout', { assetId: asset.id })}
-              variant="secondary"
-              size="md"
-              style={styles.actionBtn}
-              hapticFeedback="medium"
-            />
-          </View>
-          <View style={styles.actionRow}>
-            <AppButton
-              title="Report Issue"
-              icon={<Ionicons name="shield-outline" size={16} color={Colors.danger} />}
-              onPress={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
-              variant="secondary"
-              size="md"
-              style={styles.actionBtn}
-            />
-          </View>
+          <FlagshipActionCluster
+            layout="row"
+            actions={[
+              {
+                label: 'Trade',
+                onPress: () => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' }),
+                variant: 'primary',
+              },
+              {
+                label: 'Buyout',
+                onPress: () => navigation.navigate('Buyout', { assetId: asset.id }),
+                variant: 'secondary',
+              },
+            ]}
+          />
+          <FlagshipActionCluster
+            actions={[
+              {
+                label: 'Report Issue',
+                onPress: () => navigation.navigate('CoOwnIssue', { assetId: asset.id }),
+                variant: 'secondary',
+              },
+            ]}
+          />
         </Reanimated.View>
       </ScrollView>
     </SafeAreaView>

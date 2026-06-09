@@ -21,6 +21,7 @@ interface FlagshipProfileMediaProps {
   isUploadingAvatar?: boolean;
   style?: ViewStyle;
   cacheBuster?: string;
+  coverOnly?: boolean;
 }
 
 export function FlagshipProfileMedia({
@@ -34,6 +35,7 @@ export function FlagshipProfileMedia({
   isUploadingAvatar = false,
   style,
   cacheBuster,
+  coverOnly = false,
 }: FlagshipProfileMediaProps) {
   const effectiveCover = coverVideoUri || coverUri;
   const hasCover = Boolean(effectiveCover);
@@ -80,40 +82,42 @@ export function FlagshipProfileMedia({
       </View>
 
       {/* Avatar */}
-      <View style={styles.avatarRow}>
-        <View style={styles.avatarWrap}>
-          {avatarUri ? (
-            <CachedImage
-              uri={avatarUri}
-              style={styles.avatarImage}
-              contentFit="cover"
-              transition={300}
-              cacheBuster={cacheBuster}
-            />
-          ) : (
-            <View style={[styles.avatarImage, styles.avatarFallback]}>
-              <Ionicons name="person" size={32} color={Colors.textMuted} />
-            </View>
-          )}
+      {!coverOnly && (
+        <View style={styles.avatarRow}>
+          <View style={styles.avatarWrap}>
+            {avatarUri ? (
+              <CachedImage
+                uri={avatarUri}
+                style={styles.avatarImage}
+                contentFit="cover"
+                transition={300}
+                cacheBuster={cacheBuster}
+              />
+            ) : (
+              <View style={[styles.avatarImage, styles.avatarFallback]}>
+                <Ionicons name="person" size={32} color={Colors.textMuted} />
+              </View>
+            )}
 
-          {isSelf && onEditAvatar && (
-            <AnimatedPressable
-              style={styles.editAvatarBtn}
-              onPress={onEditAvatar}
-              activeOpacity={0.85}
-              hapticFeedback="light"
-            >
-              {isUploadingAvatar ? (
-                <Reanimated.View entering={FadeIn}>
-                  <Ionicons name="sync" size={14} color="#fff" />
-                </Reanimated.View>
-              ) : (
-                <Ionicons name="camera" size={14} color="#fff" />
-              )}
-            </AnimatedPressable>
-          )}
+            {isSelf && onEditAvatar && (
+              <AnimatedPressable
+                style={styles.editAvatarBtn}
+                onPress={onEditAvatar}
+                activeOpacity={0.85}
+                hapticFeedback="light"
+              >
+                {isUploadingAvatar ? (
+                  <Reanimated.View entering={FadeIn}>
+                    <Ionicons name="sync" size={14} color="#fff" />
+                  </Reanimated.View>
+                ) : (
+                  <Ionicons name="camera" size={14} color="#fff" />
+                )}
+              </AnimatedPressable>
+            )}
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }

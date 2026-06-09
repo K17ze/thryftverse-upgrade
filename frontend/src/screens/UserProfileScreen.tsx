@@ -32,6 +32,7 @@ import { Space, Radius } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { Typography } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
+import { FlagshipProfileMedia } from '../components/flagship';
 import { fetchPublicProfile, type PublicProfileUser } from '../services/profileApi';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SharedTransitionView } from '../components/SharedTransitionView';
@@ -254,26 +255,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
       {/* Cover photo with parallax - supports images, GIFs and videos */}
       <Reanimated.View style={[styles.coverWrap, coverStyle]}>
-        {isVideoUri(displayCover) ? (
-          <Video
-            key={`user-cover-video-${displayCover}`}
-            source={{ uri: displayCover }}
-            style={styles.coverImage}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay
-            isLooping
-            isMuted
-          />
-        ) : (
-          <CachedImage
-            key={`user-cover-image-${displayCover}`}
-            uri={displayCover}
-            style={styles.coverImage}
-            contentFit="cover"
-            priority="high"
-          />
-        )}
-        <View style={styles.coverGradient} />
+        <FlagshipProfileMedia
+          coverUri={displayCover}
+          coverVideoUri={isVideoUri(displayCover) ? displayCover : undefined}
+          isSelf={isSelfProfile}
+          coverOnly
+          style={{ width: '100%' }}
+        />
       </Reanimated.View>
 
       {/* Main Content Area */}

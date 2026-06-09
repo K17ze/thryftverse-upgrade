@@ -31,6 +31,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { Type, Radius } from '../theme/designTokens';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
+import { FlagshipOrderCard, FlagshipEmptyGraphic } from '../components/flagship';
 
 const { width } = Dimensions.get('window');
 
@@ -251,7 +252,7 @@ export default function MyOrdersScreen() {
             />
           ) : filteredOrders.length === 0 ? (
             <EmptyState
-              icon="cube-outline"
+              graphic={<FlagshipEmptyGraphic variant="box" size={120} />}
               title={statusFilter === 'All' ? 'No orders yet' : `No ${statusFilter.toLowerCase()} orders`}
               subtitle={
                 statusFilter === 'All'
@@ -267,41 +268,22 @@ export default function MyOrdersScreen() {
               const trackingSnippet = backendMeta?.trackingNumber
                 ? `${backendMeta.shippingProvider ? `${backendMeta.shippingProvider.toUpperCase()} · ` : ''}${backendMeta.trackingNumber}`
                 : null;
+              const statusKey = order.status.toLowerCase();
+              const orderStatus = statusKey === 'delivered' || statusKey === 'completed' ? 'delivered'
+                : statusKey === 'shipped' || statusKey === 'in transit' ? 'shipped'
+                : statusKey === 'cancelled' || statusKey === 'refunded' ? 'cancelled'
+                : 'pending';
               return (
-                <Reanimated.View
+                <FlagshipOrderCard
                   key={order.id}
-                  entering={
-                    reducedMotionEnabled
-                      ? undefined
-                      : FadeInDown
-                          .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                          .duration(Motion.list.enterDuration)
-                  }
-                >
-                  <ElevatedSurface variant="surface" style={styles.cardGroup}>
-                    <AnimatedPressable
-                      style={styles.orderSummaryTap}
-                      onPress={() => navigation.navigate('OrderDetail', { orderId: order.id })}
-                      activeOpacity={0.9}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open order ${order.title}`}
-                      accessibilityHint={`View details for this ${order.status.toLowerCase()} order`}
-                    >
-                      <View style={styles.orderRow}>
-                        <CachedImage uri={getListingCoverUri(order.images, '')} style={styles.orderThumb} contentFit="cover" />
-                        <View style={styles.orderInfo}>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <PremiumStatusPill tone={getStatusTone(order.status)} label={order.status} compact />
-                          </View>
-                          <Text style={styles.orderTitle} numberOfLines={1}>{order.title}</Text>
-                          {trackingSnippet ? <Text style={styles.orderTracking} numberOfLines={1}>{trackingSnippet}</Text> : null}
-                          <Text style={styles.orderPrice}>{formatFromFiat(order.price, 'GBP', { displayMode: 'fiat' })}</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-                      </View>
-                    </AnimatedPressable>
-                  </ElevatedSurface>
-                </Reanimated.View>
+                  imageUri={getListingCoverUri(order.images, '')}
+                  listingTitle={order.title}
+                  status={orderStatus}
+                  price={formatFromFiat(order.price, 'GBP', { displayMode: 'fiat' })}
+                  orderDate={trackingSnippet || undefined}
+                  onPress={() => navigation.navigate('OrderDetail', { orderId: order.id })}
+                  index={index}
+                />
               );
             })
           )}

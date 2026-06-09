@@ -75,6 +75,7 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useToast } from '../context/ToastContext';
 
 import { AppButton } from '../components/ui/AppButton';
+import { FlagshipProfileMedia } from '../components/flagship';
 
 import { Space, Radius } from '../theme/designTokens';
 
@@ -674,101 +675,32 @@ export default function MyProfileScreen() {
 
 
       {/* Cover photo with parallax - supports images, GIFs and videos */}
-
       <Reanimated.View style={[styles.coverWrap, coverStyle]}>
-
-        {isVideoUri(displayCover) ? (
-
-          <Video
-
-            key={`cover-video-${displayCover}`}
-
-            source={{ uri: displayCover }}
-
-            style={styles.coverImage}
-
-            resizeMode={ResizeMode.COVER}
-
-            shouldPlay
-
-            isLooping
-
-            isMuted
-
-          />
-
-        ) : (
-
-          <CachedImage
-
-            key={`cover-image-${displayCover}`}
-
-            uri={displayCover}
-
-            style={styles.coverImage}
-
-            contentFit="cover"
-
-            priority="high"
-
-          />
-
-        )}
-
-        <View style={styles.coverGradient} />
-
+        <FlagshipProfileMedia
+          coverUri={displayCover}
+          coverVideoUri={isVideoUri(displayCover) ? displayCover : undefined}
+          isSelf
+          onEditCover={pickCover}
+          coverOnly
+          style={{ width: '100%' }}
+        />
       </Reanimated.View>
 
 
 
       <View pointerEvents="box-none" style={styles.coverActionLayer}>
-
         <Reanimated.View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}>
-
           <AnimatedPressable
-
             style={styles.topUtilityIconBtn}
-
             activeOpacity={0.9}
-
             onPress={() => navigation.navigate('Personalisation')}
-
             accessibilityLabel="Open personalisation settings"
-
             accessibilityRole="button"
-
             accessibilityHint="Opens your style and experience preferences"
-
           >
-
             <Ionicons name="apps-outline" size={18} color="#fff" />
-
           </AnimatedPressable>
-
-
-
-          <AnimatedPressable
-
-            style={[styles.topUtilityIconBtn, { width: 32, height: 32, borderRadius: 16 }]}
-
-            onPress={pickCover}
-
-            activeOpacity={0.9}
-
-            accessibilityLabel="Change cover photo"
-
-            accessibilityRole="button"
-
-            accessibilityHint="Opens photo picker to update your cover photo"
-
-          >
-
-            <Ionicons name="camera" size={16} color="#fff" />
-
-          </AnimatedPressable>
-
         </Reanimated.View>
-
       </View>
 
 
