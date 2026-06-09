@@ -18,6 +18,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppInput } from '../components/ui/AppInput';
 import { useToast } from '../context/ToastContext';
+import { FlagshipEmptyGraphic, FlagshipActionCluster } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'CoOwnIssue'>;
 
@@ -60,26 +61,18 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
         <ScreenHeader title="Report Issue" onBack={() => navigation.goBack()} />
         <View style={styles.centered}>
-          <View style={styles.successIcon}>
-            <Ionicons name="document-text-outline" size={40} color={Colors.brand} />
-          </View>
+          <FlagshipEmptyGraphic variant="box" size={140} />
           <Text style={styles.successTitle}>Report recorded</Text>
           <Text style={styles.successSub}>
             Your issue has been logged locally. Support connection is required for escalation.
           </Text>
-          <AppButton
-            title="Back to Asset"
-            variant="secondary"
-            onPress={() => navigation.goBack()}
-            style={{ marginTop: Space.md }}
+          <FlagshipActionCluster
+            actions={[
+              { label: 'Back to Asset', onPress: () => navigation.goBack(), variant: 'primary' },
+              { label: 'Contact Support', onPress: () => navigation.navigate('HelpSupport'), variant: 'secondary' },
+            ]}
+            style={{ marginTop: Space.lg, width: '100%', paddingHorizontal: Space.lg }}
           />
-          <AnimatedPressable
-            onPress={() => navigation.navigate('HelpSupport')}
-            style={{ marginTop: Space.sm, paddingVertical: 8 }}
-            activeOpacity={0.85}
-          >
-            <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.medium, color: Colors.brand }}>Contact Support</Text>
-          </AnimatedPressable>
         </View>
       </SafeAreaView>
     );
@@ -138,12 +131,10 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
           </Text>
         </Reanimated.View>
 
-        <AppButton
-          title={isSubmitting ? 'Recording...' : 'Record Report'}
-          variant="primary"
-          size="lg"
-          onPress={handleSubmit}
-          disabled={isSubmitting}
+        <FlagshipActionCluster
+          actions={[
+            { label: isSubmitting ? 'Recording...' : 'Record Report', onPress: handleSubmit, variant: 'primary', disabled: isSubmitting, loading: isSubmitting },
+          ]}
           style={{ marginTop: Space.lg }}
         />
       </ScrollView>

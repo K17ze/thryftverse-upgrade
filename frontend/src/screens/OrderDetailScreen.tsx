@@ -44,6 +44,7 @@ import { haptics } from '../utils/haptics';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { FlagshipActionCluster } from '../components/flagship';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -364,29 +365,32 @@ export default function OrderDetailScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
 
-        {/* -- Item Card -- */}
+        {/* -- Item Hero -- */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
-        <ElevatedSurface variant="surface" style={styles.itemCard}>
-        <AnimatedPressable
-          onPress={() => { haptics.tap(); navigation.push('ItemDetail', { itemId: listing.id }); }}
-          activeOpacity={0.88}
-        >
-          <SharedTransitionView
-            style={styles.itemThumb}
-            sharedTransitionTag={`image-${listing.id}-0`}
+          <AnimatedPressable
+            onPress={() => { haptics.tap(); navigation.push('ItemDetail', { itemId: listing.id }); }}
+            activeOpacity={0.92}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${listing.title}`}
           >
-            <CachedImage uri={getListingCoverUri(listing.images, '')} style={styles.itemThumbImage} contentFit="cover" />
-          </SharedTransitionView>
-          <View style={styles.itemInfo}>
-            <Text style={styles.itemTitle} numberOfLines={2}>{listing.title}</Text>
-            {listing.size || listing.condition ? (
-              <Text style={styles.itemMeta}>{[listing.size, listing.condition].filter(Boolean).join(' - ')}</Text>
-            ) : null}
-            <Text style={styles.itemPrice}>{formatFromFiat(subtotal, 'GBP', { displayMode: 'fiat' })}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-        </AnimatedPressable>
-        </ElevatedSurface>
+            <View style={styles.itemHeroWrap}>
+              <CachedImage
+                uri={getListingCoverUri(listing.images, '')}
+                style={styles.itemHeroImage}
+                contentFit="cover"
+                transition={300}
+              />
+              <View style={styles.itemHeroGradient} />
+              <View style={styles.itemHeroInfo}>
+                <Text style={styles.itemHeroTitle} numberOfLines={2}>{listing.title}</Text>
+                {listing.size || listing.condition ? (
+                  <Text style={styles.itemHeroMeta}>{[listing.size, listing.condition].filter(Boolean).join(' - ')}</Text>
+                ) : null}
+                <Text style={styles.itemHeroPrice}>{formatFromFiat(subtotal, 'GBP', { displayMode: 'fiat' })}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#fff" style={styles.itemHeroChevron} />
+            </View>
+          </AnimatedPressable>
         </Reanimated.View>
 
         {/* -- Status Banner -- */}
@@ -675,23 +679,37 @@ const styles = StyleSheet.create({
 
   content: { paddingHorizontal: 20, paddingTop: 8 },
 
-  itemCard: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surfaceAlt,
+  itemHeroWrap: {
+    width: '100%',
+    height: 220,
     borderRadius: Radius.lg,
-    padding: Space.md - Space.xs,
-    alignItems: 'center',
-    gap: Space.sm + 2,
-    marginBottom: 16,
-    borderWidth: 0.5,
-    borderColor: Colors.border,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
+    marginBottom: Space.md,
+    position: 'relative',
   },
-  itemThumb: { width: 72, height: 72, borderRadius: 14, overflow: 'hidden' },
-  itemThumbImage: { width: '100%', height: '100%' },
-  itemInfo: { flex: 1 },
-  itemTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
-  itemMeta: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textMuted, marginBottom: 4 },
-  itemPrice: { fontSize: 16, fontFamily: Typography.family.bold, color: Colors.textPrimary },
+  itemHeroImage: { width: '100%', height: '100%' },
+  itemHeroGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 120,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  itemHeroInfo: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: Space.md,
+    gap: 4,
+  },
+  itemHeroTitle: { fontSize: 17, fontFamily: Typography.family.bold, color: '#fff', lineHeight: 22 },
+  itemHeroMeta: { fontSize: 13, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.85)' },
+  itemHeroPrice: { fontSize: 16, fontFamily: Typography.family.bold, color: '#fff', marginTop: 2 },
+  itemHeroChevron: { position: 'absolute', right: Space.md, top: Space.md },
+  actionCard: { display: 'none' },
 
   statusBanner: {
     flexDirection: 'row',
@@ -839,11 +857,11 @@ const styles = StyleSheet.create({
   txDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.border, marginVertical: 6 },
 
   // Actions
-  actionsRow: { flexDirection: 'row', gap: 12 },
+  actionsRow: { flexDirection: 'column', gap: 10, marginTop: 4 },
   actionBtnSecondary: {
-    flex: 1,
+    width: '100%',
     minHeight: 56,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     backgroundColor: Colors.surfaceAlt,
     borderWidth: 0.5,
     borderColor: Colors.border,
@@ -856,9 +874,9 @@ const styles = StyleSheet.create({
   },
   actionBtnSecondaryText: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
   actionBtnPrimary: {
-    flex: 2,
+    width: '100%',
     minHeight: 56,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     borderWidth: 0,
     backgroundColor: Colors.brand,
   },

@@ -78,6 +78,28 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain('graphic={<FlagshipEmptyGraphic');
   });
 
+  it('OrderDetailScreen imports FlagshipActionCluster', () => {
+    const src = readSrc('screens/OrderDetailScreen.tsx');
+    expect(src).toContain("import { FlagshipActionCluster } from '../components/flagship';");
+  });
+
+  it('CoOwnIssueScreen imports FlagshipEmptyGraphic and FlagshipActionCluster', () => {
+    const src = readSrc('screens/CoOwnIssueScreen.tsx');
+    expect(src).toContain("import { FlagshipEmptyGraphic, FlagshipActionCluster } from '../components/flagship';");
+  });
+
+  it('SignUpScreen imports AppButton', () => {
+    const src = readSrc('screens/SignUpScreen.tsx');
+    expect(src).toContain("import { AppButton } from '../components/ui/AppButton';");
+  });
+
+  it('FlagshipProfileMedia supports video covers', () => {
+    const src = readSrc('components/flagship/FlagshipProfileMedia.tsx');
+    expect(src).toContain("import { Video, ResizeMode } from '../compat/Video';");
+    expect(src).toContain('coverVideoUri ? (');
+    expect(src).toContain('ResizeMode.COVER');
+  });
+
   it('no glass/blur except BottomSheet and tests', () => {
     const screens = [
       'screens/HomeScreen.tsx',

@@ -10,6 +10,7 @@ import { useStore } from '../store/useStore';
 import { signupWithPassword } from '../services/authApi';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppButton } from '../components/ui/AppButton';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Typography } from '../theme/designTokens';
 
@@ -182,14 +183,16 @@ export default function SignUpScreen() {
             )}
 
             <Reanimated.View style={shakeStyle} layout={layoutAnimation}>
-              <AnimatedPressable
-                style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
+              <AppButton
+                title={isSubmitting ? 'Creating account...' : 'Create Account'}
+                variant="primary"
+                size="lg"
                 onPress={handleSignUp}
-                activeOpacity={0.9}
                 disabled={!canSubmit}
-              >
-                <Text style={styles.primaryText}>{isSubmitting ? 'Creating account...' : 'Create Account'}</Text>
-              </AnimatedPressable>
+                loading={isSubmitting}
+                style={styles.primaryBtn}
+                hapticFeedback="medium"
+              />
             </Reanimated.View>
           </View>
         </ScrollView>

@@ -7,6 +7,7 @@ import { Colors } from '../../constants/colors';
 import { Space, Radius } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { Video, ResizeMode } from '../compat/Video';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -44,7 +45,16 @@ export function FlagshipProfileMedia({
     <View style={[styles.root, style]}>
       {/* Cover */}
       <View style={styles.coverWrap}>
-        {hasCover ? (
+        {coverVideoUri ? (
+          <Video
+            source={{ uri: coverVideoUri }}
+            style={styles.coverImage}
+            resizeMode={ResizeMode.COVER}
+            shouldPlay
+            isLooping
+            isMuted
+          />
+        ) : hasCover ? (
           <CachedImage
             uri={effectiveCover!}
             style={styles.coverImage}
