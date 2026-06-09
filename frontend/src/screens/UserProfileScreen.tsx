@@ -32,6 +32,7 @@ import { Space, Radius } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { Typography } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
+import { fetchPublicProfile, type PublicProfileUser } from '../services/profileApi';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { isVideoUri } from '../utils/media';
@@ -83,20 +84,39 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [following, setFollowing] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
+  const [publicProfile, setPublicProfile] = useState<PublicProfileUser | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
 
   const isMe = route.params?.isMe ?? false;
   const userId = route.params?.userId;
 
+  const isSelfProfile =
+    isMe ||
+    userId === currentUser?.id;
+
   const profileListings = React.useMemo(() => {
     const targetId = isMe ? currentUser?.id : userId;
     return targetId ? listings.filter((l) => l.sellerId === targetId) : [];
   }, [listings, isMe, userId, currentUser?.id]);
 
-  const isSelfProfile =
-    isMe ||
-    userId === currentUser?.id;
+  React.useEffect(() => {
+    if (isSelfProfile || !userId) return;
+    let canceled = false;
+    setIsLoadingProfile(true);
+    fetchPublicProfile(userId)
+      .then((profile) => {
+        if (!canceled) setPublicProfile(profile);
+      })
+      .catch(() => {
+        if (!canceled) setPublicProfile(null);
+      })
+      .finally(() => {
+        if (!canceled) setIsLoadingProfile(false);
+      });
+    return () => { canceled = true; };
+  }, [userId, isSelfProfile]);
 
   const hasRealUserData = isSelfProfile && currentUser != null;
 
@@ -105,14 +125,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     ?? (currentUser ? profileMediaOverrides[currentUser.id] : undefined)
     ?? null;
 
-  const displayUsername = hasRealUserData
-    ? currentUser?.username ?? 'Thryft user'
-    : 'Profile unavailable';
-  const displayHandle = hasRealUserData ? `@${currentUser?.username ?? 'user'}` : '';
-  const displayAvatar = hasRealUserData
-    ? userAvatar || mediaOverride?.avatar || undefined
-    : undefined;
-  const displayCover = hasRealUserData
+  const targetProfile = isSelfProfile ? currentUser : publicProfile;
+  const displayUsername = targetProfile?.username ?? 'Thryft user';
+  const displayHandle = targetProfile ? `@${targetProfile.username}` : '';
+  const displayAvatar = isSelfProfile
+    ? userAvatar || mediaOverride?.avatar || targetProfile?.avatar || undefined
+    : targetProfile?.avatar || undefined;
+  const displayCover = isSelfProfile
     ? userCover || mediaOverride?.cover || COVER_IMAGE
     : COVER_IMAGE;
 
@@ -282,30 +301,20 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           <View style={styles.heroInfoLinkedIn}>
             <Text style={styles.heroNameLinkedIn}>{displayUsername}</Text>
             <Text style={styles.heroHandleLinkedIn}>{displayHandle}</Text>
-            {hasRealUserData && (currentUser as any)?.rating ? (
-              <View style={styles.heroRatingRow}>
-                <StarRating rating={Math.round((currentUser as any).rating)} size={14} />
-                {(currentUser as any)?.reviewCount ? (
-                  <Text style={styles.heroReviewCount}>({(currentUser as any).reviewCount} reviews)</Text>
-                ) : null}
-              </View>
+            {targetProfile?.bio ? (
+              <Text style={styles.heroBio} numberOfLines={2}>{targetProfile.bio}</Text>
             ) : null}
           </View>
-          
+
           <View style={styles.statsCard}>
             <View style={styles.statCol}>
-              <Text style={styles.statValue}>{hasRealUserData ? (currentUser as any)?.followers ?? 0 : 0}</Text>
-              <Text style={styles.statLabel}>Followers</Text>
+              <Text style={styles.statValue}>{profileListings.length}</Text>
+              <Text style={styles.statLabel}>Listings</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statValue}>{hasRealUserData ? (currentUser as any)?.following ?? 0 : 0}</Text>
-              <Text style={styles.statLabel}>Following</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCol}>
-              <Text style={styles.statValue}>{hasRealUserData ? (currentUser as any)?.listingCount ?? 0 : profileListings.length}</Text>
-              <Text style={styles.statLabel}>Active Items</Text>
+              <Text style={styles.statValue}>{isSelfProfile ? (currentUser as any)?.emailVerified ? 'Yes' : 'No' : '—'}</Text>
+              <Text style={styles.statLabel}>Verified</Text>
             </View>
           </View>
 
@@ -639,6 +648,15 @@ const styles = StyleSheet.create({
     color: MUTED,
     textAlign: 'center',
     marginTop: 2,
+  },
+  heroBio: {
+    fontSize: 14,
+    fontFamily: Typography.family.medium,
+    color: MUTED,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+    paddingHorizontal: 24,
   },
   heroRatingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroReviewCount: { fontSize: 14, fontFamily: Typography.family.medium, color: MUTED },

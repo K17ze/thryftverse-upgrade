@@ -15,19 +15,25 @@ import {
   deleteCustomBotOnApi,
 } from '../services/botsApi';
 import { fetchChatBotsFromApi } from '../services/chatApi';
+import { fetchMyProfile as fetchMyProfileFromApi } from '../services/profileApi';
 
 export interface User {
   id: string;
   username: string;
-  avatar: string;
-  bio?: string;
-  location?: string;
+  avatar: string | null;
+  bio?: string | null;
+  location?: string | null;
   gender?: string;
-  website?: string;
-  email?: string;
-  phone?: string;
-  fullName?: string;
+  website?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  displayName?: string | null;
   birthday?: string;
+  role?: string;
+  emailVerified?: boolean;
+  twoFactorEnabled?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface ProfileMediaOverride {
@@ -237,6 +243,7 @@ interface StoreState {
   login: (user: User) => void;
   logout: () => void;
   updateUserProfile: (updates: Partial<User>) => void;
+  fetchMyProfile: () => Promise<void>;
 
   // Global Interactions
   wishlist: string[]; // array of string item IDs
@@ -398,6 +405,33 @@ export const useStore = create<StoreState>()(
       const updatedUser = state.currentUser ? { ...state.currentUser, ...updates } : null;
       return { currentUser: updatedUser };
     }),
+  fetchMyProfile: async () => {
+    try {
+      const profile = await fetchMyProfileFromApi();
+      set((state) => ({
+        currentUser: state.currentUser
+          ? {
+              ...state.currentUser,
+              username: profile.username,
+              displayName: profile.displayName,
+              bio: profile.bio,
+              location: profile.location,
+              website: profile.website,
+              phone: profile.phone,
+              avatar: profile.avatar,
+              email: profile.email,
+              role: profile.role,
+              emailVerified: profile.emailVerified,
+              twoFactorEnabled: profile.twoFactorEnabled,
+              createdAt: profile.createdAt,
+              updatedAt: profile.updatedAt,
+            }
+          : null,
+      }));
+    } catch {
+      // Silently fail; profile will remain as cached or null.
+    }
+  },
 
   wishlist: [],
   toggleWishlist: (id) =>

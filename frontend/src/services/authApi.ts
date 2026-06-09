@@ -145,7 +145,7 @@ function toStoreUser(user: AuthUser) {
   return {
     id: user.id,
     username: user.username,
-    avatar: `https://picsum.photos/seed/${encodeURIComponent(user.id)}/200/200`,
+    avatar: null as string | null,
   };
 }
 

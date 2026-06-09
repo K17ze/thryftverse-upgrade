@@ -498,3 +498,56 @@ describe('Double-boxing guardrails', () => {
     });
   }
 });
+
+describe('Profile screen guardrails', () => {
+  const PROFILE_SCREENS = [
+    'MyProfileScreen.tsx',
+    'UserProfileScreen.tsx',
+    'EditProfileScreen.tsx',
+  ];
+
+  for (const file of PROFILE_SCREENS) {
+    const src = readSrc(`screens/${file}`);
+
+    it(`${file} does not import mock users`, () => {
+      expect(src).not.toContain("import { MOCK_USERS");
+      expect(src).not.toContain('MOCK_USERS');
+    });
+
+    it(`${file} has no fake follower counts`, () => {
+      expect(src).not.toContain('user.followers');
+      expect(src).not.toContain('user.following');
+      expect(src).not.toContain('.followers');
+      expect(src).not.toContain('.following');
+    });
+
+    it(`${file} has no fake rating strings`, () => {
+      expect(src).not.toContain('user.rating');
+      expect(src).not.toContain('reviewCount');
+    });
+
+    it(`${file} does not hardcode gold/yellow`, () => {
+      expect(src).not.toMatch(/#(?:f0ad4e|ffd700|ffdf00|ffaa00|gold|yellow)/i);
+    });
+
+    it(`${file} does not import glass/blur`, () => {
+      expect(src).not.toContain('BlurView');
+      expect(src).not.toContain("from 'expo-blur'");
+    });
+  }
+
+  it('MyProfileScreen calls backend profile fetch', () => {
+    const src = readSrc('screens/MyProfileScreen.tsx');
+    expect(src).toContain('fetchMyProfile');
+  });
+
+  it('UserProfileScreen calls backend public profile fetch', () => {
+    const src = readSrc('screens/UserProfileScreen.tsx');
+    expect(src).toContain('fetchPublicProfile');
+  });
+
+  it('EditProfileScreen calls backend profile update', () => {
+    const src = readSrc('screens/EditProfileScreen.tsx');
+    expect(src).toContain('updateMyProfile');
+  });
+});

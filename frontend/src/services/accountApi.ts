@@ -95,10 +95,13 @@ export async function deleteMyAccount(reason?: string): Promise<DeleteAccountRes
 }
 
 export interface UpdateProfileInput {
-  email?: string;
+  displayName?: string;
+  username?: string;
+  bio?: string;
+  location?: string;
+  website?: string;
   phone?: string;
-  fullName?: string;
-  birthday?: string;
+  avatar?: string;
 }
 
 export async function updateUserProfile(input: UpdateProfileInput): Promise<void> {

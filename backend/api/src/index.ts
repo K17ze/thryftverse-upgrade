@@ -9502,6 +9502,23 @@ type AuthUserRow = {
   two_factor_enabled: boolean;
 };
 
+type ProfileUserRow = {
+  id: string;
+  username: string;
+  email: string | null;
+  display_name: string | null;
+  bio: string | null;
+  location: string | null;
+  website: string | null;
+  phone: string | null;
+  avatar: string | null;
+  role: string;
+  email_verified_at: string | null;
+  two_factor_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 type OAuthIdentityLookupRow = {
   user_id: string;
 };
@@ -9954,6 +9971,40 @@ function toAuthUserPayload(row: Pick<AuthUserRow, 'id' | 'username' | 'email' | 
     role: normalizeAuthRole(row.role),
     emailVerified: Boolean(row.email_verified_at),
     twoFactorEnabled: Boolean(row.two_factor_enabled),
+  };
+}
+
+function toProfilePayload(row: ProfileUserRow) {
+  return {
+    id: row.id,
+    username: row.username,
+    email: row.email,
+    displayName: row.display_name,
+    bio: row.bio,
+    location: row.location,
+    website: row.website,
+    phone: row.phone,
+    avatar: row.avatar,
+    role: normalizeAuthRole(row.role),
+    emailVerified: Boolean(row.email_verified_at),
+    twoFactorEnabled: Boolean(row.two_factor_enabled),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toPublicProfilePayload(row: ProfileUserRow) {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    bio: row.bio,
+    location: row.location,
+    website: row.website,
+    avatar: row.avatar,
+    role: normalizeAuthRole(row.role),
+    emailVerified: Boolean(row.email_verified_at),
+    createdAt: row.created_at,
   };
 }
 
@@ -11405,6 +11456,136 @@ app.get('/users/:userId/capabilities', async (request, reply) => {
       kycStatus: profile.kycStatus,
     },
     capabilities,
+  };
+});
+
+/* ─── Profile endpoints ─── */
+
+app.get('/users/me', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<ProfileUserRow>(
+    `
+      SELECT
+        id, username, email, display_name, bio, location, website, phone, avatar,
+        role, email_verified_at, two_factor_enabled, created_at, updated_at
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [request.authUser.userId]
+  );
+
+  const user = result.rows[0];
+  if (!user) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    user: toProfilePayload(user),
+  };
+});
+
+app.patch('/users/me', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    displayName: z.string().trim().min(1).max(120).optional(),
+    username: z.string().trim().min(3).max(32).optional(),
+    bio: z.string().trim().max(500).optional(),
+    location: z.string().trim().max(120).optional(),
+    website: z.string().trim().max(255).optional(),
+    phone: z.string().trim().max(30).optional(),
+    avatar: z.string().trim().max(2048).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const allowed: Record<string, unknown> = {};
+  if (payload.displayName !== undefined) allowed.display_name = payload.displayName;
+  if (payload.username !== undefined) allowed.username = payload.username;
+  if (payload.bio !== undefined) allowed.bio = payload.bio;
+  if (payload.location !== undefined) allowed.location = payload.location;
+  if (payload.website !== undefined) allowed.website = payload.website;
+  if (payload.phone !== undefined) allowed.phone = payload.phone;
+  if (payload.avatar !== undefined) allowed.avatar = payload.avatar;
+
+  if (Object.keys(allowed).length === 0) {
+    reply.code(400);
+    return { ok: false, error: 'No fields provided to update' };
+  }
+
+  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
+  const values = Object.values(allowed);
+
+  await db.query(
+    `
+      UPDATE users
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $1
+    `,
+    [request.authUser.userId, ...values]
+  );
+
+  const result = await db.query<ProfileUserRow>(
+    `
+      SELECT
+        id, username, email, display_name, bio, location, website, phone, avatar,
+        role, email_verified_at, two_factor_enabled, created_at, updated_at
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [request.authUser.userId]
+  );
+
+  const user = result.rows[0];
+  if (!user) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    user: toProfilePayload(user),
+  };
+});
+
+app.get('/users/:userId/profile', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  await ensureUserExists(userId);
+
+  const result = await db.query<ProfileUserRow>(
+    `
+      SELECT
+        id, username, email, display_name, bio, location, website, phone, avatar,
+        role, email_verified_at, two_factor_enabled, created_at, updated_at
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [userId]
+  );
+
+  const user = result.rows[0];
+  if (!user) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    user: toPublicProfilePayload(user),
   };
 });
 

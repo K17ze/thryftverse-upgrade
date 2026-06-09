@@ -36,7 +36,7 @@ const AUTH_SNAPSHOT_STORAGE_KEY = 'thryftverse:auth-snapshot:v1';
 export interface StoredAuthSnapshotUser {
   id: string;
   username: string;
-  avatar: string;
+  avatar: string | null;
 }
 
 export interface StoredAuthSnapshot {
@@ -53,7 +53,7 @@ function isValidUser(value: unknown): value is StoredAuthSnapshotUser {
   return (
     typeof candidate.id === 'string' && candidate.id.trim().length > 0 &&
     typeof candidate.username === 'string' && candidate.username.trim().length > 0 &&
-    typeof candidate.avatar === 'string' && candidate.avatar.trim().length > 0
+    (candidate.avatar === null || typeof candidate.avatar === 'string')
   );
 }
 

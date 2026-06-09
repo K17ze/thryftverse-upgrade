@@ -28,6 +28,7 @@ import { PremiumTextField } from '../components/ui/PremiumTextField';
 import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
 import { PremiumFormCard } from '../components/ui/PremiumFormCard';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { updateMyProfile } from '../services/profileApi';
 import {
   setStoredUserAvatar,
   setStoredUserAvatarForUser,
@@ -147,15 +148,28 @@ export default function EditProfileScreen() {
   const handleSave = async () => {
     if (!validateWebsite(website)) return;
     setIsSaving(true);
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    const updates: Partial<any> = { bio, website, gender };
-    if (name !== initialName) updates.fullName = name;
-    if (username !== initialUsername) updates.username = username;
-    updateUserProfile(updates);
-    setIsSaving(false);
-    show('Profile updated', 'success');
-    navigation.goBack();
+    try {
+      const updates: Partial<any> = { bio, website, gender };
+      if (name !== initialName) updates.displayName = name;
+      if (username !== initialUsername) updates.username = username;
+      const updated = await updateMyProfile(updates);
+      updateUserProfile({
+        username: updated.username,
+        displayName: updated.displayName,
+        bio: updated.bio,
+        website: updated.website,
+        location: updated.location,
+        phone: updated.phone,
+        avatar: updated.avatar,
+      });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      show('Profile updated', 'success');
+      navigation.goBack();
+    } catch (err) {
+      show('Failed to save profile. Please try again.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const currentAvatar = userAvatar || user?.avatar;

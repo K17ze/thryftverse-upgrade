@@ -157,6 +157,7 @@ export default function MyProfileScreen() {
   const { formatFromFiat } = useFormattedPrice();
 
   const { listings } = useBackendData();
+  const fetchMyProfile = useStore((state) => state.fetchMyProfile);
 
   const customCoOwns = useStore((state) => state.customCoOwns);
 
@@ -179,6 +180,10 @@ export default function MyProfileScreen() {
   const updateUserCover = useStore((state) => state.updateUserCover);
 
 
+
+  React.useEffect(() => {
+    fetchMyProfile().catch(() => {});
+  }, [fetchMyProfile]);
 
   React.useEffect(() => {
 
@@ -434,7 +439,7 @@ export default function MyProfileScreen() {
 
   const profileMediaOverride = profileMediaOverrides[profileUserId] ?? null;
 
-  const displayCover = userCover || profileMediaOverride?.cover || user.coverPhoto || COVER_IMAGE;
+  const displayCover = userCover || profileMediaOverride?.cover || COVER_IMAGE;
 
   const displayAvatar = userAvatar || profileMediaOverride?.avatar || user.avatar;
 
@@ -844,10 +849,6 @@ export default function MyProfileScreen() {
 
                 user.location,
 
-                user.reviewCount ? `${user.reviewCount} reviews` : null,
-
-                user.lastSeen ? `last seen ${user.lastSeen.toLowerCase()}` : null,
-
               ].filter(Boolean).join(' | ')}
 
             </Text>
@@ -950,7 +951,7 @@ export default function MyProfileScreen() {
 
               activeOpacity={0.8}
 
-              accessibilityLabel={`${user.listingCount} listings. Tap to view full profile.`}
+              accessibilityLabel={`${myListings.length} listings. Tap to view full profile.`}
 
               accessibilityRole="button"
 
@@ -958,7 +959,7 @@ export default function MyProfileScreen() {
 
             >
 
-              <Text style={styles.statNumber}>{user.listingCount}</Text>
+              <Text style={styles.statNumber}>{myListings.length}</Text>
 
               <Text style={styles.statLabel}>LISTED</Text>
 
@@ -968,29 +969,9 @@ export default function MyProfileScreen() {
 
             <View style={styles.statItem}>
 
-              <Text style={styles.statNumber}>{user.followers}</Text>
+              <Text style={styles.statNumber}>{coOwnHoldings.length}</Text>
 
-              <Text style={styles.statLabel}>FOLLOWERS</Text>
-
-            </View>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.statItem}>
-
-              <Text style={styles.statNumber}>{user.following}</Text>
-
-              <Text style={styles.statLabel}>FOLLOWING</Text>
-
-            </View>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.statItem}>
-
-              <Text style={styles.statNumber}>{user.rating}*</Text>
-
-              <Text style={styles.statLabel}>RATING</Text>
+              <Text style={styles.statLabel}>CO-OWN</Text>
 
             </View>
 

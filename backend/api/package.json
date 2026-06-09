@@ -12,7 +12,8 @@
     "migrate": "tsx src/db/migrate.ts",
     "start": "node --enable-source-maps dist/index.js",
     "smoke:commerce": "node scripts/smoke-commerce-flow.mjs",
-    "smoke:coown": "node scripts/smoke-coown-flow.mjs"
+    "smoke:coown": "node scripts/smoke-coown-flow.mjs",
+    "smoke:profile": "node scripts/smoke-profile-flow.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.882.0",

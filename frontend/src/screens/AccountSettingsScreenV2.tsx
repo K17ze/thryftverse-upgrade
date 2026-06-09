@@ -42,7 +42,7 @@ export default function AccountSettingsScreenV2() {
   const userAny = user as any;
   const [email, setEmail] = useState(userAny?.email ?? '');
   const [phone, setPhone] = useState(userAny?.phone ?? '');
-  const [fullName, setFullName] = useState(userAny?.fullName ?? user?.username ?? '');
+  const [displayName, setDisplayName] = useState(userAny?.displayName ?? userAny?.fullName ?? user?.username ?? '');
   const [birthday, setBirthday] = useState(userAny?.birthday ?? '');
 
   const holidayMode = accountPreferences.holidayMode;
@@ -165,24 +165,24 @@ export default function AccountSettingsScreenV2() {
     if (isSaving) return;
     const previousEmail = email;
     const previousPhone = phone;
-    const previousFullName = fullName;
+    const previousDisplayName = displayName;
     const previousBirthday = birthday;
 
-    updateUserProfile({ email, phone, fullName, birthday });
+    updateUserProfile({ phone, displayName, birthday });
     show('Saving account details…', 'info');
     setIsSaving(true);
 
     try {
-      await updateUserProfileApi({ email, phone, fullName, birthday });
+      await updateUserProfileApi({ phone, displayName });
       show('Account details saved', 'success');
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to save account details.');
       show(parsed.message, 'error');
       setEmail(previousEmail);
       setPhone(previousPhone);
-      setFullName(previousFullName);
+      setDisplayName(previousDisplayName);
       setBirthday(previousBirthday);
-      updateUserProfile({ email: previousEmail, phone: previousPhone, fullName: previousFullName, birthday: previousBirthday });
+      updateUserProfile({ phone: previousPhone, displayName: previousDisplayName, birthday: previousBirthday });
     } finally {
       setIsSaving(false);
     }
@@ -201,7 +201,7 @@ export default function AccountSettingsScreenV2() {
   const saveEdit = () => {
     if (editingField === 'email') setEmail(editValue);
     if (editingField === 'phone') setPhone(editValue);
-    if (editingField === 'fullName') setFullName(editValue);
+    if (editingField === 'fullName') setDisplayName(editValue);
     if (editingField === 'birthday') setBirthday(editValue);
     closeEdit();
     handleSaveChanges();
@@ -277,7 +277,7 @@ export default function AccountSettingsScreenV2() {
               </View>
             ) : (
               <>
-                <DetailRow label="Full name" value={fullName} onPress={() => openEdit('fullName', fullName)} />
+                <DetailRow label="Display name" value={displayName} onPress={() => openEdit('fullName', displayName)} />
                 <DetailRow label="Date of birth" value={birthday} onPress={() => openEdit('birthday', birthday)} />
                 <DetailRow label="Phone" value={phone} onPress={() => openEdit('phone', phone)} />
                 <DetailRow
