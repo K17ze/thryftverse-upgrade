@@ -39,4 +39,23 @@ describe('co-own truth rules', () => {
     expect(src).toContain('createCoOwnAsset');
     expect(src).not.toContain('addCoOwn');
   });
+
+  it('AssetDetailScreen does not contain fake synthetic holder handles', () => {
+    const src = readSrc('screens/AssetDetailScreen.tsx');
+    expect(src).not.toContain('@holder1');
+    expect(src).not.toContain('@holder2');
+    expect(src).not.toContain('@holder3');
+    expect(src).not.toContain('fallbackHandles');
+    expect(src).not.toContain('syntheticOwners');
+  });
+
+  it('SyndicateOrderHistoryScreen does not import mock order history', () => {
+    const src = readSrc('screens/SyndicateOrderHistoryScreen.tsx');
+    expect(src).not.toContain('getOrderHistoryForAsset');
+  });
+
+  it('CoOwnAssetCard does not use picsum fallback images', () => {
+    const src = readSrc('components/trade/CoOwnAssetCard.tsx');
+    expect(src).not.toContain('picsum.photos');
+  });
 });

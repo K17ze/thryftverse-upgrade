@@ -136,7 +136,7 @@ export default function CreateAuctionScreen() {
       listingId: selectedListing.id,
       sellerId,
       title: selectedListing.title,
-      image: getListingCoverUri(selectedListing.images, 'https://picsum.photos/seed/new-auction/500/700'),
+      image: getListingCoverUri(selectedListing.images, ''),
       startsAt: new Date(startsAtMs).toISOString(),
       endsAt: new Date(endsAtMs).toISOString(),
       startingBid,
@@ -164,7 +164,7 @@ export default function CreateAuctionScreen() {
         accessibilityLabel={`Select listing ${item.title}`}
       >
         <CachedImage
-          uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/listing-auction-fallback/300/400')}
+          uri={getListingCoverUri(item.images, '')}
           style={styles.listingImage}
           containerStyle={styles.listingImageContainer}
           contentFit="cover"
@@ -183,8 +183,8 @@ export default function CreateAuctionScreen() {
   };
 
   const previewImage = selectedListing
-    ? getListingCoverUri(selectedListing.images, 'https://picsum.photos/seed/auction-preview/500/700')
-    : 'https://picsum.photos/seed/auction-preview/500/700';
+    ? getListingCoverUri(selectedListing.images, '')
+    : '';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>

@@ -85,7 +85,7 @@ export default function AuctionsScreen() {
         listingId: item.listingId,
         sellerId: item.sellerId,
         title: item.title,
-        image: item.imageUrl ?? `https://picsum.photos/seed/${item.id}/500/700`,
+        image: item.imageUrl ?? '',
         startsAt: item.startsAt,
         endsAt: item.endsAt,
         startingBid: item.startingBidGbp,

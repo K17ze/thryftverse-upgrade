@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -17,7 +17,7 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { CachedImage } from '../components/CachedImage';
 import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
@@ -114,20 +114,13 @@ export default function AssetDetailScreen() {
     });
   }
   const allocatedUnits = ownerAccounts.reduce((sum, account) => sum + account.units, 0);
-  let remainingUnits = Math.max(0, asset.totalUnits - allocatedUnits);
-  const syntheticOwners = Math.max(0, Math.min(3, asset.holders - (asset.yourUnits > 0 ? 1 : 0)));
-  const fallbackHandles = ['@holder1', '@holder2', '@holder3'];
-
-  for (let index = 0; index < syntheticOwners; index += 1) {
-    const slotsLeft = syntheticOwners - index;
-    const units = slotsLeft === 1 ? remainingUnits : Math.max(1, Math.floor(remainingUnits / slotsLeft));
-    if (units <= 0) break;
-    remainingUnits = Math.max(0, remainingUnits - units);
+  const remainingUnits = Math.max(0, asset.totalUnits - allocatedUnits);
+  if (remainingUnits > 0) {
     ownerAccounts.push({
-      id: `owner_${index + 1}`,
-      handle: fallbackHandles[index] ?? `@holder${index + 1}`,
-      role: 'Owner account',
-      units,
+      id: 'other_holders',
+      handle: `${Math.max(0, asset.holders - (asset.yourUnits > 0 ? 1 : 0) - 1)} other holders`,
+      role: 'Co-owners',
+      units: remainingUnits,
     });
   }
 
@@ -157,7 +150,7 @@ export default function AssetDetailScreen() {
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(50)}>
           <BodyEmphasis style={styles.assetTitle}>{asset.title}</BodyEmphasis>
-          <Meta style={styles.assetSub}>Asset ID {asset.id.toUpperCase()} | Issuer {asset.issuerId}</Meta>
+          <Meta style={styles.assetSub}>{asset.totalUnits} units · {asset.settlementMode} settlement</Meta>
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
@@ -169,11 +162,11 @@ export default function AssetDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Open @${issuerHandle} profile`}
             >
-              <CachedImage
-                uri={''}
-                style={styles.issuerAvatar}
-                containerStyle={styles.issuerAvatarContainer}
-              />
+              <View style={[styles.issuerAvatarContainer, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 12, fontFamily: Typography.family.bold, color: Colors.textPrimary }}>
+                  {issuerHandle.slice(0, 1).toUpperCase()}
+                </Text>
+              </View>
               <BodyEmphasis style={styles.issuerHandle}>@{issuerHandle}</BodyEmphasis>
               <Meta style={styles.issuerRole}>Issuer</Meta>
             </AnimatedPressable>

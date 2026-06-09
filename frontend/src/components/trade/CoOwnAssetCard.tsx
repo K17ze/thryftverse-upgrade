@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
@@ -126,12 +126,15 @@ export function CoOwnAssetCard({
             accessibilityRole="button"
             accessibilityLabel={`Open @${issuerHandle} profile`}
           >
-            <Image
-              source={{
-                uri: issuerAvatar ?? 'https://picsum.photos/seed/co-own-issuer-fallback/80/80',
-              }}
-              style={styles.issuerAvatar}
-            />
+            {issuerAvatar ? (
+              <CachedImage uri={issuerAvatar} style={styles.issuerAvatar} contentFit="cover" />
+            ) : (
+              <View style={[styles.issuerAvatar, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 10, fontFamily: Typography.family.bold, color: Colors.textPrimary }}>
+                  {issuerHandle.slice(0, 1).toUpperCase()}
+                </Text>
+              </View>
+            )}
             <Meta style={styles.issuerText} numberOfLines={1}>
               Issuer @{issuerHandle}
             </Meta>

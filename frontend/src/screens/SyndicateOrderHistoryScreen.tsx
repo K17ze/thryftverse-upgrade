@@ -12,8 +12,6 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
 import { CachedImage } from '../components/CachedImage';
-import { getOrderHistoryForAsset } from '../data/mockSyndicateData';
-import { TradeOrder } from '../data/syndicateModels';
 import { getCoOwnMarket } from '../data/tradeHub';
 import {
   MarketHistoryCursor,
@@ -65,23 +63,6 @@ const DATE_FILTERS: Array<{ value: DateFilter; label: string; accessibilityLabel
 ];
 
 const PAGE_SIZE = 80;
-
-function toHistoryEntry(order: TradeOrder): HistoryEntry {
-  return {
-    id: order.id,
-    assetId: order.assetId,
-    side: order.side,
-    type: order.type,
-    quantity: order.quantity,
-    pricePerShare: order.pricePerShare,
-    totalAmount: order.totalAmount,
-    fee: order.fee,
-    status: order.status,
-    filledQuantity: order.filledQuantity,
-    createdAt: order.createdAt,
-    source: 'seeded',
-  };
-}
 
 function getFilterWindowMs(dateFilter: DateFilter) {
   if (dateFilter === '24h') return 24 * 60 * 60 * 1000;

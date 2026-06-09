@@ -171,7 +171,7 @@ export default function CreateCoOwnScreen() {
         scaleValue={0.97}
       >
         <CachedImage
-          uri={getListingCoverUri(item.images, 'https://picsum.photos/seed/listing-co-own-fallback/300/400')}
+          uri={getListingCoverUri(item.images, '')}
           style={styles.listingImage}
           containerStyle={styles.listingImageContainer}
           contentFit="cover"
@@ -190,8 +190,8 @@ export default function CreateCoOwnScreen() {
   };
 
   const previewImage = selectedListing
-    ? getListingCoverUri(selectedListing.images, 'https://picsum.photos/seed/co-own-preview/500/700')
-    : 'https://picsum.photos/seed/co-own-preview/500/700';
+    ? getListingCoverUri(selectedListing.images, '')
+    : '';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
