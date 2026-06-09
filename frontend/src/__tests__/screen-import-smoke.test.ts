@@ -421,3 +421,80 @@ describe('SuccessScreen static smoke', () => {
     expect(src).not.toContain("import { MOCK_USERS");
   });
 });
+
+/* ─── Premium primitive import guardrails ─── */
+const PREMIUM_SCREENS = [
+  'SellScreenV2.tsx',
+  'PaymentsScreen.tsx',
+  'BalanceScreen.tsx',
+  'PostageScreen.tsx',
+  'SettingsScreenV2.tsx',
+  'AccountSettingsScreenV2.tsx',
+  'CheckoutScreen.tsx',
+  'OrderDetailScreen.tsx',
+  'MyOrdersScreen.tsx',
+  'ListingSuccessScreen.tsx',
+  'EditProfileScreen.tsx',
+];
+
+const PREMIUM_PRIMITIVES = [
+  'ElevatedSurface',
+  'PremiumInputShell',
+  'PremiumListSection',
+  'PremiumStatusPill',
+  'PremiumActionBar',
+  'PremiumTextField',
+  'PremiumFormCard',
+  'PremiumSelectRow',
+  'PremiumActionFooter',
+  'SettingsSection',
+  'SettingsRow',
+  'SettingsPage',
+  'IdentityCard',
+];
+
+describe('Premium primitive import guardrails', () => {
+  for (const file of PREMIUM_SCREENS) {
+    const src = readSrc(`screens/${file}`);
+
+    it(`${file} imports at least one premium primitive`, () => {
+      const hasPrimitive = PREMIUM_PRIMITIVES.some((p) => src.includes(p));
+      expect(hasPrimitive).toBe(true);
+    });
+
+    it(`${file} has no gold/yellow color literals`, () => {
+      expect(src).not.toMatch(/#(?:f0ad4e|ffd700|ffdf00|ffaa00|gold|yellow)/i);
+    });
+
+    it(`${file} does not import glass/blur components`, () => {
+      expect(src).not.toContain('BlurView');
+      expect(src).not.toContain("from 'expo-blur'");
+      expect(src).not.toContain('expo-blur');
+    });
+  }
+});
+
+describe('Double-boxing guardrails', () => {
+  const DOUBLE_BOXING_SCREENS = [
+    'PaymentsScreen.tsx',
+    'PostageScreen.tsx',
+    'BalanceScreen.tsx',
+    'AccountSettingsScreenV2.tsx',
+    'SettingsScreenV2.tsx',
+  ];
+
+  for (const file of DOUBLE_BOXING_SCREENS) {
+    const src = readSrc(`screens/${file}`);
+
+    it(`${file} does not nest ElevatedSurface inside PremiumListSection`, () => {
+      // Find any PremiumListSection whose children contain ElevatedSurface before the closing tag
+      const pattern = /<PremiumListSection[\s\S]*?<ElevatedSurface[\s\S]*?<\/PremiumListSection>/;
+      expect(src).not.toMatch(pattern);
+    });
+
+    it(`${file} does not nest ElevatedSurface inside SettingsSection`, () => {
+      const pattern = /<SettingsSection[\s\S]*?<ElevatedSurface[\s\S]*?<\/SettingsSection>/;
+      expect(src).not.toMatch(pattern);
+    });
+  }
+});
