@@ -97,14 +97,32 @@ async function run() {
   assert(!('email' in pub.body.user), 'public profile should NOT include email');
   assert(!('phone' in pub.body.user), 'public profile should NOT include phone');
   assert(!('twoFactorEnabled' in pub.body.user), 'public profile should NOT include 2fa status');
+  assert(!('updatedAt' in pub.body.user), 'public profile should NOT include updatedAt');
   console.log('PUBLIC_PRIVACY_OK');
 
-  // 7. Unauthorized edit blocked
+  // 7. Patch avatar and verify public profile reflects it
+  const avatarPatch = await patchMe(accessToken, { avatar: 'https://example.com/avatar.jpg' });
+  assert(avatarPatch.status === 200, 'PATCH avatar should return 200');
+  assert(avatarPatch.body.user.avatar === 'https://example.com/avatar.jpg', 'avatar not updated');
+  const pubWithAvatar = await getPublicProfile(userId);
+  assert(pubWithAvatar.body.user.avatar === 'https://example.com/avatar.jpg', 'public profile should include avatar');
+  console.log('AVATAR_PATCH_OK');
+
+  // 8. Cross-user patch blocked (create second user and try to patch first)
+  const { userId: userId2, accessToken: token2 } = await signup();
+  const crossPatch = await patchMe(token2, { displayName: 'Hijack', avatar: 'https://evil.com/avatar.jpg' });
+  // Token2 should patch user2's profile, not user1's. Verify user1 is unchanged.
+  const pubAfterCross = await getPublicProfile(userId);
+  assert(pubAfterCross.body.user.displayName === 'Test User', 'cross-user patch leaked to other user');
+  assert(pubAfterCross.body.user.avatar === 'https://example.com/avatar.jpg', 'cross-user avatar leak');
+  console.log('CROSS_USER_PATCH_BLOCKED_OK');
+
+  // 9. Unauthorized edit blocked
   const badPatch = await patchMe('invalid-token', { displayName: 'Hacker' });
   assert(badPatch.status === 401, 'Unauthorized PATCH should return 401');
   console.log('UNAUTHORIZED_PATCH_BLOCKED_OK');
 
-  // 8. Unauthenticated get private profile blocked
+  // 10. Unauthenticated get private profile blocked
   const unauthMe = await getMe('invalid-token');
   assert(unauthMe.status === 401, 'Unauthenticated GET /users/me should return 401');
   console.log('UNAUTH_GET_ME_BLOCKED_OK');

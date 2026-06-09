@@ -29,6 +29,7 @@ import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
 import { PremiumFormCard } from '../components/ui/PremiumFormCard';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { updateMyProfile } from '../services/profileApi';
+import { uploadMedia } from '../services/mediaUpload';
 import {
   setStoredUserAvatar,
   setStoredUserAvatarForUser,
@@ -127,15 +128,24 @@ export default function EditProfileScreen() {
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const pickedUri = result.assets[0].uri;
         setIsUploadingAvatar(true);
         try {
-          const nextAvatarUri = await persistProfileMediaUri(result.assets[0].uri, 'avatar');
-          updateUserAvatar(nextAvatarUri);
+          // 1. Persist locally first for immediate display
+          const localUri = await persistProfileMediaUri(pickedUri, 'avatar');
+          updateUserAvatar(localUri);
+          // 2. Upload to backend/MinIO and save public URL
+          const publicUrl = await uploadMedia(pickedUri, 'avatars');
+          await updateMyProfile({ avatar: publicUrl });
+          updateUserAvatar(publicUrl);
           await Promise.all([
-            setStoredUserAvatar(nextAvatarUri),
-            currentUser?.id ? setStoredUserAvatarForUser(currentUser.id, nextAvatarUri) : Promise.resolve(),
+            setStoredUserAvatar(publicUrl),
+            currentUser?.id ? setStoredUserAvatarForUser(currentUser.id, publicUrl) : Promise.resolve(),
           ]).catch(() => {});
           show('Avatar updated', 'success');
+        } catch {
+          show('Avatar upload requires media storage connection.', 'error');
+          // Keep local URI for preview, but user knows it's not saved to backend.
         } finally {
           setIsUploadingAvatar(false);
         }

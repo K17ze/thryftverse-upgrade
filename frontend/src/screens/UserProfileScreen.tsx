@@ -244,7 +244,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           onPress={() => setActionSheetVisible(true)}
           accessibilityRole="button"
           accessibilityLabel="Open profile actions"
-          accessibilityHint="Shows report and block actions"
+          accessibilityHint="Shows profile options"
         >
           <View style={styles.iconBackdrop}>
             <Ionicons name="ellipsis-horizontal" size={22} color="#fff" />
@@ -398,7 +398,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="More profile actions"
-              accessibilityHint="Shows report and block options"
+              accessibilityHint="Shows profile options"
             >
               <Ionicons name="ellipsis-horizontal" size={18} color={TEXT} />
             </AnimatedPressable>
@@ -465,41 +465,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       <BottomSheet visible={actionSheetVisible} onDismiss={() => setActionSheetVisible(false)} snapPoint={0.3}>
         <View style={{ paddingVertical: 10 }}>
           <Text style={{ fontSize: 18, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 20 }}>User Actions</Text>
-
-          <AnimatedPressable
-            style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-            onPress={() => {
-              setActionSheetVisible(false);
-              setTimeout(() => navigation.navigate('Report', { type: 'user' }), 200);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Report user"
-            accessibilityHint="Opens report flow for this user"
-          >
-            <Ionicons name="flag-outline" size={20} color={TEXT} />
-            <Text style={{ fontSize: 16, fontFamily: Typography.family.medium, color: TEXT }}>Report user</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={{ paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-            onPress={() => {
-              setActionSheetVisible(false);
-              if (isSelfProfile) {
-                show('You cannot block your own profile.', 'info');
-                return;
-              }
-
-              setIsBlocked(true);
-              setFollowing(false);
-              show('User blocked. You will not receive new messages from them.', 'success');
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Block user"
-            accessibilityHint="Blocks this user and disables future messages"
-          >
-            <Ionicons name="ban-outline" size={20} color={Colors.danger} />
-            <Text style={{ fontSize: 16, fontFamily: Typography.family.medium, color: Colors.danger }}>Block user</Text>
-          </AnimatedPressable>
+          <Text style={{ fontSize: 14, fontFamily: Typography.family.medium, color: MUTED, textAlign: 'center', paddingVertical: 20 }}>
+            Report and block features are coming soon.
+          </Text>
         </View>
       </BottomSheet>
     </View>

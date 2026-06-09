@@ -96,6 +96,10 @@ import { persistProfileMediaUri } from '../utils/profileMediaAsset';
 
 import { isVideoUri } from '../utils/media';
 
+import { uploadMedia } from '../services/mediaUpload';
+
+import { updateMyProfile } from '../services/profileApi';
+
 
 
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -369,27 +373,47 @@ export default function MyProfileScreen() {
 
       if (!result.canceled && result.assets?.[0]?.uri) {
 
-        const nextAvatarUri = await persistProfileMediaUri(result.assets[0].uri, 'avatar');
+        const pickedUri = result.assets[0].uri;
 
-        updateUserAvatar(nextAvatarUri);
+        // 1. Persist locally first for immediate display
+        const localUri = await persistProfileMediaUri(pickedUri, 'avatar');
 
-        if (currentUser?.id) {
+        updateUserAvatar(localUri);
 
-          Promise.all([
+        // 2. Upload to backend/MinIO and save public URL
+        try {
 
-            setStoredUserAvatar(nextAvatarUri),
+          const publicUrl = await uploadMedia(pickedUri, 'avatars');
 
-            setStoredUserAvatarForUser(currentUser.id, nextAvatarUri),
+          await updateMyProfile({ avatar: publicUrl });
 
-          ]).catch(() => {
+          updateUserAvatar(publicUrl);
 
-            // Keep UX responsive when local persistence fails.
+          if (currentUser?.id) {
 
-          });
+            Promise.all([
+
+              setStoredUserAvatar(publicUrl),
+
+              setStoredUserAvatarForUser(currentUser.id, publicUrl),
+
+            ]).catch(() => {
+
+              // Keep UX responsive when local persistence fails.
+
+            });
+
+          }
+
+          show('Avatar updated', 'success');
+
+        } catch {
+
+          show('Avatar upload requires media storage connection.', 'error');
+
+          // Keep local URI for preview, but user knows it's not saved to backend.
 
         }
-
-        show('Avatar updated', 'success');
 
       }
 
