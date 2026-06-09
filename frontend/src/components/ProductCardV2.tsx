@@ -218,7 +218,6 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginBottom: Space.sm,
   },
 
   // Image - Flagship radius with subtle shadow for depth

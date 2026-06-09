@@ -100,6 +100,19 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain('ResizeMode.COVER');
   });
 
+  it('ProductCardV2 is image-first with no container marginBottom', () => {
+    const src = readSrc('components/ProductCardV2.tsx');
+    expect(src).toContain('flex: 1,');
+    expect(src).not.toContain('marginBottom: Space.sm');
+  });
+
+  it('OrderDetail timeline has premium dot treatment', () => {
+    const src = readSrc('screens/OrderDetailScreen.tsx');
+    expect(src).toContain('borderWidth: 3');
+    expect(src).toContain('borderColor: Colors.background');
+    expect(src).toContain('shadowRadius: 8');
+  });
+
   it('no glass/blur except BottomSheet and tests', () => {
     const screens = [
       'screens/HomeScreen.tsx',
