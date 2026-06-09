@@ -10,7 +10,7 @@ import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { getCoOwnMarket, CoOwnAsset } from '../data/tradeHub';
 import { useStore } from '../store/useStore';
-import { resolveAssetMarketState } from '../data/mockSyndicateData';
+import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { EmptyState } from '../components/EmptyState';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
@@ -41,8 +41,6 @@ const SORT_OPTIONS: Array<{ value: HubSort; label: string; accessibilityLabel: s
 
 export default function CoOwnHubScreen() {
   const navigation = useNavigation<NavT>();
-  const customCoOwns = useStore((state) => state.customCoOwns);
-  const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
@@ -50,17 +48,69 @@ export default function CoOwnHubScreen() {
 
   const [query, setQuery] = React.useState('');
   const [sortBy, setSortBy] = React.useState<HubSort>('value');
+  const [remoteAssets, setRemoteAssets] = React.useState<CoOwnAsset[]>([]);
+  const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
+  const [isSyncing, setIsSyncing] = React.useState(false);
+  const actingUserId = currentUser?.id;
+
+  React.useEffect(() => {
+    if (!actingUserId) return;
+    setIsSyncing(true);
+    Promise.all([
+      listCoOwnAssets({ limit: 120 }),
+      fetchCoOwnHoldings(actingUserId).catch(() => []),
+    ])
+      .then(([items, holdingItems]) => {
+        const mapped: CoOwnAsset[] = items.map((item) => ({
+          id: item.id,
+          listingId: item.listingId,
+          issuerId: item.issuerId,
+          title: item.title,
+          image: item.imageUrl ?? '',
+          totalUnits: item.totalUnits,
+          availableUnits: item.availableUnits,
+          unitPriceGBP: item.unitPriceGbp,
+          unitPriceStable: item.unitPriceStable,
+          settlementMode: item.settlementMode as 'GBP' | 'TVUSD' | 'HYBRID',
+          issuerJurisdiction: item.issuerJurisdiction ?? undefined,
+          marketMovePct24h: item.marketMovePct24h,
+          holders: item.holders,
+          volume24hGBP: item.volume24hGbp,
+          yourUnits: 0,
+          isOpen: item.isOpen,
+        }));
+        const holdingsMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
+        for (const h of holdingItems) {
+          holdingsMap.set(h.assetId, { units: h.unitsOwned, avgEntry: h.avgEntryPriceGbp, realized: h.realizedPnlGbp });
+        }
+        setRemoteAssets(mapped);
+        setHoldings(holdingsMap);
+      })
+      .catch((err) => {
+        show('Failed to load co-own assets', 'error');
+      })
+      .finally(() => setIsSyncing(false));
+  }, [actingUserId, show]);
 
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
     navigation.navigate('MainTabs');
   }, [navigation]);
 
-  const baseAssets = React.useMemo(() => getCoOwnMarket(customCoOwns), [customCoOwns]);
+  const baseAssets = React.useMemo(() => getCoOwnMarket(remoteAssets), [remoteAssets]);
 
   const marketAssets = React.useMemo(
-    () => baseAssets.map((asset) => resolveAssetMarketState(asset, coOwnRuntime[asset.id])),
-    [baseAssets, coOwnRuntime]
+    () => baseAssets.map((asset) => {
+      const holding = holdings.get(asset.id);
+      if (!holding) return asset;
+      return {
+        ...asset,
+        yourUnits: holding.units,
+        avgEntryPriceGBP: holding.avgEntry,
+        realizedProfitGBP: holding.realized,
+      };
+    }),
+    [baseAssets, holdings]
   );
 
   const filteredAssets = React.useMemo(() => {

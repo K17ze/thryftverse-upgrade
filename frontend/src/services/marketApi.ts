@@ -323,6 +323,36 @@ export async function placeCoOwnOrder(
   );
 }
 
+export interface CreateCoOwnAssetInput {
+  id?: string;
+  listingId: string;
+  title?: string;
+  imageUrl?: string;
+  totalUnits: number;
+  unitPriceGbp: number;
+  unitPriceStable?: number;
+  settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID';
+  issuerJurisdiction?: string;
+}
+
+interface CreateCoOwnAssetResponse {
+  ok: true;
+  assetId: string;
+}
+
+export async function createCoOwnAsset(
+  input: CreateCoOwnAssetInput
+): Promise<CreateCoOwnAssetResponse> {
+  return fetchJson<CreateCoOwnAssetResponse>(
+    '/co-own/assets',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+}
+
 export async function createCoOwnBuyoutOffer(
   assetId: string,
   input: CreateCoOwnBuyoutOfferInput
@@ -349,6 +379,27 @@ export async function listCoOwnAssetOrders(
     `/co-own/assets/${encodeURIComponent(assetId)}/orders${query}`
   );
 
+  return payload.items;
+}
+
+export interface MarketCoOwnHolding {
+  userId: string;
+  assetId: string;
+  unitsOwned: number;
+  avgEntryPriceGbp: number;
+  realizedPnlGbp: number;
+  updatedAt: string;
+}
+
+interface ListCoOwnHoldingsResponse {
+  ok: true;
+  items: MarketCoOwnHolding[];
+}
+
+export async function fetchCoOwnHoldings(userId: string): Promise<MarketCoOwnHolding[]> {
+  const payload = await fetchJson<ListCoOwnHoldingsResponse>(
+    `/users/${encodeURIComponent(userId)}/co-own/holdings`
+  );
   return payload.items;
 }
 

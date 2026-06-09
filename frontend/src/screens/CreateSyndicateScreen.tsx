@@ -8,8 +8,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { MOCK_LISTINGS, MOCK_USERS, Listing } from '../data/mockData';
-import type { CoOwnAsset } from '../data/tradeHub';
+import { MOCK_LISTINGS, Listing } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -19,6 +18,7 @@ import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAut
 import { formatIzeAmount } from '../utils/currency';
 import { getCreateCoOwnInitialState } from '../utils/syndicatePrefill';
 import { useBackendData } from '../context/BackendDataContext';
+import { createCoOwnAsset } from '../services/marketApi';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
@@ -45,9 +45,8 @@ export default function CreateCoOwnScreen() {
   const prefill = route.params;
 
   const currentUser = useStore((state) => state.currentUser);
-  const addCoOwn = useStore((state) => state.addCoOwn);
 
-  const issuerId = currentUser?.id ?? MOCK_USERS[0]?.id ?? 'u1';
+  const issuerId = currentUser?.id ?? '';
 
   const issuerListings = React.useMemo(() => {
     const sourceListings = listings.length ? listings : MOCK_LISTINGS;
@@ -63,6 +62,7 @@ export default function CreateCoOwnScreen() {
   const [selectedListingId, setSelectedListingId] = React.useState(initialState.selectedListingId);
   const [totalUnitsInput, setTotalUnitsInput] = React.useState(initialState.totalUnitsInput);
   const [unitPriceInput, setUnitPriceInput] = React.useState(initialState.unitPriceInput);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleTotalUnitsChange = React.useCallback((value: string) => {
     const sanitized = sanitizeIntegerInput(value);
@@ -93,9 +93,13 @@ export default function CreateCoOwnScreen() {
     [issuerListings, selectedListingId]
   );
 
-  const issueCoOwn = () => {
+  const issueCoOwn = async () => {
     if (!selectedListing) {
       show('Select a listing to issue', 'error');
+      return;
+    }
+    if (!issuerId) {
+      show('Sign in to issue co-owns', 'error');
       return;
     }
 
@@ -117,31 +121,25 @@ export default function CreateCoOwnScreen() {
       return;
     }
 
-    const now = Date.now();
-    const newAsset: CoOwnAsset = {
-      id: `s_user_${now}`,
-      listingId: selectedListing.id,
-      issuerId,
-      title: `${selectedListing.title} Split`,
-      image: getListingCoverUri(selectedListing.images, 'https://picsum.photos/seed/new-co-own/500/700'),
-      totalUnits,
-      availableUnits: totalUnits,
-      unitPriceGBP,
-      unitPriceStable,
-      settlementMode: 'TVUSD',
-      issuerJurisdiction: undefined,
-      marketMovePct24h: 0,
-      holders: 0,
-      volume24hGBP: 0,
-      yourUnits: 0,
-      avgEntryPriceGBP: unitPriceGBP,
-      realizedProfitGBP: 0,
-      isOpen: true,
-    };
-
-    addCoOwn(newAsset);
-    show('Co-Own issued successfully', 'success');
-    navigation.goBack();
+    setIsSubmitting(true);
+    try {
+      const imageUrl = getListingCoverUri(selectedListing.images, '');
+      await createCoOwnAsset({
+        listingId: selectedListing.id,
+        title: `${selectedListing.title} Split`,
+        imageUrl,
+        totalUnits,
+        unitPriceGbp: unitPriceGBP,
+        unitPriceStable,
+        settlementMode: 'TVUSD',
+      });
+      show('Co-Own issued successfully', 'success');
+      navigation.goBack();
+    } catch (err) {
+      show('Failed to issue co-own. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const estimatedValue = React.useMemo(() => {
@@ -298,12 +296,13 @@ export default function CreateCoOwnScreen() {
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}>
           <AppButton
-            title="Issue Co-Own"
+            title={isSubmitting ? 'Issuing...' : 'Issue Co-Own'}
             icon={<Ionicons name="flash-outline" size={16} color={Colors.background} />}
-            onPress={issueCoOwn}
+            onPress={() => void issueCoOwn()}
             variant="primary"
             size="md"
             style={styles.issueBtn}
+            disabled={isSubmitting}
             hapticFeedback="medium"
             accessibilityLabel="Issue co-own"
           />

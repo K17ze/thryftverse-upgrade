@@ -29126,6 +29126,101 @@ app.post('/co-own/buyout-offers/:offerId/accept', async (request, reply) => {
   }
 });
 
+app.get('/co-own/assets/:assetId', async (request, reply) => {
+  const paramsSchema = z.object({ assetId: z.string().min(2) });
+  const { assetId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    id: string;
+    listing_id: string;
+    issuer_id: string;
+    title: string;
+    image_url: string | null;
+    total_units: number;
+    available_units: number;
+    unit_price_gbp: number;
+    unit_price_stable: number;
+    settlement_mode: string;
+    issuer_jurisdiction: string | null;
+    market_move_pct_24h: number;
+    holders: number;
+    volume_24h_gbp: number;
+    is_open: boolean;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `SELECT * FROM coOwn_assets WHERE id = $1 LIMIT 1`,
+    [assetId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'Asset not found' };
+  }
+
+  return {
+    ok: true,
+    item: {
+      id: row.id,
+      listingId: row.listing_id,
+      issuerId: row.issuer_id,
+      title: row.title,
+      imageUrl: row.image_url,
+      totalUnits: row.total_units,
+      availableUnits: row.available_units,
+      unitPriceGbp: Number(row.unit_price_gbp),
+      unitPriceStable: Number(row.unit_price_stable),
+      settlementMode: row.settlement_mode,
+      issuerJurisdiction: row.issuer_jurisdiction,
+      marketMovePct24h: Number(row.market_move_pct_24h),
+      holders: row.holders,
+      volume24hGbp: Number(row.volume_24h_gbp),
+      isOpen: row.is_open,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    },
+  };
+});
+
+app.get('/users/:userId/co-own/holdings', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const callerId = (request as any).authUser?.userId as string | undefined;
+
+  if (!callerId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (callerId !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
+  const result = await db.query<{
+    user_id: string;
+    asset_id: string;
+    units_owned: number;
+    avg_entry_price_gbp: number;
+    realized_pnl_gbp: number;
+    updated_at: string;
+  }>(
+    `SELECT * FROM coOwn_holdings WHERE user_id = $1 ORDER BY updated_at DESC`,
+    [userId]
+  );
+
+  const items = result.rows.map((row) => ({
+    userId: row.user_id,
+    assetId: row.asset_id,
+    unitsOwned: row.units_owned,
+    avgEntryPriceGbp: Number(row.avg_entry_price_gbp),
+    realizedPnlGbp: Number(row.realized_pnl_gbp),
+    updatedAt: row.updated_at,
+  }));
+
+  return { ok: true, items };
+});
+
 let isShuttingDown = false;
 
 const start = async () => {

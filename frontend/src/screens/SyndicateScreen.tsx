@@ -25,7 +25,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { formatIzeAmount, toIze } from '../utils/currency';
 import { parseApiError } from '../lib/apiClient';
-import { listCoOwnAssets, placeCoOwnOrder } from '../services/marketApi';
+import { listCoOwnAssets, placeCoOwnOrder, fetchCoOwnHoldings } from '../services/marketApi';
 import { t } from '../i18n';
 import { Motion } from '../constants/motion';
 import { Space, Radius } from '../theme/designTokens';
@@ -54,8 +54,6 @@ export default function CoOwnScreen() {
   const { goldRates } = useCurrencyContext();
   const { formatFromFiat, formatFromIze } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
-  const customCoOwns = useStore((state) => state.customCoOwns);
-  const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const reducedMotionEnabled = useReducedMotion();
 
   const actingUserId = currentUser?.id;
@@ -67,6 +65,7 @@ export default function CoOwnScreen() {
   const [selectedAsset, setSelectedAsset] = React.useState<CoOwnAsset | null>(null);
   const [unitsInput, setUnitsInput] = React.useState('1');
   const [remoteAssets, setRemoteAssets] = React.useState<CoOwnAsset[]>([]);
+  const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
   const [isSyncingAssets, setIsSyncingAssets] = React.useState(false);
   const [syncError, setSyncError] = React.useState<string | null>(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = React.useState(false);
@@ -78,7 +77,10 @@ export default function CoOwnScreen() {
     }
     setIsSyncingAssets(true);
     try {
-      const items = await listCoOwnAssets({ limit: 120, issuerId: actingUserId });
+      const [items, holdingItems] = await Promise.all([
+        listCoOwnAssets({ limit: 120, issuerId: actingUserId }),
+        fetchCoOwnHoldings(actingUserId).catch(() => []),
+      ]);
       const mapped: CoOwnAsset[] = items.map((item) => ({
         id: item.id,
         listingId: item.listingId,
@@ -97,7 +99,12 @@ export default function CoOwnScreen() {
         yourUnits: 0,
         isOpen: item.isOpen,
       }));
+      const holdingsMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
+      for (const h of holdingItems) {
+        holdingsMap.set(h.assetId, { units: h.unitsOwned, avgEntry: h.avgEntryPriceGbp, realized: h.realizedPnlGbp });
+      }
       setRemoteAssets(mapped);
+      setHoldings(holdingsMap);
       setSyncError(null);
     } catch (error) {
       setSyncError((error as Error).message || t('syndicate.sync.unable'));
@@ -116,36 +123,20 @@ export default function CoOwnScreen() {
     setRefreshing(false);
   };
 
-  const mergedAssets = React.useMemo(() => {
-    const merged = new Map<string, CoOwnAsset>();
-    for (const item of remoteAssets) merged.set(item.id, item);
-    for (const item of customCoOwns) {
-      if (item.issuerId !== actingUserId) continue;
-      merged.set(item.id, { ...item, settlementMode: 'TVUSD', issuerJurisdiction: undefined });
-    }
-    return [...merged.values()];
-  }, [actingUserId, customCoOwns, remoteAssets]);
-
-  const baseAssets = React.useMemo(() => getCoOwnMarket(mergedAssets), [mergedAssets]);
+  const baseAssets = React.useMemo(() => getCoOwnMarket(remoteAssets), [remoteAssets]);
 
   const marketAssets = React.useMemo(() => {
     return baseAssets.map((asset) => {
-      const runtime = coOwnRuntime[asset.id];
-      if (!runtime) return asset;
+      const holding = holdings.get(asset.id);
+      if (!holding) return asset;
       return {
         ...asset,
-        availableUnits: runtime.availableUnits,
-        holders: runtime.holders,
-        volume24hGBP: runtime.volume24hGBP,
-        yourUnits: runtime.yourUnits,
-        unitPriceGBP: runtime.unitPriceGBP,
-        unitPriceStable: runtime.unitPriceStable,
-        marketMovePct24h: runtime.marketMovePct24h,
-        avgEntryPriceGBP: runtime.avgEntryPriceGBP,
-        realizedProfitGBP: runtime.realizedProfitGBP,
+        yourUnits: holding.units,
+        avgEntryPriceGBP: holding.avgEntry,
+        realizedProfitGBP: holding.realized,
       };
     });
-  }, [baseAssets, coOwnRuntime]);
+  }, [baseAssets, holdings]);
 
   const visibleAssets = React.useMemo(() => {
     if (activeView === 'HOLDINGS') return marketAssets.filter((asset) => asset.yourUnits > 0);
