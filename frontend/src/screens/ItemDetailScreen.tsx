@@ -323,11 +323,15 @@ export default function ItemDetailScreen() {
                 <CachedImage uri={resolvedSeller.avatar || ''} style={styles.sellerAvatar} containerStyle={{ width: 52, height: 52, borderRadius: 26 }} contentFit="cover" />
                 <View style={styles.sellerInfo}>
                   <Text style={styles.sellerName}>@{resolvedSeller.username || 'Seller'}</Text>
-                  <View style={styles.sellerMetaRow}>
-                    <Ionicons name="star" size={12} color={Colors.brand} />
-                    <Text style={styles.sellerStats}>{resolvedSeller.rating ?? 0} · {resolvedSeller.reviewCount ?? 0} reviews</Text>
-                  </View>
-                  <Text style={styles.sellerLastSeen}>{resolvedSeller.location || ''}</Text>
+                  {(resolvedSeller.rating || resolvedSeller.reviewCount) ? (
+                    <View style={styles.sellerMetaRow}>
+                      <Ionicons name="star" size={12} color={Colors.brand} />
+                      <Text style={styles.sellerStats}>{resolvedSeller.rating} · {resolvedSeller.reviewCount} reviews</Text>
+                    </View>
+                  ) : null}
+                  {resolvedSeller.location ? (
+                    <Text style={styles.sellerLastSeen}>{resolvedSeller.location}</Text>
+                  ) : null}
                 </View>
               </AnimatedPressable>
 

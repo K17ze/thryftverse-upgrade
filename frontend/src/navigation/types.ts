@@ -58,8 +58,6 @@ export type RootStackParamList = {
   Settings: undefined;
   EditProfile: undefined;
   AccountSettings: undefined;
-  PersonalInformation: undefined;
-  SecurityAndLogins: undefined;
   Payments: undefined;
   // Phase 16 new screens
   MakeOffer: { itemId: string; price: number; title: string };
@@ -68,7 +66,6 @@ export type RootStackParamList = {
   InviteFriends: undefined;
   BalanceHistory: undefined;
   // Phase 17 new screens
-  AddCard: undefined;
   AddBankAccount: undefined;
   HelpSupport: undefined;
   // Phase 18 new screens
@@ -82,7 +79,6 @@ export type RootStackParamList = {
   CategoryTree: { categoryPrefix: string };
   // Phase 24 new screens
   GlobalSearch: undefined;
-  AddAddress: undefined;
   // Collections feature
   CollectionDetail: { collectionId: string };
   // Phase 25 new screens

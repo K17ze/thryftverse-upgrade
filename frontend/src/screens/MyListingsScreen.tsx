@@ -9,6 +9,7 @@ import { TypeStyles, Space, Radius, Type, Typography } from '../theme/designToke
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -93,13 +94,7 @@ export default function MyListingsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
-        <View style={styles.header}>
-          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={styles.title}>{headerTitle}</Text>
-          <View style={styles.backBtn} />
-        </View>
+        <ScreenHeader title={headerTitle} onBack={() => navigation.goBack()} />
         <View style={styles.body}>
           <ActivityIndicator size="large" color={Colors.brand} />
         </View>
@@ -110,13 +105,7 @@ export default function MyListingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.title}>{headerTitle}</Text>
-        <View style={styles.backBtn} />
-      </View>
+      <ScreenHeader title={headerTitle} onBack={() => navigation.goBack()} />
 
       {listings.length === 0 ? (
         <View style={styles.body}>
@@ -144,25 +133,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    ...TypeStyles.title,
-    color: Colors.textPrimary,
   },
   body: {
     flex: 1,
