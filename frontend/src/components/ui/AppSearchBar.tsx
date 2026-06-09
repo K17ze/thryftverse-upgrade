@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useState } from 'react';
 import {
   View,
   TextInput,
@@ -34,14 +34,16 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
   },
   ref
 ) {
+  const [isFocused, setIsFocused] = useState(false);
+
   const handleClear = () => {
     onChangeText('');
     onClear?.();
   };
 
   return (
-    <View style={[styles.container, containerStyle]}>
-      <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
+    <View style={[styles.container, isFocused && styles.containerFocused, containerStyle]}>
+      <Ionicons name="search-outline" size={18} color={isFocused ? Colors.textSecondary : Colors.textMuted} />
       <TextInput
         ref={ref}
         {...inputProps}
@@ -50,6 +52,8 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
         placeholderTextColor={Colors.textMuted}
         value={value}
         onChangeText={onChangeText}
+        onFocus={(e) => { setIsFocused(true); inputProps?.onFocus?.(e); }}
+        onBlur={(e) => { setIsFocused(false); inputProps?.onBlur?.(e); }}
         accessibilityLabel={placeholder}
         accessibilityRole="search"
       />
@@ -75,11 +79,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: Space.sm + Space.xs,
     paddingVertical: Space.sm,
     gap: Space.xs + Space.xs,
+  },
+  containerFocused: {
+    borderColor: Colors.textSecondary,
+    backgroundColor: Colors.surfaceAlt,
   },
   input: {
     flex: 1,

@@ -37,12 +37,14 @@ const styles = StyleSheet.create({
     marginBottom: Space.lg,
   },
   title: {
-    fontSize: Type.body.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.sm,
     marginTop: Space.lg,
     paddingHorizontal: Space.md,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    lineHeight: Type.caption.lineHeight,
   },
   description: {
     fontSize: Type.caption.size,

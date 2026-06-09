@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useState } from 'react';
 import {
   KeyboardTypeOptions,
   StyleProp,
@@ -11,6 +11,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { Typography } from '../../theme/designTokens';
 
 interface AppInputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -44,10 +45,13 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
     keyboardType,
     onChangeText,
     editable = true,
+    onFocus,
+    onBlur,
     ...rest
   },
   ref
 ) {
+  const [isFocused, setIsFocused] = useState(false);
   const hasError = Boolean(errorText);
 
   return (
@@ -56,6 +60,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
       <View
         style={[
           styles.inputWrap,
+          isFocused && !hasError && styles.inputWrapFocused,
           hasError && styles.inputWrapError,
           !editable && styles.inputWrapDisabled,
           inputContainerStyle,
@@ -73,6 +78,8 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
           placeholder={placeholder}
           placeholderTextColor={placeholderTextColor ?? Colors.textMuted}
           style={[styles.input, inputStyle]}
+          onFocus={(e) => { setIsFocused(true); onFocus?.(e); }}
+          onBlur={(e) => { setIsFocused(false); onBlur?.(e); }}
         />
         {suffix}
       </View>
@@ -87,20 +94,24 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     color: Colors.textSecondary,
     fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
   inputWrap: {
-    borderRadius: 10,
-    borderWidth: 0.5,
+    borderRadius: 12,
+    borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 12,
-    minHeight: 46,
+    paddingHorizontal: 14,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  inputWrapFocused: {
+    borderColor: Colors.textSecondary,
+    backgroundColor: Colors.surface,
   },
   inputWrapError: {
     borderColor: Colors.danger,
@@ -112,7 +123,7 @@ const styles = StyleSheet.create({
   prefixText: {
     color: Colors.textMuted,
     fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   prefixNode: {
     alignItems: 'center',
@@ -121,8 +132,8 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     color: Colors.textPrimary,
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    fontFamily: Typography.family.medium,
     paddingVertical: 10,
   },
   helperText: {
@@ -130,13 +141,13 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 11,
     lineHeight: 16,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   errorText: {
     marginTop: 7,
     color: Colors.danger,
     fontSize: 11,
     lineHeight: 16,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
 });

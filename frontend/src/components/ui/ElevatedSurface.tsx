@@ -74,6 +74,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    marginBottom: Space.md,
   },
 });

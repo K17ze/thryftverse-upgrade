@@ -70,11 +70,11 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
 
   const cardContent = (
     <View style={styles.container}>
-      {/* Image - Full bleed, no border radius */}
+      {/* Image - Full bleed, subtle radius for modern feel */}
       <AnimatedPressable onPress={onPress} style={styles.imageWrap}>
         <CachedImage
           uri={item.images?.[0] ?? ''}
-          style={[styles.image, { aspectRatio, borderRadius: visualOnly ? 16 : Radius.none }]}
+          style={[styles.image, { aspectRatio, borderRadius: visualOnly ? 16 : Radius.sm }]}
           contentFit="cover"
           transition={300}
         />
@@ -86,26 +86,26 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
           </View>
         )}
 
-        {/* Condition badge - top left */}
+        {/* Condition badge - top left, more subtle */}
         {!item.isSold && (
           <View style={styles.conditionBadge}>
             <Text style={styles.conditionText}>{item.condition}</Text>
           </View>
         )}
 
-        {/* Price drop flash - top left below condition */}
+        {/* Price drop badge - top left below condition */}
         {hasPriceDrop && !item.isSold && (
           <View style={[styles.conditionBadge, styles.priceDropBadge]}>
             <Text style={styles.conditionText}>-{priceDropPercent}%</Text>
           </View>
         )}
 
-        {/* Media indicator */}
+        {/* Media indicator - refined */}
         {(hasMultiple || hasVideo) && (
           <View style={styles.mediaBadge}>
             <Ionicons
               name={hasVideo ? 'videocam' : 'images'}
-              size={12}
+              size={11}
               color="#FFFFFF"
             />
           </View>
@@ -136,7 +136,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
         </View>
       </AnimatedPressable>
 
-      {/* Info - Tight padding like Depop */}
+      {/* Info - Clean hierarchy */}
       {!visualOnly && (
         <View style={styles.info}>
           <View style={styles.priceRow}>
@@ -148,15 +148,13 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
             </View>
             {item.likes > 0 && (
               <View style={styles.likes}>
-                <Ionicons name="heart" size={10} color={Colors.textMuted} />
-                <T.Caption>{item.likes}</T.Caption>
+                <Ionicons name="heart" size={9} color={Colors.textMuted} />
+                <T.Caption style={{ fontSize: 11, lineHeight: 14 }}>{item.likes}</T.Caption>
               </View>
             )}
           </View>
 
-          <T.Caption numberOfLines={1}>{item.size}</T.Caption>
-
-          {/* Seller info omitted — shown in ItemDetail only */}
+          {item.size ? <T.Caption numberOfLines={1} style={{ marginTop: 1 }}>{item.size}</T.Caption> : null}
         </View>
       )}
     </View>
@@ -220,51 +218,50 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginBottom: 10,
-    ...Elevation.subtle, // ELEVATED: Use design system
+    marginBottom: Space.sm,
   },
 
-  // Image - No border radius, full bleed
+  // Image - Subtle radius for modern feel
   imageWrap: {
     position: 'relative',
+    overflow: 'hidden',
+    borderRadius: Radius.sm,
   },
   image: {
     width: '100%',
-    borderRadius: Radius.none, // Sharp corners like Depop
+    borderRadius: Radius.sm,
   },
 
   // Overlays
   soldOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   soldText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
   mediaBadge: {
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    width: 26,
-    height: 26,
+    backgroundColor: 'rgba(0,0,0,0.40)',
+    width: 24,
+    height: 24,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
   },
   favBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.32)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -272,7 +269,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.32)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -285,11 +282,11 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
 
-  // Info - Refined padding
+  // Info - Clean hierarchy
   info: {
-    padding: Space.sm,
-    paddingTop: Space.sm + 2,
-    gap: 3,
+    paddingTop: Space.sm,
+    paddingHorizontal: 2,
+    gap: 2,
   },
   priceRow: {
     flexDirection: 'row',
@@ -311,34 +308,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
   },
   // Condition & price-drop badges
   conditionBadge: {
     position: 'absolute',
     top: Space.sm,
     left: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.50)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
   },
   priceDropBadge: {
-    top: Space.sm + 26,
-    backgroundColor: 'rgba(220,38,38,0.75)',
+    top: Space.sm + 24,
+    backgroundColor: 'rgba(200,50,50,0.70)',
   },
   conditionText: {
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: Typography.family.bold,
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
 

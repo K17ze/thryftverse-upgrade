@@ -45,14 +45,14 @@ const TabIcon = ({ name, color, focused, badgeCount }: TabIconProps) => {
     transform: [{ scale: iconScale.value }],
   }));
 
-  const dotOpacity = useSharedValue(focused ? 1 : 0);
+  const indicatorWidth = useSharedValue(focused ? 18 : 4);
   useEffect(() => {
-    dotOpacity.value = withTiming(focused ? 1 : 0, { duration: 200 });
-  }, [focused, dotOpacity]);
+    indicatorWidth.value = withSpring(focused ? 18 : 4, { damping: 18, stiffness: 200 });
+  }, [focused, indicatorWidth]);
 
-  const dotStyle = useAnimatedStyle(() => ({
-    opacity: dotOpacity.value,
-    transform: [{ scale: dotOpacity.value }],
+  const indicatorStyle = useAnimatedStyle(() => ({
+    width: indicatorWidth.value,
+    opacity: focused ? 1 : 0,
   }));
 
   return (
@@ -61,7 +61,7 @@ const TabIcon = ({ name, color, focused, badgeCount }: TabIconProps) => {
         <Ionicons name={name} size={22} color={color} />
       </Reanimated.View>
       {badgeCount !== undefined && <AnimatedBadge count={badgeCount} />}
-      <Reanimated.View style={[styles.activeIndicator, dotStyle]} />
+      <Reanimated.View style={[styles.activeIndicator, indicatorStyle]} />
     </View>
   );
 };
@@ -188,10 +188,9 @@ const styles = StyleSheet.create({
     width: 28,
   },
   activeIndicator: {
-    width: Space.md - Space.xs,
-    height: Space.md - Space.xs,
-    borderRadius: Radius.full,
+    height: 3,
+    borderRadius: 2,
     backgroundColor: Colors.textPrimary,
-    marginTop: Space.xs - 1,
+    marginTop: 4,
   },
 });

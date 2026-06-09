@@ -12,13 +12,10 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { Typography , Elevation  } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-
-const IS_LIGHT = ActiveTheme === 'light';
-const RING_BG = IS_LIGHT ? '#f0ebe3' : '#151515';
 
 interface SuggestedAction {
   label: string;
@@ -169,7 +166,7 @@ const styles = StyleSheet.create({
     borderRadius: 48,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    backgroundColor: RING_BG,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
