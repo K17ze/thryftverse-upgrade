@@ -1,0 +1,5 @@
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS cover_photo TEXT;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS cover_video TEXT;

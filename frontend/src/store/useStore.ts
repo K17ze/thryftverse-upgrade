@@ -21,6 +21,8 @@ export interface User {
   id: string;
   username: string;
   avatar: string | null;
+  coverPhoto?: string | null;
+  coverVideo?: string | null;
   bio?: string | null;
   location?: string | null;
   gender?: string;
@@ -419,6 +421,8 @@ export const useStore = create<StoreState>()(
               website: profile.website,
               phone: profile.phone,
               avatar: profile.avatar,
+              coverPhoto: profile.coverPhoto,
+              coverVideo: profile.coverVideo,
               email: profile.email,
               role: profile.role,
               emailVerified: profile.emailVerified,
@@ -427,6 +431,7 @@ export const useStore = create<StoreState>()(
               updatedAt: profile.updatedAt,
             }
           : null,
+        userCover: profile.coverPhoto ?? state.userCover,
       }));
     } catch {
       // Silently fail; profile will remain as cached or null.

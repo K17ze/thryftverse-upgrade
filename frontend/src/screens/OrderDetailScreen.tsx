@@ -296,13 +296,13 @@ export default function OrderDetailScreen() {
   const existingListing = listingId ? listings.find((item) => item.id === listingId) : undefined;
   const listing = existingListing ?? {
     id: listingId ?? '',
-    title: backendOrder ? `Order item` : 'Order',
+    title: backendOrder?.listingTitle || 'Order details unavailable',
     brand: '',
     size: '',
-    condition: 'Very good' as const,
+    condition: '',
     price: backendOrder?.subtotalGbp ?? 0,
     priceWithProtection: backendOrder?.totalGbp ?? 0,
-    images: [''],
+    images: backendOrder?.listingImageUrl ? [backendOrder.listingImageUrl] : [],
     likes: 0,
     sellerId: backendOrder?.sellerId ?? '',
     category: '',

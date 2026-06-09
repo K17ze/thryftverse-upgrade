@@ -28,8 +28,8 @@ describe('EditProfileScreen static smoke', () => {
     expect(src).toContain("import { PremiumSelectRow }");
   });
 
-  it('imports PremiumFormCard', () => {
-    expect(src).toContain("import { PremiumFormCard }");
+  it('imports AppButton', () => {
+    expect(src).toContain("import { AppButton }");
   });
 
   it('uses reactive theme (useAppTheme)', () => {

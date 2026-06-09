@@ -9516,6 +9516,8 @@ type ProfileUserRow = {
   website: string | null;
   phone: string | null;
   avatar: string | null;
+  cover_photo: string | null;
+  cover_video: string | null;
   role: string;
   email_verified_at: string | null;
   two_factor_enabled: boolean;
@@ -9989,6 +9991,8 @@ function toProfilePayload(row: ProfileUserRow) {
     website: row.website,
     phone: row.phone,
     avatar: row.avatar,
+    coverPhoto: row.cover_photo,
+    coverVideo: row.cover_video,
     role: normalizeAuthRole(row.role),
     emailVerified: Boolean(row.email_verified_at),
     twoFactorEnabled: Boolean(row.two_factor_enabled),
@@ -10006,6 +10010,8 @@ function toPublicProfilePayload(row: ProfileUserRow) {
     location: row.location,
     website: row.website,
     avatar: row.avatar,
+    coverPhoto: row.cover_photo,
+    coverVideo: row.cover_video,
     role: normalizeAuthRole(row.role),
     emailVerified: Boolean(row.email_verified_at),
     createdAt: row.created_at,
@@ -11474,7 +11480,7 @@ app.get('/users/me', async (request, reply) => {
   const result = await db.query<ProfileUserRow>(
     `
       SELECT
-        id, username, email, display_name, bio, location, website, phone, avatar,
+        id, username, email, display_name, bio, location, website, phone, avatar, cover_photo, cover_video,
         role, email_verified_at, two_factor_enabled, created_at, updated_at
       FROM users
       WHERE id = $1
@@ -11509,6 +11515,8 @@ app.patch('/users/me', async (request, reply) => {
     website: z.string().trim().max(255).optional(),
     phone: z.string().trim().max(30).optional(),
     avatar: z.string().trim().max(2048).optional(),
+    coverPhoto: z.string().trim().max(2048).optional(),
+    coverVideo: z.string().trim().max(2048).optional(),
   });
 
   const payload = bodySchema.parse(request.body ?? {});
@@ -11521,6 +11529,8 @@ app.patch('/users/me', async (request, reply) => {
   if (payload.website !== undefined) allowed.website = payload.website;
   if (payload.phone !== undefined) allowed.phone = payload.phone;
   if (payload.avatar !== undefined) allowed.avatar = payload.avatar;
+  if (payload.coverPhoto !== undefined) allowed.cover_photo = payload.coverPhoto;
+  if (payload.coverVideo !== undefined) allowed.cover_video = payload.coverVideo;
 
   if (Object.keys(allowed).length === 0) {
     reply.code(400);
@@ -11542,7 +11552,7 @@ app.patch('/users/me', async (request, reply) => {
   const result = await db.query<ProfileUserRow>(
     `
       SELECT
-        id, username, email, display_name, bio, location, website, phone, avatar,
+        id, username, email, display_name, bio, location, website, phone, avatar, cover_photo, cover_video,
         role, email_verified_at, two_factor_enabled, created_at, updated_at
       FROM users
       WHERE id = $1
@@ -11572,7 +11582,7 @@ app.get('/users/:userId/profile', async (request, reply) => {
   const result = await db.query<ProfileUserRow>(
     `
       SELECT
-        id, username, email, display_name, bio, location, website, phone, avatar,
+        id, username, email, display_name, bio, location, website, phone, avatar, cover_photo, cover_video,
         role, email_verified_at, two_factor_enabled, created_at, updated_at
       FROM users
       WHERE id = $1

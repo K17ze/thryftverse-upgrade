@@ -34,6 +34,8 @@ export interface CommerceOrder {
   buyerId: string;
   sellerId: string;
   listingId: string;
+  listingTitle: string;
+  listingImageUrl: string | null;
   subtotalGbp: number;
   buyerProtectionFeeGbp: number;
   platformChargeGbp: number;

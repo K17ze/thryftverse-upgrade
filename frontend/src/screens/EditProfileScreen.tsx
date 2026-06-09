@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -17,7 +17,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -26,8 +26,7 @@ import { EmptyState } from '../components/EmptyState';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
 import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
-import { PremiumFormCard } from '../components/ui/PremiumFormCard';
-import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { AppButton } from '../components/ui/AppButton';
 import { updateMyProfile } from '../services/profileApi';
 import { uploadMedia } from '../services/mediaUpload';
 import {
@@ -37,7 +36,6 @@ import {
   setStoredUserCoverForUser,
 } from '../preferences/profileMediaPreferences';
 import { persistProfileMediaUri } from '../utils/profileMediaAsset';
-import { Typography } from '../theme/designTokens';
 
 const GENDER_OPTIONS = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
 
@@ -51,18 +49,17 @@ export default function EditProfileScreen() {
   const updateUserAvatar = useStore((state) => state.updateUserAvatar);
   const updateUserCover = useStore((state) => state.updateUserCover);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
+  const fetchMyProfile = useStore((state) => state.fetchMyProfile);
 
-  const user = currentUser as any;
+  const user = currentUser;
   const initialGender = user?.gender ?? 'Prefer not to say';
-  const initialName = user?.fullName ?? user?.displayName ?? '';
+  const initialName = user?.displayName ?? user?.username ?? '';
   const initialUsername = user?.username ?? '';
 
   const [name, setName] = useState(initialName);
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(user?.bio ?? '');
-  const [website, setWebsite] = useState(
-    (user as any)?.website ?? ''
-  );
+  const [website, setWebsite] = useState(user?.website ?? '');
   const [gender, setGender] = useState(initialGender);
   const [genderPickerVisible, setGenderPickerVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -70,14 +67,22 @@ export default function EditProfileScreen() {
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [websiteError, setWebsiteError] = useState('');
 
-  const hasChanges =
+  const hasTextChanges =
     name !== initialName ||
     username !== initialUsername ||
     bio !== (user?.bio ?? '') ||
-    website !== ((user as any)?.website ?? '') ||
+    website !== (user?.website ?? '') ||
     gender !== initialGender;
 
-  const validateWebsite = (value: string) => {
+  const hasMediaChanges = React.useMemo(() => {
+    const avatarChanged = userAvatar !== (user?.avatar ?? null);
+    const coverChanged = userCover !== (user?.coverPhoto ?? null);
+    return avatarChanged || coverChanged;
+  }, [userAvatar, userCover, user]);
+
+  const hasChanges = hasTextChanges || hasMediaChanges;
+
+  const validateWebsite = useCallback((value: string) => {
     if (!value) {
       setWebsiteError('');
       return true;
@@ -89,31 +94,38 @@ export default function EditProfileScreen() {
     }
     setWebsiteError('');
     return true;
-  };
+  }, []);
 
   const pickCover = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 0.86,
+        allowsEditing: true,
+        aspect: [3, 1],
+        quality: 0.9,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const pickedUri = result.assets[0].uri;
         setIsUploadingCover(true);
         try {
-          const nextCoverUri = await persistProfileMediaUri(result.assets[0].uri, 'cover');
-          updateUserCover(nextCoverUri);
+          const localUri = await persistProfileMediaUri(pickedUri, 'cover');
+          updateUserCover(localUri);
+          const publicUrl = await uploadMedia(pickedUri, 'covers');
+          await updateMyProfile({ coverPhoto: publicUrl });
+          updateUserCover(publicUrl);
           await Promise.all([
-            setStoredUserCover(nextCoverUri),
-            currentUser?.id ? setStoredUserCoverForUser(currentUser.id, nextCoverUri) : Promise.resolve(),
+            setStoredUserCover(publicUrl),
+            currentUser?.id ? setStoredUserCoverForUser(currentUser.id, publicUrl) : Promise.resolve(),
           ]).catch(() => {});
           show('Cover updated', 'success');
+        } catch {
+          show('Cover upload requires media storage connection.', 'error');
         } finally {
           setIsUploadingCover(false);
         }
       }
-    } catch (err) {
+    } catch {
       show('Could not select cover photo', 'error');
     }
   };
@@ -124,17 +136,15 @@ export default function EditProfileScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.9,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         const pickedUri = result.assets[0].uri;
         setIsUploadingAvatar(true);
         try {
-          // 1. Persist locally first for immediate display
           const localUri = await persistProfileMediaUri(pickedUri, 'avatar');
           updateUserAvatar(localUri);
-          // 2. Upload to backend/MinIO and save public URL
           const publicUrl = await uploadMedia(pickedUri, 'avatars');
           await updateMyProfile({ avatar: publicUrl });
           updateUserAvatar(publicUrl);
@@ -145,12 +155,11 @@ export default function EditProfileScreen() {
           show('Avatar updated', 'success');
         } catch {
           show('Avatar upload requires media storage connection.', 'error');
-          // Keep local URI for preview, but user knows it's not saved to backend.
         } finally {
           setIsUploadingAvatar(false);
         }
       }
-    } catch (err) {
+    } catch {
       show('Could not select profile photo', 'error');
     }
   };
@@ -159,39 +168,44 @@ export default function EditProfileScreen() {
     if (!validateWebsite(website)) return;
     setIsSaving(true);
     try {
-      const updates: Partial<any> = { bio, website, gender };
+      const updates: Record<string, unknown> = {};
       if (name !== initialName) updates.displayName = name;
       if (username !== initialUsername) updates.username = username;
-      const updated = await updateMyProfile(updates);
-      updateUserProfile({
-        username: updated.username,
-        displayName: updated.displayName,
-        bio: updated.bio,
-        website: updated.website,
-        location: updated.location,
-        phone: updated.phone,
-        avatar: updated.avatar,
-      });
+      if (bio !== (user?.bio ?? '')) updates.bio = bio;
+      if (website !== (user?.website ?? '')) updates.website = website;
+      if (gender !== initialGender) updates.gender = gender;
+      if (Object.keys(updates).length > 0) {
+        const updated = await updateMyProfile(updates);
+        updateUserProfile({
+          username: updated.username,
+          displayName: updated.displayName,
+          bio: updated.bio,
+          website: updated.website,
+          location: updated.location,
+          phone: updated.phone,
+          avatar: updated.avatar,
+          coverPhoto: updated.coverPhoto,
+          coverVideo: updated.coverVideo,
+        });
+      }
+      await fetchMyProfile();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       show('Profile updated', 'success');
       navigation.goBack();
-    } catch (err) {
+    } catch {
       show('Failed to save profile. Please try again.', 'error');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const currentAvatar = userAvatar || user?.avatar;
-  const currentCover = userCover || user?.coverPhoto;
+  const currentAvatar = userAvatar || user?.avatar || '';
+  const currentCover = userCover || user?.coverPhoto || '';
 
   if (!user) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar
-          barStyle={isDark ? 'light-content' : 'dark-content'}
-          backgroundColor={Colors.background}
-        />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
         <EmptyState
           icon="person-outline"
           title="Not signed in"
@@ -205,133 +219,91 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
-      />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <AnimatedPressable onPress={() => navigation.goBack()} scaleValue={0.92} hapticFeedback="light">
-          <Ionicons name="close" size={28} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Edit profile</Text>
-        <AnimatedPressable
-          onPress={() => void handleSave()}
-          scaleValue={0.92}
-          hapticFeedback="light"
-          disabled={!hasChanges || isSaving}
-        >
-          <Text style={[styles.doneText, (!hasChanges || isSaving) && styles.doneTextDisabled]}>
-            {isSaving ? 'Saving' : 'Done'}
-          </Text>
-        </AnimatedPressable>
-      </View>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Helper copy */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-            <Text style={styles.helperText}>
-              Your profile is visible to everyone on Thryftverse. Keep it accurate and up to date.
-            </Text>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {/* Header */}
+          <View style={styles.header}>
+            <AnimatedPressable onPress={() => navigation.goBack()} scaleValue={0.92} hapticFeedback="light">
+              <Ionicons name="close" size={28} color={Colors.textPrimary} />
+            </AnimatedPressable>
+            <Text style={styles.headerTitle}>Edit Profile</Text>
+            <View style={{ width: 44 }} />
+          </View>
+
+          {/* Hero Media Section */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
+            <View style={styles.heroSection}>
+              <AnimatedPressable onPress={pickCover} activeOpacity={0.92} scaleValue={0.985}>
+                <View style={styles.coverFrame}>
+                  {currentCover ? (
+                    <CachedImage uri={currentCover} style={styles.coverImage} contentFit="cover" />
+                  ) : (
+                    <View style={[styles.coverImage, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
+                      <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
+                    </View>
+                  )}
+                  {isUploadingCover && (
+                    <View style={styles.uploadOverlay}>
+                      <ActivityIndicator color="#fff" />
+                    </View>
+                  )}
+                  {!isUploadingCover && (
+                    <View style={styles.coverEditBadge}>
+                      <Ionicons name="camera" size={14} color="#fff" />
+                    </View>
+                  )}
+                </View>
+              </AnimatedPressable>
+
+              <View style={styles.avatarOuter}>
+                <AnimatedPressable onPress={pickAvatar} activeOpacity={0.92} scaleValue={0.97}>
+                  <View style={styles.avatarFrame}>
+                    {currentAvatar ? (
+                      <CachedImage uri={currentAvatar} style={styles.avatarImage} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.avatarImage, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
+                        <Ionicons name="person" size={32} color={Colors.textMuted} />
+                      </View>
+                    )}
+                    {isUploadingAvatar && (
+                      <View style={styles.uploadOverlay}>
+                        <ActivityIndicator color="#fff" size="small" />
+                      </View>
+                    )}
+                    {!isUploadingAvatar && (
+                      <View style={styles.avatarEditBadge}>
+                        <Ionicons name="camera" size={12} color="#fff" />
+                      </View>
+                    )}
+                  </View>
+                </AnimatedPressable>
+              </View>
+            </View>
           </Reanimated.View>
 
-          {/* Cover */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.coverSection}>
-            <ElevatedSurface variant="elevated" style={styles.coverWrap}>
-            <AnimatedPressable onPress={pickCover} activeOpacity={0.85} scaleValue={0.98} style={{ width: '100%', height: '100%' }}>
-              <CachedImage
-                key={`edit-cover-${currentCover}`}
-                uri={currentCover}
-                style={styles.coverImage}
-                containerStyle={styles.coverContainer}
-                contentFit="cover"
-              />
-              {isUploadingCover ? (
-                <View style={styles.coverOverlay}>
-                  <View style={styles.coverSpinner}>
-                    <Ionicons name="sync" size={22} color="#fff" />
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.coverOverlay}>
-                  <View style={styles.coverCameraCircle}>
-                    <Ionicons name="camera" size={18} color="#fff" />
-                  </View>
-                </View>
-              )}
-            </AnimatedPressable>
-            </ElevatedSurface>
-            <AnimatedPressable onPress={pickCover} activeOpacity={0.8} scaleValue={0.98}>
-              <Text style={styles.changeText}>Change cover photo</Text>
-            </AnimatedPressable>
-          </Reanimated.View>
-
-          {/* Avatar */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(40)} style={styles.avatarSection}>
-            <ElevatedSurface variant="elevated" style={[styles.avatarWrap, { borderRadius: 60, overflow: 'hidden' }]}>
-            <AnimatedPressable onPress={pickAvatar} activeOpacity={0.85} scaleValue={0.97} style={{ width: 120, height: 120 }}>
-              <CachedImage
-                uri={currentAvatar}
-                style={styles.avatarImage}
-                containerStyle={styles.avatarContainer}
-                contentFit="cover"
-              />
-              {isUploadingAvatar ? (
-                <View style={styles.avatarOverlay}>
-                  <View style={styles.avatarSpinner}>
-                    <Ionicons name="sync" size={22} color="#fff" />
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.avatarOverlay}>
-                  <View style={styles.avatarCameraCircle}>
-                    <Ionicons name="camera" size={16} color="#fff" />
-                  </View>
-                </View>
-              )}
-            </AnimatedPressable>
-            </ElevatedSurface>
-            <AnimatedPressable onPress={pickAvatar} activeOpacity={0.8} scaleValue={0.98}>
-              <Text style={styles.changeText}>Change profile photo</Text>
-            </AnimatedPressable>
-          </Reanimated.View>
-
-          {/* Form */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-            <PremiumFormCard>
-              <PremiumTextField
-                label="Name"
-                value={name}
-                onChangeText={setName}
-                placeholder="Your name"
-                autoCapitalize="words"
-              />
+          {/* Identity Fields */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.section}>
+            <Text style={styles.sectionLabel}>Identity</Text>
+            <View style={styles.fieldGroup}>
+              <PremiumTextField label="Name" value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" />
+              <View style={styles.divider} />
               <PremiumTextField
                 label="Username"
                 value={username}
                 onChangeText={setUsername}
                 placeholder="username"
                 autoCapitalize="none"
-                helperText="This is how people find you on Thryftverse."
+                helperText="How people find you on Thryftverse."
               />
-              <PremiumTextField
-                label="Website"
-                value={website}
-                onChangeText={setWebsite}
-                onBlur={() => validateWebsite(website)}
-                placeholder="https://"
-                autoCapitalize="none"
-                keyboardType="url"
-                errorText={websiteError || undefined}
-              />
-            </PremiumFormCard>
+            </View>
           </Reanimated.View>
 
-          {/* Bio */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
-            <PremiumFormCard>
+          {/* About */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.section}>
+            <Text style={styles.sectionLabel}>About</Text>
+            <View style={styles.fieldGroup}>
               <PremiumTextField
                 label="Bio"
                 value={bio}
@@ -342,12 +314,24 @@ export default function EditProfileScreen() {
                 maxLength={200}
                 helperText={`${bio.length}/200`}
               />
-            </PremiumFormCard>
+              <View style={styles.divider} />
+              <PremiumTextField
+                label="Website"
+                value={website}
+                onChangeText={setWebsite}
+                onBlur={() => validateWebsite(website)}
+                placeholder="https://"
+                autoCapitalize="none"
+                keyboardType="url"
+                errorText={websiteError || undefined}
+              />
+            </View>
           </Reanimated.View>
 
-          {/* Gender */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-            <PremiumFormCard>
+          {/* Personal */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.section}>
+            <Text style={styles.sectionLabel}>Personal</Text>
+            <View style={styles.fieldGroup}>
               <PremiumSelectRow
                 label="Gender"
                 value={gender}
@@ -355,12 +339,24 @@ export default function EditProfileScreen() {
                 icon="person-outline"
                 onPress={() => setGenderPickerVisible(true)}
               />
-            </PremiumFormCard>
+            </View>
           </Reanimated.View>
 
           <View style={{ height: Space.xl }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Sticky Save Action */}
+      <View style={styles.actionBar}>
+        <AppButton
+          title={isSaving ? 'Saving...' : 'Save Changes'}
+          variant="primary"
+          onPress={handleSave}
+          disabled={!hasChanges || isSaving}
+          loading={isSaving}
+          hapticFeedback="medium"
+        />
+      </View>
 
       <BottomSheetPicker
         visible={genderPickerVisible}
@@ -393,132 +389,117 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
     lineHeight: Type.subtitle.lineHeight,
   },
-  doneText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  doneTextDisabled: {
-    color: Colors.textMuted,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
-  helperText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    marginBottom: Space.lg,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
+    paddingBottom: Space.xxl,
   },
 
-  // Cover
-  coverSection: {
+  // Hero
+  heroSection: {
     alignItems: 'center',
-    marginBottom: Space.lg,
+    marginBottom: Space.xl,
   },
-  coverWrap: {
-    position: 'relative',
-    marginBottom: Space.sm,
+  coverFrame: {
     width: '100%',
-    height: 140,
-    borderRadius: Radius.lg,
+    height: 160,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
-  },
-  coverContainer: {
-    width: '100%',
-    height: '100%',
-    borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   coverImage: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.lg,
   },
-  coverOverlay: {
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverEditBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-  },
-  coverCameraCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    bottom: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 2,
     borderColor: Colors.background,
   },
-  coverSpinner: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+  avatarOuter: {
+    marginTop: -48,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.background,
   },
-
-  // Avatar
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: Space.xl,
-  },
-  avatarWrap: {
-    position: 'relative',
-    marginBottom: Space.sm,
-    borderRadius: 60,
-  },
-  avatarContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+  avatarFrame: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 3,
+    borderColor: Colors.background,
   },
   avatarImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 96,
+    height: 96,
   },
-  avatarOverlay: {
+  avatarEditBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-  },
-  avatarCameraCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 2,
     borderColor: Colors.background,
-  },
-  avatarSpinner: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.background,
-  },
-  changeText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-    letterSpacing: Type.body.letterSpacing,
   },
 
+  // Sections
+  section: {
+    marginBottom: Space.lg,
+  },
+  sectionLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: Space.sm,
+    marginLeft: Space.xs,
+  },
+  fieldGroup: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginLeft: Space.md,
+  },
+
+  // Action bar
+  actionBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.md + 8,
+    backgroundColor: Colors.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
 });

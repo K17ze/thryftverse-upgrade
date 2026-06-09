@@ -10,6 +10,8 @@ export interface ProfileUser {
   website: string | null;
   phone: string | null;
   avatar: string | null;
+  coverPhoto: string | null;
+  coverVideo: string | null;
   role: string;
   emailVerified: boolean;
   twoFactorEnabled: boolean;
@@ -25,6 +27,8 @@ export interface PublicProfileUser {
   location: string | null;
   website: string | null;
   avatar: string | null;
+  coverPhoto: string | null;
+  coverVideo: string | null;
   role: string;
   emailVerified: boolean;
   createdAt: string;
@@ -53,6 +57,8 @@ export interface UpdateProfileInput {
   website?: string;
   phone?: string;
   avatar?: string;
+  coverPhoto?: string;
+  coverVideo?: string;
 }
 
 export async function updateMyProfile(input: UpdateProfileInput): Promise<ProfileUser> {
