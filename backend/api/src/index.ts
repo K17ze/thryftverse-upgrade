@@ -26197,7 +26197,7 @@ app.get('/users/:userId/orders', async (request) => {
 app.post('/orders/:orderId/cancel', async (request, reply) => {
   const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
   const { orderId } = paramsSchema.parse(request.params);
-  const userId = (request as any).user?.id as string | undefined;
+  const userId = (request as any).authUser?.userId as string | undefined;
 
   if (!userId) {
     reply.code(401);
@@ -26259,7 +26259,7 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
   });
   const { orderId } = paramsSchema.parse(request.params);
   const body = bodySchema.parse(request.body);
-  const userId = (request as any).user?.id as string | undefined;
+  const userId = (request as any).authUser?.userId as string | undefined;
 
   if (!userId) {
     reply.code(401);
@@ -26299,7 +26299,7 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
     }
 
     const provider = body.shippingProvider ?? order.shipping_provider ?? 'manual';
-    const tracking = body.trackingNumber ?? order.tracking_number ?? `TV-${orderId.slice(0, 8).toUpperCase()}`;
+    const tracking = body.trackingNumber ?? order.tracking_number ?? `TV-${orderId.toUpperCase()}`;
 
     await client.query(
       `UPDATE orders SET status = 'shipped', shipped_at = NOW(), shipping_provider = $2, tracking_number = $3, updated_at = NOW() WHERE id = $1`,
@@ -26319,7 +26319,7 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
 app.post('/orders/:orderId/deliver', async (request, reply) => {
   const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
   const { orderId } = paramsSchema.parse(request.params);
-  const userId = (request as any).user?.id as string | undefined;
+  const userId = (request as any).authUser?.userId as string | undefined;
 
   if (!userId) {
     reply.code(401);
@@ -26387,7 +26387,7 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
   });
   const { orderId } = paramsSchema.parse(request.params);
   const body = bodySchema.parse(request.body);
-  const userId = (request as any).user?.id as string | undefined;
+  const userId = (request as any).authUser?.userId as string | undefined;
 
   if (!userId) {
     reply.code(401);
@@ -26447,7 +26447,7 @@ app.get('/users/:userId/transactions', async (request, reply) => {
   });
   const { userId } = paramsSchema.parse(request.params);
   const { limit, offset } = querySchema.parse(request.query);
-  const callerId = (request as any).user?.id as string | undefined;
+  const callerId = (request as any).authUser?.userId as string | undefined;
 
   if (!callerId) {
     reply.code(401);
