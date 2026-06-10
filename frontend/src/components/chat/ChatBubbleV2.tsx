@@ -33,6 +33,7 @@ interface ChatBubbleV2Props {
   onLongPress?: () => void;
   onReactionPress?: () => void;
   onRetry?: () => void;
+  onMediaPress?: () => void;
 }
 
 export function ChatBubbleV2({
@@ -52,6 +53,7 @@ export function ChatBubbleV2({
   onLongPress,
   onReactionPress,
   onRetry,
+  onMediaPress,
 }: ChatBubbleV2Props) {
   const bgColor = isMe ? Colors.surface : Colors.surfaceAlt;
   const textColor = Colors.textPrimary;
@@ -96,7 +98,7 @@ export function ChatBubbleV2({
         ) : null}
 
         {mediaUri ? (
-          <View style={styles.mediaWrap}>
+          <Pressable onPress={onMediaPress} style={styles.mediaWrap}>
             <CachedImage uri={mediaUri} style={styles.mediaImage} contentFit="cover" />
             {mediaType === 'video' ? (
               <View style={styles.videoBadge}>
@@ -108,7 +110,7 @@ export function ChatBubbleV2({
                 <Text style={styles.uploadText}>Sending...</Text>
               </View>
             ) : null}
-          </View>
+          </Pressable>
         ) : null}
 
         {text ? (

@@ -234,6 +234,7 @@ export interface Collection {
   description?: string;
   itemIds: string[];
   coverImage?: string;
+  isPrivate?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -256,7 +257,7 @@ interface StoreState {
   isSavedProduct: (id: string) => boolean;
   // Collections (replaces simple saved)
   collections: Collection[];
-  createCollection: (name: string, description?: string) => string;
+  createCollection: (name: string, description?: string, isPrivate?: boolean) => string;
   deleteCollection: (id: string) => void;
   renameCollection: (id: string, name: string) => void;
   addToCollection: (collectionId: string, itemId: string) => void;
@@ -462,13 +463,13 @@ export const useStore = create<StoreState>()(
     }),
   isSavedProduct: (id) => get().savedProducts.includes(id),
   collections: [],
-  createCollection: (name, description) => {
+  createCollection: (name, description, isPrivate) => {
     const id = `collection_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const now = Date.now();
     set((state) => ({
       collections: [
         ...state.collections,
-        { id, name, description, itemIds: [], createdAt: now, updatedAt: now },
+        { id, name, description, isPrivate, itemIds: [], createdAt: now, updatedAt: now },
       ],
     }));
     return id;
