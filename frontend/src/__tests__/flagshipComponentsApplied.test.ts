@@ -113,6 +113,39 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain('shadowRadius: 8');
   });
 
+  it('HomeScreen loading skeleton uses flagship radius', () => {
+    const src = readSrc('screens/HomeScreen.tsx');
+    expect(src).not.toContain('borderRadius={0}');
+    expect(src).toContain('borderRadius={Radius.lg}');
+  });
+
+  it('BrowseScreen imageWrap uses flagship radius and elevation', () => {
+    const src = readSrc('screens/BrowseScreen.tsx');
+    expect(src).toContain('...Elevation.card');
+    expect(src).toContain('aspectRatio: 0.8');
+    // imageWrap should use Radius.lg, not hardcoded 16
+    expect(src).toContain('imageWrap: {');
+    const imageWrapIdx = src.indexOf('imageWrap: {');
+    const imageWrapEnd = src.indexOf('  },', imageWrapIdx);
+    const imageWrapBlock = src.slice(imageWrapIdx, imageWrapEnd);
+    expect(imageWrapBlock).toContain('borderRadius: Radius.lg');
+    expect(imageWrapBlock).not.toContain('borderRadius: 16');
+  });
+
+  it('SearchScreen does not have unused inline empty state styles', () => {
+    const src = readSrc('screens/SearchScreen.tsx');
+    expect(src).not.toContain('emptyState:');
+    expect(src).not.toContain('emptyIcon:');
+    expect(src).not.toContain('emptyTitle:');
+    expect(src).not.toContain('emptySubtitle:');
+  });
+
+  it('ProductCardV2 image defers borderRadius to imageWrap', () => {
+    const src = readSrc('components/ProductCardV2.tsx');
+    expect(src).not.toContain("borderRadius: visualOnly ? 16 : Radius.sm");
+    expect(src).toContain('overflow: \'hidden\',');
+  });
+
   it('no glass/blur except BottomSheet and tests', () => {
     const screens = [
       'screens/HomeScreen.tsx',
