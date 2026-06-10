@@ -12,6 +12,8 @@ import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors, ActiveTheme } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
+import { PressPresets } from '../../hooks/usePremiumPressFeedback';
+import { useHaptic } from '../../hooks/useHaptic';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -55,6 +57,7 @@ export function ProfileVisualHeader({
   verified = false,
   hideCover = false,
 }: ProfileVisualHeaderProps) {
+  const haptic = useHaptic();
   return (
     <Reanimated.View entering={FadeInDown.duration(350).delay(30)} style={styles.root}>
       {/* Cover with gradient scrim */}
@@ -128,10 +131,10 @@ export function ProfileVisualHeader({
       <View style={styles.actionDock}>
         {isSelf ? (
           <>
-            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={onEditProfile} activeOpacity={0.85}>
+            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={onEditProfile} {...PressPresets.primaryButton}>
               <Text style={styles.actionBtnPrimaryText}>Edit Profile</Text>
             </AnimatedPressable>
-            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={onShare} activeOpacity={0.85}>
+            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); onShare?.(); }} {...PressPresets.iconButton}>
               <Ionicons name="share-outline" size={16} color={Colors.textPrimary} />
             </AnimatedPressable>
           </>
@@ -139,14 +142,14 @@ export function ProfileVisualHeader({
           <>
             <AnimatedPressable
               style={[styles.actionBtn, following ? styles.actionBtnSecondary : styles.actionBtnPrimary]}
-              onPress={onFollow}
-              activeOpacity={0.85}
+              onPress={() => { haptic.medium(); onFollow?.(); }}
+              {...PressPresets.primaryButton}
             >
               <Text style={following ? styles.actionBtnSecondaryText : styles.actionBtnPrimaryText}>
                 {following ? 'Following' : 'Follow'}
               </Text>
             </AnimatedPressable>
-            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={onShare} activeOpacity={0.85}>
+            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); onShare?.(); }} {...PressPresets.iconButton}>
               <Ionicons name="share-outline" size={16} color={Colors.textPrimary} />
             </AnimatedPressable>
           </>

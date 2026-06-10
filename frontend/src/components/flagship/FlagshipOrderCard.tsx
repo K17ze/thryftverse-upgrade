@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { AnimatedPressable } from '../AnimatedPressable';
+import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
@@ -43,7 +45,7 @@ export function FlagshipOrderCard({
 
   return (
     <Reanimated.View entering={FadeInDown.delay(index * 40).duration(350)}>
-      <Pressable onPress={onPress} style={styles.root}>
+      <AnimatedPressable onPress={onPress} style={styles.root} {...PressPresets.listRow}>
         {/* Product Image */}
         <View style={styles.imageWrap}>
           {imageUri ? (
@@ -81,7 +83,7 @@ export function FlagshipOrderCard({
 
         {/* Chevron */}
         <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} style={styles.chevron} />
-      </Pressable>
+      </AnimatedPressable>
     </Reanimated.View>
   );
 }

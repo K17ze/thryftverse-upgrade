@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import Reanimated, { FadeInDown, useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
+import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
 export interface ProfileTab {
   key: string;
@@ -20,6 +21,36 @@ interface ProfileTabRailProps {
 }
 
 export function ProfileTabRail({ tabs, activeKey, onChange }: ProfileTabRailProps) {
+  const activeIndex = tabs.findIndex((t) => t.key === activeKey);
+  const indicatorX = useSharedValue(0);
+  const indicatorW = useSharedValue(0);
+  const tabLayouts = React.useRef<Map<number, { x: number; width: number }>>(new Map());
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: indicatorX.value }],
+    width: indicatorW.value,
+    opacity: withTiming(indicatorW.value > 0 ? 1 : 0, { duration: 120 }),
+  }));
+
+  const updateIndicator = React.useCallback(
+    (index: number, animated = true) => {
+      const layout = tabLayouts.current.get(index);
+      if (!layout) return;
+      if (animated) {
+        indicatorX.value = withSpring(layout.x, { damping: 18, stiffness: 300 });
+        indicatorW.value = withSpring(layout.width, { damping: 18, stiffness: 300 });
+      } else {
+        indicatorX.value = layout.x;
+        indicatorW.value = layout.width;
+      }
+    },
+    [indicatorX, indicatorW]
+  );
+
+  React.useEffect(() => {
+    updateIndicator(activeIndex, true);
+  }, [activeIndex, updateIndicator]);
+
   return (
     <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.root}>
       <ScrollView
@@ -27,14 +58,19 @@ export function ProfileTabRail({ tabs, activeKey, onChange }: ProfileTabRailProp
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const isActive = tab.key === activeKey;
           return (
             <AnimatedPressable
               key={tab.key}
               style={[styles.tab, isActive && styles.tabActive]}
               onPress={() => onChange(tab.key)}
-              activeOpacity={0.85}
+              {...PressPresets.tabItem}
+              onLayout={(e) => {
+                const { x, width } = e.nativeEvent.layout;
+                tabLayouts.current.set(index, { x, width });
+                if (isActive) updateIndicator(index, false);
+              }}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={`${tab.label} tab${tab.count !== undefined ? `, ${tab.count} items` : ''}`}
@@ -52,10 +88,11 @@ export function ProfileTabRail({ tabs, activeKey, onChange }: ProfileTabRailProp
                   <Text style={[styles.countText, isActive && styles.countTextActive]}>{tab.count}</Text>
                 </View>
               )}
-              {isActive && <View style={styles.indicator} />}
             </AnimatedPressable>
           );
         })}
+        {/* Animated sliding indicator */}
+        <Reanimated.View style={[styles.indicator, indicatorStyle]} />
       </ScrollView>
     </Reanimated.View>
   );
@@ -115,9 +152,8 @@ const styles = StyleSheet.create({
   },
   indicator: {
     position: 'absolute',
-    bottom: -Space.sm - 1,
-    left: '20%',
-    right: '20%',
+    bottom: Space.sm - 2,
+    left: 0,
     height: 2,
     backgroundColor: Colors.textPrimary,
     borderRadius: 1,

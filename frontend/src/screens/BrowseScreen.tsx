@@ -12,7 +12,7 @@ import { View,
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
-import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS, FadeInDown } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Colors } from '../constants/colors';
 
@@ -24,6 +24,7 @@ import { RouteProp, useNavigation, useRoute, useScrollToTop } from '@react-navig
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
+import { MasonrySkeleton } from '../components/skeletons/MasonrySkeleton';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { SyncStatusPill } from '../components/SyncStatusPill';
@@ -266,17 +267,9 @@ export default function BrowseScreen() {
   const showBrowseLoadingSkeleton = isSyncing && dataToRender.length === 0 && !lastError;
 
   const renderBrowseLoadingState = () => (
-    <View style={styles.loadingStateWrap}>
-      {Array.from({ length: 6 }).map((_, index) => (
-        <View key={`browse_loading_${index}`} style={[styles.loadingCard, index % 2 === 1 && styles.loadingCardOffset]}>
-          <SkeletonLoader width={ITEM_WIDTH} height={ITEM_WIDTH * 1.35} borderRadius={Radius.lg} />
-          <View style={styles.loadingCardBody}>
-            <SkeletonLoader width="58%" height={14} borderRadius={4} />
-            <SkeletonLoader width="40%" height={14} borderRadius={4} style={{ marginTop: Space.xs }} />
-          </View>
-        </View>
-      ))}
-    </View>
+    <Reanimated.View entering={FadeInDown.duration(200)} style={styles.loadingStateWrap}>
+      <MasonrySkeleton numColumns={2} itemCount={6} horizontalPadding={Space.md} gap={3} />
+    </Reanimated.View>
   );
 
   const displayListings = backendListings ?? dataToRender;
@@ -290,24 +283,24 @@ export default function BrowseScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
       
       {/* Heavy Typography Header */}
-      <View style={styles.header}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityLabel="Go back">
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
         <AnimatedPressable style={styles.searchBtn} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityLabel="Search listings">
           <Ionicons name="search" size={20} color={Colors.textPrimary} />
         </AnimatedPressable>
-      </View>
+      </Reanimated.View>
 
-      <View style={styles.titleContainer}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
         <View style={styles.titleMetaRow}>
           <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items found`}</Text>
           <SyncStatusPill tone={browseStatus.tone} label={browseStatus.label} compact />
         </View>
-      </View>
+      </Reanimated.View>
 
-      <View style={styles.filterBar}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(90)} style={styles.filterBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <AppButton
             style={styles.filterPill}
@@ -354,7 +347,7 @@ export default function BrowseScreen() {
             accessibilityLabel="Filter by condition"
           />
         </ScrollView>
-      </View>
+      </Reanimated.View>
 
       {lastError ? (
         <SyncRetryBanner
@@ -398,21 +391,23 @@ export default function BrowseScreen() {
             horizontalPadding={Space.md}
           />
         ) : (
-          <EmptyState
-            icon="search-outline"
-            title="No matches found"
-            subtitle="Try clearing filters or searching for another keyword."
-            ctaLabel="Clear filters"
-            onCtaPress={() =>
-              updateBrowseFilters({
-                query: '',
-                sort: 'Recommended',
-                brands: [],
-                sizes: [],
-                condition: 'Any',
-              })
-            }
-          />
+          <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+            <EmptyState
+              icon="search-outline"
+              title="No matches found"
+              subtitle="Try clearing filters or searching for another keyword."
+              ctaLabel="Clear filters"
+              onCtaPress={() =>
+                updateBrowseFilters({
+                  query: '',
+                  sort: 'Recommended',
+                  brands: [],
+                  sizes: [],
+                  condition: 'Any',
+                })
+              }
+            />
+          </Reanimated.View>
         )}
       </View>
     </SafeAreaView>

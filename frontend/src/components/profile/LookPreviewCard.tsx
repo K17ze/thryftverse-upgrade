@@ -7,6 +7,7 @@ import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
+import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -46,7 +47,7 @@ export function LookPreviewCard({
 }: LookPreviewCardProps) {
   return (
     <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
-      <AnimatedPressable style={styles.card} onPress={onPress} activeOpacity={0.92} accessibilityRole="button">
+      <AnimatedPressable style={styles.card} onPress={onPress} {...PressPresets.card} accessibilityRole="button">
         {/* Cover */}
         <View style={styles.coverWrap}>
           <CachedImage
@@ -88,11 +89,11 @@ export function LookPreviewCard({
 
         {/* Action bar */}
         <View style={styles.actionBar}>
-          <AnimatedPressable style={styles.actionItem} onPress={onLike} activeOpacity={0.8}>
+          <AnimatedPressable style={styles.actionItem} onPress={onLike} {...PressPresets.iconButton}>
             <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={saved ? Colors.danger : Colors.textSecondary} />
             <Text style={styles.actionText}>{likes}</Text>
           </AnimatedPressable>
-          <AnimatedPressable style={styles.actionItem} onPress={onSave} activeOpacity={0.8}>
+          <AnimatedPressable style={styles.actionItem} onPress={onSave} {...PressPresets.iconButton}>
             <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={saved ? Colors.textPrimary : Colors.textSecondary} />
             <Text style={styles.actionText}>{saved ? 'Saved' : 'Save'}</Text>
           </AnimatedPressable>

@@ -8,6 +8,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { Listing } from '../../data/mockData';
+import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
@@ -35,7 +36,7 @@ export function ClosetBoardCard({
       <AnimatedPressable
         style={styles.card}
         onPress={onPress}
-        activeOpacity={0.92}
+        {...PressPresets.card}
         accessibilityRole="button"
         accessibilityLabel={`${title} board, ${itemCount} items`}
       >

@@ -20,6 +20,7 @@ import Reanimated, {
   withSpring,
   withTiming,
   withSequence,
+  FadeInDown,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -34,6 +35,7 @@ import { ImageViewer } from '../components/ImageViewer';
 import { AnimatedHeart } from '../components/AnimatedHeart';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { PressPresets } from '../hooks/usePremiumPressFeedback';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Motion } from '../constants/motion';
 // Phase 3: Removed SyncStatusPill - no status indicators on detail screen
@@ -219,16 +221,17 @@ export default function ItemDetailScreen() {
           )}
 
           <View style={[styles.floatingHeader, { paddingTop: Math.max(insets.top, 20) }]}>
-            <AnimatedPressable style={styles.blurBtn} onPress={() => navigation.goBack()} accessibilityLabel="Go back">
+            <AnimatedPressable style={styles.blurBtn} onPress={() => navigation.goBack()} {...PressPresets.iconButton} accessibilityLabel="Go back">
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </AnimatedPressable>
             <View style={styles.headerRight}>
-              <AnimatedPressable style={styles.blurBtn} onPress={handleShare} accessibilityLabel="Share this listing">
+              <AnimatedPressable style={styles.blurBtn} onPress={() => { haptic.light(); handleShare(); }} {...PressPresets.iconButton} accessibilityLabel="Share this listing">
                 <Ionicons name="share-outline" size={24} color="#fff" />
               </AnimatedPressable>
               <AnimatedPressable
                 style={styles.blurBtn}
-                onPress={() => setCollectionModalVisible(true)}
+                onPress={() => { haptic.medium(); setCollectionModalVisible(true); }}
+                {...PressPresets.iconButton}
                 accessibilityLabel={isItemSavedAnywhere(item?.id) ? 'Saved to collection' : 'Save to collection'}
                 accessibilityHint="Opens collection picker"
               >
@@ -251,7 +254,7 @@ export default function ItemDetailScreen() {
           </View>
         </Reanimated.View>
 
-        <View style={styles.detailsContainer}>
+        <Reanimated.View entering={FadeInDown.duration(350).delay(80)} style={styles.detailsContainer}>
 
           {/* ── Title ── */}
           <Text style={styles.title}>{item.title}</Text>
@@ -419,7 +422,7 @@ export default function ItemDetailScreen() {
               </ScrollView>
             </View>
           )}
-        </View>
+        </Reanimated.View>
       </Reanimated.ScrollView>
 
       {/* ── Floating Buy Bar ── */}

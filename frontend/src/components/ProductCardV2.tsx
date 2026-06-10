@@ -21,6 +21,7 @@ import { Listing } from '../data/mockData';
 import { isVideoUri } from '../utils/media';
 import { Typography } from '../theme/designTokens';
 import { StaggeredItem } from './StaggeredGridEntrance';
+import { PressPresets } from '../hooks/usePremiumPressFeedback';
 
 const ASPECT_RATIOS = [0.75, 1.0, 1.25, 1.5]; // Masonry varied heights
 
@@ -71,7 +72,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
   const cardContent = (
     <View style={styles.container}>
       {/* Image - Full bleed, subtle radius for modern feel */}
-      <AnimatedPressable onPress={onPress} style={styles.imageWrap}>
+      <AnimatedPressable onPress={onPress} style={styles.imageWrap} {...PressPresets.card}>
         <CachedImage
           uri={item.images?.[0] ?? ''}
           style={[styles.image, { aspectRatio }]}
@@ -117,6 +118,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
             <AnimatedPressable
               style={styles.saveBtn}
               onPress={handleToggleSave}
+              {...PressPresets.iconButton}
               accessibilityRole="button"
               accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
               accessibilityHint="Toggles this product in your saved page"
