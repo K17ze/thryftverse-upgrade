@@ -38,6 +38,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SharedTransitionView } from '../components/SharedTransitionView';
+import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 180;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -240,18 +241,19 @@ export default function CollectionDetailScreen() {
         )}
 
         {/* Grid */}
-        {count > 0 ? (
-          <Reanimated.View entering={FadeInDown.duration(300)}>
+        {count > 0 && (
+          <Reanimated.View entering={FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
             <MasonryGrid
               items={collectionItems}
-              onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
+              onPressItem={(item: any) => navigation.navigate('ItemDetail', { itemId: item.id })}
               numColumns={2}
               showSaveButton
             />
           </Reanimated.View>
-        ) : (
+        )}
+        {count === 0 && (
           <EmptyState
-            icon="folder-open-outline"
+            graphic={<BoardEmptyGraphic title="Empty collection" subtitle="Add items to this board" icon="folder-open-outline" size={140} />}
             title="Empty collection"
             subtitle="Browse items and add them to this collection."
             ctaLabel="Browse"

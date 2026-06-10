@@ -33,6 +33,7 @@ import { useToast } from '../context/ToastContext';
 import { Typography } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipProfileMedia } from '../components/flagship';
+import { ProfileVisualHeader, ProfileTabRail } from '../components/profile';
 import { fetchPublicProfile, type PublicProfileUser } from '../services/profileApi';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SharedTransitionView } from '../components/SharedTransitionView';
@@ -272,140 +273,41 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         scrollEventThrottle={16}
         stickyHeaderIndices={[1]} /* Target the Tab Bar index! */
       >
-        {/* Index 0: Hero Info - LinkedIn Style */}
-        <View style={styles.profileHeader}>
-          {/* Avatar overlapping banner bottom edge */}
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatarWrapLinkedIn}>
-              {displayAvatar ? (
-                <CachedImage uri={displayAvatar} style={styles.heroAvatarLinkedIn} contentFit="cover" />
-              ) : (
-                <View style={[styles.heroAvatarLinkedIn, { backgroundColor: Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]}>
-                  <Ionicons name="person" size={40} color={Colors.textMuted} />
-                </View>
-              )}
-            </View>
-          </View>
-          <View style={styles.heroInfoLinkedIn}>
-            <Text style={styles.heroNameLinkedIn}>{displayUsername}</Text>
-            <Text style={styles.heroHandleLinkedIn}>{displayHandle}</Text>
-            {targetProfile?.bio ? (
-              <Text style={styles.heroBio} numberOfLines={2}>{targetProfile.bio}</Text>
-            ) : null}
-          </View>
-
-          <View style={styles.statsCard}>
-            <View style={styles.statCol}>
-              <Text style={styles.statValue}>{profileListings.length}</Text>
-              <Text style={styles.statLabel}>Listings</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCol}>
-              <Text style={styles.statValue}>{isSelfProfile ? (currentUser as any)?.emailVerified ? 'Yes' : 'No' : '—'}</Text>
-              <Text style={styles.statLabel}>Verified</Text>
-            </View>
-          </View>
-
-          <View style={styles.heroActionRow}>
-            <AppButton
-              title={isSelfProfile ? 'Edit profile' : isBlocked ? 'Blocked' : following ? 'Following' : 'Follow user'}
-              variant={following && !isSelfProfile ? 'secondary' : 'primary'}
-              size="sm"
-              align="center"
-              style={styles.heroActionPrimary}
-              titleStyle={styles.heroActionPrimaryText}
-              onPress={() => {
-                if (isSelfProfile) {
-                  navigation.navigate('EditProfile');
-                  return;
-                }
-
-                if (isBlocked) {
-                  show('This user is blocked. Unblock them before following.', 'info');
-                  return;
-                }
-
-                setFollowing((prev) => !prev);
-              }}
-              accessibilityLabel={
-                isSelfProfile
-                  ? 'Edit profile'
-                  : isBlocked
-                    ? 'Profile blocked'
-                    : following
-                      ? 'Following user'
-                      : 'Follow user'
-              }
-              accessibilityHint={
-                isSelfProfile
-                  ? 'Opens profile editor'
-                  : isBlocked
-                    ? 'User is blocked. Unblock to follow again'
-                    : following
-                      ? 'Double tap to unfollow this user'
-                      : 'Double tap to follow this user'
-              }
-            />
-
-            {isSelfProfile ? (
-              <AppButton
-                title="Share profile"
-                variant="secondary"
-                size="sm"
-                align="center"
-                style={styles.heroActionSecondary}
-                titleStyle={styles.heroActionSecondaryText}
-                onPress={handleShare}
-                accessibilityLabel="Share profile"
-                accessibilityHint="Opens share sheet for this user profile"
-              />
-            ) : (
-              <AppButton
-                title={isBlocked ? 'Unblock first' : 'Message'}
-                variant="secondary"
-                size="sm"
-                align="center"
-                style={styles.heroActionSecondary}
-                titleStyle={styles.heroActionSecondaryText}
-                onPress={() => {
-                  if (isBlocked) {
-                    show('This user is blocked. Unblock them before messaging.', 'info');
-                    return;
-                  }
-
-                  handleMessageProfile();
-                }}
-                accessibilityLabel={isBlocked ? 'Cannot message blocked user' : 'Message user'}
-                accessibilityHint={isBlocked ? 'Unblock this user before starting chat' : 'Opens chat with this user'}
-              />
-            )}
-
-            <AnimatedPressable
-              style={styles.heroActionIcon}
-              onPress={() => setActionSheetVisible(true)}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="More profile actions"
-              accessibilityHint="Shows profile options"
-            >
-              <Ionicons name="ellipsis-horizontal" size={18} color={TEXT} />
-            </AnimatedPressable>
-          </View>
-        </View>
+        {/* Profile Visual Identity */}
+        <ProfileVisualHeader
+          coverUri={displayCover}
+          avatarUri={displayAvatar}
+          displayName={displayUsername}
+          username={targetProfile?.username}
+          bio={targetProfile?.bio}
+          isSelf={isSelfProfile}
+          onEditProfile={isSelfProfile ? () => navigation.navigate('EditProfile') : undefined}
+          onShare={handleShare}
+          onFollow={!isSelfProfile ? () => {
+            if (isBlocked) {
+              show('This user is blocked. Unblock them before following.', 'info');
+              return;
+            }
+            setFollowing((prev) => !prev);
+          } : undefined}
+          following={following}
+          hideCover
+          stats={[
+            { label: 'Listings', value: profileListings.length },
+            { label: 'Verified', value: isSelfProfile ? ((currentUser as any)?.emailVerified ? 'Yes' : 'No') : '—' },
+          ]}
+        />
 
         {/* Index 1: Sticky Tabs */}
         <View style={styles.stickyTabWrapper}>
-          <AppSegmentControl
-            style={styles.tabBarContainer}
-            options={TAB_OPTIONS}
-            value={activeTab}
-            onChange={setActiveTab}
-            fullWidth
-            optionStyle={styles.tabPill}
-            optionActiveStyle={styles.tabPillActive}
-            optionTextStyle={styles.tabText}
-            optionTextActiveStyle={styles.tabTextActive}
-          />
+          <ProfileTabRail
+          tabs={[
+            { key: 'Listings', label: 'Listings', icon: 'shirt-outline', count: profileListings.length },
+            { key: 'About', label: 'About', icon: 'person-outline' },
+          ]}
+          activeKey={activeTab}
+          onChange={(k) => setActiveTab(k as Tab)}
+        />
         </View>
 
         {/* Index 2: Tab Content */}
