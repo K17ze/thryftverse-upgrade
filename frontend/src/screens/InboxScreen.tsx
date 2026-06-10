@@ -28,7 +28,7 @@ import { RootStackParamList } from '../navigation/types';
 
 import { Swipeable } from 'react-native-gesture-handler';
 
-import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
 
 import { EmptyState } from '../components/EmptyState';
 
@@ -1076,7 +1076,49 @@ export default function InboxScreen() {
 
         ) : (
 
-          <AnimatedFlashList
+          <>
+
+            {segment === 'all' && messageRequests.length > 0 && (
+
+              <Reanimated.View entering={FadeInDown.duration(300)} style={styles.requestsBanner}>
+
+                <AnimatedPressable
+
+                  onPress={() => navigation.navigate('MessageRequests')}
+
+                  activeOpacity={0.7}
+
+                  scaleValue={0.98}
+
+                  hapticFeedback="light"
+
+                  accessibilityLabel={`${messageRequests.length} message requests`}
+
+                  accessibilityRole="button"
+
+                >
+
+                  <View style={styles.requestsBannerInner}>
+
+                    <View style={styles.requestsBadge}>
+
+                      <Text style={styles.requestsBadgeText}>{messageRequests.length}</Text>
+
+                    </View>
+
+                    <Text style={styles.requestsBannerText}>Message requests</Text>
+
+                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+
+                  </View>
+
+                </AnimatedPressable>
+
+              </Reanimated.View>
+
+            )}
+
+            <AnimatedFlashList
 
             data={visibleConversations}
 
@@ -1245,6 +1287,8 @@ export default function InboxScreen() {
             }
 
           />
+
+          </>
 
         )}
 
@@ -1723,6 +1767,74 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
 
     backgroundColor: Colors.brand,
+
+  },
+
+  requestsBanner: {
+
+    marginHorizontal: Space.md,
+
+    marginBottom: Space.sm,
+
+  },
+
+  requestsBannerInner: {
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    gap: Space.sm,
+
+    paddingVertical: 12,
+
+    paddingHorizontal: Space.md,
+
+    backgroundColor: Colors.surface,
+
+    borderRadius: Radius.lg,
+
+    ...Elevation.subtle,
+
+  },
+
+  requestsBadge: {
+
+    width: 24,
+
+    height: 24,
+
+    borderRadius: 12,
+
+    backgroundColor: Colors.textPrimary,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+  },
+
+  requestsBadgeText: {
+
+    fontSize: 12,
+
+    fontFamily: Typography.family.bold,
+
+    color: Colors.background,
+
+  },
+
+  requestsBannerText: {
+
+    flex: 1,
+
+    fontSize: Type.body.size,
+
+    fontFamily: Typography.family.medium,
+
+    color: Colors.textPrimary,
+
+    letterSpacing: Type.body.letterSpacing,
 
   },
 

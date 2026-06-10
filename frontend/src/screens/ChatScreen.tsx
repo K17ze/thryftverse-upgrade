@@ -1542,6 +1542,28 @@ export default function ChatScreen({ navigation, route }: Props) {
 
             onReactionPress={() => setReactingToMessage(msg)}
 
+            onMediaPress={
+
+              msg.mediaUri
+
+                ? () => {
+
+                    const uri = msg.mediaUri!;
+
+                    navigation.navigate('ChatMediaPreview', {
+
+                      mediaUri: uri,
+
+                      mediaType: msg.mediaType ?? 'image',
+
+                    });
+
+                  }
+
+                : undefined
+
+            }
+
             replyTo={
 
               msg.replyToMessageId
@@ -1648,9 +1670,15 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         onInfo={
 
-          isGroup && conversation
+          conversation
 
-            ? () => navigation.navigate('GroupChatInfo', { conversationId: conversation.id })
+            ? () => navigation.navigate(
+
+                isGroup ? 'GroupChatInfo' : 'ConversationInfo',
+
+                { conversationId: conversation.id }
+
+              )
 
             : undefined
 

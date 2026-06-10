@@ -119,6 +119,12 @@ export type RootStackParamList = {
   BlockedUsers: undefined;
   PrivacySettings: undefined;
   About: undefined;
+  // VISUAL-15 — UI Architecture + Feature Depth
+  ConversationInfo: { conversationId: string };
+  MessageRequests: undefined;
+  CreateCollection: undefined;
+  OrderSupport: { orderId: string };
+  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video' };
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
 };

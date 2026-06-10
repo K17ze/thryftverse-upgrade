@@ -157,10 +157,8 @@ export default function ClosetScreen() {
 
   const handleCreateCollection = useCallback(() => {
     haptic.medium();
-    // Quick inline creation with default name
-    const newId = createCollection('New Collection');
-    navigation.navigate('CollectionDetail', { collectionId: newId });
-  }, [createCollection, haptic, navigation]);
+    navigation.navigate('CreateCollection');
+  }, [haptic, navigation]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {

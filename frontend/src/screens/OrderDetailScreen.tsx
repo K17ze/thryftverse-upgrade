@@ -357,7 +357,7 @@ export default function OrderDetailScreen() {
         title="Order Details"
         onBack={() => navigation.goBack()}
         rightAction={
-          <AnimatedPressable onPress={() => navigation.navigate('HelpSupport')}>
+          <AnimatedPressable onPress={() => navigation.navigate('OrderSupport', { orderId })}>
             <Ionicons name="ellipsis-horizontal" size={22} color={Colors.textPrimary} />
           </AnimatedPressable>
         }
