@@ -125,6 +125,9 @@ export type RootStackParamList = {
   CreateCollection: undefined;
   OrderSupport: { orderId: string };
   ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video' };
+  // UI-18 — Reference-perfect product UX
+  EditCollection: { collectionId: string };
+  SupportTicketDetail: { ticketId: string };
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
 };

@@ -50,6 +50,7 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Space, Radius } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
+import { FlagshipEmptyGraphic } from '../components/flagship';
 
 const { width, height } = Dimensions.get('window');
 const PANEL_BG = Colors.surfaceAlt;
@@ -102,7 +103,7 @@ export default function ItemDetailScreen() {
   if (!item) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.xl }]}>
-        <Ionicons name="cube-outline" size={48} color={Colors.textMuted} />
+        <FlagshipEmptyGraphic variant="box" size={140} />
         <Text style={{ marginTop: Space.md, fontSize: 16, fontFamily: Typography.family.medium, color: Colors.textSecondary, textAlign: 'center' }}>
           Item not found
         </Text>
@@ -267,6 +268,13 @@ export default function ItemDetailScreen() {
                 + {formatFromFiat(item.priceWithProtection - item.price, 'GBP', { displayMode: 'fiat' })} protection
               </Text>
             )}
+          </View>
+
+          {/* ── Trust Badge ── */}
+          <View style={styles.trustBadge}>
+            <Ionicons name="shield-checkmark" size={16} color={Colors.success} />
+            <Text style={styles.trustText}>Thryft Buyer Protection</Text>
+            <Text style={styles.trustSub}>Money back guarantee · Authenticity check</Text>
           </View>
 
           {/* ── Product Attributes ── */}
@@ -493,6 +501,29 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   protectionText: { fontSize: 13, color: Colors.textMuted, fontFamily: Typography.family.medium },
+  trustBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    backgroundColor: 'rgba(52, 199, 89, 0.08)',
+    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: Space.md,
+  },
+  trustText: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.success,
+  },
+  trustSub: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    width: '100%',
+    marginTop: 2,
+  },
   title: { fontSize: 22, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 6, lineHeight: 30 },
   sizeCondition: { fontSize: 15, fontFamily: Typography.family.medium, color: Colors.textSecondary },
   syncStatusCard: {

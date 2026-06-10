@@ -1100,13 +1100,25 @@ export default function InboxScreen() {
 
                   <View style={styles.requestsBannerInner}>
 
+                    <View style={styles.requestsIconWrap}>
+
+                      <Ionicons name="mail-unread-outline" size={20} color={Colors.brand} />
+
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+
+                      <Text style={styles.requestsBannerText}>Message requests</Text>
+
+                      <Text style={styles.requestsBannerSub}>{messageRequests.length} pending</Text>
+
+                    </View>
+
                     <View style={styles.requestsBadge}>
 
                       <Text style={styles.requestsBadgeText}>{messageRequests.length}</Text>
 
                     </View>
-
-                    <Text style={styles.requestsBannerText}>Message requests</Text>
 
                     <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
 
@@ -1824,18 +1836,25 @@ const styles = StyleSheet.create({
 
   },
 
+  requestsIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   requestsBannerText: {
-
-    flex: 1,
-
     fontSize: Type.body.size,
-
-    fontFamily: Typography.family.medium,
-
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
-
     letterSpacing: Type.body.letterSpacing,
-
+  },
+  requestsBannerSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
 
   requestBtnAcceptText: {
