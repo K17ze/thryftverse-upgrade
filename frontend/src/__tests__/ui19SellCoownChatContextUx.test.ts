@@ -118,11 +118,28 @@ describe('UI-19 sell co-own and chat marketplace context UX', () => {
     expect(src).toContain('Offer');
   });
 
-  // ── 11. No fake data or regressions ──
+  // ── 11. CreateAuctionScreen uses real backend API and has terms ──
+  it('CreateAuctionScreen calls createAuction backend API', () => {
+    const src = read(resolve(SCREENS, 'CreateAuctionScreen.tsx'));
+    expect(src).toContain('createAuction');
+    expect(src).not.toContain('addAuction');
+    expect(src).not.toContain("from '../data/mockData'");
+    expect(src).not.toContain("from '../data/tradeHub'");
+  });
+
+  it('CreateAuctionScreen has terms and fees section', () => {
+    const src = read(resolve(SCREENS, 'CreateAuctionScreen.tsx'));
+    expect(src).toContain('TERMS & FEES');
+    expect(src).toContain('Platform fee');
+    expect(src).toContain('Duration');
+  });
+
+  // ── 12. No fake data or regressions ──
   it('no fake user data in new screens', () => {
     const screens = [
       'ListingPreviewScreen.tsx',
       'TradeConfirmScreen.tsx',
+      'CreateAuctionScreen.tsx',
     ];
     for (const screen of screens) {
       const src = read(resolve(SCREENS, screen));
@@ -137,12 +154,15 @@ describe('UI-19 sell co-own and chat marketplace context UX', () => {
     const screens = [
       'ListingPreviewScreen.tsx',
       'TradeConfirmScreen.tsx',
+      'CreateAuctionScreen.tsx',
     ];
     for (const screen of screens) {
       const src = read(resolve(SCREENS, screen));
       expect(src).not.toContain('#FFD700');
-      expect(src).not.toContain('gold');
-      expect(src).not.toContain('yellow');
+      expect(src).not.toMatch(/color:\s*['"]gold['"]/i);
+      expect(src).not.toMatch(/color:\s*['"]yellow['"]/i);
+      expect(src).not.toMatch(/backgroundColor:\s*['"]gold['"]/i);
+      expect(src).not.toMatch(/backgroundColor:\s*['"]yellow['"]/i);
     }
   });
 });

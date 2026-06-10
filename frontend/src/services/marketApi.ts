@@ -252,6 +252,30 @@ function toQuery(params: Record<string, string | number | boolean | undefined>) 
   return encoded ? `?${encoded}` : '';
 }
 
+export interface CreateAuctionInput {
+  id?: string;
+  listingId: string;
+  sellerId?: string;
+  startsAt: string;
+  endsAt: string;
+  startingBidGbp: number;
+  buyNowPriceGbp?: number;
+}
+
+export interface CreateAuctionResponse {
+  ok: true;
+  auction: MarketAuction;
+}
+
+export async function createAuction(input: CreateAuctionInput): Promise<MarketAuction> {
+  const payload = await fetchJson<CreateAuctionResponse>('/auctions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return payload.auction;
+}
+
 export async function listAuctions(options: ListAuctionsOptions = {}): Promise<MarketAuction[]> {
   const query = toQuery({
     status: options.status,

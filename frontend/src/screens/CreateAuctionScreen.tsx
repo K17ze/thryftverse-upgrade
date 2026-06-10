@@ -6,10 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import type { Listing } from '../data/mockData';
-import type { AuctionMarketItem } from '../data/tradeHub';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -26,6 +25,8 @@ import { Space, Radius } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { createAuction } from '../services/marketApi';
+import { EmptyState } from '../components/EmptyState';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -38,6 +39,7 @@ const START_WINDOWS = [
 ];
 
 export default function CreateAuctionScreen() {
+  const { isDark } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
@@ -46,15 +48,12 @@ export default function CreateAuctionScreen() {
   const reducedMotionEnabled = useReducedMotion();
 
   const currentUser = useStore((state) => state.currentUser);
-  const addAuction = useStore((state) => state.addAuction);
 
   const sellerId = currentUser?.id;
 
   const sellerListings = React.useMemo(() => {
-    const sourceListings = listings;
     if (!sellerId) return [];
-    const own = sourceListings.filter((item) => item.sellerId === sellerId);
-    return own.length ? own : sourceListings.slice(0, 12);
+    return listings.filter((item) => item.sellerId === sellerId);
   }, [listings, sellerId]);
 
   const [selectedListingId, setSelectedListingId] = React.useState(sellerListings[0]?.id ?? '');
@@ -62,6 +61,7 @@ export default function CreateAuctionScreen() {
   const [startingBidInput, setStartingBidInput] = React.useState('');
   const [buyNowEnabled, setBuyNowEnabled] = React.useState(true);
   const [buyNowInput, setBuyNowInput] = React.useState('');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const fromGbpToDisplay = React.useCallback(
     (amountGbp: number) => {
@@ -106,7 +106,7 @@ export default function CreateAuctionScreen() {
     }
   }, [buyNowInput, fromGbpToDisplay, selectedListing, startingBidInput]);
 
-  const launchAuction = () => {
+  const launchAuction = async () => {
     if (!selectedListing) {
       show('Select a listing to launch', 'error');
       return;
@@ -119,10 +119,10 @@ export default function CreateAuctionScreen() {
       return;
     }
 
-    let buyNowPrice: number | undefined;
+    let buyNowPriceGbp: number | undefined;
     if (buyNowEnabled) {
-      buyNowPrice = fromDisplayToGbp(Number(buyNowInput));
-      if (!Number.isFinite(buyNowPrice) || buyNowPrice <= startingBid) {
+      buyNowPriceGbp = fromDisplayToGbp(Number(buyNowInput));
+      if (!Number.isFinite(buyNowPriceGbp) || buyNowPriceGbp <= startingBid) {
         show('Buy now must be greater than starting bid', 'error');
         return;
       }
@@ -132,26 +132,26 @@ export default function CreateAuctionScreen() {
     const startsAtMs = now + startInMinutes * 60 * 1000;
     const endsAtMs = startsAtMs + AUCTION_WINDOW_HOURS * 60 * 60 * 1000;
 
-    const newAuction: AuctionMarketItem = {
-      id: `a_user_${now}`,
-      listingId: selectedListing.id,
-      sellerId: sellerId ?? '',
-      title: selectedListing.title,
-      image: getListingCoverUri(selectedListing.images, ''),
-      startsAt: new Date(startsAtMs).toISOString(),
-      endsAt: new Date(endsAtMs).toISOString(),
-      startingBid,
-      currentBid: startingBid,
-      bidCount: 0,
-      ...(buyNowPrice ? { buyNowPrice } : {}),
-    };
-
-    addAuction(newAuction);
-    show(startInMinutes > 0 ? 'Auction scheduled successfully' : 'Auction is now live', 'success');
-    navigation.goBack();
+    setIsSubmitting(true);
+    try {
+      await createAuction({
+        listingId: selectedListing.id,
+        sellerId: sellerId ?? undefined,
+        startsAt: new Date(startsAtMs).toISOString(),
+        endsAt: new Date(endsAtMs).toISOString(),
+        startingBidGbp: startingBid,
+        ...(buyNowPriceGbp ? { buyNowPriceGbp } : {}),
+      });
+      show(startInMinutes > 0 ? 'Auction scheduled successfully' : 'Auction is now live', 'success');
+      navigation.goBack();
+    } catch (e) {
+      show('Failed to launch auction. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const renderListingCard = ({ item }: { item: Listing }) => {
+  const renderListingCard = ({ item }: { item: any }) => {
     const selected = item.id === selectedListingId;
     return (
       <AnimatedPressable
@@ -189,7 +189,7 @@ export default function CreateAuctionScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       <TradeHeader
         title="Launch Auction"
@@ -209,20 +209,32 @@ export default function CreateAuctionScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}
-        >
-          <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
-        </Reanimated.View>
+        {!sellerListings.length ? (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+            <EmptyState
+              icon="pricetag-outline"
+              title="No listings available"
+              subtitle="Create a listing first to launch an auction."
+              ctaLabel="Create Listing"
+              onCtaPress={() => (navigation as any).navigate('Sell')}
+            />
+          </Reanimated.View>
+        ) : (
+          <>
+            <Reanimated.View
+              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}
+            >
+              <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
+            </Reanimated.View>
 
-        <FlashList
-          data={sellerListings}
-          horizontal
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.listingListContent}
-          renderItem={renderListingCard}
-        />
+            <FlashList
+              data={sellerListings}
+              horizontal
+              keyExtractor={(item) => item.id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.listingListContent}
+              renderItem={renderListingCard}
+            />
 
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}
@@ -322,17 +334,41 @@ export default function CreateAuctionScreen() {
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}
         >
+          <TradeCard style={styles.formCard}>
+            <Meta style={styles.sectionLabel}>TERMS & FEES</Meta>
+            <View style={styles.termsRow}>
+              <Meta style={styles.termsLabel}>Duration</Meta>
+              <Body style={styles.termsValue}>{AUCTION_WINDOW_HOURS} hours</Body>
+            </View>
+            <View style={styles.termsRow}>
+              <Meta style={styles.termsLabel}>Platform fee</Meta>
+              <Body style={styles.termsValue}>3% of winning bid</Body>
+            </View>
+            <View style={styles.termsRow}>
+              <Meta style={styles.termsLabel}>Payment hold</Meta>
+              <Body style={styles.termsValue}>Held in escrow until settlement</Body>
+            </View>
+          </TradeCard>
+        </Reanimated.View>
+
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(350)}
+        >
           <AppButton
-            title="Launch Auction"
-            icon={<Ionicons name="flash-outline" size={16} color={Colors.background} />}
+            title={isSubmitting ? 'Launching...' : 'Launch Auction'}
+            icon={isSubmitting ? undefined : <Ionicons name="flash-outline" size={16} color={Colors.background} />}
             onPress={launchAuction}
             variant="primary"
             size="md"
             style={styles.launchBtn}
+            disabled={isSubmitting}
+            loading={isSubmitting}
             hapticFeedback="medium"
             accessibilityLabel="Launch auction"
           />
         </Reanimated.View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -479,5 +515,20 @@ const styles = StyleSheet.create({
   launchBtn: {
     marginHorizontal: Space.md,
     marginTop: Space.lg,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  termsLabel: {
+    color: Colors.textMuted,
+  },
+  termsValue: {
+    color: Colors.textPrimary,
+    fontFamily: 'SpaceGrotesk_600SemiBold',
   },
 });
