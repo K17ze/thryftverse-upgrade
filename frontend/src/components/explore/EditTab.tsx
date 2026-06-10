@@ -28,26 +28,26 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 /* ── Editorial seed data ── */
 const HERO_ITEMS: HeroItem[] = [
-  { id: 'hero1', type: 'image', uri: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800&q=80', title: 'The Archive Issue', ctaLabel: 'Read' },
-  { id: 'hero2', type: 'image', uri: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=80', title: 'Winter Layering Guide', ctaLabel: 'Explore' },
-  { id: 'hero3', type: 'image', uri: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80', title: 'Streetwear Essentials 2026', ctaLabel: 'Shop' },
+  { id: 'hero1', type: 'image', uri: '', title: 'The Archive Issue', ctaLabel: 'Read' },
+  { id: 'hero2', type: 'image', uri: '', title: 'Winter Layering Guide', ctaLabel: 'Explore' },
+  { id: 'hero3', type: 'image', uri: '', title: 'Streetwear Essentials 2026', ctaLabel: 'Shop' },
 ];
 
 const FEATURED_BOARDS: FeaturedBoard[] = [
-  { id: 'board1', title: 'Gorpcore Gods', subtitle: 'Editors Pick', meta: '42 Items • Hot', isVerified: true, images: ['https://images.unsplash.com/photo-1509631179647-0177331693ae?w=400&q=80', 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&q=80', 'https://images.unsplash.com/photo-1433086966358-a548c30072b5?w=400&q=80'] },
-  { id: 'board2', title: 'Vintage Denim', subtitle: 'Community', meta: '128 Items • Curated', isVerified: false, images: ['https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400&q=80', 'https://images.unsplash.com/photo-1593305841991-05c29736f97c?w=400&q=80', 'https://images.unsplash.com/photo-1616499370260-485b3e5ed653?w=400&q=80'] },
-  { id: 'board3', title: 'Minimal Wardrobe', subtitle: 'Editors Pick', meta: '56 Items • New', isVerified: true, images: ['https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=400&q=80', 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=400&q=80', 'https://images.unsplash.com/photo-1485231183945-ef89e404cf89?w=400&q=80'] },
+  { id: 'board1', title: 'Gorpcore Gods', subtitle: 'Editors Pick', meta: '42 Items • Hot', isVerified: true, images: ['', '', ''] },
+  { id: 'board2', title: 'Vintage Denim', subtitle: 'Community', meta: '128 Items • Curated', isVerified: false, images: ['', '', ''] },
+  { id: 'board3', title: 'Minimal Wardrobe', subtitle: 'Editors Pick', meta: '56 Items • New', isVerified: true, images: ['', '', ''] },
 ];
 
 const EDITORIAL_SECTIONS: { id: string; kicker: string; title: string; images: EditorialImage[] }[] = [
-  { id: 'sec1', kicker: 'Ideas for you', title: 'Shirt dress outfit', images: [{ id: 'e1-1', uri: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&q=80', aspectRatio: 1.4 }, { id: 'e1-2', uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=80', aspectRatio: 1.2 }, { id: 'e1-3', uri: 'https://images.unsplash.com/photo-1581044777550-4cfa60707efb?w=400&q=80', aspectRatio: 1.5 }, { id: 'e1-4', uri: 'https://images.unsplash.com/photo-1434389677669-e08b4a3a7a5e?w=400&q=80', aspectRatio: 1.1 }] },
-  { id: 'sec2', kicker: 'Brand deep dive', title: 'Comme des Garçons Archive', images: [{ id: 'e2-1', uri: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=400&q=80', aspectRatio: 1.3 }, { id: 'e2-2', uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=80', aspectRatio: 1.1 }, { id: 'e2-3', uri: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=400&q=80', aspectRatio: 1.4 }, { id: 'e2-4', uri: 'https://images.unsplash.com/photo-1485231183945-ef89e404cf89?w=400&q=80', aspectRatio: 1.2 }] },
+  { id: 'sec1', kicker: 'Ideas for you', title: 'Shirt dress outfit', images: [{ id: 'e1-1', uri: '', aspectRatio: 1.4 }, { id: 'e1-2', uri: '', aspectRatio: 1.2 }, { id: 'e1-3', uri: '', aspectRatio: 1.5 }, { id: 'e1-4', uri: '', aspectRatio: 1.1 }] },
+  { id: 'sec2', kicker: 'Brand deep dive', title: 'Comme des Garçons Archive', images: [{ id: 'e2-1', uri: '', aspectRatio: 1.3 }, { id: 'e2-2', uri: '', aspectRatio: 1.1 }, { id: 'e2-3', uri: '', aspectRatio: 1.4 }, { id: 'e2-4', uri: '', aspectRatio: 1.2 }] },
 ];
 
 const DROP_CALENDAR = [
-  { id: 'drop1', date: 'Today', title: 'YSL Knit Auction Ends', time: '18:00 GMT', image: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=200&q=80' },
-  { id: 'drop2', date: 'Tomorrow', title: 'New Arrivals: Japanese Denim', time: '09:00 GMT', image: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=200&q=80' },
-  { id: 'drop3', date: 'Jun 3', title: 'Vintage Sneaker Drop', time: '12:00 GMT', image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=200&q=80' },
+  { id: 'drop1', date: 'Today', title: 'YSL Knit Auction Ends', time: '18:00 GMT', image: '' },
+  { id: 'drop2', date: 'Tomorrow', title: 'New Arrivals: Japanese Denim', time: '09:00 GMT', image: '' },
+  { id: 'drop3', date: 'Jun 3', title: 'Vintage Sneaker Drop', time: '12:00 GMT', image: '' },
 ];
 
 /* ── Sub-components ── */
@@ -108,7 +108,7 @@ export default function EditTab() {
       {/* Seasonal Theme Banner */}
       <Reanimated.View entering={FadeInDown.duration(350).delay(120)}>
         <AnimatedPressable style={styles.seasonBanner} onPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Summer Collection' })} activeOpacity={0.92}>
-          <CachedImage uri="https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=600&q=80" style={styles.seasonBannerImage} containerStyle={{ borderRadius: Radius.lg }} contentFit="cover" />
+          <CachedImage uri="" style={styles.seasonBannerImage} containerStyle={{ borderRadius: Radius.lg }} contentFit="cover" />
           <View style={styles.seasonBannerOverlay}>
             <Text style={styles.seasonBannerKicker}>This Season</Text>
             <Text style={styles.seasonBannerTitle}>Summer Essentials</Text>
@@ -126,7 +126,7 @@ export default function EditTab() {
         <Text style={[styles.sectionTitle, { marginTop: Space.lg }]}>Brand Spotlight</Text>
         <AnimatedPressable style={styles.brandCard} onPress={() => navigation.navigate('Browse', { categoryId: 'search', title: 'Comme des Garçons' })} activeOpacity={0.92}>
           <View style={styles.brandHeader}>
-            <CachedImage uri="https://images.unsplash.com/photo-1509631179647-0177331693ae?w=200&q=80" style={styles.brandLogo} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
+            <CachedImage uri="" style={styles.brandLogo} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
             <View style={styles.brandInfo}>
               <Text style={styles.brandName}>Comme des Garçons</Text>
               <Text style={styles.brandMeta}>Archive · 42 items · Verified</Text>
@@ -135,10 +135,10 @@ export default function EditTab() {
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.brandGallery}>
             {[
-              'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=200&q=80',
-              'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=200&q=80',
-              'https://images.unsplash.com/photo-1485231183945-ef89e404cf89?w=200&q=80',
-              'https://images.unsplash.com/photo-1507679799987-c73779b96318?w=200&q=80',
+              '',
+              '',
+              '',
+              '',
             ].map((uri, i) => (
               <CachedImage key={i} uri={uri} style={styles.brandGalleryImg} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
             ))}

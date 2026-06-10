@@ -70,7 +70,7 @@ const SAVED_LOOKS_SEED: SavedLook[] = [
   {
     id: 'look1',
     title: 'Winter Layers',
-    coverImage: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=600&q=80',
+    coverImage: '',
     items: [
       { id: 'l5', label: 'Off-White Hoodie', x: 0.2, y: 0.3 },
       { id: 'l7', label: 'Cargo Trousers', x: 0.6, y: 0.65 },
@@ -84,7 +84,7 @@ const SAVED_LOOKS_SEED: SavedLook[] = [
   {
     id: 'look2',
     title: 'Minimal Monochrome',
-    coverImage: 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=600&q=80',
+    coverImage: '',
     items: [
       { id: 'l2', label: 'AMI Striped Shirt', x: 0.35, y: 0.25 },
       { id: 'l3', label: 'RL Harrington', x: 0.7, y: 0.4 },
@@ -97,7 +97,7 @@ const SAVED_LOOKS_SEED: SavedLook[] = [
   {
     id: 'look3',
     title: 'Streetwear Daily',
-    coverImage: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=600&q=80',
+    coverImage: '',
     items: [
       { id: 'l4', label: 'Stussy Logo Tee', x: 0.4, y: 0.3 },
       { id: 'l9', label: 'Represent Hoodie', x: 0.25, y: 0.15 },

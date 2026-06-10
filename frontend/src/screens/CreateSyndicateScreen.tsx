@@ -8,7 +8,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { MOCK_LISTINGS, Listing } from '../data/mockData';
+import type { Listing } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -49,7 +49,7 @@ export default function CreateCoOwnScreen() {
   const issuerId = currentUser?.id ?? '';
 
   const issuerListings = React.useMemo(() => {
-    const sourceListings = listings.length ? listings : MOCK_LISTINGS;
+    const sourceListings = listings;
     const own = sourceListings.filter((item) => item.sellerId === issuerId);
     return own.length ? own : sourceListings.slice(0, 12);
   }, [issuerId, listings]);

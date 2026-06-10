@@ -73,12 +73,12 @@ const DISCOVER_SORT_OPTIONS: BrowseSortOption[] = [
 
 // Colorful backgrounds for "Top Searches" cards
 const TOP_SEARCH_CARDS = [
-  { label: 'Summer Fits', color: '#E8D5C4', textColor: '#5C3D2E', image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=300&q=80' },
-  { label: 'Y2K Style', color: '#D4E6F1', textColor: '#2E4A62', image: 'https://images.unsplash.com/photo-1552374196-cb6190d5120e?w=300&q=80' },
-  { label: 'Streetwear', color: '#D5DBDB', textColor: '#2C3E50', image: 'https://images.unsplash.com/photo-1556906781-9a412961c28c?w=300&q=80' },
-  { label: 'Vintage', color: '#FADBD8', textColor: '#6E2C3D', image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=300&q=80' },
-  { label: 'Techwear', color: '#D6EAF8', textColor: '#1B4F72', image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=300&q=80' },
-  { label: 'Minimal', color: '#E8DAEF', textColor: '#4A235A', image: 'https://images.unsplash.com/photo-1434389677669-e08b4a3a7a5e?w=300&q=80' },
+  { label: 'Summer Fits', color: '#E8D5C4', textColor: '#5C3D2E', image: '' },
+  { label: 'Y2K Style', color: '#D4E6F1', textColor: '#2E4A62', image: '' },
+  { label: 'Streetwear', color: '#D5DBDB', textColor: '#2C3E50', image: '' },
+  { label: 'Vintage', color: '#FADBD8', textColor: '#6E2C3D', image: '' },
+  { label: 'Techwear', color: '#D6EAF8', textColor: '#1B4F72', image: '' },
+  { label: 'Minimal', color: '#E8DAEF', textColor: '#4A235A', image: '' },
 ];
 
 /* ── Editorial seed data ── */
@@ -87,7 +87,7 @@ const HERO_ITEMS: HeroItem[] = [
     id: 'hero1',
     type: 'video',
     uri: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    posterUri: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800&q=80',
+    posterUri: '',
     sponsor: 'H&M',
     title: 'H&M Summer 2026',
     ctaLabel: 'Visit',
@@ -95,14 +95,14 @@ const HERO_ITEMS: HeroItem[] = [
   {
     id: 'hero2',
     type: 'image',
-    uri: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=80',
+    uri: '',
     title: 'Escape to Indian Hills',
     ctaLabel: 'Explore',
   },
   {
     id: 'hero3',
     type: 'image',
-    uri: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=800&q=80',
+    uri: '',
     sponsor: 'Nike',
     title: 'Streetwear Essentials',
     ctaLabel: 'Shop',
@@ -117,9 +117,9 @@ const FEATURED_BOARDS: FeaturedBoard[] = [
     meta: '41 Pins \u2022 11mo',
     isVerified: true,
     images: [
-      'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=400&q=80',
-      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&q=80',
-      'https://images.unsplash.com/photo-1433086966358-a548c30072b5?w=400&q=80',
+      '',
+      '',
+      '',
     ],
   },
   {
@@ -129,9 +129,9 @@ const FEATURED_BOARDS: FeaturedBoard[] = [
     meta: '65 Pins \u2022 5mo',
     isVerified: true,
     images: [
-      'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400&q=80',
-      'https://images.unsplash.com/photo-1593305841991-05c29736f97c?w=400&q=80',
-      'https://images.unsplash.com/photo-1616499370260-485b3e5ed653?w=400&q=80',
+      '',
+      '',
+      '',
     ],
   },
   {
@@ -141,9 +141,9 @@ const FEATURED_BOARDS: FeaturedBoard[] = [
     meta: '28 Pins \u2022 Hot',
     isVerified: false,
     images: [
-      'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=400&q=80',
-      'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=400&q=80',
-      'https://images.unsplash.com/photo-1485231183945-ef89e404cf89?w=400&q=80',
+      '',
+      '',
+      '',
     ],
   },
 ];
@@ -154,10 +154,10 @@ const EDITORIAL_SECTIONS: { id: string; kicker: string; title: string; images: E
     kicker: 'Ideas for you',
     title: 'Shirt dress outfit',
     images: [
-      { id: 'e1-1', uri: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&q=80', aspectRatio: 1.4 },
-      { id: 'e1-2', uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=80', aspectRatio: 1.2 },
-      { id: 'e1-3', uri: 'https://images.unsplash.com/photo-1581044777550-4cfa60707efb?w=400&q=80', aspectRatio: 1.5 },
-      { id: 'e1-4', uri: 'https://images.unsplash.com/photo-1434389677669-e08b4a3a7a5e?w=400&q=80', aspectRatio: 1.1 },
+      { id: 'e1-1', uri: '', aspectRatio: 1.4 },
+      { id: 'e1-2', uri: '', aspectRatio: 1.2 },
+      { id: 'e1-3', uri: '', aspectRatio: 1.5 },
+      { id: 'e1-4', uri: '', aspectRatio: 1.1 },
     ],
   },
   {
@@ -165,10 +165,10 @@ const EDITORIAL_SECTIONS: { id: string; kicker: string; title: string; images: E
     kicker: 'Ideas for you',
     title: 'YSL runway',
     images: [
-      { id: 'e2-1', uri: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=400&q=80', aspectRatio: 1.3 },
-      { id: 'e2-2', uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=80', aspectRatio: 1.1 },
-      { id: 'e2-3', uri: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?w=400&q=80', aspectRatio: 1.4 },
-      { id: 'e2-4', uri: 'https://images.unsplash.com/photo-1485231183945-ef89e404cf89?w=400&q=80', aspectRatio: 1.2 },
+      { id: 'e2-1', uri: '', aspectRatio: 1.3 },
+      { id: 'e2-2', uri: '', aspectRatio: 1.1 },
+      { id: 'e2-3', uri: '', aspectRatio: 1.4 },
+      { id: 'e2-4', uri: '', aspectRatio: 1.2 },
     ],
   },
   {
@@ -176,10 +176,10 @@ const EDITORIAL_SECTIONS: { id: string; kicker: string; title: string; images: E
     kicker: 'Ideas for you',
     title: "Men's formal style",
     images: [
-      { id: 'e3-1', uri: 'https://images.unsplash.com/photo-1507679799987-c73779b96318?w=400&q=80', aspectRatio: 1.35 },
-      { id: 'e3-2', uri: 'https://images.unsplash.com/photo-1593030761757-11f489f2c6f9?w=400&q=80', aspectRatio: 1.15 },
-      { id: 'e3-3', uri: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&q=80', aspectRatio: 1.25 },
-      { id: 'e3-4', uri: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&q=80', aspectRatio: 1.45 },
+      { id: 'e3-1', uri: '', aspectRatio: 1.35 },
+      { id: 'e3-2', uri: '', aspectRatio: 1.15 },
+      { id: 'e3-3', uri: '', aspectRatio: 1.25 },
+      { id: 'e3-4', uri: '', aspectRatio: 1.45 },
     ],
   },
   {
@@ -187,10 +187,10 @@ const EDITORIAL_SECTIONS: { id: string; kicker: string; title: string; images: E
     kicker: 'Ideas for you',
     title: 'Tom ford suit',
     images: [
-      { id: 'e4-1', uri: 'https://images.unsplash.com/photo-1507679799987-c73779b96318?w=400&q=80', aspectRatio: 1.2 },
-      { id: 'e4-2', uri: 'https://images.unsplash.com/photo-1593030761757-11f489f2c6f9?w=400&q=80', aspectRatio: 1.4 },
-      { id: 'e4-3', uri: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&q=80', aspectRatio: 1.1 },
-      { id: 'e4-4', uri: 'https://images.unsplash.com/photo-1507679799987-c73779b96318?w=400&q=80', aspectRatio: 1.3 },
+      { id: 'e4-1', uri: '', aspectRatio: 1.2 },
+      { id: 'e4-2', uri: '', aspectRatio: 1.4 },
+      { id: 'e4-3', uri: '', aspectRatio: 1.1 },
+      { id: 'e4-4', uri: '', aspectRatio: 1.3 },
     ],
   },
 ];
