@@ -29462,6 +29462,400 @@ const start = async () => {
   }
 };
 
+
+// ── Support tickets ────────────────────────────────────────────────
+
+app.post('/support/tickets', async (request, reply) => {
+  const bodySchema = z.object({
+    orderId: z.string().min(4).max(64),
+    topicId: z.string().min(1).max(64),
+    topicLabel: z.string().min(1).max(120),
+    details: z.string().min(1).max(2000),
+  });
+
+  const payload = bodySchema.parse(request.body);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const orderResult = await db.query<{ id: string }>(
+    'SELECT id FROM orders WHERE id = $1 AND (buyer_id = $2 OR seller_id = $2) LIMIT 1',
+    [payload.orderId, userId]
+  );
+
+  if (!orderResult.rowCount) {
+    reply.code(403);
+    return { ok: false, error: 'Order not found or not accessible' };
+  }
+
+  const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  await db.query(
+    `
+      INSERT INTO support_tickets (id, user_id, order_id, topic_id, topic_label, details, status, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, 'open', NOW(), NOW())
+    `,
+    [ticketId, userId, payload.orderId, payload.topicId, payload.topicLabel, payload.details]
+  );
+
+  reply.code(201);
+  return {
+    ok: true,
+    ticket: {
+      id: ticketId,
+      orderId: payload.orderId,
+      topicId: payload.topicId,
+      topicLabel: payload.topicLabel,
+      details: payload.details,
+      status: 'open',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  };
+});
+
+app.get('/support/tickets', async (request) => {
+  const userId = (request as any).authUser?.userId as string | undefined;
+  if (!userId) {
+    throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const result = await db.query<{
+    id: string;
+    order_id: string;
+    topic_id: string;
+    topic_label: string;
+    details: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT id, order_id, topic_id, topic_label, details, status, created_at, updated_at
+      FROM support_tickets
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `,
+    [userId]
+  );
+
+  return {
+    ok: true,
+    tickets: result.rows.map((row) => ({
+      id: row.id,
+      orderId: row.order_id,
+      topicId: row.topic_id,
+      topicLabel: row.topic_label,
+      details: row.details,
+      status: row.status,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  };
+});
+
+app.get('/support/tickets/order/:orderId', async (request) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+  const userId = (request as any).authUser?.userId as string | undefined;
+  if (!userId) {
+    throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const result = await db.query<{
+    id: string;
+    order_id: string;
+    topic_id: string;
+    topic_label: string;
+    details: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT id, order_id, topic_id, topic_label, details, status, created_at, updated_at
+      FROM support_tickets
+      WHERE user_id = $1 AND order_id = $2
+      ORDER BY created_at DESC
+    `,
+    [userId, orderId]
+  );
+
+  return {
+    ok: true,
+    tickets: result.rows.map((row) => ({
+      id: row.id,
+      orderId: row.order_id,
+      topicId: row.topic_id,
+      topicLabel: row.topic_label,
+      details: row.details,
+      status: row.status,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  };
+});
+
+app.patch('/support/tickets/:ticketId/status', async (request, reply) => {
+  const paramsSchema = z.object({ ticketId: z.string().min(4).max(120) });
+  const bodySchema = z.object({
+    status: z.enum(['open', 'resolved', 'closed']),
+  });
+
+  const { ticketId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query(
+    `
+      UPDATE support_tickets
+      SET status = $1, updated_at = NOW()
+      WHERE id = $2 AND user_id = $3
+      RETURNING id
+    `,
+    [body.status, ticketId, userId]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Ticket not found' };
+  }
+
+  return { ok: true, ticketId, status: body.status };
+});
+
+// ── Collections ──────────────────────────────────────────────────────
+
+app.post('/collections', async (request, reply) => {
+  const bodySchema = z.object({
+    name: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(500).optional(),
+    isPrivate: z.boolean().default(false),
+  });
+
+  const payload = bodySchema.parse(request.body);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const collectionId = `collection_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  await db.query(
+    `
+      INSERT INTO collections (id, user_id, name, description, is_private, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+    `,
+    [collectionId, userId, payload.name, payload.description ?? null, payload.isPrivate]
+  );
+
+  reply.code(201);
+  return {
+    ok: true,
+    collection: {
+      id: collectionId,
+      name: payload.name,
+      description: payload.description ?? null,
+      isPrivate: payload.isPrivate,
+      itemIds: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  };
+});
+
+app.get('/collections', async (request) => {
+  const userId = (request as any).authUser?.userId as string | undefined;
+  if (!userId) {
+    throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const result = await db.query<{
+    id: string;
+    name: string;
+    description: string | null;
+    is_private: boolean;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT id, name, description, is_private, created_at, updated_at
+      FROM collections
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `,
+    [userId]
+  );
+
+  const collectionIds = result.rows.map((r) => r.id);
+
+  let itemsResult: { rows: { collection_id: string; listing_id: string }[] } = { rows: [] };
+  if (collectionIds.length > 0) {
+    itemsResult = await db.query<{
+      collection_id: string;
+      listing_id: string;
+    }>(
+      `
+        SELECT collection_id, listing_id
+        FROM collection_items
+        WHERE collection_id = ANY($1)
+      `,
+      [collectionIds]
+    );
+  }
+
+  const itemsByCollection: Record<string, string[]> = {};
+  for (const row of itemsResult.rows) {
+    if (!itemsByCollection[row.collection_id]) {
+      itemsByCollection[row.collection_id] = [];
+    }
+    itemsByCollection[row.collection_id].push(row.listing_id);
+  }
+
+  return {
+    ok: true,
+    collections: result.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      isPrivate: row.is_private,
+      itemIds: itemsByCollection[row.id] ?? [],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  };
+});
+
+app.get('/collections/:collectionId', async (request, reply) => {
+  const paramsSchema = z.object({ collectionId: z.string().min(4).max(120) });
+  const { collectionId } = paramsSchema.parse(request.params);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    id: string;
+    name: string;
+    description: string | null;
+    is_private: boolean;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT id, name, description, is_private, created_at, updated_at
+      FROM collections
+      WHERE id = $1 AND user_id = $2
+      LIMIT 1
+    `,
+    [collectionId, userId]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Collection not found' };
+  }
+
+  const row = result.rows[0];
+
+  const itemsResult = await db.query<{ listing_id: string }>(
+    'SELECT listing_id FROM collection_items WHERE collection_id = $1',
+    [collectionId]
+  );
+
+  return {
+    ok: true,
+    collection: {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      isPrivate: row.is_private,
+      itemIds: itemsResult.rows.map((r) => r.listing_id),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    },
+  };
+});
+
+app.post('/collections/:collectionId/items', async (request, reply) => {
+  const paramsSchema = z.object({ collectionId: z.string().min(4).max(120) });
+  const bodySchema = z.object({ listingId: z.string().min(2).max(120) });
+
+  const { collectionId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const ownership = await db.query(
+    'SELECT id FROM collections WHERE id = $1 AND user_id = $2 LIMIT 1',
+    [collectionId, userId]
+  );
+
+  if (!ownership.rowCount) {
+    reply.code(403);
+    return { ok: false, error: 'Collection not found or not owned' };
+  }
+
+  await db.query(
+    `
+      INSERT INTO collection_items (collection_id, listing_id, added_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (collection_id, listing_id) DO NOTHING
+    `,
+    [collectionId, body.listingId]
+  );
+
+  return { ok: true };
+});
+
+app.delete('/collections/:collectionId/items/:listingId', async (request, reply) => {
+  const paramsSchema = z.object({
+    collectionId: z.string().min(4).max(120),
+    listingId: z.string().min(2).max(120),
+  });
+
+  const { collectionId, listingId } = paramsSchema.parse(request.params);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const ownership = await db.query(
+    'SELECT id FROM collections WHERE id = $1 AND user_id = $2 LIMIT 1',
+    [collectionId, userId]
+  );
+
+  if (!ownership.rowCount) {
+    reply.code(403);
+    return { ok: false, error: 'Collection not found or not owned' };
+  }
+
+  await db.query(
+    'DELETE FROM collection_items WHERE collection_id = $1 AND listing_id = $2',
+    [collectionId, listingId]
+  );
+
+  return { ok: true };
+});
+
 const shutdown = async () => {
   if (isShuttingDown) {
     return;

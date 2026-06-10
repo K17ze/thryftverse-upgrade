@@ -49,28 +49,33 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
 
-  const createSupportTicket = useStore((state) => state.createSupportTicket);
+  const createSupportTicketOnApi = useStore((state) => state.createSupportTicketOnApi);
 
   const canSubmit = selectedTopic && details.trim().length > 10 && !isSubmitting && !isSubmitted;
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!canSubmit) return;
     haptic.medium();
     setIsSubmitting(true);
 
-    const topic = SUPPORT_TOPICS.find((t) => t.id === selectedTopic)!;
-    const ticketId = createSupportTicket({
-      orderId,
-      topicId: topic.id,
-      topicLabel: topic.label,
-      details: details.trim(),
-    });
+    try {
+      const topic = SUPPORT_TOPICS.find((t) => t.id === selectedTopic)!;
+      const ticketId = await createSupportTicketOnApi({
+        orderId,
+        topicId: topic.id,
+        topicLabel: topic.label,
+        details: details.trim(),
+      });
 
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-    setSubmittedTicketId(ticketId);
-    show('Support request submitted. We will review and respond within 24 hours.', 'success');
-  }, [canSubmit, haptic, createSupportTicket, orderId, selectedTopic, details, show]);
+      setIsSubmitting(false);
+      setIsSubmitted(true);
+      setSubmittedTicketId(ticketId);
+      show('Support request submitted. We will review and respond within 24 hours.', 'success');
+    } catch {
+      setIsSubmitting(false);
+      show('Unable to submit support request. Please check your connection and try again.', 'error');
+    }
+  }, [canSubmit, haptic, createSupportTicketOnApi, orderId, selectedTopic, details, show]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
