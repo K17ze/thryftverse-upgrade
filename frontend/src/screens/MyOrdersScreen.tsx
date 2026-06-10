@@ -32,6 +32,7 @@ import { Type, Radius } from '../theme/designTokens';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 import { FlagshipOrderCard, FlagshipEmptyGraphic } from '../components/flagship';
+import { PressPresets } from '../hooks/usePremiumPressFeedback';
 
 const { width } = Dimensions.get('window');
 
@@ -243,25 +244,29 @@ export default function MyOrdersScreen() {
           }
         >
           {!viewerId ? (
-            <EmptyState
-              graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
-              title="Sign in to view orders"
-              subtitle="Your buying and selling history appears here once you're signed in."
-              ctaLabel="Sign In"
-              onCtaPress={() => navigation.navigate('Login')}
-            />
+            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+              <EmptyState
+                graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
+                title="Sign in to view orders"
+                subtitle="Your buying and selling history appears here once you're signed in."
+                ctaLabel="Sign In"
+                onCtaPress={() => navigation.navigate('Login')}
+              />
+            </Reanimated.View>
           ) : filteredOrders.length === 0 ? (
-            <EmptyState
-              graphic={<FlagshipEmptyGraphic variant="box" size={120} />}
-              title={statusFilter === 'All' ? 'No orders yet' : `No ${statusFilter.toLowerCase()} orders`}
-              subtitle={
-                statusFilter === 'All'
-                  ? `When you ${activeTab === 'buying' ? 'buy' : 'sell'} items, you'll track them here.`
-                  : 'Try another status filter to view more orders.'
-              }
-              ctaLabel={activeTab === 'buying' ? 'Start Browsing' : 'List an Item'}
-              onCtaPress={() => navigation.navigate(activeTab === 'buying' ? 'MainTabs' : 'Sell')}
-            />
+            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+              <EmptyState
+                graphic={<FlagshipEmptyGraphic variant="box" size={120} />}
+                title={statusFilter === 'All' ? 'No orders yet' : `No ${statusFilter.toLowerCase()} orders`}
+                subtitle={
+                  statusFilter === 'All'
+                    ? `When you ${activeTab === 'buying' ? 'buy' : 'sell'} items, you'll track them here.`
+                    : 'Try another status filter to view more orders.'
+                }
+                ctaLabel={activeTab === 'buying' ? 'Start Browsing' : 'List an Item'}
+                onCtaPress={() => navigation.navigate(activeTab === 'buying' ? 'MainTabs' : 'Sell')}
+              />
+            </Reanimated.View>
           ) : (
             filteredOrders.map((order, index) => {
               const backendMeta = backendOrderById.get(order.id);

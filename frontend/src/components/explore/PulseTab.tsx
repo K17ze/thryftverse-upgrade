@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
-import { Type, Space, Radius , Typography  } from '../../theme/designTokens';
+import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 import { useStore } from '../../store/useStore';
 import { useBackendData } from '../../context/BackendDataContext';
 import { useNavigation } from '@react-navigation/native';
@@ -21,6 +21,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import { EmptyState } from '../EmptyState';
 import { formatCountdown } from '../../data/tradeHub';
+import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -59,7 +60,35 @@ interface ActivityItem {
   routeId?: string;
 }
 
+interface LiveAuctionItem {
+  id: string;
+  title: string;
+  image: string;
+  currentBid: number;
+  endsAtMs: number;
+  listingId: string;
+}
+
 /* ── Sub-components ── */
+function LiveNowCard({ auction, index, onPress }: { auction: LiveAuctionItem; index: number; onPress: () => void }) {
+  const countdown = formatCountdown(Math.max(0, auction.endsAtMs - Date.now()));
+  return (
+    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
+      <AnimatedPressable style={styles.liveCard} onPress={onPress} activeOpacity={0.92}>
+        <CachedImage uri={auction.image} style={styles.liveImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
+        <View style={styles.liveContent}>
+          <Text style={styles.liveTitle} numberOfLines={1}>{auction.title}</Text>
+          <Text style={styles.liveBid}>Current bid · £{auction.currentBid}</Text>
+          <View style={styles.liveBadge}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>{countdown}</Text>
+          </View>
+        </View>
+      </AnimatedPressable>
+    </Reanimated.View>
+  );
+}
+
 function ActivityCard({ item, onPress, index }: { item: ActivityItem; onPress: () => void; index: number }) {
   const iconMap: Record<ActivityType, string> = {
     auction_live: 'flame-outline',
@@ -131,6 +160,23 @@ export default function PulseTab() {
 
   const now = Date.now();
 
+  const liveAuctions = useMemo<LiveAuctionItem[]>(() => {
+    return customAuctions
+      .filter((a) => {
+        const endsAtMs = new Date(a.endsAt).getTime();
+        const isLive = now >= new Date(a.startsAt).getTime() && now < endsAtMs;
+        return isLive;
+      })
+      .map((a) => ({
+        id: a.id,
+        title: a.title,
+        image: a.image,
+        currentBid: a.currentBid,
+        endsAtMs: new Date(a.endsAt).getTime(),
+        listingId: a.listingId,
+      }));
+  }, [customAuctions, now]);
+
   const activities = useMemo<ActivityItem[]>(() => {
     const items: ActivityItem[] = [];
 
@@ -179,7 +225,7 @@ export default function PulseTab() {
     navigation.navigate('Browse', { categoryId: 'search', title: `Trending: ${tag}`, searchQuery: tag.replace('#', '') });
   };
 
-  if (activities.length === 0) {
+  if (activities.length === 0 && liveAuctions.length === 0) {
     return (
       <EmptyState
         icon="pulse-outline"
@@ -193,8 +239,30 @@ export default function PulseTab() {
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      {/* Live Now Rail */}
+      {liveAuctions.length > 0 && (
+        <Reanimated.View entering={FadeInDown.duration(300)}>
+          <DiscoverySectionHeader
+            kicker="Bidding now"
+            title="Live Now"
+            actionLabel="View all"
+            onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Live Auctions' })}
+          />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.liveScroll}>
+            {liveAuctions.map((auction, i) => (
+              <LiveNowCard
+                key={auction.id}
+                auction={auction}
+                index={i}
+                onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: auction.listingId }); }}
+              />
+            ))}
+          </ScrollView>
+        </Reanimated.View>
+      )}
+
       {/* Live Pulse Banner */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
         <AnimatedPressable style={styles.pulseBanner} onPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Live Now' })} activeOpacity={0.92}>
           <View style={styles.pulseDot}>
             <View style={styles.pulseRing} />
@@ -209,8 +277,11 @@ export default function PulseTab() {
       </Reanimated.View>
 
       {/* Trending tags */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
-        <Text style={styles.sectionTitle}>Trending Now</Text>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <DiscoverySectionHeader
+          kicker="What's popular"
+          title="Trending Now"
+        />
         <View style={styles.trendRow}>
           {TRENDING_TAGS.map((tag, i) => (
             <TrendingBubble key={tag.label} tag={tag} onPress={() => handleTagPress(tag.label)} index={i} />
@@ -219,8 +290,13 @@ export default function PulseTab() {
       </Reanimated.View>
 
       {/* Hot Sellers */}
-      <Reanimated.View entering={FadeInDown.duration(350).delay(80)}>
-        <Text style={[styles.sectionTitle, { marginTop: Space.lg }]}>Hot Sellers</Text>
+      <Reanimated.View entering={FadeInDown.duration(350).delay(120)} style={{ marginTop: Space.lg }}>
+        <DiscoverySectionHeader
+          kicker="Top sellers"
+          title="Hot Sellers"
+          actionLabel="View all"
+          onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Hot Sellers' })}
+        />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sellerScroll}>
           {HOT_SELLERS.map((seller, i) => (
             <Reanimated.View key={seller.id} entering={FadeInDown.duration(300).delay(i * 50)}>
@@ -228,9 +304,9 @@ export default function PulseTab() {
                 <CachedImage uri={seller.avatar} style={styles.sellerAvatar} containerStyle={{ borderRadius: Radius.full }} contentFit="cover" />
                 <Text style={styles.sellerName} numberOfLines={1}>@{seller.name}</Text>
                 <Text style={styles.sellerMeta}>{seller.sales} sales</Text>
-                <View style={styles.liveBadge}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.liveText}>{seller.viewers} viewing</Text>
+                <View style={styles.sellerLiveBadge}>
+                  <View style={styles.sellerLiveDot} />
+                  <Text style={styles.sellerLiveText}>{seller.viewers} viewing</Text>
                 </View>
               </AnimatedPressable>
             </Reanimated.View>
@@ -239,10 +315,15 @@ export default function PulseTab() {
       </Reanimated.View>
 
       {/* Activity feed */}
-      <Text style={[styles.sectionTitle, { marginTop: Space.lg }]}>Live Feed</Text>
-      {activities.map((item, i) => (
-        <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} />
-      ))}
+      <Reanimated.View entering={FadeInDown.duration(350).delay(160)} style={{ marginTop: Space.lg }}>
+        <DiscoverySectionHeader
+          kicker="Updates"
+          title="Live Feed"
+        />
+        {activities.map((item, i) => (
+          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} />
+        ))}
+      </Reanimated.View>
 
       <View style={{ height: 100 }} />
     </ScrollView>
@@ -254,6 +335,70 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xl,
+  },
+
+  /* Live Now Rail */
+  liveScroll: {
+    paddingHorizontal: Space.md,
+    marginHorizontal: -Space.md,
+    gap: Space.sm,
+  },
+  liveCard: {
+    width: 150,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Space.sm,
+    gap: Space.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  liveImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  liveContent: {
+    gap: 3,
+  },
+  liveTitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  liveBid: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+    backgroundColor: 'rgba(239,68,68,0.10)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    alignSelf: 'flex-start',
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.danger,
+  },
+  liveText: {
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+    color: Colors.danger,
   },
 
   /* Pulse Banner */
@@ -306,15 +451,6 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
   },
 
-  /* Section title */
-  sectionTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-    marginBottom: Space.sm,
-  },
-
   /* Trending */
   trendRow: {
     flexDirection: 'row',
@@ -324,10 +460,10 @@ const styles = StyleSheet.create({
   trendBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: Radius.full,
-    gap: 8,
+    gap: 6,
   },
   trendLabel: {
     fontSize: Type.body.size,
@@ -335,9 +471,9 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   heatDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 
   /* Hot Sellers */
@@ -380,7 +516,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: Type.meta.letterSpacing,
   },
-  liveBadge: {
+  sellerLiveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -390,13 +526,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: Radius.full,
   },
-  liveDot: {
+  sellerLiveDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: Colors.success,
   },
-  liveText: {
+  sellerLiveText: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
     color: Colors.success,
@@ -410,9 +546,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: Space.sm,
+    padding: Space.md,
     marginBottom: Space.sm,
-    gap: Space.sm,
+    gap: Space.md,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
@@ -420,14 +556,14 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   activityImage: {
-    width: 72,
-    height: 72,
+    width: 80,
+    height: 80,
     borderRadius: Radius.md,
     backgroundColor: Colors.surfaceAlt,
   },
   activityContent: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
   activityHeader: {
     flexDirection: 'row',
@@ -440,11 +576,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   activityTitle: {
-    fontSize: Type.subtitle.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: Type.body.letterSpacing,
+    lineHeight: Type.body.lineHeight,
   },
   activitySubtitle: {
     fontSize: Type.caption.size,

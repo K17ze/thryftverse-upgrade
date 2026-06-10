@@ -76,6 +76,7 @@ import { useToast } from '../context/ToastContext';
 
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipProfileMedia } from '../components/flagship';
+import { ProfileVisualHeader, ProfileTabRail } from '../components/profile';
 
 import { Space, Radius } from '../theme/designTokens';
 
@@ -156,6 +157,7 @@ export default function MyProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const reducedMotionEnabled = useReducedMotion();
+  const [activeTab, setActiveTab] = React.useState<'wardrobe' | 'saved' | 'about'>('wardrobe');
 
   const { show } = useToast();
 
@@ -731,565 +733,214 @@ export default function MyProfileScreen() {
 
       >
 
-        {/* Profile Hero - LinkedIn Style */}
+        {/* Profile Visual Identity */}
+        <ProfileVisualHeader
+          coverUri={displayCover}
+          avatarUri={displayAvatar}
+          displayName={user.displayName || user.username}
+          username={user.username}
+          bio={user.bio}
+          verified={false}
+          isSelf
+          onEditCover={pickCover}
+          onEditAvatar={pickAvatar}
+          onEditProfile={() => navigation.navigate('EditProfile')}
+          onShare={handleShare}
+          hideCover
+          stats={[
+            { label: 'Listings', value: myListings.length },
+            { label: 'Saved', value: savedCount + wishlistCount },
+            { label: 'Co-Own', value: coOwnHoldings.length },
+          ]}
+        />
 
-        <View style={styles.heroSection}>
+        {/* Profile Tab Rail */}
+        <ProfileTabRail
+          tabs={[
+            { key: 'wardrobe', label: 'Wardrobe', icon: 'shirt-outline', count: myListings.length },
+            { key: 'saved', label: 'Saved', icon: 'bookmark-outline', count: savedCount + wishlistCount },
+            { key: 'about', label: 'About', icon: 'person-outline' },
+          ]}
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key as 'wardrobe' | 'saved' | 'about')}
+        />
 
-          {/* Avatar positioned to overlap the banner bottom edge */}
-
-          <View style={styles.avatarContainer}>
-
-            <AnimatedPressable style={styles.avatarWrapLinkedIn} onPress={pickAvatar} activeOpacity={0.85}
-
-              accessibilityLabel="Change profile photo"
-
-              accessibilityRole="button"
-
-              accessibilityHint="Opens photo picker to update your avatar"
-
-            >
-
-              <CachedImage
-
-                uri={displayAvatar}
-
-                style={styles.heroAvatarLinkedIn}
-
-                containerStyle={styles.heroAvatarContainerLinkedIn}
-
-                contentFit="cover"
-
-              />
-
-              <View style={styles.editAvatarChipLinkedIn}>
-
-                <Ionicons name="camera" size={18} color="#fff" />
-
+        {/* Tab Content */}
+        {activeTab === 'wardrobe' && (
+          <View style={{ backgroundColor: Colors.background, paddingBottom: 120 }}>
+            {/* My Wardrobe */}
+            <View style={styles.wardrobeSection}>
+              <View style={styles.wardrobeHeader}>
+                <View>
+                  <Text style={styles.wardrobeSectionLabel}>YOUR LISTINGS</Text>
+                  <Text style={styles.wardrobeTitle}>My Wardrobe</Text>
+                </View>
+                <AnimatedPressable
+                  style={styles.viewAllBtn}
+                  onPress={() => navigation.navigate('UserProfile', { userId: user.id, isMe: true })}
+                  accessibilityRole="button"
+                  accessibilityLabel="View all listings"
+                >
+                  <Text style={styles.viewAllText}>View All</Text>
+                  <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
+                </AnimatedPressable>
               </View>
 
-            </AnimatedPressable>
-
-          </View>
-
-
-
-          <AnimatedPressable
-
-            style={styles.heroIdentityTap}
-
-            onPress={() => navigation.navigate('UserProfile', { userId: user.id, isMe: true })}
-
-            activeOpacity={0.85}
-
-            accessibilityRole="button"
-
-            accessibilityLabel="Open your public profile"
-
-            accessibilityHint="Shows how other users see your profile"
-
-          >
-
-            <Text style={styles.heroName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>{user.username.toUpperCase()}</Text>
-
-            <Text style={styles.heroHandle}>@{user.username}</Text>
-
-            {user.bio && (
-
-              <Text style={styles.heroBio} numberOfLines={2}>{user.bio}</Text>
-
-            )}
-
-            <Text style={styles.heroMeta}>
-
-              {[
-
-                user.location,
-
-              ].filter(Boolean).join(' | ')}
-
-            </Text>
-
-          </AnimatedPressable>
-
-
-
-          <View style={styles.profileActionRow}>
-
-            <AppButton
-
-              title="Edit profile"
-
-              variant="primary"
-
-              size="sm"
-
-              onPress={() => navigation.navigate('EditProfile')}
-
-              style={styles.profileActionPrimary}
-
-              titleStyle={styles.profileActionPrimaryText}
-
-              accessibilityLabel="Edit your profile"
-
-              accessibilityHint="Opens profile editor for username, bio, and preferences"
-
-            />
-
-
-
-            <AppButton
-
-              title="Share profile"
-
-              variant="secondary"
-
-              size="sm"
-
-              onPress={handleShare}
-
-              style={styles.profileActionSecondary}
-
-              titleStyle={styles.profileActionSecondaryText}
-
-              accessibilityLabel="Share your profile"
-
-              accessibilityHint="Opens share sheet with your profile link"
-
-            />
-
-
-
-            <AnimatedPressable
-
-              style={styles.profileActionIcon}
-
-              onPress={() => navigation.navigate('Settings')}
-
-              activeOpacity={0.8}
-
-              accessibilityLabel="Open settings"
-
-              accessibilityRole="button"
-
-              accessibilityHint="Opens account and app settings"
-
-            >
-
-              <Ionicons name="settings-outline" size={18} color={Colors.textPrimary} />
-
-            </AnimatedPressable>
-
-          </View>
-
-
-
-          <Reanimated.View
-
-            entering={
-
-              reducedMotionEnabled
-
-                ? undefined
-
-                : FadeInDown.delay(200).duration(400)
-
-            }
-
-            style={styles.statsRow}
-
-          >
-
-            <AnimatedPressable
-
-              style={styles.statItem}
-
-              onPress={() => navigation.navigate('UserProfile', { userId: user.id, isMe: true })}
-
-              activeOpacity={0.8}
-
-              accessibilityLabel={`${myListings.length} listings. Tap to view full profile.`}
-
-              accessibilityRole="button"
-
-              accessibilityHint="Opens your complete public profile"
-
-            >
-
-              <Text style={styles.statNumber}>{myListings.length}</Text>
-
-              <Text style={styles.statLabel}>LISTED</Text>
-
-            </AnimatedPressable>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.statItem}>
-
-              <Text style={styles.statNumber}>{coOwnHoldings.length}</Text>
-
-              <Text style={styles.statLabel}>CO-OWN</Text>
-
-            </View>
-
-          </Reanimated.View>
-
-
-
-          <View style={styles.quickAccessCard}>
-
-            <View style={styles.quickGrid}>
-
-              {quickAccess.map((item, index) => (
-
-                <AnimatedPressable
-
-                  key={item.label}
-
-                  style={[styles.quickItem, (index + 1) % 3 === 0 && styles.quickItemLastInRow]}
-
-                  activeOpacity={0.8}
-
-                  onPress={() => navigation.navigate(item.route as any)}
-
-                  accessibilityRole="button"
-
-                  accessibilityLabel={`Open ${item.label}`}
-
-                  accessibilityHint={item.value ? `Shows ${item.label.toLowerCase()} with ${item.value}` : `Navigates to ${item.label.toLowerCase()}`}
-
-                >
-
-                  <View style={styles.quickIconCircle}>
-
-                    <Ionicons name={item.icon as any} size={18} color={item.color} />
-
-                  </View>
-
-                  <Text style={styles.quickLabel}>{item.label}</Text>
-
-                  {item.value && <Text style={styles.quickValue}>{item.value}</Text>}
-
-                </AnimatedPressable>
-
-              ))}
-
-            </View>
-
-          </View>
-
-
-
-          <View style={styles.mediaGrid}>
-
-            {heroMediaListings.slice(0, 6).map((item, index) => (
-
-              <AnimatedPressable
-
-                key={`hero_media_${item.id}_${index}`}
-
-                style={[styles.mediaTile, (index + 1) % 3 === 0 && styles.mediaTileLast]}
-
-                activeOpacity={0.9}
-
-                onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
-
-                accessibilityRole="button"
-
-                accessibilityLabel={`Manage listing ${item.title}`}
-
-                accessibilityHint="Opens listing management"
-
-              >
-
-                <SharedTransitionView
-
-                  style={styles.mediaThumbWrap}
-
-                  sharedTransitionTag={`image-${item.id}-0`}
-
-                >
-
-                  <CachedImage
-
-                    uri={item.images?.[0] ?? ''}
-
-                    style={styles.mediaThumb}
-
-                    containerStyle={{ width: '100%', height: '100%', borderRadius: 10 }}
-
-                    contentFit="cover"
-
-                  />
-
-                </SharedTransitionView>
-
-                <View style={styles.mediaTilePricePill}>
-
-                  <Text style={styles.mediaTilePriceText}>
-
-                    {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
-
-                  </Text>
-
-                </View>
-
-              </AnimatedPressable>
-
-            ))}
-
-          </View>
-
-        </View>
-
-
-
-        {/* Content Below Hero */}
-
-        <View style={{ backgroundColor: Colors.background, paddingBottom: 120 }}>
-
-          {/* ── Co-Own Portfolio Summary ── */}
-
-          <View style={styles.portfolioSummaryCard}>
-
-          <View style={styles.portfolioSummaryTop}>
-
-            <Text style={styles.portfolioSummaryLabel}>MY CO-OWN HOLDINGS</Text>
-
-            <AnimatedPressable
-
-              style={styles.portfolioSummaryLinkBtn}
-
-              activeOpacity={0.8}
-
-              onPress={() => navigation.navigate('Portfolio')}
-
-              accessibilityRole="button"
-
-              accessibilityLabel="Open co-own portfolio"
-
-              accessibilityHint="Navigates to your portfolio holdings"
-
-            >
-
-              <Text style={styles.portfolioSummaryLinkText}>Open</Text>
-
-              <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
-
-            </AnimatedPressable>
-
-          </View>
-
-
-
-          <Text style={styles.portfolioSummaryValue}>{formatFromFiat(holdingsValue, 'GBP')}</Text>
-
-
-
-          <View style={styles.portfolioSummaryMetaRow}>
-
-            <Text style={styles.portfolioSummaryMeta}>
-
-              {coOwnHoldings.length} active position{coOwnHoldings.length === 1 ? '' : 's'}
-
-            </Text>
-
-            <Text
-
-              style={[
-
-                styles.portfolioSummaryPnl,
-
-                holdingsUnrealized >= 0 ? styles.portfolioPnlUp : styles.portfolioPnlDown,
-
-              ]}
-
-            >
-
-              Unrealized {holdingsUnrealized >= 0 ? '+' : '-'}
-
-              {formatFromFiat(Math.abs(holdingsUnrealized), 'GBP', { displayMode: 'fiat' })}
-
-            </Text>
-
-          </View>
-
-
-
-          {coOwnHoldings.length === 0 && (
-
-            <AnimatedPressable
-
-              style={styles.portfolioSummaryCta}
-
-              activeOpacity={0.85}
-
-              onPress={() => navigation.navigate('CoOwnHub')}
-
-              accessibilityRole="button"
-
-              accessibilityLabel="Explore co-own hub"
-
-              accessibilityHint="Navigates to co-own opportunities"
-
-            >
-
-              <Ionicons name="sparkles-outline" size={14} color={Colors.background} />
-
-              <Text style={styles.portfolioSummaryCtaText}>Explore Co-Own Hub</Text>
-
-            </AnimatedPressable>
-
-          )}
-
-        </View>
-
-
-
-        {/* My Wardrobe Preview */}
-
-        <View style={styles.wardrobeSection}>
-
-          <View style={styles.wardrobeHeader}>
-
-            <View>
-
-              <Text style={styles.wardrobeSectionLabel}>YOUR LISTINGS</Text>
-
-              <Text style={styles.wardrobeTitle}>My Wardrobe</Text>
-
-            </View>
-
-            <AnimatedPressable
-
-              style={styles.viewAllBtn}
-
-              onPress={() => navigation.navigate('UserProfile', { userId: user.id, isMe: true })}
-
-              accessibilityRole="button"
-
-              accessibilityLabel="View all listings"
-
-              accessibilityHint="Opens your complete wardrobe listings"
-
-            >
-
-              <Text style={styles.viewAllText}>View All</Text>
-
-              <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
-
-            </AnimatedPressable>
-
-          </View>
-
-
-
-          <ScrollView
-
-            horizontal
-
-            showsHorizontalScrollIndicator={false}
-
-            contentContainerStyle={styles.wardrobeScroll}
-
-          >
-
-            {myListings.length === 0 ? (
-
-              <AnimatedPressable
-
-                style={styles.wardrobeEmptyState}
-
-                activeOpacity={0.85}
-
-                onPress={() => navigation.navigate('MainTabs')}
-
-                accessibilityRole="button"
-
-                accessibilityLabel="List your first item"
-
-                accessibilityHint="Opens the listing creation flow"
-
-              >
-
-                <View style={styles.wardrobeEmptyIconCircle}>
-
-                  <Ionicons name="add" size={28} color={Colors.brand} />
-
-                </View>
-
-                <Text style={styles.wardrobeEmptyTitle}>List your first item</Text>
-
-                <Text style={styles.wardrobeEmptySubtitle}>Tap to start selling</Text>
-
-              </AnimatedPressable>
-
-            ) : (
-
-              myListings.map((item) => (
-
-                <AnimatedPressable
-
-                  key={item.id}
-
-                  style={styles.wardrobeItem}
-
-                  activeOpacity={0.9}
-
-                  onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
-
-                  accessibilityRole="button"
-
-                  accessibilityLabel={`Manage listing ${item.title}`}
-
-                  accessibilityHint="Opens listing management"
-
-                >
-
-                  <SharedTransitionView
-
-                    style={styles.wardrobeImageWrap}
-
-                    sharedTransitionTag={`image-${item.id}-0`}
-
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wardrobeScroll}>
+                {myListings.length === 0 ? (
+                  <AnimatedPressable
+                    style={styles.wardrobeEmptyState}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('MainTabs')}
+                    accessibilityRole="button"
                   >
+                    <View style={styles.wardrobeEmptyIconCircle}>
+                      <Ionicons name="add" size={28} color={Colors.brand} />
+                    </View>
+                    <Text style={styles.wardrobeEmptyTitle}>List your first item</Text>
+                    <Text style={styles.wardrobeEmptySubtitle}>Tap to start selling</Text>
+                  </AnimatedPressable>
+                ) : (
+                  myListings.map((item) => (
+                    <AnimatedPressable
+                      key={item.id}
+                      style={styles.wardrobeItem}
+                      activeOpacity={0.9}
+                      onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
+                      accessibilityRole="button"
+                    >
+                      <SharedTransitionView
+                        style={styles.mediaThumbWrap}
+                        sharedTransitionTag={`image-${item.id}-0`}
+                      >
+                        <CachedImage
+                          uri={item.images?.[0] ?? ''}
+                          style={styles.mediaThumb}
+                          containerStyle={{ width: '100%', height: '100%', borderRadius: 10 }}
+                          contentFit="cover"
+                        />
+                      </SharedTransitionView>
+                      <View style={styles.mediaTilePricePill}>
+                        <Text style={styles.mediaTilePriceText}>
+                          {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                        </Text>
+                      </View>
+                    </AnimatedPressable>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        )}
 
-                    <CachedImage uri={item.images?.[0] ?? ''} style={styles.wardrobeImage} containerStyle={{ width: '100%', height: '100%', borderRadius: 16 }} contentFit="cover" />
+        {activeTab === 'saved' && (
+          <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
+            <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+              <View style={{ paddingHorizontal: Space.md, marginBottom: Space.lg }}>
+                <Text style={styles.wardrobeTitle}>Saved Items</Text>
+                <Text style={{ fontFamily: Typography.family.regular, fontSize: 14, color: Colors.textSecondary, marginTop: 4 }}>
+                  {savedCount + wishlistCount} items in your closet
+                </Text>
+              </View>
+              <AnimatedPressable
+                style={{
+                  marginHorizontal: Space.md,
+                  backgroundColor: Colors.surface,
+                  borderRadius: Radius.lg,
+                  borderWidth: 1,
+                  borderColor: Colors.border,
+                  padding: Space.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: Space.sm,
+                }}
+                onPress={() => navigation.navigate('Closet')}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="bookmark-outline" size={22} color={Colors.textPrimary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Typography.family.semibold, fontSize: 15, color: Colors.textPrimary }}>Open Closet</Text>
+                  <Text style={{ fontFamily: Typography.family.regular, fontSize: 13, color: Colors.textSecondary }}>View saved, wishlist, and collections</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </AnimatedPressable>
+            </Reanimated.View>
+          </View>
+        )}
 
-                  </SharedTransitionView>
+        {activeTab === 'about' && (
+          <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
+            {/* Co-Own Portfolio Summary */}
+            <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+              <View style={styles.portfolioSummaryCard}>
+                <View style={styles.portfolioSummaryTop}>
+                  <Text style={styles.portfolioSummaryLabel}>MY CO-OWN HOLDINGS</Text>
+                  <AnimatedPressable
+                    style={styles.portfolioSummaryLinkBtn}
+                    activeOpacity={0.8}
+                    onPress={() => navigation.navigate('Portfolio')}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.portfolioSummaryLinkText}>Open</Text>
+                    <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
+                  </AnimatedPressable>
+                </View>
+                <Text style={styles.portfolioSummaryValue}>{formatFromFiat(holdingsValue, 'GBP')}</Text>
+                <View style={styles.portfolioSummaryMetaRow}>
+                  <Text style={styles.portfolioSummaryMeta}>
+                    {coOwnHoldings.length} active position{coOwnHoldings.length === 1 ? '' : 's'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.portfolioSummaryPnl,
+                      holdingsUnrealized >= 0 ? styles.portfolioPnlUp : styles.portfolioPnlDown,
+                    ]}
+                  >
+                    Unrealized {holdingsUnrealized >= 0 ? '+' : '-'}
+                    {formatFromFiat(Math.abs(holdingsUnrealized), 'GBP', { displayMode: 'fiat' })}
+                  </Text>
+                </View>
+                {coOwnHoldings.length === 0 && (
+                  <AnimatedPressable
+                    style={styles.portfolioSummaryCta}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('CoOwnHub')}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="sparkles-outline" size={14} color={Colors.background} />
+                    <Text style={styles.portfolioSummaryCtaText}>Explore Co-Own Hub</Text>
+                  </AnimatedPressable>
+                )}
+              </View>
+            </Reanimated.View>
 
-                  <View style={styles.wardrobeInfo}>
-
-                    <Text style={styles.wardrobePrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
-
-                    <Text style={styles.wardrobeBrand} numberOfLines={1}>@{item.brand.toLowerCase()}</Text>
-
-                  </View>
-
-                  <View style={styles.wardrobeLikes}>
-
-                    <Ionicons name="heart" size={10} color={Colors.textMuted} />
-
-                    <Text style={styles.wardrobeLikeCount}>{item.likes}</Text>
-
-                  </View>
-
-                </AnimatedPressable>
-
-              ))
-
-            )}
-
-          </ScrollView>
-
-        </View>
-
-
-
-        {/* Badges removed — only show when backed by real backend data */}
-
-        </View>
-
-
+            {/* Quick Access */}
+            <Reanimated.View entering={FadeInDown.duration(300).delay(100)} style={{ marginTop: Space.lg }}>
+              <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>
+                <Text style={styles.wardrobeTitle}>Quick Access</Text>
+              </View>
+              <View style={styles.quickAccessCard}>
+                <View style={styles.quickGrid}>
+                  {quickAccess.map((item, index) => (
+                    <AnimatedPressable
+                      key={item.label}
+                      style={[styles.quickItem, (index + 1) % 3 === 0 && styles.quickItemLastInRow]}
+                      activeOpacity={0.8}
+                      onPress={() => navigation.navigate(item.route as any)}
+                      accessibilityRole="button"
+                    >
+                      <View style={styles.quickIconCircle}>
+                        <Ionicons name={item.icon as any} size={18} color={item.color} />
+                      </View>
+                      <Text style={styles.quickLabel}>{item.label}</Text>
+                      {item.value && <Text style={styles.quickValue}>{item.value}</Text>}
+                    </AnimatedPressable>
+                  ))}
+                </View>
+              </View>
+            </Reanimated.View>
+          </View>
+        )}
 
       </AnimatedScrollView>
 
@@ -1515,71 +1166,9 @@ const styles = StyleSheet.create({
 
   },
 
-  avatarWrapLinkedIn: {
 
-    width: AVATAR_SIZE,
 
-    height: AVATAR_SIZE,
 
-    borderRadius: AVATAR_SIZE / 2,
-
-    backgroundColor: Colors.background,
-
-    borderWidth: 4,
-
-    borderColor: Colors.background,
-
-    overflow: 'hidden',
-
-    shadowColor: '#000',
-
-    shadowOffset: { width: 0, height: 2 },
-
-    shadowOpacity: 0.15,
-
-    shadowRadius: 8,
-
-    elevation: 5,
-
-  },
-
-  heroAvatarLinkedIn: {
-
-    width: '100%',
-
-    height: '100%',
-
-  },
-
-  heroAvatarContainerLinkedIn: {
-
-    width: '100%',
-
-    height: '100%',
-
-  },
-
-  editAvatarChipLinkedIn: {
-
-    position: 'absolute',
-
-    bottom: 4,
-
-    left: AVATAR_SIZE / 2 - 16,
-
-    backgroundColor: 'rgba(0,0,0,0.6)',
-
-    borderRadius: 16,
-
-    width: 32,
-
-    height: 32,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-  },
 
   avatarWrap: { position: 'relative' },
 
@@ -1653,19 +1242,6 @@ const styles = StyleSheet.create({
 
   },
 
-  heroIdentityTap: {
-
-    alignSelf: 'stretch',
-
-    alignItems: 'center',
-
-    borderRadius: 12,
-
-    paddingTop: 2,
-
-    paddingBottom: 4,
-
-  },
 
   heroHandle: {
 
@@ -1683,113 +1259,13 @@ const styles = StyleSheet.create({
 
   },
 
-  heroBio: {
 
-    fontSize: 13,
 
-    lineHeight: 18,
 
-    fontFamily: Typography.family.regular,
 
-    color: Colors.textSecondary,
 
-    textAlign: 'center',
 
-    marginBottom: 6,
 
-    paddingHorizontal: 16,
-
-  },
-
-  heroMeta: {
-
-    fontSize: 11,
-
-    fontFamily: Typography.family.regular,
-
-    color: Colors.textMuted,
-
-    alignSelf: 'center',
-
-    marginBottom: 12,
-
-    letterSpacing: 0.24,
-
-    textAlign: 'center',
-
-  },
-
-  profileActionRow: {
-
-    width: '100%',
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    gap: 8,
-
-  },
-
-  profileActionPrimary: {
-
-    flex: 1,
-
-    minHeight: 42,
-
-    borderRadius: 14,
-
-  },
-
-  profileActionPrimaryText: {
-
-    color: Colors.background,
-
-    fontSize: 13,
-
-    fontFamily: Typography.family.semibold,
-
-    letterSpacing: 0.15,
-
-  },
-
-  profileActionSecondary: {
-
-    flex: 1,
-
-    minHeight: 42,
-
-    borderRadius: 14,
-
-  },
-
-  profileActionSecondaryText: {
-
-    color: Colors.textPrimary,
-
-    fontSize: 13,
-
-    fontFamily: Typography.family.semibold,
-
-    letterSpacing: 0.18,
-
-  },
-
-  profileActionIcon: {
-
-    width: 42,
-
-    height: 42,
-
-    borderRadius: 14,
-
-    backgroundColor: PANEL_BG,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-  },
 
   mediaGrid: {
 
@@ -1919,73 +1395,10 @@ const styles = StyleSheet.create({
 
   // Stats
 
-  statsRow: {
 
-    flexDirection: 'row',
 
-    alignItems: 'center',
 
-    justifyContent: 'space-between',
 
-    backgroundColor: 'transparent',
-
-    borderRadius: 20,
-
-    paddingHorizontal: 0,
-
-    paddingVertical: 4,
-
-    marginTop: 8,
-
-    width: '100%',
-
-  },
-
-  statItem: {
-
-    flex: 1,
-
-    alignItems: 'center',
-
-    borderRadius: 12,
-
-    backgroundColor: 'transparent',
-
-    paddingVertical: 6,
-
-  },
-
-  statNumber: {
-
-    fontSize: 18,
-
-    fontFamily: Typography.family.bold,
-
-    color: Colors.textPrimary,
-
-    marginBottom: 4,
-
-  },
-
-  statLabel: {
-
-    fontSize: 10,
-
-    fontFamily: Typography.family.semibold,
-
-    color: Colors.textMuted,
-
-    letterSpacing: 0.55,
-
-  },
-
-  statDivider: {
-
-    width: 4,
-
-    backgroundColor: 'transparent',
-
-  },
 
 
 
@@ -2321,35 +1734,7 @@ const styles = StyleSheet.create({
 
   },
 
-  heroNameLinkedIn: {
 
-    fontSize: 18,
-
-    fontFamily: Typography.family.bold,
-
-    color: Colors.textPrimary,
-
-    letterSpacing: -0.3,
-
-    textAlign: 'center',
-
-    marginTop: 8,
-
-  },
-
-  heroHandleLinkedIn: {
-
-    fontSize: 11,
-
-    fontFamily: Typography.family.medium,
-
-    color: Colors.textMuted,
-
-    textAlign: 'center',
-
-    marginTop: 2,
-
-  },
 
   wardrobeTitle: {
 

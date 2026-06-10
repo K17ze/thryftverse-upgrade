@@ -47,10 +47,10 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain('graphic?: React.ReactNode');
   });
 
-  it('ProductCardV2 uses flagship radius and elevation', () => {
+  it('ProductCardV2 uses Pinterest-style tight radius and no heavy elevation', () => {
     const src = readSrc('components/ProductCardV2.tsx');
-    expect(src).toContain('borderRadius: Radius.lg');
-    expect(src).toContain('...Elevation.card');
+    expect(src).toContain('borderRadius: Radius.sm');
+    expect(src).not.toContain('...Elevation.card');
   });
 
   it('MyOrdersScreen renders FlagshipOrderCard in list', () => {
@@ -113,22 +113,20 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain('shadowRadius');
   });
 
-  it('HomeScreen loading skeleton uses flagship radius', () => {
+  it('HomeScreen loading skeleton uses Pinterest tight radius', () => {
     const src = readSrc('screens/HomeScreen.tsx');
     expect(src).not.toContain('borderRadius={0}');
-    expect(src).toContain('borderRadius={Radius.lg}');
+    expect(src).toContain('borderRadius={Radius.sm}');
   });
 
-  it('BrowseScreen imageWrap uses flagship radius and elevation', () => {
+  it('BrowseScreen imageWrap uses Pinterest tight radius and no heavy elevation', () => {
     const src = readSrc('screens/BrowseScreen.tsx');
-    expect(src).toContain('...Elevation.card');
+    expect(src).not.toContain('...Elevation.card');
     expect(src).toContain('aspectRatio: 0.8');
-    // imageWrap should use Radius.lg, not hardcoded 16
     expect(src).toContain('imageWrap: {');
     const imageWrapIdx = src.indexOf('imageWrap: {');
     const imageWrapEnd = src.indexOf('  },', imageWrapIdx);
     const imageWrapBlock = src.slice(imageWrapIdx, imageWrapEnd);
-    expect(imageWrapBlock).toContain('borderRadius: Radius.lg');
     expect(imageWrapBlock).not.toContain('borderRadius: 16');
   });
 

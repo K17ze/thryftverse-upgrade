@@ -12,7 +12,7 @@ import { View,
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
-import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS, FadeInDown } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Colors } from '../constants/colors';
 
@@ -24,8 +24,9 @@ import { RouteProp, useNavigation, useRoute, useScrollToTop } from '@react-navig
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { MasonryGrid } from '../components/ProductCardV2';
-import { ProductCardV2 } from '../components/ProductCardV2';
+import { MasonrySkeleton } from '../components/skeletons/MasonrySkeleton';
+import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
+import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { SyncStatusPill } from '../components/SyncStatusPill';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { RootStackParamList } from '../navigation/types';
@@ -79,109 +80,6 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 
   return loweredTitle;
 }
-
-const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, showToast, formatPrice, reducedMotionEnabled }: any) => {
-  const isWishlisted = wishlist?.includes(item.id) ?? false;
-  const haptic = useHaptic();
-  const heartScale = useSharedValue(0);
-  const likeBtnScale = useSharedValue(1);
-
-  const performLikeSequence = () => {
-    haptic.heavy();
-    
-    // Bubble big heart overlaid on image
-    heartScale.value = withSequence(
-      withTiming(1.2, { duration: 120 }),
-      withTiming(1, { duration: 120 }),
-      withDelay(400, withTiming(0, { duration: 180 }))
-    );
-
-    // Scale the mini corner button
-    likeBtnScale.value = withSequence(
-      withTiming(1.2, { duration: 120 }),
-      withTiming(1, { duration: 120 })
-    );
-
-    if (!isWishlisted) {
-      toggleWishlist(item.id);
-      showToast('Added to wishlist ♥', 'success');
-    }
-  };
-
-  const handleDoubleTap = () => {
-    performLikeSequence();
-  };
-
-  const taps = Gesture.Tap()
-    .numberOfTaps(2)
-    .onEnd(() => {
-      runOnJS(handleDoubleTap)();
-    });
-
-  const singleTap = Gesture.Tap()
-    .onEnd(() => {
-      runOnJS(navigation.push as any)('ItemDetail', { itemId: item.id });
-    });
-
-  const combinedGesture = Gesture.Exclusive(taps, singleTap);
-
-  const bigHeartStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: heartScale.value }],
-    opacity: heartScale.value,
-  }));
-
-  const likeCornerStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: likeBtnScale.value }],
-  }));
-
-  return (
-    <Reanimated.View 
-      style={[styles.gridItem, index % 2 === 0 ? { marginTop: 0 } : { marginTop: 24 }]}
-    >
-      <View style={styles.imageWrap}>
-        <GestureDetector gesture={combinedGesture}>
-          <View style={{ flex: 1 }}>
-            <SharedTransitionView
-              style={styles.sharedImageLayer}
-              sharedTransitionTag={`image-${item.id}-0`}
-            >
-              <CachedImage uri={item.images?.[0] ?? ''} style={styles.gridImage} containerStyle={styles.gridImageContainer} contentFit="cover" />
-            </SharedTransitionView>
-
-            <Reanimated.View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }, bigHeartStyle]}>
-              <Ionicons name="heart" size={60} color="#fff" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 }} />
-            </Reanimated.View>
-          </View>
-        </GestureDetector>
-
-        <Reanimated.View style={[styles.likeBtn, likeCornerStyle]}>
-          <AnimatedPressable
-            style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
-            activeOpacity={0.8}
-            accessibilityLabel={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
-            onPress={() => {
-              haptic.light();
-              toggleWishlist(item.id);
-              if (!isWishlisted) showToast('Added to wishlist ♥', 'success');
-            }}
-          >
-            <Ionicons name={isWishlisted ? 'heart' : 'heart-outline'} size={20} color={isWishlisted ? Colors.danger : "#fff"} />
-          </AnimatedPressable>
-        </Reanimated.View>
-      </View>
-      <AnimatedPressable activeOpacity={0.8} onPress={() => navigation.push('ItemDetail', { itemId: item.id })}>
-        <View style={styles.infoWrap}>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceText}>{formatPrice(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
-            <Text style={styles.brandText}>{item.brand}</Text>
-          </View>
-          <Text style={styles.sizeText}>{item.size} • {item.condition}</Text>
-        </View>
-      </AnimatedPressable>
-
-    </Reanimated.View>
-  );
-};
 
 export default function BrowseScreen() {
   const { isDark } = useAppTheme();
@@ -369,17 +267,9 @@ export default function BrowseScreen() {
   const showBrowseLoadingSkeleton = isSyncing && dataToRender.length === 0 && !lastError;
 
   const renderBrowseLoadingState = () => (
-    <View style={styles.loadingStateWrap}>
-      {Array.from({ length: 6 }).map((_, index) => (
-        <View key={`browse_loading_${index}`} style={[styles.loadingCard, index % 2 === 1 && styles.loadingCardOffset]}>
-          <SkeletonLoader width={ITEM_WIDTH} height={ITEM_WIDTH * 1.35} borderRadius={Radius.lg} />
-          <View style={styles.loadingCardBody}>
-            <SkeletonLoader width="58%" height={14} borderRadius={4} />
-            <SkeletonLoader width="40%" height={14} borderRadius={4} style={{ marginTop: Space.xs }} />
-          </View>
-        </View>
-      ))}
-    </View>
+    <Reanimated.View entering={FadeInDown.duration(200)} style={styles.loadingStateWrap}>
+      <MasonrySkeleton numColumns={2} itemCount={6} horizontalPadding={Space.md} gap={3} />
+    </Reanimated.View>
   );
 
   const displayListings = backendListings ?? dataToRender;
@@ -393,24 +283,24 @@ export default function BrowseScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
       
       {/* Heavy Typography Header */}
-      <View style={styles.header}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityLabel="Go back">
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
         <AnimatedPressable style={styles.searchBtn} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityLabel="Search listings">
           <Ionicons name="search" size={20} color={Colors.textPrimary} />
         </AnimatedPressable>
-      </View>
+      </Reanimated.View>
 
-      <View style={styles.titleContainer}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
         <View style={styles.titleMetaRow}>
           <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items found`}</Text>
           <SyncStatusPill tone={browseStatus.tone} label={browseStatus.label} compact />
         </View>
-      </View>
+      </Reanimated.View>
 
-      <View style={styles.filterBar}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(90)} style={styles.filterBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <AppButton
             style={styles.filterPill}
@@ -457,7 +347,7 @@ export default function BrowseScreen() {
             accessibilityLabel="Filter by condition"
           />
         </ScrollView>
-      </View>
+      </Reanimated.View>
 
       {lastError ? (
         <SyncRetryBanner
@@ -492,27 +382,32 @@ export default function BrowseScreen() {
             }
           />
         ) : displayListings.length > 0 ? (
-          <MasonryGrid
+          <PinterestMasonryGrid
             items={displayListings}
             onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
             numColumns={2}
+            showSaveButton
+            gap={3}
+            horizontalPadding={Space.md}
           />
         ) : (
-          <EmptyState
-            icon="search-outline"
-            title="No matches found"
-            subtitle="Try clearing filters or searching for another keyword."
-            ctaLabel="Clear filters"
-            onCtaPress={() =>
-              updateBrowseFilters({
-                query: '',
-                sort: 'Recommended',
-                brands: [],
-                sizes: [],
-                condition: 'Any',
-              })
-            }
-          />
+          <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+            <EmptyState
+              icon="search-outline"
+              title="No matches found"
+              subtitle="Try clearing filters or searching for another keyword."
+              ctaLabel="Clear filters"
+              onCtaPress={() =>
+                updateBrowseFilters({
+                  query: '',
+                  sort: 'Recommended',
+                  brands: [],
+                  sizes: [],
+                  condition: 'Any',
+                })
+              }
+            />
+          </Reanimated.View>
         )}
       </View>
     </SafeAreaView>
@@ -598,11 +493,10 @@ const styles = StyleSheet.create({
   gridItem: { width: ITEM_WIDTH },
   imageWrap: {
     width: ITEM_WIDTH,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
     marginBottom: 12,
-    ...Elevation.card,
   },
   gridImageContainer: {
     width: '100%',

@@ -47,6 +47,7 @@ import { CachedImage } from '../components/CachedImage';
 // Phase 3: Removed SyncStatusPill (status indicator clutter reduced)
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
+import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { ThryftCartIcon } from '../components/icons/ThryftCartIcon';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { MasonryGrid, ProductCardV2 } from '../components/ProductCardV2';
@@ -57,6 +58,9 @@ import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Elevation } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 import { Typography } from '../theme/designTokens';
+import { EditorialDiscoveryHero } from '../components/discover/EditorialDiscoveryHero';
+import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
+import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -429,6 +433,13 @@ export default function HomeScreen() {
     [windowWidth],
   );
 
+  // Editorial hero items — honest, no fake imagery
+  const heroItems = React.useMemo(() => [
+    { id: 'hero1', uri: '', title: 'The Archive Drop', subtitle: 'Curated vintage essentials', ctaLabel: 'Explore', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'The Archive Drop' }) },
+    { id: 'hero2', uri: '', title: 'Summer Layers', subtitle: 'Lightweight fits for the season', ctaLabel: 'Shop', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Summer Layers' }) },
+    { id: 'hero3', uri: '', title: 'Streetwear Daily', subtitle: 'New arrivals every day', ctaLabel: 'Browse', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Streetwear Daily' }) },
+  ], [navigation]);
+
   const exploreData = React.useMemo<ExploreTile[]>(() => {
     return listings.map((item): ExploreTile => {
       const primaryMediaUri = item.images?.[0] ?? '';
@@ -588,7 +599,7 @@ export default function HomeScreen() {
           const ratio = TILE_RATIO_SEQUENCE[index % TILE_RATIO_SEQUENCE.length];
           return (
             <View key={`feed_loading_left_${index}`}>
-              <SkeletonLoader width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.lg} />
+              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.sm} />
             </View>
           );
         })}
@@ -598,7 +609,7 @@ export default function HomeScreen() {
           const ratio = TILE_RATIO_SEQUENCE[(index + 2) % TILE_RATIO_SEQUENCE.length];
           return (
             <View key={`feed_loading_right_${index}`}>
-              <SkeletonLoader width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.lg} />
+              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.sm} />
             </View>
           );
         })}
@@ -683,8 +694,20 @@ export default function HomeScreen() {
           />
         }
       >
+        {/* Editorial Hero */}
+        <View style={{ marginBottom: Space.md }}>
+          <EditorialDiscoveryHero items={heroItems} autoPlayInterval={6000} />
+        </View>
+
         {renderPosters()}
         {renderNewListingsBanner()}
+        <DiscoverySectionHeader
+          kicker="Fresh from the community"
+          title="Explore"
+          actionLabel="See all"
+          onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+          style={{ marginTop: Space.md }}
+        />
         {showFeedLoadingSkeleton ? (
           renderExploreLoadingState()
         ) : (
@@ -1274,23 +1297,18 @@ const styles = StyleSheet.create({
   masonryGrid: {
     flexDirection: 'row',
     paddingHorizontal: Space.sm,
-    gap: Space.sm,
+    gap: 3,
     alignItems: 'flex-start',
   },
   masonryColumn: {
     flex: 1,
-    gap: Space.sm,
+    gap: 3,
   },
   exploreItemBox: {
-    borderRadius: 14,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
-    backgroundColor: PANEL_BG,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    backgroundColor: Colors.surfaceAlt,
+    // Pinterest feel: no border, no shadow — image is the card
   },
   exploreMediaWrap: {
     position: 'relative',
@@ -1402,11 +1420,11 @@ const styles = StyleSheet.create({
   exploreLoadingGrid: {
     flexDirection: 'row',
     paddingHorizontal: Space.sm,
-    gap: GRID_GAP, // ELEVATED: Match actual grid gap
+    gap: 3,
   },
   exploreLoadingColumn: {
     flex: 1,
-    gap: GRID_GAP, // ELEVATED: Match actual grid gap
+    gap: 3,
   },
 
   peekBackdrop: {

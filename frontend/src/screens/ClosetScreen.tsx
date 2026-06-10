@@ -36,6 +36,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { CollectionCard } from '../components/closet/CollectionCard';
 import { AppButton } from '../components/ui/AppButton';
 import { Typography } from '../theme/designTokens';
+import { MoodboardCollectionGrid } from '../components/profile/MoodboardCollectionGrid';
+import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS';
 type SortOption = 'Recently Added' | 'Price: Low to High' | 'Price: High to Low' | 'Newest';
@@ -289,11 +291,11 @@ export default function ClosetScreen() {
     );
   };
 
-  const renderCollectionsContent = () => {
+    const renderCollectionsContent = () => {
     if (filteredCollections.length === 0) {
       return (
         <EmptyState
-          graphic={<FlagshipEmptyGraphic variant="box" size={120} />}
+          graphic={<BoardEmptyGraphic title="No collections" subtitle="Create your first moodboard" icon="folder-open-outline" size={140} />}
           title="No collections yet"
           subtitle="Group your saved items into boards."
           ctaLabel="Create Collection"
@@ -301,20 +303,28 @@ export default function ClosetScreen() {
         />
       );
     }
+
+    const boardData = filteredCollections.map((collection) => {
+      const covers = collection.itemIds
+        .slice(0, 3)
+        .map((id) => listings.find((l) => l.id === id))
+        .filter((l): l is NonNullable<typeof listings[0]> => !!l && Array.isArray(l.images) && l.images.length > 0)
+        .map((l) => l.images[0]);
+      return {
+        id: collection.id,
+        title: collection.name,
+        itemCount: collection.itemIds?.length ?? 0,
+        covers,
+      };
+    });
+
     return (
-      <Reanimated.View entering={FadeInDown.duration(300).delay(50)} style={styles.collectionsList}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
         {renderSortBar()}
-        {filteredCollections.map((collection, index) => (
-          <Reanimated.View
-            key={collection.id}
-            entering={FadeInDown.duration(250).delay(index * 40)}
-          >
-            <CollectionCard
-              collection={collection}
-              onPress={() => navigation.navigate('CollectionDetail', { collectionId: collection.id })}
-            />
-          </Reanimated.View>
-        ))}
+        <MoodboardCollectionGrid
+          boards={boardData}
+          onPressBoard={(id) => navigation.navigate('CollectionDetail', { collectionId: id })}
+        />
         {/* FAB-style create button on Collections tab */}
         <AppButton
           title="Create Collection"
@@ -325,6 +335,7 @@ export default function ClosetScreen() {
       </Reanimated.View>
     );
   };
+
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
