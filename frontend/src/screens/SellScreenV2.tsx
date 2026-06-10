@@ -1467,7 +1467,32 @@ export default function SellScreenV2() {
 
       {/* ── floating publish CTA ── */}
       <Animated.View style={[styles.floatingCtaWrap, shakeStyle]}>
-        <View style={styles.floatingCtaGlow}>
+        <View style={styles.floatingCtaRow}>
+          <AppButton
+            title="Preview"
+            variant="secondary"
+            size="lg"
+            style={styles.previewBtn}
+            onPress={() => {
+              haptics.press();
+              navigation.navigate('ListingPreview', {
+                preview: {
+                  title: title.trim(),
+                  price: Number(sanitizeDecimalInput(price)) || undefined,
+                  originalPrice: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
+                  brand: brand || undefined,
+                  condition: condition || undefined,
+                  category: category || undefined,
+                  size: size || undefined,
+                  description: desc.trim() || undefined,
+                  photos,
+                  tags,
+                  shippingMethod: shippingMethod || undefined,
+                  shippingPayer: shippingPayer || undefined,
+                },
+              });
+            }}
+          />
           <AppButton
             title={
               isPublishing
@@ -1894,8 +1919,20 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: Radius.xl,
   },
+  floatingCtaRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    padding: Space.sm,
+  },
+  previewBtn: {
+    flex: 1,
+  },
   publishBtn: {
-    width: '100%',
+    flex: 1.4,
   },
   errorBanner: {
     position: 'absolute',

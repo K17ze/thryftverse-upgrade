@@ -27,6 +27,8 @@ import {
   getCollection as getCollectionFromApi,
   addListingToCollection as addListingToCollectionOnApi,
   removeListingFromCollection as removeListingFromCollectionOnApi,
+  updateCollection as updateCollectionOnApi,
+  deleteCollectionOnApi,
 } from '../services/collectionsApi';
 
 export interface User {
@@ -254,7 +256,7 @@ async function persistLocalAuthSnapshot(
 export interface Collection {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   itemIds: string[];
   coverImage?: string;
   isPrivate?: boolean;
@@ -284,7 +286,9 @@ interface StoreState {
   createCollectionOnApi: (name: string, description?: string, isPrivate?: boolean) => Promise<string>;
   loadCollectionsFromApi: () => Promise<void>;
   deleteCollection: (id: string) => void;
+  deleteCollectionOnApi: (id: string) => Promise<void>;
   renameCollection: (id: string, name: string) => void;
+  updateCollectionOnApi: (id: string, fields: { name?: string; description?: string | null; isPrivate?: boolean }) => Promise<void>;
   addToCollection: (collectionId: string, itemId: string) => void;
   addToCollectionOnApi: (collectionId: string, itemId: string) => Promise<void>;
   removeFromCollection: (collectionId: string, itemId: string) => void;
@@ -551,6 +555,22 @@ export const useStore = create<StoreState>()(
         c.id === id ? { ...c, name, updatedAt: Date.now() } : c
       ),
     })),
+  updateCollectionOnApi: async (id, fields) => {
+    await updateCollectionOnApi(id, fields);
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === id
+          ? { ...c, ...fields, updatedAt: Date.now() }
+          : c
+      ),
+    }));
+  },
+  deleteCollectionOnApi: async (id) => {
+    await deleteCollectionOnApi(id);
+    set((state) => ({
+      collections: state.collections.filter((c) => c.id !== id),
+    }));
+  },
   addToCollection: (collectionId, itemId) =>
     set((state) => ({
       collections: state.collections.map((c) =>

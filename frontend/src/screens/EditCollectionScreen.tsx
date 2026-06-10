@@ -36,6 +36,8 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
   const collections = useStore((state) => state.collections);
   const renameCollection = useStore((state) => state.renameCollection);
   const deleteCollection = useStore((state) => state.deleteCollection);
+  const updateCollectionOnApi = useStore((state) => state.updateCollectionOnApi);
+  const deleteCollectionOnApi = useStore((state) => state.deleteCollectionOnApi);
 
   const collection = useMemo(
     () => collections.find((c) => c.id === collectionId),
@@ -54,20 +56,25 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
 
   const canSave = name.trim().length > 0 && hasChanges && !isSaving;
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!canSave || !collectionId) return;
     haptic.medium();
     setIsSaving(true);
 
-    if (name.trim() !== collection?.name) {
-      renameCollection(collectionId, name.trim());
+    try {
+      await updateCollectionOnApi(collectionId, {
+        name: name.trim(),
+        description: description.trim() || null,
+        isPrivate,
+      });
+      show('Collection updated', 'success');
+      setIsSaving(false);
+      navigation.goBack();
+    } catch {
+      setIsSaving(false);
+      show('Unable to update collection. Please check your connection.', 'error');
     }
-    // Note: description and privacy are store-only for now; backend rename exists
-    // but full edit needs backend PATCH. We update local state optimistically.
-    show('Collection updated', 'success');
-    setIsSaving(false);
-    navigation.goBack();
-  }, [canSave, collectionId, haptic, name, collection, renameCollection, show, navigation]);
+  }, [canSave, collectionId, haptic, name, description, isPrivate, updateCollectionOnApi, show, navigation]);
 
   const handleDelete = useCallback(() => {
     haptic.heavy();
@@ -79,17 +86,21 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             if (collectionId) {
-              deleteCollection(collectionId);
-              show('Collection deleted', 'info');
-              navigation.navigate('Closet');
+              try {
+                await deleteCollectionOnApi(collectionId);
+                show('Collection deleted', 'info');
+                navigation.navigate('Closet');
+              } catch {
+                show('Unable to delete collection. Please try again.', 'error');
+              }
             }
           },
         },
       ]
     );
-  }, [collection, collectionId, deleteCollection, haptic, show, navigation]);
+  }, [collection, collectionId, deleteCollectionOnApi, haptic, show, navigation]);
 
   if (!collection) {
     return (
