@@ -23,7 +23,7 @@ interface Props {
 export function FeaturedBoardCard({ board }: Props) {
   const imgs = board.images.slice(0, 3);
   while (imgs.length < 3) {
-    imgs.push(`https://picsum.photos/seed/${board.id}${imgs.length}/400/500`);
+    imgs.push('');
   }
 
   return (

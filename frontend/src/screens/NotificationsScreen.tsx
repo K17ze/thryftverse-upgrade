@@ -141,16 +141,7 @@ function formatRelativeTime(value: string): string {
 }
 
 function buildNotificationImage(event: NotificationEvent, index: number): string {
-  const payloadOrderId = event.payload.orderId;
-  const payloadListingId = event.payload.listingId;
-  const primarySeed =
-    typeof payloadOrderId === 'string'
-      ? payloadOrderId
-      : typeof payloadListingId === 'string'
-        ? payloadListingId
-        : event.id;
-
-  return `https://picsum.photos/seed/notif-${primarySeed}-${index}/80/80`;
+  return '';
 }
 
 function mapEventToCard(

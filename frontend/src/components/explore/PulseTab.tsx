@@ -26,11 +26,11 @@ type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
 
 const HOT_SELLERS = [
-  { id: 'u1', name: 'mariefullery', avatar: 'https://picsum.photos/seed/user1/80/80', sales: 124, viewers: 24 },
-  { id: 'u2', name: 'scott_art', avatar: 'https://picsum.photos/seed/user2/80/80', sales: 89, viewers: 18 },
-  { id: 'u3', name: 'dankdunksuk', avatar: 'https://picsum.photos/seed/user3/80/80', sales: 203, viewers: 31 },
-  { id: 'u4', name: 'vintagelover', avatar: 'https://picsum.photos/seed/user4/80/80', sales: 156, viewers: 12 },
-  { id: 'u5', name: 'gorpgod', avatar: 'https://picsum.photos/seed/user5/80/80', sales: 67, viewers: 9 },
+  { id: 'u1', name: 'mariefullery', avatar: '', sales: 124, viewers: 24 },
+  { id: 'u2', name: 'scott_art', avatar: '', sales: 89, viewers: 18 },
+  { id: 'u3', name: 'dankdunksuk', avatar: '', sales: 203, viewers: 31 },
+  { id: 'u4', name: 'vintagelover', avatar: '', sales: 156, viewers: 12 },
+  { id: 'u5', name: 'gorpgod', avatar: '', sales: 67, viewers: 9 },
 ];
 
 const TRENDING_TAGS = [
@@ -151,18 +151,18 @@ export default function PulseTab() {
       .sort((a, b) => { const da = a.createdAt ? Date.parse(a.createdAt) : 0; const db = b.createdAt ? Date.parse(b.createdAt) : 0; return db - da; })
       .slice(0, 6);
     recent.forEach((l) => {
-      items.push({ id: `drop_${l.id}`, type: 'fresh_drop', title: l.title ?? 'New Listing', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? `https://picsum.photos/seed/${l.id}/500/700`, meta: `£${l.price}`, routeId: l.id });
+      items.push({ id: `drop_${l.id}`, type: 'fresh_drop', title: l.title ?? 'New Listing', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: `£${l.price}`, routeId: l.id });
     });
 
     listings.slice(0, 4).forEach((l, i) => {
       if (i % 2 === 0) {
-        items.push({ id: `sold_${l.id}_${i}`, type: 'just_sold', title: l.title ?? 'Item', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? `https://picsum.photos/seed/sold${i}/500/700`, meta: `Sold for £${(l.price * 0.92).toFixed(0)}`, routeId: l.id });
+        items.push({ id: `sold_${l.id}_${i}`, type: 'just_sold', title: l.title ?? 'Item', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: `Sold for £${(l.price * 0.92).toFixed(0)}`, routeId: l.id });
       }
     });
 
     listings.filter((l) => l.originalPrice && l.originalPrice > l.price).slice(0, 3).forEach((l) => {
       const dropPct = Math.round(((l.originalPrice! - l.price) / l.originalPrice!) * 100);
-      items.push({ id: `drop_${l.id}_price`, type: 'price_drop', title: l.title ?? 'Item', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? `https://picsum.photos/seed/${l.id}/500/700`, meta: `Down ${dropPct}% · Now £${l.price}`, metaAccent: true, actionLabel: 'View', routeId: l.id });
+      items.push({ id: `drop_${l.id}_price`, type: 'price_drop', title: l.title ?? 'Item', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: `Down ${dropPct}% · Now £${l.price}`, metaAccent: true, actionLabel: 'View', routeId: l.id });
     });
 
     return items.slice(0, 14);

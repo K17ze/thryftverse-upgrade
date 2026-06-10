@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   sharedFromText: {
-    color: '#d7b98f',
+    color: Colors.textSecondary,
     fontSize: 11,
     fontFamily: Typography.family.semibold,
   },

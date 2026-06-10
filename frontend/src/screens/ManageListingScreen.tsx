@@ -262,7 +262,7 @@ export default function ManageListingScreen() {
         <View style={styles.iconActionsRow}>
           <AnimatedPressable style={styles.iconAction} activeOpacity={0.82} onPress={handleBumpListing}>
             <View style={[styles.iconCircle, { backgroundColor: WARN_TINT }]}>
-              <Ionicons name="flash-outline" size={22} color="#F5A623" />
+              <Ionicons name="flash-outline" size={22} color={Colors.brand} />
             </View>
             <Text style={styles.iconActionLabel}>Bump</Text>
           </AnimatedPressable>

@@ -8,7 +8,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { MOCK_LISTINGS, MOCK_USERS, Listing } from '../data/mockData';
+import type { Listing } from '../data/mockData';
 import type { AuctionMarketItem } from '../data/tradeHub';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -48,10 +48,11 @@ export default function CreateAuctionScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const addAuction = useStore((state) => state.addAuction);
 
-  const sellerId = currentUser?.id ?? MOCK_USERS[0]?.id ?? 'u1';
+  const sellerId = currentUser?.id;
 
   const sellerListings = React.useMemo(() => {
-    const sourceListings = listings.length ? listings : MOCK_LISTINGS;
+    const sourceListings = listings;
+    if (!sellerId) return [];
     const own = sourceListings.filter((item) => item.sellerId === sellerId);
     return own.length ? own : sourceListings.slice(0, 12);
   }, [listings, sellerId]);
@@ -134,7 +135,7 @@ export default function CreateAuctionScreen() {
     const newAuction: AuctionMarketItem = {
       id: `a_user_${now}`,
       listingId: selectedListing.id,
-      sellerId,
+      sellerId: sellerId ?? '',
       title: selectedListing.title,
       image: getListingCoverUri(selectedListing.images, ''),
       startsAt: new Date(startsAtMs).toISOString(),

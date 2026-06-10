@@ -14,8 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
-import { MOCK_USERS } from '../data/mockData';
-import { CachedImage } from '../components/CachedImage';
 import { Typography } from '../theme/designTokens';
 
 type RouteT = RouteProp<RootStackParamList, 'CategoryTree'>;
@@ -26,13 +24,13 @@ const PILL_BORDER = Colors.border;
 
 // Premium imagery for category headers
 const CAT_IMAGES: Record<string, string> = {
-  Clothing: 'https://images.unsplash.com/photo-1550614000-4b95d466f204?w=800&q=80',
-  Shoes: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=800&q=80',
-  Bags: 'https://images.unsplash.com/photo-1584916201218-f4242ceb4809?w=800&q=80',
-  Accessories: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=800&q=80',
-  Girls: 'https://images.unsplash.com/photo-1519689680058-324335c77eba?w=800&q=80',
-  Boys: 'https://images.unsplash.com/photo-1471286174890-9c11241eb988?w=800&q=80',
-  Baby: 'https://images.unsplash.com/photo-1519238323602-513470ffbd2a?w=800&q=80',
+  Clothing: '',
+  Shoes: '',
+  Bags: '',
+  Accessories: '',
+  Girls: '',
+  Boys: '',
+  Baby: '',
 };
 
 const TREES: Record<string, { title: string; subs: string[] }[]> = {
@@ -59,20 +57,10 @@ export default function CategoryTreeScreen() {
   const route = useRoute<RouteT>();
   const { show } = useToast();
   const { categoryPrefix } = route.params;
-  const supportUser = MOCK_USERS[0];
 
   const resolvedPrefix = TREES[categoryPrefix] ? categoryPrefix : 'Women';
 
   const sections = TREES[resolvedPrefix];
-
-  const handleOpenCategorySupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: `${resolvedPrefix} categories`,
-      partnerUserId: supportUser.id,
-    });
-    show('Opening support chat for category help.', 'info');
-  }, [navigation, resolvedPrefix, show, supportUser.id]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -96,36 +84,6 @@ export default function CategoryTreeScreen() {
           <Text style={styles.viewAllText}>View All {resolvedPrefix}</Text>
           <Ionicons name="arrow-forward" size={20} color={Colors.background} />
         </AnimatedPressable>
-
-        <View style={styles.supportRow}>
-          <AnimatedPressable
-            style={styles.supportIdentity}
-            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Open @${supportUser.username} profile`}
-            accessibilityHint="Shows category support profile"
-          >
-            <CachedImage
-              uri={supportUser.avatar}
-              style={styles.supportAvatar}
-              containerStyle={styles.supportAvatarWrap}
-              contentFit="cover"
-            />
-            <Text style={styles.supportText}>Need category help? @{supportUser.username}</Text>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={styles.supportMessageBtn}
-            onPress={handleOpenCategorySupport}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Message category support"
-            accessibilityHint="Opens support chat for category browsing"
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
 
         {sections.map((section, index) => (
           <View key={section.title} style={styles.section}>
