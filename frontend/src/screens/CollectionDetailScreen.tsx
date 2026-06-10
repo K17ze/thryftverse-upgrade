@@ -38,6 +38,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SharedTransitionView } from '../components/SharedTransitionView';
+import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 180;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -251,7 +252,7 @@ export default function CollectionDetailScreen() {
           </Reanimated.View>
         ) : (
           <EmptyState
-            icon="folder-open-outline"
+            graphic={<BoardEmptyGraphic title="Empty collection" subtitle="Add items to this board" icon="folder-open-outline" size={140} />}
             title="Empty collection"
             subtitle="Browse items and add them to this collection."
             ctaLabel="Browse"

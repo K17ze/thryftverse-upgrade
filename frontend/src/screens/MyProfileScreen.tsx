@@ -76,6 +76,7 @@ import { useToast } from '../context/ToastContext';
 
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipProfileMedia } from '../components/flagship';
+import { ProfileVisualHeader, ProfileTabRail } from '../components/profile';
 
 import { Space, Radius } from '../theme/designTokens';
 
@@ -156,6 +157,7 @@ export default function MyProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const reducedMotionEnabled = useReducedMotion();
+  const [activeTab, setActiveTab] = React.useState<'wardrobe' | 'saved' | 'about'>('wardrobe');
 
   const { show } = useToast();
 
@@ -1043,7 +1045,18 @@ export default function MyProfileScreen() {
 
 
 
-        {/* Content Below Hero */}
+              {/* Profile Tab Rail */}
+      <ProfileTabRail
+        tabs={[
+          { key: 'wardrobe', label: 'Wardrobe', icon: 'shirt-outline', count: myListings.length },
+          { key: 'saved', label: 'Saved', icon: 'bookmark-outline', count: savedCount + wishlistCount },
+          { key: 'about', label: 'About', icon: 'person-outline' },
+        ]}
+        activeKey={activeTab}
+        onChange={(key) => setActiveTab(key as 'wardrobe' | 'saved' | 'about')}
+      />
+
+{/* Content Below Hero */}
 
         <View style={{ backgroundColor: Colors.background, paddingBottom: 120 }}>
 

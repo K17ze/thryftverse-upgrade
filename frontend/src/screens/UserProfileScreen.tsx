@@ -33,6 +33,7 @@ import { useToast } from '../context/ToastContext';
 import { Typography } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipProfileMedia } from '../components/flagship';
+import { ProfileVisualHeader, ProfileTabRail } from '../components/profile';
 import { fetchPublicProfile, type PublicProfileUser } from '../services/profileApi';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SharedTransitionView } from '../components/SharedTransitionView';
@@ -395,17 +396,14 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
         {/* Index 1: Sticky Tabs */}
         <View style={styles.stickyTabWrapper}>
-          <AppSegmentControl
-            style={styles.tabBarContainer}
-            options={TAB_OPTIONS}
-            value={activeTab}
-            onChange={setActiveTab}
-            fullWidth
-            optionStyle={styles.tabPill}
-            optionActiveStyle={styles.tabPillActive}
-            optionTextStyle={styles.tabText}
-            optionTextActiveStyle={styles.tabTextActive}
-          />
+          <ProfileTabRail
+          tabs={[
+            { key: 'Listings', label: 'Listings', icon: 'shirt-outline', count: profileListings.length },
+            { key: 'About', label: 'About', icon: 'person-outline' },
+          ]}
+          activeKey={activeTab}
+          onChange={(k) => setActiveTab(k as Tab)}
+        />
         </View>
 
         {/* Index 2: Tab Content */}

@@ -22,6 +22,7 @@ import { useToast } from '../../context/ToastContext';
 import { useStore } from '../../store/useStore';
 import { EmptyState } from '../EmptyState';
 import { useBackendData } from '../../context/BackendDataContext';
+import { LookPreviewCard } from '../profile/LookPreviewCard';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -312,20 +313,23 @@ export default function LooksTab() {
       contentContainerStyle={styles.scrollContent}
     >
       {allLooks.map((look, i) => (
-        <LookCard
+        <LookPreviewCard
           key={look.id}
-          look={look}
-          index={i}
-          isLiked={!!likedLooks[look.id]}
-          isSaved={!!savedLooks[look.id] || look.saved}
+          id={look.id}
+          title={look.title}
+          coverImage={look.coverImage}
+          items={look.items}
+          creatorName={look.creator.name}
+          likes={look.likes + (likedLooks[look.id] ? 1 : 0)}
+          saved={!!savedLooks[look.id] || look.saved}
           onPress={() => {
             haptic.light();
             const itemId = resolveLookItemId(look);
             if (itemId) navigation.push('ItemDetail', { itemId });
           }}
-          onLikePress={() => handleToggleLike(look)}
-          onCommentPress={() => handleCommentPress(look)}
-          onSavePress={() => handleToggleSave(look)}
+          onLike={() => handleToggleLike(look)}
+          onSave={() => handleToggleSave(look)}
+          index={i}
         />
       ))}
       <View style={{ height: 100 }} />
