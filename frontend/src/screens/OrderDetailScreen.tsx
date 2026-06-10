@@ -554,6 +554,7 @@ export default function OrderDetailScreen() {
               variant="secondary"
               size="md"
               onPress={async () => {
+                haptics.heavyPress();
                 try {
                   await cancelOrder(orderId);
                   show('Order cancelled', 'info');
@@ -575,6 +576,7 @@ export default function OrderDetailScreen() {
               variant="secondary"
               size="md"
               onPress={async () => {
+                haptics.heavyPress();
                 try {
                   await shipOrder(orderId);
                   show('Order marked as shipped', 'success');
@@ -594,6 +596,7 @@ export default function OrderDetailScreen() {
               variant="primary"
               size="md"
               onPress={async () => {
+                haptics.heavyPress();
                 try {
                   await deliverOrder(orderId);
                   show('Delivery confirmed', 'success');
@@ -615,6 +618,7 @@ export default function OrderDetailScreen() {
               variant="secondary"
               size="md"
               onPress={async () => {
+                haptics.heavyPress();
                 try {
                   await refundOrder(orderId);
                   show('Refund processed', 'info');
@@ -800,15 +804,15 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   dotActive: {
-    width: 18, height: 18, borderRadius: 9,
+    width: 22, height: 22, borderRadius: 11,
     backgroundColor: Colors.brand,
     borderWidth: 3,
     borderColor: Colors.background,
     shadowColor: Colors.brand,
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 8,
   },
   dotInactive: { backgroundColor: Colors.border, width: 10, height: 10, borderRadius: 5 },
   line: { width: 2, flex: 1, backgroundColor: Colors.brand, marginVertical: 4, minHeight: 28, borderRadius: 1 },

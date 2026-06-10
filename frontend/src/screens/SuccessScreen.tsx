@@ -1,19 +1,15 @@
-import React, { useEffect } from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import { View,
-  Text,
-  StyleSheet,
-  StatusBar
-} from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Confetti } from '../components/Confetti';
 import { useToast } from '../context/ToastContext';
-import { CachedImage } from '../components/CachedImage';
 import { Typography } from '../theme/designTokens';
+import { FlagshipActionCluster } from '../components/flagship';
+import { Space, Radius } from '../theme/designTokens';
 
 export default function SuccessScreen() {
   const navigation = useNavigation<any>();
@@ -28,78 +24,61 @@ export default function SuccessScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
       <Confetti />
-      
-      <View style={styles.centerContent}>
-        <View style={styles.iconCircle}>
-          <Ionicons name="checkmark" size={48} color={Colors.background} />
-        </View>
-        
-        <Text style={styles.title}>Payment Successful</Text>
-        <Text style={styles.subtitle}>
-          Your order has been placed successfully.{'\n'}
-          The seller has 5 working days to send the parcel.
-        </Text>
 
-        <View style={styles.supportRow}>
-          <AnimatedPressable
-            style={styles.supportIdentity}
-            onPress={handleOpenSupport}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Open help and support"
-            accessibilityHint="Shows help and support options"
-          >
+      <View style={styles.centerContent}>
+        <Reanimated.View entering={FadeInDown.duration(400)} style={styles.iconCircle}>
+          <Ionicons name="checkmark" size={48} color={Colors.background} />
+        </Reanimated.View>
+
+        <Reanimated.View entering={FadeInDown.duration(400).delay(80)}>
+          <Text style={styles.title}>Payment Successful</Text>
+          <Text style={styles.subtitle}>
+            Your order has been placed successfully.{ '\n' }
+            The seller has 5 working days to send the parcel.
+          </Text>
+        </Reanimated.View>
+
+        <Reanimated.View
+          entering={FadeInDown.duration(400).delay(160)}
+          style={styles.supportRow}
+        >
+          <View style={styles.supportIdentity}>
             <View style={[styles.supportAvatarWrap, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
               <Ionicons name="help-circle-outline" size={20} color={Colors.textSecondary} />
             </View>
             <Text style={styles.supportText}>Need help? Visit support</Text>
-          </AnimatedPressable>
+          </View>
 
-          <AnimatedPressable
-            style={styles.supportMessageBtn}
-            onPress={handleOpenSupport}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Open help and support"
-            accessibilityHint="Opens help and support"
-          >
+          <View style={styles.supportMessageBtn}>
             <Ionicons name="chevron-forward" size={14} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
+          </View>
+        </Reanimated.View>
       </View>
 
-      <View style={styles.footer}>
-        <AnimatedPressable 
-          style={styles.primaryBtn} 
-          activeOpacity={0.9} 
-          onPress={() => navigation.navigate('MyOrders')}
-        >
-          <Text style={styles.primaryText}>Track Order</Text>
-        </AnimatedPressable>
-        
-        <AnimatedPressable 
-          style={styles.secondaryBtn} 
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('MainTabs')}
-        >
-          <Text style={styles.secondaryText}>Continue Browsing</Text>
-        </AnimatedPressable>
-      </View>
+      <Reanimated.View entering={FadeInDown.duration(400).delay(240)} style={styles.footer}>
+        <FlagshipActionCluster
+          actions={[
+            { label: 'Track Order', onPress: () => navigation.navigate('MyOrders'), variant: 'primary' },
+            { label: 'Continue Browsing', onPress: () => navigation.navigate('MainTabs'), variant: 'secondary' },
+          ]}
+          layout="stack"
+        />
+      </Reanimated.View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, justifyContent: 'space-between' },
-  
+
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  iconCircle: { 
-    width: 96, height: 96, borderRadius: 48, 
-    backgroundColor: Colors.success, 
-    alignItems: 'center', justifyContent: 'center', 
-    marginBottom: 32 
+  iconCircle: {
+    width: 96, height: 96, borderRadius: 48,
+    backgroundColor: Colors.success,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 32,
   },
-  
+
   title: { fontSize: 28, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 12, textAlign: 'center' },
   subtitle: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
   supportRow: {
@@ -113,7 +92,7 @@ const styles = StyleSheet.create({
   supportIdentity: {
     flex: 1,
     minHeight: 40,
-    borderRadius: 14,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
@@ -143,10 +122,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   footer: { paddingHorizontal: 24, paddingBottom: 40, gap: 12 },
-  primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold },
-  secondaryBtn: { backgroundColor: 'transparent', height: 56, borderRadius: 28, borderWidth: 1, borderColor: '#333', alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { color: Colors.textPrimary, fontSize: 16, fontFamily: Typography.family.semibold },
 });

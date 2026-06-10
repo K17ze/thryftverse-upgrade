@@ -99,14 +99,18 @@ export default function MyBidsScreen() {
 
       <TradeHeader title="My Bids" onBack={() => navigation.goBack()} />
 
-      <View style={styles.filterWrap}>
-        <AppSegmentControl
-          options={FILTER_OPTIONS}
-          value={filter}
-          onChange={setFilter}
-          fullWidth
-        />
-      </View>
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}
+      >
+        <View style={styles.filterWrap}>
+          <AppSegmentControl
+            options={FILTER_OPTIONS}
+            value={filter}
+            onChange={setFilter}
+            fullWidth
+          />
+        </View>
+      </Reanimated.View>
 
       <FlashList
         data={filteredBids}

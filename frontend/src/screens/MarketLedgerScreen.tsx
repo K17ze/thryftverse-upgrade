@@ -187,18 +187,26 @@ export default function MarketLedgerScreen() {
 
       <TradeHeader title="Market Ledger" onBack={() => navigation.goBack()} />
 
-      <MetricGrid
-        metrics={[
-          { label: 'Volume', value: formatMoney(totalMarketValue) },
-          { label: 'Net Cashflow', value: formatSignedMoney(netCashflow), tone: netCashflow >= 0 ? 'positive' : 'negative' },
-          { label: 'Realized P&L', value: formatSignedMoney(realizedCoOwnPL), tone: realizedCoOwnPL >= 0 ? 'positive' : 'negative' },
-        ]}
-        columns={3}
-      />
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}
+      >
+        <MetricGrid
+          metrics={[
+            { label: 'Volume', value: formatMoney(totalMarketValue) },
+            { label: 'Net Cashflow', value: formatSignedMoney(netCashflow), tone: netCashflow >= 0 ? 'positive' : 'negative' },
+            { label: 'Realized P&L', value: formatSignedMoney(realizedCoOwnPL), tone: realizedCoOwnPL >= 0 ? 'positive' : 'negative' },
+          ]}
+          columns={3}
+        />
+      </Reanimated.View>
 
-      <View style={styles.filterWrap}>
-        <AppSegmentControl options={FILTER_OPTIONS} value={filter} onChange={setFilter} fullWidth />
-      </View>
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)}
+      >
+        <View style={styles.filterWrap}>
+          <AppSegmentControl options={FILTER_OPTIONS} value={filter} onChange={setFilter} fullWidth />
+        </View>
+      </Reanimated.View>
 
       <FlashList
         data={filteredEntries}
@@ -290,6 +298,6 @@ const styles = StyleSheet.create({
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: Space.sm,
   },
 });

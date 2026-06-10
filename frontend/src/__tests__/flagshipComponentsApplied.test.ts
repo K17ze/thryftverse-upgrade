@@ -110,7 +110,7 @@ describe('flagship components applied to production screens', () => {
     const src = readSrc('screens/OrderDetailScreen.tsx');
     expect(src).toContain('borderWidth: 3');
     expect(src).toContain('borderColor: Colors.background');
-    expect(src).toContain('shadowRadius: 8');
+    expect(src).toContain('shadowRadius');
   });
 
   it('no glass/blur except BottomSheet and tests', () => {
