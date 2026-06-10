@@ -244,7 +244,7 @@ export default function MyOrdersScreen() {
         >
           {!viewerId ? (
             <EmptyState
-              icon="person-outline"
+              graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
               title="Sign in to view orders"
               subtitle="Your buying and selling history appears here once you're signed in."
               ctaLabel="Sign In"

@@ -1,14 +1,5 @@
 ﻿import React from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -17,6 +8,10 @@ import { ActiveTheme, Colors } from '../constants/colors';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { listUserTransactions, UserTransaction } from '../services/commerceApi';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipEmptyGraphic } from '../components/flagship';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { Space, Radius, Type } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'BalanceHistory'>;
 
@@ -41,7 +36,7 @@ function iconForType(type: string, lineType: string) {
 }
 
 function colorForType(type: string, lineType: string) {
-  if (lineType.includes('refund') || type === 'refund') return '#FFE66D';
+  if (lineType.includes('refund') || type === 'refund') return Colors.textSecondary;
   if (lineType.includes('withdrawal') || type === 'withdrawal') return Colors.danger;
   if (lineType.includes('seller_payable') || type === 'sale') return ACCENT;
   if (lineType.includes('buyer_spend') || type === 'purchase') return Colors.textSecondary;
@@ -78,18 +73,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
-      <View style={styles.header}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to the previous screen"
-        >
-          <Ionicons name="arrow-back" size={24} color={TEXT} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>History</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <ScreenHeader title="History" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading && (
@@ -101,8 +85,8 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
 
         {!isLoading && transactions.length === 0 && (
           <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-            <Ionicons name="receipt-outline" size={40} color={MUTED} style={{ marginBottom: 12 }} />
-            <Text style={{ fontSize: 15, fontWeight: '600', color: TEXT, marginBottom: 6 }}>No transactions yet</Text>
+            <FlagshipEmptyGraphic variant="bag" size={120} />
+            <Text style={{ fontSize: 15, fontWeight: '600', color: TEXT, marginBottom: 6, marginTop: 12 }}>No transactions yet</Text>
             <Text style={{ fontSize: 13, color: MUTED, textAlign: 'center' }}>
               Your transaction history will appear here once you start buying, selling, or withdrawing.
             </Text>
@@ -112,7 +96,10 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
         {!isLoading && transactions.length > 0 && (
           <View style={styles.card}>
             {transactions.map((tx, idx) => (
-              <View key={tx.id}>
+              <Reanimated.View
+                key={tx.id}
+                entering={FadeInDown.delay(Math.min(idx, 10) * 40).duration(300)}
+              >
                 <View style={styles.txRow}>
                   <View style={[styles.txIcon, { backgroundColor: colorForType(tx.type, tx.lineType) + '22' }]}>
                     <Ionicons name={iconForType(tx.type, tx.lineType) as any} size={18} color={colorForType(tx.type, tx.lineType)} />
@@ -126,7 +113,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                   </Text>
                 </View>
                 {idx < transactions.length - 1 && <View style={styles.divider} />}
-              </View>
+              </Reanimated.View>
             ))}
           </View>
         )}
@@ -150,7 +137,7 @@ const styles = StyleSheet.create({
   content: { padding: 20 },
   group: { marginBottom: 24 },
   monthLabel: { fontSize: 13, fontWeight: '700', color: MUTED, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
-  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden' },
+  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: Radius.lg, overflow: 'hidden' },
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -165,4 +152,3 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: BORDER, marginHorizontal: 18 },
   footerNote: { fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 8 },
 });
-

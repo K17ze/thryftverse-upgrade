@@ -20,6 +20,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius } from '../theme/designTokens';
+import { haptics } from '../utils/haptics';
 import {
   TradeHeader,
   MetricGrid,
@@ -161,101 +162,125 @@ export default function CoOwnHubScreen() {
         )}
       />
 
-      <View style={styles.supportRow}>
-        <AnimatedPressable
-          style={styles.supportIdentity}
-          onPress={handleOpenCoOwnSupport}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Open help and support"
-          accessibilityHint="Shows help and support options"
-        >
-          <View style={[styles.supportAvatar, { backgroundColor: Colors.surfaceAlt }]} />
-          <Meta style={styles.supportText}>Help & Support</Meta>
-        </AnimatedPressable>
-        <AnimatedPressable
-          style={styles.supportMessageBtn}
-          onPress={handleOpenCoOwnSupport}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Open help and support"
-          accessibilityHint="Shows help and support options"
-        >
-          <Ionicons name="help-circle-outline" size={18} color={Colors.textPrimary} />
-        </AnimatedPressable>
-      </View>
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}
+      >
+        <View style={styles.supportRow}>
+          <AnimatedPressable
+            style={styles.supportIdentity}
+            onPress={handleOpenCoOwnSupport}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Open help and support"
+            accessibilityHint="Shows help and support options"
+          >
+            <View style={[styles.supportAvatar, { backgroundColor: Colors.surfaceAlt }]} />
+            <Meta style={styles.supportText}>Help & Support</Meta>
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={styles.supportMessageBtn}
+            onPress={handleOpenCoOwnSupport}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Open help and support"
+            accessibilityHint="Shows help and support options"
+          >
+            <Ionicons name="help-circle-outline" size={18} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
+      </Reanimated.View>
 
-      <View style={styles.searchWrap}>
-        <AppInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search assets..."
-          prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
-          accessibilityLabel="Search co-own assets"
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(60)}
+      >
+        <View style={styles.searchWrap}>
+          <AppInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search assets..."
+            prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
+            accessibilityLabel="Search co-own assets"
+          />
+        </View>
+      </Reanimated.View>
+
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}
+      >
+        <MetricGrid
+          metrics={[
+            { label: 'Open Value', value: formatFromFiat(totalOpenValue, 'GBP', { displayMode: 'fiat' }) },
+            { label: 'Market Cap', value: formatFromFiat(totalMarketValue, 'GBP', { displayMode: 'fiat' }) },
+            { label: 'Assets', value: String(marketAssets.length) },
+          ]}
+          columns={3}
         />
-      </View>
+      </Reanimated.View>
 
-      <MetricGrid
-        metrics={[
-          { label: 'Open Value', value: formatFromFiat(totalOpenValue, 'GBP', { displayMode: 'fiat' }) },
-          { label: 'Market Cap', value: formatFromFiat(totalMarketValue, 'GBP', { displayMode: 'fiat' }) },
-          { label: 'Assets', value: String(marketAssets.length) },
-        ]}
-        columns={3}
-      />
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(140)}
+      >
+        <View style={styles.quickActionsWrap}>
+          <AppButton
+            style={styles.quickActionBtn}
+            variant="primary"
+            size="sm"
+            align="center"
+            icon={<Ionicons name="pie-chart-outline" size={14} color={Colors.textInverse} />}
+            title="Portfolio"
+            onPress={() => { haptics.tap(); navigation.navigate('Portfolio'); }}
+            accessibilityLabel="Open co-own portfolio"
+          />
+          <AppButton
+            style={styles.quickActionBtn}
+            variant="primary"
+            size="sm"
+            align="center"
+            icon={<Ionicons name="list-outline" size={14} color={Colors.textInverse} />}
+            title="My Listings"
+            onPress={() => { haptics.tap(); navigation.navigate('MyListings', { type: 'coown' }); }}
+            accessibilityLabel="View my co-own listings"
+          />
+          <AppButton
+            style={styles.quickActionBtn}
+            variant="primary"
+            size="sm"
+            align="center"
+            icon={<Ionicons name="time-outline" size={14} color={Colors.textInverse} />}
+            title="Orders"
+            onPress={() => { haptics.tap(); navigation.navigate('CoOwnOrderHistory'); }}
+            accessibilityLabel="Open co-own order history"
+          />
+        </View>
+      </Reanimated.View>
 
-      <View style={styles.quickActionsWrap}>
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
+      >
         <AppButton
-          style={styles.quickActionBtn}
-          variant="primary"
+          style={styles.issueBtn}
+          variant="secondary"
           size="sm"
           align="center"
-          icon={<Ionicons name="pie-chart-outline" size={14} color={Colors.textInverse} />}
-          title="Portfolio"
-          onPress={() => navigation.navigate('Portfolio')}
-          accessibilityLabel="Open co-own portfolio"
+          icon={<Ionicons name="add" size={16} color={Colors.textPrimary} />}
+          title="Issue New Co-Own"
+          onPress={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
+          accessibilityLabel="Issue new co-own asset"
         />
-        <AppButton
-          style={styles.quickActionBtn}
-          variant="primary"
-          size="sm"
-          align="center"
-          icon={<Ionicons name="list-outline" size={14} color={Colors.textInverse} />}
-          title="My Listings"
-          onPress={() => navigation.navigate('MyListings', { type: 'coown' })}
-          accessibilityLabel="View my co-own listings"
-        />
-        <AppButton
-          style={styles.quickActionBtn}
-          variant="primary"
-          size="sm"
-          align="center"
-          icon={<Ionicons name="time-outline" size={14} color={Colors.textInverse} />}
-          title="Orders"
-          onPress={() => navigation.navigate('CoOwnOrderHistory')}
-          accessibilityLabel="Open co-own order history"
-        />
-      </View>
+      </Reanimated.View>
 
-      <AppButton
-        style={styles.issueBtn}
-        variant="secondary"
-        size="sm"
-        align="center"
-        icon={<Ionicons name="add" size={16} color={Colors.textPrimary} />}
-        title="Issue New Co-Own"
-        onPress={() => navigation.navigate('CreateCoOwn')}
-        accessibilityLabel="Issue new co-own asset"
-      />
-
-      <View style={styles.sortWrap}>
-        <AppSegmentControl
-          options={SORT_OPTIONS}
-          value={sortBy}
-          onChange={setSortBy}
-          fullWidth
-        />
-      </View>
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(220)}
+      >
+        <View style={styles.sortWrap}>
+          <AppSegmentControl
+            options={SORT_OPTIONS}
+            value={sortBy}
+            onChange={setSortBy}
+            fullWidth
+          />
+        </View>
+      </Reanimated.View>
 
       <FlashList
         data={filteredAssets}
@@ -267,19 +292,29 @@ export default function CoOwnHubScreen() {
           const openValue = item.availableUnits * item.unitPriceGBP;
 
           return (
-            <FlagshipAssetCard
-              key={item.id}
-              imageUri={item.image}
-              name={item.title}
-              unitPrice={formatFromFiat(item.unitPriceGBP, 'GBP')}
-              yourUnits={item.yourUnits}
-              totalUnits={item.totalUnits}
-              status={item.isOpen ? 'active' : 'paused'}
-              onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-              onAction={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
-              actionLabel="Trade"
-              index={index}
-            />
+            <Reanimated.View
+              entering={
+                reducedMotionEnabled
+                  ? undefined
+                  : FadeInDown
+                      .duration(Motion.list.enterDuration)
+                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+              }
+            >
+              <FlagshipAssetCard
+                key={item.id}
+                imageUri={item.image}
+                name={item.title}
+                unitPrice={formatFromFiat(item.unitPriceGBP, 'GBP')}
+                yourUnits={item.yourUnits}
+                totalUnits={item.totalUnits}
+                status={item.isOpen ? 'active' : 'paused'}
+                onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
+                onAction={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
+                actionLabel="Trade"
+                index={index}
+              />
+            </Reanimated.View>
           );
         }}
         ListEmptyComponent={
@@ -333,12 +368,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: Space.sm,
-    paddingVertical: 10,
+    paddingVertical: Space.sm,
   },
   supportIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.xs,
   },
   supportAvatarContainer: {
     width: 28,

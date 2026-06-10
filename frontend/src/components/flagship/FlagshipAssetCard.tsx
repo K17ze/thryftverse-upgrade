@@ -34,7 +34,7 @@ export function FlagshipAssetCard({
   const ownershipPct = totalUnits > 0 ? Math.round((yourUnits / totalUnits) * 100) : 0;
 
   const statusColor =
-    status === 'active' ? Colors.success : status === 'pending' ? '#F5A623' : status === 'sold' ? Colors.textMuted : Colors.textSecondary;
+    status === 'active' ? Colors.success : status === 'pending' ? Colors.textSecondary : status === 'sold' ? Colors.textMuted : Colors.textSecondary;
 
   return (
     <Reanimated.View entering={FadeInDown.delay(index * 50).duration(350)}>

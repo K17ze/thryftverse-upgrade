@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, StatusBar, LayoutChangeEvent } from 'react-nati
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
+  FadeInDown,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,8 @@ import { t } from '../i18n';
 import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { haptics } from '../utils/haptics';
 
 type TradeHubTab = 'AUCTIONS' | 'CO-OWN';
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -25,11 +28,12 @@ type NavT = StackNavigationProp<RootStackParamList>;
 export default function TradeHubScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
   const [activeTab, setActiveTab] = React.useState<TradeHubTab>('AUCTIONS');
 
   const tabLayouts = React.useRef<{ [key: string]: { x: number; width: number } }>({});
-  const indicatorX = useSharedValue(4);
-  const indicatorWidth = useSharedValue(0);
+  const indicatorX = useSharedValue<number>(Space.xs);
+  const indicatorWidth = useSharedValue<number>(0);
 
   const handleTabLayout = (tab: TradeHubTab, e: LayoutChangeEvent) => {
     const { x, width } = e.nativeEvent.layout;
@@ -56,16 +60,14 @@ export default function TradeHubScreen() {
   const quickActions = React.useMemo(() => {
     if (activeTab === 'AUCTIONS') {
       return [
-        { key: 'create-auction', label: 'Create Auction', icon: 'hammer-outline' as const, onPress: () => navigation.navigate('CreateAuction') },
-
-        { key: 'auction-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => navigation.navigate('CreatePoster') },
+        { key: 'create-auction', label: 'Create Auction', icon: 'hammer-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreateAuction'); } },
+        { key: 'auction-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreatePoster'); } },
       ];
     }
     return [
-      { key: 'create-coown', label: 'Create Co-Own', icon: 'people-outline' as const, onPress: () => navigation.navigate('CreateCoOwn') },
-
-      { key: 'coown-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => navigation.navigate('CreatePoster') },
-      { key: 'open-portfolio', label: 'Portfolio', icon: 'wallet-outline' as const, onPress: () => navigation.navigate('Portfolio') },
+      { key: 'create-coown', label: 'Create Co-Own', icon: 'people-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
+      { key: 'coown-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreatePoster'); } },
+      { key: 'open-portfolio', label: 'Portfolio', icon: 'wallet-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('Portfolio'); } },
     ];
   }, [activeTab, navigation, show]);
 
@@ -74,47 +76,60 @@ export default function TradeHubScreen() {
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
       {/* Tab switcher at the very top */}
-      <View style={styles.tabSwitcher}>
-        <Reanimated.View style={[styles.tabIndicator, indicatorStyle]} />
-        {(['AUCTIONS', 'CO-OWN'] as const).map((tab) => (
-          <AnimatedPressable
-            key={tab}
-            style={styles.tabBtn}
-            onPress={() => setActiveTab(tab)}
-            activeOpacity={0.9}
-            onLayout={(e: LayoutChangeEvent) => handleTabLayout(tab, e)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeTab === tab }}
-            accessibilityLabel={tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
-            accessibilityHint="Switches the active trade hub view"
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
-            </Text>
-          </AnimatedPressable>
-        ))}
-      </View>
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}
+      >
+        <View style={styles.tabSwitcher}>
+          <Reanimated.View style={[styles.tabIndicator, indicatorStyle]} />
+          {(['AUCTIONS', 'CO-OWN'] as const).map((tab) => (
+            <AnimatedPressable
+              key={tab}
+              style={styles.tabBtn}
+              onPress={() => setActiveTab(tab)}
+              activeOpacity={0.9}
+              onLayout={(e: LayoutChangeEvent) => handleTabLayout(tab, e)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: activeTab === tab }}
+              accessibilityLabel={tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
+              accessibilityHint="Switches the active trade hub view"
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                {tab === 'AUCTIONS' ? t('tradeHub.tab.auctions') : t('tradeHub.tab.coOwn')}
+              </Text>
+            </AnimatedPressable>
+          ))}
+        </View>
+      </Reanimated.View>
 
       {/* Tab-specific quick actions */}
-      <View style={styles.quickActionsWrap}>
-        {quickActions.map((action) => (
-          <AppButton
-            key={action.key}
-            title={action.label}
-            icon={<Ionicons name={action.icon} size={14} color={Colors.textSecondary} />}
-            variant="secondary"
-            size="sm"
-            style={styles.quickActionBtn}
-            titleStyle={styles.quickActionBtnText}
-            iconContainerStyle={styles.quickActionIconWrap}
-            onPress={action.onPress}
-            accessibilityLabel={action.label}
-          />
-        ))}
-      </View>
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)}
+      >
+        <View style={styles.quickActionsWrap}>
+          {quickActions.map((action) => (
+            <AppButton
+              key={action.key}
+              title={action.label}
+              icon={<Ionicons name={action.icon} size={14} color={Colors.textSecondary} />}
+              variant="secondary"
+              size="sm"
+              style={styles.quickActionBtn}
+              titleStyle={styles.quickActionBtnText}
+              iconContainerStyle={styles.quickActionIconWrap}
+              onPress={action.onPress}
+              accessibilityLabel={action.label}
+            />
+          ))}
+        </View>
+      </Reanimated.View>
 
       {/* Tab content */}
-      {activeTab === 'AUCTIONS' ? <AuctionsScreen /> : <CoOwnScreen />}
+      <Reanimated.View
+        style={styles.tabContent}
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)}
+      >
+        {activeTab === 'AUCTIONS' ? <AuctionsScreen /> : <CoOwnScreen />}
+      </Reanimated.View>
     </SafeAreaView>
   );
 }
@@ -132,14 +147,14 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 4,
+    padding: Space.xs,
     flexDirection: 'row',
     position: 'relative',
   },
   tabIndicator: {
     position: 'absolute',
-    top: 4,
-    bottom: 4,
+    top: Space.xs,
+    bottom: Space.xs,
     borderRadius: Radius.full,
     backgroundColor: Colors.brand,
   },
@@ -181,5 +196,8 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: Radius.md,
     backgroundColor: Colors.surfaceAlt,
+  },
+  tabContent: {
+    flex: 1,
   },
 });

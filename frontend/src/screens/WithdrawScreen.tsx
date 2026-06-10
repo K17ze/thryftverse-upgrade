@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { View,
   Text,
   StyleSheet,

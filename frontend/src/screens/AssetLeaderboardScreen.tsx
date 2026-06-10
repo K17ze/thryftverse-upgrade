@@ -41,42 +41,58 @@ export default function AssetLeaderboardScreen() {
   );
   const topHolders = React.useMemo(() => [...marketAssets].sort((a, b) => b.holders - a.holders).slice(0, 5), [marketAssets]);
 
-  const renderList = (title: string, icon: keyof typeof Ionicons.glyphMap, data: CoOwnAsset[], metric: (asset: CoOwnAsset) => string) => (
-    <TradeCard style={styles.sectionCard}>
-      <View style={styles.sectionHeader}>
-        <Ionicons name={icon} size={16} color={Colors.brand} />
-        <BodyEmphasis style={styles.sectionTitle}>{title}</BodyEmphasis>
-      </View>
+  const renderList = (
+    title: string,
+    icon: keyof typeof Ionicons.glyphMap,
+    data: CoOwnAsset[],
+    metric: (asset: CoOwnAsset) => string,
+    sectionIndex: number
+  ) => (
+    <Reanimated.View
+      entering={
+        reducedMotionEnabled
+          ? undefined
+          : FadeInDown
+              .duration(Motion.list.enterDuration)
+              .delay(sectionIndex * Motion.list.staggerStep)
+      }
+    >
+      <TradeCard style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name={icon} size={16} color={Colors.brand} />
+          <BodyEmphasis style={styles.sectionTitle}>{title}</BodyEmphasis>
+        </View>
 
-      {data.map((asset, idx) => (
-        <Reanimated.View
-          key={`${title}_${asset.id}`}
-          entering={
-            reducedMotionEnabled
-              ? undefined
-              : FadeInDown
-                  .duration(Motion.list.enterDuration)
-                  .delay(Math.min(idx, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-          }
-        >
-          <AnimatedPressable
-            style={styles.row}
-            activeOpacity={0.92}
-            onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-            disableAnimation={false}
-            scaleValue={0.985}
+        {data.map((asset, idx) => (
+          <Reanimated.View
+            key={`${title}_${asset.id}`}
+            entering={
+              reducedMotionEnabled
+                ? undefined
+                : FadeInDown
+                    .duration(Motion.list.enterDuration)
+                    .delay(Math.min(idx, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+            }
           >
-            <BodyEmphasis style={styles.rank}>{idx + 1}</BodyEmphasis>
-            <CachedImage uri={asset.image} style={styles.thumb} containerStyle={styles.thumbContainer} contentFit="cover" />
-            <View style={styles.rowBody}>
-              <BodyEmphasis style={styles.rowTitle} numberOfLines={1}>{asset.title}</BodyEmphasis>
-              <Meta style={styles.rowSub}>{formatFromFiat(asset.unitPriceGBP, 'GBP')}</Meta>
-            </View>
-            <BodyEmphasis style={styles.metric}>{metric(asset)}</BodyEmphasis>
-          </AnimatedPressable>
-        </Reanimated.View>
-      ))}
-    </TradeCard>
+            <AnimatedPressable
+              style={styles.row}
+              activeOpacity={0.92}
+              onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+              disableAnimation={false}
+              scaleValue={0.985}
+            >
+              <BodyEmphasis style={styles.rank}>{idx + 1}</BodyEmphasis>
+              <CachedImage uri={asset.image} style={styles.thumb} containerStyle={styles.thumbContainer} contentFit="cover" />
+              <View style={styles.rowBody}>
+                <BodyEmphasis style={styles.rowTitle} numberOfLines={1}>{asset.title}</BodyEmphasis>
+                <Meta style={styles.rowSub}>{formatFromFiat(asset.unitPriceGBP, 'GBP')}</Meta>
+              </View>
+              <BodyEmphasis style={styles.metric}>{metric(asset)}</BodyEmphasis>
+            </AnimatedPressable>
+          </Reanimated.View>
+        ))}
+      </TradeCard>
+    </Reanimated.View>
   );
 
   return (
@@ -86,9 +102,9 @@ export default function AssetLeaderboardScreen() {
       <TradeHeader title="Asset Leaderboard" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {renderList('Top Movers', 'trending-up-outline', topMovers, (asset) => `${asset.marketMovePct24h >= 0 ? '+' : ''}${asset.marketMovePct24h.toFixed(1)}%`)}
-        {renderList('Top Market Value', 'pulse-outline', topMarketValue, (asset) => formatFromFiat(asset.totalUnits * asset.unitPriceGBP, 'GBP', { displayMode: 'fiat' }))}
-        {renderList('Most Held', 'people-outline', topHolders, (asset) => `${asset.holders} holders`)}
+        {renderList('Top Movers', 'trending-up-outline', topMovers, (asset) => `${asset.marketMovePct24h >= 0 ? '+' : ''}${asset.marketMovePct24h.toFixed(1)}%`, 0)}
+        {renderList('Top Market Value', 'pulse-outline', topMarketValue, (asset) => formatFromFiat(asset.totalUnits * asset.unitPriceGBP, 'GBP', { displayMode: 'fiat' }), 1)}
+        {renderList('Most Held', 'people-outline', topHolders, (asset) => `${asset.holders} holders`, 2)}
       </ScrollView>
     </SafeAreaView>
   );
@@ -110,15 +126,15 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 7,
+    gap: Space.xs,
+    marginBottom: Space.xs,
   },
   sectionTitle: {},
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    gap: 9,
+    paddingVertical: Space.xs,
+    gap: Space.sm,
   },
   rank: {
     width: 18,
@@ -127,7 +143,7 @@ const styles = StyleSheet.create({
   thumbContainer: {
     width: 34,
     height: 34,
-    borderRadius: 9,
+    borderRadius: Radius.md,
   },
   thumb: {
     width: '100%',
