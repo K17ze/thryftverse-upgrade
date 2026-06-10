@@ -50,3 +50,6 @@ frontend/android/
 
 # cleanup quarantine (recoverable, not tracked)
 trash/
+
+# IDE
+.idea/
