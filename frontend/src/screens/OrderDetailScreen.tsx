@@ -324,6 +324,9 @@ export default function OrderDetailScreen() {
   const sellerName = resolvedSeller.username ?? `Seller ${resolvedSeller.id.slice(0, 8)}`;
 
   const currentUser = useStore((state) => state.currentUser);
+  const getSupportTicketsForOrder = useStore((state) => state.getSupportTicketsForOrder);
+  const supportTickets = getSupportTicketsForOrder(orderId);
+  const openTicket = supportTickets.find((t) => t.status === 'open');
   const isBuyer = currentUser?.id === backendOrder?.buyerId;
   const isSeller = currentUser?.id === backendOrder?.sellerId;
   const canCancel = isBuyer && (orderStatus === 'paid' || orderStatus === 'created');
@@ -540,6 +543,22 @@ export default function OrderDetailScreen() {
           <TxRow label="Total paid" value={formatFromFiat(totalPaid, 'GBP', { displayMode: 'fiat' })} bold />
         </ElevatedSurface>
         </Reanimated.View>
+
+        {/* -- Support status -- */}
+        {openTicket && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(340)}>
+            <ElevatedSurface variant="surface" style={styles.supportCard}>
+              <View style={styles.supportRow}>
+                <Ionicons name="help-circle-outline" size={20} color={Colors.brand} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.supportLabel}>Open support request</Text>
+                  <Text style={styles.supportSub}>{openTicket.topicLabel}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </View>
+            </ElevatedSurface>
+          </Reanimated.View>
+        )}
 
         {/* -- Actions -- */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(360)}>
@@ -865,6 +884,30 @@ const styles = StyleSheet.create({
 
   // Actions
   actionsRow: { flexDirection: 'column', gap: 10, marginTop: 4 },
+  supportCard: {
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
+    marginBottom: Space.lg + Space.sm,
+    borderWidth: 0.5,
+    borderColor: Colors.border,
+  },
+  supportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  supportLabel: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  supportSub: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
   actionBtnSecondary: {
     width: '100%',
     minHeight: 56,

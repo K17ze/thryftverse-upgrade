@@ -96,6 +96,17 @@ interface BrowseFilterState {
   condition: BrowseConditionOption;
 }
 
+interface SupportTicket {
+  id: string;
+  orderId: string;
+  topicId: string;
+  topicLabel: string;
+  details: string;
+  status: 'open' | 'resolved' | 'closed';
+  createdAt: number;
+  updatedAt: number;
+}
+
 // Global address format supporting all countries
 interface SavedAddress {
   id?: number;
@@ -358,6 +369,11 @@ interface StoreState {
   acceptMessageRequest: (id: string) => void;
   declineMessageRequest: (id: string) => void;
   isMessageRequest: (id: string) => boolean;
+  // Support tickets
+  supportTickets: SupportTicket[];
+  createSupportTicket: (ticket: Omit<SupportTicket, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => string;
+  updateSupportTicketStatus: (id: string, status: SupportTicket['status']) => void;
+  getSupportTicketsForOrder: (orderId: string) => SupportTicket[];
   // Marketplace chat settings
   offersInChatEnabled: boolean;
   setOffersInChatEnabled: (v: boolean) => void;
@@ -1207,6 +1223,26 @@ export const useStore = create<StoreState>()(
   setOffersInChatEnabled: (v) => set({ offersInChatEnabled: v }),
   orderUpdatesInChatEnabled: true,
   setOrderUpdatesInChatEnabled: (v) => set({ orderUpdatesInChatEnabled: v }),
+  supportTickets: [],
+  createSupportTicket: (ticket) => {
+    const id = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now = Date.now();
+    set((state) => ({
+      supportTickets: [
+        ...state.supportTickets,
+        { ...ticket, id, status: 'open', createdAt: now, updatedAt: now },
+      ],
+    }));
+    return id;
+  },
+  updateSupportTicketStatus: (id, status) =>
+    set((state) => ({
+      supportTickets: state.supportTickets.map((t) =>
+        t.id === id ? { ...t, status, updatedAt: Date.now() } : t
+      ),
+    })),
+  getSupportTicketsForOrder: (orderId) =>
+    get().supportTickets.filter((t) => t.orderId === orderId),
   enabledBotIds: [],
   toggleEnabledBot: (botId) =>
     set((state) => {
@@ -1465,6 +1501,7 @@ export const useStore = create<StoreState>()(
         orderUpdatesInChatEnabled: state.orderUpdatesInChatEnabled,
         enabledBotIds: state.enabledBotIds,
         customBots: state.customBots,
+        supportTickets: state.supportTickets,
       }),
     },
   ),

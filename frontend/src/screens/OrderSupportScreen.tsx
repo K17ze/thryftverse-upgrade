@@ -46,22 +46,31 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [details, setDetails] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
 
-  const canSubmit = selectedTopic && details.trim().length > 10 && !isSubmitting;
+  const createSupportTicket = useStore((state) => state.createSupportTicket);
+
+  const canSubmit = selectedTopic && details.trim().length > 10 && !isSubmitting && !isSubmitted;
 
   const handleSubmit = useCallback(() => {
     if (!canSubmit) return;
     haptic.medium();
     setIsSubmitting(true);
 
-    // In a real app, this would POST to a support ticket API.
-    // We simulate the honest async flow without faking success.
-    setTimeout(() => {
-      setIsSubmitting(false);
-      show('Support request submitted. We will review and respond within 24 hours.', 'success');
-      navigation.goBack();
-    }, 800);
-  }, [canSubmit, haptic, show, navigation]);
+    const topic = SUPPORT_TOPICS.find((t) => t.id === selectedTopic)!;
+    const ticketId = createSupportTicket({
+      orderId,
+      topicId: topic.id,
+      topicLabel: topic.label,
+      details: details.trim(),
+    });
+
+    setIsSubmitting(false);
+    setIsSubmitted(true);
+    setSubmittedTicketId(ticketId);
+    show('Support request submitted. We will review and respond within 24 hours.', 'success');
+  }, [canSubmit, haptic, createSupportTicket, orderId, selectedTopic, details, show]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -139,25 +148,51 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             </View>
           </Reanimated.View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.honestNote}>
-            <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
-            <Caption color={Colors.textMuted} style={styles.honestNoteText}>
-              Our support team typically responds within 24 hours. For urgent issues, contact us through the Help & Support page.
-            </Caption>
-          </Reanimated.View>
+          {isSubmitted && submittedTicketId && (
+            <Reanimated.View entering={FadeInDown.duration(300)} style={styles.successCard}>
+              <Ionicons name="checkmark-circle" size={32} color={Colors.success} />
+              <BodyEmphasis style={styles.successTitle}>Request received</BodyEmphasis>
+              <Caption color={Colors.textSecondary} style={styles.successSub}>
+                Ticket #{submittedTicketId.slice(-8).toUpperCase()}
+              </Caption>
+              <Caption color={Colors.textMuted} style={styles.successSub}>
+                Our support team typically responds within 24 hours.
+              </Caption>
+            </Reanimated.View>
+          )}
+
+          {!isSubmitted && (
+            <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.honestNote}>
+              <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
+              <Caption color={Colors.textMuted} style={styles.honestNoteText}>
+                Our support team typically responds within 24 hours. For urgent issues, contact us through the Help & Support page.
+              </Caption>
+            </Reanimated.View>
+          )}
         </ScrollView>
 
         <View style={styles.footer}>
-          <AppButton
-            title={isSubmitting ? 'Submitting...' : 'Submit Request'}
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-            variant="primary"
-            size="lg"
-            style={[!canSubmit && styles.btnDisabled]}
-            hapticFeedback="medium"
-            accessibilityLabel="Submit support request"
-          />
+          {isSubmitted ? (
+            <AppButton
+              title="Done"
+              onPress={() => navigation.goBack()}
+              variant="primary"
+              size="lg"
+              hapticFeedback="medium"
+              accessibilityLabel="Close support request"
+            />
+          ) : (
+            <AppButton
+              title={isSubmitting ? 'Submitting...' : 'Submit Request'}
+              onPress={handleSubmit}
+              disabled={!canSubmit}
+              variant="primary"
+              size="lg"
+              style={[!canSubmit && styles.btnDisabled]}
+              hapticFeedback="medium"
+              accessibilityLabel="Submit support request"
+            />
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -260,5 +295,23 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     opacity: 0.45,
+  },
+  successCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.lg,
+    alignItems: 'center',
+    gap: Space.sm,
+    ...Elevation.subtle,
+  },
+  successTitle: {
+    fontSize: Type.title.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    marginTop: Space.sm,
+  },
+  successSub: {
+    textAlign: 'center',
+    lineHeight: Type.caption.lineHeight + 2,
   },
 });
