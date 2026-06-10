@@ -8,19 +8,22 @@ import {
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
-import { Type, Space, Radius , Typography  } from '../../theme/designTokens';
+import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
+import { useBackendData } from '../../context/BackendDataContext';
 import { HeroCarousel, HeroItem } from '../discover/HeroCarousel';
 import { EditorialSection } from '../discover/EditorialSection';
 import { FeaturedBoardCard, FeaturedBoard } from '../discover/FeaturedBoardCard';
 import { EditorialImageRow, EditorialImage } from '../discover/EditorialImageRow';
+import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -51,6 +54,19 @@ const DROP_CALENDAR = [
 ];
 
 /* ── Sub-components ── */
+function TrendingRailItem({ item, index, onPress }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void }) {
+  return (
+    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
+      <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
+        <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
+        <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
+        <Text style={styles.trendingTitle} numberOfLines={1}>{item.title}</Text>
+        <Text style={styles.trendingPrice}>£{item.price}</Text>
+      </AnimatedPressable>
+    </Reanimated.View>
+  );
+}
+
 function DropCalendarItem({ item, onPress, index }: { item: typeof DROP_CALENDAR[0]; onPress: () => void; index: number }) {
   return (
     <Reanimated.View entering={FadeInDown.duration(350).delay(index * 70).springify()}>
@@ -61,7 +77,10 @@ function DropCalendarItem({ item, onPress, index }: { item: typeof DROP_CALENDAR
           <Text style={styles.dropTitle} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.dropTime}>{item.time}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+        <View style={styles.dropAction}>
+          <Text style={styles.dropActionText}>Remind</Text>
+          <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+        </View>
       </AnimatedPressable>
     </Reanimated.View>
   );
@@ -72,6 +91,21 @@ export default function EditTab() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
+  const { listings } = useBackendData();
+
+  const trendingListings = React.useMemo(() => {
+    return [...listings]
+      .filter((l) => l.images && l.images.length > 0)
+      .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
+      .slice(0, 10)
+      .map((l) => ({
+        id: l.id,
+        title: l.title,
+        brand: l.brand,
+        price: l.price,
+        image: l.images[0] ?? '',
+      }));
+  }, [listings]);
 
   const handleHeroAction = (item: HeroItem) => { haptic.light(); navigation.navigate('Browse', { categoryId: 'all', title: item.title }); };
   const handleBoardPress = (boardId: string) => { haptic.light(); navigation.navigate('Browse', { categoryId: 'search', title: FEATURED_BOARDS.find(b => b.id === boardId)?.title ?? 'Browse' }); };
@@ -80,13 +114,41 @@ export default function EditTab() {
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      {/* Trending Rail */}
+      {trendingListings.length > 0 && (
+        <Reanimated.View entering={FadeInDown.duration(300)}>
+          <DiscoverySectionHeader
+            kicker="What's hot"
+            title="Trending Now"
+            actionLabel="See all"
+            onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
+          />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
+            {trendingListings.map((item, i) => (
+              <TrendingRailItem
+                key={item.id}
+                item={item}
+                index={i}
+                onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+              />
+            ))}
+          </ScrollView>
+        </Reanimated.View>
+      )}
+
       {/* Hero Carousel */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(trendingListings.length > 0 ? 60 : 0)}>
         <HeroCarousel items={HERO_ITEMS.map((h) => ({ ...h, ctaAction: () => handleHeroAction(h) }))} autoPlayInterval={6000} />
       </Reanimated.View>
 
       {/* Featured Boards */}
-      <EditorialSection kicker="Curated by editors" title="Collections We Love" style={{ marginTop: Space.md }}>
+      <Reanimated.View entering={FadeInDown.duration(350).delay(80)} style={{ marginTop: Space.md }}>
+        <DiscoverySectionHeader
+          kicker="Curated by editors"
+          title="Collections We Love"
+          actionLabel="Explore"
+          onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Collections' })}
+        />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.boardsScroll}>
           {FEATURED_BOARDS.map((board) => (
             <View key={board.id} style={styles.boardWrap}>
@@ -94,22 +156,34 @@ export default function EditTab() {
             </View>
           ))}
         </ScrollView>
-      </EditorialSection>
+      </Reanimated.View>
 
       {/* Editorial Image Rows */}
-      {EDITORIAL_SECTIONS.map((section) => (
-        <Reanimated.View key={section.id} entering={FadeInDown.duration(350).delay(100)}>
-          <EditorialSection kicker={section.kicker} title={section.title} onSearchPress={() => navigation.navigate('Browse', { categoryId: 'search', title: section.title })}>
-            <EditorialImageRow images={section.images} onPressImage={handleEditorialImagePress} sharedTransitionPrefix={`explore-edit-${section.id}`} />
-          </EditorialSection>
+      {EDITORIAL_SECTIONS.map((section, idx) => (
+        <Reanimated.View key={section.id} entering={FadeInDown.duration(350).delay(100 + idx * 40)} style={{ marginTop: Space.lg }}>
+          <DiscoverySectionHeader
+            kicker={section.kicker}
+            title={section.title}
+            actionLabel="View"
+            onAction={() => navigation.navigate('Browse', { categoryId: 'search', title: section.title })}
+          />
+          <EditorialImageRow images={section.images} onPressImage={handleEditorialImagePress} sharedTransitionPrefix={`explore-edit-${section.id}`} />
         </Reanimated.View>
       ))}
 
       {/* Seasonal Theme Banner */}
-      <Reanimated.View entering={FadeInDown.duration(350).delay(120)}>
+      <Reanimated.View entering={FadeInDown.duration(350).delay(160)} style={{ marginTop: Space.lg }}>
+        <DiscoverySectionHeader
+          kicker="This Season"
+          title="Summer Essentials"
+        />
         <AnimatedPressable style={styles.seasonBanner} onPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Summer Collection' })} activeOpacity={0.92}>
-          <CachedImage uri="" style={styles.seasonBannerImage} containerStyle={{ borderRadius: Radius.lg }} contentFit="cover" />
-          <View style={styles.seasonBannerOverlay}>
+          <CachedImage uri="" style={styles.seasonBannerImage} contentFit="cover" />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.75)']}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.seasonBannerContent}>
             <Text style={styles.seasonBannerKicker}>This Season</Text>
             <Text style={styles.seasonBannerTitle}>Summer Essentials</Text>
             <Text style={styles.seasonBannerSub}>Light layers, linen, and sun-faded denim</Text>
@@ -122,8 +196,13 @@ export default function EditTab() {
       </Reanimated.View>
 
       {/* Brand Spotlight */}
-      <Reanimated.View entering={FadeInDown.duration(350).delay(140)}>
-        <Text style={[styles.sectionTitle, { marginTop: Space.lg }]}>Brand Spotlight</Text>
+      <Reanimated.View entering={FadeInDown.duration(350).delay(180)} style={{ marginTop: Space.lg }}>
+        <DiscoverySectionHeader
+          kicker="In focus"
+          title="Brand Spotlight"
+          actionLabel="View"
+          onAction={() => navigation.navigate('Browse', { categoryId: 'search', title: 'Comme des Garçons' })}
+        />
         <AnimatedPressable style={styles.brandCard} onPress={() => navigation.navigate('Browse', { categoryId: 'search', title: 'Comme des Garçons' })} activeOpacity={0.92}>
           <View style={styles.brandHeader}>
             <CachedImage uri="" style={styles.brandLogo} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
@@ -134,23 +213,30 @@ export default function EditTab() {
             <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.brandGallery}>
-            {[
-              '',
-              '',
-              '',
-              '',
-            ].map((uri, i) => (
+            {['', '', '', ''].map((uri, i) => (
               <CachedImage key={i} uri={uri} style={styles.brandGalleryImg} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
             ))}
           </ScrollView>
+          <View style={styles.brandAccent}>
+            <LinearGradient
+              colors={[Colors.brand, 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.brandAccentLine}
+            />
+          </View>
         </AnimatedPressable>
       </Reanimated.View>
 
       {/* Style Quiz Teaser */}
-      <Reanimated.View entering={FadeInDown.duration(350).delay(160)}>
+      <Reanimated.View entering={FadeInDown.duration(350).delay(200)} style={{ marginTop: Space.lg }}>
+        <DiscoverySectionHeader
+          kicker="Personalise"
+          title="Find Your Aesthetic"
+        />
         <AnimatedPressable style={styles.quizCard} onPress={() => show('Style Quiz coming soon', 'info')} activeOpacity={0.92}>
           <View style={styles.quizContent}>
-            <Text style={styles.quizTitle}>Find Your Aesthetic</Text>
+            <Text style={styles.quizTitle}>Discover your style</Text>
             <Text style={styles.quizSub}>Take a 2-minute quiz to discover your personal style and get curated picks.</Text>
             <View style={styles.quizPills}>
               {['Minimal', 'Streetwear', 'Vintage', 'Gorpcore'].map((pill) => (
@@ -167,8 +253,11 @@ export default function EditTab() {
       </Reanimated.View>
 
       {/* Drop Calendar */}
-      <Reanimated.View entering={FadeInDown.duration(350).delay(180)}>
-        <Text style={[styles.sectionTitle, { marginTop: Space.lg }]}>Drop Calendar</Text>
+      <Reanimated.View entering={FadeInDown.duration(350).delay(220)} style={{ marginTop: Space.lg }}>
+        <DiscoverySectionHeader
+          kicker="Don't miss"
+          title="Drop Calendar"
+        />
         <View style={styles.calendarCard}>
           {DROP_CALENDAR.map((item, i) => (
             <DropCalendarItem key={item.id} item={item} onPress={() => handleDropPress(item)} index={i} />
@@ -186,14 +275,42 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.xl,
   },
-  sectionTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
+
+  /* Trending Rail */
+  trendingScroll: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
+    gap: Space.sm,
   },
+  trendingItem: {
+    width: 140,
+    gap: 4,
+  },
+  trendingImage: {
+    width: 140,
+    height: 180,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  trendingBrand: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    letterSpacing: Type.meta.letterSpacing,
+    marginTop: 4,
+  },
+  trendingTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  trendingPrice: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.brand,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+
   boardsScroll: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
@@ -207,7 +324,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    height: 180,
+    height: 220,
     position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -219,13 +336,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  seasonBannerOverlay: {
+  seasonBannerContent: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    padding: Space.lg,
   },
   seasonBannerKicker: {
     fontSize: Type.meta.size,
@@ -239,23 +355,24 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     color: '#fff',
     letterSpacing: Type.title.letterSpacing,
-    marginTop: 2,
+    marginTop: 4,
   },
   seasonBannerSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 4,
+    lineHeight: 20,
   },
   seasonBannerCta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: Space.sm,
+    marginTop: Space.md,
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: Radius.full,
   },
   seasonBannerCtaText: {
@@ -278,6 +395,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
+    overflow: 'hidden',
   },
   brandHeader: {
     flexDirection: 'row',
@@ -314,6 +432,17 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: Radius.md,
     backgroundColor: Colors.surfaceAlt,
+  },
+  brandAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+  },
+  brandAccentLine: {
+    width: '100%',
+    height: '100%',
   },
 
   /* Quiz Card */
@@ -384,7 +513,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     marginHorizontal: Space.md,
-    padding: Space.sm,
+    padding: Space.md,
     gap: Space.sm,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -395,18 +524,18 @@ const styles = StyleSheet.create({
   dropItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: 6,
+    gap: Space.md,
+    paddingVertical: Space.sm,
   },
   dropImage: {
-    width: 48,
-    height: 48,
+    width: 64,
+    height: 64,
     borderRadius: Radius.md,
     backgroundColor: Colors.surfaceAlt,
   },
   dropInfo: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   dropDate: {
     fontSize: Type.meta.size,
@@ -425,6 +554,21 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: Colors.textMuted,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  dropAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+  },
+  dropActionText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
     letterSpacing: Type.meta.letterSpacing,
   },
 });

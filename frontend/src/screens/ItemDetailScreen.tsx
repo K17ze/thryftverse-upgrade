@@ -47,6 +47,7 @@ import { ShareSheet } from '../components/ShareSheet';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Space, Radius } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
+import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 
 const { width, height } = Dimensions.get('window');
 const PANEL_BG = Colors.surfaceAlt;
@@ -366,12 +367,12 @@ export default function ItemDetailScreen() {
           {/* ── More from this seller ── */}
           {sellerItems.length > 0 && resolvedSeller && (
             <View style={styles.sellerItemsSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>More from @{resolvedSeller.username || 'Seller'}</Text>
-                <AnimatedPressable onPress={() => navigation.navigate('UserProfile', { userId: resolvedSeller.id })}>
-                  <Text style={styles.sectionLink}>See all</Text>
-                </AnimatedPressable>
-              </View>
+              <DiscoverySectionHeader
+                kicker="From the closet"
+                title={`More from @${resolvedSeller.username || 'Seller'}`}
+                actionLabel="See all"
+                onAction={() => navigation.navigate('UserProfile', { userId: resolvedSeller.id })}
+              />
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
                 {sellerItems.map(sItem => (
                   <AnimatedPressable
@@ -395,7 +396,10 @@ export default function ItemDetailScreen() {
           {/* ── Related listings ── */}
           {relatedListings.length > 0 && (
             <View style={styles.sellerItemsSection}>
-              <Text style={styles.sectionTitle}>Related items</Text>
+              <DiscoverySectionHeader
+                kicker="You might like"
+                title="Related items"
+              />
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
                 {relatedListings.map(rItem => (
                   <AnimatedPressable
@@ -464,7 +468,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   heroContainer: {
     width: width,
-    height: height * 0.65,
+    height: height * 0.72,
     position: 'relative',
     backgroundColor: Colors.surfaceAlt,
     overflow: 'hidden',
@@ -612,7 +616,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   sectionLink: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.brand },
   sellerItemCard: { width: 140 },
-  sellerItemMediaWrap: { width: 140, height: 180, borderRadius: 14, overflow: 'hidden', marginBottom: 8 },
+  sellerItemMediaWrap: { width: 140, height: 180, borderRadius: Radius.sm, overflow: 'hidden', marginBottom: 8 },
   sellerItemImg: { width: '100%', height: '100%' },
   sellerItemPrice: { fontSize: 14, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   floatingBuyBar: {
@@ -621,13 +625,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(150,150,150,0.1)',
-    backgroundColor: 'transparent',
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
     overflow: 'hidden',
   },
   actionBtn: {

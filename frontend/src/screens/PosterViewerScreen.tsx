@@ -9,6 +9,7 @@ import {
   Pressable,
   Dimensions
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../components/CachedImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +20,7 @@ import { RootStackParamList } from '../navigation/types';
 import { fetchPostersFromApi, deletePosterOnApi } from '../services/postersApi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Typography } from '../theme/designTokens';
+import { Type, Typography } from '../theme/designTokens';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const AUTO_ADVANCE_MS = 5000;
@@ -206,7 +207,7 @@ export default function PosterViewerScreen() {
             accessibilityLabel={`Open @${uploaderHandle} profile`}
             accessibilityHint="Shows poster creator profile"
           >
-            <View style={[styles.authorAvatar, { backgroundColor: Colors.surfaceAlt }]} />
+            <CachedImage uri="" style={styles.authorAvatar} containerStyle={{ borderRadius: 14, overflow: 'hidden' }} contentFit="cover" />
             <Text style={styles.authorName}>@{uploaderHandle}</Text>
             <Text style={styles.postedTime}>| {postedTimeLabel}</Text>
           </AnimatedPressable>
@@ -229,6 +230,11 @@ export default function PosterViewerScreen() {
 
         {activePoster.textOverlay?.text ? (
           <View style={[styles.storyOverlayWrap, textOverlayPositionStyle]}>
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.35)']}
+              style={styles.textOverlayGradient}
+              pointerEvents="none"
+            />
             <Text style={[styles.storyOverlayText, { color: activePoster.textOverlay.color }]} numberOfLines={2}>
               {activePoster.textOverlay.text}
             </Text>
@@ -236,7 +242,14 @@ export default function PosterViewerScreen() {
         ) : null}
 
         <View style={styles.bottomMetaWrap}>
-          <Text style={styles.captionText}>{activePoster.caption}</Text>
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.55)']}
+            style={styles.bottomGradient}
+            pointerEvents="none"
+          />
+          <View style={styles.captionWrap}>
+            <Text style={styles.captionText}>{activePoster.caption}</Text>
+          </View>
 
           <View style={styles.bottomActionRow}>
             <View style={styles.expiryPill}>
@@ -262,7 +275,7 @@ const styles = StyleSheet.create({
   },
   backdropOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   overlay: {
     flex: 1,
@@ -275,7 +288,7 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     flex: 1,
-    height: 2,
+    height: 1.5,
     borderRadius: 1,
     backgroundColor: 'rgba(255,255,255,0.25)',
     overflow: 'hidden',
@@ -364,6 +377,18 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
     paddingBottom: 28,
     gap: 10,
+    position: 'relative',
+  },
+  bottomGradient: {
+    position: 'absolute',
+    left: -12,
+    right: -12,
+    bottom: -28,
+    height: 160,
+  },
+  captionWrap: {
+    position: 'relative',
+    zIndex: 2,
   },
   storyOverlayWrap: {
     position: 'absolute',
@@ -371,6 +396,13 @@ const styles = StyleSheet.create({
     right: 20,
     alignItems: 'center',
     zIndex: 2,
+  },
+  textOverlayGradient: {
+    position: 'absolute',
+    left: -20,
+    right: -20,
+    top: -40,
+    bottom: -40,
   },
   storyOverlayTop: {
     top: 120,
@@ -382,8 +414,8 @@ const styles = StyleSheet.create({
     bottom: 180,
   },
   storyOverlayText: {
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
     fontFamily: Typography.family.bold,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.65)',
@@ -407,8 +439,8 @@ const styles = StyleSheet.create({
   },
   captionText: {
     color: '#fff',
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowRadius: 8,
@@ -419,6 +451,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
     marginTop: 4,
+    position: 'relative',
+    zIndex: 2,
   },
   expiryPill: {
     flexDirection: 'row',
@@ -464,4 +498,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-

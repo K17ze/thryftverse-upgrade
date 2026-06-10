@@ -7,23 +7,21 @@ import {
   FlatList,
   ViewToken,
 } from 'react-native';
-import { Video, ResizeMode } from '../compat/Video';
+import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors, ActiveTheme } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Space, Radius } from '../../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 export interface HeroItem {
   id: string;
-  type: 'image' | 'video';
   uri: string;
-  posterUri?: string;
-  sponsor?: string;
   title: string;
+  subtitle?: string;
   ctaLabel?: string;
   ctaAction?: () => void;
 }
@@ -33,9 +31,8 @@ interface Props {
   autoPlayInterval?: number;
 }
 
-export function HeroCarousel({ items, autoPlayInterval = 5000 }: Props) {
+export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [muted, setMuted] = useState(true);
   const flatListRef = useRef<FlatList<HeroItem>>(null);
   const autoPlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isInteractingRef = useRef(false);
@@ -71,63 +68,48 @@ export function HeroCarousel({ items, autoPlayInterval = 5000 }: Props) {
   const renderItem = useCallback(
     ({ item }: { item: HeroItem }) => (
       <View style={styles.slide}>
-        {item.type === 'video' ? (
-          <Video
-            source={{ uri: item.uri }}
-            style={styles.media}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay
-            isMuted={muted}
-            isLooping
-            usePoster={!!item.posterUri}
-            posterSource={item.posterUri ? { uri: item.posterUri } : undefined}
-          />
-        ) : (
-          <CachedImage
-            uri={item.uri}
-            style={styles.media}
-            contentFit="cover"
-          />
-        )}
+        <CachedImage
+          uri={item.uri}
+          style={styles.media}
+          contentFit="cover"
+          emptyLabel={item.title}
+          emptyIcon="image-outline"
+        />
 
-        {/* Top-right mute toggle for videos */}
-        {item.type === 'video' && (
-          <AnimatedPressable
-            style={styles.muteBtn}
-            onPress={() => setMuted((m) => !m)}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={muted ? 'volume-mute' : 'volume-high'}
-              size={18}
-              color="#fff"
-            />
-          </AnimatedPressable>
-        )}
+        {/* Bottom gradient scrim */}
+        <LinearGradient
+          colors={
+            ActiveTheme === 'light'
+              ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.85)']
+              : ['rgba(0,0,0,0)', 'rgba(0,0,0,0.75)']
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
 
-        {/* Bottom gradient / info */}
+        {/* Bottom info */}
         <View style={styles.infoOverlay}>
-          {item.sponsor && (
-            <Text style={styles.sponsorLabel}>
-              Sponsored by {item.sponsor}
-            </Text>
-          )}
           <Text style={styles.heroTitle}>{item.title}</Text>
+          {item.subtitle ? (
+            <Text style={styles.heroSubtitle}>{item.subtitle}</Text>
+          ) : null}
         </View>
 
-        {/* Visit CTA */}
-        {item.ctaLabel && (
+        {/* CTA */}
+        {item.ctaLabel && item.ctaAction && (
           <AnimatedPressable
             style={styles.visitBtn}
             onPress={item.ctaAction}
             activeOpacity={0.85}
           >
             <Text style={styles.visitBtnText}>{item.ctaLabel}</Text>
+            <Ionicons name="arrow-forward" size={14} color="#fff" />
           </AnimatedPressable>
         )}
       </View>
     ),
-    [muted]
+    []
   );
 
   if (items.length === 0) return null;
@@ -144,19 +126,14 @@ export function HeroCarousel({ items, autoPlayInterval = 5000 }: Props) {
         showsHorizontalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
-        onScrollBeginDrag={() => {
-          isInteractingRef.current = true;
-        }}
-        onScrollEndDrag={() => {
-          isInteractingRef.current = false;
-          startAutoPlay();
-        }}
+        onScrollBeginDrag={() => { isInteractingRef.current = true; }}
+        onScrollEndDrag={() => { isInteractingRef.current = false; startAutoPlay(); }}
         decelerationRate="fast"
         snapToInterval={SCREEN_W}
         snapToAlignment="center"
       />
 
-      {/* Pagination dots */}
+      {/* Pagination — pill style */}
       <View style={styles.dotsRow}>
         {items.map((_, i) => (
           <View
@@ -175,61 +152,54 @@ export function HeroCarousel({ items, autoPlayInterval = 5000 }: Props) {
 const styles = StyleSheet.create({
   slide: {
     width: SCREEN_W,
-    height: SCREEN_W * 1.3,
+    height: SCREEN_W * 1.05,
     position: 'relative',
   },
   media: {
     width: '100%',
     height: '100%',
   },
-  muteBtn: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   infoOverlay: {
     position: 'absolute',
-    bottom: 56,
-    left: 20,
-    right: 100,
-  },
-  sponsorLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
-    marginBottom: 4,
+    bottom: 52,
+    left: Space.md,
+    right: 120,
   },
   heroTitle: {
     fontFamily: Typography.family.bold,
     fontSize: 28,
-    color: '#fff',
+    color: ActiveTheme === 'light' ? Colors.textPrimary : '#fff',
     letterSpacing: -0.6,
     lineHeight: 34,
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: ActiveTheme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
+    textShadowRadius: 4,
+  },
+  heroSubtitle: {
+    fontFamily: Typography.family.medium,
+    fontSize: 14,
+    color: ActiveTheme === 'light' ? Colors.textSecondary : 'rgba(255,255,255,0.85)',
+    marginTop: 4,
+    textShadowColor: ActiveTheme === 'light' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   visitBtn: {
     position: 'absolute',
-    bottom: 56,
-    right: 20,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    paddingHorizontal: 18,
+    bottom: 52,
+    right: Space.md,
+    backgroundColor: Colors.textPrimary,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: Radius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   visitBtnText: {
     fontFamily: Typography.family.semibold,
     fontSize: 13,
-    color: '#fff',
+    color: Colors.background,
   },
   dotsRow: {
     flexDirection: 'row',
