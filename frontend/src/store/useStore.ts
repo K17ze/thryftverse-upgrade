@@ -16,6 +16,18 @@ import {
 } from '../services/botsApi';
 import { fetchChatBotsFromApi } from '../services/chatApi';
 import { fetchMyProfile as fetchMyProfileFromApi } from '../services/profileApi';
+import {
+  createSupportTicket as createSupportTicketOnApi,
+  listSupportTickets as listSupportTicketsFromApi,
+  listSupportTicketsForOrder as listSupportTicketsForOrderFromApi,
+} from '../services/supportApi';
+import {
+  createCollection as createCollectionOnApi,
+  listCollections as listCollectionsFromApi,
+  getCollection as getCollectionFromApi,
+  addListingToCollection as addListingToCollectionOnApi,
+  removeListingFromCollection as removeListingFromCollectionOnApi,
+} from '../services/collectionsApi';
 
 export interface User {
   id: string;
@@ -269,10 +281,14 @@ interface StoreState {
   // Collections (replaces simple saved)
   collections: Collection[];
   createCollection: (name: string, description?: string, isPrivate?: boolean) => string;
+  createCollectionOnApi: (name: string, description?: string, isPrivate?: boolean) => Promise<string>;
+  loadCollectionsFromApi: () => Promise<void>;
   deleteCollection: (id: string) => void;
   renameCollection: (id: string, name: string) => void;
   addToCollection: (collectionId: string, itemId: string) => void;
+  addToCollectionOnApi: (collectionId: string, itemId: string) => Promise<void>;
   removeFromCollection: (collectionId: string, itemId: string) => void;
+  removeFromCollectionOnApi: (collectionId: string, itemId: string) => Promise<void>;
   isInCollection: (collectionId: string, itemId: string) => boolean;
   isItemSavedAnywhere: (itemId: string) => boolean;
   getItemCollections: (itemId: string) => Collection[];
@@ -372,6 +388,9 @@ interface StoreState {
   // Support tickets
   supportTickets: SupportTicket[];
   createSupportTicket: (ticket: Omit<SupportTicket, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => string;
+  createSupportTicketOnApi: (ticket: Omit<SupportTicket, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => Promise<string>;
+  loadSupportTicketsFromApi: () => Promise<void>;
+  loadSupportTicketsForOrderFromApi: (orderId: string) => Promise<void>;
   updateSupportTicketStatus: (id: string, status: SupportTicket['status']) => void;
   getSupportTicketsForOrder: (orderId: string) => SupportTicket[];
   // Marketplace chat settings
@@ -490,6 +509,38 @@ export const useStore = create<StoreState>()(
     }));
     return id;
   },
+  createCollectionOnApi: async (name, description, isPrivate) => {
+    const apiCollection = await createCollectionOnApi(name, description, isPrivate);
+    set((state) => ({
+      collections: [
+        ...state.collections,
+        {
+          id: apiCollection.id,
+          name: apiCollection.name,
+          description: apiCollection.description ?? undefined,
+          isPrivate: apiCollection.isPrivate,
+          itemIds: apiCollection.itemIds,
+          createdAt: new Date(apiCollection.createdAt).getTime(),
+          updatedAt: new Date(apiCollection.updatedAt).getTime(),
+        },
+      ],
+    }));
+    return apiCollection.id;
+  },
+  loadCollectionsFromApi: async () => {
+    const apiCollections = await listCollectionsFromApi();
+    set(() => ({
+      collections: apiCollections.map((c) => ({
+        id: c.id,
+        name: c.name,
+        description: c.description ?? undefined,
+        isPrivate: c.isPrivate,
+        itemIds: c.itemIds,
+        createdAt: new Date(c.createdAt).getTime(),
+        updatedAt: new Date(c.updatedAt).getTime(),
+      })),
+    }));
+  },
   deleteCollection: (id) =>
     set((state) => ({
       collections: state.collections.filter((c) => c.id !== id),
@@ -508,6 +559,16 @@ export const useStore = create<StoreState>()(
           : c
       ),
     })),
+  addToCollectionOnApi: async (collectionId, itemId) => {
+    await addListingToCollectionOnApi(collectionId, itemId);
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === collectionId && !(c.itemIds?.includes(itemId) ?? false)
+          ? { ...c, itemIds: [...(c.itemIds ?? []), itemId], updatedAt: Date.now() }
+          : c
+      ),
+    }));
+  },
   removeFromCollection: (collectionId, itemId) =>
     set((state) => ({
       collections: state.collections.map((c) =>
@@ -516,6 +577,16 @@ export const useStore = create<StoreState>()(
           : c
       ),
     })),
+  removeFromCollectionOnApi: async (collectionId, itemId) => {
+    await removeListingFromCollectionOnApi(collectionId, itemId);
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === collectionId
+          ? { ...c, itemIds: (c.itemIds ?? []).filter((id) => id !== itemId), updatedAt: Date.now() }
+          : c
+      ),
+    }));
+  },
   isInCollection: (collectionId, itemId) =>
     get().collections.find((c) => c.id === collectionId)?.itemIds?.includes(itemId) ?? false,
   isItemSavedAnywhere: (itemId) =>
@@ -1234,6 +1305,59 @@ export const useStore = create<StoreState>()(
       ],
     }));
     return id;
+  },
+  createSupportTicketOnApi: async (ticket) => {
+    const apiTicket = await createSupportTicketOnApi(
+      ticket.orderId,
+      ticket.topicId,
+      ticket.topicLabel,
+      ticket.details
+    );
+    set((state) => ({
+      supportTickets: [
+        ...state.supportTickets,
+        {
+          ...ticket,
+          id: apiTicket.id,
+          status: apiTicket.status as SupportTicket['status'],
+          createdAt: new Date(apiTicket.createdAt).getTime(),
+          updatedAt: new Date(apiTicket.updatedAt).getTime(),
+        },
+      ],
+    }));
+    return apiTicket.id;
+  },
+  loadSupportTicketsFromApi: async () => {
+    const tickets = await listSupportTicketsFromApi();
+    set(() => ({
+      supportTickets: tickets.map((t) => ({
+        id: t.id,
+        orderId: t.orderId,
+        topicId: t.topicId,
+        topicLabel: t.topicLabel,
+        details: t.details,
+        status: t.status as SupportTicket['status'],
+        createdAt: new Date(t.createdAt).getTime(),
+        updatedAt: new Date(t.updatedAt).getTime(),
+      })),
+    }));
+  },
+  loadSupportTicketsForOrderFromApi: async (orderId) => {
+    const tickets = await listSupportTicketsForOrderFromApi(orderId);
+    set((state) => {
+      const existingOther = state.supportTickets.filter((t) => t.orderId !== orderId);
+      const incoming = tickets.map((t) => ({
+        id: t.id,
+        orderId: t.orderId,
+        topicId: t.topicId,
+        topicLabel: t.topicLabel,
+        details: t.details,
+        status: t.status as SupportTicket['status'],
+        createdAt: new Date(t.createdAt).getTime(),
+        updatedAt: new Date(t.updatedAt).getTime(),
+      }));
+      return { supportTickets: [...existingOther, ...incoming] };
+    });
   },
   updateSupportTicketStatus: (id, status) =>
     set((state) => ({

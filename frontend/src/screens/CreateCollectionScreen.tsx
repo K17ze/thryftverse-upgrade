@@ -32,7 +32,7 @@ export default function CreateCollectionScreen() {
   const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
-  const createCollection = useStore((state) => state.createCollection);
+  const createCollectionOnApi = useStore((state) => state.createCollectionOnApi);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -41,20 +41,22 @@ export default function CreateCollectionScreen() {
 
   const canSubmit = name.trim().length > 0 && !isSubmitting;
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
     if (!canSubmit) return;
     haptic.medium();
     setIsSubmitting(true);
 
-    const trimmed = name.trim();
-    const newId = createCollection(trimmed, description.trim() || undefined, isPrivate);
-    show('Collection created', 'success');
-
-    setTimeout(() => {
+    try {
+      const trimmed = name.trim();
+      const newId = await createCollectionOnApi(trimmed, description.trim() || undefined, isPrivate);
+      show('Collection created', 'success');
       setIsSubmitting(false);
       navigation.replace('CollectionDetail', { collectionId: newId });
-    }, 300);
-  }, [canSubmit, haptic, name, description, isPrivate, createCollection, show, navigation]);
+    } catch {
+      setIsSubmitting(false);
+      show('Unable to create collection. Please check your connection and try again.', 'error');
+    }
+  }, [canSubmit, haptic, name, description, isPrivate, createCollectionOnApi, show, navigation]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

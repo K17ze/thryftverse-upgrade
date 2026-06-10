@@ -59,11 +59,17 @@ export default function ClosetScreen() {
   const savedProductIds = useStore((state) => state.savedProducts);
   const collections = useStore((state) => state.collections);
   const createCollection = useStore((state) => state.createCollection);
+  const loadCollectionsFromApi = useStore((state) => state.loadCollectionsFromApi);
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
+
+  React.useEffect(() => {
+    void loadCollectionsFromApi();
+  }, [loadCollectionsFromApi]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshListings();
+    await loadCollectionsFromApi();
     setTimeout(() => setRefreshing(false), 350);
   };
 

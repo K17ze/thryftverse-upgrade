@@ -293,6 +293,12 @@ export default function OrderDetailScreen() {
     };
   }, [syncOrder]);
 
+  const loadSupportTicketsForOrderFromApi = useStore((state) => state.loadSupportTicketsForOrderFromApi);
+
+  React.useEffect(() => {
+    void loadSupportTicketsForOrderFromApi(orderId);
+  }, [orderId, loadSupportTicketsForOrderFromApi]);
+
   const listingId = backendOrder?.listingId;
   const existingListing = listingId ? listings.find((item) => item.id === listingId) : undefined;
   const listing = existingListing ?? {
