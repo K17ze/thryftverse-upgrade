@@ -98,9 +98,9 @@ export function ChatComposerBar({
 const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     paddingHorizontal: Space.sm,
-    paddingVertical: 8,
+    paddingVertical: 10,
     gap: Space.xs,
     backgroundColor: Colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -112,6 +112,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 2,
   },
   inputWrap: {
     flex: 1,
@@ -120,8 +121,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
     minHeight: 44,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   input: {
     flex: 1,
@@ -132,6 +135,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
     padding: 0,
     margin: 0,
+    maxHeight: 120,
   },
   sendBtn: {
     width: 36,
@@ -140,8 +144,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   sendBtnActive: {
-    backgroundColor: Colors.brand,
+    backgroundColor: Colors.textPrimary,
+    borderColor: Colors.textPrimary,
   },
 });

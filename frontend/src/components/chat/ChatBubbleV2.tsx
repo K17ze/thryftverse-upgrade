@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 interface Reaction {
@@ -53,10 +53,10 @@ export function ChatBubbleV2({
   onReactionPress,
   onRetry,
 }: ChatBubbleV2Props) {
-  const bgColor = isMe ? Colors.brand : Colors.surfaceAlt;
-  const textColor = isMe ? Colors.textInverse : Colors.textPrimary;
-  const metaColor = isMe ? Colors.textInverse : Colors.textMuted;
-  const replyBorderColor = isMe ? Colors.textInverse : Colors.border;
+  const bgColor = isMe ? Colors.surface : Colors.surfaceAlt;
+  const textColor = Colors.textPrimary;
+  const metaColor = Colors.textMuted;
+  const replyBorderColor = Colors.border;
 
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
@@ -76,7 +76,8 @@ export function ChatBubbleV2({
         delayLongPress={350}
         style={({ pressed }) => [
           styles.bubble,
-          { backgroundColor: bgColor, opacity: pressed ? 0.9 : 1 },
+          isMe ? styles.bubbleMe : styles.bubbleThem,
+          { backgroundColor: bgColor, opacity: pressed ? 0.92 : 1 },
         ]}
       >
         {senderLabel && !isMe && isFirstInCluster ? (
@@ -184,6 +185,21 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     gap: 4,
     borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  bubbleMe: {
+    borderTopRightRadius: Radius.sm,
+    borderBottomRightRadius: Radius.lg,
+    borderTopLeftRadius: Radius.lg,
+    borderBottomLeftRadius: Radius.lg,
+    ...Elevation.subtle,
+  },
+  bubbleThem: {
+    borderTopLeftRadius: Radius.sm,
+    borderBottomLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    borderBottomRightRadius: Radius.lg,
   },
   senderName: {
     fontSize: Type.caption.size,
