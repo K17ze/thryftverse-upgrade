@@ -21,11 +21,11 @@ interface StatItem {
 }
 
 interface ProfileVisualHeaderProps {
-  coverUri?: string | null;
-  avatarUri?: string | null;
+  coverUri?: string | null | undefined;
+  avatarUri?: string | null | undefined;
   displayName?: string;
   username?: string;
-  bio?: string;
+  bio?: string | null;
   stats?: StatItem[];
   isSelf?: boolean;
   onEditCover?: () => void;
@@ -35,6 +35,7 @@ interface ProfileVisualHeaderProps {
   onFollow?: () => void;
   following?: boolean;
   verified?: boolean;
+  hideCover?: boolean;
 }
 
 export function ProfileVisualHeader({
@@ -52,10 +53,12 @@ export function ProfileVisualHeader({
   onFollow,
   following = false,
   verified = false,
+  hideCover = false,
 }: ProfileVisualHeaderProps) {
   return (
     <Reanimated.View entering={FadeInDown.duration(350).delay(30)} style={styles.root}>
       {/* Cover with gradient scrim */}
+      {!hideCover && (
       <View style={styles.coverWrap}>
         <CachedImage
           uri={coverUri ?? ''}
@@ -75,9 +78,10 @@ export function ProfileVisualHeader({
           </AnimatedPressable>
         )}
       </View>
+      )}
 
       {/* Identity block overlaps cover bottom */}
-      <View style={styles.identityBlock}>
+      <View style={[styles.identityBlock, hideCover && { marginTop: 0, paddingTop: Space.md }]}>
         {/* Avatar */}
         <View style={styles.avatarWrap}>
           <CachedImage

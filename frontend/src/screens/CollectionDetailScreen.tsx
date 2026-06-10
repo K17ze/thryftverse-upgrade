@@ -241,16 +241,17 @@ export default function CollectionDetailScreen() {
         )}
 
         {/* Grid */}
-        {count > 0 ? (
-          <Reanimated.View entering={FadeInDown.duration(300)}>
+        {count > 0 && (
+          <Reanimated.View entering={FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
             <MasonryGrid
               items={collectionItems}
-              onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
+              onPressItem={(item: any) => navigation.navigate('ItemDetail', { itemId: item.id })}
               numColumns={2}
               showSaveButton
             />
           </Reanimated.View>
-        ) : (
+        )}
+        {count === 0 && (
           <EmptyState
             graphic={<BoardEmptyGraphic title="Empty collection" subtitle="Add items to this board" icon="folder-open-outline" size={140} />}
             title="Empty collection"
