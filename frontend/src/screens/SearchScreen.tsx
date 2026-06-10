@@ -629,37 +629,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
 
-  // Empty states
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingBottom: 80,
-  },
-  emptyIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    letterSpacing: 0.1,
-  },
   emptyFooter: {
     alignItems: 'center',
     paddingVertical: 24,

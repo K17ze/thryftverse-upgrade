@@ -588,7 +588,7 @@ export default function HomeScreen() {
           const ratio = TILE_RATIO_SEQUENCE[index % TILE_RATIO_SEQUENCE.length];
           return (
             <View key={`feed_loading_left_${index}`}>
-              <SkeletonLoader width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={0} />
+              <SkeletonLoader width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.lg} />
             </View>
           );
         })}
@@ -598,7 +598,7 @@ export default function HomeScreen() {
           const ratio = TILE_RATIO_SEQUENCE[(index + 2) % TILE_RATIO_SEQUENCE.length];
           return (
             <View key={`feed_loading_right_${index}`}>
-              <SkeletonLoader width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={0} />
+              <SkeletonLoader width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.lg} />
             </View>
           );
         })}

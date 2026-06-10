@@ -74,7 +74,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
       <AnimatedPressable onPress={onPress} style={styles.imageWrap}>
         <CachedImage
           uri={item.images?.[0] ?? ''}
-          style={[styles.image, { aspectRatio, borderRadius: visualOnly ? 16 : Radius.sm }]}
+          style={[styles.image, { aspectRatio }]}
           contentFit="cover"
           transition={300}
         />
@@ -230,7 +230,6 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    borderRadius: Radius.lg,
   },
 
   // Overlays

@@ -38,7 +38,7 @@ import { fetchFilteredListings } from '../services/listingsApi';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Elevation } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -145,7 +145,7 @@ const BrowseGridItem = ({ item, index, navigation, wishlist, toggleWishlist, sho
               style={styles.sharedImageLayer}
               sharedTransitionTag={`image-${item.id}-0`}
             >
-              <CachedImage uri={item.images?.[0] ?? ''} style={styles.gridImage} containerStyle={{ width: '100%', height: 180, borderRadius: 12 }} contentFit="cover" />
+              <CachedImage uri={item.images?.[0] ?? ''} style={styles.gridImage} containerStyle={styles.gridImageContainer} contentFit="cover" />
             </SharedTransitionView>
 
             <Reanimated.View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }, bigHeartStyle]}>
@@ -598,11 +598,16 @@ const styles = StyleSheet.create({
   gridItem: { width: ITEM_WIDTH },
   imageWrap: {
     width: ITEM_WIDTH,
-    height: ITEM_WIDTH * 1.35,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceAlt,
     marginBottom: 12,
+    ...Elevation.card,
+  },
+  gridImageContainer: {
+    width: '100%',
+    aspectRatio: 0.8,
+    borderRadius: Radius.lg,
   },
   gridImage: { width: '100%', height: '100%' },
   sharedImageLayer: {
