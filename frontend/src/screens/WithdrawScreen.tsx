@@ -31,7 +31,8 @@ import {
   PayoutAccountPayload,
 } from '../services/walletApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
-import { Typography } from '../theme/designTokens';
+import { Typography, Space, Radius, Elevation } from '../theme/designTokens';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import {
   convertDisplayToGbpAmount,
   getDefaultWithdrawDisplayAmount,
@@ -391,8 +392,9 @@ export default function WithdrawScreen() {
 
       <KeyboardAvoidingView style={styles.content} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-          
-          <View style={styles.amountWrap}>
+
+          <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
+            <View style={styles.amountWrap}>
             <Text style={styles.currencySymbol}>{currencySymbol}</Text>
             <TextInput
               style={styles.amountInput}
@@ -409,12 +411,14 @@ export default function WithdrawScreen() {
           {policyScopeLabel ? <Text style={styles.policyLabel}>Policy scope: {policyScopeLabel}</Text> : null}
           {payoutPolicyHint ? <Text style={styles.policyHint}>{payoutPolicyHint}</Text> : null}
           {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
+          </Reanimated.View>
 
-          <Text style={styles.sectionTitle}>Transfer to</Text>
-          <AnimatedPressable
-            style={styles.bankCard}
-            activeOpacity={0.8}
-            onPress={() => {
+          <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+            <Text style={styles.sectionTitle}>Transfer to</Text>
+            <AnimatedPressable
+              style={styles.bankCard}
+              activeOpacity={0.8}
+              onPress={() => {
               if (!allowBankAccounts) {
                 show('Bank account setup is unavailable in your country policy.', 'error');
                 navigation.navigate('Payments');
@@ -453,6 +457,7 @@ export default function WithdrawScreen() {
           ) : (
             <Text style={styles.railHintText}>Bank account setup is currently disabled for this region policy.</Text>
           )}
+          </Reanimated.View>
 
         </ScrollView>
 
@@ -499,7 +504,7 @@ const styles = StyleSheet.create({
   balanceError: { textAlign: 'center', marginTop: 4, marginBottom: 20, fontSize: 12, fontFamily: Typography.family.semibold, color: Colors.danger },
   sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
 
-  bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: 16, borderRadius: 16, marginBottom: 12 },
+  bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: 16, borderRadius: Radius.lg, marginBottom: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.border, ...Elevation.subtle },
   bankLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   bankIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   bankName: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },

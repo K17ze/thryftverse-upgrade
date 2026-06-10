@@ -48,7 +48,7 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 
 import { useHaptic } from '../hooks/useHaptic';
 
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Space, Radius, Type, Elevation } from '../theme/designTokens';
 
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 
@@ -1386,7 +1386,7 @@ const styles = StyleSheet.create({
 
     flexGrow: 1,
 
-    paddingTop: Space.xs,
+    paddingTop: Space.sm,
 
   },
 
@@ -1402,9 +1402,15 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: Space.md,
 
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.surface,
 
-    borderBottomColor: Colors.border,
+    borderRadius: Radius.lg,
+
+    marginHorizontal: Space.md,
+
+    marginVertical: 4,
+
+    ...Elevation.subtle,
 
   },
 
@@ -1562,15 +1568,21 @@ const styles = StyleSheet.create({
 
   unreadDot: {
 
-    width: 8,
+    minWidth: 20,
 
-    height: 8,
+    height: 20,
 
-    borderRadius: 4,
+    borderRadius: 10,
 
     backgroundColor: Colors.textPrimary,
 
     marginLeft: Space.xs,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    paddingHorizontal: 6,
 
   },
 
