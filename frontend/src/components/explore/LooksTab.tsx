@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
@@ -22,6 +23,7 @@ import { useToast } from '../../context/ToastContext';
 import { useStore } from '../../store/useStore';
 import { EmptyState } from '../EmptyState';
 import { useBackendData } from '../../context/BackendDataContext';
+import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -81,50 +83,18 @@ const LOOKS_SEED: LookItem[] = [
     comments: 7,
     saved: true,
   },
-  {
-    id: 'look4',
-    title: 'Vintage Denim Fit',
-    coverImage: '',
-    items: [
-      { id: 'l11', label: 'Levis 501', x: 0.5, y: 0.55 },
-      { id: 'l12', label: 'Carhartt Detroit', x: 0.3, y: 0.2 },
-    ],
-    creator: { name: 'vintagelover', avatar: '' },
-    likes: 312,
-    comments: 24,
-    saved: false,
-  },
-  {
-    id: 'look5',
-    title: 'Techwear Essentials',
-    coverImage: '',
-    items: [
-      { id: 'l13', label: "Arc'teryx Alpha", x: 0.45, y: 0.35 },
-      { id: 'l14', label: 'ACG Pants', x: 0.55, y: 0.7 },
-      { id: 'l15', label: 'Salomon XT-6', x: 0.35, y: 0.9 },
-    ],
-    creator: { name: 'gorpgod', avatar: '' },
-    likes: 178,
-    comments: 15,
-    saved: false,
-  },
 ];
 
-/* ── Animated Tag Dot ── */
+/* ── Tag dot ── */
 function TagDot() {
   return (
-    <View style={tagDotStyles.wrap}>
-      <View style={tagDotStyles.ring} />
-      <View style={tagDotStyles.core}>
-        <View style={tagDotStyles.inner} />
-      </View>
+    <View style={tagDotStyles.core}>
+      <View style={tagDotStyles.inner} />
     </View>
   );
 }
 
 const tagDotStyles = StyleSheet.create({
-  wrap: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
-  ring: { position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.brand, opacity: 0.35 },
   core: { width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
   inner: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
 });
@@ -161,8 +131,10 @@ function LookCard({
             <CachedImage
               uri={look.coverImage}
               style={styles.image}
-              containerStyle={{ width: '100%', height: SCREEN_W * 1.1, borderRadius: Radius.lg }}
+              containerStyle={{ width: '100%', height: '100%' }}
               contentFit="cover"
+              emptyLabel={look.title}
+              emptyIcon="image-outline"
             />
           </SharedTransitionView>
 
@@ -196,40 +168,42 @@ function LookCard({
               <Text style={styles.tagBadgeText}>{look.items.length}</Text>
             </View>
           )}
-        </View>
 
-        {/* Bottom info row */}
-        <View style={styles.infoRow}>
-          <CachedImage
-            uri={look.creator.avatar ?? ''}
-            style={styles.creatorAvatar}
-            containerStyle={{ width: 32, height: 32, borderRadius: 16 }}
-            contentFit="cover"
+          {/* Gradient overlay at bottom */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.gradient}
           />
-          <View style={styles.infoText}>
-            <Text style={styles.lookTitle}>{look.title}</Text>
-            <Text style={styles.creatorName}>@{look.creator.name}</Text>
+
+          {/* Overlaid title & creator (Instagram-style) */}
+          <View style={styles.overlayInfo}>
+            <Text style={styles.overlayTitle}>{look.title}</Text>
+            <Text style={styles.overlayCreator}>@{look.creator.name}</Text>
           </View>
-          <View style={styles.statsRow}>
+
+          {/* Subtle stats row overlaid at bottom-right */}
+          <View style={styles.overlayStats}>
             <AnimatedPressable
-              style={styles.statBtn}
+              style={styles.overlayStatBtn}
               onPress={(event) => { event.stopPropagation(); onLikePress(); }}
             >
-              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={18} color={isLiked ? Colors.danger : Colors.brand} />
-              <Text style={styles.statCount}>{likeCount}</Text>
+              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={14} color={isLiked ? Colors.danger : '#fff'} />
+              <Text style={styles.overlayStatCount}>{likeCount}</Text>
             </AnimatedPressable>
             <AnimatedPressable
-              style={styles.statBtn}
+              style={styles.overlayStatBtn}
               onPress={(event) => { event.stopPropagation(); onCommentPress(); }}
             >
-              <Ionicons name="chatbubble-outline" size={16} color={Colors.textSecondary} />
-              <Text style={styles.statCount}>{look.comments}</Text>
+              <Ionicons name="chatbubble-outline" size={13} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.overlayStatCount}>{look.comments}</Text>
             </AnimatedPressable>
             <AnimatedPressable
-              style={styles.statBtn}
+              style={styles.overlayStatBtn}
               onPress={(event) => { event.stopPropagation(); onSavePress(); }}
             >
-              <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={16} color={isSaved ? Colors.brand : Colors.textSecondary} />
+              <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={13} color={isSaved ? Colors.brand : 'rgba(255,255,255,0.9)'} />
             </AnimatedPressable>
           </View>
         </View>
@@ -296,13 +270,20 @@ export default function LooksTab() {
 
   if (allLooks.length === 0) {
     return (
-      <EmptyState
-        icon="camera-outline"
-        title="No looks yet"
-        subtitle="Be the first to share your style. Looks with shoppable tags coming soon."
-        ctaLabel="Browse"
-        onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
-      />
+      <Reanimated.View entering={FadeInDown.duration(400)}>
+        <EmptyState
+          icon="camera-outline"
+          title="No looks yet"
+          subtitle="Be the first to share your style. Looks with shoppable tags coming soon."
+          ctaLabel="Browse"
+          onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
+          graphic={
+            <View style={{ alignItems: 'center', marginBottom: Space.md }}>
+              <Ionicons name="images-outline" size={48} color={Colors.brand} />
+            </View>
+          }
+        />
+      </Reanimated.View>
     );
   }
 
@@ -311,6 +292,10 @@ export default function LooksTab() {
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.scrollContent}
     >
+      <DiscoverySectionHeader
+        kicker="Community"
+        title="Looks"
+      />
       {allLooks.map((look, i) => (
         <LookCard
           key={look.id}
@@ -319,16 +304,16 @@ export default function LooksTab() {
           isLiked={!!likedLooks[look.id]}
           isSaved={!!savedLooks[look.id] || look.saved}
           onPress={() => {
-            haptic.light();
             const itemId = resolveLookItemId(look);
-            if (itemId) navigation.push('ItemDetail', { itemId });
+            if (itemId) {
+              navigation.navigate('ItemDetail', { itemId });
+            }
           }}
           onLikePress={() => handleToggleLike(look)}
           onCommentPress={() => handleCommentPress(look)}
           onSavePress={() => handleToggleSave(look)}
         />
       ))}
-      <View style={{ height: 100 }} />
     </ScrollView>
   );
 }
@@ -336,29 +321,18 @@ export default function LooksTab() {
 const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
     paddingBottom: Space.xl,
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.sm,
     marginBottom: Space.lg,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
   },
   imageWrap: {
     width: '100%',
     height: SCREEN_W * 1.1,
     position: 'relative',
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    overflow: 'hidden',
   },
   image: {
     width: '100%',
@@ -367,95 +341,96 @@ const styles = StyleSheet.create({
   imageShared: {
     ...StyleSheet.absoluteFillObject,
   },
-
-  /* Tags */
+  gradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 140,
+  },
+  overlayInfo: {
+    position: 'absolute',
+    bottom: 44,
+    left: Space.md,
+    right: 100,
+  },
+  overlayTitle: {
+    fontFamily: Typography.family.bold,
+    fontSize: 18,
+    color: '#fff',
+    letterSpacing: -0.3,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  overlayCreator: {
+    fontFamily: Typography.family.medium,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  overlayStats: {
+    position: 'absolute',
+    bottom: Space.sm,
+    right: Space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  overlayStatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  overlayStatCount: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+  },
   tagWrap: {
     position: 'absolute',
-    transform: [{ translateX: -24 }, { translateY: -24 }],
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
+    zIndex: 3,
   },
   tagPill: {
     position: 'absolute',
-    top: 22,
-    left: -40,
-    width: 80,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    borderRadius: Radius.md,
+    left: 20,
+    top: -6,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 5,
+    flexDirection: 'row',
     alignItems: 'center',
   },
   tagPillText: {
     color: '#fff',
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    marginLeft: 6,
   },
   tagBadge: {
     position: 'absolute',
     top: 12,
-    left: 12,
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: Radius.full,
+    gap: 4,
+    zIndex: 2,
   },
   tagBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-  },
-
-  /* Info row */
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Space.md,
-    gap: Space.sm,
-  },
-  creatorAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  infoText: {
-    flex: 1,
-  },
-  lookTitle: {
     color: Colors.textPrimary,
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-    marginBottom: 2,
-  },
-  creatorName: {
-    color: Colors.textMuted,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  statBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statCount: {
-    color: Colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
   },
 });

@@ -9,12 +9,13 @@ import {
   StatusBar,
   TextInput,
   Dimensions,
-  RefreshControl
+  RefreshControl,
 } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
-import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MasonryGrid } from '../components/ProductCardV2';
 import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -34,7 +35,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
-import { Type , Typography  } from '../theme/designTokens';
+import { Type , Typography, Space, Radius  } from '../theme/designTokens';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import PulseTab from '../components/explore/PulseTab';
 import LooksTab from '../components/explore/LooksTab';
@@ -48,7 +49,6 @@ const EXPLORE_TABS = [
   { value: 'looks', label: 'Looks' },
   { value: 'edit', label: 'Edit' },
 ];
-
 
 const PANEL_BG = Colors.surface;
 const PANEL_ALT = Colors.surfaceAlt;
@@ -112,7 +112,7 @@ const SAVED_LOOKS_SEED: SavedLook[] = [
 
 const SAVED_LOOKS: SavedLook[] = ENABLE_RUNTIME_MOCKS ? SAVED_LOOKS_SEED : [];
 
-// Look card component
+// Look card component — upgraded for editorial visual discovery
 function LookCard({
   look,
   onPress,
@@ -142,11 +142,18 @@ function LookCard({
           style={lookStyles.imageShared}
           sharedTransitionTag={sharedTransitionTag}
         >
-          <CachedImage uri={look.coverImage} style={lookStyles.image} containerStyle={{ width: '100%', height: 200, borderRadius: 14 }} contentFit="cover" />
+          <CachedImage
+            uri={look.coverImage}
+            style={lookStyles.image}
+            containerStyle={{ width: '100%', height: '100%' }}
+            contentFit="cover"
+            emptyLabel={look.title}
+            emptyIcon="image-outline"
+          />
         </SharedTransitionView>
 
         {/* Floating item tags */}
-        {look.items.map((item, i) => (
+        {look.items.map((item) => (
           <View
             key={item.id}
             style={[
@@ -159,46 +166,50 @@ function LookCard({
           </View>
         ))}
 
-        {/* Gradient overlay at bottom */}
-        <View style={lookStyles.gradient} />
-      </View>
+        {/* Gradient overlay + overlaid info */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={lookStyles.gradient}
+        />
 
-      {/* Bottom info row */}
-      <View style={lookStyles.infoRow}>
-        <CachedImage uri={look.creator.avatar} style={lookStyles.creatorAvatar} containerStyle={{ width: 24, height: 24, borderRadius: 12 }} contentFit="cover" />
-        <View style={lookStyles.infoText}>
-          <Text style={lookStyles.lookTitle}>{look.title}</Text>
-          <Text style={lookStyles.creatorName}>by @{look.creator.name}</Text>
+        {/* Overlaid title & creator (Instagram-style) */}
+        <View style={lookStyles.overlayInfo}>
+          <Text style={lookStyles.overlayTitle}>{look.title}</Text>
+          <Text style={lookStyles.overlayCreator}>by @{look.creator.name}</Text>
         </View>
-        <View style={lookStyles.statsRow}>
+
+        {/* Subtle stats row overlaid at bottom */}
+        <View style={lookStyles.overlayStats}>
           <AnimatedPressable
-            style={lookStyles.statBtn}
+            style={lookStyles.overlayStatBtn}
             onPress={(event) => {
               event.stopPropagation();
               onLikePress();
             }}
           >
-            <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={18} color={isLiked ? Colors.danger : BRAND} />
-            <Text style={lookStyles.statCount}>{likeCount}</Text>
+            <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={14} color={isLiked ? Colors.danger : '#fff'} />
+            <Text style={lookStyles.overlayStatCount}>{likeCount}</Text>
           </AnimatedPressable>
           <AnimatedPressable
-            style={lookStyles.statBtn}
+            style={lookStyles.overlayStatBtn}
             onPress={(event) => {
               event.stopPropagation();
               onCommentPress();
             }}
           >
-            <Ionicons name="chatbubble-outline" size={16} color={Colors.textSecondary} />
-            <Text style={lookStyles.statCount}>{look.comments}</Text>
+            <Ionicons name="chatbubble-outline" size={13} color="rgba(255,255,255,0.9)" />
+            <Text style={lookStyles.overlayStatCount}>{look.comments}</Text>
           </AnimatedPressable>
           <AnimatedPressable
-            style={lookStyles.statBtn}
+            style={lookStyles.overlayStatBtn}
             onPress={(event) => {
               event.stopPropagation();
               onSavePress();
             }}
           >
-            <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={16} color={isSaved ? BRAND : Colors.textSecondary} />
+            <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={13} color={isSaved ? BRAND : 'rgba(255,255,255,0.9)'} />
           </AnimatedPressable>
         </View>
       </View>
@@ -234,8 +245,6 @@ export default function SearchScreen() {
     setTimeout(() => setRefreshing(false), 400);
   };
 
-
-
   const handleToggleLookLike = React.useCallback(
     (look: SavedLook) => {
       setLikedLooks((prev) => {
@@ -247,15 +256,26 @@ export default function SearchScreen() {
         };
       });
     },
-    [navigation, show],
+    [show],
   );
 
   const resolveLookItemId = React.useCallback(
     (look: SavedLook) => look.items.find((entry) => listingIdSet.has(entry.id))?.id ?? listings[0]?.id,
-    [listingIdSet, listings]
+    [listingIdSet, listings],
   );
 
   const { isDark } = useAppTheme();
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'pulse':
+        return <PulseTab />;
+      case 'looks':
+        return <LooksTab />;
+      case 'edit':
+        return <EditTab />;
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -263,7 +283,8 @@ export default function SearchScreen() {
 
       {/* -- Header -- */}
       <View style={styles.headerRow}>
-        <View>
+        <View style={styles.headerTitleBlock}>
+          <Text style={styles.headerLabel}>DISCOVER</Text>
           <Text style={styles.hugeTitle}>Explore</Text>
         </View>
         <View style={styles.headerRight}>
@@ -271,10 +292,6 @@ export default function SearchScreen() {
             <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('CreateLook')}>
               <Ionicons name="camera-outline" size={18} color={Colors.textPrimary} />
             </AnimatedPressable>
-            {/* OutfitBuilder hidden — no backend */}
-            {/* <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('OutfitBuilder')}>
-              <Ionicons name="shirt-outline" size={18} color={Colors.textPrimary} />
-            </AnimatedPressable> */}
             <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('GlobalSearch')}>
               <Ionicons name="compass-outline" size={18} color={Colors.textPrimary} />
             </AnimatedPressable>
@@ -347,9 +364,26 @@ export default function SearchScreen() {
             fullWidth
           />
 
-          {activeTab === 'pulse' && <PulseTab />}
-          {activeTab === 'looks' && <LooksTab />}
-          {activeTab === 'edit' && <EditTab />}
+          {/* Empty state when no listings and not loading */}
+          {listings.length === 0 && !isSyncing && !lastError ? (
+            <Reanimated.View entering={FadeInDown.duration(400)}>
+              <EmptyState
+                icon="compass-outline"
+                title="Nothing to explore yet"
+                subtitle="New items are uploaded every day. Check back soon or browse categories."
+                ctaLabel="Browse Categories"
+                onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
+                suggestedActions={[
+                  { label: 'Search', onPress: () => navigation.navigate('GlobalSearch') },
+                  { label: 'Visual Search', onPress: () => navigation.navigate('VisualSearch') },
+                ]}
+              />
+            </Reanimated.View>
+          ) : (
+            <Reanimated.View entering={FadeInDown.duration(350).delay(100)}>
+              {renderTabContent()}
+            </Reanimated.View>
+          )}
 
           <View style={styles.emptyFooter} />
         </Reanimated.ScrollView>
@@ -362,8 +396,8 @@ export default function SearchScreen() {
 const lookStyles = StyleSheet.create({
   card: {
     backgroundColor: PANEL_BG,
-    borderRadius: 20,
-    marginBottom: 20,
+    borderRadius: Radius.sm,
+    marginBottom: Space.lg,
     overflow: 'hidden',
   },
   imageWrap: {
@@ -383,10 +417,53 @@ const lookStyles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 100,
-    backgroundColor: 'transparent',
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
+    height: 140,
+  },
+  overlayInfo: {
+    position: 'absolute',
+    bottom: 44,
+    left: Space.md,
+    right: 100,
+  },
+  overlayTitle: {
+    fontFamily: Typography.family.bold,
+    fontSize: 18,
+    color: '#fff',
+    letterSpacing: -0.3,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  overlayCreator: {
+    fontFamily: Typography.family.medium,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  overlayStats: {
+    position: 'absolute',
+    bottom: Space.sm,
+    right: Space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  overlayStatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  overlayStatCount: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
   },
   itemTag: {
     position: 'absolute',
@@ -410,49 +487,6 @@ const lookStyles = StyleSheet.create({
     fontSize: 11,
     fontFamily: Typography.family.medium,
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-  },
-  creatorAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surface,
-  },
-  infoText: {
-    flex: 1,
-  },
-  lookTitle: {
-    color: Colors.textPrimary,
-    fontSize: 16,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.06,
-    marginBottom: 2,
-  },
-  creatorName: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    letterSpacing: 0.1,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  statBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statCount: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-  },
 });
 
 // ------------------------------------------------------------------------------
@@ -468,12 +502,15 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 16,
   },
+  headerTitleBlock: {
+    gap: 2,
+  },
   headerLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: BRAND,
-    letterSpacing: 1.1,
-    marginBottom: 4,
+    color: Colors.brand,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   hugeTitle: {
     fontSize: Type.title.size,
@@ -544,8 +581,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  searchBarFocused: { backgroundColor: Colors.surfaceAlt, borderColor: Colors.brand },
+  searchBarFocused: {
+    backgroundColor: Colors.surfaceAlt,
+    borderColor: Colors.brand,
+    shadowOpacity: 0.08,
+    elevation: 3,
+  },
   searchInput: {
     flex: 1,
     fontSize: 16,

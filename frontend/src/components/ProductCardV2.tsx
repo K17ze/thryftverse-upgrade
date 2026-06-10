@@ -8,7 +8,7 @@ import React from 'react';
 import { View, StyleSheet, Dimensions, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Layout, Elevation } from '../theme/designTokens';
+import { Space, Radius, Layout } from '../theme/designTokens';
 import { T, Price } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
@@ -184,10 +184,27 @@ interface MasonryGridProps {
 }
 
 export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton = false, visualOnly = false }: MasonryGridProps) {
-  // Split items into columns for masonry effect, tracking original indices
+  // True masonry: assign each item to the shortest column for visual balance
   const columns: { item: Listing; originalIndex: number }[][] = Array.from({ length: numColumns }, () => []);
+  const heights = Array.from({ length: numColumns }, () => 0);
+
   items.forEach((item, index) => {
-    columns[index % numColumns].push({ item, originalIndex: index });
+    const aspect = ASPECT_RATIOS[item.id.charCodeAt(0) % ASPECT_RATIOS.length];
+    const imgHeight = 160 / aspect; // approximate; actual width varies
+    const infoHeight = visualOnly ? 0 : 42;
+    const itemHeight = imgHeight + infoHeight + Space.sm;
+
+    let shortestCol = 0;
+    let shortestHeight = heights[0];
+    for (let c = 1; c < numColumns; c++) {
+      if (heights[c] < shortestHeight) {
+        shortestCol = c;
+        shortestHeight = heights[c];
+      }
+    }
+
+    columns[shortestCol].push({ item, originalIndex: index });
+    heights[shortestCol] += itemHeight;
   });
 
   return (
@@ -220,13 +237,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Image - Flagship radius with subtle shadow for depth
+  // Image - Pinterest/Depop tight editorial feel. No shadow, minimal radius.
   imageWrap: {
     position: 'relative',
     overflow: 'hidden',
-    borderRadius: Radius.lg,
+    borderRadius: Radius.sm,
     backgroundColor: Colors.surfaceAlt,
-    ...Elevation.card,
   },
   image: {
     width: '100%',
@@ -331,15 +347,15 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  // Grid
+  // Grid — Pinterest density: tight 3px gaps, edge-to-edge feel
   grid: {
     flexDirection: 'row',
     paddingHorizontal: Space.sm,
-    gap: Space.sm,
+    gap: 3,
   },
   column: {
     flex: 1,
-    gap: 0,
+    gap: 3,
   },
 });
 

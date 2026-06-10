@@ -12,9 +12,11 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isVideoUri } from '../utils/media';
+import { ImageEmptyGraphic } from './ImageEmptyGraphic';
 
 interface CachedImageProps {
   uri: string;
@@ -27,6 +29,8 @@ interface CachedImageProps {
   priority?: 'low' | 'normal' | 'high';
   isVisible?: boolean;
   cacheBuster?: string;
+  emptyLabel?: string;
+  emptyIcon?: keyof typeof Ionicons.glyphMap;
 }
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
@@ -42,7 +46,21 @@ export function CachedImage({
   priority = 'normal',
   isVisible = true,
   cacheBuster,
+  emptyLabel,
+  emptyIcon,
 }: CachedImageProps) {
+  // Honest placeholder for missing images — no blank rectangles
+  if (!uri) {
+    return (
+      <View style={[styles.container, containerStyle]}>
+        <ImageEmptyGraphic
+          label={emptyLabel}
+          icon={emptyIcon}
+          style={[styles.image, style]}
+        />
+      </View>
+    );
+  }
   const [loaded, setLoaded] = useState(false);
   const reducedMotionEnabled = useReducedMotion();
   const shimmerX = useSharedValue(-1);
