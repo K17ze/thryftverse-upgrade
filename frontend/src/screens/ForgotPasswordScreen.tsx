@@ -1,8 +1,13 @@
-import { Typography } from '../theme/designTokens';
+import { Space, Typography } from '../theme/designTokens';
 import React, { useState } from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
+  View,
+  Text,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -10,6 +15,9 @@ import { AppInput } from '../components/ui/AppInput';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { requestPasswordReset } from '../services/authApi';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { AppButton } from '../components/ui/AppButton';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation<any>();
@@ -19,6 +27,7 @@ export default function ForgotPasswordScreen() {
   const canSendReset = email.trim().length > 0;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const reducedMotionEnabled = useReducedMotion();
 
   const handleReset = async () => {
     if (isSubmitting) {
@@ -63,18 +72,30 @@ export default function ForgotPasswordScreen() {
         style={styles.content} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Text style={styles.title}>Reset{'\n'}Password</Text>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.delay(0).duration(400)}>
+          <Text style={styles.title}>Reset{'\n'}Password</Text>
+        </Reanimated.View>
         
         {isSent ? (
-          <View style={styles.successState}>
+          <Reanimated.View 
+            style={styles.successState}
+            entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)}
+          >
             <Ionicons name="mail-unread-outline" size={48} color={Colors.success} />
             <Text style={styles.successText}>We have sent a password reset link to {email}.</Text>
-            <AnimatedPressable style={styles.primaryBtn} onPress={() => navigation.goBack()} activeOpacity={0.9}>
-              <Text style={styles.primaryText}>Return to Login</Text>
-            </AnimatedPressable>
-          </View>
+            <AppButton
+              title="Return to Login"
+              onPress={() => navigation.goBack()}
+              variant="primary"
+              size="lg"
+              style={{ marginTop: Space.lg }}
+            />
+          </Reanimated.View>
         ) : (
-          <View style={styles.form}>
+          <Reanimated.View 
+            style={styles.form}
+            entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)}
+          >
             <Text style={styles.subtitle}>Enter your email address and we will send you a link to reset your password.</Text>
             <AppInput
               label="Email"
@@ -93,17 +114,21 @@ export default function ForgotPasswordScreen() {
 
             {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
-            <View style={styles.footer}>
-              <AnimatedPressable
-                style={[styles.primaryBtn, !canSendReset && styles.primaryBtnDisabled]}
+            <Reanimated.View 
+              style={styles.footer}
+              entering={reducedMotionEnabled ? undefined : FadeInDown.delay(200).duration(400)}
+            >
+              <AppButton
+                title={isSubmitting ? 'Sending...' : 'Send Reset Link'}
                 onPress={handleReset}
-                activeOpacity={0.9}
                 disabled={!canSendReset || isSubmitting}
-              >
-                <Text style={styles.primaryText}>{isSubmitting ? 'Sending...' : 'Send Reset Link'}</Text>
-              </AnimatedPressable>
-            </View>
-          </View>
+                loading={isSubmitting}
+                variant="primary"
+                size="lg"
+                style={{ marginTop: Space.lg }}
+              />
+            </Reanimated.View>
+          </Reanimated.View>
         )}
 
       </KeyboardAvoidingView>
@@ -114,38 +139,26 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   
-  content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center' },
-  title: { fontSize: 44, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: 48, letterSpacing: -1, marginBottom: 20 },
-  subtitle: { fontSize: 16, fontFamily: Typography.family.regular, color: Colors.textSecondary, marginBottom: 40, lineHeight: 24 },
+  content: { flex: 1, paddingHorizontal: Space.lg, justifyContent: 'center' },
+  title: { fontSize: 44, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: 48, letterSpacing: -1, marginBottom: Space.lg },
+  subtitle: { fontSize: 16, fontFamily: Typography.family.regular, color: Colors.textSecondary, marginBottom: Space.xl, lineHeight: 24 },
   
-  form: { marginBottom: 40 },
-  inputGroup: { marginBottom: 40 },
-  label: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textSecondary, marginBottom: 12 },
-  input: { 
-    height: 56, 
-    borderBottomWidth: 1, 
-    borderBottomColor: Colors.border, 
-    color: Colors.textPrimary, 
-    fontSize: 16, 
-    fontFamily: Typography.family.regular 
-  },
+  form: { marginBottom: Space.xl },
+  inputGroup: { marginBottom: Space.xl },
   
-  footer: { paddingBottom: 40 },
-  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, marginBottom: 4 },
-  primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', width: '100%', marginTop: 20 },
-  primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold },
+  footer: { paddingBottom: Space.xl },
+  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, marginBottom: Space.xs },
 
   successState: {
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: Space.lg,
   },
   successText: {
     fontSize: 16,
     color: Colors.textPrimary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
-    marginVertical: 24,
+    marginVertical: Space.lg,
     lineHeight: 24,
   }
 });
