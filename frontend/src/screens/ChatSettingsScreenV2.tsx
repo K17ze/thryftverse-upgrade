@@ -1,9 +1,11 @@
 import React from 'react';
 import { Alert, View } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SettingsPage } from '../components/settings/SettingsPage';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -26,6 +28,7 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
   const enabledBotIds = useStore((s) => s.enabledBotIds);
   const bots = useStore((s) => s.availableChatBots);
   const messageRequests = useStore((s) => s.messageRequests);
+  const reducedMotionEnabled = useReducedMotion();
 
   const mutedCount = mutedIds.length;
   const archivedCount = archivedIds.length;
@@ -70,7 +73,7 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
   return (
     <SettingsPage title="Chat Settings" onBack={() => navigation.goBack()}>
       {/* Privacy */}
-      <View>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
         <SettingsSection title="Privacy">
           <SettingsRow
             icon="lock-closed-outline"
@@ -94,10 +97,10 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </View>
+      </Reanimated.View>
 
       {/* Conversations */}
-      <View>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
         <SettingsSection title="Conversations">
           <SettingsRow
             icon="volume-mute-outline"
@@ -126,10 +129,10 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </View>
+      </Reanimated.View>
 
       {/* Marketplace chat */}
-      <View>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
         <SettingsSection title="Marketplace Chat">
           <SettingsRow
             icon="pricetag-outline"
@@ -154,10 +157,10 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </View>
+      </Reanimated.View>
 
       {/* Bots */}
-      <View>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
         <SettingsSection title="Bots & Automation">
           <SettingsRow
             icon="hardware-chip-outline"
@@ -186,10 +189,10 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </View>
+      </Reanimated.View>
 
       {/* Message requests */}
-      <View>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
         <SettingsSection title="Message Requests">
           <SettingsRow
             icon="mail-unread-outline"
@@ -206,10 +209,10 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </View>
+      </Reanimated.View>
 
       {/* Notifications */}
-      <View>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
         <SettingsSection title="Notifications">
           <SettingsRow
             icon="notifications-outline"
@@ -220,7 +223,7 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </View>
+      </Reanimated.View>
     </SettingsPage>
   );
 }

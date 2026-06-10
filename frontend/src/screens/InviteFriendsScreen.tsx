@@ -16,8 +16,10 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { useToast } from '../context/ToastContext';
-import { MOCK_USERS } from '../data/mockData';
-import { CachedImage } from '../components/CachedImage';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'InviteFriends'>;
 
@@ -29,18 +31,10 @@ const BORDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
 
-const MOCK_CONTACTS = [
-  { id: '1', name: 'Alex Johnson', initials: 'AJ' },
-  { id: '2', name: 'Sam Rivera', initials: 'SR' },
-  { id: '3', name: 'Jordan Lee', initials: 'JL' },
-  { id: '4', name: 'Morgan Davis', initials: 'MD' },
-  { id: '5', name: 'Taylor Brown', initials: 'TB' },
-];
-
 export default function InviteFriendsScreen({ navigation }: Props) {
   const inviteLink = 'https://thryftverse.app/invite/user123';
   const { show } = useToast();
-  const supportUser = MOCK_USERS[0];
+  const reducedMotionEnabled = useReducedMotion();
 
   const handleShare = async () => {
     try {
@@ -56,117 +50,62 @@ export default function InviteFriendsScreen({ navigation }: Props) {
     show('Invite link copied to clipboard.', 'success');
   }, [inviteLink, show]);
 
-  const handleOpenReferralSupport = React.useCallback(() => {
-    navigation.navigate('Chat', {
-      conversationId: 'c1',
-      focusQuery: 'invite rewards',
-      partnerUserId: supportUser.id,
-    });
-  }, [navigation, supportUser.id]);
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
-      <View style={styles.header}>
-        <AnimatedPressable onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={TEXT} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Invite friends</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <ScreenHeader title="Invite friends" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Hero */}
-        <View style={styles.heroCard}>
+        <Reanimated.View
+          style={styles.heroCard}
+          entering={reducedMotionEnabled ? undefined : FadeInDown.delay(0).duration(400)}
+        >
           <Ionicons name="gift-outline" size={48} color={ACCENT} />
           <Text style={styles.heroTitle}>Invite & earn</Text>
           <Text style={styles.heroSubtitle}>
             Invite friends to Thryftverse. When they make their first sale, you both get a reward.
           </Text>
-        </View>
-
-        <View style={styles.supportRow}>
-          <AnimatedPressable
-            style={styles.supportIdentity}
-            onPress={() => navigation.navigate('UserProfile', { userId: supportUser.id })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Open @${supportUser.username} profile`}
-            accessibilityHint="Shows referral support profile"
-          >
-            <CachedImage
-              uri={supportUser.avatar}
-              style={styles.supportAvatar}
-              containerStyle={styles.supportAvatarWrap}
-              contentFit="cover"
-            />
-            <View style={styles.supportCopyWrap}>
-              <Text style={styles.supportTitle}>Questions about rewards?</Text>
-              <Text style={styles.supportHandle}>@{supportUser.username}</Text>
-            </View>
-          </AnimatedPressable>
-
-          <AnimatedPressable
-            style={styles.supportMessageBtn}
-            onPress={handleOpenReferralSupport}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Message referral support"
-            accessibilityHint="Opens chat for invite reward help"
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
+        </Reanimated.View>
 
         {/* Share Link */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
-          <View style={styles.linkRow}>
-            <Text style={styles.linkText} numberOfLines={1}>
-              {inviteLink}
-            </Text>
-            <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()}>
-              <Ionicons name="copy-outline" size={16} color={ACCENT} />
-              <Text style={styles.copyText}>Copy</Text>
-            </AnimatedPressable>
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)}
+        >
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
+            <View style={styles.linkRow}>
+              <Text style={styles.linkText} numberOfLines={1}>
+                {inviteLink}
+              </Text>
+              <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()}>
+                <Ionicons name="copy-outline" size={16} color={ACCENT} />
+                <Text style={styles.copyText}>Copy</Text>
+              </AnimatedPressable>
+            </View>
           </View>
-        </View>
+        </Reanimated.View>
 
         {/* Share Options */}
-        <View style={styles.shareRow}>
-          {[
-            { icon: 'logo-whatsapp', label: 'WhatsApp', color: '#25D366' },
-            { icon: 'logo-instagram', label: 'Instagram', color: '#E1306C' },
-            { icon: 'mail-outline', label: 'Email', color: ACCENT },
-            { icon: 'share-social-outline', label: 'More', color: MUTED },
-          ].map(s => (
-            <AnimatedPressable key={s.label} style={styles.shareIconBtn} onPress={handleShare}>
-              <View style={[styles.shareIconCircle, { borderColor: s.color }]}>
-                <Ionicons name={s.icon as any} size={22} color={s.color} />
-              </View>
-              <Text style={styles.shareIconLabel}>{s.label}</Text>
-            </AnimatedPressable>
-          ))}
-        </View>
-
-        {/* Contacts */}
-        <Text style={styles.sectionLabel}>SUGGESTED CONTACTS</Text>
-        <View style={styles.card}>
-          {MOCK_CONTACTS.map((contact, idx) => (
-            <View key={contact.id}>
-              <View style={styles.contactRow}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{contact.initials}</Text>
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.delay(200).duration(400)}
+        >
+          <View style={styles.shareRow}>
+            {[
+              { icon: 'logo-whatsapp', label: 'WhatsApp', color: '#25D366' },
+              { icon: 'logo-instagram', label: 'Instagram', color: '#E1306C' },
+              { icon: 'mail-outline', label: 'Email', color: ACCENT },
+              { icon: 'share-social-outline', label: 'More', color: MUTED },
+            ].map(s => (
+              <AnimatedPressable key={s.label} style={styles.shareIconBtn} onPress={handleShare}>
+                <View style={[styles.shareIconCircle, { borderColor: s.color }]}>
+                  <Ionicons name={s.icon as any} size={22} color={s.color} />
                 </View>
-                <Text style={styles.contactName}>{contact.name}</Text>
-                <AnimatedPressable style={styles.inviteBtn} onPress={handleShare}>
-                  <Text style={styles.inviteBtnText}>Invite</Text>
-                </AnimatedPressable>
-              </View>
-              {idx < MOCK_CONTACTS.length - 1 && <View style={styles.divider} />}
-            </View>
-          ))}
-        </View>
+                <Text style={styles.shareIconLabel}>{s.label}</Text>
+              </AnimatedPressable>
+            ))}
+          </View>
+        </Reanimated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -174,107 +113,74 @@ export default function InviteFriendsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
-  },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: TEXT },
-  content: { padding: 20 },
+  content: { padding: Space.lg },
   heroCard: {
     backgroundColor: CARD,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 20,
-    padding: 30,
+    borderRadius: Radius.xl,
+    padding: Space.xl,
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: Space.xl,
   },
-  heroTitle: { fontSize: 24, fontWeight: '800', color: TEXT, marginTop: 14, marginBottom: 8 },
-  heroSubtitle: { fontSize: 14, color: MUTED, textAlign: 'center', lineHeight: 20 },
-  supportRow: {
-    marginBottom: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  supportIdentity: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  supportAvatarWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-  },
-  supportAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-  },
-  supportCopyWrap: {
-    flex: 1,
-  },
-  supportTitle: {
+  heroTitle: {
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
+    letterSpacing: Type.title.letterSpacing,
+    fontFamily: Typography.family.extrabold,
     color: TEXT,
-    fontSize: 12,
-    fontWeight: '700',
+    marginTop: Space.md,
+    marginBottom: Space.sm,
   },
-  supportHandle: {
-    marginTop: 1,
+  heroSubtitle: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    letterSpacing: Type.body.letterSpacing,
+    fontFamily: Typography.family.regular,
     color: MUTED,
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  supportMessageBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
+    textAlign: 'center',
   },
   sectionLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    letterSpacing: LetterSpacing.caps,
+    fontFamily: Typography.family.medium,
     color: MUTED,
-    letterSpacing: 1.2,
     textTransform: 'uppercase',
-    marginBottom: 10,
-    marginLeft: 4,
+    marginBottom: Space.sm,
+    marginLeft: Space.xs,
   },
-  section: { marginBottom: 20 },
+  section: { marginBottom: Space.lg },
   linkRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: CARD,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
   },
-  linkText: { flex: 1, fontSize: 14, color: MUTED },
-  copyBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  copyText: { fontSize: 13, color: ACCENT, fontWeight: '600' },
+  linkText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    letterSpacing: Type.body.letterSpacing,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+  },
+  copyBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  copyText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    fontFamily: Typography.family.semibold,
+    color: ACCENT,
+  },
   shareRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 28,
+    marginBottom: Space.xl,
   },
   shareIconBtn: { alignItems: 'center', gap: 6 },
   shareIconCircle: {
@@ -286,37 +192,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: CARD_ALT,
   },
-  shareIconLabel: { fontSize: 11, color: MUTED },
-  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+  shareIconLabel: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    letterSpacing: Type.meta.letterSpacing,
+    fontFamily: Typography.family.medium,
+    color: MUTED,
   },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: CARD_ALT,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  avatarText: { fontSize: 14, fontWeight: '700', color: ACCENT },
-  contactName: { flex: 1, fontSize: 15, fontWeight: '500', color: TEXT },
-  inviteBtn: {
-    borderWidth: 1,
-    borderColor: ACCENT,
-    backgroundColor: CARD_ALT,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  inviteBtnText: { fontSize: 13, color: ACCENT, fontWeight: '600' },
-  divider: { height: 1, backgroundColor: BORDER, marginHorizontal: 18 },
 });
-
-

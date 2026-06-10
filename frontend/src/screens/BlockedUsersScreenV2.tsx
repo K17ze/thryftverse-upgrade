@@ -9,7 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { EmptyState } from '../components/EmptyState';
+import { FlagshipEmptyGraphic } from '../components/flagship';
 import { SettingsPage } from '../components/settings/SettingsPage';
 
 type Props = StackScreenProps<RootStackParamList, 'BlockedUsers'>;
@@ -35,11 +35,11 @@ export default function BlockedUsersScreenV2({ navigation }: Props) {
   return (
     <SettingsPage title="Blocked Users" onBack={() => navigation.goBack()}>
       {blockedIds.length === 0 ? (
-        <EmptyState
-          icon="shield-checkmark-outline"
-          title="No blocked users"
-          subtitle="When you block someone, they will appear here. You can unblock them at any time."
-        />
+        <View style={{ alignItems: 'center', paddingVertical: Space.xl * 2 }}>
+          <FlagshipEmptyGraphic variant="box" size={120} />
+          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.lg }}>No blocked users</Text>
+          <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', marginTop: Space.xs, paddingHorizontal: Space.lg }}>When you block someone, they will appear here. You can unblock them at any time.</Text>
+        </View>
       ) : (
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
           <View style={styles.card}>
@@ -79,7 +79,7 @@ export default function BlockedUsersScreenV2({ navigation }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     marginHorizontal: Space.md,
     shadowColor: '#000',
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     paddingHorizontal: Space.md,
     minHeight: 56,
     gap: Space.sm + 4,

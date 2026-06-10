@@ -24,14 +24,11 @@ import * as Linking from 'expo-linking';
 import { Colors } from '../constants/colors';
 import { Typography, Radius } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken } from '../services/authApi';
 
 const { width, height } = Dimensions.get('window');
-
-const BG_IMAGE = 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=85';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -220,19 +217,7 @@ export default function AuthLandingScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Full-bleed editorial background */}
-      <CachedImage
-        uri={BG_IMAGE}
-        style={styles.bgImage}
-        containerStyle={styles.bgImageContainer}
-        contentFit="cover"
-        priority="high"
-      />
-
-      {/* Background overlay */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.background }]} />
-
-      {/* Dark gradient overlay for text readability */}
+      {/* Premium dark gradient background */}
       <LinearGradient
         colors={['rgba(9,9,9,0.15)', 'rgba(9,9,9,0.50)', 'rgba(9,9,9,0.92)', '#090909']}
         locations={[0, 0.4, 0.7, 1]}
@@ -344,13 +329,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#090909',
   },
-  bgImageContainer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  bgImage: {
-    width: '100%',
-    height: '100%',
-  },
   safeArea: {
     flex: 1,
     justifyContent: 'space-between',
@@ -391,19 +369,19 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   primaryBtn: {
-    backgroundColor: '#d7b98f',
+    backgroundColor: '#F4F0E8',
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#d7b98f',
+    shadowColor: '#F4F0E8',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
   },
   primaryText: {
-    color: '#0b0907',
+    color: '#111111',
     fontSize: 16,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
