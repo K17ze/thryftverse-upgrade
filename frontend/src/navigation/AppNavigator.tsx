@@ -102,6 +102,9 @@ import MessageRequestsScreen from '../screens/MessageRequestsScreen';
 import CreateCollectionScreen from '../screens/CreateCollectionScreen';
 import OrderSupportScreen from '../screens/OrderSupportScreen';
 import ChatMediaPreviewScreen from '../screens/ChatMediaPreviewScreen';
+// UI-18 — Reference-perfect product UX
+import EditCollectionScreen from '../screens/EditCollectionScreen';
+import SupportTicketDetailScreen from '../screens/SupportTicketDetailScreen';
 
 // Phase 13 — Settings integrity
 import ChatSettingsScreen from '../screens/ChatSettingsScreenV2';
@@ -284,6 +287,9 @@ export default function AppNavigator() {
       <Stack.Screen name="CreateCollection" component={CreateCollectionScreen} options={modalScreenOptions} />
       <Stack.Screen name="OrderSupport" component={OrderSupportScreen} />
       <Stack.Screen name="ChatMediaPreview" component={ChatMediaPreviewScreen} options={modalScreenOptions} />
+      {/* UI-18 — Reference-perfect product UX */}
+      <Stack.Screen name="EditCollection" component={EditCollectionScreen} options={modalScreenOptions} />
+      <Stack.Screen name="SupportTicketDetail" component={SupportTicketDetailScreen} />
 
       {/* Diagnostic — dev only */}
       {__DEV__ && (

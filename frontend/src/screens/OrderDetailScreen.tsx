@@ -553,16 +553,25 @@ export default function OrderDetailScreen() {
         {/* -- Support status -- */}
         {openTicket && (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(340)}>
-            <ElevatedSurface variant="surface" style={styles.supportCard}>
-              <View style={styles.supportRow}>
-                <Ionicons name="help-circle-outline" size={20} color={Colors.brand} />
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.supportLabel}>Open support request</Text>
-                  <Text style={styles.supportSub}>{openTicket.topicLabel}</Text>
+            <AnimatedPressable
+              onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id })}
+              activeOpacity={0.92}
+              scaleValue={0.99}
+              hapticFeedback="light"
+              accessibilityLabel="Open support request details"
+              accessibilityRole="button"
+            >
+              <ElevatedSurface variant="surface" style={styles.supportCard}>
+                <View style={styles.supportRow}>
+                  <Ionicons name="help-circle-outline" size={20} color={Colors.brand} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.supportLabel}>Open support request</Text>
+                    <Text style={styles.supportSub}>{openTicket.topicLabel}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-              </View>
-            </ElevatedSurface>
+              </ElevatedSurface>
+            </AnimatedPressable>
           </Reanimated.View>
         )}
 

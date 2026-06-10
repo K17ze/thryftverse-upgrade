@@ -39,6 +39,7 @@ import { Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
+import { ShareSheet } from '../components/ShareSheet';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 180;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -52,6 +53,7 @@ export default function CollectionDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
+  const [shareVisible, setShareVisible] = useState(false);
   const scrollY = useSharedValue(0);
 
   const collectionId = route.params?.collectionId;
@@ -211,11 +213,11 @@ export default function CollectionDetailScreen() {
             <View style={styles.coverActions} pointerEvents="box-none">
               <View style={{ width: 40 }} />
               <View style={styles.actionRow}>
-                <AnimatedPressable style={styles.actionBtnOverlay} onPress={openRename} activeOpacity={0.85} accessibilityLabel="Rename collection">
-                  <Ionicons name="pencil-outline" size={18} color="#fff" />
+                <AnimatedPressable style={styles.actionBtnOverlay} onPress={() => { haptic.light(); setShareVisible(true); }} activeOpacity={0.85} accessibilityLabel="Share collection">
+                  <Ionicons name="share-outline" size={18} color="#fff" />
                 </AnimatedPressable>
-                <AnimatedPressable style={styles.actionBtnOverlay} onPress={handleDelete} activeOpacity={0.85} accessibilityLabel="Delete collection">
-                  <Ionicons name="trash-outline" size={18} color="#fff" />
+                <AnimatedPressable style={styles.actionBtnOverlay} onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }} activeOpacity={0.85} accessibilityLabel="Edit collection">
+                  <Ionicons name="settings-outline" size={18} color="#fff" />
                 </AnimatedPressable>
               </View>
             </View>
@@ -230,11 +232,11 @@ export default function CollectionDetailScreen() {
               <Text style={styles.noCoverMeta}>{count} {count === 1 ? 'item' : 'items'}</Text>
             </View>
             <View style={styles.actionRow}>
-              <AnimatedPressable style={styles.actionBtn} onPress={openRename} activeOpacity={0.85}>
-                <Ionicons name="pencil-outline" size={20} color={Colors.textPrimary} />
+              <AnimatedPressable style={styles.actionBtn} onPress={() => { haptic.light(); setShareVisible(true); }} activeOpacity={0.85}>
+                <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
               </AnimatedPressable>
-              <AnimatedPressable style={styles.actionBtn} onPress={handleDelete} activeOpacity={0.85}>
-                <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+              <AnimatedPressable style={styles.actionBtn} onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }} activeOpacity={0.85}>
+                <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
               </AnimatedPressable>
             </View>
           </View>
@@ -266,6 +268,14 @@ export default function CollectionDetailScreen() {
 
         <View style={{ height: 120 }} />
       </Reanimated.ScrollView>
+
+      <ShareSheet
+        visible={shareVisible}
+        onDismiss={() => setShareVisible(false)}
+        url={`https://thryftverse.com/collection/${collectionId}`}
+        title={collection?.name ?? 'Check out this collection'}
+        imageUri={coverImage ?? undefined}
+      />
 
       {/* Rename Bottom Sheet Modal */}
       <RenameCollectionSheet
