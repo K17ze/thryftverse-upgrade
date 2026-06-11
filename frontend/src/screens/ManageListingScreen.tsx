@@ -21,6 +21,7 @@ import Reanimated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { FlagshipActionCluster } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
@@ -28,7 +29,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -258,33 +259,43 @@ export default function ManageListingScreen() {
           hapticFeedback="light"
         />
 
-        {/* Icon Actions Row */}
-        <View style={styles.iconActionsRow}>
-          <AnimatedPressable style={styles.iconAction} activeOpacity={0.82} onPress={handleBumpListing}>
-            <View style={[styles.iconCircle, { backgroundColor: WARN_TINT }]}>
-              <Ionicons name="flash-outline" size={22} color={Colors.brand} />
+        {/* Action Cluster */}
+        <FlagshipActionCluster
+          actions={[
+            { icon: <Ionicons name="flash-outline" size={20} color={Colors.brand} />, label: 'Bump', onPress: handleBumpListing },
+            { icon: <Ionicons name="image-outline" size={20} color={Colors.brand} />, label: 'Poster', onPress: () => navigation.navigate('CreatePoster') },
+            { icon: <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />, label: 'Share', onPress: handleShare },
+            { icon: <Ionicons name="eye-outline" size={20} color={Colors.textPrimary} />, label: 'Preview', onPress: () => navigation.push('ItemDetail', { itemId: item.id }) },
+          ]}
+          style={{ marginHorizontal: Space.md, marginBottom: Space.md }}
+        />
+
+        {/* Listing Health */}
+        {(item.views !== undefined || item.likes !== undefined || item.saves !== undefined) && (
+          <View style={styles.healthCard}>
+            <Text style={styles.healthTitle}>Listing Health</Text>
+            <View style={styles.healthRow}>
+              {item.views !== undefined && (
+                <View style={styles.healthItem}>
+                  <Text style={styles.healthValue}>{item.views}</Text>
+                  <Text style={styles.healthLabel}>Views</Text>
+                </View>
+              )}
+              {item.likes !== undefined && (
+                <View style={styles.healthItem}>
+                  <Text style={styles.healthValue}>{item.likes}</Text>
+                  <Text style={styles.healthLabel}>Likes</Text>
+                </View>
+              )}
+              {item.saves !== undefined && (
+                <View style={styles.healthItem}>
+                  <Text style={styles.healthValue}>{item.saves}</Text>
+                  <Text style={styles.healthLabel}>Saves</Text>
+                </View>
+              )}
             </View>
-            <Text style={styles.iconActionLabel}>Bump</Text>
-          </AnimatedPressable>
-          <AnimatedPressable style={styles.iconAction} activeOpacity={0.82} onPress={() => navigation.navigate('CreatePoster')}>
-            <View style={[styles.iconCircle, { backgroundColor: BRAND_TINT }]}>
-              <Ionicons name="image-outline" size={22} color={Colors.brand} />
-            </View>
-            <Text style={styles.iconActionLabel}>Poster</Text>
-          </AnimatedPressable>
-          <AnimatedPressable style={styles.iconAction} activeOpacity={0.82} onPress={handleShare}>
-            <View style={[styles.iconCircle, { backgroundColor: ICON_BG }]}>
-              <Ionicons name="share-outline" size={22} color={Colors.textPrimary} />
-            </View>
-            <Text style={styles.iconActionLabel}>Share</Text>
-          </AnimatedPressable>
-          <AnimatedPressable style={styles.iconAction} activeOpacity={0.82} onPress={() => navigation.push('ItemDetail', { itemId: item.id })}>
-            <View style={[styles.iconCircle, { backgroundColor: ICON_BG }]}>
-              <Ionicons name="eye-outline" size={22} color={Colors.textPrimary} />
-            </View>
-            <Text style={styles.iconActionLabel}>Preview</Text>
-          </AnimatedPressable>
-        </View>
+          </View>
+        )}
 
         {/* Status Toggle */}
         <View style={styles.card}>
@@ -549,6 +560,42 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 8,
     paddingVertical: 12,
+  },
+  healthCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.lg,
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  healthTitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: Space.sm,
+  },
+  healthRow: {
+    flexDirection: 'row',
+    gap: Space.lg,
+  },
+  healthItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  healthValue: {
+    fontSize: Type.priceLarge.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  healthLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   deleteText: {
     fontSize: 14,

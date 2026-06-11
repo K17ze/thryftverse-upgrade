@@ -59,3 +59,19 @@ export async function removeListingFromCollection(collectionId: string, listingI
     method: 'DELETE',
   });
 }
+
+export async function updateCollection(
+  collectionId: string,
+  fields: { name?: string; description?: string | null; isPrivate?: boolean }
+): Promise<{ ok: true; collectionId: string }> {
+  return fetchJson<{ ok: true; collectionId: string }>(`/collections/${collectionId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(fields),
+  });
+}
+
+export async function deleteCollectionOnApi(collectionId: string): Promise<{ ok: true; collectionId: string }> {
+  return fetchJson<{ ok: true; collectionId: string }>(`/collections/${collectionId}`, {
+    method: 'DELETE',
+  });
+}

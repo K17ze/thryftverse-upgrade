@@ -29856,6 +29856,87 @@ app.delete('/collections/:collectionId/items/:listingId', async (request, reply)
   return { ok: true };
 });
 
+// PATCH /collections/:collectionId — update name, description, privacy
+app.patch('/collections/:collectionId', async (request, reply) => {
+  const paramsSchema = z.object({ collectionId: z.string().min(4).max(120) });
+  const bodySchema = z.object({
+    name: z.string().trim().min(1).max(80).optional(),
+    description: z.string().trim().max(500).optional().nullable(),
+    isPrivate: z.boolean().optional(),
+  });
+
+  const { collectionId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const ownership = await db.query(
+    'SELECT id FROM collections WHERE id = $1 AND user_id = $2 LIMIT 1',
+    [collectionId, userId]
+  );
+
+  if (!ownership.rowCount) {
+    reply.code(403);
+    return { ok: false, error: 'Collection not found or not owned' };
+  }
+
+  const updates = [];
+  const values = [];
+  let idx = 1;
+
+  if (body.name !== undefined) { updates.push(`name = $${idx++}`); values.push(body.name); }
+  if (body.description !== undefined) { updates.push(`description = $${idx++}`); values.push(body.description); }
+  if (body.isPrivate !== undefined) { updates.push(`is_private = $${idx++}`); values.push(body.isPrivate); }
+
+  if (updates.length === 0) {
+    reply.code(400);
+    return { ok: false, error: 'No fields to update' };
+  }
+
+  updates.push(`updated_at = NOW()`);
+  values.push(collectionId);
+  values.push(userId);
+
+  await db.query(
+    `UPDATE collections SET ${updates.join(', ')} WHERE id = $${idx++} AND user_id = $${idx++}`,
+    values
+  );
+
+  return { ok: true, collectionId };
+});
+
+// DELETE /collections/:collectionId — delete collection and its items
+app.delete('/collections/:collectionId', async (request, reply) => {
+  const paramsSchema = z.object({ collectionId: z.string().min(4).max(120) });
+
+  const { collectionId } = paramsSchema.parse(request.params);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const ownership = await db.query(
+    'SELECT id FROM collections WHERE id = $1 AND user_id = $2 LIMIT 1',
+    [collectionId, userId]
+  );
+
+  if (!ownership.rowCount) {
+    reply.code(403);
+    return { ok: false, error: 'Collection not found or not owned' };
+  }
+
+  await db.query('DELETE FROM collection_items WHERE collection_id = $1', [collectionId]);
+  await db.query('DELETE FROM collections WHERE id = $1 AND user_id = $2', [collectionId, userId]);
+
+  return { ok: true, collectionId };
+});
+
 const shutdown = async () => {
   if (isShuttingDown) {
     return;

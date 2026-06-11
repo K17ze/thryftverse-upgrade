@@ -128,6 +128,33 @@ export type RootStackParamList = {
   // UI-18 — Reference-perfect product UX
   EditCollection: { collectionId: string };
   SupportTicketDetail: { ticketId: string };
+  // UI-19 — Sell / Co-own / Chat marketplace UX
+  ListingPreview: {
+    preview: {
+      title: string;
+      price?: number;
+      originalPrice?: number;
+      brand?: string;
+      condition?: string;
+      category?: string;
+      size?: string;
+      description?: string;
+      photos: string[];
+      tags?: string[];
+      shippingMethod?: string;
+      shippingPayer?: string;
+    };
+  };
+  TradeConfirm: {
+    assetId: string;
+    side: 'buy' | 'sell';
+    quantity: number;
+    totalValue: number;
+    fee: number;
+    netValue: number;
+    orderMode: 'market' | 'limit';
+    limitPriceGbp?: number;
+  };
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
 };

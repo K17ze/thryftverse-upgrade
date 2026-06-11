@@ -34,6 +34,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
 
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -93,6 +94,8 @@ export default function TradeScreen() {
 
   const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote });
 
+  const haptic = useHaptic();
+
   const handleSubmit = async () => {
     if (isSubmittingOrder) return;
 
@@ -102,44 +105,22 @@ export default function TradeScreen() {
     });
 
     if (!decision.ok) { show(decision.message, 'error'); return; }
-    const expectedQueue = decision.kind === 'queue';
     if (!asset) { show('Asset not found', 'error'); return; }
 
-    setIsSubmittingOrder(true);
-    try {
-      const actingUserId = currentUser?.id ?? 'u1';
-      let remoteOrder: Awaited<ReturnType<typeof placeCoOwnOrder>> | null = null;
+    const feeGbp = quote.grossValue * CO_OWN_FEE_RATE;
+    const totalGbp = quote.grossValue + feeGbp;
 
-      try {
-        remoteOrder = await placeCoOwnOrder(asset.id, {
-          userId: actingUserId, side, units: quote.quantity,
-          orderType: orderMode,
-          limitPriceGbp: orderMode === 'limit' && quote.hasLimitPrice ? quote.limitPrice : undefined,
-        });
-      } catch (error) {
-        const parsedError = parseApiError(error, 'Unable to submit order');
-        if (!parsedError.isNetworkError) {
-          if (isComplianceBlocked(parsedError.code)) { show(parsedError.message, 'error'); return; }
-          show(parsedError.message, parsedError.status && parsedError.status >= 500 ? 'error' : 'info');
-          return;
-        }
-        show('Trading engine unavailable. Please retry once connection is restored.', 'error');
-        return;
-      }
-
-      if (remoteOrder) {
-        if (remoteOrder.order.status === 'rejected') { show('Order rejected by matching engine.', 'error'); return; }
-        if (remoteOrder.order.status === 'open' || remoteOrder.order.status === 'partially_filled' || expectedQueue) {
-          show('Offer placed on the server order book.', 'info');
-        } else {
-          show('Order executed on CO-OWN engine.', 'success');
-        }
-        if (remoteOrder.aml?.alertId) show('Trade is flagged for AML review.', 'info');
-        navigation.goBack();
-      }
-    } finally {
-      setIsSubmittingOrder(false);
-    }
+    haptic.medium();
+    navigation.navigate('TradeConfirm', {
+      assetId: asset.id,
+      side,
+      quantity: quote.quantity,
+      totalValue: quote.grossValue,
+      fee: feeGbp,
+      netValue: totalGbp,
+      orderMode,
+      limitPriceGbp: orderMode === 'limit' && quote.hasLimitPrice ? quote.limitPrice : undefined,
+    });
   };
 
   if (!asset) {

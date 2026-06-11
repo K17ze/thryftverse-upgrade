@@ -105,6 +105,9 @@ import ChatMediaPreviewScreen from '../screens/ChatMediaPreviewScreen';
 // UI-18 — Reference-perfect product UX
 import EditCollectionScreen from '../screens/EditCollectionScreen';
 import SupportTicketDetailScreen from '../screens/SupportTicketDetailScreen';
+// UI-19 — Sell / Co-own / Chat marketplace UX
+import ListingPreviewScreen from '../screens/ListingPreviewScreen';
+import TradeConfirmScreen from '../screens/TradeConfirmScreen';
 
 // Phase 13 — Settings integrity
 import ChatSettingsScreen from '../screens/ChatSettingsScreenV2';
@@ -290,6 +293,9 @@ export default function AppNavigator() {
       {/* UI-18 — Reference-perfect product UX */}
       <Stack.Screen name="EditCollection" component={EditCollectionScreen} options={modalScreenOptions} />
       <Stack.Screen name="SupportTicketDetail" component={SupportTicketDetailScreen} />
+      {/* UI-19 — Sell / Co-own / Chat marketplace UX */}
+      <Stack.Screen name="ListingPreview" component={ListingPreviewScreen} options={modalScreenOptions} />
+      <Stack.Screen name="TradeConfirm" component={TradeConfirmScreen} options={modalScreenOptions} />
 
       {/* Diagnostic — dev only */}
       {__DEV__ && (

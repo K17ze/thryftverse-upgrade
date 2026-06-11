@@ -200,6 +200,8 @@ function TaggedItemCard({
 
         hapticFeedback="light"
 
+        accessibilityLabel="View listing"
+        accessibilityRole="button"
       >
 
         <View style={[styles.itemCardRow, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
@@ -222,10 +224,43 @@ function TaggedItemCard({
 
             <Caption color={Colors.textSecondary}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Caption>
 
+            {listing.condition && (
+              <View style={styles.itemMetaRow}>
+                <Caption color={Colors.textMuted}>{listing.condition}</Caption>
+                {listing.brand && <Caption color={Colors.textMuted}> · {listing.brand}</Caption>}
+              </View>
+            )}
+
           </View>
 
           <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
 
+        </View>
+
+        {/* Quick actions */}
+        <View style={styles.itemQuickActions}>
+          <AnimatedPressable
+            style={styles.itemQuickBtn}
+            onPress={() => navigation.navigate('Checkout', { itemId: listing.id })}
+            activeOpacity={0.8}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityLabel="Buy now"
+          >
+            <Ionicons name="flash-outline" size={14} color={Colors.brand} />
+            <Caption color={Colors.brand} style={styles.itemQuickText}>Buy</Caption>
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={styles.itemQuickBtn}
+            onPress={() => navigation.navigate('MakeOffer', { itemId: listing.id, price: listing.price, title: listing.title })}
+            activeOpacity={0.8}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityLabel="Make offer"
+          >
+            <Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />
+            <Caption color={Colors.textPrimary} style={styles.itemQuickText}>Offer</Caption>
+          </AnimatedPressable>
         </View>
 
       </AnimatedPressable>
@@ -2230,6 +2265,31 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.md,
 
+  },
+  itemMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  itemQuickActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.sm,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  itemQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 6,
+  },
+  itemQuickText: {
+    fontFamily: Typography.family.medium,
   },
 
   itemInfo: {
