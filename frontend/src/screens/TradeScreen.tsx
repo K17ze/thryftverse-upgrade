@@ -5,11 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { getCoOwnMarket } from '../data/tradeHub';
 import { useStore } from '../store/useStore';
-import { resolveAssetMarketState } from '../data/mockSyndicateData';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
@@ -24,7 +23,7 @@ import {
   TradeSide,
 } from '../utils/tradeFlow';
 import { parseApiError } from '../lib/apiClient';
-import { placeCoOwnOrder } from '../services/marketApi';
+import { placeCoOwnOrder, fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
@@ -36,6 +35,7 @@ import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { FinancialDisclosure } from '../components/FinancialDisclosure';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
@@ -60,10 +60,9 @@ export default function TradeScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { show } = useToast();
+  const { isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
 
-  const customCoOwns = useStore((state) => state.customCoOwns);
-  const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const currentUser = useStore((state) => state.currentUser);
   const checkCoOwnEligibility = useStore((state) => state.checkCoOwnEligibility);
   const { goldRates } = useCurrencyContext();
@@ -74,15 +73,43 @@ export default function TradeScreen() {
   const [offerPriceInput, setOfferPriceInput] = React.useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = React.useState(false);
 
-  const baseAssets = React.useMemo(() => getCoOwnMarket(customCoOwns), [customCoOwns]);
-  const marketAssets = React.useMemo(
-    () => baseAssets.map((asset) => resolveAssetMarketState(asset, coOwnRuntime[asset.id])),
-    [baseAssets, coOwnRuntime]
-  );
+  const [asset, setAsset] = React.useState<any>(null);
+  const [yourUnits, setYourUnits] = React.useState(0);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isError, setIsError] = React.useState(false);
 
   const tradeAssetId = route.params?.assetId;
-  const asset = tradeAssetId ? marketAssets.find((item) => item.id === tradeAssetId) : undefined;
-  const marketPrice = asset ? toIze(asset.unitPriceGBP, 'GBP', goldRates) : 0;
+
+  React.useEffect(() => {
+    if (!tradeAssetId) { setIsLoading(false); setIsError(true); return; }
+    let cancelled = false;
+    setIsLoading(true);
+    setIsError(false);
+
+    Promise.all([
+      fetchCoOwnAssetById(tradeAssetId),
+      currentUser?.id ? fetchCoOwnHoldings(currentUser.id).catch(() => []) : Promise.resolve([]),
+    ])
+      .then(([fetchedAsset, holdings]) => {
+        if (cancelled) return;
+        setAsset(fetchedAsset);
+        const holding = holdings.find((h) => h.assetId === tradeAssetId);
+        setYourUnits(holding?.unitsOwned ?? 0);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const parsed = parseApiError(err, 'Unable to load asset');
+        show(parsed.message, 'error');
+        setIsError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [tradeAssetId, currentUser?.id, show]);
+
+  const marketPrice = asset ? toIze(asset.unitPriceGbp, 'GBP', goldRates) : 0;
   const orderMode = offerPriceInput.trim().length > 0 ? 'limit' : 'market';
 
   const quote = React.useMemo(
@@ -101,7 +128,7 @@ export default function TradeScreen() {
 
     const decision = evaluateTradeSubmit({
       orderMode, side, quantityInput, limitPriceInput: offerPriceInput, marketPrice,
-      assetFound: !!asset, eligibility, maxSellUnits: asset?.yourUnits ?? 0,
+      assetFound: !!asset, eligibility, maxSellUnits: yourUnits,
     });
 
     if (!decision.ok) { show(decision.message, 'error'); return; }
@@ -123,10 +150,22 @@ export default function TradeScreen() {
     });
   };
 
-  if (!asset) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+        <TradeHeader title="Trade" onBack={() => navigation.goBack()} />
+        <View style={styles.emptyWrap}>
+          <Meta style={styles.emptyText}>Loading asset details...</Meta>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isError || !asset) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
         <TradeHeader title="Trade" onBack={() => navigation.goBack()} />
         <View style={styles.emptyWrap}>
           <BodyEmphasis style={styles.emptyText}>Asset not found.</BodyEmphasis>
@@ -146,7 +185,7 @@ export default function TradeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       <TradeHeader title={`Trade ${asset.id.toUpperCase()}`} onBack={() => navigation.goBack()} />
 
@@ -230,23 +269,23 @@ export default function TradeScreen() {
           </TradeCard>
         </Reanimated.View>
 
-        {asset.yourUnits > 0 && (
+        {yourUnits > 0 && (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
             <TradeCard variant="surface">
               <Meta style={styles.sectionLabel}>YOUR POSITION</Meta>
               <View style={styles.positionRow}>
                 <Meta>Units held</Meta>
-                <BodyEmphasis>{asset.yourUnits}</BodyEmphasis>
-              </View>
-              <View style={styles.positionRow}>
-                <Meta>Avg entry</Meta>
-                <Body>{formatFromIze(toIze(asset.avgEntryPriceGBP ?? asset.unitPriceGBP, 'GBP', goldRates))}</Body>
+                <BodyEmphasis>{yourUnits}</BodyEmphasis>
               </View>
             </TradeCard>
           </Reanimated.View>
         )}
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}>
+          <FinancialDisclosure />
+        </Reanimated.View>
+
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(350)}>
           <AppButton
             title={isSubmittingOrder ? 'Submitting...' : side === 'buy' ? 'Buy Units' : 'Sell Units'}
             icon={<Ionicons name={side === 'buy' ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline'} size={18} color={Colors.background} />}

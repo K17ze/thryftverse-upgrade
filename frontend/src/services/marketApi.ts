@@ -333,6 +333,42 @@ export async function listCoOwnAssets(
   return payload.items;
 }
 
+interface GetCoOwnAssetResponse {
+  ok: true;
+  item: MarketCoOwnAsset;
+}
+
+export async function fetchCoOwnAssetById(assetId: string): Promise<MarketCoOwnAsset> {
+  const payload = await fetchJson<GetCoOwnAssetResponse>(
+    `/co-own/assets/${encodeURIComponent(assetId)}`
+  );
+  return payload.item;
+}
+
+export interface CoOwnOrderBookEntry {
+  side: 'buy' | 'sell';
+  unitPriceGbp: number;
+  units: number;
+  orderCount: number;
+}
+
+interface GetCoOwnOrderBookResponse {
+  ok: true;
+  bids: CoOwnOrderBookEntry[];
+  asks: CoOwnOrderBookEntry[];
+}
+
+export async function fetchCoOwnOrderBook(
+  assetId: string,
+  options: { limit?: number } = {}
+): Promise<{ bids: CoOwnOrderBookEntry[]; asks: CoOwnOrderBookEntry[] }> {
+  const query = toQuery({ limit: options.limit });
+  const payload = await fetchJson<GetCoOwnOrderBookResponse>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/orderbook${query}`
+  );
+  return { bids: payload.bids, asks: payload.asks };
+}
+
 export async function placeCoOwnOrder(
   assetId: string,
   input: PlaceCoOwnOrderInput

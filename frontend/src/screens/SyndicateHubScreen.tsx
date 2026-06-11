@@ -6,11 +6,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { getCoOwnMarket, CoOwnAsset } from '../data/tradeHub';
 import { useStore } from '../store/useStore';
-import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
+import { listCoOwnAssets, fetchCoOwnHoldings, type MarketCoOwnAsset } from '../services/marketApi';
 import { EmptyState } from '../components/EmptyState';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
@@ -49,9 +49,10 @@ export default function CoOwnHubScreen() {
 
   const [query, setQuery] = React.useState('');
   const [sortBy, setSortBy] = React.useState<HubSort>('value');
-  const [remoteAssets, setRemoteAssets] = React.useState<CoOwnAsset[]>([]);
+  const [remoteAssets, setRemoteAssets] = React.useState<any[]>([]);
   const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
   const [isSyncing, setIsSyncing] = React.useState(false);
+  const { isDark } = useAppTheme();
   const actingUserId = currentUser?.id;
 
   React.useEffect(() => {
@@ -62,7 +63,7 @@ export default function CoOwnHubScreen() {
       fetchCoOwnHoldings(actingUserId).catch(() => []),
     ])
       .then(([items, holdingItems]) => {
-        const mapped: CoOwnAsset[] = items.map((item) => ({
+        const mapped = items.map((item) => ({
           id: item.id,
           listingId: item.listingId,
           issuerId: item.issuerId,
@@ -98,10 +99,8 @@ export default function CoOwnHubScreen() {
     navigation.navigate('MainTabs');
   }, [navigation]);
 
-  const baseAssets = React.useMemo(() => getCoOwnMarket(remoteAssets), [remoteAssets]);
-
   const marketAssets = React.useMemo(
-    () => baseAssets.map((asset) => {
+    () => remoteAssets.map((asset: any) => {
       const holding = holdings.get(asset.id);
       if (!holding) return asset;
       return {
@@ -111,7 +110,7 @@ export default function CoOwnHubScreen() {
         realizedProfitGBP: holding.realized,
       };
     }),
-    [baseAssets, holdings]
+    [remoteAssets, holdings]
   );
 
   const filteredAssets = React.useMemo(() => {
@@ -143,7 +142,7 @@ export default function CoOwnHubScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       <TradeHeader
         title="Co-Own Hub"

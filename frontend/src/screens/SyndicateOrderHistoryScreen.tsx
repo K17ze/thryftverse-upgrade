@@ -6,13 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
-import { CachedImage } from '../components/CachedImage';
-import { getCoOwnMarket } from '../data/tradeHub';
 import {
   MarketHistoryCursor,
   MarketHistoryItem,
@@ -22,12 +21,12 @@ import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { useToast } from '../context/ToastContext';
 import { TradeHeader, OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
-import { AppInput } from '../components/ui/AppInput';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Space } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis } from '../components/ui/Text';
+import { parseApiError } from '../lib/apiClient';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -104,25 +103,14 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
 
 export default function CoOwnOrderHistoryScreen() {
   const navigation = useNavigation<NavT>();
-  const marketLedger = useStore((state) => state.marketLedger);
   const currentUser = useStore((state) => state.currentUser);
-  const customCoOwns = useStore((state) => state.customCoOwns);
   const { formatFromFiat } = useFormattedPrice();
-  const { show } = useToast();
+  const { isDark } = useAppTheme();
   const viewerId = currentUser?.id;
   const reducedMotionEnabled = useReducedMotion();
 
-  const assetIssuerMap = React.useMemo(() => {
-    const map = new Map<string, string>();
-    for (const asset of getCoOwnMarket(customCoOwns)) {
-      map.set(asset.id, asset.issuerId);
-    }
-    return map;
-  }, [customCoOwns]);
-
   const [sideFilter, setSideFilter] = React.useState<SideFilter>('all');
   const [dateFilter, setDateFilter] = React.useState<DateFilter>('all');
-  const [assetFilter, setAssetFilter] = React.useState<string>('all');
   const [remoteEntries, setRemoteEntries] = React.useState<HistoryEntry[]>([]);
   const [isSyncingRemote, setIsSyncingRemote] = React.useState(false);
   const [isRemoteAvailable, setIsRemoteAvailable] = React.useState(false);
@@ -189,36 +177,22 @@ export default function CoOwnOrderHistoryScreen() {
     setRefreshing(false);
   }, [syncRemoteHistory]);
 
-  const assetOptions = React.useMemo(() => {
-    const assets = getCoOwnMarket(customCoOwns);
-    const options = [{ value: 'all', label: 'All Assets', accessibilityLabel: 'Filter by all assets' }];
-    for (const asset of assets) {
-      options.push({
-        value: asset.id,
-        label: asset.title.slice(0, 20),
-        accessibilityLabel: `Filter by ${asset.title}`,
-      });
-    }
-    return options;
-  }, [customCoOwns]);
-
   const entries = React.useMemo(() => {
     const all = [...remoteEntries];
     const windowMs = getFilterWindowMs(dateFilter);
     return all.filter((entry) => {
       if (sideFilter !== 'all' && entry.side !== sideFilter) return false;
-      if (assetFilter !== 'all' && entry.assetId !== assetFilter) return false;
       if (windowMs) {
         const entryTs = new Date(entry.createdAt).getTime();
         if (Date.now() - entryTs > windowMs) return false;
       }
       return true;
     });
-  }, [remoteEntries, sideFilter, dateFilter, assetFilter]);
+  }, [remoteEntries, sideFilter, dateFilter]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <TradeHeader title="Order History" onBack={() => navigation.goBack()} />
 
@@ -237,10 +211,6 @@ export default function CoOwnOrderHistoryScreen() {
         onEndReached={() => void loadMoreRemoteHistory()}
         onEndReachedThreshold={0.5}
         renderItem={({ item, index }) => {
-          const asset = customCoOwns.find((a) => a.id === item.assetId);
-          const issuerId = assetIssuerMap.get(item.assetId) ?? item.assetId;
-          const issuerHandle = issuerId.slice(0, 12);
-          const canMessageIssuer = issuerId !== viewerId;
           return (
             <Reanimated.View
               entering={
@@ -255,24 +225,13 @@ export default function CoOwnOrderHistoryScreen() {
                 id={item.id}
                 side={item.side}
                 type={item.type}
-                assetTitle={asset?.title ?? item.assetId}
+                assetTitle={item.assetId}
                 quantity={item.quantity}
                 pricePerShare={formatFromFiat(item.pricePerShare, 'GBP')}
                 totalAmount={formatFromFiat(item.totalAmount, 'GBP')}
                 status={item.status}
                 timestamp={item.createdAt}
                 onPress={() => navigation.navigate('AssetDetail', { assetId: item.assetId })}
-                issuerHandle={issuerHandle}
-                issuerAvatar={undefined}
-                canMessageIssuer={canMessageIssuer}
-                onPressIssuer={() => navigation.navigate('UserProfile', { userId: issuerId })}
-                onMessageIssuer={() =>
-                  navigation.navigate('Chat', {
-                    conversationId: `${issuerId}_${item.assetId}`,
-                    focusQuery: issuerHandle,
-                    partnerUserId: issuerId,
-                  })
-                }
               />
             </Reanimated.View>
           );
