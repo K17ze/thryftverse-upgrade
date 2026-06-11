@@ -60,9 +60,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 import { useBackendData } from '../context/BackendDataContext';
 
-import { getCoOwnMarket } from '../data/tradeHub';
-
-import { resolveAssetMarketState } from '../data/mockSyndicateData';
+import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
+import { parseApiError } from '../lib/apiClient';
 
 import { AnimatedPressable } from '../components/AnimatedPressable';
 
@@ -166,17 +165,59 @@ export default function MyProfileScreen() {
   const { listings } = useBackendData();
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
 
-  const customCoOwns = useStore((state) => state.customCoOwns);
+  const currentUser = useStore((state) => state.currentUser);
 
-  const coOwnRuntime = useStore((state) => state.coOwnRuntime);
+  const [coOwnHoldings, setCoOwnHoldings] = React.useState<any[]>([]);
 
-
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    Promise.all([
+      listCoOwnAssets({ limit: 120 }),
+      fetchCoOwnHoldings(currentUser.id).catch(() => []),
+    ])
+      .then(([assets, holdings]) => {
+        if (cancelled) return;
+        const holdingMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
+        for (const h of holdings) {
+          holdingMap.set(h.assetId, { units: h.unitsOwned, avgEntry: h.avgEntryPriceGbp, realized: h.realizedPnlGbp });
+        }
+        const merged = assets
+          .filter((a) => (holdingMap.get(a.id)?.units ?? 0) > 0)
+          .map((a) => {
+            const h = holdingMap.get(a.id);
+            return {
+              id: a.id,
+              title: a.title,
+              image: a.imageUrl ?? '',
+              totalUnits: a.totalUnits,
+              availableUnits: a.availableUnits,
+              unitPriceGBP: a.unitPriceGbp,
+              unitPriceStable: a.unitPriceStable,
+              settlementMode: a.settlementMode,
+              issuerId: a.issuerId,
+              marketMovePct24h: a.marketMovePct24h,
+              holders: a.holders,
+              volume24hGBP: a.volume24hGbp,
+              isOpen: a.isOpen,
+              yourUnits: h?.units ?? 0,
+              avgEntryPriceGBP: h?.avgEntry,
+              realizedProfitGBP: h?.realized,
+            };
+          });
+        setCoOwnHoldings(merged);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const parsed = parseApiError(err, 'Unable to load portfolio');
+        show(parsed.message, 'error');
+      });
+    return () => { cancelled = true; };
+  }, [currentUser?.id, show]);
 
   const userAvatar = useStore((state) => state.userAvatar);
 
   const userCover = useStore((state) => state.userCover);
-
-  const currentUser = useStore((state) => state.currentUser);
 
   const user = currentUser as any;
 
@@ -492,17 +533,7 @@ export default function MyProfileScreen() {
 
 
 
-  const coOwnHoldings = React.useMemo(() => {
-
-    const marketAssets = getCoOwnMarket(customCoOwns).map((asset) =>
-
-      resolveAssetMarketState(asset, coOwnRuntime[asset.id])
-
-    );
-
-    return marketAssets.filter((asset) => asset.yourUnits > 0);
-
-  }, [customCoOwns, coOwnRuntime]);
+  /* coOwnHoldings now fetched from backend via useEffect above */
 
 
 

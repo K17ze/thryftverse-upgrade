@@ -5,15 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { getCoOwnMarket } from '../data/tradeHub';
 import { useStore } from '../store/useStore';
-import { resolveAssetMarketState } from '../data/mockSyndicateData';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { parseApiError } from '../lib/apiClient';
-import { createCoOwnBuyoutOffer } from '../services/marketApi';
+import { createCoOwnBuyoutOffer, fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
 import { TradeHeader, TradeCard } from '../components/trade';
@@ -21,6 +20,7 @@ import { Space, Radius } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { FinancialDisclosure } from '../components/FinancialDisclosure';
 
 type RouteT = RouteProp<RootStackParamList, 'Buyout'>;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -29,27 +29,64 @@ export default function BuyoutScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { show } = useToast();
+  const { isDark } = useAppTheme();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const reducedMotionEnabled = useReducedMotion();
-
-  const customCoOwns = useStore((state) => state.customCoOwns);
-  const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
 
-  const baseAssets = React.useMemo(() => getCoOwnMarket(customCoOwns), [customCoOwns]);
-  const marketAssets = React.useMemo(
-    () => baseAssets.map((asset) => resolveAssetMarketState(asset, coOwnRuntime[asset.id])),
-    [baseAssets, coOwnRuntime]
-  );
-
   const buyoutAssetId = route.params?.assetId;
-  const asset = buyoutAssetId ? marketAssets.find((item) => item.id === buyoutAssetId) : undefined;
 
-  if (!asset) {
+  const [asset, setAsset] = React.useState<any>(null);
+  const [sharesOwned, setSharesOwned] = React.useState(0);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isError, setIsError] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!buyoutAssetId) { setIsLoading(false); setIsError(true); return; }
+    let cancelled = false;
+    setIsLoading(true);
+    setIsError(false);
+
+    Promise.all([
+      fetchCoOwnAssetById(buyoutAssetId),
+      currentUser?.id ? fetchCoOwnHoldings(currentUser.id).catch(() => []) : Promise.resolve([]),
+    ])
+      .then(([fetchedAsset, holdings]) => {
+        if (cancelled) return;
+        setAsset(fetchedAsset);
+        const holding = holdings.find((h) => h.assetId === buyoutAssetId);
+        setSharesOwned(holding?.unitsOwned ?? 0);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const parsed = parseApiError(err, 'Unable to load asset');
+        show(parsed.message, 'error');
+        setIsError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [buyoutAssetId, currentUser?.id, show]);
+
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+        <TradeHeader title="Buyout" onBack={() => navigation.goBack()} />
+        <View style={styles.emptyWrap}>
+          <Meta style={styles.emptyText}>Loading asset details...</Meta>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isError || !asset) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
         <TradeHeader title="Buyout" onBack={() => navigation.goBack()} />
         <View style={styles.emptyWrap}>
           <BodyEmphasis style={styles.emptyText}>Asset not found.</BodyEmphasis>
@@ -58,10 +95,9 @@ export default function BuyoutScreen() {
     );
   }
 
-  const sharesOwned = asset.yourUnits;
   const sharesNeeded = Math.max(0, asset.totalUnits - sharesOwned);
   const ownershipPct = asset.totalUnits > 0 ? (sharesOwned / asset.totalUnits) * 100 : 0;
-  const offerPricePerShare = Number((asset.unitPriceGBP * 1.08).toFixed(2));
+  const offerPricePerShare = Number((asset.unitPriceGbp * 1.08).toFixed(2));
   const totalCost = sharesNeeded * offerPricePerShare;
 
   const handleBuyout = async () => {
@@ -100,13 +136,13 @@ export default function BuyoutScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       <TradeHeader title="Buyout" onBack={() => navigation.goBack()} />
 
       <View style={styles.content}>
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-          <CachedImage uri={asset.image} style={styles.image} containerStyle={styles.imageContainer} contentFit="cover" />
+          <CachedImage uri={asset.imageUrl ?? ''} style={styles.image} containerStyle={styles.imageContainer} contentFit="cover" />
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(50)}>
@@ -139,6 +175,10 @@ export default function BuyoutScreen() {
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+          <FinancialDisclosure />
+        </Reanimated.View>
+
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
           <AppButton
             style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
             title={isSubmitting ? 'Submitting...' : sharesNeeded > 0 ? 'Initiate Buyout' : 'Claim Full Ownership'}

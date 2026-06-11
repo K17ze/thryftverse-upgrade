@@ -6,10 +6,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { formatMoney } from '../data/tradeHub';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import {
   MarketHistoryItem,
   MarketHistoryCursor,
@@ -52,6 +53,10 @@ function getEntryCashflow(entry: { action: 'bid' | 'win' | 'buy-units' | 'sell-u
   return 0;
 }
 
+function formatMoney(value: number) {
+  return `£${value.toFixed(2)}`;
+}
+
 function formatSignedMoney(value: number) {
   const sign = value >= 0 ? '+' : '-';
   return `${sign}${formatMoney(Math.abs(value))}`;
@@ -90,6 +95,7 @@ function mapHistoryToLedgerEntries(items: MarketHistoryItem[]): LedgerEntry[] {
 
 export default function MarketLedgerScreen() {
   const navigation = useNavigation<NavT>();
+  const { isDark } = useAppTheme();
   const localEntries = useStore((state) => state.marketLedger);
   const currentUser = useStore((state) => state.currentUser);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
@@ -183,7 +189,7 @@ export default function MarketLedgerScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <TradeHeader title="Market Ledger" onBack={() => navigation.goBack()} />
 

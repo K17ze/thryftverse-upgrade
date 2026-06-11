@@ -6,11 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { getCoOwnMarket, CoOwnAsset } from '../data/tradeHub';
 import { useStore } from '../store/useStore';
-import { resolveAssetMarketState } from '../data/mockSyndicateData';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -21,27 +20,76 @@ import {
   TradeHeader,
   MetricGrid,
 } from '../components/trade';
-import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { Meta, BodyEmphasis } from '../components/ui/Text';
 import { FlagshipAssetCard, FlagshipEmptyGraphic } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
+import { parseApiError } from '../lib/apiClient';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function PortfolioScreen() {
   const navigation = useNavigation<NavT>();
-  const customCoOwns = useStore((state) => state.customCoOwns);
-  const coOwnRuntime = useStore((state) => state.coOwnRuntime);
+  const { isDark } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
-  const baseAssets = React.useMemo(() => getCoOwnMarket(customCoOwns), [customCoOwns]);
-  const marketAssets = React.useMemo(
-    () => baseAssets.map((asset) => resolveAssetMarketState(asset, coOwnRuntime[asset.id])),
-    [baseAssets, coOwnRuntime]
-  );
 
-  const holdings = React.useMemo(() => marketAssets.filter((asset) => asset.yourUnits > 0), [marketAssets]);
+  const [holdings, setHoldings] = React.useState<any[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!currentUser?.id) { setIsLoading(false); return; }
+    let cancelled = false;
+    setIsLoading(true);
+
+    Promise.all([
+      listCoOwnAssets({ limit: 120 }),
+      fetchCoOwnHoldings(currentUser.id).catch(() => []),
+    ])
+      .then(([assets, userHoldings]) => {
+        if (cancelled) return;
+        const holdingMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
+        for (const h of userHoldings) {
+          holdingMap.set(h.assetId, { units: h.unitsOwned, avgEntry: h.avgEntryPriceGbp, realized: h.realizedPnlGbp });
+        }
+        const merged = assets
+          .filter((a) => (holdingMap.get(a.id)?.units ?? 0) > 0)
+          .map((a) => {
+            const h = holdingMap.get(a.id);
+            return {
+              id: a.id,
+              title: a.title,
+              image: a.imageUrl ?? '',
+              totalUnits: a.totalUnits,
+              availableUnits: a.availableUnits,
+              unitPriceGBP: a.unitPriceGbp,
+              unitPriceStable: a.unitPriceStable,
+              settlementMode: a.settlementMode,
+              issuerId: a.issuerId,
+              marketMovePct24h: a.marketMovePct24h,
+              holders: a.holders,
+              volume24hGBP: a.volume24hGbp,
+              isOpen: a.isOpen,
+              yourUnits: h?.units ?? 0,
+              avgEntryPriceGBP: h?.avgEntry,
+              realizedProfitGBP: h?.realized,
+            };
+          });
+        setHoldings(merged);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const parsed = parseApiError(err, 'Unable to load portfolio');
+        show(parsed.message, 'error');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [currentUser?.id, show]);
 
   const totalValue = React.useMemo(
     () => holdings.reduce((sum, asset) => sum + asset.yourUnits * asset.unitPriceGBP, 0),
@@ -69,17 +117,7 @@ export default function PortfolioScreen() {
     }));
   }, [holdings, totalValue]);
 
-  const handleOpenPortfolioSupport = React.useCallback(() => {
-    navigation.navigate('HelpSupport');
-  }, [navigation]);
-
-  const renderHolding = ({ item, index }: { item: CoOwnAsset; index: number }) => {
-    const value = item.yourUnits * item.unitPriceGBP;
-    const avg = item.avgEntryPriceGBP ?? item.unitPriceGBP;
-    const pnl = (item.unitPriceGBP - avg) * item.yourUnits;
-    const issuerHandle = item.issuerId.slice(0, 12);
-    const canMessageIssuer = currentUser?.id !== item.issuerId;
-
+  const renderHolding = ({ item, index }: { item: any; index: number }) => {
     return (
       <Reanimated.View
         entering={
@@ -108,7 +146,7 @@ export default function PortfolioScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       <TradeHeader
         title="Portfolio"
@@ -171,13 +209,19 @@ export default function PortfolioScreen() {
           </View>
         }
         ListEmptyComponent={
-          <EmptyState
-            graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
-            title="No holdings"
-            subtitle="Your co-own portfolio will appear here once you purchase units."
-            ctaLabel="Browse Assets"
-            onCtaPress={() => navigation.navigate('CoOwnHub')}
-          />
+          isLoading ? (
+            <View style={{ padding: Space.lg }}>
+              <Meta style={{ textAlign: 'center', color: Colors.textMuted }}>Loading portfolio...</Meta>
+            </View>
+          ) : (
+            <EmptyState
+              graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
+              title="No holdings"
+              subtitle="Your co-own portfolio will appear here once you purchase units."
+              ctaLabel="Browse Assets"
+              onCtaPress={() => navigation.navigate('CoOwnHub')}
+            />
+          )
         }
         renderItem={renderHolding}
         showsVerticalScrollIndicator={false}

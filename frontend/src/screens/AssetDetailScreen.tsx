@@ -5,15 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { getCoOwnMarket, getUserLabel } from '../data/tradeHub';
 import { useStore } from '../store/useStore';
-import { resolveAssetMarketState, getOrderBookSnapshot, getPriceSeries, ChartRange } from '../data/mockSyndicateData';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
 import { AppButton } from '../components/ui/AppButton';
-import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { CachedImage } from '../components/CachedImage';
 import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -22,63 +20,78 @@ import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
 import { FlagshipActionCluster } from '../components/flagship';
+import { FinancialDisclosure } from '../components/FinancialDisclosure';
+import { fetchCoOwnAssetById, fetchCoOwnOrderBook, fetchCoOwnHoldings } from '../services/marketApi';
+import { parseApiError } from '../lib/apiClient';
+import { useToast } from '../context/ToastContext';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = StackNavigationProp<RootStackParamList>;
 
-const RANGE_OPTIONS: ChartRange[] = ['1H', '1D', '1W', '1M', 'ALL'];
-const RANGE_SEGMENT_OPTIONS: Array<{ value: ChartRange; label: string; accessibilityLabel: string }> =
-  RANGE_OPTIONS.map((option) => ({
-    value: option,
-    label: option,
-    accessibilityLabel: `Set chart range to ${option}`,
-  }));
-
 export default function AssetDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const insets = useSafeAreaInsets();
+  const { isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
-
-  const customCoOwns = useStore((state) => state.customCoOwns);
-  const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
-
-  const [range, setRange] = React.useState<ChartRange>('1D');
-
-  const baseAssets = React.useMemo(() => getCoOwnMarket(customCoOwns), [customCoOwns]);
-  const marketAssets = React.useMemo(
-    () => baseAssets.map((asset) => resolveAssetMarketState(asset, coOwnRuntime[asset.id])),
-    [baseAssets, coOwnRuntime]
-  );
+  const { show } = useToast();
 
   const assetId = route.params?.assetId;
-  const asset = assetId ? marketAssets.find((item) => item.id === assetId) : undefined;
 
-  const series = React.useMemo(() => (asset ? getPriceSeries(asset.id, range) : []), [asset, range]);
-  const orderBook = React.useMemo(() => (asset ? getOrderBookSnapshot(asset.id) : []), [asset]);
+  const [asset, setAsset] = React.useState<any>(null);
+  const [orderBook, setOrderBook] = React.useState<{ bids: any[]; asks: any[] }>({ bids: [], asks: [] });
+  const [yourUnits, setYourUnits] = React.useState(0);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isError, setIsError] = React.useState(false);
 
-  const chartPoints = React.useMemo(() => {
-    if (series.length === 0) return [];
-    const sampleSize = 28;
-    const step = Math.max(1, Math.floor(series.length / sampleSize));
-    const closes = series.filter((_, idx) => idx % step === 0).map((point) => point.close);
-    const min = Math.min(...closes);
-    const max = Math.max(...closes);
-    const spread = max - min || 1;
-    return closes.map((close) => ({ value: close, level: (close - min) / spread }));
-  }, [series]);
+  React.useEffect(() => {
+    if (!assetId) { setIsLoading(false); setIsError(true); return; }
+    let cancelled = false;
+    setIsLoading(true);
+    setIsError(false);
 
-  const currentPoint = series[series.length - 1];
-  const previousPoint = series[series.length - 2] ?? currentPoint;
-  const delta = currentPoint && previousPoint ? currentPoint.close - previousPoint.close : 0;
-  const deltaPct = previousPoint && previousPoint.close > 0 ? (delta / previousPoint.close) * 100 : 0;
+    Promise.all([
+      fetchCoOwnAssetById(assetId),
+      fetchCoOwnOrderBook(assetId, { limit: 40 }).catch(() => ({ bids: [], asks: [] })),
+      currentUser?.id ? fetchCoOwnHoldings(currentUser.id).catch(() => []) : Promise.resolve([]),
+    ])
+      .then(([fetchedAsset, fetchedBook, holdings]) => {
+        if (cancelled) return;
+        setAsset(fetchedAsset);
+        setOrderBook(fetchedBook);
+        const holding = holdings.find((h) => h.assetId === assetId);
+        setYourUnits(holding?.unitsOwned ?? 0);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const parsed = parseApiError(err, 'Unable to load asset');
+        show(parsed.message, 'error');
+        setIsError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
 
-  if (!asset) {
+    return () => { cancelled = true; };
+  }, [assetId, currentUser?.id, show]);
+
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+        <TradeHeader title="Asset Detail" onBack={() => navigation.goBack()} />
+        <View style={styles.centered}>
+          <Meta style={styles.emptyText}>Loading asset details...</Meta>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isError || !asset) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
         <TradeHeader title="Asset Detail" onBack={() => navigation.goBack()} />
         <EmptyState
           icon="analytics-outline"
@@ -91,27 +104,26 @@ export default function AssetDetailScreen() {
     );
   }
 
-  const bids = orderBook.filter((entry) => entry.side === 'bid').sort((a, b) => b.price - a.price);
-  const asks = orderBook.filter((entry) => entry.side === 'ask').sort((a, b) => a.price - b.price);
-  const marketValue = asset.totalUnits * asset.unitPriceGBP;
-  const circulatingValue = Math.max(0, asset.totalUnits - asset.availableUnits) * asset.unitPriceGBP;
-
-  const issuerHandle = getUserLabel(asset.issuerId).replace(/^@/, 'seller');
+  const deltaPct = asset.marketMovePct24h ?? 0;
+  const delta = deltaPct;
+  const marketValue = asset.totalUnits * asset.unitPriceGbp;
+  const circulatingValue = Math.max(0, asset.totalUnits - asset.availableUnits) * asset.unitPriceGbp;
+  const issuerHandle = asset.issuerId.slice(0, 12);
   const canMessageIssuer = currentUser?.id !== asset.issuerId;
 
   const ownerAccounts: Array<{ id: string; handle: string; role: string; units: number }> = [];
   ownerAccounts.push({
     id: `issuer_${asset.issuerId}`,
-    handle: getUserLabel(asset.issuerId),
+    handle: `@${issuerHandle}`,
     role: 'Issuer treasury',
     units: Math.max(0, asset.availableUnits),
   });
-  if (asset.yourUnits > 0) {
+  if (yourUnits > 0) {
     ownerAccounts.push({
       id: 'you',
       handle: currentUser ? `@${currentUser.username}` : '@you',
       role: 'Your position',
-      units: asset.yourUnits,
+      units: yourUnits,
     });
   }
   const allocatedUnits = ownerAccounts.reduce((sum, account) => sum + account.units, 0);
@@ -119,7 +131,7 @@ export default function AssetDetailScreen() {
   if (remainingUnits > 0) {
     ownerAccounts.push({
       id: 'other_holders',
-      handle: `${Math.max(0, asset.holders - (asset.yourUnits > 0 ? 1 : 0) - 1)} other holders`,
+      handle: `${Math.max(0, asset.holders - (yourUnits > 0 ? 1 : 0) - 1)} other holders`,
       role: 'Co-owners',
       units: remainingUnits,
     });
@@ -127,7 +139,7 @@ export default function AssetDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       <TradeHeader
         title="Asset Detail"
@@ -146,7 +158,7 @@ export default function AssetDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-          <CachedImage uri={asset.image} style={styles.heroImage} containerStyle={styles.heroImageContainer} contentFit="cover" />
+          <CachedImage uri={asset.imageUrl ?? ''} style={styles.heroImage} containerStyle={styles.heroImageContainer} contentFit="cover" />
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(50)}>
@@ -196,12 +208,12 @@ export default function AssetDetailScreen() {
             <View style={styles.priceRow}>
               <View>
                 <Meta>Current Price</Meta>
-                <BodyEmphasis style={styles.priceValue}>{formatFromFiat(asset.unitPriceGBP, 'GBP')}</BodyEmphasis>
+                <BodyEmphasis style={styles.priceValue}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</BodyEmphasis>
               </View>
-              <View style={[styles.deltaPill, delta >= 0 ? styles.deltaUp : styles.deltaDown]}>
-                <Ionicons name={delta >= 0 ? 'trending-up-outline' : 'trending-down-outline'} size={14} color={delta >= 0 ? Colors.success : Colors.danger} />
-                <Body style={[styles.deltaText, { color: delta >= 0 ? Colors.success : Colors.danger }]}>
-                  {delta >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%
+              <View style={[styles.deltaPill, deltaPct >= 0 ? styles.deltaUp : styles.deltaDown]}>
+                <Ionicons name={deltaPct >= 0 ? 'trending-up-outline' : 'trending-down-outline'} size={14} color={deltaPct >= 0 ? Colors.success : Colors.danger} />
+                <Body style={[styles.deltaText, { color: deltaPct >= 0 ? Colors.success : Colors.danger }]}>
+                  {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%
                 </Body>
               </View>
             </View>
@@ -210,32 +222,9 @@ export default function AssetDetailScreen() {
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
           <TradeCard>
-            <Meta style={styles.sectionLabel}>PRICE CHART</Meta>
-            <AppSegmentControl
-              options={RANGE_SEGMENT_OPTIONS}
-              value={range}
-              onChange={setRange}
-              style={styles.rangeControl}
-            />
+            <Meta style={styles.sectionLabel}>PRICE HISTORY</Meta>
             <View style={styles.chartContainer}>
-              {chartPoints.length === 0 ? (
-                <Meta style={styles.chartEmpty}>No price data available.</Meta>
-              ) : (
-                <View style={styles.chartBarRow}>
-                  {chartPoints.map((point, idx) => (
-                    <View
-                      key={idx}
-                      style={[
-                        styles.chartBar,
-                        {
-                          height: `${Math.max(10, point.level * 100)}%`,
-                          backgroundColor: point.value >= (chartPoints[0]?.value ?? 0) ? Colors.success : Colors.danger,
-                        },
-                      ]}
-                    />
-                  ))}
-                </View>
-              )}
+              <Meta style={styles.chartEmpty}>Price history is not available for this asset.</Meta>
             </View>
           </TradeCard>
         </Reanimated.View>
@@ -246,23 +235,23 @@ export default function AssetDetailScreen() {
             <View style={styles.orderBookGrid}>
               <View style={styles.orderBookCol}>
                 <Meta style={styles.orderBookHeader}>BIDS</Meta>
-                {bids.slice(0, 5).map((entry, i) => (
+                {orderBook.bids.slice(0, 5).map((entry: any, i: number) => (
                   <View key={`bid-${i}`} style={styles.orderBookRow}>
-                    <Body style={styles.orderBookPrice}>{formatFromFiat(entry.price, 'GBP')}</Body>
-                    <Meta>{entry.quantity}u</Meta>
+                    <Body style={styles.orderBookPrice}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Body>
+                    <Meta>{entry.units}u</Meta>
                   </View>
                 ))}
-                {bids.length === 0 && <Meta style={styles.orderBookEmpty}>No bids</Meta>}
+                {orderBook.bids.length === 0 && <Meta style={styles.orderBookEmpty}>No bids</Meta>}
               </View>
               <View style={styles.orderBookCol}>
                 <Meta style={styles.orderBookHeader}>ASKS</Meta>
-                {asks.slice(0, 5).map((entry, i) => (
+                {orderBook.asks.slice(0, 5).map((entry: any, i: number) => (
                   <View key={`ask-${i}`} style={styles.orderBookRow}>
-                    <Body style={styles.orderBookPrice}>{formatFromFiat(entry.price, 'GBP')}</Body>
-                    <Meta>{entry.quantity}u</Meta>
+                    <Body style={styles.orderBookPrice}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Body>
+                    <Meta>{entry.units}u</Meta>
                   </View>
                 ))}
-                {asks.length === 0 && <Meta style={styles.orderBookEmpty}>No asks</Meta>}
+                {orderBook.asks.length === 0 && <Meta style={styles.orderBookEmpty}>No asks</Meta>}
               </View>
             </View>
           </TradeCard>
@@ -288,6 +277,10 @@ export default function AssetDetailScreen() {
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(350)}>
+          <FinancialDisclosure />
+        </Reanimated.View>
+
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(400)}>
           <FlagshipActionCluster
             layout="row"
             actions={[
@@ -447,18 +440,13 @@ const styles = StyleSheet.create({
   chartEmpty: {
     color: Colors.textMuted,
   },
-  chartBarRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    width: '100%',
-    height: '80%',
-    gap: 2,
-  },
-  chartBar: {
+  centered: {
     flex: 1,
-    borderRadius: 2,
-    minWidth: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: Colors.textSecondary,
   },
   orderBookGrid: {
     flexDirection: 'row',

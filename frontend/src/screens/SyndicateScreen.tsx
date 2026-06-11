@@ -7,12 +7,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import {
-  formatMoney,
-  getCoOwnMarket,
-  getUserLabel,
-  CoOwnAsset,
-} from '../data/tradeHub';
+import type { CoOwnAsset } from '../data/tradeHub';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
 import { useStore } from '../store/useStore';
@@ -43,16 +38,16 @@ type CoOwnView = 'ISSUED' | 'HOLDINGS';
 
 const CO_OWN_MAX_UNITS = 20;
 
-function formatSigned(value: number) {
-  const sign = value >= 0 ? '+' : '-';
-  return `${sign}${formatMoney(Math.abs(value))}`;
-}
-
 export default function CoOwnScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const { goldRates } = useCurrencyContext();
   const { formatFromFiat, formatFromIze } = useFormattedPrice();
+
+  const formatSigned = (value: number) => {
+    const sign = value >= 0 ? '+' : '-';
+    return `${sign}${formatFromFiat(Math.abs(value), 'GBP', { displayMode: 'fiat' })}`;
+  };
   const currentUser = useStore((state) => state.currentUser);
   const reducedMotionEnabled = useReducedMotion();
 
@@ -123,10 +118,8 @@ export default function CoOwnScreen() {
     setRefreshing(false);
   };
 
-  const baseAssets = React.useMemo(() => getCoOwnMarket(remoteAssets), [remoteAssets]);
-
   const marketAssets = React.useMemo(() => {
-    return baseAssets.map((asset) => {
+    return remoteAssets.map((asset) => {
       const holding = holdings.get(asset.id);
       if (!holding) return asset;
       return {
@@ -136,7 +129,7 @@ export default function CoOwnScreen() {
         realizedProfitGBP: holding.realized,
       };
     });
-  }, [baseAssets, holdings]);
+  }, [remoteAssets, holdings]);
 
   const visibleAssets = React.useMemo(() => {
     if (activeView === 'HOLDINGS') return marketAssets.filter((asset) => asset.yourUnits > 0);
@@ -277,7 +270,7 @@ export default function CoOwnScreen() {
         metrics={[
           { label: t('syndicate.metrics.issuedPools'), value: String(marketAssets.length) },
           { label: t('syndicate.metrics.issuedValue'), value: formatFromFiat(totalMarketValue, 'GBP', { displayMode: 'fiat' }) },
-          { label: t('syndicate.metrics.yourValue'), value: formatMoney(holdingsValue) },
+          { label: t('syndicate.metrics.yourValue'), value: formatFromFiat(holdingsValue, 'GBP', { displayMode: 'fiat' }) },
         ]}
         columns={3}
       />
