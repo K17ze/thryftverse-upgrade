@@ -1,78 +1,15 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
-  Linking,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Linking } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { PremiumToggle } from '../components/PremiumToggle';
-import { Typography } from '../theme/designTokens';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'PrivacySettings'>;
-
-interface RowDef {
-  icon: string;
-  title: string;
-  subtitle?: string;
-  value?: string;
-  onPress?: () => void;
-  toggleValue?: boolean;
-  onToggle?: (v: boolean) => void;
-  isFirst?: boolean;
-  isLast?: boolean;
-}
-
-function SettingRow({
-  icon,
-  title,
-  subtitle,
-  value,
-  onPress,
-  toggleValue,
-  onToggle,
-  isFirst,
-  isLast,
-}: RowDef) {
-  return (
-    <AnimatedPressable
-      onPress={onPress}
-      activeOpacity={0.75}
-      scaleValue={0.995}
-      hapticFeedback="light"
-      disabled={!onPress && !onToggle}
-    >
-      <View style={[styles.rowRoot, !isLast && styles.rowBorder]}>
-        <View style={styles.rowIconWrap}>
-          <Ionicons name={icon as any} size={22} color={Colors.textPrimary} />
-        </View>
-        <View style={styles.rowTextWrap}>
-          <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
-          {subtitle ? <Text style={styles.rowSubtitle} numberOfLines={2}>{subtitle}</Text> : null}
-        </View>
-        <View style={styles.rowRight}>
-          {value ? <Text style={styles.rowValue} numberOfLines={1}>{value}</Text> : null}
-          {onToggle ? (
-            <PremiumToggle value={!!toggleValue} onValueChange={onToggle} />
-          ) : onPress ? (
-            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-          ) : null}
-        </View>
-      </View>
-    </AnimatedPressable>
-  );
-}
 
 export default function PrivacySettingsScreen({ navigation }: Props) {
   const { show } = useToast();
@@ -89,203 +26,74 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-        backgroundColor={Colors.background}
-      />
+    <FlagshipScreen header={<FlagshipHeader title="Privacy Controls" onBack={() => navigation.goBack()} />}>
+      {/* Profile visibility */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <SettingsSection title="Profile">
+          <SettingsRow
+            icon="eye-outline"
+            title="Private Profile"
+            subtitle="Only approved followers can see your full profile and listings"
+            toggleValue={accountPreferences.privateProfile}
+            onToggle={(v) => updateAccountPreferences({ privateProfile: v })}
+            isFirst
+            isLast
+          />
+        </SettingsSection>
+      </Reanimated.View>
 
-      <View style={styles.header}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          style={styles.headerBack}
-          scaleValue={0.92}
-          hapticFeedback="light"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Privacy Controls</Text>
-        <View style={styles.headerBack} />
-      </View>
+      {/* Activity */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <SettingsSection title="Activity">
+          <SettingsRow
+            icon="bag-outline"
+            title="Holiday Mode"
+            subtitle="Pause your listings and hide your shop while you’re away"
+            toggleValue={accountPreferences.holidayMode}
+            onToggle={(v) => updateAccountPreferences({ holidayMode: v })}
+            isFirst
+            isLast
+          />
+        </SettingsSection>
+      </Reanimated.View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Profile visibility */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <Text style={styles.sectionLabel}>Profile</Text>
-          <View style={styles.rowGroup}>
-            <SettingRow
-              icon="eye-outline"
-              title="Private Profile"
-              subtitle="Only approved followers can see your full profile and listings"
-              toggleValue={accountPreferences.privateProfile}
-              onToggle={(v) => updateAccountPreferences({ privateProfile: v })}
-              isFirst
-              isLast
-            />
-          </View>
-        </Reanimated.View>
+      {/* Safety */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <SettingsSection title="Safety">
+          <SettingsRow
+            icon="people-circle-outline"
+            title="Blocked users"
+            value={blockedCount > 0 ? `${blockedCount}` : 'None'}
+            onPress={() => navigation.navigate('BlockedUsers')}
+            isFirst
+          />
+          <SettingsRow
+            icon="chatbubble-ellipses-outline"
+            title="Chat privacy"
+            subtitle="Who can message me, read receipts, and more"
+            onPress={() => navigation.navigate('ChatSettings')}
+            isLast
+          />
+        </SettingsSection>
+      </Reanimated.View>
 
-        {/* Activity */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
-          <Text style={styles.sectionLabel}>Activity</Text>
-          <View style={styles.rowGroup}>
-            <SettingRow
-              icon="bag-outline"
-              title="Holiday Mode"
-              subtitle="Pause your listings and hide your shop while you’re away"
-              toggleValue={accountPreferences.holidayMode}
-              onToggle={(v) => updateAccountPreferences({ holidayMode: v })}
-              isFirst
-              isLast
-            />
-          </View>
-        </Reanimated.View>
-
-        {/* Safety */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
-          <Text style={styles.sectionLabel}>Safety</Text>
-          <View style={styles.rowGroup}>
-            <SettingRow
-              icon="people-circle-outline"
-              title="Blocked users"
-              value={blockedCount > 0 ? `${blockedCount}` : 'None'}
-              onPress={() => navigation.navigate('BlockedUsers')}
-              isFirst
-            />
-            <SettingRow
-              icon="chatbubble-ellipses-outline"
-              title="Chat privacy"
-              subtitle="Who can message me, read receipts, and more"
-              onPress={() => navigation.navigate('ChatSettings')}
-              isLast
-            />
-          </View>
-        </Reanimated.View>
-
-        {/* Data */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
-          <Text style={styles.sectionLabel}>Data & transparency</Text>
-          <View style={styles.rowGroup}>
-            <SettingRow
-              icon="document-text-outline"
-              title="Privacy Policy"
-              onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
-              isFirst
-            />
-            <SettingRow
-              icon="shield-checkmark-outline"
-              title="Terms of Service"
-              onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
-              isLast
-            />
-          </View>
-        </Reanimated.View>
-
-        <View style={{ height: Space.xl }} />
-      </ScrollView>
-    </SafeAreaView>
+      {/* Data */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <SettingsSection title="Data & transparency">
+          <SettingsRow
+            icon="document-text-outline"
+            title="Privacy Policy"
+            onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
+            isFirst
+          />
+          <SettingsRow
+            icon="shield-checkmark-outline"
+            title="Terms of Service"
+            onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
+            isLast
+          />
+        </SettingsSection>
+      </Reanimated.View>
+    </FlagshipScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
-  },
-  headerBack: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-  },
-  scrollContent: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
-  sectionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginBottom: Space.sm + 4,
-    marginTop: Space.lg,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  rowGroup: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    marginBottom: Space.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  rowRoot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: Space.md,
-    minHeight: 56,
-    gap: Space.sm + 4,
-  },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  rowIconWrap: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowTextWrap: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  rowTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
-  rowSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 2,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  rowValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    maxWidth: 140,
-    letterSpacing: Type.body.letterSpacing,
-  },
-});

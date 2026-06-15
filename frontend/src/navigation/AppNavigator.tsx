@@ -14,7 +14,7 @@ import ItemDetailScreen from '../screens/ItemDetailScreen';
 import ClosetScreen from '../screens/ClosetScreen';
 import CollectionDetailScreen from '../screens/CollectionDetailScreen';
 import PosterViewerScreen from '../screens/PosterViewerScreen';
-import CreatePosterScreen from '../screens/CreatePosterScreenV2';
+import CreatePosterScreen from '../screens/CreatePosterScreen';
 
 import CreateAuctionScreen from '../screens/CreateAuctionScreen';
 import CreateCoOwnScreen from '../screens/CreateSyndicateScreen';
@@ -47,20 +47,20 @@ import BalanceScreen from '../screens/BalanceScreen';
 import WalletScreen from '../screens/WalletScreen';
 import MyOrdersScreen from '../screens/MyOrdersScreen';
 import PersonalisationScreen from '../screens/PersonalisationScreen';
-import SettingsScreen from '../screens/SettingsScreenV2';
+import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
-import AccountSettingsScreen from '../screens/AccountSettingsScreenV2';
+import AccountSettingsScreen from '../screens/AccountSettingsScreen';
 import PaymentsScreen from '../screens/PaymentsScreen';
 
 // Phase 16 new screens
 import MakeOfferScreen from '../screens/MakeOfferScreen';
-import PushNotificationsScreen from '../screens/PushNotificationsScreenV2';
+import PushNotificationsScreen from '../screens/PushNotificationsScreen';
 import PostageScreen from '../screens/PostageScreen';
 import InviteFriendsScreen from '../screens/InviteFriendsScreen';
 import BalanceHistoryScreen from '../screens/BalanceHistoryScreen';
 
 import AddBankAccountScreen from '../screens/AddBankAccountScreen';
-import HelpSupportScreen from '../screens/HelpSupportScreenV2';
+import HelpSupportScreen from '../screens/HelpSupportScreen';
 
 // Phase 18 new screens
 import OrderDetailScreen from '../screens/OrderDetailScreen';
@@ -85,8 +85,8 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 // Phase 28
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import VisualSearchScreen from '../screens/VisualSearchScreen';
-import ChangePasswordScreen from '../screens/ChangePasswordScreenV2';
-import TwoFactorSetupScreen from '../screens/TwoFactorSetupScreenV2';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import TwoFactorSetupScreen from '../screens/TwoFactorSetupScreen';
 import WriteReviewScreen from '../screens/WriteReviewScreen';
 import ReportScreen from '../screens/ReportScreen';
 import EditListingScreen from '../screens/EditListingScreen';
@@ -110,10 +110,10 @@ import ListingPreviewScreen from '../screens/ListingPreviewScreen';
 import TradeConfirmScreen from '../screens/TradeConfirmScreen';
 
 // Phase 13 — Settings integrity
-import ChatSettingsScreen from '../screens/ChatSettingsScreenV2';
-import ActiveSessionsScreen from '../screens/ActiveSessionsScreenV2';
-import BlockedUsersScreen from '../screens/BlockedUsersScreenV2';
-import PrivacySettingsScreen from '../screens/PrivacySettingsScreenV2';
+import ChatSettingsScreen from '../screens/ChatSettingsScreen';
+import ActiveSessionsScreen from '../screens/ActiveSessionsScreen';
+import BlockedUsersScreen from '../screens/BlockedUsersScreen';
+import PrivacySettingsScreen from '../screens/PrivacySettingsScreen';
 import AboutScreen from '../screens/AboutScreen';
 
 // Diagnostic — dev only

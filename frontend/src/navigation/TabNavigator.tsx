@@ -20,7 +20,7 @@ import { useStore } from '../store/useStore';
 import HomeScreen from '../screens/HomeScreen';
 import TradeHubScreen from '../screens/TradeHubScreen';
 import SearchScreen from '../screens/SearchScreen';
-import SellScreenV2 from '../screens/SellScreenV2';
+import SellScreen from '../screens/SellScreen';
 import InboxScreen from '../screens/InboxScreen';
 import MyProfileScreen from '../screens/MyProfileScreen';
 
@@ -125,7 +125,7 @@ export default function TabNavigator() {
         />
         <Tab.Screen
           name="Sell"
-          component={SellScreenV2}
+          component={SellScreen}
           options={{
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={focused ? 'add-circle' : 'add-circle-outline'} color={color} focused={focused} />

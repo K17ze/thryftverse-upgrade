@@ -16,7 +16,7 @@ interface ReplyInfo {
   text: string;
 }
 
-interface ChatBubbleV2Props {
+interface MessageBubbleProps {
   text?: string;
   isMe: boolean;
   senderLabel?: string;
@@ -36,7 +36,7 @@ interface ChatBubbleV2Props {
   onMediaPress?: () => void;
 }
 
-export function ChatBubbleV2({
+export function MessageBubble({
   text,
   isMe,
   senderLabel,
@@ -54,7 +54,7 @@ export function ChatBubbleV2({
   onReactionPress,
   onRetry,
   onMediaPress,
-}: ChatBubbleV2Props) {
+}: MessageBubbleProps) {
   const bgColor = isMe ? Colors.surface : Colors.surfaceAlt;
   const textColor = Colors.textPrimary;
   const metaColor = Colors.textMuted;
@@ -331,3 +331,4 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
 });
+

@@ -18,6 +18,7 @@ export interface FlagshipHeaderProps {
   style?: ViewStyle;
   showBackButton?: boolean;
   backIcon?: React.ComponentProps<typeof Ionicons>['name'];
+  avatar?: React.ReactNode;
 }
 
 export function FlagshipHeader({
@@ -30,6 +31,7 @@ export function FlagshipHeader({
   style,
   showBackButton = true,
   backIcon,
+  avatar,
 }: FlagshipHeaderProps) {
   const { colors } = useAppTheme();
   const isLarge = variant === 'large';
@@ -56,6 +58,9 @@ export function FlagshipHeader({
           <View style={styles.iconBtnPlaceholder} />
         )}
 
+        {avatar ? (
+          <View style={styles.avatarWrap}>{avatar}</View>
+        ) : null}
         <View style={styles.titleWrap}>
           <Text
             style={[
@@ -131,5 +136,8 @@ const styles = StyleSheet.create({
     minWidth: ICON_SIZE,
     alignItems: 'flex-end',
     justifyContent: 'center',
+  },
+  avatarWrap: {
+    marginRight: Space.sm,
   },
 });

@@ -1,13 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
-  StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { Colors } from '../constants/colors';
@@ -16,7 +14,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
 import { deployBotToConversationOnApi, undeployBotFromConversationOnApi } from '../services/chatApi';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
 import { Space, Radius, Type } from '../theme/designTokens';
@@ -76,16 +74,7 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
-      />
-
-      <ScreenHeader
-        title="Group Bots"
-        onBack={() => navigation.goBack()}
-      />
+    <FlagshipScreen header={<FlagshipHeader title="Group Bots" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
 
       {!conversation || conversation.type !== 'group' ? (
         <EmptyState
@@ -145,7 +134,7 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
           }}
         />
       )}
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 

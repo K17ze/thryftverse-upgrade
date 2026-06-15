@@ -6,10 +6,8 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
-  StatusBar,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -17,7 +15,7 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
@@ -44,13 +42,11 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 
   if (!conversation || conversation.type !== 'group') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <ScreenHeader title="Edit Group" onBack={() => navigation.goBack()} />
+      <FlagshipScreen header={<FlagshipHeader title="Edit Group" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
         <View style={styles.center}>
           <Caption color={Colors.textMuted}>Group not found</Caption>
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -85,10 +81,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     .toUpperCase();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader title="Edit Group" onBack={() => navigation.goBack()} />
-
+    <FlagshipScreen header={<FlagshipHeader title="Edit Group" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Avatar preview */}
         <View style={styles.identity}>
@@ -122,7 +115,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
           disabled={isSaving || !name.trim()}
         />
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 

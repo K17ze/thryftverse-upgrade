@@ -36,7 +36,7 @@ const TEXT_COLORS = ['#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00', '#4c
 const BG_COLORS = ['#1a1a1a', '#ffffff', '#ff3b30', '#ff9500', '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55', '#f2f2f2'];
 const ALIGNMENTS: Array<'left' | 'center' | 'right'> = ['left', 'center', 'right'];
 
-export default function CreatePosterScreenV2({ navigation }: Props) {
+export default function CreatePosterScreen({ navigation }: Props) {
   const { isDark } = useAppTheme();
   const { show } = useToast();
   const [phase, setPhase] = useState<'landing' | 'editing' | 'preview'>('landing');

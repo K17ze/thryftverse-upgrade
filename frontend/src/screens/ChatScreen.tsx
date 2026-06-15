@@ -10,10 +10,6 @@ import {
 
   StyleSheet,
 
-  StatusBar,
-
-  KeyboardAvoidingView,
-
   Platform,
 
   FlatList,
@@ -24,7 +20,6 @@ import {
 
 } from 'react-native';
 
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Reanimated from 'react-native-reanimated';
 
@@ -53,6 +48,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { getListingCoverUri, isVideoUri } from '../utils/media';
 
 import { useStore } from '../store/useStore';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 import {
 
@@ -74,11 +70,10 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 
 import { useHaptic } from '../hooks/useHaptic';
 
-import { ChatTopBar } from '../components/chat/ChatTopBar';
 
 import { ChatComposerBar } from '../components/chat/ChatComposerBar';
 
-import { ChatBubbleV2 } from '../components/chat/ChatBubbleV2';
+import { MessageBubble } from '../components/chat/MessageBubble';
 
 import { MarketplaceChatCard } from '../components/chat/MarketplaceChatCard';
 
@@ -1545,7 +1540,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         >
 
-          <ChatBubbleV2
+          <MessageBubble
 
             text={msg.text ?? ''}
 
@@ -1665,61 +1660,38 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   return (
 
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-
-
-      <ChatTopBar
-
-        title={isGroup ? (conversation?.title ?? 'Group chat') : '@' + sellerHandle}
-
-        subtitle={
-
-          isGroup
-
-            ? (conversation?.participantIds?.length ?? 0) + ' members'
-
-            : undefined
-
-        }
-
-        initials={isGroup ? 'G' : (sellerHandle?.[0]?.toUpperCase() ?? '?')}
-
-        variant={isGroup ? 'group' : 'dm'}
-
-        onBack={() => navigation.goBack()}
-
-        onSearch={() => setIsSearchActive((v) => !v)}
-
-        onTitlePress={
-
-          isGroup && conversation
-
-            ? () => navigation.navigate('GroupChatInfo', { conversationId: conversation.id })
-
-            : undefined
-
-        }
-
-        onInfo={
-
-          conversation
-
-            ? () => navigation.navigate(
-
-                isGroup ? 'GroupChatInfo' : 'ConversationInfo',
-
-                { conversationId: conversation.id }
-
-              )
-
-            : undefined
-
-        }
-
-      />
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title={isGroup ? (conversation?.title ?? 'Group chat') : '@' + sellerHandle}
+          subtitle={isGroup ? (conversation?.participantIds?.length ?? 0) + ' members' : undefined}
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <View style={{ flexDirection: 'row', gap: Space.sm }}>
+              <AnimatedPressable
+                onPress={() => setIsSearchActive((v) => !v)}
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light">
+                <Ionicons name="search-outline" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => {
+                  if (!conversation) return;
+                  navigation.navigate(isGroup ? 'GroupChatInfo' : 'ConversationInfo', { conversationId: conversation.id });
+                }}
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light">
+                <Ionicons name="information-circle-outline" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
+          }
+        />
+      }
+      keyboardAvoiding
+      scrollEnabled={false}
+    >
 
 
 
@@ -1833,7 +1805,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
         {isSyncing ? (
 
@@ -2009,9 +1980,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         </View>
 
-      </KeyboardAvoidingView>
-
-
 
       <ChatActionSheet
 
@@ -2155,7 +2123,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
       />
 
-    </SafeAreaView>
+    </FlagshipScreen>
 
   );
 
@@ -2857,4 +2825,7 @@ const styles = StyleSheet.create({
   },
 
 });
+
+
+
 

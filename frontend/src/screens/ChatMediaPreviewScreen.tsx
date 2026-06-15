@@ -4,10 +4,8 @@ import {
   Text,
   StyleSheet,
   Dimensions,
-  StatusBar,
   Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -15,6 +13,7 @@ import { Colors } from '../constants/colors';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useHaptic } from '../hooks/useHaptic';
+import { FlagshipScreen } from '../components/flagship';
 import { Video, ResizeMode } from '../components/compat/Video';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -70,8 +69,7 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <FlagshipScreen scrollEnabled={false}>
 
       <View style={styles.backdrop}>
         {/* Close button */}
@@ -130,7 +128,7 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
           </AnimatedPressable>
         </View>
       </View>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 

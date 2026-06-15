@@ -1,13 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
-  StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { Colors } from '../constants/colors';
@@ -17,7 +15,7 @@ import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { createGroupConversationOnApi } from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
@@ -106,16 +104,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
-      />
-
-      <ScreenHeader
-        title="Create Group Chat"
-        onBack={() => navigation.goBack()}
-      />
+    <FlagshipScreen header={<FlagshipHeader title="Create Group Chat" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
 
       <View style={styles.body}>
         <ChatCard variant="surface" style={styles.titleCard}>
@@ -236,7 +225,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           accessibilityRole="button"
         />
       </View>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 

@@ -2,11 +2,10 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 
 import { AnimatedPressable } from '../components/AnimatedPressable';
 
-import { View, Text, StyleSheet, StatusBar, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, Alert } from 'react-native';
 
 import { FlashList } from '@shopify/flash-list';
 
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Ionicons } from '@expo/vector-icons';
 
@@ -33,6 +32,7 @@ import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from
 import { EmptyState } from '../components/EmptyState';
 
 import { useStore } from '../store/useStore';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 import { useToast } from '../context/ToastContext';
 
@@ -888,70 +888,46 @@ export default function InboxScreen() {
 
   return (
 
-    <SafeAreaView style={styles.container} edges={['top']}>
-
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Inbox"
+          rightAction={
+            <View style={styles.headerActions}>
+              <AnimatedPressable
+                style={styles.iconBtn}
+                onPress={() => navigation.navigate('CreateGroupChat')}
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light"
+                accessibilityLabel="Create new group chat"
+                accessibilityRole="button"
+              >
+                <Ionicons name="people-outline" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.iconBtn}
+                onPress={() => navigation.navigate('ChatSettings')}
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light"
+                accessibilityLabel="Settings"
+                accessibilityRole="button"
+              >
+                <Ionicons name="cog-outline" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
+          }
+        />
+      }
+      scrollEnabled={false}
+    >
 
 
 
       <View style={styles.header}>
 
-        <View style={styles.headerRow}>
-
-          <Text style={styles.title}>Inbox</Text>
-
-          <View style={styles.headerActions}>
-
-            <AnimatedPressable
-
-              style={styles.iconBtn}
-
-              onPress={() => navigation.navigate('CreateGroupChat')}
-
-              activeOpacity={0.7}
-
-              scaleValue={0.9}
-
-              hapticFeedback="light"
-
-              accessibilityLabel="Create new group chat"
-
-              accessibilityRole="button"
-
-            >
-
-              <Ionicons name="people-outline" size={20} color={Colors.textPrimary} />
-
-            </AnimatedPressable>
-
-            <AnimatedPressable
-
-              style={styles.iconBtn}
-
-              onPress={() => navigation.navigate('ChatSettings')}
-
-              activeOpacity={0.7}
-
-              scaleValue={0.9}
-
-              hapticFeedback="light"
-
-              accessibilityLabel="Settings"
-
-              accessibilityRole="button"
-
-            >
-
-              <Ionicons name="cog-outline" size={20} color={Colors.textPrimary} />
-
-            </AnimatedPressable>
-
-          </View>
-
-        </View>
-
-
-
+        
         <AppSearchBar
 
           placeholder="Search"
@@ -1308,7 +1284,7 @@ export default function InboxScreen() {
 
       </View>
 
-    </SafeAreaView>
+    </FlagshipScreen>
 
   );
 
@@ -1974,4 +1950,6 @@ const styles = StyleSheet.create({
   },
 
 });
+
+
 
