@@ -22,7 +22,7 @@
     "test": "vitest run --dir src",
     "test:watch": "vitest --dir src",
     "test:smoke": "vitest run src/__tests__/smoke-flows.test.ts",
-    "verify:phase": "npm run typecheck && npm run check:animated-scroll && vitest run src/__tests__/premium-form-primitives.test.ts src/__tests__/screen-import-smoke.test.ts src/__tests__/animated-scroll-usage.test.ts src/__tests__/coOwnTruthRules.test.ts src/__tests__/profileMediaTruth.test.ts src/__tests__/flagshipComponentsApplied.test.ts",
+    "verify:phase": "npm run typecheck && npm run check:animated-scroll && vitest run src/__tests__/premium-form-primitives.test.ts src/__tests__/screen-import-smoke.test.ts src/__tests__/animated-scroll-usage.test.ts src/__tests__/coOwnTruthRules.test.ts src/__tests__/profileMediaTruth.test.ts src/__tests__/flagshipComponentsApplied.test.ts src/__tests__/ui20CoOwnFinancialTruth.test.ts src/__tests__/ui21DeviceAudit.test.ts",
     "i18n:extract": "node scripts/extract-i18n-strings.mjs",
     "deploy:prod:validate": "node scripts/validate-production-env.mjs .env.production",
     "docker:up:prod": "docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build",

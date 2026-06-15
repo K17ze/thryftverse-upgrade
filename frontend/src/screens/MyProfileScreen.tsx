@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 
 import {
 
@@ -72,6 +72,7 @@ import { CachedImage } from '../components/CachedImage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 
 import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
 
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipProfileMedia } from '../components/flagship';
@@ -159,6 +160,7 @@ export default function MyProfileScreen() {
   const [activeTab, setActiveTab] = React.useState<'wardrobe' | 'saved' | 'about'>('wardrobe');
 
   const { show } = useToast();
+  const haptic = useHaptic();
 
   const { formatFromFiat } = useFormattedPrice();
 
@@ -684,6 +686,17 @@ export default function MyProfileScreen() {
         value: `${coOwnHoldings.length} assets`,
 
         color: Colors.textSecondary,
+      },
+
+      {
+
+        icon: 'settings-outline',
+
+        label: 'Settings',
+
+        route: 'Settings',
+
+        color: Colors.textSecondary,
 
       },
 
@@ -726,13 +739,26 @@ export default function MyProfileScreen() {
           <AnimatedPressable
             style={styles.topUtilityIconBtn}
             activeOpacity={0.9}
-            onPress={() => navigation.navigate('Personalisation')}
+            onPress={() => { haptic.light(); navigation.navigate('Personalisation'); }}
             accessibilityLabel="Open personalisation settings"
             accessibilityRole="button"
             accessibilityHint="Opens your style and experience preferences"
           >
             <Ionicons name="apps-outline" size={18} color="#fff" />
           </AnimatedPressable>
+
+          <View style={styles.topUtilityRight}>
+            <AnimatedPressable
+              style={styles.topUtilityIconBtn}
+              activeOpacity={0.9}
+              onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
+              accessibilityLabel="Open settings"
+              accessibilityRole="button"
+              accessibilityHint="Opens account and app settings"
+            >
+              <Ionicons name="settings-outline" size={18} color="#fff" />
+            </AnimatedPressable>
+          </View>
         </Reanimated.View>
       </View>
 
@@ -746,10 +772,20 @@ export default function MyProfileScreen() {
 
         <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{user.username}</Text>
 
-        <View style={{ flex: 1 }} />
+        <View style={{ flex: 1, alignItems: "flex-end" }}>
+          <AnimatedPressable
+            style={styles.floatingHeaderAction}
+            activeOpacity={0.9}
+            onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
+            accessibilityLabel="Open settings"
+            accessibilityRole="button"
+            accessibilityHint="Opens account and app settings"
+          >
+            <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
 
       </Reanimated.View>
-
 
 
       <AnimatedScrollView
@@ -1161,6 +1197,23 @@ const styles = StyleSheet.create({
 
   },
 
+  floatingHeaderAction: {
+
+    width: 36,
+
+    height: 36,
+
+    borderRadius: 18,
+
+    backgroundColor: Colors.surfaceAlt,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    marginRight: 14,
+
+  },
 
 
   // Hero

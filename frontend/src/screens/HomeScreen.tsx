@@ -481,88 +481,115 @@ export default function HomeScreen() {
     setPeekItem(null);
   }, []);
 
-  const renderPosters = () => (
-    <View style={styles.postersSection}>
-      <View style={styles.sectionRow}>
-        <Text style={styles.sectionTitle}>Posters</Text>
-        {/* Phase 3: Removed sync status pill - cleaner headers */}
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.postersScroll}
-      >
-        <AnimatedPressable
-          style={styles.posterCard}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('CreatePoster')}
-          accessibilityLabel="Create a new poster"
-          accessibilityRole="button"
-          accessibilityHint="Opens poster creator for auction or promotion posts"
-        >
-          <View style={styles.posterCreateTile}>
-            <View style={styles.posterCreateIcon}>
-              <Ionicons name="add" size={24} color={Colors.background} />
-            </View>
-            <Text style={styles.posterCreateLabel}>Create Poster</Text>
+  const renderPosters = () => {
+    if (postersLoading) {
+      return (
+        <View style={styles.postersSection}>
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionTitle}>Posters</Text>
           </View>
-        </AnimatedPressable>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersScroll}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <View key={`poster_skeleton_${i}`} style={styles.posterCard}>
+                <SkeletonLoader width={108} height={128} borderRadius={Radius.md} />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      );
+    }
 
-        {realPosters.map((poster) => (
+    return (
+      <View style={styles.postersSection}>
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>Posters</Text>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.postersScroll}
+        >
           <AnimatedPressable
-            key={poster.id}
             style={styles.posterCard}
             activeOpacity={0.9}
-            onPress={() => navigation.navigate('PosterViewer', { posterId: poster.id })}
+            onPress={() => { haptic.light(); navigation.navigate('CreatePoster'); }}
+            accessibilityLabel="Create a new poster"
             accessibilityRole="button"
-            accessibilityLabel={`Open poster`}
-            accessibilityHint="Opens poster details"
+            accessibilityHint="Opens poster creator for auction or promotion posts"
           >
-            <View style={[styles.posterTile, hasSeenPoster(poster.id) ? styles.posterTileSeen : styles.posterTileUnseen]}>
-              {isVideoUri(poster.mediaUrl) ? (
-                <Video
-                  source={{ uri: poster.mediaUrl }}
-                  style={styles.posterImage}
-                  resizeMode={ResizeMode.COVER}
-                  shouldPlay
-                  isLooping
-                  isMuted
-                />
-              ) : (
-                <CachedImage
-                  uri={poster.mediaUrl || ''}
-                  style={styles.posterImage}
-                  contentFit="cover"
-                />
-              )}
-              <View style={styles.posterShade} />
-
-              <View style={styles.posterBottomOverlay}>
-                <Text style={styles.posterCaption} numberOfLines={2}>{poster.caption}</Text>
+            <View style={styles.posterCreateTile}>
+              <View style={styles.posterCreateIcon}>
+                <Ionicons name="add" size={24} color={Colors.background} />
               </View>
-            </View>
-
-            <View style={styles.posterCardMetaRow}>
-              <Text style={hasSeenPoster(poster.id) ? styles.posterSeenMeta : styles.posterFreshMeta}>
-                {hasSeenPoster(poster.id) ? 'Seen' : 'New'}
-              </Text>
+              <Text style={styles.posterCreateLabel}>Create Poster</Text>
             </View>
           </AnimatedPressable>
-        ))}
-      </ScrollView>
 
-      {lastError ? (
-        <SyncRetryBanner
-          message="Sync is unavailable. Showing cached items."
-          onRetry={() => void handleRefresh()}
-          isRetrying={isSyncing || refreshing}
-          telemetryContext="home_feed_sync"
-          containerStyle={styles.feedStatusBanner}
-        />
-      ) : null}
-    </View>
-  );
+          {realPosters.length === 0 && !postersLoading && (
+            <View style={styles.posterCard}>
+              <View style={[styles.posterTile, { justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surfaceAlt }]}>
+                <Ionicons name="images-outline" size={28} color={Colors.textMuted} />
+                <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 6, textAlign: 'center' }}>No posters yet</Text>
+              </View>
+            </View>
+          )}
+
+          {realPosters.map((poster) => (
+            <AnimatedPressable
+              key={poster.id}
+              style={styles.posterCard}
+              activeOpacity={0.9}
+              onPress={() => { haptic.light(); navigation.navigate('PosterViewer', { posterId: poster.id }); }}
+              accessibilityRole="button"
+              accessibilityLabel={`Open poster`}
+              accessibilityHint="Opens poster details"
+            >
+              <View style={[styles.posterTile, hasSeenPoster(poster.id) ? styles.posterTileSeen : styles.posterTileUnseen]}>
+                {isVideoUri(poster.mediaUrl) ? (
+                  <Video
+                    source={{ uri: poster.mediaUrl }}
+                    style={styles.posterImage}
+                    resizeMode={ResizeMode.COVER}
+                    shouldPlay
+                    isLooping
+                    isMuted
+                  />
+                ) : (
+                  <CachedImage
+                    uri={poster.mediaUrl || ''}
+                    style={styles.posterImage}
+                    contentFit="cover"
+                  />
+                )}
+                <View style={styles.posterShade} />
+
+                <View style={styles.posterBottomOverlay}>
+                  <Text style={styles.posterCaption} numberOfLines={2}>{poster.caption}</Text>
+                </View>
+              </View>
+
+              <View style={styles.posterCardMetaRow}>
+                <Text style={hasSeenPoster(poster.id) ? styles.posterSeenMeta : styles.posterFreshMeta}>
+                  {hasSeenPoster(poster.id) ? 'Seen' : 'New'}
+                </Text>
+              </View>
+            </AnimatedPressable>
+          ))}
+        </ScrollView>
+
+        {lastError ? (
+          <SyncRetryBanner
+            message="Sync is unavailable. Showing cached items."
+            onRetry={() => void handleRefresh()}
+            isRetrying={isSyncing || refreshing}
+            telemetryContext="home_feed_sync"
+            containerStyle={styles.feedStatusBanner}
+          />
+        ) : null}
+      </View>
+    );
+  };
 
   const renderNewListingsBanner = () => {
     if (newListingIds.size === 0) {
@@ -694,12 +721,15 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Editorial Hero */}
-        <View style={{ marginBottom: Space.md }}>
-          <EditorialDiscoveryHero items={heroItems} autoPlayInterval={6000} />
-        </View>
-
         {renderPosters()}
+
+        {/* Editorial Hero — only renders when real imagery is configured */}
+        {heroItems.some((h) => h.uri.trim().length > 0) && (
+          <View style={{ marginBottom: Space.md }}>
+            <EditorialDiscoveryHero items={heroItems.filter((h) => h.uri.trim().length > 0)} autoPlayInterval={6000} />
+          </View>
+        )}
+
         {renderNewListingsBanner()}
         <DiscoverySectionHeader
           kicker="Fresh from the community"

@@ -7,14 +7,6 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import {
-  AuctionMarketItem,
-  AuctionViewModel,
-  formatCompact,
-  formatCountdown,
-  getAuctionMarket,
-  getUserLabel,
-} from '../data/tradeHub';
 import { getFreshPosters } from '../data/posters';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
@@ -46,6 +38,44 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
+
+type AuctionLifecycle = 'upcoming' | 'live' | 'ended';
+
+interface AuctionMarketItem {
+  id: string;
+  listingId: string;
+  sellerId: string;
+  title: string;
+  image: string;
+  startsAt: string;
+  endsAt: string;
+  startingBid: number;
+  currentBid: number;
+  bidCount: number;
+  buyNowPrice?: number;
+}
+
+interface AuctionViewModel extends AuctionMarketItem {
+  lifecycle: AuctionLifecycle;
+  msToStart: number;
+  msToEnd: number;
+  progress: number;
+}
+
+function formatCompact(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return `${value}`;
+}
+
+function formatCountdown(ms: number) {
+  if (ms <= 0) return '00:00:00';
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+  const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+  const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
+}
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -130,7 +160,31 @@ export default function AuctionsScreen() {
     return [...merged.values()];
   }, [actingUserId, customAuctions, remoteAuctions]);
 
-  const marketAuctions = React.useMemo(() => getAuctionMarket(nowTs, baseAuctions), [baseAuctions, nowTs]);
+  const marketAuctions = React.useMemo(() => {
+    const WINDOW_6_HOURS_MS = 6 * 60 * 60 * 1000;
+    const lifecycleRank: Record<AuctionLifecycle, number> = { live: 0, upcoming: 1, ended: 2 };
+    return baseAuctions
+      .map<AuctionViewModel>((auction) => {
+        const startsAtMs = new Date(auction.startsAt).getTime();
+        const endsAtMs = new Date(auction.endsAt).getTime();
+        const msToStart = startsAtMs - nowTs;
+        const msToEnd = endsAtMs - nowTs;
+        let lifecycle: AuctionLifecycle = 'upcoming';
+        if (msToStart <= 0 && msToEnd > 0) lifecycle = 'live';
+        else if (msToEnd <= 0) lifecycle = 'ended';
+        const elapsedMs = Math.max(0, WINDOW_6_HOURS_MS - msToEnd);
+        const progress = Math.min(1, Math.max(0, elapsedMs / WINDOW_6_HOURS_MS));
+        return { ...auction, lifecycle, msToStart, msToEnd, progress };
+      })
+      .sort((a, b) => {
+        if (lifecycleRank[a.lifecycle] !== lifecycleRank[b.lifecycle]) {
+          return lifecycleRank[a.lifecycle] - lifecycleRank[b.lifecycle];
+        }
+        if (a.lifecycle === 'live') return a.msToEnd - b.msToEnd;
+        if (a.lifecycle === 'upcoming') return a.msToStart - b.msToStart;
+        return b.currentBid - a.currentBid;
+      });
+  }, [baseAuctions, nowTs]);
 
   const auctions = React.useMemo(() => {
     return marketAuctions.map((item) => {
@@ -431,7 +485,7 @@ export default function AuctionsScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => {
           const isWatching = watchedAuctionIds.has(item.id);
-          const sellerLabel = getUserLabel(item.sellerId);
+          const sellerLabel = `@${item.sellerId.slice(0, 12)}`;
           return (
             <Reanimated.View
               entering={
