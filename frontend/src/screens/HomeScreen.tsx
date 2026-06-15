@@ -491,7 +491,7 @@ export default function HomeScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersScroll}>
             {Array.from({ length: 4 }).map((_, i) => (
               <View key={`poster_skeleton_${i}`} style={styles.posterCard}>
-                <SkeletonLoader width={108} height={128} borderRadius={Radius.md} />
+                <SkeletonLoader width={120} height={152} borderRadius={Radius.md} />
               </View>
             ))}
           </ScrollView>
@@ -1161,11 +1161,14 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   posterCard: {
-    width: 108,
+
+    width: 120,
   },
   posterTile: {
-    width: 108,
-    height: 128,
+
+    width: 120,
+
+    height: 152,
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 5,
@@ -1215,8 +1218,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   posterCreateTile: {
-    width: 108,
-    height: 128,
+
+    width: 120,
+
+    height: 152,
     borderRadius: 12,
     marginBottom: 5,
     backgroundColor: Colors.textPrimary,
@@ -1314,14 +1319,18 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   posterFreshMeta: {
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: Typography.family.bold,
     color: Colors.brand,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   posterSeenMeta: {
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: Typography.family.medium,
     color: Colors.textMuted,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
 
   masonryGrid: {

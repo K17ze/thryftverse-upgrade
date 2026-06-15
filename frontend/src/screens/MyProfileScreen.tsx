@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 
 import {
 
@@ -157,7 +157,7 @@ export default function MyProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const reducedMotionEnabled = useReducedMotion();
-  const [activeTab, setActiveTab] = React.useState<'wardrobe' | 'saved' | 'about'>('wardrobe');
+  const [activeTab, setActiveTab] = React.useState<'edits' | 'looks' | 'pulse'>('edits');
 
   const { show } = useToast();
   const haptic = useHaptic();
@@ -812,16 +812,16 @@ export default function MyProfileScreen() {
         {/* Profile Tab Rail */}
         <ProfileTabRail
           tabs={[
-            { key: 'wardrobe', label: 'Wardrobe', icon: 'shirt-outline', count: myListings.length },
-            { key: 'saved', label: 'Saved', icon: 'bookmark-outline', count: savedCount + wishlistCount },
-            { key: 'about', label: 'About', icon: 'person-outline' },
+            { key: 'edits', label: 'Edits', icon: 'shirt-outline', count: myListings.length },
+            { key: 'looks', label: 'Looks', icon: 'bookmark-outline', count: savedCount + wishlistCount },
+            { key: 'pulse', label: 'Pulse', icon: 'pulse-outline' },
           ]}
           activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as 'wardrobe' | 'saved' | 'about')}
+          onChange={(key) => setActiveTab(key as 'edits' | 'looks' | 'pulse')}
         />
 
         {/* Tab Content */}
-        {activeTab === 'wardrobe' && (
+        {activeTab === 'edits' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120 }}>
             {/* My Wardrobe */}
             <View style={styles.wardrobeSection}>
@@ -888,7 +888,7 @@ export default function MyProfileScreen() {
           </View>
         )}
 
-        {activeTab === 'saved' && (
+        {activeTab === 'looks' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
             <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
               <View style={{ paddingHorizontal: Space.md, marginBottom: Space.lg }}>
@@ -923,7 +923,7 @@ export default function MyProfileScreen() {
           </View>
         )}
 
-        {activeTab === 'about' && (
+        {activeTab === 'pulse' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
             {/* Co-Own Portfolio Summary */}
             <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>

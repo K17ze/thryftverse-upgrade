@@ -55,7 +55,7 @@ describe('UI-21 device UX audit and consistency restoration', () => {
     const src = read(resolve(SCREENS, 'HomeScreen.tsx'));
     expect(src).toContain('if (postersLoading)');
     expect(src).toContain('poster_skeleton_');
-    expect(src).toContain('SkeletonLoader width={108} height={128}');
+    expect(src).toContain('SkeletonLoader width={120} height={152}');
   });
 
   // ── 6. Async poster loading cannot insert it in the middle of the feed ──
@@ -182,5 +182,36 @@ describe('UI-21 device UX audit and consistency restoration', () => {
     const after = src.substring(quickAccessIdx, quickAccessIdx + 1200);
     expect(after).not.toContain("label: 'Settings'");
     expect(after).not.toContain("route: 'Settings'");
+  });
+
+  // ── 17. Profile uses Edits/Looks/Pulse tab labels (UI-21P.2 flagship elevation) ──
+  it('MyProfileScreen uses Edits/Looks/Pulse tab labels', () => {
+    const src = read(resolve(SCREENS, 'MyProfileScreen.tsx'));
+    // Search within the ProfileTabRail tabs array specifically
+    const tabsIdx = src.indexOf('tabs={[');
+    const tabsEndIdx = src.indexOf(']}', tabsIdx);
+    const tabSection = src.substring(tabsIdx, tabsEndIdx + 2);
+    expect(tabSection).toContain("label: 'Edits'");
+    expect(tabSection).toContain("label: 'Looks'");
+    expect(tabSection).toContain("label: 'Pulse'");
+    expect(tabSection).not.toContain("label: 'Wardrobe'");
+    expect(tabSection).not.toContain("label: 'Saved'");
+    expect(tabSection).not.toContain("label: 'About'");
+  });
+
+  // ── 18. ProfileTabRail meets minimum 44px touch target (UI-21P.2) ──
+  it('ProfileTabRail tab height meets 44px minimum', () => {
+    const src = read(resolve(COMPONENTS, 'profile/ProfileTabRail.tsx'));
+    expect(src).toContain('height: TAB_HEIGHT');
+    expect(src).toContain('const TAB_HEIGHT = 44');
+  });
+
+  // ── 19. Poster rail tiles enlarged for flagship presence (UI-21P.2) ──
+  it('HomeScreen poster tiles are 120x152 for flagship presence', () => {
+    const src = read(resolve(SCREENS, 'HomeScreen.tsx'));
+    const posterTileIdx = src.indexOf('posterTile:');
+    const posterSection = src.substring(posterTileIdx, posterTileIdx + 300);
+    expect(posterSection).toContain('width: 120');
+    expect(posterSection).toContain('height: 152');
   });
 });

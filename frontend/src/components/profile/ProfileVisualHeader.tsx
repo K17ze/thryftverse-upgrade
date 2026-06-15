@@ -71,7 +71,7 @@ export function ProfileVisualHeader({
           emptyIcon="image-outline"
         />
         <LinearGradient
-          colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.55)']}
+          colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.6)']}
           style={StyleSheet.absoluteFill}
         />
         {isSelf && onEditCover && (
@@ -159,7 +159,7 @@ export function ProfileVisualHeader({
   );
 }
 
-const AVATAR_SIZE = 88;
+const AVATAR_SIZE = 96;
 const COVER_H = 180;
 
 const styles = StyleSheet.create({

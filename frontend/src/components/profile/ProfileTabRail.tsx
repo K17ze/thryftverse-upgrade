@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown, useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
+import Reanimated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
@@ -29,7 +29,7 @@ export function ProfileTabRail({ tabs, activeKey, onChange }: ProfileTabRailProp
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
     width: indicatorW.value,
-    opacity: withTiming(indicatorW.value > 0 ? 1 : 0, { duration: 120 }),
+    opacity: withSpring(indicatorW.value > 0 ? 1 : 0, { damping: 20, stiffness: 250 }),
   }));
 
   const updateIndicator = React.useCallback(
@@ -66,7 +66,7 @@ export function ProfileTabRail({ tabs, activeKey, onChange }: ProfileTabRailProp
               style={[styles.tab, isActive && styles.tabActive]}
               onPress={() => onChange(tab.key)}
               {...PressPresets.tabItem}
-              onLayout={(e) => {
+              onLayout={(e: LayoutChangeEvent) => {
                 const { x, width } = e.nativeEvent.layout;
                 tabLayouts.current.set(index, { x, width });
                 if (isActive) updateIndicator(index, false);
@@ -78,8 +78,9 @@ export function ProfileTabRail({ tabs, activeKey, onChange }: ProfileTabRailProp
               {tab.icon && (
                 <Ionicons
                   name={tab.icon}
-                  size={16}
+                  size={18}
                   color={isActive ? Colors.textPrimary : Colors.textMuted}
+                  style={{ marginRight: 6 }}
                 />
               )}
               <Text style={[styles.label, isActive && styles.labelActive]}>{tab.label}</Text>
@@ -98,35 +99,41 @@ export function ProfileTabRail({ tabs, activeKey, onChange }: ProfileTabRailProp
   );
 }
 
+const TAB_HEIGHT = 44;
+
 const styles = StyleSheet.create({
   root: {
     backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   scroll: {
     flexDirection: 'row',
-    gap: Space.xs,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
+    alignItems: 'center',
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    height: TAB_HEIGHT,
     borderRadius: Radius.full,
     position: 'relative',
     backgroundColor: Colors.surfaceAlt,
+    minWidth: 80,
   },
   tabActive: {
     backgroundColor: Colors.surface,
   },
   label: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontSize: 14,
     color: Colors.textMuted,
+    letterSpacing: 0.2,
   },
   labelActive: {
     color: Colors.textPrimary,
@@ -138,6 +145,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     minWidth: 20,
     alignItems: 'center',
+    marginLeft: 4,
   },
   countPillActive: {
     backgroundColor: Colors.textPrimary,
@@ -153,9 +161,9 @@ const styles = StyleSheet.create({
   indicator: {
     position: 'absolute',
     bottom: Space.sm - 2,
-    left: 0,
-    height: 2,
+    left: Space.md,
+    height: 2.5,
     backgroundColor: Colors.textPrimary,
-    borderRadius: 1,
+    borderRadius: 1.25,
   },
 });
