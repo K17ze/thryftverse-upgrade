@@ -14,6 +14,7 @@ interface PremiumSelectRowProps {
   errorText?: string;
   disabled?: boolean;
   onPress?: () => void;
+  style?: import('react-native').ViewStyle;
 }
 
 export function PremiumSelectRow({

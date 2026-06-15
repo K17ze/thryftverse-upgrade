@@ -64,8 +64,8 @@ It does NOT mean:
 | Home/discovery | 6 | 7 | Poster viewer needs video support; section transitions |
 | Posters | 5 | 7 | Tiles enlarged; viewer has pause/error; needs video support |
 | Profile | 6 | 7 | Tabs relabelled and enlarged; honest empty states for Looks/Pulse |
-| Settings | 7 | 7 | Already upgraded in UI-18; 4 non-V2 screens still on older scaffold |
-| Messaging | 6 | 6 | No changes in this phase |
+| Settings | 7 | 7 | EditProfile migrated to ScreenHeader + SettingsCard; 3 non-V2 screens remain |
+| Messaging | 6 | 7 | Inbox rows flattened; Chat already V2; ConversationInfo needs audit |
 | Selling/commerce | 6 | 6 | No changes in this phase |
 | Co-own | 7 | 7 | No changes in this phase |
 | Responsiveness | 6 | 7 | Safe area fixes applied; tap targets enlarged |

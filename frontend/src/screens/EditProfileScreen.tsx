@@ -27,6 +27,8 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
 import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
 import { AppButton } from '../components/ui/AppButton';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { SettingsCard } from '../components/settings/SettingsCard';
 import { FlagshipProfileMedia, FlagshipActionCluster } from '../components/flagship';
 import { updateMyProfile } from '../services/profileApi';
 import { uploadMedia } from '../services/mediaUpload';
@@ -224,14 +226,12 @@ export default function EditProfileScreen() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {/* Header */}
-          <View style={styles.header}>
-            <AnimatedPressable onPress={() => navigation.goBack()} scaleValue={0.92} hapticFeedback="light">
-              <Ionicons name="close" size={28} color={Colors.textPrimary} />
-            </AnimatedPressable>
-            <Text style={styles.headerTitle}>Edit Profile</Text>
-            <View style={{ width: 44 }} />
-          </View>
+          <ScreenHeader
+            title="Edit Profile"
+            onBack={() => navigation.goBack()}
+            showBackButton
+            backIcon="arrow-back"
+          />
 
           {/* Hero Media Section */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
@@ -250,8 +250,8 @@ export default function EditProfileScreen() {
           {/* Identity Fields */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.section}>
             <Text style={styles.sectionLabel}>Identity</Text>
-            <View style={styles.fieldGroup}>
-              <PremiumTextField label="Name" value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" />
+            <SettingsCard variant="surface">
+              <PremiumTextField label="Name" value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" containerStyle={styles.fieldInCard} />
               <View style={styles.divider} />
               <PremiumTextField
                 label="Username"
@@ -260,8 +260,9 @@ export default function EditProfileScreen() {
                 placeholder="username"
                 autoCapitalize="none"
                 helperText="How people find you on Thryftverse."
+                containerStyle={styles.fieldInCard}
               />
-            </View>
+            </SettingsCard>
           </Reanimated.View>
 
           {/* About */}
@@ -295,15 +296,16 @@ export default function EditProfileScreen() {
           {/* Personal */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.section}>
             <Text style={styles.sectionLabel}>Personal</Text>
-            <View style={styles.fieldGroup}>
+            <SettingsCard variant="surface">
               <PremiumSelectRow
                 label="Gender"
                 value={gender}
                 placeholder="Select gender"
                 icon="person-outline"
                 onPress={() => setGenderPickerVisible(true)}
+                style={styles.selectInCard}
               />
-            </View>
+            </SettingsCard>
           </Reanimated.View>
 
           <View style={{ height: Space.xl }} />
@@ -362,73 +364,7 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xxl,
   },
 
-  // Hero
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: Space.xl,
-  },
-  coverFrame: {
-    width: '100%',
-    height: 160,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  coverImage: {
-    width: '100%',
-    height: '100%',
-  },
-  uploadOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coverEditBadge: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.background,
-  },
-  avatarOuter: {
-    marginTop: -48,
-    alignItems: 'center',
-  },
-  avatarFrame: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 3,
-    borderColor: Colors.background,
-  },
-  avatarImage: {
-    width: 96,
-    height: 96,
-  },
-  avatarEditBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.background,
-  },
+
 
   // Sections
   section: {
@@ -454,6 +390,14 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.border,
     marginLeft: Space.md,
+  },
+  fieldInCard: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  selectInCard: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
   },
 
   // Action bar

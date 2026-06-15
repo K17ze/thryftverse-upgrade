@@ -876,6 +876,8 @@ export default function InboxScreen() {
 
         )}
 
+        <View style={styles.rowSeparator} />
+
       </View>
 
     );
@@ -1458,15 +1460,17 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: Space.md,
 
-    backgroundColor: Colors.surface,
+  },
 
-    borderRadius: Radius.lg,
+  rowSeparator: {
 
-    marginHorizontal: Space.md,
+    height: StyleSheet.hairlineWidth,
 
-    marginVertical: 4,
+    backgroundColor: Colors.border,
 
-    ...Elevation.subtle,
+    marginLeft: 68,
+
+    marginRight: Space.md,
 
   },
 
@@ -1694,7 +1698,7 @@ const styles = StyleSheet.create({
 
     width: 72,
 
-    borderRadius: Radius.xl,
+    borderRadius: Radius.sm,
 
   },
 
@@ -1708,7 +1712,7 @@ const styles = StyleSheet.create({
 
     width: 72,
 
-    borderRadius: Radius.xl,
+    borderRadius: Radius.sm,
 
   },
 

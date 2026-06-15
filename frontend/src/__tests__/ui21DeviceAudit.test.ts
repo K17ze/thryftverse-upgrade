@@ -214,4 +214,80 @@ describe('UI-21 device UX audit and consistency restoration', () => {
     expect(posterSection).toContain('width: 120');
     expect(posterSection).toContain('height: 152');
   });
+
+  // ── 20. EditProfile uses ScreenHeader instead of custom header (UI-21P.4) ──
+  it('EditProfileScreen uses shared ScreenHeader with back arrow', () => {
+    const src = read(resolve(SCREENS, 'EditProfileScreen.tsx'));
+    expect(src).toContain("import { ScreenHeader } from '../components/ui/ScreenHeader'");
+    expect(src).toContain('<ScreenHeader');
+    expect(src).toContain("backIcon=\"arrow-back\"");
+    // Should not have the old custom header pattern
+    expect(src).not.toContain('name="close" size={28}');
+  });
+
+  // ── 21. EditProfile sections use SettingsCard (UI-21P.4) ──
+  it('EditProfileScreen wraps form sections in SettingsCard', () => {
+    const src = read(resolve(SCREENS, 'EditProfileScreen.tsx'));
+    expect(src).toContain("import { SettingsCard } from '../components/settings/SettingsCard'");
+    expect(src).toContain('<SettingsCard');
+    expect(src).toContain("variant=\"surface\"");
+  });
+
+  // ── 22. Inbox rows are flat with hairline separators (UI-21P.4) ──
+  it('InboxScreen uses flat rows with hairline separators', () => {
+    const src = read(resolve(SCREENS, 'InboxScreen.tsx'));
+    // Should have rowSeparator style
+    expect(src).toContain('rowSeparator:');
+    expect(src).toContain('height: StyleSheet.hairlineWidth');
+    // Should not have card styling on rows
+    expect(src).not.toMatch(/rowInner:[\s\S]{0,300}backgroundColor: Colors\.surface/);
+    expect(src).not.toMatch(/rowInner:[\s\S]{0,300}borderRadius/);
+  });
+
+  // ── 23. PremiumTextField supports containerStyle prop (UI-21P.4) ──
+  it('PremiumTextField accepts containerStyle prop', () => {
+    const src = read(resolve(COMPONENTS, 'ui/PremiumTextField.tsx'));
+    expect(src).toContain('containerStyle?:');
+  });
+
+  // ── 24. PremiumSelectRow supports style prop (UI-21P.4) ──
+  it('PremiumSelectRow accepts style prop', () => {
+    const src = read(resolve(COMPONENTS, 'ui/PremiumSelectRow.tsx'));
+    expect(src).toContain('style?:');
+  });
+
+  // ── 25. SettingsStickySaveBar component exists (UI-21P.4) ──
+  it('SettingsStickySaveBar shared component exists', () => {
+    const path = resolve(COMPONENTS, 'settings/SettingsStickySaveBar.tsx');
+    const src = read(path);
+    expect(src).toContain('export function SettingsStickySaveBar');
+    expect(src).toContain('SettingsStickySaveBarProps');
+  });
+
+  // ── 26. No fake data in Inbox or Chat (UI-21P.4 product truth) ──
+  it('InboxScreen uses real conversation state, not fabricated data', () => {
+    const src = read(resolve(SCREENS, 'InboxScreen.tsx'));
+    expect(src).toContain('useStore');
+    expect(src).toContain('conversations');
+    expect(src).not.toContain('const MOCK_CONVERSATIONS');
+    expect(src).not.toContain('FAKE_MESSAGES');
+  });
+
+  // ── 27. Chat uses shared header, context, timeline, composer (UI-21P.4) ──
+  it('ChatScreen uses shared ChatTopBar, ChatBubbleV2, ChatComposerBar', () => {
+    const src = read(resolve(SCREENS, 'ChatScreen.tsx'));
+    expect(src).toContain("import { ChatTopBar } from '../components/chat/ChatTopBar'");
+    expect(src).toContain("import { ChatBubbleV2 } from '../components/chat/ChatBubbleV2'");
+    expect(src).toContain("import { ChatComposerBar } from '../components/chat/ChatComposerBar'");
+  });
+
+  // ── 28. No external placeholder providers in messaging (UI-21P.4) ──
+  it('Inbox and Chat screens do not use placeholder image providers', () => {
+    const inbox = read(resolve(SCREENS, 'InboxScreen.tsx'));
+    const chat = read(resolve(SCREENS, 'ChatScreen.tsx'));
+    for (const src of [inbox, chat]) {
+      expect(src).not.toContain('unsplash');
+      expect(src).not.toContain('picsum');
+    }
+  });
 });
