@@ -7,7 +7,8 @@ import {
   StyleSheet,
   StatusBar,
   Pressable,
-  Dimensions
+  Dimensions,
+  AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../components/CachedImage';
@@ -48,6 +49,7 @@ export default function PosterViewerScreen() {
   const [currentIndex, setCurrentIndex] = React.useState(0);
   const [progress, setProgress] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);
+  const [mediaError, setMediaError] = React.useState(false);
 
   React.useEffect(() => {
     let mounted = true;
@@ -116,6 +118,16 @@ export default function PosterViewerScreen() {
     }
   };
 
+  // Pause when app goes to background
+  React.useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState !== 'active') {
+        setIsPaused(true);
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   React.useEffect(() => {
     if (!posters.length) {
       if (!isLoading) navigation.goBack();
@@ -168,8 +180,21 @@ export default function PosterViewerScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <CachedImage uri={activePoster.mediaUrl} style={styles.posterImage} contentFit="cover" priority="high" containerStyle={StyleSheet.absoluteFillObject} />
+      <CachedImage
+        uri={activePoster.mediaUrl}
+        style={styles.posterImage}
+        contentFit="cover"
+        priority="high"
+        containerStyle={StyleSheet.absoluteFillObject}
+        onError={() => setMediaError(true)}
+      />
       <View style={styles.backdropOverlay} />
+      {mediaError && (
+        <View style={styles.mediaErrorOverlay}>
+          <Ionicons name="alert-circle-outline" size={48} color="#fff" />
+          <Text style={styles.mediaErrorText}>Unable to load media</Text>
+        </View>
+      )}
 
       <SafeAreaView style={styles.overlay} edges={['top', 'bottom']}>
         <View style={styles.progressRow}>
@@ -497,4 +522,16 @@ const styles = StyleSheet.create({
   tapRight: {
     flex: 1,
   },
-});
+  mediaErrorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    gap: 12,
+  },
+  mediaErrorText: {
+    fontFamily: Typography.family.medium,
+    fontSize: 16,
+    color: '#fff',
+  },
+});;

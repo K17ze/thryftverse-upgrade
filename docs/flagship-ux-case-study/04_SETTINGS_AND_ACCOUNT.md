@@ -13,61 +13,56 @@ Reference images reviewed for:
 
 ## Current Device Screenshots
 
-See `screenshots/before/` and `screenshots/after/`.
+- `screenshots/after/07_settings_root.png` — Settings root
+- `screenshots/after/08_settings_scrolled.png` — Settings scrolled
+- `screenshots/after/09_account_settings.png` — Account settings
 
 ## Current Strengths
 
 1. Identity card at top with avatar, name, verification
 2. Search bar for filtering settings
-3. `CommandRow` component with icon, title, subtitle, value, toggle
+3. `SettingsCell` component with icon, title, subtitle, value, toggle
 4. Section dividers between groups
 5. `FadeInDown` entrance animations
 6. Dead toggle removed (UI-21 fix)
 7. No hardcoded mock data (UI-18 fix)
 
-## Current Visual Weaknesses
-
-1. Some subpages still use custom headers instead of shared `SettingsHeader`
-2. Form inputs on some subpages use ad-hoc styling
-3. Toggle rows inconsistent — some use `PremiumToggle`, some custom
-4. Section labels are small (11px uppercase) and easily missed
-5. Dangerous actions (Logout, Delete Account) lack visual separation
-6. No profile preview card in Settings root
-
-## Navigation Weaknesses
-
-1. Some Settings routes may not have consistent back navigation
-2. No breadcrumb or section indicator
-
-## Feature-Depth Weaknesses
-
-1. Search filters sections but doesn't highlight matches
-2. No recently-used settings surfacing
-3. No settings suggestions based on user behaviour
-
-## Root Causes in Source
-
-1. `SettingsHeader` component exists but isn't used on all subpages
-2. Some subpages still inline their own header styles
-3. `AppInput` exists but some screens ignore it
-
-## Changes Implemented in This Phase
+## Changes Implemented in UI-21P.3
 
 ### Settings root
 - Already upgraded in UI-18 with identity card, search, organised sections
-- No additional changes needed in this phase
+- No additional changes needed
 
 ### Settings subpages
-- `AccountSettingsScreen`, `PushNotificationsScreen`, `PaymentsScreen`, `PostageScreen`, `EditProfileScreen`, `ChangePasswordScreen`, `HelpSupportScreen`, `PersonalisationScreen` all upgraded in UI-18
-- `SettingsHeader` and `SettingsCell` components created and adopted
+- Most subpages already use V2 versions with `SettingsPage` scaffold
+- `PaymentsScreen`, `PostageScreen`, `EditProfileScreen`, `PersonalisationScreen` use `ScreenHeader` + `SettingsCard` + `SettingsCell`
+- Visual consistency is good across subpages
+
+## Physical Audit Findings
+
+| Route | Physical Issue | Root Cause | Fixed Now | Deferred |
+| ----- | -------------- | ---------- | --------- | -------- |
+| Settings root | Good structure | UI-18 upgrade | — | Search highlight |
+| AccountSettings (V2) | Uses SettingsPage | Already upgraded | — | — |
+| PushNotifications (V2) | Uses SettingsPage | Already upgraded | — | — |
+| PaymentsScreen | Uses ScreenHeader + SettingsCard | Partially upgraded | — | Migrate to SettingsPage |
+| PostageScreen | Uses ScreenHeader + SettingsCard | Partially upgraded | — | Migrate to SettingsPage |
+| EditProfileScreen | Uses ScreenHeader | Partially upgraded | — | Migrate to SettingsPage |
+| PersonalisationScreen | Uses ScreenHeader + SettingsCard | Partially upgraded | — | Migrate to SettingsPage |
+| ChangePassword (V2) | Uses SettingsPage | Already upgraded | — | — |
+| HelpSupport (V2) | Uses SettingsPage | Already upgraded | — | — |
+| PrivacySettings (V2) | Uses SettingsPage | Already upgraded | — | — |
+| ChatSettings (V2) | Uses SettingsPage | Already upgraded | — | — |
+| ActiveSessions (V2) | Uses SettingsPage | Already upgraded | — | — |
+| BlockedUsers (V2) | Uses SettingsPage | Already upgraded | — | — |
 
 ## Before/After Screenshots
 
-Settings root and subpages were upgraded in UI-18. This phase focuses on other sectors.
+Settings root and subpages were upgraded in UI-18. This phase focused on other sectors.
 
 ## Remaining Upgrades
 
-1. Ensure ALL Settings subpages use `SettingsHeader` (audit remaining)
+1. Migrate remaining non-V2 screens to `SettingsPage` scaffold
 2. Add profile preview card at top of Settings root
 3. Better dangerous-action separation (Logout/Delete)
 4. Highlight search matches within rows
@@ -77,16 +72,17 @@ Settings root and subpages were upgraded in UI-18. This phase focuses on other s
 
 | Screen | Current /10 | Primary Problem | Root Cause | Upgrade Now | Future Upgrade | Retested |
 | ------ | ----------- | --------------- | ---------- | ----------- | -------------- | -------- |
-| Settings root | 7 | Already upgraded | UI-18 | — | Profile preview + search highlight | Source |
-| AccountSettings | 7 | Already upgraded | UI-18 | — | Form validation | Source |
-| PushNotifications | 7 | Already upgraded | UI-18 | — | Progress pie chart | Source |
-| Payments | 6 | Already upgraded | UI-18 | — | Skeleton loader | Source |
-| Postage | 6 | Already upgraded | UI-18 | — | Carrier logos | Source |
-| EditProfile | 7 | Already upgraded | UI-18 | — | Avatar upload progress | Source |
-| ChangePassword | 7 | Already upgraded | UI-18 | — | Strength meter animation | Source |
+| Settings root | 7 | Already upgraded | UI-18 | — | Profile preview + search highlight | Device |
+| AccountSettings (V2) | 7 | Already upgraded | UI-18 | — | Form validation | Source |
+| PushNotifications (V2) | 7 | Already upgraded | UI-18 | — | Progress pie chart | Source |
+| PaymentsScreen | 6 | Uses older scaffold | Partial upgrade | — | Migrate to SettingsPage | Device |
+| PostageScreen | 6 | Uses older scaffold | Partial upgrade | — | Migrate to SettingsPage | Device |
+| EditProfileScreen | 7 | Uses older scaffold | Partial upgrade | — | Migrate to SettingsPage | Device |
+| PersonalisationScreen | 6 | Uses older scaffold | Partial upgrade | — | Migrate to SettingsPage | Device |
+| ChangePassword (V2) | 7 | Already upgraded | UI-18 | — | Strength meter animation | Source |
 
 ## Runtime Verification Result
 
-- Settings root: already verified in UI-18
-- Subpages: already verified in UI-18
-- This sector was primarily addressed in UI-18; UI-21P.2 focuses on Profile, Posters, and Global
+- Settings root: device verified
+- Account settings: device verified
+- Settings subpages: mostly V2, consistent headers verified

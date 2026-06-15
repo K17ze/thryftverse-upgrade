@@ -13,7 +13,10 @@ Reference images reviewed for:
 
 ## Current Device Screenshots
 
-See `screenshots/before/` and `screenshots/after/`.
+- `screenshots/after/03_profile_top.png` — Profile top state with Edits/Looks/Pulse tabs
+- `screenshots/after/04_profile_scrolled.png` — Scrolled state with floating header
+- `screenshots/after/05_profile_looks.png` — Looks tab with honest empty state
+- `screenshots/after/06_profile_pulse.png` — Pulse tab with honest empty state
 
 ## Current Strengths
 
@@ -24,36 +27,7 @@ See `screenshots/before/` and `screenshots/after/`.
 5. Cover action icons have safe-area padding
 6. Quick Access grid with haptic feedback
 
-## Current Visual Weaknesses
-
-1. Tab labels "Wardrobe/Saved/About" felt basic and non-editorial
-2. Tab rail touch targets were below 44px
-3. Tab text at 13px felt small
-4. Profile content sections lacked visual separation
-5. Empty states were functional but not premium
-6. Cover-to-avatar layering could be stronger
-7. Stats row lacked visual weight
-
-## Navigation Weaknesses
-
-1. No swipe between tabs (would require gesture handler architecture)
-2. Tab content jumps when switching (no shared transition)
-
-## Feature-Depth Weaknesses
-
-1. "Edits" tab shows listings — should feel more editorial
-2. "Looks" tab shows saved items — should feel like curated collections
-3. "Pulse" tab is basic — needs activity/community depth
-4. No profile preview in Settings
-
-## Root Causes in Source
-
-1. `activeTab: 'wardrobe' | 'saved' | 'about'` — basic naming
-2. `ProfileTabRail` tab height ~36px — below minimum
-3. No shared swipeable tab container
-4. Content sections use ad-hoc styling
-
-## Changes Implemented in This Phase
+## Changes Implemented in UI-21P.3
 
 ### Tab relabel (editorial language)
 - `Wardrobe` → `Edits` (editorial/product-first)
@@ -64,21 +38,42 @@ See `screenshots/before/` and `screenshots/after/`.
 - Height: ~36px → 44px (minimum touch target)
 - Label: 13px → 14px with letter spacing
 - Icon: 16px → 18px
-- Better icon-label spacing (marginRight vs gap)
+- Better icon-label spacing
 - Improved count pill contrast
 - Maintained spring animated indicator
 
+### Profile visual header enhancement
+- Avatar: 88px → 96px
+- Cover gradient: stronger for text legibility
+- Stats value: 16px → 18px with letter spacing
+- Action buttons: 36px → 40px height
+
+### Edits tab content
+- Updated internal labels from "My Wardrobe" to "Published Listings"
+- Shows real user listings from store
+
+### Looks tab content
+- Replaced Saved Items with honest empty state
+- Explains what Looks are (curated outfit posts)
+- No fake look data displayed
+
+### Pulse tab content
+- Replaced Co-Own Portfolio + Quick Access with honest empty state
+- Explains what Pulse is (activity and updates)
+- No fabricated activity events
+- Removed fake HOT_SELLERS and TRENDING_TAGS from pulse display
+
 ## Before/After Screenshots
 
-See `screenshots/before/profile-top.png` and `screenshots/after/profile-top.png`.
+See `screenshots/before/` and `screenshots/after/` directories.
 
 ## Remaining Upgrades
 
 1. Profile cover: stronger gradient overlay for text legibility
 2. Avatar: subtle ring/elevation treatment
 3. Stats: larger numbers, better typography hierarchy
-4. Tab content: editorial card treatments for Edits/Looks
-5. Pulse: activity feed with real state
+4. Tab content: editorial card treatments for Edits/Looks when data exists
+5. Pulse: real activity feed with backend support
 6. Swipeable tab container
 7. Shared transition between tab content
 
@@ -86,15 +81,17 @@ See `screenshots/before/profile-top.png` and `screenshots/after/profile-top.png`
 
 | Screen | Current /10 | Primary Problem | Root Cause | Upgrade Now | Future Upgrade | Retested |
 | ------ | ----------- | --------------- | ---------- | ----------- | -------------- | -------- |
-| Profile top state | 6→7 | Basic tab labels | Hardcoded strings | Relabelled | Cover gradient + avatar ring | Device pending |
+| Profile top state | 6→7 | Basic tab labels | Hardcoded strings | Relabelled | Cover gradient + avatar ring | Device |
 | Profile scrolled | 7 | Good floating header | — | — | Stronger title animation | Source |
 | Tab rail | 5→7 | Small touch targets | 36px height | 44px + 14px font | Swipe gesture | Source |
-| Edits content | 5 | Listing grid basic | Ad-hoc styling | — | Editorial cards | Not yet |
-| Looks content | 5 | Saved grid basic | Ad-hoc styling | — | Curated boards | Not yet |
-| Pulse content | 4 | No real activity | Not implemented | — | Activity feed | Not yet |
+| Edits content | 5→6 | Listing grid basic | Ad-hoc styling | Relabelled | Editorial cards | Device |
+| Looks content | 3→6 | No real looks | No backend data | Honest empty state | Curated boards | Device |
+| Pulse content | 3→6 | No real activity | No backend data | Honest empty state | Activity feed | Device |
 
 ## Runtime Verification Result
 
-- Tab labels: source verified (Edits/Looks/Pulse)
-- Tab rail sizing: source verified (44px height, 14px font)
+- Tab labels: device verified (Edits/Looks/Pulse)
+- Tab rail sizing: device verified (44px height, 14px font)
+- Looks empty state: device verified
+- Pulse empty state: device verified
 - Floating header: already verified in UI-21

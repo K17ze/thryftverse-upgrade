@@ -827,8 +827,8 @@ export default function MyProfileScreen() {
             <View style={styles.wardrobeSection}>
               <View style={styles.wardrobeHeader}>
                 <View>
-                  <Text style={styles.wardrobeSectionLabel}>YOUR LISTINGS</Text>
-                  <Text style={styles.wardrobeTitle}>My Wardrobe</Text>
+                  <Text style={styles.wardrobeSectionLabel}>YOUR EDITS</Text>
+                  <Text style={styles.wardrobeTitle}>Published Listings</Text>
                 </View>
                 <AnimatedPressable
                   style={styles.viewAllBtn}
@@ -925,79 +925,65 @@ export default function MyProfileScreen() {
 
         {activeTab === 'pulse' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
-            {/* Co-Own Portfolio Summary */}
             <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
-              <View style={styles.portfolioSummaryCard}>
-                <View style={styles.portfolioSummaryTop}>
-                  <Text style={styles.portfolioSummaryLabel}>MY CO-OWN HOLDINGS</Text>
-                  <AnimatedPressable
-                    style={styles.portfolioSummaryLinkBtn}
-                    activeOpacity={0.8}
-                    onPress={() => navigation.navigate('Portfolio')}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.portfolioSummaryLinkText}>Open</Text>
-                    <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
-                  </AnimatedPressable>
-                </View>
-                <Text style={styles.portfolioSummaryValue}>{formatFromFiat(holdingsValue, 'GBP')}</Text>
-                <View style={styles.portfolioSummaryMetaRow}>
-                  <Text style={styles.portfolioSummaryMeta}>
-                    {coOwnHoldings.length} active position{coOwnHoldings.length === 1 ? '' : 's'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.portfolioSummaryPnl,
-                      holdingsUnrealized >= 0 ? styles.portfolioPnlUp : styles.portfolioPnlDown,
-                    ]}
-                  >
-                    Unrealized {holdingsUnrealized >= 0 ? '+' : '-'}
-                    {formatFromFiat(Math.abs(holdingsUnrealized), 'GBP', { displayMode: 'fiat' })}
-                  </Text>
-                </View>
-                {coOwnHoldings.length === 0 && (
-                  <AnimatedPressable
-                    style={styles.portfolioSummaryCta}
-                    activeOpacity={0.85}
-                    onPress={() => navigation.navigate('CoOwnHub')}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="sparkles-outline" size={14} color={Colors.background} />
-                    <Text style={styles.portfolioSummaryCtaText}>Explore Co-Own Hub</Text>
-                  </AnimatedPressable>
-                )}
+              <View style={{ paddingHorizontal: Space.md, marginBottom: Space.lg }}>
+                <Text style={styles.wardrobeTitle}>Pulse</Text>
+                <Text style={{ fontFamily: Typography.family.regular, fontSize: 14, color: Colors.textSecondary, marginTop: 4 }}>
+                  Activity and updates from your network
+                </Text>
               </View>
-            </Reanimated.View>
-
-            {/* Quick Access */}
-            <Reanimated.View entering={FadeInDown.duration(300).delay(100)} style={{ marginTop: Space.lg }}>
-              <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>
-                <Text style={styles.wardrobeTitle}>Quick Access</Text>
-              </View>
-              <View style={styles.quickAccessCard}>
-                <View style={styles.quickGrid}>
-                  {quickAccess.map((item, index) => (
-                    <AnimatedPressable
-                      key={item.label}
-                      style={[styles.quickItem, (index + 1) % 3 === 0 && styles.quickItemLastInRow]}
-                      activeOpacity={0.8}
-                      onPress={() => navigation.navigate(item.route as any)}
-                      accessibilityRole="button"
-                    >
-                      <View style={styles.quickIconCircle}>
-                        <Ionicons name={item.icon as any} size={18} color={item.color} />
-                      </View>
-                      <Text style={styles.quickLabel}>{item.label}</Text>
-                      {item.value && <Text style={styles.quickValue}>{item.value}</Text>}
-                    </AnimatedPressable>
-                  ))}
+              {/* Honest empty state — no fabricated activity */}
+              <View style={{
+                marginHorizontal: Space.md,
+                backgroundColor: Colors.surface,
+                borderRadius: Radius.lg,
+                borderWidth: 1,
+                borderColor: Colors.border,
+                padding: Space.lg,
+                alignItems: 'center',
+                gap: Space.md,
+              }}>
+                <View style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  backgroundColor: Colors.surfaceAlt,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <Ionicons name="pulse-outline" size={28} color={Colors.textMuted} />
                 </View>
+                <View style={{ alignItems: 'center', gap: Space.xs }}>
+                  <Text style={{ fontFamily: Typography.family.semibold, fontSize: 16, color: Colors.textPrimary, textAlign: 'center' }}>
+                    No activity yet
+                  </Text>
+                  <Text style={{ fontFamily: Typography.family.regular, fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
+                    Pulse shows your sales, bids, follows and community updates. Activity will appear here as it happens.
+                  </Text>
+                </View>
+                <AnimatedPressable
+                  style={{
+                    marginTop: Space.sm,
+                    backgroundColor: Colors.brand,
+                    borderRadius: Radius.md,
+                    paddingHorizontal: Space.lg,
+                    paddingVertical: Space.sm,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: Space.xs,
+                  }}
+                  onPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
+                  activeOpacity={0.9}
+                  accessibilityRole="button"
+                  accessibilityLabel="Explore marketplace"
+                >
+                  <Text style={{ fontFamily: Typography.family.semibold, fontSize: 14, color: '#fff' }}>Explore Marketplace</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#fff" />
+                </AnimatedPressable>
               </View>
             </Reanimated.View>
           </View>
-        )}
-
-      </AnimatedScrollView>
+        )}      </AnimatedScrollView>
 
     </View>
 
