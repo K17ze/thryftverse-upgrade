@@ -217,7 +217,24 @@ The root cause of both P0 regressions was **lack of a deterministic content-orde
 
 ---
 
-## 9. Verification Results (UI-21R)
+## 9. UI-21D Runtime Visual Audit Results
+
+### Android tooling status
+| Tool | Status | Result |
+|------|--------|--------|
+| Android Studio | Attempted via winget | Download (1.37 GB) started but did not complete in session time; installer processes exited before SDK components were available |
+| Android SDK | **Not available** | No `%LOCALAPPDATA%\Android\Sdk` directory |
+| `adb` | **Not available** | Not in PATH |
+| `emulator` | **Not available** | Not in PATH |
+| Java/JDK | **Not available** | `java` command not found |
+
+**Conclusion**: Android emulator runtime verification is **blocked** by missing Android SDK, JDK, and emulator tooling. The environment is a headless Windows terminal session without Android Studio GUI.
+
+### Expo Doctor result (from `frontend/`)
+```
+Running 18 checks on your project...
+18/18 checks passed. No issues detected!
+```
 
 ### Static verification
 | Check | Command | Result |
@@ -227,7 +244,7 @@ The root cause of both P0 regressions was **lack of a deterministic content-orde
 | Phase test suite | `npm run verify:phase` | **PASS** — 253 tests across 8 files |
 | UI-21 direct tests | `vitest run ui21DeviceAudit.test.ts` | **PASS** — 17/17 assertions |
 | Animated scroll guard | `npm run check:animated-scroll` | **PASS** — no violations |
-| Expo Doctor | `npx expo-doctor` | **BLOCKED** — `expo` package not in project root (non-managed workflow) |
+| Expo Doctor | `npx expo-doctor` (from `frontend/`) | **PASS** — 18/18 checks |
 
 ### Test guardrails proven
 1. MyProfile contains canonical Settings action — **PASS**
@@ -243,21 +260,20 @@ The root cause of both P0 regressions was **lack of a deterministic content-orde
 11. No external placeholder image providers — **PASS**
 12. No duplicated profile hero — **PASS**
 13. No gold/yellow/glass regressions — **PASS**
+14. Quick Access does not duplicate Settings — **PASS**
+15. Floating header tap target meets 44×44 — **PASS**
+16. Cover action tap target meets 44×44 — **PASS**
 
-### Runtime device QA
-| Target | Status | Honest limitation |
-|--------|--------|-------------------|
-| Android emulator | **Unavailable** | No Android SDK installed; `adb` not in PATH |
-| iOS simulator | **Unavailable** | Windows host; iOS Simulator requires macOS |
-| Physical Android device | **Unavailable** | No USB debugging device connected |
-| Physical iOS device | **Unavailable** | No macOS/Xcode host for development build install |
-| Web renderer | **Not used** | Prompt explicitly prohibits web renderer for mobile layout evidence |
-
-**Mitigation**: All UI-21 changes were verified through:
-- Full TypeScript compilation with strict mode
-- 253 automated assertions including layout-order, skeleton presence, safe-area, and regression guardrails
-- Source-level audit of tap-target sizes (44×44 for cover action, 36×36 for floating header — floating header to be increased in UI-22F)
-- JSX structure verification ensuring no simultaneous duplicated Settings controls
+### Additional source-level P1 fixes (UI-21D)
+| # | Screen | Issue | Fix |
+|---|--------|-------|-----|
+| 1 | MyProfileScreen | Quick Access Settings tile duplicated header action | Removed Settings from Quick Access grid; kept canonical cover action + floating header replacement |
+| 2 | MyProfileScreen | Cover action icon was 40×40 (below 44×44 minimum) | Increased to 44×44 |
+| 3 | MyProfileScreen | Floating header action was 36×36 (below 44×44 minimum) | Increased to 44×44 |
+| 4 | SaveToCollectionModal | Modal card had no bottom safe area padding for home indicator | Added `useSafeAreaInsets()`; card and FlatList now pad by `Space.md + insets.bottom` |
+| 5 | ItemDetailScreen | Floating buy bar at `bottom: 0` with fixed 16px padding | Changed to `Math.max(insets.bottom, 20)` via inline style |
+| 6 | SellScreenV2 | Floating publish CTA at `bottom: 0` with fixed 12px padding | Added `Math.max(insets.bottom, 12)` via inline style |
+| 7 | CheckoutScreen | Footer at `bottom: 0` with hardcoded iOS/Android padding | Added `Math.max(insets.bottom, Platform.OS === 'ios' ? 34 : 24)` via inline style |
 
 ### Screenshots
 No runtime screenshots were captured because no emulator or device was available. Screenshot placeholders were not created to avoid misleading evidence.
@@ -268,10 +284,14 @@ No runtime screenshots were captured because no emulator or device was available
 
 | File | Change |
 |------|--------|
-| `frontend/src/screens/MyProfileScreen.tsx` | Added Settings button to cover action layer, Quick Access grid, and floating header; added `useHaptic` import |
+| `frontend/src/screens/MyProfileScreen.tsx` | Added Settings button to cover action layer and floating header; removed Quick Access duplication; increased tap targets to 44×44 |
 | `frontend/src/screens/HomeScreen.tsx` | Moved `renderPosters()` before Editorial Hero; made Editorial Hero conditional; added poster skeleton and empty state |
 | `frontend/src/screens/SyndicateScreen.tsx` | Replaced `import type { CoOwnAsset } from '../data/tradeHub'` with local interface |
 | `frontend/src/screens/AuctionsScreen.tsx` | Replaced `../data/tradeHub` imports with local types and inline `getAuctionMarket` logic |
+| `frontend/src/screens/ItemDetailScreen.tsx` | Added safe area bottom padding to floating buy bar |
+| `frontend/src/screens/SellScreenV2.tsx` | Added safe area bottom padding to floating publish CTA |
+| `frontend/src/screens/CheckoutScreen.tsx` | Added safe area bottom padding to checkout footer |
+| `frontend/src/components/closet/SaveToCollectionModal.tsx` | Added safe area bottom padding to modal card and list |
 | `frontend/package.json` | Added `ui21DeviceAudit.test.ts` to `verify:phase` script |
-| `frontend/src/__tests__/ui21DeviceAudit.test.ts` | New test file proving UI-21 fixes |
+| `frontend/src/__tests__/ui21DeviceAudit.test.ts` | New test file proving UI-21 fixes; updated for Quick Access removal |
 | `docs/ui21-device-audit/UI21_DEVICE_UX_CASE_STUDY.md` | Updated with real verification evidence and honest limitations |

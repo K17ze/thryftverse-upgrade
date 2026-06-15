@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Type, Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppInput } from '../ui/AppInput';
@@ -30,6 +31,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
   const [newCollectionName, setNewCollectionName] = useState('');
   const [showCreateInput, setShowCreateInput] = useState(false);
   const haptic = useHaptic();
+  const insets = useSafeAreaInsets();
   const { show } = useToast();
 
   const collections = useStore((state) => state.collections);
@@ -115,7 +117,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
       >
-        <View style={styles.card}>
+        <View style={[styles.card, { paddingBottom: Space.md + insets.bottom }]}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Save</Text>

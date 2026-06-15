@@ -175,13 +175,12 @@ describe('UI-21 device UX audit and consistency restoration', () => {
     expect(after).toContain("navigate('Settings')");
   });
 
-  // ── 16. Quick Access grid includes Settings ──
-  it('MyProfileScreen Quick Access grid includes Settings entry', () => {
+  // ── 16. Quick Access grid does NOT duplicate Settings (canonical action is header only) ──
+  it('MyProfileScreen Quick Access grid does not duplicate Settings entry', () => {
     const src = read(resolve(SCREENS, 'MyProfileScreen.tsx'));
     const quickAccessIdx = src.indexOf('quickAccess');
     const after = src.substring(quickAccessIdx, quickAccessIdx + 1200);
-    expect(after).toContain("label: 'Settings'");
-    expect(after).toContain("route: 'Settings'");
-    expect(after).toContain("icon: 'settings-outline'");
+    expect(after).not.toContain("label: 'Settings'");
+    expect(after).not.toContain("route: 'Settings'");
   });
 });

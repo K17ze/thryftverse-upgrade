@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, {
@@ -175,6 +175,7 @@ function TrustReveal({
 
 /* ─── main component ─── */
 export default function SellScreenV2() {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   /* ── store ── */
   const sellDraft = useStore((s) => s.sellDraft);
@@ -1466,7 +1467,7 @@ export default function SellScreenV2() {
       ) : null}
 
       {/* ── floating publish CTA ── */}
-      <Animated.View style={[styles.floatingCtaWrap, shakeStyle]}>
+      <Animated.View style={[styles.floatingCtaWrap, shakeStyle, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <View style={styles.floatingCtaRow}>
           <AppButton
             title="Preview"

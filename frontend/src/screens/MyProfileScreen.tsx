@@ -688,18 +688,6 @@ export default function MyProfileScreen() {
         color: Colors.textSecondary,
       },
 
-      {
-
-        icon: 'settings-outline',
-
-        label: 'Settings',
-
-        route: 'Settings',
-
-        color: Colors.textSecondary,
-
-      },
-
     ],
 
     [formatFromFiat, coOwnHoldings.length, savedCount, wishlistCount]
@@ -1103,9 +1091,9 @@ const styles = StyleSheet.create({
 
   topUtilityIconBtn: {
 
-    width: 40,
+    width: 44,
 
-    height: 40,
+    height: 44,
 
     borderRadius: 20,
 
@@ -1199,9 +1187,9 @@ const styles = StyleSheet.create({
 
   floatingHeaderAction: {
 
-    width: 36,
+    width: 44,
 
-    height: 36,
+    height: 44,
 
     borderRadius: 18,
 
