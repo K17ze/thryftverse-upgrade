@@ -4,7 +4,7 @@ import { Space, Radius, Elevation } from '../../theme/designTokens';
 import { AppButton, AppButtonVariant, AppButtonSize } from '../ui/AppButton';
 import { Colors } from '../../constants/colors';
 
-interface ActionItem {
+export interface ActionItem {
   label: string;
   onPress: () => void;
   variant?: AppButtonVariant;

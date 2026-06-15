@@ -9,8 +9,8 @@ import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
-import { SettingsPage } from '../components/settings/SettingsPage';
 import { SettingsSection } from '../components/settings/SettingsSection';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'ActiveSessions'>;
 
@@ -54,7 +54,7 @@ export default function ActiveSessionsScreenV2({ navigation }: Props) {
   };
 
   return (
-    <SettingsPage title="Active Sessions" onBack={() => navigation.goBack()}>
+    <FlagshipScreen header={<FlagshipHeader title="Active Sessions" onBack={() => navigation.goBack()} />}>
       {/* This device */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
         <SettingsSection title="This device">
@@ -100,7 +100,7 @@ export default function ActiveSessionsScreenV2({ navigation }: Props) {
           Full session tracking requires backend support. This screen shows your current device only.
         </Text>
       </Reanimated.View>
-    </SettingsPage>
+    </FlagshipScreen>
   );
 }
 

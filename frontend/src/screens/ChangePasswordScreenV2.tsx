@@ -3,8 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,16 +10,14 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Space, Type } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { changePassword } from '../services/authApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
-import { PremiumFormCard } from '../components/ui/PremiumFormCard';
-import { PremiumActionFooter } from '../components/ui/PremiumActionFooter';
 import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar';
 import { Typography } from '../theme/designTokens';
-import { SettingsPage } from '../components/settings/SettingsPage';
+import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship';
 
 export default function ChangePasswordScreenV2() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -73,58 +69,58 @@ export default function ChangePasswordScreenV2() {
   );
 
   return (
-    <SettingsPage title="Change Password" onBack={() => navigation.goBack()}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={{ flex: 1, paddingHorizontal: Space.md }}>
-          <PremiumFormCard
-            title="Security"
-            subtitle="Enter your current password to confirm your identity."
-          >
-            <PremiumTextField
-              label="Current Password"
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              secureTextEntry={isSecure}
-              placeholder="Enter current password"
-              rightAction={eyeIcon}
-            />
-            <PremiumTextField
-              label="New Password"
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry={isSecure}
-              placeholder="Enter new password"
-            />
-            <View style={{ marginTop: Space.xs, marginBottom: Space.sm }}>
-              <PasswordStrengthBar password={newPassword} />
-            </View>
-            <PremiumTextField
-              label="Confirm New Password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry={isSecure}
-              placeholder="Re-enter new password"
-            />
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ForgotPassword')}
-              activeOpacity={0.7}
-              style={styles.forgotPasswordLink}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
-          </PremiumFormCard>
-        </View>
-
-        <PremiumActionFooter
-          primaryLabel="Update Password"
-          onPrimaryPress={handleUpdate}
-          primaryLoading={isUpdating}
+    <FlagshipScreen
+      header={<FlagshipHeader title="Change Password" subtitle="Update your security" onBack={() => navigation.goBack()} />}
+      keyboardAvoiding
+      stickyFooter={
+        <FlagshipStickyFooter
+          actions={[
+            {
+              label: isUpdating ? 'Updating…' : 'Update Password',
+              onPress: handleUpdate,
+              variant: 'primary',
+              disabled: isUpdating,
+              loading: isUpdating,
+            },
+          ]}
         />
-      </KeyboardAvoidingView>
-    </SettingsPage>
+      }
+    >
+      <FlagshipFormSection title="Security" description="Enter your current password to confirm your identity.">
+        <PremiumTextField
+          label="Current Password"
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+          secureTextEntry={isSecure}
+          placeholder="Enter current password"
+          rightAction={eyeIcon}
+        />
+        <PremiumTextField
+          label="New Password"
+          value={newPassword}
+          onChangeText={setNewPassword}
+          secureTextEntry={isSecure}
+          placeholder="Enter new password"
+        />
+        <View style={{ marginTop: Space.xs, marginBottom: Space.sm }}>
+          <PasswordStrengthBar password={newPassword} />
+        </View>
+        <PremiumTextField
+          label="Confirm New Password"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          secureTextEntry={isSecure}
+          placeholder="Re-enter new password"
+        />
+        <TouchableOpacity
+          onPress={() => navigation.navigate('ForgotPassword')}
+          activeOpacity={0.7}
+          style={styles.forgotPasswordLink}
+        >
+          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+        </TouchableOpacity>
+      </FlagshipFormSection>
+    </FlagshipScreen>
   );
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TextInput, StyleSheet, Linking, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -8,8 +8,8 @@ import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { SettingsPage } from '../components/settings/SettingsPage';
 import { SettingsSection } from '../components/settings/SettingsSection';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -66,8 +66,7 @@ export default function HelpSupportScreenV2({ navigation }: Props) {
   }, [allFaqs, faqSearch]);
 
   return (
-    <SettingsPage title="Help & Support" onBack={() => navigation.goBack()}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <FlagshipScreen header={<FlagshipHeader title="Help & Support" onBack={() => navigation.goBack()} />} keyboardAvoiding>
         {/* Contact options */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
           <SettingsSection title="Contact us">
@@ -193,8 +192,7 @@ export default function HelpSupportScreenV2({ navigation }: Props) {
 
         {/* Version */}
         <Text style={styles.version}>Thryftverse v1.0.0 · Response time ~2 hours</Text>
-      </KeyboardAvoidingView>
-    </SettingsPage>
+    </FlagshipScreen>
   );
 }
 

@@ -1,7 +1,5 @@
 import React from 'react';
-import { Linking, View } from 'react-native';
-import { Colors } from '../constants/colors';
-
+import { Linking, View, Text, StyleSheet } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -21,14 +19,42 @@ import {
 } from '../theme/themePreference';
 import { useAppTheme } from '../theme/ThemeContext';
 import { t } from '../i18n';
-import { SettingsPage } from '../components/settings/SettingsPage';
+import { Space, Type } from '../theme/designTokens';
+import { Typography } from '../theme/designTokens';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { IdentityCard } from '../components/settings/IdentityCard';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { FlagshipScreen, FlagshipHeader, FlagshipDangerZone } from '../components/flagship';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 type Props = StackScreenProps<RootStackParamList, 'Settings'>;
+
+interface RouteMeta {
+  key: string;
+  searchTerms: string;
+  section: string;
+}
+
+const ROUTE_METADATA: RouteMeta[] = [
+  { key: 'EditProfile', searchTerms: 'edit profile avatar name bio', section: 'Account Centre' },
+  { key: 'Postage', searchTerms: 'postage shipping address delivery', section: 'Account Centre' },
+  { key: 'Closet', searchTerms: 'closet saved wishlist collections', section: 'Account Centre' },
+  { key: 'Wallet', searchTerms: 'wallet balance payout', section: 'Seller Hub' },
+  { key: 'Payments', searchTerms: 'payment methods card bank', section: 'Seller Hub' },
+  { key: 'BalanceHistory', searchTerms: 'balance history payouts', section: 'Seller Hub' },
+  { key: 'AccountSettings', searchTerms: 'account details email phone', section: 'Trust & Security' },
+  { key: 'ChangePassword', searchTerms: 'password security', section: 'Trust & Security' },
+  { key: 'TwoFactorSetup', searchTerms: 'two factor authentication 2fa', section: 'Trust & Security' },
+  { key: 'ActiveSessions', searchTerms: 'devices sessions active', section: 'Trust & Security' },
+  { key: 'BlockedUsers', searchTerms: 'blocked users', section: 'Trust & Security' },
+  { key: 'PrivacySettings', searchTerms: 'privacy controls', section: 'Trust & Security' },
+  { key: 'PushNotifications', searchTerms: 'push notifications alerts', section: 'Preferences' },
+  { key: 'Personalisation', searchTerms: 'personalisation feed preferences', section: 'Preferences' },
+  { key: 'HelpSupport', searchTerms: 'help support faq contact', section: 'Support' },
+  { key: 'About', searchTerms: 'about version', section: 'Support' },
+];
 
 export default function SettingsScreenV2({ navigation }: Props) {
   const logout = useStore((state) => state.logout);
@@ -52,7 +78,7 @@ export default function SettingsScreenV2({ navigation }: Props) {
   const [languagePickerVisible, setLanguagePickerVisible] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
 
-  const { themePreference, setThemePreference, resolvedTheme } = useAppTheme();
+  const { themePreference, setThemePreference } = useAppTheme();
 
   const {
     currencyCode,
@@ -134,27 +160,56 @@ export default function SettingsScreenV2({ navigation }: Props) {
     navigation.replace('AuthLanding');
   }, [logout, navigation]);
 
-  const matchesSearch = (text: string) => {
+  const matchesSearch = (terms: string) => {
     if (!searchQuery.trim()) return true;
-    return text.toLowerCase().includes(searchQuery.toLowerCase().trim());
+    const q = searchQuery.toLowerCase().trim();
+    return terms.toLowerCase().includes(q);
+  };
+
+  const showSection = (sectionName: string) => {
+    if (!searchQuery.trim()) return true;
+    return (
+      sectionName.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+      ROUTE_METADATA.some(
+        (r) =>
+          r.section === sectionName &&
+          r.searchTerms.toLowerCase().includes(searchQuery.toLowerCase().trim())
+      )
+    );
   };
 
   return (
-    <SettingsPage title="Settings" onBack={() => navigation.goBack()}>
-      {/* Search */}
-      <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
-        <AppSearchBar
-          placeholder="Search settings"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          containerStyle={{ borderRadius: 999, backgroundColor: Colors.surface, height: 48 }}
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Settings"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            currentUser ? (
+              <View style={styles.headerMeta}>
+                <Text style={styles.headerMetaText}>{currentUser.username}</Text>
+              </View>
+            ) : undefined
+          }
         />
-      </View>
+      }
+    >
+      {/* Search */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <View style={{ marginBottom: Space.lg }}>
+          <AppSearchBar
+            placeholder="Search settings"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            containerStyle={styles.searchField}
+          />
+        </View>
+      </Reanimated.View>
 
       {/* Account Centre */}
-      {matchesSearch('account centre profile avatar addresses closet') && (
-        <View>
-          <ElevatedSurface variant="elevated" style={{ marginHorizontal: 16, marginBottom: 12 }}>
+      {showSection('Account Centre') && (
+        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+          <ElevatedSurface variant="elevated" style={{ marginBottom: Space.md }}>
             <IdentityCard
               user={currentUser}
               onPress={() => navigation.navigate('EditProfile')}
@@ -176,12 +231,12 @@ export default function SettingsScreenV2({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </View>
+        </Reanimated.View>
       )}
 
       {/* Seller Hub */}
-      {matchesSearch('seller hub balance wallet payments shipping payouts') && (
-        <View>
+      {showSection('Seller Hub') && (
+        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
           <SettingsSection title="Seller Hub">
             <SettingsRow
               icon="wallet-outline"
@@ -210,12 +265,12 @@ export default function SettingsScreenV2({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </View>
+        </Reanimated.View>
       )}
 
       {/* Trust & Security */}
-      {matchesSearch('trust security password 2fa devices sessions blocked privacy') && (
-        <View>
+      {showSection('Trust & Security') && (
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
           <SettingsSection title="Trust & Security">
             <SettingsRow
               icon="person-circle-outline"
@@ -256,12 +311,12 @@ export default function SettingsScreenV2({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </View>
+        </Reanimated.View>
       )}
 
       {/* Preferences */}
-      {matchesSearch('preferences currency language theme notifications push personalisation') && (
-        <View>
+      {showSection('Preferences') && (
+        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
           <SettingsSection title="Preferences">
             <SettingsRow
               icon="swap-horizontal-outline"
@@ -308,12 +363,12 @@ export default function SettingsScreenV2({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </View>
+        </Reanimated.View>
       )}
 
       {/* Support */}
-      {matchesSearch('support help terms privacy about') && (
-        <View>
+      {showSection('Support') && (
+        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
           <SettingsSection title="Support">
             <SettingsRow
               icon="help-circle-outline"
@@ -340,24 +395,19 @@ export default function SettingsScreenV2({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </View>
+        </Reanimated.View>
       )}
 
-      {/* Logout */}
-      {matchesSearch('log out') && (
-        <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
-          <ElevatedSurface variant="surface" style={{ marginBottom: 0 }}>
-            <SettingsRow
-              icon="log-out-outline"
-              iconColor="#ff3b30"
-              title="Log Out"
-              danger
-              onPress={handleLogout}
-              isFirst
-              isLast
-            />
-          </ElevatedSurface>
-        </View>
+      {/* Logout / Danger Zone */}
+      {matchesSearch('log out sign out') && (
+        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+          <FlagshipDangerZone
+            title="Sign Out"
+            description="You will be signed out of your account on this device."
+            actionLabel="Sign Out"
+            onAction={handleLogout}
+          />
+        </Reanimated.View>
       )}
 
       <BottomSheetPicker
@@ -387,6 +437,23 @@ export default function SettingsScreenV2({ navigation }: Props) {
         selectedValue={selectedThemeOption}
         onSelect={handleThemeSelect}
       />
-    </SettingsPage>
+    </FlagshipScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  searchField: {
+    borderRadius: 999,
+    backgroundColor: 'transparent',
+    height: 48,
+  },
+  headerMeta: {
+    maxWidth: 120,
+  },
+  headerMetaText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: '#666',
+    textAlign: 'right',
+  },
+});

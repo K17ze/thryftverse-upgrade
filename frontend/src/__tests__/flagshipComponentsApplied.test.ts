@@ -163,3 +163,176 @@ describe('flagship components applied to production screens', () => {
     }
   });
 });
+
+describe('UI-22B settings reconstruction architecture guardrails', () => {
+  it('SettingsScreenV2 uses FlagshipScreen and FlagshipHeader', () => {
+    const src = readSrc('screens/SettingsScreenV2.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader, FlagshipDangerZone } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+    expect(src).toContain('<FlagshipHeader');
+  });
+
+  it('SettingsScreenV2 has route metadata for real search', () => {
+    const src = readSrc('screens/SettingsScreenV2.tsx');
+    expect(src).toContain('ROUTE_METADATA');
+    expect(src).toContain('searchTerms');
+    expect(src).toContain('showSection');
+  });
+
+  it('SettingsScreenV2 separates destructive sign-out into FlagshipDangerZone', () => {
+    const src = readSrc('screens/SettingsScreenV2.tsx');
+    expect(src).toContain('<FlagshipDangerZone');
+    expect(src).toContain('Sign Out');
+  });
+
+  it('EditProfileScreen uses FlagshipScreen, FlagshipHeader, FlagshipStickyFooter', () => {
+    const src = readSrc('screens/EditProfileScreen.tsx');
+    expect(src).toContain("import { FlagshipProfileMedia, FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+    expect(src).toContain('<FlagshipStickyFooter');
+  });
+
+  it('EditProfileScreen has live preview card', () => {
+    const src = readSrc('screens/EditProfileScreen.tsx');
+    expect(src).toContain('previewCard');
+    expect(src).toContain('previewName');
+    expect(src).toContain('previewHandle');
+  });
+
+  it('EditProfileScreen has unsaved-change discard confirmation', () => {
+    const src = readSrc('screens/EditProfileScreen.tsx');
+    expect(src).toContain('Unsaved changes');
+    expect(src).toContain('Discard');
+  });
+
+  it('PaymentsScreen uses FlagshipScreen, FlagshipHeader, and FlagshipState', () => {
+    const src = readSrc('screens/PaymentsScreen.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+    expect(src).toContain('<FlagshipState variant="loading"');
+    expect(src).toContain('<FlagshipState variant="error"');
+  });
+
+  it('PaymentsScreen has security banner', () => {
+    const src = readSrc('screens/PaymentsScreen.tsx');
+    expect(src).toContain('securityBanner');
+    expect(src).toContain('Payments are encrypted and secure');
+  });
+
+  it('PostageScreen uses FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipFormSection', () => {
+    const src = readSrc('screens/PostageScreen.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipFormSection } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+    expect(src).toContain('<FlagshipFormSection');
+  });
+
+  it('PostageScreen has address management section', () => {
+    const src = readSrc('screens/PostageScreen.tsx');
+    expect(src).toContain('Your Addresses');
+    expect(src).toContain('savedAddress');
+  });
+
+  it('PersonalisationScreen uses FlagshipScreen and FlagshipHeader', () => {
+    const src = readSrc('screens/PersonalisationScreen.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+  });
+
+  it('PersonalisationScreen has visual preview card', () => {
+    const src = readSrc('screens/PersonalisationScreen.tsx');
+    expect(src).toContain('previewCard');
+    expect(src).toContain('previewTitle');
+    expect(src).toContain('Gender:');
+    expect(src).toContain('Categories:');
+  });
+
+  it('AccountSettingsScreenV2 uses FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipDangerZone', () => {
+    const src = readSrc('screens/AccountSettingsScreenV2.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipDangerZone } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+    expect(src).toContain('<FlagshipStickyFooter');
+    expect(src).toContain('<FlagshipDangerZone');
+    expect(src).toContain('Delete Account');
+  });
+
+  it('ChangePasswordScreenV2 uses FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection', () => {
+    const src = readSrc('screens/ChangePasswordScreenV2.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+    expect(src).toContain('<FlagshipStickyFooter');
+    expect(src).toContain('<FlagshipFormSection');
+  });
+
+  it('PushNotificationsScreenV2 uses FlagshipScreen and FlagshipHeader', () => {
+    const src = readSrc('screens/PushNotificationsScreenV2.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+  });
+
+  it('TwoFactorSetupScreenV2 uses FlagshipScreen and FlagshipHeader', () => {
+    const src = readSrc('screens/TwoFactorSetupScreenV2.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+  });
+
+  it('PrivacySettingsScreenV2 uses FlagshipScreen and FlagshipHeader', () => {
+    const src = readSrc('screens/PrivacySettingsScreenV2.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+  });
+
+  it('ChatSettingsScreenV2 uses FlagshipScreen and FlagshipHeader', () => {
+    const src = readSrc('screens/ChatSettingsScreenV2.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+  });
+
+  it('ActiveSessionsScreenV2 uses FlagshipScreen and FlagshipHeader', () => {
+    const src = readSrc('screens/ActiveSessionsScreenV2.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+  });
+
+  it('BlockedUsersScreenV2 uses FlagshipScreen and FlagshipHeader', () => {
+    const src = readSrc('screens/BlockedUsersScreenV2.tsx');
+    expect(src).toContain("import { FlagshipEmptyGraphic, FlagshipScreen, FlagshipHeader } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+  });
+
+  it('HelpSupportScreenV2 uses FlagshipScreen and FlagshipHeader', () => {
+    const src = readSrc('screens/HelpSupportScreenV2.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+  });
+
+  it('AboutScreen uses FlagshipScreen and FlagshipHeader', () => {
+    const src = readSrc('screens/AboutScreen.tsx');
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
+    expect(src).toContain('<FlagshipScreen');
+  });
+
+  it('no settings screen imports old SettingsPage wrapper', () => {
+    const screens = [
+      'screens/SettingsScreenV2.tsx',
+      'screens/EditProfileScreen.tsx',
+      'screens/PaymentsScreen.tsx',
+      'screens/PostageScreen.tsx',
+      'screens/PersonalisationScreen.tsx',
+      'screens/AccountSettingsScreenV2.tsx',
+      'screens/ChangePasswordScreenV2.tsx',
+      'screens/PushNotificationsScreenV2.tsx',
+      'screens/TwoFactorSetupScreenV2.tsx',
+      'screens/PrivacySettingsScreenV2.tsx',
+      'screens/ChatSettingsScreenV2.tsx',
+      'screens/ActiveSessionsScreenV2.tsx',
+      'screens/BlockedUsersScreenV2.tsx',
+      'screens/HelpSupportScreenV2.tsx',
+      'screens/AboutScreen.tsx',
+    ];
+    for (const screen of screens) {
+      const src = readSrc(screen);
+      expect(src).not.toContain("import { SettingsPage }");
+      expect(src).not.toContain("from '../components/settings/SettingsPage'");
+    }
+  });
+});

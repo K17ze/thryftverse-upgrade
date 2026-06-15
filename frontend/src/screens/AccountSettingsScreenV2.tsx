@@ -18,14 +18,13 @@ import { useToast } from '../context/ToastContext';
 import { parseApiError } from '../lib/apiClient';
 import { requestMyDataExport, deleteMyAccount, updateUserProfile as updateUserProfileApi } from '../services/accountApi';
 import { disableTwoFactor, logoutFromSession } from '../services/authApi';
-import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../theme/designTokens';
-import { SettingsPage } from '../components/settings/SettingsPage';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
+import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipDangerZone } from '../components/flagship';
 
 export default function AccountSettingsScreenV2() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -237,9 +236,24 @@ export default function AccountSettingsScreenV2() {
   );
 
   return (
-    <SettingsPage title="Account details" onBack={() => navigation.goBack()}>
+    <FlagshipScreen
+      header={<FlagshipHeader title="Account Details" subtitle="Manage your account" onBack={() => navigation.goBack()} />}
+      stickyFooter={
+        <FlagshipStickyFooter
+          actions={[
+            {
+              label: isSaving ? 'Saving…' : 'Save Changes',
+              onPress: () => void handleSaveChanges(),
+              variant: 'primary',
+              disabled: isSaving || isBusy,
+              loading: isSaving,
+            },
+          ]}
+        />
+      }
+    >
       {/* User Details */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
         <SettingsSection title="User details">
             {isHydrating ? (
               <View style={{ padding: 16 }}>
@@ -328,28 +342,18 @@ export default function AccountSettingsScreenV2() {
               value=""
               onPress={() => void handleDownloadData()}
               loading={isExporting}
-            />
-            <DetailRow
-              label="Delete account"
-              value=""
-              onPress={handleDeleteAccount}
-              danger
-              loading={isDeleting}
               isLast
             />
         </SettingsSection>
       </Reanimated.View>
 
-      {/* Save */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(220)} style={{ paddingHorizontal: 16, marginTop: 16 }}>
-        <AppButton
-          title={isSaving ? 'Saving…' : 'Save Changes'}
-          onPress={() => void handleSaveChanges()}
-          disabled={isSaving || isBusy}
-          variant="primary"
-          size="md"
-          style={{ borderRadius: Radius.xl }}
-          accessibilityLabel="Save account settings"
+      {/* Danger Zone */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(220)}>
+        <FlagshipDangerZone
+          title="Delete Account"
+          description="This will permanently remove your account and all associated data. This action cannot be undone."
+          actionLabel="Delete Account"
+          onAction={handleDeleteAccount}
         />
       </Reanimated.View>
 
@@ -430,7 +434,7 @@ export default function AccountSettingsScreenV2() {
           </View>
         </View>
       </Modal>
-    </SettingsPage>
+    </FlagshipScreen>
   );
 }
 

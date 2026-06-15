@@ -5,9 +5,9 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { SettingsPage } from '../components/settings/SettingsPage';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'PrivacySettings'>;
 
@@ -26,7 +26,7 @@ export default function PrivacySettingsScreenV2({ navigation }: Props) {
   };
 
   return (
-    <SettingsPage title="Privacy Controls" onBack={() => navigation.goBack()}>
+    <FlagshipScreen header={<FlagshipHeader title="Privacy Controls" onBack={() => navigation.goBack()} />}>
       {/* Profile visibility */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
         <SettingsSection title="Profile">
@@ -94,6 +94,6 @@ export default function PrivacySettingsScreenV2({ navigation }: Props) {
           />
         </SettingsSection>
       </Reanimated.View>
-    </SettingsPage>
+    </FlagshipScreen>
   );
 }

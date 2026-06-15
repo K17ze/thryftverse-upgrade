@@ -16,8 +16,8 @@ import { parseApiError } from '../lib/apiClient';
 import { deactivateNotificationDevice, registerNotificationDevice } from '../services/notificationsApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Typography } from '../theme/designTokens';
-import { SettingsPage } from '../components/settings/SettingsPage';
 import { SettingsSection } from '../components/settings/SettingsSection';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 
@@ -177,7 +177,7 @@ export default function PushNotificationsScreenV2({ navigation }: Props) {
   );
 
   return (
-    <SettingsPage title="Push Notifications" onBack={() => navigation.goBack()} rightAction={rightAction}>
+    <FlagshipScreen header={<FlagshipHeader title="Push Notifications" onBack={() => navigation.goBack()} rightAction={rightAction} />}>
       {pushPermissionStatus?.status === 'denied' && (
         <SettingsInfoBanner
           text="Push notifications are blocked. Enable them in Settings to receive alerts."
@@ -228,7 +228,7 @@ export default function PushNotificationsScreenV2({ navigation }: Props) {
           You can also manage push notifications from your device Settings app.
         </Text>
       </Reanimated.View>
-    </SettingsPage>
+    </FlagshipScreen>
   );
 }
 

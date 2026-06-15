@@ -3,15 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  StatusBar,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -23,13 +19,12 @@ import { CommercePaymentMethod, listUserPaymentMethods, updateUserPaymentMethod,
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { useToast } from '../context/ToastContext';
 import { AppButton } from '../components/ui/AppButton';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../theme/designTokens';
 import { PremiumListSection } from '../components/ui/PremiumListSection';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'Payments'>;
 
@@ -263,34 +258,59 @@ export default function PaymentsScreen({ navigation }: Props) {
     );
   };
 
+  const hasError = !isSyncing && backendPaymentMethods.length === 0 && countryCapabilities === null;
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-        backgroundColor={Colors.background}
-      />
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Payment Centre"
+          subtitle="Manage your payment methods"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable
+              onPress={() => navigation.navigate('AddBankAccount')}
+              scaleValue={0.92}
+              hapticFeedback="light"
+            >
+              <Ionicons name="add-circle" size={28} color={Colors.brand} />
+            </AnimatedPressable>
+          }
+        />
+      }
+    >
+      {/* Security Banner */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)} style={styles.securityBanner}>
+        <View style={[styles.securityPill, { backgroundColor: Colors.surfaceAlt }]}>
+          <Ionicons name="shield-checkmark" size={14} color={Colors.success} />
+          <Text style={[styles.securityText, { color: Colors.textSecondary }]}>
+            Payments are encrypted and secure
+          </Text>
+        </View>
+      </Reanimated.View>
 
-      <ScreenHeader title="Payments" onBack={() => navigation.goBack()} />
+      {policyLabel ? (
+        <Text style={styles.policyLabel}>Payment policy: {policyLabel}</Text>
+      ) : null}
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {policyLabel ? (
-          <Text style={styles.policyLabel}>Payment policy: {policyLabel}</Text>
-        ) : null}
+      {isSyncing && backendPaymentMethods.length === 0 && (
+        <FlagshipState variant="loading" />
+      )}
 
-        {isSyncing && backendPaymentMethods.length === 0 && (
-          <View style={styles.skeletonWrap}>
-            <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-            <View style={{ height: Space.sm }} />
-            <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-            <View style={{ height: Space.sm }} />
-            <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-          </View>
-        )}
-
-        {/* Preferences */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <PremiumListSection title="Preferences">
-            <SettingsCell
+      {hasError ? (
+        <FlagshipState
+          variant="error"
+          title="Unable to load payments"
+          subtitle="We could not fetch your payment methods."
+          actionLabel="Retry"
+          onAction={() => void syncPaymentMethods()}
+        />
+      ) : (
+        <>
+          {/* Preferences */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+            <PremiumListSection title="Preferences">
+              <SettingsCell
                 icon="wallet-outline"
                 iconColor={Colors.brand}
                 title="Use Thryftverse Balance"
@@ -301,12 +321,12 @@ export default function PaymentsScreen({ navigation }: Props) {
                 isFirst
                 isLast
               />
-          </PremiumListSection>
-        </Reanimated.View>
+            </PremiumListSection>
+          </Reanimated.View>
 
-        {/* Cards */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-          <PremiumListSection title="Cards">
+          {/* Cards */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+            <PremiumListSection title="Cards">
               {renderPaymentMethodRows(
                 cardMethods,
                 fallbackCard as CommercePaymentMethod | null,
@@ -333,12 +353,12 @@ export default function PaymentsScreen({ navigation }: Props) {
                   accessibilityHint="Opens card setup"
                 />
               ) : null}
-          </PremiumListSection>
-        </Reanimated.View>
+            </PremiumListSection>
+          </Reanimated.View>
 
-        {/* Bank Accounts */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-          <PremiumListSection title="Bank Accounts">
+          {/* Bank Accounts */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+            <PremiumListSection title="Bank Accounts">
               {renderPaymentMethodRows(
                 bankMethods,
                 fallbackBank as CommercePaymentMethod | null,
@@ -365,9 +385,10 @@ export default function PaymentsScreen({ navigation }: Props) {
                   accessibilityHint="Opens bank account setup"
                 />
               ) : null}
-          </PremiumListSection>
-        </Reanimated.View>
-      </ScrollView>
+            </PremiumListSection>
+          </Reanimated.View>
+        </>
+      )}
 
       <AddCardSheet
         visible={addCardSheetVisible}
@@ -376,18 +397,27 @@ export default function PaymentsScreen({ navigation }: Props) {
           void syncPaymentMethods();
         }}
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
+  securityBanner: {
+    alignItems: 'center',
+    marginBottom: Space.sm,
   },
-  content: {
+  securityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+  },
+  securityText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.caption.letterSpacing,
   },
   policyLabel: {
     fontSize: Type.caption.size,
@@ -398,25 +428,8 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
     letterSpacing: Type.caption.letterSpacing,
   },
-  syncingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginLeft: Space.xs,
-    marginBottom: Space.sm,
-  },
   skeletonWrap: {
     marginBottom: Space.md,
-  },
-  sectionTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: Type.meta.letterSpacing,
-    marginLeft: Space.xs,
-    marginBottom: Space.sm,
-    marginTop: Space.lg,
   },
   paymentRow: {
     flexDirection: 'row',

@@ -19,10 +19,10 @@ import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { requestTwoFactorEnrollment, verifyTwoFactorEnrollment } from '../services/authApi';
-import { SettingsPage } from '../components/settings/SettingsPage';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { AppInput } from '../components/ui/AppInput';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import QRCode from 'qrcode';
@@ -115,7 +115,7 @@ export default function TwoFactorSetupScreenV2({ navigation }: Props) {
   };
 
   return (
-    <SettingsPage title="Two-Factor Authentication" onBack={() => navigation.goBack()} scrollEnabled={false}>
+    <FlagshipScreen header={<FlagshipHeader title="Two-Factor Authentication" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -215,7 +215,7 @@ export default function TwoFactorSetupScreenV2({ navigation }: Props) {
           </ScrollView>
         </Reanimated.View>
       </KeyboardAvoidingView>
-    </SettingsPage>
+    </FlagshipScreen>
   );
 }
 

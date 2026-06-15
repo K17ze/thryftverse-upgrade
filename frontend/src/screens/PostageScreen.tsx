@@ -3,29 +3,25 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { formatCountryPolicyScope } from '../utils/capabilityPolicy';
 import { CapabilityCarrier, getUserCountryCapabilities } from '../services/capabilitiesApi';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { RadioButton } from '../components/settings/RadioButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../theme/designTokens';
 import { PremiumListSection } from '../components/ui/PremiumListSection';
+import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipFormSection } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'Postage'>;
 
@@ -98,113 +94,133 @@ export default function PostageScreen({ navigation }: Props) {
   const bundleDiscount = postagePreferences.bundleDiscount;
   const selectedCarrier = carriers.find((c) => c.selected);
 
+  const savedAddress = useStore((state) => state.savedAddress);
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-        backgroundColor={Colors.background}
-      />
-
-      <ScreenHeader
-        title="Postage"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <AnimatedPressable onPress={() => navigation.goBack()} hapticFeedback="light" scaleValue={0.98}>
-            <View style={styles.saveBtnContainer}>
-              <Text style={styles.saveBtnText}>Done</Text>
-            </View>
-          </AnimatedPressable>
-        }
-      />
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Default Carrier */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <PremiumListSection title="Default Carrier" subtitle={carrierScopeLabel ? `Region policy: ${carrierScopeLabel}` : undefined}>
-            {isHydrating ? (
-              <View style={styles.skeletonWrap}>
-                <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
-                <View style={{ height: Space.sm }} />
-                <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
-                <View style={{ height: Space.sm }} />
-                <SkeletonLoader width="100%" height={64} borderRadius={Radius.lg} />
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Delivery Centre"
+          subtitle="Shipping addresses and carrier preferences"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable onPress={() => navigation.goBack()} hapticFeedback="light" scaleValue={0.98}>
+              <View style={[styles.saveBtnContainer, { backgroundColor: Colors.brand }]}>
+                <Text style={[styles.saveBtnText, { color: Colors.textInverse }]}>Done</Text>
               </View>
-            ) : (
-              <>
-                {carriers.map((c, idx) => (
-                  <AnimatedPressable
-                    key={c.key}
-                    style={[styles.carrierRow, c.selected && { backgroundColor: `${Colors.brand}08` }, idx < carriers.length - 1 && styles.carrierRowBorder]}
-                    onPress={() => selectCarrier(c.key)}
-                    hapticFeedback="light"
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: c.selected }}
-                    accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}`}
-                  >
-                    <View style={styles.carrierText}>
-                      <Text style={[styles.carrierLabel, c.selected && { fontFamily: Typography.family.semibold }]}>{c.label}</Text>
-                      <Text style={styles.carrierPrice}>
-                        from {formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}
-                      </Text>
+            </AnimatedPressable>
+          }
+        />
+      }
+    >
+      {/* Addresses */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <FlagshipFormSection title="Your Addresses" description="Add a default delivery address for faster checkout.">
+          {savedAddress ? (
+            <View style={{ padding: Space.md }}>
+              <View style={styles.addressRow}>
+                <Ionicons name="location-outline" size={20} color={Colors.textPrimary} />
+                <View style={styles.addressText}>
+                  <Text style={[styles.addressLabel, { color: Colors.textPrimary }]}>
+                    {savedAddress.name}
+                  </Text>
+                  <Text style={[styles.addressDetail, { color: Colors.textSecondary }]}>
+                    {savedAddress.streetAddress}, {savedAddress.city}, {savedAddress.country}
+                  </Text>
+                </View>
+                <AnimatedPressable onPress={() => show('Address editing coming soon', 'info')} scaleValue={0.92}>
+                  <Text style={[styles.addressAction, { color: Colors.brand }]}>Edit</Text>
+                </AnimatedPressable>
+              </View>
+            </View>
+          ) : (
+            <FlagshipState
+              variant="empty"
+              title="No addresses saved"
+              subtitle="Add a delivery address to speed up checkout and returns."
+              actionLabel="Add Address"
+              onAction={() => show('Address management coming soon', 'info')}
+              icon="location-outline"
+            />
+          )}
+        </FlagshipFormSection>
+      </Reanimated.View>
+
+      {/* Default Carrier */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <PremiumListSection title="Default Carrier" subtitle={carrierScopeLabel ? `Region policy: ${carrierScopeLabel}` : undefined}>
+          {isHydrating ? (
+            <FlagshipState variant="loading" />
+          ) : (
+            <>
+              {carriers.map((c, idx) => (
+                <AnimatedPressable
+                  key={c.key}
+                  style={[styles.carrierRow, c.selected && { backgroundColor: `${Colors.brand}08` }, idx < carriers.length - 1 && styles.carrierRowBorder]}
+                  onPress={() => selectCarrier(c.key)}
+                  hapticFeedback="light"
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: c.selected }}
+                  accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}`}
+                >
+                  <View style={styles.carrierText}>
+                    <Text style={[styles.carrierLabel, c.selected && { fontFamily: Typography.family.semibold }]}>{c.label}</Text>
+                    <Text style={styles.carrierPrice}>
+                      from {formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}
+                    </Text>
+                  </View>
+                  {c.selected ? (
+                    <View style={styles.selectedBadge}>
+                      <Text style={styles.selectedBadgeText}>Selected</Text>
                     </View>
-                    {c.selected ? (
-                      <View style={styles.selectedBadge}>
-                        <Text style={styles.selectedBadgeText}>Selected</Text>
-                      </View>
-                    ) : null}
-                    <RadioButton selected={c.selected} />
-                  </AnimatedPressable>
-                ))}
-              </>
-            )}
-          </PremiumListSection>
-        </Reanimated.View>
+                  ) : null}
+                  <RadioButton selected={c.selected} />
+                </AnimatedPressable>
+              ))}
+            </>
+          )}
+        </PremiumListSection>
+      </Reanimated.View>
 
-        {/* Shipping Options */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-          <PremiumListSection title="Shipping Options">
-            <SettingsCell
-                icon="gift-outline"
-                iconColor={Colors.brand}
-                title="Offer free shipping"
-                subtitle="You'll cover the postage cost for buyers"
-                variant="toggle"
-                toggleValue={freeShipping}
-                onToggle={(v) => updatePostagePreferences({ freeShipping: v })}
-                isFirst
-              />
-              <SettingsCell
-                icon="cube-outline"
-                iconColor={Colors.brand}
-                title="Bundle discount on postage"
-                subtitle="Buyers save when buying multiple items"
-                variant="toggle"
-                toggleValue={bundleDiscount}
-                onToggle={(v) => updatePostagePreferences({ bundleDiscount: v })}
-                isLast
-              />
-          </PremiumListSection>
-        </Reanimated.View>
+      {/* Shipping Options */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <PremiumListSection title="Shipping Options">
+          <SettingsCell
+            icon="gift-outline"
+            iconColor={Colors.brand}
+            title="Offer free shipping"
+            subtitle="You'll cover the postage cost for buyers"
+            variant="toggle"
+            toggleValue={freeShipping}
+            onToggle={(v) => updatePostagePreferences({ freeShipping: v })}
+            isFirst
+          />
+          <SettingsCell
+            icon="cube-outline"
+            iconColor={Colors.brand}
+            title="Bundle discount on postage"
+            subtitle="Buyers save when buying multiple items"
+            variant="toggle"
+            toggleValue={bundleDiscount}
+            onToggle={(v) => updatePostagePreferences({ bundleDiscount: v })}
+            isLast
+          />
+        </PremiumListSection>
+      </Reanimated.View>
 
-        {/* Footer note */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-          <Text style={styles.footerNote}>
-            These are your default settings. You can override postage for individual items when
-            listing.
-          </Text>
-        </Reanimated.View>
-      </ScrollView>
-    </SafeAreaView>
+      {/* Footer note */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <Text style={styles.footerNote}>
+          These are your default settings. You can override postage for individual items when
+          listing.
+        </Text>
+      </Reanimated.View>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
   saveBtnContainer: {
-    backgroundColor: Colors.brand,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -212,32 +228,34 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: '#ffffff',
     letterSpacing: Type.body.letterSpacing,
-  },
-  content: {
-    padding: Space.md,
-    paddingBottom: Space.xl,
   },
   skeletonWrap: {
     marginBottom: Space.md,
   },
-  sectionTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: Type.meta.letterSpacing,
-    marginBottom: Space.sm,
-    marginLeft: Space.xs,
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
   },
-  scopeLabel: {
+  addressText: {
+    flex: 1,
+  },
+  addressLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+    marginBottom: 2,
+  },
+  addressDetail: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginLeft: Space.xs,
-    marginBottom: Space.sm,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  addressAction: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
   },
   carrierRow: {
     flexDirection: 'row',

@@ -6,9 +6,9 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { SettingsPage } from '../components/settings/SettingsPage';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'ChatSettings'>;
 
@@ -71,7 +71,7 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
   };
 
   return (
-    <SettingsPage title="Chat Settings" onBack={() => navigation.goBack()}>
+    <FlagshipScreen header={<FlagshipHeader title="Chat Settings" onBack={() => navigation.goBack()} />}>
       {/* Privacy */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
         <SettingsSection title="Privacy">
@@ -224,6 +224,6 @@ export default function ChatSettingsScreenV2({ navigation }: Props) {
           />
         </SettingsSection>
       </Reanimated.View>
-    </SettingsPage>
+    </FlagshipScreen>
   );
 }

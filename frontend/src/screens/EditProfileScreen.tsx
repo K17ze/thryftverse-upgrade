@@ -3,15 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  Alert,
   ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,16 +16,11 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
 import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
-import { AppButton } from '../components/ui/AppButton';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { SettingsCard } from '../components/settings/SettingsCard';
-import { FlagshipProfileMedia, FlagshipActionCluster } from '../components/flagship';
+import { FlagshipProfileMedia, FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship';
 import { updateMyProfile } from '../services/profileApi';
 import { uploadMedia } from '../services/mediaUpload';
 import {
@@ -205,10 +196,26 @@ export default function EditProfileScreen() {
   const currentAvatar = user?.avatar || userAvatar || '';
   const currentCover = user?.coverPhoto || userCover || '';
 
+  const handleDiscard = () => {
+    if (!hasChanges) {
+      navigation.goBack();
+      return;
+    }
+    Alert.alert(
+      'Unsaved changes',
+      'You have unsaved changes. Are you sure you want to discard them?',
+      [
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+      ]
+    );
+  };
+
   if (!user) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Edit Profile" onBack={() => navigation.goBack()} />}
+      >
         <EmptyState
           icon="person-outline"
           title="Not signed in"
@@ -216,105 +223,35 @@ export default function EditProfileScreen() {
           ctaLabel="Sign In"
           onCtaPress={() => (navigation as any).navigate('Login')}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <ScreenHeader
-            title="Edit Profile"
-            onBack={() => navigation.goBack()}
-            showBackButton
-            backIcon="arrow-back"
-          />
-
-          {/* Hero Media Section */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
-            <FlagshipProfileMedia
-              coverUri={currentCover}
-              avatarUri={currentAvatar}
-              isSelf
-              onEditCover={pickCover}
-              onEditAvatar={pickAvatar}
-              isUploadingCover={isUploadingCover}
-              isUploadingAvatar={isUploadingAvatar}
-              style={{ marginBottom: Space.lg }}
-            />
-          </Reanimated.View>
-
-          {/* Identity Fields */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.section}>
-            <Text style={styles.sectionLabel}>Identity</Text>
-            <SettingsCard variant="surface">
-              <PremiumTextField label="Name" value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" containerStyle={styles.fieldInCard} />
-              <View style={styles.divider} />
-              <PremiumTextField
-                label="Username"
-                value={username}
-                onChangeText={setUsername}
-                placeholder="username"
-                autoCapitalize="none"
-                helperText="How people find you on Thryftverse."
-                containerStyle={styles.fieldInCard}
-              />
-            </SettingsCard>
-          </Reanimated.View>
-
-          {/* About */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.section}>
-            <Text style={styles.sectionLabel}>About</Text>
-            <View style={styles.fieldGroup}>
-              <PremiumTextField
-                label="Bio"
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Tell people about yourself..."
-                multiline
-                minHeight={100}
-                maxLength={200}
-                helperText={`${bio.length}/200`}
-              />
-              <View style={styles.divider} />
-              <PremiumTextField
-                label="Website"
-                value={website}
-                onChangeText={setWebsite}
-                onBlur={() => validateWebsite(website)}
-                placeholder="https://"
-                autoCapitalize="none"
-                keyboardType="url"
-                errorText={websiteError || undefined}
-              />
-            </View>
-          </Reanimated.View>
-
-          {/* Personal */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.section}>
-            <Text style={styles.sectionLabel}>Personal</Text>
-            <SettingsCard variant="surface">
-              <PremiumSelectRow
-                label="Gender"
-                value={gender}
-                placeholder="Select gender"
-                icon="person-outline"
-                onPress={() => setGenderPickerVisible(true)}
-                style={styles.selectInCard}
-              />
-            </SettingsCard>
-          </Reanimated.View>
-
-          <View style={{ height: Space.xl }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      {/* Sticky Save Action */}
-      <View style={styles.actionBar}>
-        <FlagshipActionCluster
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Edit Profile"
+          onBack={handleDiscard}
+          backIcon="arrow-back"
+          rightAction={
+            hasChanges ? (
+              <Text
+                style={{
+                  fontSize: Type.body.size,
+                  fontFamily: Typography.family.semibold,
+                  color: Colors.brand,
+                }}
+              >
+                Editing
+              </Text>
+            ) : undefined
+          }
+        />
+      }
+      keyboardAvoiding
+      stickyFooter={
+        <FlagshipStickyFooter
           actions={[
             {
               label: isSaving ? 'Saving...' : 'Save Changes',
@@ -325,7 +262,92 @@ export default function EditProfileScreen() {
             },
           ]}
         />
-      </View>
+      }
+    >
+      {/* Hero Media Section */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
+        <FlagshipProfileMedia
+          coverUri={currentCover}
+          avatarUri={currentAvatar}
+          isSelf
+          onEditCover={pickCover}
+          onEditAvatar={pickAvatar}
+          isUploadingCover={isUploadingCover}
+          isUploadingAvatar={isUploadingAvatar}
+          style={{ marginBottom: Space.lg }}
+        />
+      </Reanimated.View>
+
+      {/* Live Preview */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(50)} style={styles.previewBanner}>
+        <View style={[styles.previewCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <Text style={[styles.previewName, { color: Colors.textPrimary }]}>{name || username || 'Your Name'}</Text>
+          <Text style={[styles.previewHandle, { color: Colors.textSecondary }]}>@{username || 'username'}</Text>
+          {bio ? <Text style={[styles.previewBio, { color: Colors.textSecondary }]} numberOfLines={2}>{bio}</Text> : null}
+        </View>
+      </Reanimated.View>
+
+      {/* Identity Fields */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <FlagshipFormSection title="Identity">
+          <PremiumTextField
+            label="Name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Your name"
+            autoCapitalize="words"
+          />
+          <View style={styles.divider} />
+          <PremiumTextField
+            label="Username"
+            value={username}
+            onChangeText={setUsername}
+            placeholder="username"
+            autoCapitalize="none"
+            helperText="How people find you on Thryftverse."
+          />
+        </FlagshipFormSection>
+      </Reanimated.View>
+
+      {/* About */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <FlagshipFormSection title="About">
+          <PremiumTextField
+            label="Bio"
+            value={bio}
+            onChangeText={setBio}
+            placeholder="Tell people about yourself..."
+            multiline
+            minHeight={100}
+            maxLength={200}
+            helperText={`${bio.length}/200`}
+          />
+          <View style={styles.divider} />
+          <PremiumTextField
+            label="Website"
+            value={website}
+            onChangeText={setWebsite}
+            onBlur={() => validateWebsite(website)}
+            placeholder="https://"
+            autoCapitalize="none"
+            keyboardType="url"
+            errorText={websiteError || undefined}
+          />
+        </FlagshipFormSection>
+      </Reanimated.View>
+
+      {/* Personal */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+        <FlagshipFormSection title="Personal">
+          <PremiumSelectRow
+            label="Gender"
+            value={gender}
+            placeholder="Select gender"
+            icon="person-outline"
+            onPress={() => setGenderPickerVisible(true)}
+          />
+        </FlagshipFormSection>
+      </Reanimated.View>
 
       <BottomSheetPicker
         visible={genderPickerVisible}
@@ -335,82 +357,43 @@ export default function EditProfileScreen() {
         selectedValue={gender}
         onSelect={(value) => setGender(value)}
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
+  previewBanner: {
+    marginBottom: Space.lg,
   },
-  header: {
-    flexDirection: 'row',
+  previewCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Space.md,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
   },
-  headerTitle: {
+  previewName: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
     lineHeight: Type.subtitle.lineHeight,
   },
-  content: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xxl,
+  previewHandle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+    letterSpacing: Type.body.letterSpacing,
   },
-
-
-
-  // Sections
-  section: {
-    marginBottom: Space.lg,
-  },
-  sectionLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: Space.sm,
-    marginLeft: Space.xs,
-  },
-  fieldGroup: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
+  previewBio: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: Space.sm,
+    textAlign: 'center',
+    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
   },
   divider: {
     height: 1,
     backgroundColor: Colors.border,
     marginLeft: Space.md,
-  },
-  fieldInCard: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  selectInCard: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-
-  // Action bar
-  actionBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.md + 8,
-    backgroundColor: Colors.background,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
   },
 });

@@ -3,20 +3,18 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  StatusBar,
   Linking,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Typography } from '../theme/designTokens';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'About'>;
 
@@ -32,29 +30,7 @@ export default function AboutScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-        backgroundColor={Colors.background}
-      />
-
-      <View style={styles.header}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          style={styles.headerBack}
-          scaleValue={0.92}
-          hapticFeedback="light"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>About</Text>
-        <View style={styles.headerBack} />
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+    <FlagshipScreen header={<FlagshipHeader title="About" onBack={() => navigation.goBack()} />}>
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)} style={styles.brandWrap}>
           <View style={styles.brandIcon}>
             <Ionicons name="shirt-outline" size={40} color={Colors.brand} />
@@ -140,8 +116,7 @@ export default function AboutScreen({ navigation }: Props) {
         </Reanimated.View>
 
         <View style={{ height: Space.xl }} />
-      </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 

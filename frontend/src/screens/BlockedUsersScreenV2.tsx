@@ -9,8 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { FlagshipEmptyGraphic } from '../components/flagship';
-import { SettingsPage } from '../components/settings/SettingsPage';
+import { FlagshipEmptyGraphic, FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'BlockedUsers'>;
 
@@ -33,7 +32,7 @@ export default function BlockedUsersScreenV2({ navigation }: Props) {
   }, []);
 
   return (
-    <SettingsPage title="Blocked Users" onBack={() => navigation.goBack()}>
+    <FlagshipScreen header={<FlagshipHeader title="Blocked Users" onBack={() => navigation.goBack()} />}>
       {blockedIds.length === 0 ? (
         <View style={{ alignItems: 'center', paddingVertical: Space.xl * 2 }}>
           <FlagshipEmptyGraphic variant="box" size={120} />
@@ -72,7 +71,7 @@ export default function BlockedUsersScreenV2({ navigation }: Props) {
           </View>
         </Reanimated.View>
       )}
-    </SettingsPage>
+    </FlagshipScreen>
   );
 }
 
