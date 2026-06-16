@@ -649,9 +649,63 @@ export default function SellScreen() {
     }
 
     if (listingMode === 'auction') {
-      setErrorMsg('Auction publishing requires backend auction support. Use Sell Now for now.');
-      triggerShake();
-      haptics.error();
+      if (!currentUser?.id) {
+        setErrorMsg('Sign in to publish a listing.');
+        triggerShake();
+        haptics.error();
+        return;
+      }
+      // Auction mode: create the listing first, then route to CreateAuction
+      setErrorMsg(null);
+      setIsPublishing(true);
+      try {
+        const uploadedUrls: string[] = [];
+        for (let i = 0; i < photos.length; i++) {
+          const uri = photos[i];
+          if (uri.startsWith('http')) {
+            uploadedUrls.push(uri);
+          } else {
+            const url = await uploadMedia(uri, 'listings');
+            uploadedUrls.push(url);
+          }
+        }
+        const coverImage = uploadedUrls[0] ?? '';
+        const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        await createListingOnApi({
+          id: listingId,
+          sellerId: currentUser.id,
+          title: trimmedTitle,
+          description: trimmedDescription,
+          priceGbp: numericPrice,
+          imageUrl: coverImage,
+          status: 'active',
+          category,
+          brand: brand || undefined,
+          size,
+          condition,
+          originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
+          shippingMethod: shippingMethod || undefined,
+          shippingPayer: shippingPayer || undefined,
+        });
+        for (let i = 0; i < uploadedUrls.length; i++) {
+          await createListingImageOnApi({
+            id: `${listingId}_img_${i}`,
+            listingId,
+            imageUrl: uploadedUrls[i],
+            sortOrder: i,
+          });
+        }
+        clearSellDraft();
+        haptics.success();
+        navigation.replace('CreateAuction', { listingId });
+      } catch (e: unknown) {
+        const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to prepare auction. Please try again.';
+        setErrorMsg(msg);
+        triggerShake();
+        haptics.error();
+      } finally {
+        setIsPublishing(false);
+      }
       return;
     }
 

@@ -14,7 +14,7 @@ export type RootStackParamList = {
   Closet: undefined;
   PosterViewer: { posterId: string };
   CreatePoster: undefined;
-  CreateAuction: undefined;
+  CreateAuction: { listingId?: string } | undefined;
   CreateCoOwn:
     | {
         listingId?: string;

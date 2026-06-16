@@ -7,6 +7,7 @@ import {
   ScrollView,
   Share,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,23 +22,54 @@ import { Typography, Space, Type, Radius, FontSize } from '../theme/designTokens
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
+import { fetchListingByIdFromApi } from '../services/listingsApi';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
-
 
 export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { isDark } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
 
   const listingId = route.params?.listingId;
-  const listingTitle = route.params?.title || 'your listing';
-  const listingPriceRaw =
-    typeof route.params?.price === 'number' ? route.params.price : null;
-  const listingPrice = listingPriceRaw
-    ? formatFromFiat(listingPriceRaw, 'GBP', { displayMode: 'fiat' })
-    : null;
-  const listingCategory = route.params?.categoryId;
-  const listingPhoto = route.params?.photoUri;
+  const routeTitle = route.params?.title;
+  const routePrice = typeof route.params?.price === 'number' ? route.params.price : null;
+  const routeCategory = route.params?.categoryId;
+  const routePhoto = route.params?.photoUri;
+
+  const [backendListing, setBackendListing] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!listingId) return;
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const res = await fetchListingByIdFromApi(listingId);
+        if (!cancelled && res.ok && res.listing) {
+          setBackendListing(res.listing);
+        }
+      } catch {
+        // ignore — use route params as fallback
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    void fetch();
+    return () => { cancelled = true; };
+  }, [listingId]);
+
+  const listingTitle = backendListing?.title || routeTitle || 'your listing';
+  const listingPriceRaw = backendListing?.priceGbp ?? routePrice;
+  const listingPrice = listingPriceRaw != null ? formatFromFiat(listingPriceRaw, 'GBP', { displayMode: 'fiat' }) : null;
+  const listingCategory = backendListing?.category || routeCategory;
+  const listingPhoto = backendListing?.imageUrl || routePhoto;
+
+  const status = backendListing?.status ?? 'active';
+  const isActive = status === 'active';
+  const isPaused = status === 'paused';
+  const isSold = status === 'sold';
+  const statusLabel = isActive ? 'Live now' : isPaused ? 'Paused' : isSold ? 'Sold' : status;
+  const statusTone = isActive ? 'success' : isPaused ? 'pending' : isSold ? 'delivered' : 'pending';
 
   const handleShare = React.useCallback(async () => {
     if (!listingId) return;
@@ -93,7 +125,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           </View>
           <Text style={styles.heroBigText}>Published</Text>
           <Text style={styles.heroSubText}>
-            Your item is now live on Thryftverse.
+            {isActive ? 'Your item is now live on Thryftverse.' : isPaused ? 'Your listing is paused and hidden from buyers.' : isSold ? 'Your item has been marked as sold.' : 'Your listing has been created.'}
           </Text>
           {listingPrice ? (
             <Text style={styles.heroMicroCopy}>{listingPrice}</Text>
@@ -102,7 +134,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
         {/* Published status */}
         <View style={styles.statusRow}>
-          <PremiumStatusPill tone="success" label="Live now" icon="checkmark-circle" />
+          <PremiumStatusPill tone={statusTone as any} label={statusLabel} icon="checkmark-circle" />
           {listingId ? (
             <Text style={styles.idText} numberOfLines={1}>
               {listingId}

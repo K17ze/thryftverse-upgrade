@@ -120,7 +120,7 @@ export default function MyListingsScreen() {
           renderItem={({ item }) => (
             <ListingRow
               item={item}
-              onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+              onPress={() => navigation.push('ManageListing', { itemId: item.id })}
             />
           )}
         />
