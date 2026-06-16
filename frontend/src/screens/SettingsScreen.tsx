@@ -20,7 +20,7 @@ import {
 } from '../theme/themePreference';
 import { useAppTheme } from '../theme/ThemeContext';
 import { t } from '../i18n';
-import { Space, Type } from '../theme/designTokens';
+import { Space, Radius, Type } from '../theme/designTokens';
 import { Typography } from '../theme/designTokens';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -210,27 +210,28 @@ export default function SettingsScreen({ navigation }: Props) {
       {/* Account Centre */}
       {showSection('Account Centre') && (
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
-          <ElevatedSurface variant="elevated" style={{ marginBottom: Space.md }}>
-            <IdentityCard
-              user={currentUser}
-              onPress={() => navigation.navigate('EditProfile')}
-            />
-          </ElevatedSurface>
-          <SettingsSection title="Account Centre">
-            <SettingsRow
-              icon="location-outline"
-              title="Addresses"
-              value={savedAddress ? 'Manage' : 'None'}
-              onPress={() => navigation.navigate('Postage')}
-              isFirst
-            />
-            <SettingsRow
-              icon="shirt-outline"
-              title="Closet"
-              subtitle="Saved, Wishlist & Collections"
-              onPress={() => navigation.navigate('Closet')}
-              isLast
-            />
+          <SettingsSection title="Account Centre" noCard>
+            <View style={[styles.accountCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+              <IdentityCard
+                user={currentUser}
+                onPress={() => navigation.navigate('EditProfile')}
+              />
+              <View style={[styles.accountDivider, { backgroundColor: Colors.border }]} />
+              <SettingsRow
+                icon="location-outline"
+                title="Addresses"
+                value={savedAddress ? 'Manage' : 'None'}
+                onPress={() => navigation.navigate('Postage')}
+                isFirst
+              />
+              <SettingsRow
+                icon="shirt-outline"
+                title="Closet"
+                subtitle="Saved, Wishlist & Collections"
+                onPress={() => navigation.navigate('Closet')}
+                isLast
+              />
+            </View>
           </SettingsSection>
         </Reanimated.View>
       )}
@@ -464,5 +465,15 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: '#666',
     textAlign: 'right',
+  },
+  accountCard: {
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    marginHorizontal: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  accountDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: Space.md,
   },
 });
