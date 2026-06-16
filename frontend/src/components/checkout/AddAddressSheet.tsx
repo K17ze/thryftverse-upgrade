@@ -92,9 +92,16 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
       isDefault: isDefaultAddress,
     };
 
+    const userId = currentUser?.id;
+    if (!userId) {
+      show('You must be signed in to save an address.', 'error');
+      setIsSaving(false);
+      onDismiss();
+      return;
+    }
+
     setIsSaving(true);
     try {
-      const userId = currentUser?.id ?? 'u1';
       const saved = await createUserAddress(userId, nextAddress);
 
       saveAddress({

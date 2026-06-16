@@ -217,7 +217,7 @@ describe('UI-22B settings reconstruction architecture guardrails', () => {
   it('PaymentsScreen has security trust note', () => {
     const src = readSrc('screens/PaymentsScreen.tsx');
     expect(src).toContain('trustNote');
-    expect(src).toContain('Your payment details are encrypted');
+    expect(src).toContain('Your payment details are protected by industry-standard encryption');
   });
 
   it('PostageScreen uses FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipFormSection', () => {

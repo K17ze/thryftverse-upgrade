@@ -298,9 +298,14 @@ export default function CheckoutScreen() {
     let cancelled = false;
 
     const hydrateCheckoutDefaults = async () => {
+      const userId = currentUser?.id;
+      if (!userId) {
+        setIsHydratingCheckout(false);
+        return;
+      }
+
       setIsHydratingCheckout(true);
       try {
-        const userId = currentUser?.id ?? 'u1';
         const [addresses, paymentMethods] = await Promise.all([
           listUserAddresses(userId),
           listUserPaymentMethods(userId),
@@ -363,9 +368,15 @@ export default function CheckoutScreen() {
       return;
     }
 
+    const userId = currentUser?.id;
+    if (!userId) {
+      show(t('checkout.toast.signInRequired'), 'error');
+      setIsSubmittingPayment(false);
+      return;
+    }
+
     setIsSubmittingPayment(true);
     try {
-      const userId = currentUser?.id ?? 'u1';
       const order = await createOrder({
         buyerId: userId,
         listingId: item.id,

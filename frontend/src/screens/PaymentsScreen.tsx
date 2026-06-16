@@ -55,9 +55,13 @@ export default function PaymentsScreen({ navigation }: Props) {
 
   const syncPaymentMethods = useCallback(
     async (isCancelled?: () => boolean) => {
+      const userId = currentUser?.id;
+      if (!userId) {
+        setIsSyncing(false);
+        return;
+      }
       setIsSyncing(true);
       try {
-        const userId = currentUser?.id ?? 'u1';
         const [methodsResult, capabilitiesResult] = await Promise.allSettled([
           listUserPaymentMethods(userId),
           getUserCountryCapabilities(userId),
@@ -112,8 +116,12 @@ export default function PaymentsScreen({ navigation }: Props) {
     setBackendPaymentMethods((prev) =>
       prev.map((m) => (m.id === methodId ? { ...m, isDefault: true } : { ...m, isDefault: false }))
     );
+    const userId = currentUser?.id;
+    if (!userId) {
+      setIsUpdatingDefault(false);
+      return;
+    }
     try {
-      const userId = currentUser?.id ?? 'u1';
       await updateUserPaymentMethod(userId, methodId, { isDefault: true });
       show('Default payment method updated', 'success');
     } catch {
@@ -139,8 +147,9 @@ export default function PaymentsScreen({ navigation }: Props) {
             setBackendPaymentMethods((prev) =>
               prev.map((m) => (m.id === method.id ? { ...m, label: trimmed } : m))
             );
+            const userId = currentUser?.id;
+            if (!userId) return;
             try {
-              const userId = currentUser?.id ?? 'u1';
               await updateUserPaymentMethod(userId, method.id, { label: trimmed });
               show('Nickname updated', 'success');
             } catch {
@@ -168,8 +177,9 @@ export default function PaymentsScreen({ navigation }: Props) {
             const previous = backendPaymentMethods;
             setBackendPaymentMethods((prev) => prev.filter((m) => m.id !== method.id));
             show('Payment method removed', 'info');
+            const userId = currentUser?.id;
+            if (!userId) return;
             try {
-              const userId = currentUser?.id ?? 'u1';
               await deleteUserPaymentMethod(userId, method.id);
             } catch {
               show('Failed to remove on server. Restoring...', 'error');
@@ -427,7 +437,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             <View style={[styles.trustNote, { backgroundColor: Colors.surfaceAlt }]}>
               <Ionicons name="shield-checkmark-outline" size={16} color={Colors.success} />
               <Text style={styles.trustNoteText}>
-                Your payment details are encrypted. Thryftverse never stores full card numbers.
+                Your payment details are protected by industry-standard encryption.
               </Text>
             </View>
           </Reanimated.View>
