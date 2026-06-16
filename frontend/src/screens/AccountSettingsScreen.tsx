@@ -15,6 +15,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
 import { parseApiError } from '../lib/apiClient';
 import { requestMyDataExport, deleteMyAccount, updateUserProfile as updateUserProfileApi } from '../services/accountApi';
 import { disableTwoFactor, logoutFromSession } from '../services/authApi';
@@ -36,6 +37,7 @@ export default function AccountSettingsScreen() {
   const updateAccountPreferences = useStore((state) => state.updateAccountPreferences);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
   const { show } = useToast();
+  const haptic = useHaptic();
 
   const user = currentUser;
   const userAny = user as any;
@@ -212,6 +214,7 @@ export default function AccountSettingsScreen() {
     label,
     value,
     onPress,
+    isFirst = false,
     isLast = false,
     danger = false,
     loading = false,
@@ -219,6 +222,7 @@ export default function AccountSettingsScreen() {
     label: string;
     value: string;
     onPress?: () => void;
+    isFirst?: boolean;
     isLast?: boolean;
     danger?: boolean;
     loading?: boolean;
@@ -227,7 +231,7 @@ export default function AccountSettingsScreen() {
       title={label}
       value={loading ? undefined : value}
       onPress={onPress}
-      isFirst={false}
+      isFirst={isFirst}
       isLast={isLast}
       danger={danger}
     >
@@ -371,10 +375,10 @@ export default function AccountSettingsScreen() {
               containerStyle={{ marginBottom: Space.md }}
             />
             <View style={styles.editModalActions}>
-              <AnimatedPressable onPress={closeEdit} style={styles.editModalBtn}>
+              <AnimatedPressable onPress={() => { haptic.light(); closeEdit(); }} style={styles.editModalBtn} activeOpacity={0.8}>
                 <Text style={styles.editModalBtnText}>Cancel</Text>
               </AnimatedPressable>
-              <AnimatedPressable onPress={saveEdit} style={[styles.editModalBtn, styles.editModalBtnPrimary]}>
+              <AnimatedPressable onPress={() => { haptic.medium(); saveEdit(); }} style={[styles.editModalBtn, styles.editModalBtnPrimary]} activeOpacity={0.8}>
                 <Text style={[styles.editModalBtnText, styles.editModalBtnPrimaryText]}>Save</Text>
               </AnimatedPressable>
             </View>

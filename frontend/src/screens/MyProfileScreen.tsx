@@ -809,6 +809,31 @@ export default function MyProfileScreen() {
           ]}
         />
 
+        {/* Quick Access Grid */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+          <View style={styles.quickAccessCard}>
+            <View style={styles.quickGrid}>
+              {quickAccess.map((item, index) => (
+                <AnimatedPressable
+                  key={item.route}
+                  style={[
+                    styles.quickItem,
+                    index === quickAccess.length - 1 ? styles.quickItemLastInRow : null,
+                  ]}
+                  activeOpacity={0.85}
+                  onPress={() => { haptic.light(); navigation.navigate(item.route as any); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                >
+                  <Ionicons name={item.icon as any} size={22} color={item.color} />
+                  <Text style={styles.quickLabel}>{item.label}</Text>
+                  {item.value ? <Text style={styles.quickValue}>{item.value}</Text> : null}
+                </AnimatedPressable>
+              ))}
+            </View>
+          </View>
+        </Reanimated.View>
+
         {/* Profile Tab Rail */}
         <ProfileTabRail
           tabs={[
@@ -1201,17 +1226,10 @@ const styles = StyleSheet.create({
   },
 
   floatingHeaderTitle: {
-
-    fontSize: 18,
-
-    fontFamily: Typography.family.bold,
-
+    fontSize: 17,
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
-
-    textTransform: 'uppercase',
-
-    letterSpacing: 1,
-
+    letterSpacing: -0.3,
   },
 
   floatingHeaderAction: {

@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
   headerMetaText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: '#666',
+    color: Colors.textMuted,
     textAlign: 'right',
   },
   accountCard: {
