@@ -696,7 +696,7 @@ export default function MyProfileScreen() {
 
 
 
-  const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
+  const AnimatedScrollView = Reanimated.ScrollView;
 
 
 
