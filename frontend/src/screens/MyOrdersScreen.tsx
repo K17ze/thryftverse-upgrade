@@ -5,7 +5,6 @@ import {
 import { View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   Dimensions,
   RefreshControl
@@ -167,7 +166,6 @@ export default function MyOrdersScreen() {
     return activeOrders.filter((order) => !order.isDone && !/cancel/i.test(order.status));
   }, [activeOrders, statusFilter]);
 
-  const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
 
   // Map order status to premium pill tone
   const getStatusTone = (status: string): import('../components/ui/PremiumStatusPill').StatusPillTone => {
@@ -228,7 +226,7 @@ export default function MyOrdersScreen() {
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={10} />
 
-        <AnimatedScrollView
+        <Reanimated.ScrollView
           contentContainerStyle={[styles.content, filteredOrders.length === 0 && { flex: 1, justifyContent: 'center' }]}
           showsVerticalScrollIndicator={false}
           onScroll={scrollHandler}
@@ -292,7 +290,7 @@ export default function MyOrdersScreen() {
               );
             })
           )}
-        </AnimatedScrollView>
+        </Reanimated.ScrollView>
       </View>
 
     </SafeAreaView>
