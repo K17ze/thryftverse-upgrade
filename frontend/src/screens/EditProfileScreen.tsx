@@ -281,6 +281,11 @@ export default function EditProfileScreen() {
       {/* Live Preview */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(50)} style={styles.previewBanner}>
         <View style={[styles.previewCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <View style={[styles.previewAvatar, { backgroundColor: Colors.surfaceAlt }]}>
+            <Text style={[styles.previewAvatarInitial, { color: Colors.textPrimary }]}>
+              {(name || username || 'Y').charAt(0).toUpperCase()}
+            </Text>
+          </View>
           <Text style={[styles.previewName, { color: Colors.textPrimary }]}>{name || username || 'Your Name'}</Text>
           <Text style={[styles.previewHandle, { color: Colors.textSecondary }]}>@{username || 'username'}</Text>
           {bio ? <Text style={[styles.previewBio, { color: Colors.textSecondary }]} numberOfLines={2}>{bio}</Text> : null}
@@ -370,6 +375,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Space.md,
     alignItems: 'center',
+    paddingTop: Space.lg,
+    paddingBottom: Space.lg,
+  },
+  previewAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Space.sm,
+  },
+  previewAvatarInitial: {
+    fontSize: 24,
+    fontFamily: Typography.family.bold,
   },
   previewName: {
     fontSize: Type.subtitle.size,

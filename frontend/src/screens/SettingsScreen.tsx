@@ -1,5 +1,6 @@
 import React from 'react';
 import { Linking, View, Text, StyleSheet } from 'react-native';
+import { Colors } from '../constants/colors';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -237,9 +238,10 @@ export default function SettingsScreen({ navigation }: Props) {
       {/* Seller Hub */}
       {showSection('Seller Hub') && (
         <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-          <SettingsSection title="Seller Hub">
+          <SettingsSection title="Seller Hub" description="Manage selling, payments and shipping">
             <SettingsRow
               icon="wallet-outline"
+              iconColor={Colors.brand}
               title="Balance & Wallet"
               value="Manage"
               onPress={() => navigation.navigate('Wallet')}
@@ -247,18 +249,21 @@ export default function SettingsScreen({ navigation }: Props) {
             />
             <SettingsRow
               icon="card-outline"
+              iconColor={Colors.brand}
               title="Payment Methods"
               value={savedPaymentMethod ? 'Manage' : 'None'}
               onPress={() => navigation.navigate('Payments')}
             />
             <SettingsRow
               icon="cash-outline"
+              iconColor={Colors.brand}
               title="Payouts"
               value="Manage"
               onPress={() => navigation.navigate('BalanceHistory')}
             />
             <SettingsRow
               icon="cube-outline"
+              iconColor={Colors.brand}
               title="Shipping"
               value="Manage"
               onPress={() => navigation.navigate('Postage')}
@@ -271,7 +276,7 @@ export default function SettingsScreen({ navigation }: Props) {
       {/* Trust & Security */}
       {showSection('Trust & Security') && (
         <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
-          <SettingsSection title="Trust & Security">
+          <SettingsSection title="Trust & Security" description="Security, access and privacy">
             <SettingsRow
               icon="person-circle-outline"
               title="Account Details"
@@ -281,12 +286,14 @@ export default function SettingsScreen({ navigation }: Props) {
             />
             <SettingsRow
               icon="lock-closed-outline"
+              iconColor={Colors.success}
               title="Password"
               value="••••••••"
               onPress={() => navigation.navigate('ChangePassword')}
             />
             <SettingsRow
               icon="shield-checkmark-outline"
+              iconColor={Colors.success}
               title="Two-Factor Authentication"
               value={twoFactorEnabled ? 'On' : 'Off'}
               onPress={() => navigation.navigate('TwoFactorSetup')}
@@ -299,12 +306,14 @@ export default function SettingsScreen({ navigation }: Props) {
             />
             <SettingsRow
               icon="ban-outline"
+              iconColor={Colors.danger}
               title="Blocked Users"
               value="View"
               onPress={() => navigation.navigate('BlockedUsers')}
             />
             <SettingsRow
               icon="eye-outline"
+              iconColor={Colors.success}
               title="Privacy Controls"
               value="Manage"
               onPress={() => navigation.navigate('PrivacySettings')}
