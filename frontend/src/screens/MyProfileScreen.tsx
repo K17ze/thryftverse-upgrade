@@ -932,7 +932,50 @@ export default function MyProfileScreen() {
                   Activity and updates from your network
                 </Text>
               </View>
-              {/* Honest empty state — no fabricated activity */}
+              {/* Co-Own Portfolio Summary */}
+              <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+                <View style={styles.portfolioSummaryCard}>
+                  <View style={styles.portfolioSummaryTop}>
+                    <Text style={styles.portfolioSummaryLabel}>MY CO-OWN HOLDINGS</Text>
+                    <AnimatedPressable
+                      style={styles.portfolioSummaryLinkBtn}
+                      activeOpacity={0.8}
+                      onPress={() => navigation.navigate('Portfolio')}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.portfolioSummaryLinkText}>Open</Text>
+                      <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
+                    </AnimatedPressable>
+                  </View>
+                  <Text style={styles.portfolioSummaryValue}>{formatFromFiat(holdingsValue, 'GBP')}</Text>
+                  <View style={styles.portfolioSummaryMetaRow}>
+                    <Text style={styles.portfolioSummaryMeta}>
+                      {coOwnHoldings.length} active position{coOwnHoldings.length === 1 ? '' : 's'}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.portfolioSummaryPnl,
+                        holdingsUnrealized >= 0 ? styles.portfolioPnlUp : styles.portfolioPnlDown,
+                      ]}
+                    >
+                      Unrealized {holdingsUnrealized >= 0 ? '+' : '-'}
+                      {formatFromFiat(Math.abs(holdingsUnrealized), 'GBP', { displayMode: 'fiat' })}
+                    </Text>
+                  </View>
+                  {coOwnHoldings.length === 0 && (
+                    <AnimatedPressable
+                      style={styles.portfolioSummaryCta}
+                      activeOpacity={0.85}
+                      onPress={() => navigation.navigate('CoOwnHub')}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons name="sparkles-outline" size={14} color={Colors.background} />
+                      <Text style={styles.portfolioSummaryCtaText}>Explore Co-Own Hub</Text>
+                    </AnimatedPressable>
+                  )}
+                </View>
+              </Reanimated.View>
+              {/* Honest empty state ï¿½ no fabricated activity */}
               <View style={{
                 marginHorizontal: Space.md,
                 backgroundColor: Colors.surface,

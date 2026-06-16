@@ -179,11 +179,21 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Push Notifications" onBack={() => navigation.goBack()} rightAction={rightAction} />}>
       {pushPermissionStatus?.status === 'denied' && (
-        <SettingsInfoBanner
-          text="Push notifications are blocked. Enable them in Settings to receive alerts."
-          icon="notifications-off-outline"
-          variant="warning"
-        />
+        <View style={styles.permissionBanner}>
+          <Ionicons name="notifications-off-outline" size={18} color={Colors.danger} />
+          <Text style={styles.permissionBannerText}>
+            Push notifications are blocked. Enable them in Settings to receive alerts.
+          </Text>
+          <AnimatedPressable
+            onPress={() => Linking.openSettings()}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityLabel="Open device settings"
+          >
+            <Text style={styles.permissionBannerAction}>Open Settings</Text>
+          </AnimatedPressable>
+        </View>
       )}
 
       {/* Progress indicator */}
@@ -289,5 +299,26 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     marginHorizontal: Space.md,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  permissionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  permissionBannerText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  permissionBannerAction: {
+    color: Colors.brand,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
   },
 });
