@@ -718,4 +718,3 @@ const styles = StyleSheet.create({
   txStatusCompleted: { color: Colors.textSecondary },
   txAmount: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary },
 });
-

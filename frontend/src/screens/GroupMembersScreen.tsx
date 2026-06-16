@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,11 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
-import { Caption, BodyEmphasis } from '../components/ui/Text';
+import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 
 type Props = StackScreenProps<RootStackParamList, 'GroupMembers'>;
+
+type MemberRole = 'owner' | 'admin' | 'member';
 
 export default function GroupMembersScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
@@ -26,20 +28,38 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
 
   const conversations = useStore((state) => state.conversations);
   const currentUser = useStore((state) => state.currentUser);
+  const participantNameLookup = useStore((state) => (state as any).participantNameLookup as Map<string, string> | undefined);
+
+  const [searchQuery, setSearchQuery] = useState('');
 
   const conversation = useMemo(
     () => conversations.find((c) => c.id === conversationId),
     [conversations, conversationId]
   );
 
+  // Determine roles: creator is owner, others are members (admins not yet supported by backend)
   const members = useMemo(() => {
     const ids = conversation?.participantIds ?? [];
-    return ids.map((id) => ({
-      id,
-      name: id === currentUser?.id ? 'You' : 'Member',
-      isMe: id === currentUser?.id,
-    }));
-  }, [conversation, currentUser?.id]);
+    const creatorId = (conversation as any)?.creatorId ?? ids[0];
+    return ids.map((id) => {
+      const name = id === currentUser?.id
+        ? 'You'
+        : participantNameLookup?.get(id) ?? `User ${id.slice(-6)}`;
+      const role: MemberRole = id === creatorId ? 'owner' : 'member';
+      return {
+        id,
+        name,
+        isMe: id === currentUser?.id,
+        role,
+      };
+    });
+  }, [conversation, currentUser?.id, participantNameLookup]);
+
+  const filteredMembers = useMemo(() => {
+    if (!searchQuery.trim()) return members;
+    const q = searchQuery.toLowerCase();
+    return members.filter((m) => m.name.toLowerCase().includes(q));
+  }, [members, searchQuery]);
 
   if (!conversation || conversation.type !== 'group') {
     return (
@@ -51,71 +71,88 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
     );
   }
 
+  const roleBadge = (role: MemberRole) => {
+    const colors = {
+      owner: { bg: `${Colors.brand}15`, text: Colors.brand },
+      admin: { bg: `${Colors.textPrimary}15`, text: Colors.textPrimary },
+      member: { bg: Colors.surfaceAlt, text: Colors.textMuted },
+    };
+    const labels = { owner: 'Owner', admin: 'Admin', member: 'Member' };
+    return (
+      <View style={[styles.roleBadge, { backgroundColor: colors[role].bg }]}>
+        <Caption style={[styles.roleBadgeText, { color: colors[role].text }]}>{labels[role]}</Caption>
+      </View>
+    );
+  };
+
   return (
     <FlagshipScreen header={<FlagshipHeader title="Members" subtitle={`${members.length} total`} onBack={() => navigation.goBack()} />} scrollEnabled={false}>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Add member — honest disabled state */}
-        <AnimatedPressable
-          onPress={() => {
-            haptic.light();
-            // Future: open member picker when backend supports it
-          }}
-          activeOpacity={0.7}
-          scaleValue={0.98}
-          hapticFeedback="light"
-          style={styles.addMemberRow}
-          accessibilityRole="button"
-          accessibilityLabel="Add member"
-          accessibilityHint="Member addition requires backend support"
-        >
-          <View style={[styles.addIcon, { backgroundColor: Colors.surfaceAlt }]}>
-            <Ionicons name="add" size={20} color={Colors.textMuted} />
-          </View>
-          <BodyEmphasis style={{ color: Colors.textMuted }}>Add members</BodyEmphasis>
-          <Caption color={Colors.textMuted} style={styles.comingSoonPill}>Not available</Caption>
-        </AnimatedPressable>
+        {/* Search */}
+        <View style={styles.searchRow}>
+          <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
+          <Text
+            style={styles.searchInput}
+            accessibilityLabel="Search members"
+          >
+            {searchQuery || 'Search members...'}
+          </Text>
+          {searchQuery.length > 0 && (
+            <AnimatedPressable
+              onPress={() => setSearchQuery('')}
+              activeOpacity={0.7}
+              scaleValue={0.9}
+              hapticFeedback="light"
+            >
+              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+            </AnimatedPressable>
+          )}
+        </View>
 
         {/* Member list */}
-        <View style={styles.listCard}>
-          {members.map((member, index) => (
-            <View key={member.id}>
-              <View style={styles.memberRow}>
-                <View style={[styles.memberAvatar, { backgroundColor: Colors.surfaceAlt }]}>
-                  <Text style={styles.memberAvatarText}>
-                    {member.isMe ? 'You' : 'M'}
-                  </Text>
-                </View>
-                <View style={styles.memberText}>
-                  <BodyEmphasis>{member.name}</BodyEmphasis>
-                  {member.isMe && (
-                    <Caption color={Colors.textMuted}>Group creator</Caption>
-                  )}
-                </View>
-                {/* Remove — honest disabled state */}
-                {!member.isMe && (
+        {filteredMembers.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Ionicons name="people-outline" size={32} color={Colors.textMuted} />
+            <Caption color={Colors.textMuted} style={styles.emptyText}>No members match your search.</Caption>
+          </View>
+        ) : (
+          <View style={styles.listCard}>
+            {filteredMembers.map((member, index) => (
+              <View key={member.id}>
+                <View style={styles.memberRow}>
+                  <View style={[styles.memberAvatar, { backgroundColor: Colors.surfaceAlt }]}>
+                    <Text style={styles.memberAvatarText}>
+                      {member.name.slice(0, 2).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.memberText}>
+                    <View style={styles.nameRow}>
+                      <BodyEmphasis>{member.name}</BodyEmphasis>
+                      {roleBadge(member.role)}
+                    </View>
+                    {member.isMe && (
+                      <Caption color={Colors.textMuted}>Group creator</Caption>
+                    )}
+                  </View>
                   <AnimatedPressable
-                    onPress={() => {
-                      haptic.light();
-                      // Future: remove member when backend supports it
-                    }}
+                    onPress={() => navigation.navigate('UserProfile', { userId: member.id })}
                     activeOpacity={0.7}
                     scaleValue={0.92}
                     hapticFeedback="light"
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove ${member.name}`}
-                    accessibilityHint="Member removal requires backend support"
+                    accessibilityLabel={`View ${member.name} profile`}
                   >
-                    <Ionicons name="remove-circle-outline" size={22} color={Colors.textMuted} />
+                    <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
                   </AnimatedPressable>
+                </View>
+                {index < filteredMembers.length - 1 && (
+                  <View style={styles.divider} />
                 )}
               </View>
-              {index < members.length - 1 && (
-                <View style={styles.divider} />
-              )}
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </FlagshipScreen>
   );
@@ -135,28 +172,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
     gap: Space.md,
-  },
-  addMemberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: 12,
-  },
-  addIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  comingSoonPill: {
-    marginLeft: 'auto',
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-    overflow: 'hidden',
-    fontSize: 11,
   },
   listCard: {
     backgroundColor: Colors.surface,
@@ -192,5 +207,46 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
     marginLeft: Space.md + 40 + Space.sm,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    marginBottom: Space.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  roleBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xl,
+    gap: Space.sm,
+  },
+  emptyText: {
+    textAlign: 'center',
   },
 });

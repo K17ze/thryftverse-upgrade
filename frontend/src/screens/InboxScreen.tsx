@@ -232,7 +232,7 @@ export default function InboxScreen() {
 
     }
 
-    setTimeout(() => setRefreshing(false), 400);
+    setRefreshing(false);
 
   };
 
@@ -596,11 +596,11 @@ export default function InboxScreen() {
         )}
       </View>
     ) : (
-      <AvatarRing
+          <AvatarRing
         uri={item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined)}
         size={52}
         isUnread={item.unread}
-        ringWidth={2}
+            ringWidth={2}
         fallbackInitials={safeDisplayTitle === 'Thryft user' ? 'T' : safeDisplayTitle.slice(0, 2).toUpperCase()}
       />
     );
@@ -608,7 +608,7 @@ export default function InboxScreen() {
     const contextThumbnail = item.itemId ? (
       <View style={styles.contextThumb}>
         <Ionicons name="pricetag-outline" size={14} color={Colors.textMuted} />
-      </View>
+        </View>
     ) : null;
 
     const requestRow = (
@@ -696,10 +696,10 @@ export default function InboxScreen() {
                 {item.unread ? (
                   <View style={styles.unreadDot}>
                     <Text style={styles.unreadCount}>{item.messages.filter((m) => m.sender !== 'me').length}</Text>
-                  </View>
-                ) : null}
-              </View>
             </View>
+                ) : null}
+          </View>
+        </View>
           </View>
         </View>
       </AnimatedPressable>
@@ -732,30 +732,30 @@ export default function InboxScreen() {
         <FlagshipHeader
           title="Inbox"
           rightAction={
-            <View style={styles.headerActions}>
-              <AnimatedPressable
-                style={styles.iconBtn}
-                onPress={() => navigation.navigate('CreateGroupChat')}
-                activeOpacity={0.7}
-                scaleValue={0.9}
-                hapticFeedback="light"
-                accessibilityLabel="Create new group chat"
-                accessibilityRole="button"
-              >
-                <Ionicons name="people-outline" size={20} color={Colors.textPrimary} />
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={styles.iconBtn}
-                onPress={() => navigation.navigate('ChatSettings')}
-                activeOpacity={0.7}
-                scaleValue={0.9}
-                hapticFeedback="light"
-                accessibilityLabel="Settings"
-                accessibilityRole="button"
-              >
-                <Ionicons name="cog-outline" size={20} color={Colors.textPrimary} />
-              </AnimatedPressable>
-            </View>
+          <View style={styles.headerActions}>
+            <AnimatedPressable
+              style={styles.iconBtn}
+              onPress={() => navigation.navigate('CreateGroupChat')}
+              activeOpacity={0.7}
+              scaleValue={0.9}
+              hapticFeedback="light"
+              accessibilityLabel="Create new group chat"
+              accessibilityRole="button"
+            >
+              <Ionicons name="people-outline" size={20} color={Colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.iconBtn}
+              onPress={() => navigation.navigate('ChatSettings')}
+              activeOpacity={0.7}
+              scaleValue={0.9}
+              hapticFeedback="light"
+              accessibilityLabel="Settings"
+              accessibilityRole="button"
+            >
+              <Ionicons name="cog-outline" size={20} color={Colors.textPrimary} />
+            </AnimatedPressable>
+          </View>
           }
         />
       }
@@ -766,7 +766,7 @@ export default function InboxScreen() {
 
       <View style={styles.header}>
 
-        
+
         <AppSearchBar
 
           placeholder="Search"
@@ -1804,6 +1804,3 @@ const styles = StyleSheet.create({
   },
 
 });
-
-
-

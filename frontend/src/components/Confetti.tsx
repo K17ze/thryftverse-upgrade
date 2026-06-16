@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View, Dimensions } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -31,13 +31,13 @@ function Particle({ x, y, color, delay }: ParticleProps) {
   useEffect(() => {
     // Pop out
     scale.value = withDelay(delay, withTiming(1, { duration: 200 }));
-    
+
     // Spread and fall
     translateX.value = withDelay(
       delay,
       withTiming(x, { duration: 800, easing: Easing.out(Easing.cubic) })
     );
-    
+
     translateY.value = withDelay(
       delay,
       withSequence(
@@ -111,4 +111,3 @@ export function Confetti({ count = 40 }: { count?: number }) {
     </View>
   );
 }
-

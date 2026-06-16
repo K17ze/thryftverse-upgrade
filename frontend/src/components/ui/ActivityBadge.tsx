@@ -258,4 +258,3 @@ export function ActivityBadgeRow({ badges, style }: ActivityBadgeRowProps) {
   );
 }
 
-

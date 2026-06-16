@@ -28,6 +28,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const haptic = useHaptic();
 
   const conversations = useStore((state) => state.conversations);
+  const currentUser = useStore((state) => state.currentUser);
   const archiveConversation = useStore((state) => state.archiveConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
   const mutedIds = useStore((state) => state.mutedConversationIds);
@@ -111,6 +112,9 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     .slice(0, 2)
     .toUpperCase();
 
+  const description = (conversation as any)?.description;
+  const isOwner = (conversation as any)?.creatorId === currentUser?.id;
+
   return (
     <FlagshipScreen header={<FlagshipHeader title="Group Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -122,6 +126,9 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <BodyEmphasis style={styles.groupName} numberOfLines={1}>
             {conversation.title ?? 'Group chat'}
           </BodyEmphasis>
+          {description ? (
+            <Caption color={Colors.textMuted} style={styles.groupDesc}>{description}</Caption>
+          ) : null}
           <Caption color={Colors.textMuted}>{memberCount} members</Caption>
           {deployedBotCount > 0 && (
             <View style={styles.botBadge}>
@@ -159,26 +166,6 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             icon="hardware-chip-outline"
             label="Manage bots"
             onPress={() => navigation.navigate('GroupBotManagement', { conversationId })}
-            showChevron
-          />
-        </Section>
-
-        {/* Media & shared */}
-        <Section title="Media & shared">
-          <RowItem
-            icon="images-outline"
-            label="Photos & videos"
-            onPress={() => {
-              // Future: open shared media gallery when backend supports it
-            }}
-            showChevron
-          />
-          <RowItem
-            icon="document-outline"
-            label="Shared links"
-            onPress={() => {
-              // Future: open shared links when backend supports it
-            }}
             showChevron
           />
         </Section>
@@ -327,6 +314,11 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     marginTop: Space.sm,
+  },
+  groupDesc: {
+    textAlign: 'center',
+    paddingHorizontal: Space.lg,
+    marginTop: 2,
   },
   botBadge: {
     flexDirection: 'row',

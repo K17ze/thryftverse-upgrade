@@ -42,7 +42,7 @@ export function AnimatedBadge({ count, size = 18 }: AnimatedBadgeProps) {
 
   return (
     <Reanimated.View style={[
-      styles.badge, 
+      styles.badge,
       { minWidth: size, height: size, borderRadius: size / 2 },
       animatedStyle
     ]}>

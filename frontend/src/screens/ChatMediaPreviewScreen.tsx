@@ -21,7 +21,7 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 type Props = StackScreenProps<RootStackParamList, 'ChatMediaPreview'>;
 
 export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
-  const { mediaUri, mediaType = 'image' } = route.params;
+  const { mediaUri, mediaType = 'image', senderLabel, timestamp, messageId } = route.params;
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
 
@@ -110,6 +110,21 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
           {mediaType === 'video' ? renderVideo() : renderImage()}
         </Pressable>
 
+        {/* Context overlay */}
+        {(senderLabel || timestamp) && (
+          <View style={[styles.contextOverlay, { bottom: Math.max(insets.bottom + 24, 24) }]}>
+            {senderLabel && (
+              <Text style={styles.contextSender}>{senderLabel}</Text>
+            )}
+            {timestamp && (
+              <Text style={styles.contextTime}>{timestamp}</Text>
+            )}
+            {messageId && (
+              <Text style={styles.contextId}>ID: {messageId.slice(-8)}</Text>
+            )}
+          </View>
+        )}
+
       </View>
     </FlagshipScreen>
   );
@@ -175,5 +190,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
     color: '#fff',
+  },
+  contextOverlay: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    alignItems: 'center',
+    gap: 4,
+  },
+  contextSender: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  contextTime: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: 'rgba(255,255,255,0.7)',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  contextId: {
+    fontSize: 11,
+    fontFamily: 'Inter-Regular',
+    color: 'rgba(255,255,255,0.4)',
   },
 });

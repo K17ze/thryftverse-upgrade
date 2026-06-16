@@ -20,7 +20,7 @@ interface MessageBubbleProps {
   text?: string;
   isMe: boolean;
   senderLabel?: string;
-  timestamp: string;
+  timestamp?: string;
   status?: 'sending' | 'sent' | 'failed';
   reactions?: Reaction[];
   mediaUri?: string;
@@ -34,6 +34,7 @@ interface MessageBubbleProps {
   onReactionPress?: () => void;
   onRetry?: () => void;
   onMediaPress?: () => void;
+  onReplyPress?: () => void;
 }
 
 export function MessageBubble({
@@ -54,6 +55,7 @@ export function MessageBubble({
   onReactionPress,
   onRetry,
   onMediaPress,
+  onReplyPress,
 }: MessageBubbleProps) {
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
@@ -114,14 +116,14 @@ export function MessageBubble({
           ]}
         >
           {replyTo ? (
-            <View style={[styles.replyBlock, { borderLeftColor: isMe ? `${Colors.background}40` : Colors.border }]}>
+            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${Colors.background}40` : Colors.border }]}>
               <Text style={[styles.replyName, { color: metaColor }]}>
                 {replyTo.senderName}
               </Text>
               <Text style={[styles.replyText, { color: metaColor }]} numberOfLines={2}>
                 {replyTo.text}
               </Text>
-            </View>
+            </Pressable>
           ) : null}
 
           {mediaUri ? (
@@ -153,7 +155,7 @@ export function MessageBubble({
           ) : null}
 
           <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
-            <Text style={[styles.timestamp, { color: metaColor }]}>{timestamp}</Text>
+            {timestamp ? <Text style={[styles.timestamp, { color: metaColor }]}>{timestamp}</Text> : null}
             {isMe && status ? (
               <View style={styles.statusWrap}>
                 {isUploading ? (
@@ -378,4 +380,3 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
 });
-

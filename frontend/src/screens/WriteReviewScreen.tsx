@@ -30,7 +30,7 @@ export default function WriteReviewScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-      
+
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="close" size={24} color={Colors.textPrimary} />
@@ -39,20 +39,20 @@ export default function WriteReviewScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      <KeyboardAvoidingView 
-        style={styles.content} 
+      <KeyboardAvoidingView
+        style={styles.content}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.form}>
           <Text style={styles.promptText}>How was your experience?</Text>
-          
+
           <View style={styles.starsContainer}>
             {[1, 2, 3, 4, 5].map((star) => (
               <AnimatedPressable key={star} onPress={() => setRating(star)}>
-                <Ionicons 
-                  name={rating >= star ? "star" : "star-outline"} 
-                  size={44} 
-                  color={rating >= star ? Colors.brand : Colors.textMuted} 
+                <Ionicons
+                  name={rating >= star ? "star" : "star-outline"}
+                  size={44}
+                  color={rating >= star ? Colors.brand : Colors.textMuted}
                 />
               </AnimatedPressable>
             ))}
@@ -60,9 +60,9 @@ export default function WriteReviewScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Detailed Review (Optional)</Text>
-            <TextInput 
-              style={styles.input} 
-              placeholder="Tell others what you thought about the item and seller..." 
+            <TextInput
+              style={styles.input}
+              placeholder="Tell others what you thought about the item and seller..."
               placeholderTextColor={Colors.textMuted}
               multiline
               textAlignVertical="top"
@@ -73,9 +73,9 @@ export default function WriteReviewScreen() {
         </View>
 
         <View style={styles.footer}>
-          <AnimatedPressable 
-            style={[styles.primaryBtn, rating === 0 && styles.disabledBtn]} 
-            onPress={submitReview} 
+          <AnimatedPressable
+            style={[styles.primaryBtn, rating === 0 && styles.disabledBtn]}
+            onPress={submitReview}
             activeOpacity={0.9}
             disabled={rating === 0}
           >
@@ -89,28 +89,28 @@ export default function WriteReviewScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20, 
-    paddingTop: 10, 
+    paddingHorizontal: 20,
+    paddingTop: 10,
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: Colors.textPrimary },
-  
+
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
   form: { flex: 1 },
-  
+
   promptText: { fontSize: 22, fontFamily: Typography.family.semibold, color: Colors.textPrimary, textAlign: 'center', marginBottom: 24 },
   starsContainer: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 40 },
-  
+
   inputGroup: { flex: 1 },
   label: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textSecondary, marginBottom: 12 },
-  input: { 
+  input: {
     flex: 1,
     maxHeight: 200,
     backgroundColor: Colors.surface,
@@ -118,11 +118,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: 16,
     padding: 16,
-    color: Colors.textPrimary, 
-    fontSize: 15, 
-    fontFamily: Typography.family.regular 
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontFamily: Typography.family.regular
   },
-  
+
   footer: { paddingBottom: 40 },
   primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   disabledBtn: { opacity: 0.5 },

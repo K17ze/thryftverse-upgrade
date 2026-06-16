@@ -425,7 +425,7 @@ export default function CheckoutScreen() {
       />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
+
         {/* Item Summary Card */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
         <ElevatedSurface variant="surface" style={styles.itemCard}>
@@ -817,4 +817,3 @@ const styles = StyleSheet.create({
   footerTotalPrice: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   payBtn: { minWidth: 186, marginLeft: 16 },
 });
-

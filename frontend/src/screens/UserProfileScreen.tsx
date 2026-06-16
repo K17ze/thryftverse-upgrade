@@ -174,7 +174,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     const scale = interpolate(overscroll, [-100, 0], [1.25, 1], Extrapolation.CLAMP);
     return { transform: [{ translateY }, { scale }] };
   });
-  
+
   const headerOpacityStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [COVER_HEIGHT - 60, COVER_HEIGHT - 10], [0, 1], Extrapolation.CLAMP);
     return { opacity, backgroundColor: BG };
@@ -228,7 +228,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{displayUsername}</Text>
          <View style={{ flex: 1 }} />
       </Reanimated.View>
-      
+
       <View style={[styles.floatingHeaderActions, { top: insets.top }]}>
         <AnimatedPressable
           style={styles.backBtn}
@@ -366,7 +366,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  
+
   floatingHeader: {
     position: 'absolute', top: 0, left: 0, right: 0,
     zIndex: 10,
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
     borderBottomColor: BORDER,
   },
   floatingHeaderTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: TEXT, textTransform: 'uppercase', letterSpacing: 1 },
-  
+
   floatingHeaderActions: {
     position: 'absolute', left: 0, right: 0,
     zIndex: 11,
@@ -406,13 +406,13 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.15)',
   },
-  
+
   scrollContent: {
     minHeight: '100%',
   },
 
   profileHeader: {
-    paddingHorizontal: 20, 
+    paddingHorizontal: 20,
     paddingBottom: 24,
     backgroundColor: BG,
     borderTopLeftRadius: 24,
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
   },
   heroRatingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroReviewCount: { fontSize: 14, fontFamily: Typography.family.medium, color: MUTED },
-  
+
   statsCard: {
     flexDirection: 'row',
     backgroundColor: CARD,
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
   statValue: { fontSize: Typography.size.title, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 2 },
   statLabel: { fontSize: Typography.size.caption, fontFamily: Typography.family.medium, color: MUTED },
   statDivider: { width: 6, backgroundColor: 'transparent' },
-  
+
   heroActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -638,14 +638,14 @@ const styles = StyleSheet.create({
   ratingHero: { alignItems: 'center', paddingVertical: 40 },
   ratingBigNumber: { fontSize: Typography.size.giant, fontFamily: Typography.family.bold, color: TEXT, letterSpacing: -2, lineHeight: 80 },
   ratingTotalText: { fontSize: Typography.size.body, fontFamily: Typography.family.medium, color: MUTED, marginTop: 12 },
-  
+
   reviewsFilterRow: { paddingHorizontal: 20, marginBottom: 24 },
   reviewsFilterStrip: { gap: 10 },
   filterChip: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, backgroundColor: CARD_ALT },
   filterChipActive: { backgroundColor: Colors.brand },
   filterChipText: { fontSize: Typography.size.body, fontFamily: Typography.family.medium, color: MUTED },
   filterChipTextActive: { color: Colors.background, fontFamily: Typography.family.bold },
-  
+
   reviewsList: { paddingHorizontal: 20 },
   reviewBlock: {
     flexDirection: 'row',
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   aboutBigName: { fontSize: Typography.size.heading, fontFamily: Typography.family.bold, color: TEXT, letterSpacing: -1, marginBottom: 32 },
-  
+
   aboutInfoCard: {
     backgroundColor: CARD,
     borderRadius: 24,
@@ -721,5 +721,4 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 });
-
 

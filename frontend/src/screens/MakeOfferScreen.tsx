@@ -167,12 +167,12 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             <Text style={styles.protectionLabel}>Platform charge</Text>
             <Text style={styles.protectionValue}>{formatFromFiat(platformChargeGbp, 'GBP')}</Text>
           </View>
-          
+
           <View style={[styles.protectionRow, { marginTop: 12 }]}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{formatFromFiat(total, 'GBP')}</Text>
           </View>
-          
+
           <Text style={styles.protectionNote}>
             Includes our platform charge for secure settlement and support.
           </Text>
@@ -211,10 +211,10 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  
-  
+
+
   content: { paddingHorizontal: 20, paddingBottom: 40 },
-  
+
   itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -284,17 +284,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   itemListingPrice: { fontSize: 15, fontFamily: Typography.family.medium, color: MUTED },
-  
+
   section: { marginBottom: 32 },
-  sectionLabel: { 
-    fontSize: 14, 
-    fontFamily: Typography.family.bold, 
-    color: MUTED, 
-    marginBottom: 12, 
-    textTransform: 'uppercase', 
-    letterSpacing: 1 
+  sectionLabel: {
+    fontSize: 14,
+    fontFamily: Typography.family.bold,
+    color: MUTED,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1
   },
-  
+
   priceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -306,15 +306,15 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
   },
   currencySymbol: { fontSize: 48, fontFamily: Typography.family.bold, color: BRAND, marginRight: 12, marginBottom: 4 },
-  priceInput: { 
-    flex: 1, 
-    fontSize: 56, 
-    fontFamily: Typography.family.bold, 
-    color: TEXT, 
+  priceInput: {
+    flex: 1,
+    fontSize: 56,
+    fontFamily: Typography.family.bold,
+    color: TEXT,
     paddingVertical: 12,
     letterSpacing: -2,
   },
-  
+
   protectionCard: {
     backgroundColor: CARD,
     borderWidth: 1,
@@ -326,21 +326,21 @@ const styles = StyleSheet.create({
   protectionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   protectionLabel: { flex: 1, fontSize: 15, fontFamily: Typography.family.medium, color: MUTED },
   protectionValue: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
-  
+
   totalLabel: { flex: 1, fontSize: 18, fontFamily: Typography.family.bold, color: TEXT },
   totalValue: { fontSize: 22, fontFamily: Typography.family.bold, color: BRAND },
-  
-  protectionNote: { 
-    fontSize: 13, 
-    fontFamily: Typography.family.regular, 
-    color: MUTED, 
-    lineHeight: 20, 
+
+  protectionNote: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+    lineHeight: 20,
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: BORDER
   },
-  
+
   tipCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -366,9 +366,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Typography.family.medium,
   },
-  
-  footer: { 
-    paddingHorizontal: 20, 
+
+  footer: {
+    paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: Platform.OS === 'ios' ? 34 : 24,
     borderTopWidth: 1,
@@ -377,4 +377,3 @@ const styles = StyleSheet.create({
   },
   sendBtn: { width: '100%' },
 });
-

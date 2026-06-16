@@ -124,7 +124,7 @@ export type RootStackParamList = {
   MessageRequests: undefined;
   CreateCollection: undefined;
   OrderSupport: { orderId: string };
-  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video' };
+  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
   // UI-18 — Reference-perfect product UX
   EditCollection: { collectionId: string };
   SupportTicketDetail: { ticketId: string };

@@ -215,22 +215,20 @@ describe('UI-21 device UX audit and consistency restoration', () => {
     expect(posterSection).toContain('height: 152');
   });
 
-  // ── 20. EditProfile uses ScreenHeader instead of custom header (UI-21P.4) ──
-  it('EditProfileScreen uses shared ScreenHeader with back arrow', () => {
+  // ── 20. EditProfile uses FlagshipHeader instead of custom header (UI-21P.4) ──
+  it('EditProfileScreen uses shared FlagshipHeader with back arrow', () => {
     const src = read(resolve(SCREENS, 'EditProfileScreen.tsx'));
-    expect(src).toContain("import { ScreenHeader } from '../components/ui/ScreenHeader'");
-    expect(src).toContain('<ScreenHeader');
-    expect(src).toContain("backIcon=\"arrow-back\"");
+    expect(src).toContain("FlagshipScreen, FlagshipHeader");
+    expect(src).toContain('<FlagshipHeader');
     // Should not have the old custom header pattern
     expect(src).not.toContain('name="close" size={28}');
   });
 
-  // ── 21. EditProfile sections use SettingsCard (UI-21P.4) ──
-  it('EditProfileScreen wraps form sections in SettingsCard', () => {
+  // ── 21. EditProfile sections use FlagshipFormSection (UI-21P.4) ──
+  it('EditProfileScreen wraps form sections in FlagshipFormSection', () => {
     const src = read(resolve(SCREENS, 'EditProfileScreen.tsx'));
-    expect(src).toContain("import { SettingsCard } from '../components/settings/SettingsCard'");
-    expect(src).toContain('<SettingsCard');
-    expect(src).toContain("variant=\"surface\"");
+    expect(src).toContain("FlagshipFormSection");
+    expect(src).toContain('<FlagshipFormSection');
   });
 
   // ── 22. Inbox rows are flat with hairline separators (UI-21P.4) ──
@@ -274,10 +272,9 @@ describe('UI-21 device UX audit and consistency restoration', () => {
   });
 
   // ── 27. Chat uses shared header, context, timeline, composer (UI-21P.4) ──
-  it('ChatScreen uses shared ChatTopBar, ChatBubbleV2, ChatComposerBar', () => {
+  it('ChatScreen uses shared MessageBubble and ChatComposerBar', () => {
     const src = read(resolve(SCREENS, 'ChatScreen.tsx'));
-    expect(src).toContain("import { ChatTopBar } from '../components/chat/ChatTopBar'");
-    expect(src).toContain("import { ChatBubbleV2 } from '../components/chat/ChatBubbleV2'");
+    expect(src).toContain("import { MessageBubble } from '../components/chat/MessageBubble'");
     expect(src).toContain("import { ChatComposerBar } from '../components/chat/ChatComposerBar'");
   });
 

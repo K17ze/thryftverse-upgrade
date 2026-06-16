@@ -232,7 +232,7 @@ export default function FilterScreen() {
   const toggleBrand = (b: string) => {
     setSelectedBrands(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
   };
-  
+
   const toggleSize = (s: string) => {
     setSelectedSizes(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
   };
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: HANDLE_BG,
   },
-  
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
-  
+
   sectionHeading: {
     fontSize: Typography.size.bodyLarge,
     fontFamily: Typography.family.bold,
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   seeAllText: { color: Colors.brand, fontSize: Typography.size.body, fontFamily: Typography.family.semibold },
 
   hScroll: { paddingHorizontal: 20, gap: 10 },
-  
+
   wrapContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
   },
   sizeChip: { minWidth: 64, alignItems: 'center' },
   chipActive: { backgroundColor: Colors.textPrimary, borderColor: Colors.textPrimary },
-  
+
   chipText: { fontSize: Typography.size.body, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
   chipTextActive: { color: Colors.background, fontFamily: Typography.family.bold },
 
@@ -673,4 +673,3 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
 });
-

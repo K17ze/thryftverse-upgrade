@@ -303,7 +303,7 @@ export default function App() {
 
     // Offline queue listener
     let networkSub: ReturnType<typeof Network.addNetworkStateListener> | undefined;
-    
+
     // Initial flush attempt if we boot up and have network
     Network.getNetworkStateAsync().then((state) => {
       if (state.isInternetReachable) {

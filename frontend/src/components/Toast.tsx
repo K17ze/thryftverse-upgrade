@@ -31,7 +31,7 @@ function ToastItem({ id, message, type }: ToastItemProps) {
   useEffect(() => {
     translateY.value = withSpring(0, Motion.spring.flagshipPop);
     opacity.value = withTiming(1, { duration: 150 });
-    
+
     const timer = setTimeout(() => {
       handleDismiss();
     }, 3200);
@@ -120,4 +120,3 @@ const styles = StyleSheet.create({
     padding: 2,
   },
 });
-

@@ -163,7 +163,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.88}>
       <Text style={styles.sheetTitle}>Add card</Text>
       {policyLabel ? <Text style={styles.policyLabel}>Policy scope: {policyLabel}</Text> : null}
-      
+
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {!cardAllowed ? (
           <View style={styles.blockedCard}>
@@ -314,4 +314,3 @@ const styles = StyleSheet.create({
   saveBtn: { backgroundColor: Colors.brand, borderRadius: 30, paddingVertical: 16, alignItems: 'center' },
   saveBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textInverse },
 });
-

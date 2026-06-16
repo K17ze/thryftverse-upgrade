@@ -28,8 +28,8 @@ describe('EditProfileScreen static smoke', () => {
     expect(src).toContain("import { PremiumSelectRow }");
   });
 
-  it('imports AppButton', () => {
-    expect(src).toContain("import { AppButton }");
+  it('imports FlagshipStickyFooter', () => {
+    expect(src).toContain("FlagshipStickyFooter");
   });
 
   it('uses reactive theme (useAppTheme)', () => {
@@ -45,23 +45,20 @@ describe('EditProfileScreen static smoke', () => {
   });
 });
 
-describe('ChangePasswordScreenV2 static smoke', () => {
-  const src = readSrc('screens/ChangePasswordScreenV2.tsx');
+describe('ChangePasswordScreen static smoke', () => {
+  const src = readSrc('screens/ChangePasswordScreen.tsx');
 
   it('has a default export', () => {
-    expect(src).toMatch(/export default function ChangePasswordScreenV2/);
+    expect(src).toMatch(/export default function ChangePasswordScreen/);
   });
 
   it('imports PremiumTextField', () => {
     expect(src).toContain("import { PremiumTextField }");
   });
 
-  it('imports PremiumFormCard', () => {
-    expect(src).toContain("import { PremiumFormCard }");
-  });
-
-  it('imports PremiumActionFooter', () => {
-    expect(src).toContain("import { PremiumActionFooter }");
+  it('imports FlagshipScreen and FlagshipFormSection', () => {
+    expect(src).toContain("import { FlagshipScreen");
+    expect(src).toContain('FlagshipFormSection');
   });
 
   it('has no hardcoded gold/yellow colors', () => {
@@ -69,11 +66,11 @@ describe('ChangePasswordScreenV2 static smoke', () => {
   });
 });
 
-describe('SellScreenV2 static smoke', () => {
-  const src = readSrc('screens/SellScreenV2.tsx');
+describe('SellScreen static smoke', () => {
+  const src = readSrc('screens/SellScreen.tsx');
 
   it('has a default export', () => {
-    expect(src).toMatch(/export default function SellScreenV2/);
+    expect(src).toMatch(/export default function SellScreen/);
   });
 
   it('uses Animated.ScrollView for reanimated scroll handler', () => {
@@ -424,12 +421,12 @@ describe('SuccessScreen static smoke', () => {
 
 /* ─── Premium primitive import guardrails ─── */
 const PREMIUM_SCREENS = [
-  'SellScreenV2.tsx',
+  'SellScreen.tsx',
   'PaymentsScreen.tsx',
   'BalanceScreen.tsx',
   'PostageScreen.tsx',
-  'SettingsScreenV2.tsx',
-  'AccountSettingsScreenV2.tsx',
+  'SettingsScreen.tsx',
+  'AccountSettingsScreen.tsx',
   'CheckoutScreen.tsx',
   'OrderDetailScreen.tsx',
   'MyOrdersScreen.tsx',
@@ -479,8 +476,8 @@ describe('Double-boxing guardrails', () => {
     'PaymentsScreen.tsx',
     'PostageScreen.tsx',
     'BalanceScreen.tsx',
-    'AccountSettingsScreenV2.tsx',
-    'SettingsScreenV2.tsx',
+    'AccountSettingsScreen.tsx',
+    'SettingsScreen.tsx',
   ];
 
   for (const file of DOUBLE_BOXING_SCREENS) {

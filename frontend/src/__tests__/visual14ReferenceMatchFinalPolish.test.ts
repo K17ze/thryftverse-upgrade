@@ -24,22 +24,23 @@ describe('VISUAL-14 Reference-Match Final Polish', () => {
     expect(src).toContain("paddingTop: Space.sm");
   });
 
-  // ── 2. ChatBubbleV2 has modern bubble styling ──
-  it('ChatBubbleV2 has variable border radius for me/them bubbles', () => {
-    const src = read(resolve(COMPONENTS, 'chat/ChatBubbleV2.tsx'));
+  // ── 2. MessageBubble has modern bubble styling ──
+  it('MessageBubble has variable border radius for me/them bubbles', () => {
+    const src = read(resolve(COMPONENTS, 'chat/MessageBubble.tsx'));
     expect(src).toContain('bubbleMe:');
     expect(src).toContain('bubbleThem:');
     expect(src).toContain('borderTopRightRadius: Radius.sm');
     expect(src).toContain('borderTopLeftRadius: Radius.sm');
   });
 
-  it('ChatBubbleV2 uses surface colors instead of solid brand', () => {
-    const src = read(resolve(COMPONENTS, 'chat/ChatBubbleV2.tsx'));
-    expect(src).toContain("const bgColor = isMe ? Colors.surface : Colors.surfaceAlt");
+  it('MessageBubble uses surface/text colors for them/me', () => {
+    const src = read(resolve(COMPONENTS, 'chat/MessageBubble.tsx'));
+    expect(src).toContain('bubbleBg');
+    expect(src).toContain('isMe ? Colors.textPrimary : Colors.surface');
   });
 
-  it('ChatBubbleV2 has subtle border and shadow', () => {
-    const src = read(resolve(COMPONENTS, 'chat/ChatBubbleV2.tsx'));
+  it('MessageBubble has subtle border and shadow', () => {
+    const src = read(resolve(COMPONENTS, 'chat/MessageBubble.tsx'));
     expect(src).toContain('borderWidth: StyleSheet.hairlineWidth');
     expect(src).toContain('borderColor: Colors.border');
     expect(src).toContain('...Elevation.subtle');
@@ -98,10 +99,11 @@ describe('VISUAL-14 Reference-Match Final Polish', () => {
   });
 
   // ── 6. SettingsScreen maintains upgraded structure ──
-  it('SettingsScreen uses identity card and row groups', () => {
+  it('SettingsScreen uses IdentityCard and SettingsSection/SettingsRow', () => {
     const src = read(resolve(SCREENS, 'SettingsScreen.tsx'));
-    expect(src).toContain('identityCard');
-    expect(src).toContain('rowGroup');
+    expect(src).toContain('IdentityCard');
+    expect(src).toContain('SettingsSection');
+    expect(src).toContain('SettingsRow');
     expect(src).toContain('FadeInDown');
   });
 

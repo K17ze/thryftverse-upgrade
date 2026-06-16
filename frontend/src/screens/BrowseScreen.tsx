@@ -281,7 +281,7 @@ export default function BrowseScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-      
+
       {/* Heavy Typography Header */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityLabel="Go back">
@@ -362,7 +362,7 @@ export default function BrowseScreen() {
       {/* Masonry Grid - Pinterest/Depop Style */}
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={40} />
-        
+
         {backendLoading || showBrowseLoadingSkeleton ? (
           renderBrowseLoadingState()
         ) : backendError ? (
@@ -416,10 +416,10 @@ export default function BrowseScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
@@ -427,16 +427,16 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   searchBtn: { width: 44, height: 44, borderRadius: Radius.full, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  
+
   titleContainer: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
   },
-  hugeTitle: { 
-    fontSize: 44, 
-    fontFamily: Typography.family.bold, 
-    color: Colors.textPrimary, 
+  hugeTitle: {
+    fontSize: 44,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     letterSpacing: -1.5,
     textTransform: 'uppercase',
     lineHeight: 48,
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
 
   filterBar: { paddingBottom: 20 },
   filterRow: { paddingHorizontal: 20, gap: 10 },
-  filterPill: { 
+  filterPill: {
     paddingHorizontal: 16,
   },
   filterPillTextActive: { color: Colors.background, fontSize: 13, fontFamily: Typography.family.bold },
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingHorizontal: 4,
   },
-  
+
   gridItem: { width: ITEM_WIDTH },
   imageWrap: {
     width: ITEM_WIDTH,
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   infoWrap: { paddingHorizontal: 4 },
   priceRow: {
     flexDirection: 'row',

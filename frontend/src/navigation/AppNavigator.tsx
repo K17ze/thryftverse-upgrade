@@ -181,7 +181,7 @@ export default function AppNavigator() {
       initialRouteName={isAuthenticated ? 'MainTabs' : 'AuthLanding'}
       screenOptions={pushScreenOptions}
     >
-      
+
       {/* Auth Flow */}
       <Stack.Screen name="AuthLanding" component={AuthLandingScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
@@ -251,7 +251,7 @@ export default function AppNavigator() {
       <Stack.Screen name="ManageListing" component={ManageListingScreen} />
       <Stack.Screen name="Withdraw" component={WithdrawScreen} />
       <Stack.Screen name="CategoryTree" component={CategoryTreeScreen} />
-      
+
       {/* Phase 24 new screens */}
       <Stack.Screen name="GlobalSearch" component={GlobalSearchScreen} />
 

@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
 
   content: { flex: 1, paddingHorizontal: 20 },
-  
+
   amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 40, marginBottom: 12 },
   currencySymbol: { fontSize: 44, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginRight: 8 },
   amountInput: { fontSize: 56, fontFamily: Typography.family.bold, color: Colors.textPrimary, minWidth: 150 },

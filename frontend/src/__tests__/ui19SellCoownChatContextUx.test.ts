@@ -69,9 +69,9 @@ describe('UI-19 sell co-own and chat marketplace context UX', () => {
     expect(src).toContain('FadeInDown');
   });
 
-  // ── 6. SellScreenV2 navigates to ListingPreview ──
-  it('SellScreenV2 has Preview button leading to ListingPreview', () => {
-    const src = read(resolve(SCREENS, 'SellScreenV2.tsx'));
+  // ── 6. SellScreen navigates to ListingPreview ──
+  it('SellScreen has Preview button leading to ListingPreview', () => {
+    const src = read(resolve(SCREENS, 'SellScreen.tsx'));
     expect(src).toContain('ListingPreview');
     expect(src).toContain('Preview');
     expect(src).toContain('previewBtn');

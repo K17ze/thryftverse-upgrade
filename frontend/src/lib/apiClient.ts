@@ -388,17 +388,17 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   }
 
   const isWriteMethod = init && init.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(init.method.toUpperCase());
-  
+
   if (isWriteMethod) {
     const networkState = await Network.getNetworkStateAsync();
     if (!networkState.isInternetReachable) {
       // 🚨 Offline Silent Queue Path
       console.log(`[OfflineQueue] Intercepting ${init.method} to ${url}`);
       useOfflineQueue.getState().pushToQueue(url, init || {});
-      
+
       // Return a gracefully mocked success payload so the app continues optimistically.
-      return { 
-        ok: true, 
+      return {
+        ok: true,
         id: `offline-${Date.now()}`,
         status: 'queued'
       } as unknown as T;
@@ -425,15 +425,15 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
     if (!networkState.isInternetReachable && !isWriteMethod) {
       throw new ApiRequestError(`Internet connection is offline`);
     }
-    
+
     response = await execute();
   } catch (error) {
     if (isWriteMethod) {
        // Network dropped exactly during the flight of the execution. Queue it.
        console.log(`[OfflineQueue] Request failed mid-flight. Queueing ${url}`);
        useOfflineQueue.getState().pushToQueue(url, init || {});
-       return { 
-          ok: true, 
+       return {
+          ok: true,
           id: `offline-${Date.now()}`,
           status: 'queued'
         } as unknown as T;

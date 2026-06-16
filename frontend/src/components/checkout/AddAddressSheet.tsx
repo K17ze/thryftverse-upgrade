@@ -72,7 +72,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
 
   const selectedCountry = COMMON_COUNTRIES.find(c => c.code === countryCode) || COMMON_COUNTRIES[0];
   const needsRegion = selectedCountry.needsState;
-  
+
   const isFormValid = name.trim() && streetAddress.trim() && city.trim() && postalCode.trim();
 
   const handleSave = async () => {
@@ -125,7 +125,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.88}>
       <Text style={styles.sheetTitle}>Delivery Address</Text>
-      
+
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.heroCopy}>Where should we send your items?</Text>
 
@@ -205,9 +205,9 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
         {needsRegion && (
           <View style={styles.formGroup}>
             <Text style={styles.label}>
-              {countryCode === 'US' ? 'State' : 
-               countryCode === 'CA' ? 'Province' : 
-               countryCode === 'JP' ? 'Prefecture' : 
+              {countryCode === 'US' ? 'State' :
+               countryCode === 'CA' ? 'Province' :
+               countryCode === 'JP' ? 'Prefecture' :
                countryCode === 'IN' ? 'State' : 'Region'}
             </Text>
             <View style={styles.inputWrapper}>
@@ -258,8 +258,8 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <AnimatedPressable 
-          style={[styles.saveBtn, (!isFormValid || isSaving) && styles.saveBtnDisabled]} 
+        <AnimatedPressable
+          style={[styles.saveBtn, (!isFormValid || isSaving) && styles.saveBtnDisabled]}
           onPress={handleSave}
           disabled={!isFormValid || isSaving}
           activeOpacity={0.9}
