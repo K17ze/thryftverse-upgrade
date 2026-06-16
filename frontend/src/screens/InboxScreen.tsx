@@ -575,313 +575,152 @@ export default function InboxScreen() {
 
 
   const renderItem = ({ item, index }: { item: ConvoItem; index: number }) => {
-
     const isGroup = item.type === 'group';
-
     const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
-
     const displayTitle = isGroup
-
       ? item.title ?? 'Untitled Group'
-
       : (counterpartyId ? participantNameLookup.get(counterpartyId) ?? 'Thryft user' : 'Thryft user');
-
     const safeDisplayTitle = String(displayTitle ?? 'Thryft user');
-
-
-
     const isRequest = messageRequests.includes(item.id);
+    const isMuted = mutedIds.includes(item.id);
 
+    const avatarEl = isGroup ? (
+      <View style={styles.groupAvatar}>
+        <Text style={styles.groupAvatarText}>
+          {item.title?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? 'G'}
+        </Text>
+        {(item.botIds?.length ?? 0) > 0 && (
+          <View style={styles.botIndicator}>
+            <Ionicons name="hardware-chip-outline" size={10} color={Colors.brand} />
+          </View>
+        )}
+      </View>
+    ) : (
+      <AvatarRing
+        uri={item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined)}
+        size={52}
+        isUnread={item.unread}
+        ringWidth={2}
+        fallbackInitials={safeDisplayTitle === 'Thryft user' ? 'T' : safeDisplayTitle.slice(0, 2).toUpperCase()}
+      />
+    );
 
+    const contextThumbnail = item.itemId ? (
+      <View style={styles.contextThumb}>
+        <Ionicons name="pricetag-outline" size={14} color={Colors.textMuted} />
+      </View>
+    ) : null;
 
     const requestRow = (
-
       <View style={styles.rowInner}>
-
-        <View style={styles.avatarWrap}>
-
-          <AvatarRing
-
-            uri={
-
-              item.avatar
-
-              ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined)
-
-            }
-
-            size={48}
-
-            isUnread
-
-            ringWidth={2}
-
-            fallbackInitials={
-
-              safeDisplayTitle === 'Thryft user'
-
-                ? 'T'
-
-                : safeDisplayTitle.slice(0, 2).toUpperCase()
-
-            }
-
-          />
-
-        </View>
-
+        {avatarEl}
         <View style={styles.messageBody}>
-
           <View style={styles.messageTop}>
-
             <Text style={[styles.nameText, styles.nameUnread]}>{displayTitle}</Text>
-
             <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
-
           </View>
-
           <Caption color={Colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
-
           <View style={styles.requestActions}>
-
             <AnimatedPressable
-
               style={styles.requestBtnDecline}
-
               onPress={() => handleDeclineRequest(item.id)}
-
               activeOpacity={0.85}
-
               scaleValue={0.96}
-
               hapticFeedback="light"
-
             >
-
               <Text style={styles.requestBtnDeclineText}>Decline</Text>
-
             </AnimatedPressable>
-
             <AnimatedPressable
-
               style={styles.requestBtnAccept}
-
               onPress={() => handleAcceptRequest(item.id)}
-
               activeOpacity={0.85}
-
               scaleValue={0.96}
-
               hapticFeedback="medium"
-
             >
-
               <Text style={styles.requestBtnAcceptText}>Accept</Text>
-
             </AnimatedPressable>
-
           </View>
-
         </View>
-
       </View>
-
     );
-
-
 
     const conversationRow = (
-
       <AnimatedPressable
-
         onPress={() => {
-
           markConversationRead(item.id);
-
           navigation.navigate('Chat', {
-
             conversationId: item.id,
-
             focusQuery: searchQuery.trim() || undefined,
-
           });
-
         }}
-
         activeOpacity={0.85}
-
         scaleValue={0.98}
-
         hapticFeedback="light"
-
         accessibilityLabel={`${displayTitle}${item.unread ? ', unread' : ''}, ${item.lastMessage}`}
-
         accessibilityRole="button"
-
         accessibilityHint="Opens the conversation thread"
-
       >
-
         <View style={styles.rowInner}>
-
-          <View style={styles.avatarWrap}>
-
-            {isGroup ? (
-
-              <View style={styles.groupAvatar}>
-
-                <Text style={styles.groupAvatarText}>
-
-                  {item.title?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? 'G'}
-
-                </Text>
-
-                {(item.botIds?.length ?? 0) > 0 && (
-
-                  <View style={styles.botIndicator}>
-
-                    <Ionicons name="hardware-chip-outline" size={10} color={Colors.brand} />
-
-                  </View>
-
-                )}
-
-              </View>
-
-            ) : (
-
-              <AvatarRing
-
-                uri={
-
-                  item.avatar
-
-                  ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined)
-
-                }
-
-                size={48}
-
-                isUnread={item.unread}
-
-                ringWidth={2}
-
-                fallbackInitials={
-
-                  safeDisplayTitle === 'Thryft user'
-
-                    ? 'T'
-
-                    : safeDisplayTitle.slice(0, 2).toUpperCase()
-
-                }
-
-              />
-
-            )}
-
-          </View>
-
-
-
+          <View style={styles.avatarWrap}>{avatarEl}</View>
           <View style={styles.messageBody}>
-
             <View style={styles.messageTop}>
-
               <View style={styles.titleRow}>
-
-                <Text style={[styles.nameText, item.unread && styles.nameUnread]}>{displayTitle}</Text>
-
-                {item.isPinned ? <Ionicons name="pin" size={12} color={Colors.brand} style={styles.pinIcon} /> : null}
-
-                {mutedIds.includes(item.id) ? <Ionicons name="volume-mute" size={12} color={Colors.textMuted} style={styles.pinIcon} /> : null}
-
+                <Text style={[styles.nameText, item.unread && styles.nameUnread]} numberOfLines={1}>
+                  {displayTitle}
+                </Text>
+                {item.isPinned && <Ionicons name="pin" size={12} color={Colors.brand} style={styles.pinIcon} />}
+                {isMuted && <Ionicons name="volume-mute" size={12} color={Colors.textMuted} style={styles.pinIcon} />}
               </View>
-
-              <Caption color={item.unread ? Colors.textPrimary : Colors.textMuted}>{item.lastMessageTime}</Caption>
-
+              <Caption color={item.unread ? Colors.textPrimary : Colors.textMuted} style={item.unread && styles.timeUnread}>
+                {item.lastMessageTime}
+              </Caption>
             </View>
-
-
-
             <View style={styles.snippetRow}>
-
               {isGroup && (
-
                 <Caption color={Colors.textMuted} style={styles.memberCount}>
-
                   {item.participantIds?.length ?? 0} members
-
                 </Caption>
-
               )}
-
               <Text style={[styles.snippet, item.unread && styles.snippetUnread]} numberOfLines={1}>
-
                 {item.draftText ? (
-
                   <Text>
-
                     <Text style={styles.draftLabel}>Draft: </Text>
-
                     {item.draftText}
-
                   </Text>
-
-                ) : item.lastMessage}
-
+                ) : (
+                  item.lastMessage
+                )}
               </Text>
-
-              {item.unread ? <View style={styles.unreadDot} /> : null}
-
+              <View style={styles.rowMeta}>
+                {contextThumbnail}
+                {item.unread ? (
+                  <View style={styles.unreadDot}>
+                    <Text style={styles.unreadCount}>{item.messages.filter((m) => m.sender !== 'me').length}</Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
-
           </View>
-
         </View>
-
       </AnimatedPressable>
-
     );
-
-
 
     return (
-
       <View>
-
-        {isRequest ? (
-
-          requestRow
-
-        ) : (
-
+        {isRequest ? requestRow : (
           <Swipeable
-
             friction={2}
-
             overshootLeft={false}
-
             overshootRight={false}
-
             renderRightActions={() => renderRightActions(item.id)}
-
             renderLeftActions={() => renderLeftActions(item.id)}
-
           >
-
             {conversationRow}
-
           </Swipeable>
-
         )}
-
         <View style={styles.rowSeparator} />
-
       </View>
-
     );
-
   };
 
 
@@ -1603,23 +1442,38 @@ const styles = StyleSheet.create({
   },
 
   unreadDot: {
-
     minWidth: 20,
-
     height: 20,
-
     borderRadius: 10,
-
     backgroundColor: Colors.textPrimary,
-
     marginLeft: Space.xs,
-
     alignItems: 'center',
-
     justifyContent: 'center',
-
     paddingHorizontal: 6,
-
+  },
+  unreadCount: {
+    fontSize: 11,
+    fontFamily: Typography.family.bold,
+    color: Colors.background,
+  },
+  timeUnread: {
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  rowMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  contextThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   draftLabel: {

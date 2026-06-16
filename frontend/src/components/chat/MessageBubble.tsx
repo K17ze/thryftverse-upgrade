@@ -55,13 +55,37 @@ export function MessageBubble({
   onRetry,
   onMediaPress,
 }: MessageBubbleProps) {
-  const bgColor = isMe ? Colors.surface : Colors.surfaceAlt;
-  const textColor = Colors.textPrimary;
-  const metaColor = Colors.textMuted;
-  const replyBorderColor = Colors.border;
-
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
+
+  const bubbleBg = isMe ? Colors.textPrimary : Colors.surface;
+  const bubbleText = isMe ? Colors.background : Colors.textPrimary;
+  const metaColor = isMe ? `${Colors.background}99` : Colors.textMuted;
+
+  const isStandalone = isFirstInCluster && isLastInCluster;
+  const isTop = isFirstInCluster && !isLastInCluster;
+  const isBottom = !isFirstInCluster && isLastInCluster;
+  const isMiddle = !isFirstInCluster && !isLastInCluster;
+
+  const meRadius = isStandalone
+    ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.lg }
+    : isTop
+    ? { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.lg }
+    : isBottom
+    ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.sm }
+    : isMiddle
+    ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.lg }
+    : { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.lg };
+
+  const themRadius = isStandalone
+    ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg }
+    : isTop
+    ? { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.lg }
+    : isBottom
+    ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.sm }
+    : isMiddle
+    ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg }
+    : { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg };
 
   return (
     <View style={[styles.row, isMe && styles.rowRight]}>
@@ -73,83 +97,95 @@ export function MessageBubble({
         <View style={styles.avatarSpacer} />
       )}
 
-      <Pressable
-        onLongPress={onLongPress}
-        delayLongPress={350}
-        style={({ pressed }) => [
-          styles.bubble,
-          isMe ? styles.bubbleMe : styles.bubbleThem,
-          { backgroundColor: bgColor, opacity: pressed ? 0.92 : 1 },
-        ]}
-      >
+      <View style={styles.bubbleColumn}>
         {senderLabel && !isMe && isFirstInCluster ? (
-          <Text style={[styles.senderName, { color: Colors.brand }]}>{senderLabel}</Text>
+          <Text style={styles.senderName}>{senderLabel}</Text>
         ) : null}
 
-        {replyTo ? (
-          <View style={[styles.replyBlock, { borderLeftColor: replyBorderColor }]}>
-            <Text style={[styles.replyName, { color: metaColor }]}>
-              {replyTo.senderName}
-            </Text>
-            <Text style={[styles.replyText, { color: metaColor }]} numberOfLines={2}>
-              {replyTo.text}
-            </Text>
-          </View>
-        ) : null}
-
-        {mediaUri ? (
-          <Pressable onPress={onMediaPress} style={styles.mediaWrap}>
-            <CachedImage uri={mediaUri} style={styles.mediaImage} contentFit="cover" />
-            {mediaType === 'video' ? (
-              <View style={styles.videoBadge}>
-                <Ionicons name="play" size={16} color={Colors.textInverse} />
-              </View>
-            ) : null}
-            {isUploading ? (
-              <View style={styles.uploadOverlay}>
-                <Text style={styles.uploadText}>Sending...</Text>
-              </View>
-            ) : null}
-          </Pressable>
-        ) : null}
-
-        {text ? (
-          <Text style={[styles.messageText, { color: textColor }]}>{text}</Text>
-        ) : null}
-
-        <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
-          <Text style={[styles.timestamp, { color: metaColor }]}>{timestamp}</Text>
-          {isMe && status ? (
-            <View style={styles.statusWrap}>
-              {isUploading ? (
-                <Ionicons name="time-outline" size={12} color={metaColor} />
-              ) : hasFailed ? (
-                <Ionicons name="alert-circle" size={12} color={Colors.danger} />
-              ) : (
-                <Ionicons name="checkmark" size={12} color={metaColor} />
-              )}
+        <Pressable
+          onLongPress={onLongPress}
+          delayLongPress={350}
+          style={({ pressed }) => [
+            styles.bubble,
+            isMe ? styles.bubbleMe : styles.bubbleThem,
+            isMe ? meRadius : themRadius,
+            { opacity: pressed ? 0.9 : 1 },
+            hasFailed && styles.bubbleFailed,
+          ]}
+        >
+          {replyTo ? (
+            <View style={[styles.replyBlock, { borderLeftColor: isMe ? `${Colors.background}40` : Colors.border }]}>
+              <Text style={[styles.replyName, { color: metaColor }]}>
+                {replyTo.senderName}
+              </Text>
+              <Text style={[styles.replyText, { color: metaColor }]} numberOfLines={2}>
+                {replyTo.text}
+              </Text>
             </View>
           ) : null}
-        </View>
+
+          {mediaUri ? (
+            <Pressable onPress={onMediaPress} style={styles.mediaWrap}>
+              <CachedImage
+                uri={mediaUri}
+                style={[
+                  styles.mediaImage,
+                  mediaType === 'video' && { width: 200, height: 140 },
+                ]}
+                contentFit="cover"
+              />
+              {mediaType === 'video' ? (
+                <View style={styles.videoBadge}>
+                  <Ionicons name="play" size={14} color={Colors.textInverse} />
+                </View>
+              ) : null}
+              {isUploading ? (
+                <View style={styles.uploadOverlay}>
+                  <Ionicons name="cloud-upload-outline" size={20} color={Colors.textInverse} />
+                  <Text style={styles.uploadText}>Sending...</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          ) : null}
+
+          {text ? (
+            <Text style={[styles.messageText, { color: bubbleText }]}>{text}</Text>
+          ) : null}
+
+          <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
+            <Text style={[styles.timestamp, { color: metaColor }]}>{timestamp}</Text>
+            {isMe && status ? (
+              <View style={styles.statusWrap}>
+                {isUploading ? (
+                  <Ionicons name="time-outline" size={10} color={metaColor} />
+                ) : hasFailed ? (
+                  <Ionicons name="alert-circle" size={10} color={isMe ? Colors.background : Colors.danger} />
+                ) : (
+                  <Ionicons name="checkmark" size={10} color={metaColor} />
+                )}
+              </View>
+            ) : null}
+          </View>
+        </Pressable>
 
         {hasFailed && onRetry ? (
           <Pressable onPress={onRetry} style={styles.retryBadge}>
-            <Ionicons name="refresh" size={12} color={Colors.danger} />
+            <Ionicons name="refresh" size={11} color={Colors.danger} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
-      </Pressable>
 
-      {reactions && reactions.length > 0 ? (
-        <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]}>
-          {reactions.slice(0, 3).map((r, i) => (
-            <View key={i} style={[styles.reactionChip, r.reactedByMe && styles.reactionChipActive]}>
-              <Text style={styles.reactionEmoji}>{r.emoji}</Text>
-              {r.count > 1 ? <Text style={styles.reactionCount}>{r.count}</Text> : null}
-            </View>
-          ))}
-        </Pressable>
-      ) : null}
+        {reactions && reactions.length > 0 ? (
+          <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]}>
+            {reactions.slice(0, 3).map((r, i) => (
+              <View key={i} style={[styles.reactionChip, r.reactedByMe && styles.reactionChipActive]}>
+                <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                {r.count > 1 ? <Text style={styles.reactionCount}>{r.count}</Text> : null}
+              </View>
+            ))}
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -172,44 +208,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   avatarText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
   avatarSpacer: {
     width: 28,
   },
-  bubble: {
-    maxWidth: '72%',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    gap: 4,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  bubbleMe: {
-    borderTopRightRadius: Radius.sm,
-    borderBottomRightRadius: Radius.lg,
-    borderTopLeftRadius: Radius.lg,
-    borderBottomLeftRadius: Radius.lg,
-    ...Elevation.subtle,
-  },
-  bubbleThem: {
-    borderTopLeftRadius: Radius.sm,
-    borderBottomLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    borderBottomRightRadius: Radius.lg,
+  bubbleColumn: {
+    maxWidth: '74%',
+    gap: 2,
   },
   senderName: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.brand,
     marginBottom: 2,
+    marginLeft: Space.xs,
+  },
+  bubble: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    gap: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    ...Elevation.subtle,
+  },
+  bubbleMe: {
+    backgroundColor: Colors.textPrimary,
+    borderColor: Colors.textPrimary,
+    alignSelf: 'flex-end',
+  },
+  bubbleThem: {
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    alignSelf: 'flex-start',
+  },
+  bubbleFailed: {
+    borderColor: Colors.danger,
+    ...Elevation.none,
   },
   replyBlock: {
-    borderLeftWidth: 3,
+    borderLeftWidth: 2,
     paddingLeft: Space.sm,
     marginBottom: 2,
     gap: 2,
@@ -237,7 +281,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   metaRowMe: {
-    opacity: 0.7,
+    opacity: 0.85,
   },
   timestamp: {
     fontSize: 10,
@@ -252,10 +296,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
-    minHeight: 120,
   },
   mediaImage: {
-    width: 220,
+    width: 200,
     height: 160,
     borderRadius: Radius.md,
   },
@@ -268,16 +311,17 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   uploadOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.md,
+    gap: Space.xs,
   },
   uploadText: {
     color: Colors.textInverse,
@@ -288,7 +332,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
+    marginTop: 2,
+    marginLeft: Space.xs,
+    paddingVertical: 2,
     alignSelf: 'flex-start',
   },
   retryText: {
@@ -299,12 +345,12 @@ const styles = StyleSheet.create({
   reactions: {
     flexDirection: 'row',
     gap: 4,
-    marginTop: 2,
-    marginLeft: 36,
+    marginTop: 1,
+    marginLeft: Space.xs,
   },
   reactionsRight: {
     marginLeft: 0,
-    marginRight: 36,
+    marginRight: Space.xs,
     alignSelf: 'flex-end',
   },
   reactionChip: {
@@ -317,10 +363,11 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
+    ...Elevation.subtle,
   },
   reactionChipActive: {
     borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}20`,
+    backgroundColor: `${Colors.brand}18`,
   },
   reactionEmoji: {
     fontSize: 13,

@@ -195,6 +195,10 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             label="Archive chat"
             onPress={handleArchive}
           />
+        </Section>
+
+        {/* Danger zone */}
+        <Section title="Danger zone" danger>
           <RowItem
             icon="log-out-outline"
             label="Leave group"
@@ -213,13 +217,21 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, danger }: { title: string; children: React.ReactNode; danger?: boolean }) {
+  const childArray = React.Children.toArray(children);
+  const lastIndex = childArray.length - 1;
+  const childrenWithIsLast = childArray.map((child, index) => {
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, { isLast: index === lastIndex } as any);
+    }
+    return child;
+  });
   return (
     <View style={styles.section}>
-      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={danger ? Colors.danger : Colors.textMuted} style={styles.sectionLabel}>
         {title.toUpperCase()}
       </Meta>
-      <View style={styles.sectionCard}>{children}</View>
+      <View style={[styles.sectionCard, danger && styles.sectionCardDanger]}>{childrenWithIsLast}</View>
     </View>
   );
 }
@@ -230,15 +242,17 @@ function RowItem({
   onPress,
   showChevron,
   danger,
+  isLast,
 }: {
   icon: string;
   label: string;
   onPress?: () => void;
   showChevron?: boolean;
   danger?: boolean;
+  isLast?: boolean;
 }) {
   const content = (
-    <View style={styles.row}>
+    <View style={[styles.row, !isLast && styles.rowBorder]}>
       <Ionicons
         name={icon as any}
         size={20}
@@ -338,12 +352,19 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     overflow: 'hidden',
   },
+  sectionCardDanger: {
+    borderColor: `${Colors.danger}30`,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: 14,
     gap: Space.sm,
+  },
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   rowLabel: {
     flex: 1,

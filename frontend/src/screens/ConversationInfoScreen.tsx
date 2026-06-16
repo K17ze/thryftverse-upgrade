@@ -160,6 +160,24 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
           </Section>
         </Reanimated.View>
 
+        {/* Marketplace context */}
+        {conversation.itemId && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
+            <Section title="Context">
+              <RowItem
+                icon="pricetag-outline"
+                label="View linked listing"
+                onPress={() => {
+                if (conversation.itemId) {
+                  navigation.navigate('ItemDetail', { itemId: conversation.itemId });
+                }
+              }}
+                showChevron
+              />
+            </Section>
+          </Reanimated.View>
+        )}
+
         {/* Actions */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
           <Section title="Actions">
@@ -169,15 +187,21 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               onPress={handleToggleMute}
             />
             <RowItem
+              icon="archive-outline"
+              label="Archive chat"
+              onPress={handleArchive}
+            />
+          </Section>
+        </Reanimated.View>
+
+        {/* Danger zone */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
+          <Section title="Danger zone" danger>
+            <RowItem
               icon={isBlocked ? 'person-add-outline' : 'person-remove-outline'}
               label={isBlocked ? 'Unblock user' : 'Block user'}
               onPress={handleToggleBlock}
               danger={!isBlocked}
-            />
-            <RowItem
-              icon="archive-outline"
-              label="Archive chat"
-              onPress={handleArchive}
             />
             <RowItem
               icon="trash-outline"
@@ -192,13 +216,21 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, danger }: { title: string; children: React.ReactNode; danger?: boolean }) {
+  const childArray = React.Children.toArray(children);
+  const lastIndex = childArray.length - 1;
+  const childrenWithIsLast = childArray.map((child, index) => {
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, { isLast: index === lastIndex } as any);
+    }
+    return child;
+  });
   return (
     <View style={styles.section}>
-      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={danger ? Colors.danger : Colors.textMuted} style={styles.sectionLabel}>
         {title.toUpperCase()}
       </Meta>
-      <View style={styles.sectionCard}>{children}</View>
+      <View style={[styles.sectionCard, danger && styles.sectionCardDanger]}>{childrenWithIsLast}</View>
     </View>
   );
 }
@@ -209,15 +241,17 @@ function RowItem({
   onPress,
   showChevron,
   danger,
+  isLast,
 }: {
   icon: string;
   label: string;
   onPress?: () => void;
   showChevron?: boolean;
   danger?: boolean;
+  isLast?: boolean;
 }) {
   const content = (
-    <View style={styles.row}>
+    <View style={[styles.row, !isLast && styles.rowBorder]}>
       <Ionicons
         name={icon as any}
         size={20}
@@ -312,12 +346,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Elevation.subtle,
   },
+  sectionCardDanger: {
+    borderColor: `${Colors.danger}30`,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: Space.md,
     gap: Space.sm + 4,
+  },
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   rowLabel: {
     flex: 1,

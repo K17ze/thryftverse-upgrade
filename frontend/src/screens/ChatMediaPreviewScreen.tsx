@@ -9,12 +9,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen } from '../components/flagship';
 import { Video, ResizeMode } from '../components/compat/Video';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -23,6 +23,7 @@ type Props = StackScreenProps<RootStackParamList, 'ChatMediaPreview'>;
 export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
   const { mediaUri, mediaType = 'image' } = route.params;
   const haptic = useHaptic();
+  const insets = useSafeAreaInsets();
 
   const [imageError, setImageError] = useState(false);
   const [videoError, setVideoError] = useState(false);
@@ -34,6 +35,18 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
       <Ionicons name="image-outline" size={48} color="rgba(255,255,255,0.4)" />
       <Text style={styles.errorText}>Media unavailable</Text>
       <Text style={styles.errorSub}>This media could not be loaded.</Text>
+      <AnimatedPressable
+        style={styles.retryBtn}
+        onPress={() => {
+          setImageError(false);
+          setVideoError(false);
+        }}
+        activeOpacity={0.7}
+        scaleValue={0.95}
+        hapticFeedback="light"
+      >
+        <Text style={styles.retryText}>Retry</Text>
+      </AnimatedPressable>
     </View>
   );
 
@@ -70,11 +83,10 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
 
   return (
     <FlagshipScreen scrollEnabled={false}>
-
       <View style={styles.backdrop}>
         {/* Close button */}
         <AnimatedPressable
-          style={styles.closeBtn}
+          style={[styles.closeBtn, { top: Math.max(insets.top + 8, 12) }]}
           onPress={() => {
             haptic.light();
             navigation.goBack();
@@ -99,32 +111,32 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
         </Pressable>
 
         {/* Bottom actions */}
-        <View style={styles.bottomBar}>
+        <View style={[styles.bottomBar, { bottom: Math.max(insets.bottom + 16, 32) }]}>
           <AnimatedPressable
-            style={styles.bottomBtn}
+            style={[styles.bottomBtn, styles.bottomBtnDisabled]}
             onPress={() => {
               haptic.light();
-              // Future: save to gallery when permissions allow
             }}
             activeOpacity={0.7}
             scaleValue={0.92}
-            accessibilityLabel="Save to gallery"
+            accessibilityLabel="Save to gallery (not available)"
             accessibilityRole="button"
+            accessibilityHint="Save feature requires device permissions"
           >
-            <Ionicons name="download-outline" size={24} color="#fff" />
+            <Ionicons name="download-outline" size={24} color="rgba(255,255,255,0.4)" />
           </AnimatedPressable>
           <AnimatedPressable
-            style={styles.bottomBtn}
+            style={[styles.bottomBtn, styles.bottomBtnDisabled]}
             onPress={() => {
               haptic.light();
-              // Future: share media when system share is available
             }}
             activeOpacity={0.7}
             scaleValue={0.92}
-            accessibilityLabel="Share media"
+            accessibilityLabel="Share media (not available)"
             accessibilityRole="button"
+            accessibilityHint="Share feature requires system integration"
           >
-            <Ionicons name="share-outline" size={24} color="#fff" />
+            <Ionicons name="share-outline" size={24} color="rgba(255,255,255,0.4)" />
           </AnimatedPressable>
         </View>
       </View>
@@ -145,7 +157,6 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     position: 'absolute',
-    top: 12,
     left: 12,
     zIndex: 10,
     width: 44,
@@ -182,9 +193,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: 'rgba(255,255,255,0.4)',
   },
+  retryBtn: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  retryText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#fff',
+  },
   bottomBar: {
     position: 'absolute',
-    bottom: 32,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -198,5 +220,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  bottomBtnDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
 });

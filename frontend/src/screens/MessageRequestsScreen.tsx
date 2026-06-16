@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -25,9 +26,10 @@ import { EmptyState } from '../components/EmptyState';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
+type ActionState = 'idle' | 'accepting' | 'declining';
+
 export default function MessageRequestsScreen() {
   const navigation = useNavigation<NavT>();
-  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -38,14 +40,23 @@ export default function MessageRequestsScreen() {
   const profileMediaOverrides = useStore((s) => s.profileMediaOverrides);
   const currentUser = useStore((state) => state.currentUser);
 
+  const [actionState, setActionState] = useState<Record<string, ActionState>>({});
+
   const requestConversations = useMemo(() => {
     return conversations.filter((c) => messageRequests.includes(c.id));
   }, [conversations, messageRequests]);
 
-  const handleAccept = (id: string) => {
+  const handleAccept = async (id: string) => {
+    setActionState((s) => ({ ...s, [id]: 'accepting' }));
     haptic.medium();
-    acceptMessageRequest(id);
-    show('Request accepted', 'success');
+    try {
+      await new Promise((r) => setTimeout(r, 300));
+      acceptMessageRequest(id);
+      show('Request accepted', 'success');
+    } catch {
+      show('Failed to accept request', 'error');
+      setActionState((s) => ({ ...s, [id]: 'idle' }));
+    }
   };
 
   const handleDecline = (id: string) => {
@@ -57,10 +68,17 @@ export default function MessageRequestsScreen() {
         {
           text: 'Decline',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            setActionState((s) => ({ ...s, [id]: 'declining' }));
             haptic.heavy();
-            declineMessageRequest(id);
-            show('Request declined', 'info');
+            try {
+              await new Promise((r) => setTimeout(r, 300));
+              declineMessageRequest(id);
+              show('Request declined', 'info');
+            } catch {
+              show('Failed to decline request', 'error');
+              setActionState((s) => ({ ...s, [id]: 'idle' }));
+            }
           },
         },
       ]
@@ -69,10 +87,10 @@ export default function MessageRequestsScreen() {
 
   const renderItem = ({ item, index }: { item: typeof requestConversations[0]; index: number }) => {
     const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
-    const displayTitle = counterpartyId
-      ? (item.title ?? 'Thryft user')
-      : (item.title ?? 'Thryft user');
+    const displayTitle = item.title ?? 'Thryft user';
     const avatarUri = item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined);
+    const state = actionState[item.id] ?? 'idle';
+    const isBusy = state !== 'idle';
 
     return (
       <Reanimated.View entering={FadeInDown.duration(300).delay(index * 60)}>
@@ -80,34 +98,52 @@ export default function MessageRequestsScreen() {
           <View style={styles.cardHeader}>
             <AvatarRing
               uri={avatarUri}
-              size={48}
+              size={52}
               ringWidth={2}
               fallbackInitials={displayTitle.slice(0, 2).toUpperCase()}
             />
             <View style={styles.cardText}>
               <BodyEmphasis numberOfLines={1}>{displayTitle}</BodyEmphasis>
-              <Caption color={Colors.textMuted} numberOfLines={1}>{item.lastMessage ?? 'Wants to message you'}</Caption>
+              <Caption color={Colors.textMuted} numberOfLines={2} style={styles.previewText}>
+                {item.lastMessage ?? 'Wants to message you'}
+              </Caption>
+              {item.itemId && (
+                <View style={styles.contextPill}>
+                  <Ionicons name="pricetag-outline" size={12} color={Colors.brand} />
+                  <Caption color={Colors.brand} style={styles.contextPillText}>About a listing</Caption>
+                </View>
+              )}
             </View>
           </View>
 
           <View style={styles.actionsRow}>
             <AnimatedPressable
-              style={styles.declineBtn}
-              onPress={() => handleDecline(item.id)}
+              style={[styles.declineBtn, isBusy && styles.actionDisabled]}
+              onPress={() => !isBusy && handleDecline(item.id)}
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="light"
+              disabled={isBusy}
             >
-              <Text style={styles.declineText}>Decline</Text>
+              {state === 'declining' ? (
+                <ActivityIndicator size="small" color={Colors.textPrimary} />
+              ) : (
+                <Text style={styles.declineText}>Decline</Text>
+              )}
             </AnimatedPressable>
             <AnimatedPressable
-              style={styles.acceptBtn}
-              onPress={() => handleAccept(item.id)}
+              style={[styles.acceptBtn, isBusy && styles.actionDisabled]}
+              onPress={() => !isBusy && handleAccept(item.id)}
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="medium"
+              disabled={isBusy}
             >
-              <Text style={styles.acceptText}>Accept</Text>
+              {state === 'accepting' ? (
+                <ActivityIndicator size="small" color={Colors.background} />
+              ) : (
+                <Text style={styles.acceptText}>Accept</Text>
+              )}
             </AnimatedPressable>
           </View>
         </View>
@@ -117,7 +153,6 @@ export default function MessageRequestsScreen() {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Message Requests" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
-
       {requestConversations.length === 0 ? (
         <EmptyState
           icon="mail-outline"
@@ -156,25 +191,49 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     ...Elevation.subtle,
     gap: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Space.sm + 6,
   },
   cardText: {
     flex: 1,
     justifyContent: 'center',
+    gap: 2,
+  },
+  previewText: {
+    lineHeight: Type.caption.lineHeight + 2,
+    marginTop: 2,
+  },
+  contextPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: Space.xs,
+    alignSelf: 'flex-start',
+    backgroundColor: `${Colors.brand}10`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.md,
+  },
+  contextPillText: {
+    fontFamily: Typography.family.semibold,
   },
   actionsRow: {
     flexDirection: 'row',
     gap: Space.sm,
   },
+  actionDisabled: {
+    opacity: 0.5,
+  },
   declineBtn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: Radius.md,
     backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
@@ -189,7 +248,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: Radius.md,
     backgroundColor: Colors.textPrimary,
   },
