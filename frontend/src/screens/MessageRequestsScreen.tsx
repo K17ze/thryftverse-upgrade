@@ -1,10 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -26,8 +25,6 @@ import { EmptyState } from '../components/EmptyState';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
-type ActionState = 'idle' | 'accepting' | 'declining';
-
 export default function MessageRequestsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
@@ -37,26 +34,17 @@ export default function MessageRequestsScreen() {
   const messageRequests = useStore((state) => state.messageRequests);
   const acceptMessageRequest = useStore((state) => state.acceptMessageRequest);
   const declineMessageRequest = useStore((state) => state.declineMessageRequest);
-  const profileMediaOverrides = useStore((s) => s.profileMediaOverrides);
+  const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const currentUser = useStore((state) => state.currentUser);
-
-  const [actionState, setActionState] = useState<Record<string, ActionState>>({});
 
   const requestConversations = useMemo(() => {
     return conversations.filter((c) => messageRequests.includes(c.id));
   }, [conversations, messageRequests]);
 
-  const handleAccept = async (id: string) => {
-    setActionState((s) => ({ ...s, [id]: 'accepting' }));
+  const handleAccept = (id: string) => {
     haptic.medium();
-    try {
-      await new Promise((r) => setTimeout(r, 300));
-      acceptMessageRequest(id);
-      show('Request accepted', 'success');
-    } catch {
-      show('Failed to accept request', 'error');
-      setActionState((s) => ({ ...s, [id]: 'idle' }));
-    }
+    acceptMessageRequest(id);
+    show('Request accepted', 'success');
   };
 
   const handleDecline = (id: string) => {
@@ -68,17 +56,10 @@ export default function MessageRequestsScreen() {
         {
           text: 'Decline',
           style: 'destructive',
-          onPress: async () => {
-            setActionState((s) => ({ ...s, [id]: 'declining' }));
+          onPress: () => {
             haptic.heavy();
-            try {
-              await new Promise((r) => setTimeout(r, 300));
-              declineMessageRequest(id);
-              show('Request declined', 'info');
-            } catch {
-              show('Failed to decline request', 'error');
-              setActionState((s) => ({ ...s, [id]: 'idle' }));
-            }
+            declineMessageRequest(id);
+            show('Request declined', 'info');
           },
         },
       ]
@@ -89,8 +70,6 @@ export default function MessageRequestsScreen() {
     const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
     const displayTitle = item.title ?? 'Thryft user';
     const avatarUri = item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined);
-    const state = actionState[item.id] ?? 'idle';
-    const isBusy = state !== 'idle';
 
     return (
       <Reanimated.View entering={FadeInDown.duration(300).delay(index * 60)}>
@@ -118,32 +97,22 @@ export default function MessageRequestsScreen() {
 
           <View style={styles.actionsRow}>
             <AnimatedPressable
-              style={[styles.declineBtn, isBusy && styles.actionDisabled]}
-              onPress={() => !isBusy && handleDecline(item.id)}
+              style={styles.declineBtn}
+              onPress={() => handleDecline(item.id)}
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="light"
-              disabled={isBusy}
             >
-              {state === 'declining' ? (
-                <ActivityIndicator size="small" color={Colors.textPrimary} />
-              ) : (
-                <Text style={styles.declineText}>Decline</Text>
-              )}
+              <Text style={styles.declineText}>Decline</Text>
             </AnimatedPressable>
             <AnimatedPressable
-              style={[styles.acceptBtn, isBusy && styles.actionDisabled]}
-              onPress={() => !isBusy && handleAccept(item.id)}
+              style={styles.acceptBtn}
+              onPress={() => handleAccept(item.id)}
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="medium"
-              disabled={isBusy}
             >
-              {state === 'accepting' ? (
-                <ActivityIndicator size="small" color={Colors.background} />
-              ) : (
-                <Text style={styles.acceptText}>Accept</Text>
-              )}
+              <Text style={styles.acceptText}>Accept</Text>
             </AnimatedPressable>
           </View>
         </View>
@@ -225,9 +194,6 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     gap: Space.sm,
-  },
-  actionDisabled: {
-    opacity: 0.5,
   },
   declineBtn: {
     flex: 1,

@@ -110,35 +110,6 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
           {mediaType === 'video' ? renderVideo() : renderImage()}
         </Pressable>
 
-        {/* Bottom actions */}
-        <View style={[styles.bottomBar, { bottom: Math.max(insets.bottom + 16, 32) }]}>
-          <AnimatedPressable
-            style={[styles.bottomBtn, styles.bottomBtnDisabled]}
-            onPress={() => {
-              haptic.light();
-            }}
-            activeOpacity={0.7}
-            scaleValue={0.92}
-            accessibilityLabel="Save to gallery (not available)"
-            accessibilityRole="button"
-            accessibilityHint="Save feature requires device permissions"
-          >
-            <Ionicons name="download-outline" size={24} color="rgba(255,255,255,0.4)" />
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={[styles.bottomBtn, styles.bottomBtnDisabled]}
-            onPress={() => {
-              haptic.light();
-            }}
-            activeOpacity={0.7}
-            scaleValue={0.92}
-            accessibilityLabel="Share media (not available)"
-            accessibilityRole="button"
-            accessibilityHint="Share feature requires system integration"
-          >
-            <Ionicons name="share-outline" size={24} color="rgba(255,255,255,0.4)" />
-          </AnimatedPressable>
-        </View>
       </View>
     </FlagshipScreen>
   );
@@ -204,24 +175,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
     color: '#fff',
-  },
-  bottomBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 40,
-  },
-  bottomBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bottomBtnDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
   },
 });
