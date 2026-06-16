@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   Dimensions,
   Share,
@@ -73,7 +72,6 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
   );
 }
 
-const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
 
 export default function UserProfileScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
@@ -266,7 +264,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       </Reanimated.View>
 
       {/* Main Content Area */}
-      <AnimatedScrollView
+      <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingTop: COVER_HEIGHT - 60 }]}
         onScroll={scrollHandler}
@@ -349,7 +347,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             </View>
           )}
         </View>
-      </AnimatedScrollView>
+      </Reanimated.ScrollView>
 
       {/* Flagship Bottom Sheet Overrides */}
       <BottomSheet visible={actionSheetVisible} onDismiss={() => setActionSheetVisible(false)} snapPoint={0.3}>

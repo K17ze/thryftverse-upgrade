@@ -696,7 +696,6 @@ export default function MyProfileScreen() {
 
 
 
-  const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
 
 
 
@@ -776,7 +775,7 @@ export default function MyProfileScreen() {
       </Reanimated.View>
 
 
-      <AnimatedScrollView
+      <Reanimated.ScrollView
 
         showsVerticalScrollIndicator={false}
 
@@ -1051,7 +1050,7 @@ export default function MyProfileScreen() {
               </View>
             </Reanimated.View>
           </View>
-        )}      </AnimatedScrollView>
+        )}      </Reanimated.ScrollView>
 
     </View>
 
