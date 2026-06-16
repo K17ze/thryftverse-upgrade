@@ -214,10 +214,10 @@ describe('UI-22B settings reconstruction architecture guardrails', () => {
     expect(src).toContain('variant="error"');
   });
 
-  it('PaymentsScreen has security banner', () => {
+  it('PaymentsScreen has security trust note', () => {
     const src = readSrc('screens/PaymentsScreen.tsx');
-    expect(src).toContain('securityBanner');
-    expect(src).toContain('Payments are encrypted and secure');
+    expect(src).toContain('trustNote');
+    expect(src).toContain('Your payment details are encrypted');
   });
 
   it('PostageScreen uses FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipFormSection', () => {

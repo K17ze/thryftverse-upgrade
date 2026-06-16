@@ -103,13 +103,7 @@ export default function PostageScreen({ navigation }: Props) {
           title="Delivery Centre"
           subtitle="Shipping addresses and carrier preferences"
           onBack={() => navigation.goBack()}
-          rightAction={
-            <AnimatedPressable onPress={() => navigation.goBack()} hapticFeedback="light" scaleValue={0.98}>
-              <View style={[styles.saveBtnContainer, { backgroundColor: Colors.brand }]}>
-                <Text style={[styles.saveBtnText, { color: Colors.textInverse }]}>Done</Text>
-              </View>
-            </AnimatedPressable>
-          }
+          rightAction={undefined}
         />
       }
     >
@@ -118,19 +112,41 @@ export default function PostageScreen({ navigation }: Props) {
         <FlagshipFormSection title="Your Addresses" description="Add a default delivery address for faster checkout.">
           {savedAddress ? (
             <View style={{ padding: Space.md }}>
-              <View style={styles.addressRow}>
-                <Ionicons name="location-outline" size={20} color={Colors.textPrimary} />
-                <View style={styles.addressText}>
-                  <Text style={[styles.addressLabel, { color: Colors.textPrimary }]}>
-                    {savedAddress.name}
-                  </Text>
-                  <Text style={[styles.addressDetail, { color: Colors.textSecondary }]}>
-                    {savedAddress.streetAddress}, {savedAddress.city}, {savedAddress.country}
-                  </Text>
+              <View style={[styles.addressCard, { backgroundColor: Colors.surfaceAlt }]}>
+                <View style={styles.addressCardHeader}>
+                  <View style={styles.addressCardIdentity}>
+                    <View style={[styles.addressIconCircle, { backgroundColor: `${Colors.brand}15` }]}>
+                      <Ionicons name="location" size={18} color={Colors.brand} />
+                    </View>
+                    <View>
+                      <Text style={[styles.addressLabel, { color: Colors.textPrimary }]}>
+                        {savedAddress.name}
+                      </Text>
+                      <View style={styles.defaultBadge}>
+                        <Ionicons name="checkmark-circle" size={10} color={Colors.success} />
+                        <Text style={styles.defaultBadgeText}>Default delivery</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <AnimatedPressable
+                    onPress={() => show('Address editing coming soon', 'info')}
+                    scaleValue={0.92}
+                    hapticFeedback="light"
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit address"
+                  >
+                    <Text style={[styles.addressAction, { color: Colors.brand }]}>Edit</Text>
+                  </AnimatedPressable>
                 </View>
-                <AnimatedPressable onPress={() => show('Address editing coming soon', 'info')} scaleValue={0.92}>
-                  <Text style={[styles.addressAction, { color: Colors.brand }]}>Edit</Text>
-                </AnimatedPressable>
+                <Text style={[styles.addressDetail, { color: Colors.textSecondary }]}>
+                  {savedAddress.streetAddress}
+                </Text>
+                <Text style={[styles.addressDetail, { color: Colors.textSecondary }]}>
+                  {savedAddress.city}{savedAddress.postalCode ? `, ${savedAddress.postalCode}` : ''}
+                </Text>
+                <Text style={[styles.addressDetail, { color: Colors.textSecondary }]}>
+                  {savedAddress.country}
+                </Text>
               </View>
             </View>
           ) : (
@@ -169,11 +185,6 @@ export default function PostageScreen({ navigation }: Props) {
                       from {formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}
                     </Text>
                   </View>
-                  {c.selected ? (
-                    <View style={styles.selectedBadge}>
-                      <Text style={styles.selectedBadgeText}>Selected</Text>
-                    </View>
-                  ) : null}
                   <RadioButton selected={c.selected} />
                 </AnimatedPressable>
               ))}
@@ -220,37 +231,54 @@ export default function PostageScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  saveBtnContainer: {
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  saveBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
   skeletonWrap: {
     marginBottom: Space.md,
   },
-  addressRow: {
+  addressCard: {
+    borderRadius: Radius.lg,
+    padding: Space.lg,
+    gap: Space.xs,
+  },
+  addressCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Space.sm,
+  },
+  addressCardIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
   },
-  addressText: {
-    flex: 1,
+  addressIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  defaultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  defaultBadgeText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.success,
+    letterSpacing: Type.meta.letterSpacing,
   },
   addressLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
-    marginBottom: 2,
   },
   addressDetail: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
   addressAction: {
     fontSize: Type.body.size,
@@ -292,18 +320,5 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     letterSpacing: Type.caption.letterSpacing,
     textAlign: 'center',
-  },
-  selectedBadge: {
-    backgroundColor: `${Colors.brand}15`,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
-    marginRight: Space.sm,
-  },
-  selectedBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-    letterSpacing: Type.meta.letterSpacing,
   },
 });
