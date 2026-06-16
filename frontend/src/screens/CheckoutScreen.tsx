@@ -390,14 +390,26 @@ export default function CheckoutScreen() {
       const intent = await createCommercePaymentIntent({ orderId: order.id });
 
       if (intent.nextActionUrl) {
-        await Linking.openURL(intent.nextActionUrl);
-        show(t('checkout.toast.paymentActionRequired'), 'info');
+        try {
+          const supported = await Linking.canOpenURL(intent.nextActionUrl);
+          if (!supported) {
+            show('Unable to open payment action URL.', 'error');
+            setIsSubmittingPayment(false);
+            return;
+          }
+          await Linking.openURL(intent.nextActionUrl);
+          show(t('checkout.toast.paymentActionRequired'), 'info');
+        } catch {
+          show('Could not open payment page. Please try again.', 'error');
+          setIsSubmittingPayment(false);
+          return;
+        }
       }
 
       const settlementStatus = await waitForPaymentIntentSettlement(intent.intentId);
       if (settlementStatus === 'succeeded') {
         show(t('checkout.toast.paymentCompleted'), 'success');
-        navigation.replace('Success');
+        navigation.replace('Success', { orderId: order.id });
         return;
       }
 
@@ -408,8 +420,11 @@ export default function CheckoutScreen() {
       }
 
       throw new Error('payment-intent-failed');
-    } catch {
-      show(t('checkout.toast.paymentFailed'), 'error');
+    } catch (error: any) {
+      const message = error?.message === 'payment-intent-failed'
+        ? t('checkout.toast.paymentFailed')
+        : (error?.message || t('checkout.toast.paymentFailed'));
+      show(message, 'error');
     } finally {
       setIsSubmittingPayment(false);
     }
