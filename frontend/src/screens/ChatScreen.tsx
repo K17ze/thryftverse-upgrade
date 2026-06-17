@@ -1550,6 +1550,23 @@ export default function ChatScreen({ navigation, route }: Props) {
           title={isGroup ? (conversation?.title ?? 'Group chat') : '@' + sellerHandle}
           subtitle={isGroup ? (conversation?.participantIds?.length ?? 0) + ' members' : undefined}
           onBack={() => navigation.goBack()}
+          avatar={
+            !isGroup ? (
+              (() => {
+                const avatarUri =
+                  conversation?.avatar ||
+                  (resolvedPartnerId ? profileMediaOverrides[resolvedPartnerId]?.avatar : undefined) ||
+                  '';
+                return (
+                  <CachedImage
+                    uri={avatarUri}
+                    style={{ width: 32, height: 32, borderRadius: 16 }}
+                    contentFit="cover"
+                  />
+                );
+              })()
+            ) : null
+          }
           rightAction={
             <View style={{ flexDirection: 'row', gap: Space.sm }}>
               <AnimatedPressable
