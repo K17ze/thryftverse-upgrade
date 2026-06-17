@@ -144,9 +144,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             <RowItem
               icon="images-outline"
               label="Photos & videos"
-              onPress={() => {
-                // Future: open shared media gallery when backend supports it
-              }}
+              onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
               showChevron
             />
             <RowItem
