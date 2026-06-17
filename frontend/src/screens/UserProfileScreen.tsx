@@ -20,7 +20,6 @@ import Reanimated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { CachedImage } from '../components/CachedImage';
-import { BottomSheet } from '../components/BottomSheet';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
 import { ActiveTheme, Colors } from '../constants/colors';
@@ -34,7 +33,6 @@ import { AppButton } from '../components/ui/AppButton';
 import { FlagshipProfileMedia } from '../components/flagship';
 import { ProfileVisualHeader, ProfileTabRail } from '../components/profile';
 import { fetchPublicProfile, type PublicProfileUser } from '../services/profileApi';
-import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { isVideoUri } from '../utils/media';
 
@@ -62,16 +60,6 @@ const TAB_OPTIONS: Array<{ value: Tab; label: string; accessibilityLabel: string
   { value: 'About', label: 'About', accessibilityLabel: 'Show about tab' },
 ];
 
-function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
-  return (
-    <View style={{ flexDirection: 'row', gap: 2 }}>
-      {[1, 2, 3, 4, 5].map(i => (
-        <Ionicons key={i} name={i <= rating ? 'star' : 'star-outline'} size={size} color={Colors.textSecondary} />
-      ))}
-    </View>
-  );
-}
-
 
 export default function UserProfileScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
@@ -81,11 +69,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const profileMediaOverrides = useStore(state => state.profileMediaOverrides);
   const { show } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('Listings');
-  const [following, setFollowing] = useState(false);
-  const [isBlocked, setIsBlocked] = useState(false);
-  const [actionSheetVisible, setActionSheetVisible] = useState(false);
+  
   const [publicProfile, setPublicProfile] = useState<PublicProfileUser | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
 
@@ -105,12 +92,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     if (isSelfProfile || !userId) return;
     let canceled = false;
     setIsLoadingProfile(true);
+    setProfileError(null);
     fetchPublicProfile(userId)
       .then((profile) => {
         if (!canceled) setPublicProfile(profile);
       })
-      .catch(() => {
-        if (!canceled) setPublicProfile(null);
+      .catch((err) => {
+        if (!canceled) {
+          setPublicProfile(null);
+          setProfileError('Unable to load profile. Tap to retry.');
+        }
       })
       .finally(() => {
         if (!canceled) setIsLoadingProfile(false);
@@ -143,21 +134,15 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     }
   }, [displayHandle]);
 
-  const primaryListingId = profileListings[0]?.id;
-
+  
   const handleMessageProfile = React.useCallback(() => {
     const targetId = isSelfProfile ? currentUser?.id : userId;
     if (!targetId) return;
-    const conversationId = primaryListingId
-      ? `${targetId}_${primaryListingId}`
-      : `profile_${targetId}`;
-
-    navigation.navigate('Chat', {
-      conversationId,
-      focusQuery: displayUsername,
-      partnerUserId: targetId,
+    navigation.navigate('NewMessage', {
+      preselectedUserId: targetId,
+      preselectedDisplayName: displayUsername,
     });
-  }, [displayUsername, navigation, primaryListingId, isSelfProfile, currentUser?.id, userId]);
+  }, [displayUsername, navigation, isSelfProfile, currentUser?.id, userId]);
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -239,17 +224,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
              <Ionicons name="arrow-back" size={24} color="#fff" />
           </View>
         </AnimatedPressable>
-        <AnimatedPressable
-          style={styles.backBtn}
-          onPress={() => setActionSheetVisible(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Open profile actions"
-          accessibilityHint="Shows profile options"
-        >
-          <View style={styles.iconBackdrop}>
-            <Ionicons name="ellipsis-horizontal" size={22} color="#fff" />
-          </View>
-        </AnimatedPressable>
+        
       </View>
 
       {/* Cover photo with parallax - supports images, GIFs and videos */}
@@ -281,18 +256,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           isSelf={isSelfProfile}
           onEditProfile={isSelfProfile ? () => navigation.navigate('EditProfile') : undefined}
           onShare={handleShare}
-          onFollow={!isSelfProfile ? () => {
-            if (isBlocked) {
-              show('This user is blocked. Unblock them before following.', 'info');
-              return;
-            }
-            setFollowing((prev) => !prev);
-          } : undefined}
-          following={following}
+          
           hideCover
           stats={[
             { label: 'Listings', value: profileListings.length },
-            { label: 'Verified', value: isSelfProfile ? ((currentUser as any)?.emailVerified ? 'Yes' : 'No') : '—' },
+            
           ]}
         />
 
@@ -323,25 +291,31 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
           {activeTab === 'About' && (
             <View style={styles.aboutContent}>
-              {hasRealUserData && (currentUser as any)?.bio ? (
+              {targetProfile?.bio ? (
                 <View style={styles.aboutBlock}>
                   <Text style={styles.aboutLabel}>Bio</Text>
-                  <Text style={styles.aboutText}>{(currentUser as any).bio}</Text>
+                  <Text style={styles.aboutText}>{targetProfile.bio}</Text>
                 </View>
               ) : null}
-              {hasRealUserData && (currentUser as any)?.location ? (
+              {targetProfile?.location ? (
                 <View style={styles.aboutBlock}>
                   <Text style={styles.aboutLabel}>Location</Text>
-                  <Text style={styles.aboutText}>{(currentUser as any).location}</Text>
+                  <Text style={styles.aboutText}>{targetProfile.location}</Text>
                 </View>
               ) : null}
-              {hasRealUserData && (currentUser as any)?.website ? (
+              {targetProfile?.website ? (
                 <View style={styles.aboutBlock}>
                   <Text style={styles.aboutLabel}>Website</Text>
-                  <Text style={styles.aboutText}>{(currentUser as any).website}</Text>
+                  <Text style={styles.aboutText}>{targetProfile.website}</Text>
                 </View>
               ) : null}
-              {(!hasRealUserData || (!(currentUser as any)?.bio && !(currentUser as any)?.location && !(currentUser as any)?.website)) && (
+              {targetProfile?.createdAt ? (
+                <View style={styles.aboutBlock}>
+                  <Text style={styles.aboutLabel}>Member Since</Text>
+                  <Text style={styles.aboutText}>{new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</Text>
+                </View>
+              ) : null}
+              {!targetProfile?.bio && !targetProfile?.location && !targetProfile?.website && !targetProfile?.createdAt && (
                 <Text style={{ color: MUTED, textAlign: 'center', marginTop: 40 }}>No additional info.</Text>
               )}
             </View>
@@ -349,15 +323,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       </Reanimated.ScrollView>
 
-      {/* Flagship Bottom Sheet Overrides */}
-      <BottomSheet visible={actionSheetVisible} onDismiss={() => setActionSheetVisible(false)} snapPoint={0.3}>
-        <View style={{ paddingVertical: 10 }}>
-          <Text style={{ fontSize: 18, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 20 }}>User Actions</Text>
-          <Text style={{ fontSize: 14, fontFamily: Typography.family.medium, color: MUTED, textAlign: 'center', paddingVertical: 20 }}>
-            Report and block features are coming soon.
-          </Text>
-        </View>
-      </BottomSheet>
+      
     </View>
   );
 }

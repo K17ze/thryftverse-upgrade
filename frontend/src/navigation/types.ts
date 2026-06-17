@@ -137,7 +137,9 @@ export type RootStackParamList = {
   // VISUAL-15 — UI Architecture + Feature Depth
   ConversationInfo: { conversationId: string };
   MessageRequests: undefined;
-  NewMessage: undefined;
+  NewMessage:
+    | { preselectedUserId?: string; preselectedDisplayName?: string }
+    | undefined;
   SharedConversationMedia: { conversationId: string };
   ManageCollectionItems: { collectionId: string };
   CreateCollection: undefined;

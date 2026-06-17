@@ -31,12 +31,14 @@ interface ContactItem {
   conversationId?: string;
 }
 
-export default function NewMessageScreen({ navigation }: Props) {
+export default function NewMessageScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const haptic = useHaptic();
   const { isDark } = useAppTheme();
 
   const conversations = useStore((state) => state.conversations);
+    const preselectedUserId = route.params?.preselectedUserId;
+  const preselectedDisplayName = route.params?.preselectedDisplayName;
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
@@ -73,6 +75,14 @@ export default function NewMessageScreen({ navigation }: Props) {
     const q = searchQuery.trim().toLowerCase();
     return recentContacts.filter((c) => c.name.toLowerCase().includes(q));
   }, [recentContacts, searchQuery]);
+
+  React.useEffect(() => {
+    if (!preselectedUserId) return;
+    const existing = recentContacts.find((c) => c.userId === preselectedUserId);
+    if (existing?.conversationId) {
+      navigation.navigate('Chat', { conversationId: existing.conversationId, partnerUserId: preselectedUserId });
+    }
+  }, [preselectedUserId, recentContacts, navigation]);
 
   const handlePress = (contact: ContactItem) => {
     haptic.light();

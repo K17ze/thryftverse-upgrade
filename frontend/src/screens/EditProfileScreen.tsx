@@ -18,9 +18,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
 import { CachedImage } from '../components/CachedImage';
-import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
-import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipProfileMedia, FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship';
 import { updateMyProfile } from '../services/profileApi';
@@ -33,7 +31,6 @@ import {
 } from '../preferences/profileMediaPreferences';
 import { persistProfileMediaUri } from '../utils/profileMediaAsset';
 
-const GENDER_OPTIONS = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
 
 export default function EditProfileScreen() {
   const { isDark } = useAppTheme();
@@ -48,16 +45,14 @@ export default function EditProfileScreen() {
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
 
   const user = currentUser;
-  const initialGender = user?.gender ?? 'Prefer not to say';
-  const initialName = user?.displayName ?? user?.username ?? '';
+    const initialName = user?.displayName ?? user?.username ?? '';
   const initialUsername = user?.username ?? '';
 
   const [name, setName] = useState(initialName);
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(user?.bio ?? '');
   const [website, setWebsite] = useState(user?.website ?? '');
-  const [gender, setGender] = useState(initialGender);
-  const [genderPickerVisible, setGenderPickerVisible] = useState(false);
+  
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
@@ -67,8 +62,7 @@ export default function EditProfileScreen() {
     name !== initialName ||
     username !== initialUsername ||
     bio !== (user?.bio ?? '') ||
-    website !== (user?.website ?? '') ||
-    gender !== initialGender;
+    website !== (user?.website ?? '');
 
   const hasMediaChanges = React.useMemo(() => {
     const avatarChanged = userAvatar !== (user?.avatar ?? null);
@@ -169,7 +163,6 @@ export default function EditProfileScreen() {
       if (username !== initialUsername) updates.username = username;
       if (bio !== (user?.bio ?? '')) updates.bio = bio;
       if (website !== (user?.website ?? '')) updates.website = website;
-      if (gender !== initialGender) updates.gender = gender;
       if (Object.keys(updates).length > 0) {
         const updated = await updateMyProfile(updates);
         updateUserProfile({
@@ -188,8 +181,9 @@ export default function EditProfileScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       show('Profile updated', 'success');
       navigation.goBack();
-    } catch {
-      show('Failed to save profile. Please try again.', 'error');
+    } catch (err: any) {
+      const message = err?.message || 'Failed to save profile. Please try again.';
+      show(message, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -236,26 +230,7 @@ export default function EditProfileScreen() {
           title="Edit Profile"
           onBack={handleDiscard}
           backIcon="arrow-back"
-          rightAction={
-            hasChanges ? (
-              <AnimatedPressable
-                onPress={handleSave}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Save profile changes"
-              >
-                <Text
-                  style={{
-                    fontSize: Type.body.size,
-                    fontFamily: Typography.family.semibold,
-                    color: Colors.brand,
-                  }}
-                >
-                  Save
-                </Text>
-              </AnimatedPressable>
-            ) : undefined
-          }
+          rightAction={undefined}
         />
       }
       keyboardAvoiding
@@ -287,29 +262,7 @@ export default function EditProfileScreen() {
         />
       </Reanimated.View>
 
-      {/* Live Preview */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(50)} style={styles.previewBanner}>
-        <View style={[styles.previewCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-          <View style={[styles.previewAvatar, { backgroundColor: Colors.surfaceAlt }]}>
-            {currentAvatar ? (
-              <CachedImage
-                uri={currentAvatar}
-                style={{ width: 64, height: 64, borderRadius: 32 }}
-                contentFit="cover"
-              />
-            ) : (
-              <Text style={[styles.previewAvatarInitial, { color: Colors.textPrimary }]}>
-                {(name || username || 'Y').charAt(0).toUpperCase()}
-              </Text>
-            )}
-          </View>
-          <Text style={[styles.previewName, { color: Colors.textPrimary }]}>{name || username || 'Your Name'}</Text>
-          <Text style={[styles.previewHandle, { color: Colors.textSecondary }]}>@{username || 'username'}</Text>
-          {bio ? <Text style={[styles.previewBio, { color: Colors.textSecondary }]} numberOfLines={2}>{bio}</Text> : null}
-        </View>
-      </Reanimated.View>
-
-      {/* Identity Fields */}
+      
       <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
         <FlagshipFormSection title="Identity">
           <PremiumTextField
@@ -358,75 +311,11 @@ export default function EditProfileScreen() {
         </FlagshipFormSection>
       </Reanimated.View>
 
-      {/* Personal */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-        <FlagshipFormSection title="Personal">
-          <PremiumSelectRow
-            label="Gender"
-            value={gender}
-            placeholder="Select gender"
-            icon="person-outline"
-            onPress={() => setGenderPickerVisible(true)}
-          />
-        </FlagshipFormSection>
-      </Reanimated.View>
-
-      <BottomSheetPicker
-        visible={genderPickerVisible}
-        onClose={() => setGenderPickerVisible(false)}
-        title="Gender"
-        options={GENDER_OPTIONS}
-        selectedValue={gender}
-        onSelect={(value) => setGender(value)}
-      />
-    </FlagshipScreen>
+          </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  previewBanner: {
-    marginBottom: Space.lg,
-  },
-  previewCard: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Space.md,
-    alignItems: 'center',
-    paddingTop: Space.lg,
-    paddingBottom: Space.lg,
-  },
-  previewAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Space.sm,
-  },
-  previewAvatarInitial: {
-    fontSize: 24,
-    fontFamily: Typography.family.bold,
-  },
-  previewName: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-  },
-  previewHandle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  previewBio: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.sm,
-    textAlign: 'center',
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
   divider: {
     height: 1,
     backgroundColor: Colors.border,

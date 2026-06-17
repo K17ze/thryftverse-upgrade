@@ -76,7 +76,7 @@ import { useHaptic } from '../hooks/useHaptic';
 
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipProfileMedia } from '../components/flagship';
-import { ProfileVisualHeader, ProfileTabRail } from '../components/profile';
+import { ProfileVisualHeader, ProfileTabRail, LookPreviewCard } from '../components/profile';
 
 import { Space, Radius } from '../theme/designTokens';
 
@@ -157,7 +157,7 @@ export default function MyProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const reducedMotionEnabled = useReducedMotion();
-  const [activeTab, setActiveTab] = React.useState<'edits' | 'looks' | 'pulse'>('edits');
+  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'about'>('listings');
 
   const { show } = useToast();
   const haptic = useHaptic();
@@ -222,6 +222,7 @@ export default function MyProfileScreen() {
   const userCover = useStore((state) => state.userCover);
 
   const user = currentUser as any;
+  const userLooks = useStore((state) => state.userLooks);
 
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
 
@@ -515,23 +516,12 @@ export default function MyProfileScreen() {
 
 
 
-  const myListings = React.useMemo(() => {
-
-    const owned = listings.filter((item) => item.sellerId === profileUserId);
-
-    return owned.slice(0, 6);
-
-  }, [listings, profileUserId]);
+  const allOwnedListings = React.useMemo(() => listings.filter((item) => item.sellerId === profileUserId), [listings, profileUserId]);
+  const previewListings = React.useMemo(() => allOwnedListings.slice(0, 6), [allOwnedListings]);
 
 
 
-  const heroMediaListings = React.useMemo(
-
-    () => myListings.filter((item) => item.images && item.images.length > 0),
-
-    [myListings]
-
-  );
+  const heroMediaListings = React.useMemo(() => previewListings.filter((item) => item.images && item.images.length > 0), [previewListings]);
 
 
 
@@ -759,18 +749,7 @@ export default function MyProfileScreen() {
 
         <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{user.username}</Text>
 
-        <View style={{ flex: 1, alignItems: "flex-end" }}>
-          <AnimatedPressable
-            style={styles.floatingHeaderAction}
-            activeOpacity={0.9}
-            onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
-            accessibilityLabel="Open settings"
-            accessibilityRole="button"
-            accessibilityHint="Opens account and app settings"
-          >
-            <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
+        <View style={{ flex: 1 }} />
 
       </Reanimated.View>
 
@@ -802,9 +781,7 @@ export default function MyProfileScreen() {
           onShare={handleShare}
           hideCover
           stats={[
-            { label: 'Listings', value: myListings.length },
-            { label: 'Saved', value: savedCount + wishlistCount },
-            { label: 'Co-Own', value: coOwnHoldings.length },
+            { label: 'Listings', value: allOwnedListings.length },
           ]}
         />
 
@@ -836,16 +813,16 @@ export default function MyProfileScreen() {
         {/* Profile Tab Rail */}
         <ProfileTabRail
           tabs={[
-            { key: 'edits', label: 'Edits', icon: 'shirt-outline', count: myListings.length },
-            { key: 'looks', label: 'Looks', icon: 'bookmark-outline', count: savedCount + wishlistCount },
-            { key: 'pulse', label: 'Pulse', icon: 'pulse-outline' },
+            { key: 'listings', label: 'Listings', icon: 'shirt-outline', count: allOwnedListings.length },
+            { key: 'looks', label: 'Looks', icon: 'sparkles-outline', count: userLooks.length },
+            { key: 'about', label: 'About', icon: 'person-outline' },
           ]}
           activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as 'edits' | 'looks' | 'pulse')}
+          onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
         />
 
         {/* Tab Content */}
-        {activeTab === 'edits' && (
+        {activeTab === 'listings' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120 }}>
             {/* My Wardrobe */}
             <View style={styles.wardrobeSection}>
@@ -856,7 +833,7 @@ export default function MyProfileScreen() {
                 </View>
                 <AnimatedPressable
                   style={styles.viewAllBtn}
-                  onPress={() => navigation.navigate('UserProfile', { userId: user.id, isMe: true })}
+                  onPress={() => navigation.navigate('MyListings')}
                   accessibilityRole="button"
                   accessibilityLabel="View all listings"
                 >
@@ -866,7 +843,7 @@ export default function MyProfileScreen() {
               </View>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wardrobeScroll}>
-                {myListings.length === 0 ? (
+                {previewListings.length === 0 ? (
                   <AnimatedPressable
                     style={styles.wardrobeEmptyState}
                     activeOpacity={0.85}
@@ -880,7 +857,7 @@ export default function MyProfileScreen() {
                     <Text style={styles.wardrobeEmptySubtitle}>Tap to start selling</Text>
                   </AnimatedPressable>
                 ) : (
-                  myListings.map((item) => (
+                  previewListings.map((item) => (
                     <AnimatedPressable
                       key={item.id}
                       style={styles.wardrobeItem}
@@ -914,143 +891,33 @@ export default function MyProfileScreen() {
 
         {activeTab === 'looks' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
-            <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
-              <View style={{ paddingHorizontal: Space.md, marginBottom: Space.lg }}>
-                <Text style={styles.wardrobeTitle}>Saved Items</Text>
-                <Text style={{ fontFamily: Typography.family.regular, fontSize: 14, color: Colors.textSecondary, marginTop: 4 }}>
-                  {savedCount + wishlistCount} items in your closet
-                </Text>
+            {userLooks.length === 0 ? (
+              <EmptyState icon="sparkles-outline" title="No Looks yet" subtitle="Create your first Look to showcase your style." ctaLabel="Create Look" onCtaPress={() => navigation.navigate('CreateLook')} />
+            ) : (
+              <View style={{ paddingHorizontal: Space.md }}>
+                {userLooks.map((look, index) => (
+                  <LookPreviewCard key={look.id} id={look.id} title={look.title} coverImage={look.coverImage} items={look.items} creatorName={user.username} creatorAvatar={displayAvatar ?? undefined} likes={look.likes} saved={false} onPress={() => navigation.navigate('LookDetail', { lookId: look.id })} index={index} />
+                ))}
               </View>
-              <AnimatedPressable
-                style={{
-                  marginHorizontal: Space.md,
-                  backgroundColor: Colors.surface,
-                  borderRadius: Radius.lg,
-                  borderWidth: 1,
-                  borderColor: Colors.border,
-                  padding: Space.md,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: Space.sm,
-                }}
-                onPress={() => navigation.navigate('Closet')}
-                activeOpacity={0.9}
-              >
-                <Ionicons name="bookmark-outline" size={22} color={Colors.textPrimary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: Typography.family.semibold, fontSize: 15, color: Colors.textPrimary }}>Open Closet</Text>
-                  <Text style={{ fontFamily: Typography.family.regular, fontSize: 13, color: Colors.textSecondary }}>View saved, wishlist, and collections</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-              </AnimatedPressable>
-            </Reanimated.View>
+            )}
           </View>
         )}
 
-        {activeTab === 'pulse' && (
+
+        {activeTab === 'about' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
-            <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
-              <View style={{ paddingHorizontal: Space.md, marginBottom: Space.lg }}>
-                <Text style={styles.wardrobeTitle}>Pulse</Text>
-                <Text style={{ fontFamily: Typography.family.regular, fontSize: 14, color: Colors.textSecondary, marginTop: 4 }}>
-                  Activity and updates from your network
-                </Text>
-              </View>
-              {/* Co-Own Portfolio Summary */}
-              <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
-                <View style={styles.portfolioSummaryCard}>
-                  <View style={styles.portfolioSummaryTop}>
-                    <Text style={styles.portfolioSummaryLabel}>MY CO-OWN HOLDINGS</Text>
-                    <AnimatedPressable
-                      style={styles.portfolioSummaryLinkBtn}
-                      activeOpacity={0.8}
-                      onPress={() => navigation.navigate('Portfolio')}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.portfolioSummaryLinkText}>Open</Text>
-                      <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
-                    </AnimatedPressable>
-                  </View>
-                  <Text style={styles.portfolioSummaryValue}>{formatFromFiat(holdingsValue, 'GBP')}</Text>
-                  <View style={styles.portfolioSummaryMetaRow}>
-                    <Text style={styles.portfolioSummaryMeta}>
-                      {coOwnHoldings.length} active position{coOwnHoldings.length === 1 ? '' : 's'}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.portfolioSummaryPnl,
-                        holdingsUnrealized >= 0 ? styles.portfolioPnlUp : styles.portfolioPnlDown,
-                      ]}
-                    >
-                      Unrealized {holdingsUnrealized >= 0 ? '+' : '-'}
-                      {formatFromFiat(Math.abs(holdingsUnrealized), 'GBP', { displayMode: 'fiat' })}
-                    </Text>
-                  </View>
-                  {coOwnHoldings.length === 0 && (
-                    <AnimatedPressable
-                      style={styles.portfolioSummaryCta}
-                      activeOpacity={0.85}
-                      onPress={() => navigation.navigate('CoOwnHub')}
-                      accessibilityRole="button"
-                    >
-                      <Ionicons name="sparkles-outline" size={14} color={Colors.background} />
-                      <Text style={styles.portfolioSummaryCtaText}>Explore Co-Own Hub</Text>
-                    </AnimatedPressable>
-                  )}
-                </View>
-              </Reanimated.View>
-              {/* Honest empty state � no fabricated activity */}
-              <View style={{
-                marginHorizontal: Space.md,
-                backgroundColor: Colors.surface,
-                borderRadius: Radius.lg,
-                borderWidth: 1,
-                borderColor: Colors.border,
-                padding: Space.lg,
-                alignItems: 'center',
-                gap: Space.md,
-              }}>
-                <View style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 32,
-                  backgroundColor: Colors.surfaceAlt,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  <Ionicons name="pulse-outline" size={28} color={Colors.textMuted} />
-                </View>
-                <View style={{ alignItems: 'center', gap: Space.xs }}>
-                  <Text style={{ fontFamily: Typography.family.semibold, fontSize: 16, color: Colors.textPrimary, textAlign: 'center' }}>
-                    No activity yet
-                  </Text>
-                  <Text style={{ fontFamily: Typography.family.regular, fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
-                    Pulse shows your sales, bids, follows and community updates. Activity will appear here as it happens.
-                  </Text>
-                </View>
-                <AnimatedPressable
-                  style={{
-                    marginTop: Space.sm,
-                    backgroundColor: Colors.brand,
-                    borderRadius: Radius.md,
-                    paddingHorizontal: Space.lg,
-                    paddingVertical: Space.sm,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: Space.xs,
-                  }}
-                  onPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
-                  activeOpacity={0.9}
-                  accessibilityRole="button"
-                  accessibilityLabel="Explore marketplace"
-                >
-                  <Text style={{ fontFamily: Typography.family.semibold, fontSize: 14, color: '#fff' }}>Explore Marketplace</Text>
-                  <Ionicons name="arrow-forward" size={14} color="#fff" />
-                </AnimatedPressable>
-              </View>
-            </Reanimated.View>
+            <View style={{ paddingHorizontal: Space.md, gap: Space.md }}>
+              {user.bio ? (<View style={styles.aboutBlock}><Text style={styles.aboutLabel}>Bio</Text><Text style={styles.aboutText}>{user.bio}</Text></View>) : null}
+              {user.location ? (<View style={styles.aboutBlock}><Text style={styles.aboutLabel}>Location</Text><Text style={styles.aboutText}>{user.location}</Text></View>) : null}
+              {user.website ? (<View style={styles.aboutBlock}><Text style={styles.aboutLabel}>Website</Text><Text style={styles.aboutText}>{user.website}</Text></View>) : null}
+              {user.createdAt ? (<View style={styles.aboutBlock}><Text style={styles.aboutLabel}>Member Since</Text><Text style={styles.aboutText}>{new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</Text></View>) : null}
+              {!user.bio && !user.location && !user.website && !user.createdAt && (
+                <EmptyState icon="person-outline" title="About you" subtitle="Add a bio, location, and website in Edit Profile." ctaLabel="Edit Profile" onCtaPress={() => navigation.navigate('EditProfile')} />
+              )}
+            </View>
           </View>
-        )}      </Reanimated.ScrollView>
+        )}
+      </Reanimated.ScrollView>
 
     </View>
 
@@ -1464,6 +1331,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.08,
 
   },
+  aboutBlock: { backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: Space.md },
+  aboutLabel: { fontSize: 11, fontFamily: Typography.family.bold, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: Space.xs },
+  aboutText: { fontSize: 14, fontFamily: Typography.family.regular, color: Colors.textPrimary, lineHeight: 20 },
 
 
 
