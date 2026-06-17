@@ -139,6 +139,7 @@ export type RootStackParamList = {
   MessageRequests: undefined;
   NewMessage: undefined;
   SharedConversationMedia: { conversationId: string };
+  ManageCollectionItems: { collectionId: string };
   CreateCollection: undefined;
   OrderSupport: { orderId: string };
   ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };

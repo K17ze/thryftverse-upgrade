@@ -29,28 +29,26 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { MasonryGrid } from '../components/ProductCardV2';
-import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
-import { CollectionCard } from '../components/closet/CollectionCard';
 import { AppButton } from '../components/ui/AppButton';
 import { Typography } from '../theme/designTokens';
 import { MoodboardCollectionGrid } from '../components/profile/MoodboardCollectionGrid';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS';
-type SortOption = 'Recently Added' | 'Price: Low to High' | 'Price: High to Low' | 'Newest';
+type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest';
 type NavT = StackNavigationProp<RootStackParamList>;
 
-const SORT_OPTIONS: SortOption[] = ['Recently Added', 'Price: Low to High', 'Price: High to Low', 'Newest'];
+const SORT_OPTIONS: SortOption[] = ['Default', 'Price: Low to High', 'Price: High to Low', 'Newest'];
 
 export default function ClosetScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const [activeTab, setActiveTab] = useState<TabKey>('SAVED');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<SortOption>('Recently Added');
+  const [sortBy, setSortBy] = useState<SortOption>('Default');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
@@ -58,7 +56,6 @@ export default function ClosetScreen() {
   const wishlistIds = useStore((state) => state.wishlist);
   const savedProductIds = useStore((state) => state.savedProducts);
   const collections = useStore((state) => state.collections);
-  const createCollection = useStore((state) => state.createCollection);
   const loadCollectionsFromApi = useStore((state) => state.loadCollectionsFromApi);
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
 
@@ -107,7 +104,7 @@ export default function ClosetScreen() {
           const db = b.createdAt ? Date.parse(b.createdAt) : 0;
           return (db as number) - (da as number);
         });
-      case 'Recently Added':
+      case 'Default':
       default:
         return items;
     }
@@ -158,7 +155,6 @@ export default function ClosetScreen() {
   const handleTabChange = (tab: TabKey) => {
     haptic.light();
     setActiveTab(tab);
-    setSearchQuery('');
   };
 
   const handleCreateCollection = useCallback(() => {
@@ -243,10 +239,6 @@ export default function ClosetScreen() {
           subtitle="Tap the bookmark on any product to save it here."
           ctaLabel="Browse"
           onCtaPress={handleBrowse}
-          suggestedActions={[
-            { label: 'Trending', onPress: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' }) },
-            { label: 'New Arrivals', onPress: () => navigation.navigate('Browse', { categoryId: 'all', title: 'New Arrivals' }) },
-          ]}
         />
       );
     }
@@ -274,10 +266,6 @@ export default function ClosetScreen() {
           subtitle="Heart items to track them."
           ctaLabel="Browse"
           onCtaPress={handleBrowse}
-          suggestedActions={[
-            { label: 'Streetwear', onPress: () => navigation.navigate('Browse', { categoryId: 'streetwear', title: 'Streetwear' }) },
-            { label: 'Vintage', onPress: () => navigation.navigate('Browse', { categoryId: 'vintage', title: 'Vintage' }) },
-          ]}
         />
       );
     }
@@ -354,7 +342,6 @@ export default function ClosetScreen() {
           <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
         </AnimatedPressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerLabel}>CLOSET</Text>
           <Text style={styles.headerTitle}>Closet</Text>
         </View>
         <View style={styles.countPill}>
@@ -412,16 +399,32 @@ export default function ClosetScreen() {
 
         {/* Tabs */}
         <View style={styles.tabsWrap}>
-          <AppSegmentControl
-            options={[
-              { value: 'SAVED', label: `Saved`, icon: <Ionicons name="bookmark-outline" size={14} color={Colors.textSecondary} /> },
-              { value: 'WISHLIST', label: `Wishlist`, icon: <Ionicons name="heart-outline" size={14} color={Colors.textSecondary} /> },
-              { value: 'COLLECTIONS', label: `Collections`, icon: <Ionicons name="folder-open-outline" size={14} color={Colors.textSecondary} /> },
-            ]}
-            value={activeTab}
-            onChange={handleTabChange}
-            fullWidth
-          />
+          <View style={styles.tabBar}>
+            {(['SAVED', 'WISHLIST', 'COLLECTIONS'] as TabKey[]).map((tab) => {
+              const isActive = activeTab === tab;
+              const tabCounts = {
+                SAVED: savedItems.length,
+                WISHLIST: wishlistItems.length,
+                COLLECTIONS: collections.length,
+              };
+              return (
+                <AnimatedPressable
+                  key={tab}
+                  style={styles.tabItem}
+                  onPress={() => handleTabChange(tab)}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`${tab.toLowerCase()} tab, ${tabCounts[tab]} items`}
+                >
+                  <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                    {tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : 'Collections'}
+                  </Text>
+                  {isActive && <View style={styles.tabIndicator} />}
+                </AnimatedPressable>
+              );
+            })}
+          </View>
         </View>
 
         {/* Content */}
@@ -469,18 +472,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerLabel: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
-    color: Colors.brand,
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
-  },
   headerTitle: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    marginTop: 2,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    gap: Space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  tabItem: {
+    paddingVertical: Space.sm,
+    position: 'relative',
+  },
+  tabLabel: {
+    fontSize: 15,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+  },
+  tabLabelActive: {
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: Colors.textPrimary,
+    borderTopLeftRadius: 1,
+    borderTopRightRadius: 1,
   },
   countPill: {
     flexDirection: 'row',
