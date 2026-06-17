@@ -588,31 +588,35 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             {/* ═══════ DISCOVER LANDING (no query) ═══════ */}
             {isDiscoverLanding && (
               <>
-                {/* Hero Carousel */}
-                <HeroCarousel items={HERO_ITEMS} autoPlayInterval={6000} />
+                {/* Hero Carousel — only when real imagery exists */}
+                {HERO_ITEMS.some((h) => h.uri.trim().length > 0) && (
+                  <HeroCarousel items={HERO_ITEMS.filter((h) => h.uri.trim().length > 0)} autoPlayInterval={6000} />
+                )}
 
-                {/* Explore featured boards */}
-                <EditorialSection
-                  kicker="Explore featured boards"
-                  title="Ideas you might like"
-                  style={{ marginTop: 12 }}
-                >
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.boardsScroll}
+                {/* Explore featured boards — only when real imagery exists */}
+                {FEATURED_BOARDS.some((b) => b.images.some((img) => img.trim().length > 0)) && (
+                  <EditorialSection
+                    kicker="Explore featured boards"
+                    title="Ideas you might like"
+                    style={{ marginTop: 12 }}
                   >
-                    {FEATURED_BOARDS.map((board) => (
-                      <FeaturedBoardCard
-                        key={board.id}
-                        board={{
-                          ...board,
-                          onPress: () => handleBoardPress(board.id),
-                        }}
-                      />
-                    ))}
-                  </ScrollView>
-                </EditorialSection>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.boardsScroll}
+                    >
+                      {FEATURED_BOARDS.filter((b) => b.images.some((img) => img.trim().length > 0)).map((board) => (
+                        <FeaturedBoardCard
+                          key={board.id}
+                          board={{
+                            ...board,
+                            onPress: () => handleBoardPress(board.id),
+                          }}
+                        />
+                      ))}
+                    </ScrollView>
+                  </EditorialSection>
+                )}
 
                 {/* Recent searches */}
                 {recentSearches.length > 0 && (
@@ -666,8 +670,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </ScrollView>
                 </EditorialSection>
 
-                {/* Editorial image rows (Pinterest-style 4-col sections) */}
-                {EDITORIAL_SECTIONS.map((section) => (
+                {/* Editorial image rows — only when real imagery exists */}
+                {EDITORIAL_SECTIONS.filter((s) => s.images.some((img) => img.uri.trim().length > 0)).map((section) => (
                   <EditorialSection
                     key={section.id}
                     kicker={section.kicker}
@@ -678,7 +682,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                     }}
                   >
                     <EditorialImageRow
-                      images={section.images}
+                      images={section.images.filter((img) => img.uri.trim().length > 0)}
                       onPressImage={handleEditorialImagePress}
                       sharedTransitionPrefix={`editorial-${section.id}`}
                     />
@@ -1141,9 +1145,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     fontSize: 14,
     color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
   resultReason: {
     fontFamily: Typography.family.medium,

@@ -66,7 +66,7 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 const HEADER_EXPANDED = 80;
 const HEADER_COLLAPSED = 56;
-const GRID_GAP = 10;
+const GRID_GAP = 12;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const PANEL_BG = Colors.surfaceAlt;
@@ -1335,16 +1335,16 @@ const styles = StyleSheet.create({
 
   masonryGrid: {
     flexDirection: 'row',
-    paddingHorizontal: Space.sm,
-    gap: 3,
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
     alignItems: 'flex-start',
   },
   masonryColumn: {
     flex: 1,
-    gap: 3,
+    gap: Space.sm,
   },
   exploreItemBox: {
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
     // Pinterest feel: no border, no shadow — image is the card
@@ -1361,25 +1361,23 @@ const styles = StyleSheet.create({
   },
   exploreOverlay: {
     position: 'absolute',
-    left: 8,
-    bottom: 8,
+    left: 10,
+    bottom: 10,
   },
   exploreTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   exploreTagText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.14,
+    letterSpacing: 0.1,
   },
   exploreSellerRow: {
     marginTop: 7,
@@ -1458,12 +1456,12 @@ const styles = StyleSheet.create({
   },
   exploreLoadingGrid: {
     flexDirection: 'row',
-    paddingHorizontal: Space.sm,
-    gap: 3,
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
   },
   exploreLoadingColumn: {
     flex: 1,
-    gap: 3,
+    gap: Space.sm,
   },
 
   peekBackdrop: {

@@ -48,9 +48,9 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain('graphic?: React.ReactNode');
   });
 
-  it('ProductCardV2 uses Pinterest-style tight radius and no heavy elevation', () => {
+  it('ProductCardV2 uses refined radius and no heavy elevation', () => {
     const src = readSrc('components/ProductCardV2.tsx');
-    expect(src).toContain('borderRadius: Radius.sm');
+    expect(src).toContain('borderRadius: Radius.md');
     expect(src).not.toContain('...Elevation.card');
   });
 
