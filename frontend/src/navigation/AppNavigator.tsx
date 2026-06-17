@@ -104,6 +104,7 @@ import StyleQuizScreen from '../screens/StyleQuizScreen';
 // VISUAL-15 — UI Architecture + Feature Depth
 import ConversationInfoScreen from '../screens/ConversationInfoScreen';
 import MessageRequestsScreen from '../screens/MessageRequestsScreen';
+import NewMessageScreen from '../screens/NewMessageScreen';
 import CreateCollectionScreen from '../screens/CreateCollectionScreen';
 import OrderSupportScreen from '../screens/OrderSupportScreen';
 import ChatMediaPreviewScreen from '../screens/ChatMediaPreviewScreen';
@@ -297,6 +298,7 @@ export default function AppNavigator() {
       {/* VISUAL-15 — UI Architecture + Feature Depth */}
       <Stack.Screen name="ConversationInfo" component={ConversationInfoScreen} />
       <Stack.Screen name="MessageRequests" component={MessageRequestsScreen} />
+      <Stack.Screen name="NewMessage" component={NewMessageScreen} />
       <Stack.Screen name="CreateCollection" component={CreateCollectionScreen} options={modalScreenOptions} />
       <Stack.Screen name="OrderSupport" component={OrderSupportScreen} />
       <Stack.Screen name="ChatMediaPreview" component={ChatMediaPreviewScreen} options={modalScreenOptions} />

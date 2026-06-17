@@ -147,21 +147,15 @@ const INITIAL_MESSAGES: Message[] = [];
 
 
 function TaggedItemCard({
-
   itemId,
-
   navigation,
-
   formatFromFiat,
-
+  currentUserId,
 }: {
-
   itemId?: string;
-
   navigation: any;
-
   formatFromFiat: any;
-
+  currentUserId?: string | null;
 }) {
 
   const { listings } = useBackendData();
@@ -178,7 +172,8 @@ function TaggedItemCard({
 
   if (!listing) return null;
 
-
+  const isOwner = listing.sellerId === currentUserId;
+  const isSold = !!listing.isSold;
 
   return (
 
@@ -233,30 +228,51 @@ function TaggedItemCard({
 
         </View>
 
-        {/* Quick actions */}
+        {/* Quick actions — gated by ownership and status */}
         <View style={styles.itemQuickActions}>
-          <AnimatedPressable
-            style={styles.itemQuickBtn}
-            onPress={() => navigation.navigate('Checkout', { itemId: listing.id })}
-            activeOpacity={0.8}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            accessibilityLabel="Buy now"
-          >
-            <Ionicons name="flash-outline" size={14} color={Colors.brand} />
-            <Caption color={Colors.brand} style={styles.itemQuickText}>Buy</Caption>
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={styles.itemQuickBtn}
-            onPress={() => navigation.navigate('MakeOffer', { itemId: listing.id, price: listing.price, title: listing.title })}
-            activeOpacity={0.8}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            accessibilityLabel="Make offer"
-          >
-            <Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />
-            <Caption color={Colors.textPrimary} style={styles.itemQuickText}>Offer</Caption>
-          </AnimatedPressable>
+          {isOwner ? (
+            <AnimatedPressable
+              style={styles.itemQuickBtn}
+              onPress={() => navigation.navigate('ManageListing', { itemId: listing.id })}
+              activeOpacity={0.8}
+              scaleValue={0.95}
+              hapticFeedback="light"
+              accessibilityLabel="Manage listing"
+            >
+              <Ionicons name="settings-outline" size={14} color={Colors.brand} />
+              <Caption color={Colors.brand} style={styles.itemQuickText}>Manage</Caption>
+            </AnimatedPressable>
+          ) : isSold ? (
+            <View style={styles.itemQuickBtn}>
+              <Ionicons name="bag-check-outline" size={14} color={Colors.textMuted} />
+              <Caption color={Colors.textMuted} style={styles.itemQuickText}>Sold</Caption>
+            </View>
+          ) : (
+            <>
+              <AnimatedPressable
+                style={styles.itemQuickBtn}
+                onPress={() => navigation.navigate('Checkout', { itemId: listing.id })}
+                activeOpacity={0.8}
+                scaleValue={0.95}
+                hapticFeedback="light"
+                accessibilityLabel="Buy now"
+              >
+                <Ionicons name="flash-outline" size={14} color={Colors.brand} />
+                <Caption color={Colors.brand} style={styles.itemQuickText}>Buy</Caption>
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.itemQuickBtn}
+                onPress={() => navigation.navigate('MakeOffer', { itemId: listing.id, price: listing.price, title: listing.title })}
+                activeOpacity={0.8}
+                scaleValue={0.95}
+                hapticFeedback="light"
+                accessibilityLabel="Make offer"
+              >
+                <Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />
+                <Caption color={Colors.textPrimary} style={styles.itemQuickText}>Offer</Caption>
+              </AnimatedPressable>
+            </>
+          )}
         </View>
 
       </AnimatedPressable>
@@ -1667,7 +1683,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
       {!isGroup && routeItemId ? (
 
-        <TaggedItemCard itemId={routeItemId} navigation={navigation} formatFromFiat={formatFromFiat} />
+        <TaggedItemCard itemId={routeItemId} navigation={navigation} formatFromFiat={formatFromFiat} currentUserId={currentUser?.id} />
 
       ) : null}
 

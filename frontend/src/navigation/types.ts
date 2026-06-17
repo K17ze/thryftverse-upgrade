@@ -137,6 +137,7 @@ export type RootStackParamList = {
   // VISUAL-15 — UI Architecture + Feature Depth
   ConversationInfo: { conversationId: string };
   MessageRequests: undefined;
+  NewMessage: undefined;
   CreateCollection: undefined;
   OrderSupport: { orderId: string };
   ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };

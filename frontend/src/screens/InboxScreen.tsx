@@ -2,7 +2,8 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 
 import { AnimatedPressable } from '../components/AnimatedPressable';
 
-import { View, Text, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, Alert, ScrollView } from 'react-native';
+import { CachedImage } from '../components/CachedImage';
 
 import { FlashList } from '@shopify/flash-list';
 
@@ -69,20 +70,32 @@ type InboxSegment = 'all' | 'unread' | 'requests' | 'archived' | 'groups';
 
 
 const SEGMENT_OPTIONS: Array<{ value: InboxSegment; label: string; accessibilityLabel: string }> = [
-
   { value: 'all', label: 'All', accessibilityLabel: 'Show all conversations' },
-
   { value: 'unread', label: 'Unread', accessibilityLabel: 'Filter unread conversations' },
-
   { value: 'requests', label: 'Requests', accessibilityLabel: 'Filter message requests' },
-
   { value: 'archived', label: 'Archived', accessibilityLabel: 'Filter archived conversations' },
-
   { value: 'groups', label: 'Groups', accessibilityLabel: 'Filter group conversations' },
-
 ];
 
-
+function ListingContextThumbnail({ itemId }: { itemId: string }) {
+  const { listings } = useBackendData();
+  const listing = useMemo(() => listings.find((l) => l.id === itemId), [listings, itemId]);
+  if (!listing?.images?.[0]) {
+    return (
+      <View style={styles.contextThumb}>
+        <Ionicons name="pricetag-outline" size={14} color={Colors.textMuted} />
+      </View>
+    );
+  }
+  return (
+    <CachedImage
+      uri={listing.images[0]}
+      style={styles.contextThumbImage}
+      containerStyle={styles.contextThumb}
+      contentFit="cover"
+    />
+  );
+}
 
 export default function InboxScreen() {
 
@@ -605,12 +618,6 @@ export default function InboxScreen() {
       />
     );
 
-    const contextThumbnail = item.itemId ? (
-      <View style={styles.contextThumb}>
-        <Ionicons name="pricetag-outline" size={14} color={Colors.textMuted} />
-        </View>
-    ) : null;
-
     const requestRow = (
       <View style={styles.rowInner}>
         {avatarEl}
@@ -692,13 +699,11 @@ export default function InboxScreen() {
                 )}
               </Text>
               <View style={styles.rowMeta}>
-                {contextThumbnail}
+                {item.itemId && <ListingContextThumbnail itemId={item.itemId} />}
                 {item.unread ? (
-                  <View style={styles.unreadDot}>
-                    <Text style={styles.unreadCount}>{item.messages.filter((m) => m.sender !== 'me').length}</Text>
-            </View>
+                  <View style={styles.unreadDot} />
                 ) : null}
-          </View>
+              </View>
         </View>
           </View>
         </View>
@@ -746,14 +751,14 @@ export default function InboxScreen() {
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.iconBtn}
-              onPress={() => navigation.navigate('ChatSettings')}
+              onPress={() => navigation.navigate('NewMessage')}
               activeOpacity={0.7}
               scaleValue={0.9}
               hapticFeedback="light"
-              accessibilityLabel="Settings"
+              accessibilityLabel="New message"
               accessibilityRole="button"
             >
-              <Ionicons name="cog-outline" size={20} color={Colors.textPrimary} />
+              <Ionicons name="create-outline" size={20} color={Colors.textPrimary} />
             </AnimatedPressable>
           </View>
           }
@@ -791,25 +796,26 @@ export default function InboxScreen() {
 
 
 
-        <AppSegmentControl
-
-          style={styles.segmentStrip}
-
-          options={SEGMENT_OPTIONS}
-
-          value={segment}
-
-          onChange={setSegment}
-
-          optionStyle={styles.segmentChip}
-
-          optionActiveStyle={styles.segmentChipActive}
-
-          optionTextStyle={styles.segmentChipText}
-
-          optionTextActiveStyle={styles.segmentChipTextActive}
-
-        />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChips}>
+          {SEGMENT_OPTIONS.map((opt) => {
+            const isActive = segment === opt.value;
+            return (
+              <AnimatedPressable
+                key={opt.value}
+                style={[styles.filterChip, isActive && styles.filterChipActive]}
+                onPress={() => setSegment(opt.value)}
+                activeOpacity={0.85}
+                scaleValue={0.95}
+                hapticFeedback="light"
+                accessibilityLabel={opt.accessibilityLabel}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{opt.label}</Text>
+              </AnimatedPressable>
+            );
+          })}
+        </ScrollView>
 
       </View>
 
@@ -1211,46 +1217,32 @@ const styles = StyleSheet.create({
 
   },
 
-  segmentStrip: {
-
-    marginTop: Space.xs,
-
+  filterChips: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingTop: Space.xs,
+    paddingBottom: Space.xs,
   },
-
-  segmentChip: {
-
-    paddingVertical: Space.sm - 2,
-
-    paddingHorizontal: Space.md,
-
+  filterChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
     borderRadius: Radius.full,
-
-    backgroundColor: 'transparent',
-
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
-
-  segmentChipActive: {
-
-    backgroundColor: Colors.brand,
-
+  filterChipActive: {
+    backgroundColor: Colors.textPrimary,
+    borderColor: Colors.textPrimary,
   },
-
-  segmentChipText: {
-
+  filterChipText: {
     fontSize: Type.caption.size,
-
     fontFamily: Typography.family.medium,
-
-    color: Colors.textMuted,
-
+    color: Colors.textSecondary,
   },
-
-  segmentChipTextActive: {
-
-    color: Colors.textInverse,
-
+  filterChipTextActive: {
+    color: Colors.background,
     fontFamily: Typography.family.semibold,
-
   },
 
   listContent: {
@@ -1442,19 +1434,11 @@ const styles = StyleSheet.create({
   },
 
   unreadDot: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: Colors.textPrimary,
     marginLeft: Space.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  unreadCount: {
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
-    color: Colors.background,
   },
   timeUnread: {
     fontFamily: Typography.family.semibold,
@@ -1474,6 +1458,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  contextThumbImage: {
+    width: 24,
+    height: 24,
   },
 
   draftLabel: {

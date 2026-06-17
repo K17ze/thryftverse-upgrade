@@ -45,6 +45,7 @@ export default function MessageRequestsScreen() {
     haptic.medium();
     acceptMessageRequest(id);
     show('Request accepted', 'success');
+    navigation.navigate('Chat', { conversationId: id });
   };
 
   const handleDecline = (id: string) => {
