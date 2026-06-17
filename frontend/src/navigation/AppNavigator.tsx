@@ -95,6 +95,11 @@ import EditListingScreen from '../screens/EditListingScreen';
 import CreateLookScreen from '../screens/CreateLookScreen';
 import OutfitBuilderScreen from '../screens/OutfitBuilderScreen';
 import CoOwnIssueScreen from '../screens/CoOwnIssueScreen';
+// UI-22R.6B — Experience elevation
+import LookDetailScreen from '../screens/LookDetailScreen';
+import PulseFeedScreen from '../screens/PulseFeedScreen';
+import ExploreCollectionScreen from '../screens/ExploreCollectionScreen';
+import StyleQuizScreen from '../screens/StyleQuizScreen';
 
 // VISUAL-15 — UI Architecture + Feature Depth
 import ConversationInfoScreen from '../screens/ConversationInfoScreen';
@@ -276,6 +281,11 @@ export default function AppNavigator() {
       <Stack.Screen name="CreateLook" component={CreateLookScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" component={OutfitBuilderScreen} options={modalScreenOptions} />
       <Stack.Screen name="CoOwnIssue" component={CoOwnIssueScreen} options={modalScreenOptions} />
+      {/* UI-22R.6B — Experience elevation */}
+      <Stack.Screen name="LookDetail" component={LookDetailScreen} />
+      <Stack.Screen name="PulseFeed" component={PulseFeedScreen} />
+      <Stack.Screen name="ExploreCollection" component={ExploreCollectionScreen} />
+      <Stack.Screen name="StyleQuiz" component={StyleQuizScreen} options={modalScreenOptions} />
 
       {/* Phase 13 — Settings integrity */}
       <Stack.Screen name="ChatSettings" component={ChatSettingsScreen} />

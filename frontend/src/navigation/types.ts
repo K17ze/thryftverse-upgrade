@@ -113,6 +113,21 @@ export type RootStackParamList = {
   CreateLook: undefined;
   CoOwnIssue: { assetId?: string };
   OutfitBuilder: undefined;
+  // UI-22R.6B — Experience elevation
+  LookDetail: { lookId: string };
+  PulseFeed: undefined;
+  ExploreCollection: {
+    title: string;
+    subtitle?: string;
+    source:
+      | { type: 'category'; categoryId: string }
+      | { type: 'brand'; brand: string }
+      | { type: 'price_drop' }
+      | { type: 'newest' }
+      | { type: 'saved_affinity' }
+      | { type: 'auction' };
+  };
+  StyleQuiz: undefined;
   // Phase 13 — Settings integrity
   ChatSettings: undefined;
   ActiveSessions: undefined;

@@ -42,50 +42,6 @@ interface LookItem {
   saved: boolean;
 }
 
-const LOOKS_SEED: LookItem[] = [
-  {
-    id: 'look1',
-    title: 'Winter Layers',
-    coverImage: '',
-    items: [
-      { id: 'l5', label: 'Off-White Hoodie', x: 0.2, y: 0.3 },
-      { id: 'l7', label: 'Cargo Trousers', x: 0.6, y: 0.65 },
-      { id: 'l6', label: 'Air Max 90', x: 0.5, y: 0.85 },
-    ],
-    creator: { name: 'mariefullery', avatar: '' },
-    likes: 234,
-    comments: 18,
-    saved: true,
-  },
-  {
-    id: 'look2',
-    title: 'Minimal Monochrome',
-    coverImage: '',
-    items: [
-      { id: 'l2', label: 'AMI Striped Shirt', x: 0.35, y: 0.25 },
-      { id: 'l3', label: 'RL Harrington', x: 0.7, y: 0.4 },
-    ],
-    creator: { name: 'scott_art', avatar: '' },
-    likes: 156,
-    comments: 12,
-    saved: true,
-  },
-  {
-    id: 'look3',
-    title: 'Streetwear Daily',
-    coverImage: '',
-    items: [
-      { id: 'l4', label: 'Stussy Logo Tee', x: 0.4, y: 0.3 },
-      { id: 'l9', label: 'Represent Hoodie', x: 0.25, y: 0.15 },
-      { id: 'l10', label: 'Chuck Taylor', x: 0.6, y: 0.8 },
-    ],
-    creator: { name: 'dankdunksuk', avatar: '' },
-    likes: 89,
-    comments: 7,
-    saved: true,
-  },
-];
-
 /* ── Tag dot ── */
 function TagDot() {
   return (
@@ -238,7 +194,7 @@ export default function LooksTab() {
 
   const userLooks = useStore((state) => state.userLooks);
   const allLooks = React.useMemo<LookItem[]>(
-    () => [...userLooks.map((ul) => ({ ...ul, saved: false })), ...LOOKS_SEED],
+    () => userLooks.map((ul) => ({ ...ul, saved: false })),
     [userLooks],
   );
 
@@ -256,18 +212,9 @@ export default function LooksTab() {
     [haptic, show, listingIdSet, listings, toggleSavedProduct],
   );
 
-  const resolveLookItemId = React.useCallback(
-    (look: LookItem) => look.items.find((entry) => listingIdSet.has(entry.id))?.id ?? listings[0]?.id,
-    [listingIdSet, listings],
-  );
-
-  const handleCommentPress = React.useCallback(
-    (look: LookItem) => {
-      haptic.light();
-      show('Comments coming soon', 'info');
-    },
-    [haptic, show],
-  );
+  const handleCreateLook = React.useCallback(() => {
+    navigation.navigate('CreateLook');
+  }, [navigation]);
 
   if (allLooks.length === 0) {
     return (
@@ -275,9 +222,9 @@ export default function LooksTab() {
         <EmptyState
           icon="camera-outline"
           title="No looks yet"
-          subtitle="Be the first to share your style. Looks with shoppable tags coming soon."
-          ctaLabel="Browse"
-          onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
+          subtitle="Create a look, tag real products, and share your style with the community."
+          ctaLabel="Create a Look"
+          onCtaPress={handleCreateLook}
           graphic={
             <View style={{ alignItems: 'center', marginBottom: Space.md }}>
               <Ionicons name="images-outline" size={48} color={Colors.brand} />
@@ -308,10 +255,7 @@ export default function LooksTab() {
           likes={look.likes + (likedLooks[look.id] ? 1 : 0)}
           saved={!!savedLooks[look.id] || look.saved}
           onPress={() => {
-            const itemId = resolveLookItemId(look);
-            if (itemId) {
-              navigation.navigate('ItemDetail', { itemId });
-            }
+            navigation.navigate('LookDetail', { lookId: look.id });
           }}
           onLike={() => handleToggleLike(look)}
           onSave={() => handleToggleSave(look)}
