@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   imageWrap: {
     position: 'relative',
     overflow: 'hidden',
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     backgroundColor: Colors.surfaceAlt,
   },
   image: {
@@ -303,8 +303,8 @@ const styles = StyleSheet.create({
   // Info - Clean hierarchy
   info: {
     paddingTop: Space.sm,
-    paddingHorizontal: 2,
-    gap: 2,
+    paddingHorizontal: Space.xs,
+    gap: 3,
   },
   priceRow: {
     flexDirection: 'row',
@@ -332,32 +332,32 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: Space.sm,
     left: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.50)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   priceDropBadge: {
-    top: Space.sm + 24,
-    backgroundColor: 'rgba(200,50,50,0.70)',
+    top: Space.sm + 26,
+    backgroundColor: 'rgba(200,50,50,0.65)',
   },
   conditionText: {
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: Typography.family.bold,
     color: '#FFFFFF',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
 
-  // Grid — Pinterest density: tight 3px gaps, edge-to-edge feel
+  // Grid — Pinterest density with breathable gaps
   grid: {
     flexDirection: 'row',
-    paddingHorizontal: Space.sm,
-    gap: 3,
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
   },
   column: {
     flex: 1,
-    gap: 3,
+    gap: Space.sm,
   },
 });
 

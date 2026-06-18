@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type , Typography  } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { User } from '../../store/useStore';
@@ -46,7 +46,7 @@ export function IdentityCard({ user, onPress }: IdentityCardProps) {
             <Text style={[styles.meta, { color: colors.textSecondary }]}>Manage your account details, privacy and security</Text>
           )}
           {(user as any)?.isVerified && (
-            <View style={styles.verifiedRow}>
+            <View style={[styles.verifiedRow, { backgroundColor: `${colors.success}18` }]}>
               <Ionicons name="checkmark-circle" size={12} color={colors.success} />
               <Text style={[styles.verifiedLabel, { color: colors.success }]}>Verified</Text>
             </View>
@@ -58,33 +58,36 @@ export function IdentityCard({ user, onPress }: IdentityCardProps) {
   );
 }
 
+const AVATAR_SIZE = 64;
+const AVATAR_RADIUS = AVATAR_SIZE / 2;
+
 const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: Space.md,
-    gap: Space.sm + 4,
+    gap: Space.md,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_RADIUS,
     overflow: 'hidden',
   },
   avatarImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_RADIUS,
   },
   avatarFallback: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_RADIUS,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitial: {
-    fontSize: 20,
+    fontSize: 24,
     fontFamily: Typography.family.bold,
   },
   text: {
@@ -107,7 +110,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
+    marginTop: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: Radius.sm,
+    alignSelf: 'flex-start',
   },
   verifiedLabel: {
     fontSize: Type.meta.size,

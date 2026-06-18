@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Type, Space, Radius } from '../../theme/designTokens';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppInput } from '../ui/AppInput';
 import { AppButton } from '../ui/AppButton';
@@ -19,6 +20,8 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useStore, Collection } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { Typography } from '../../theme/designTokens';
+import { CachedImage } from '../CachedImage';
+import { useBackendData } from '../../context/BackendDataContext';
 
 interface Props {
   visible: boolean;
@@ -29,16 +32,23 @@ interface Props {
 export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
   const [newCollectionName, setNewCollectionName] = useState('');
   const [showCreateInput, setShowCreateInput] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const haptic = useHaptic();
+  const insets = useSafeAreaInsets();
   const { show } = useToast();
 
+  const { listings } = useBackendData();
   const collections = useStore((state) => state.collections);
+  const addToCollectionOnApi = useStore((state) => state.addToCollectionOnApi);
+  const removeFromCollectionOnApi = useStore((state) => state.removeFromCollectionOnApi);
   const addToCollection = useStore((state) => state.addToCollection);
   const removeFromCollection = useStore((state) => state.removeFromCollection);
   const isInCollection = useStore((state) => state.isInCollection);
-  const createCollection = useStore((state) => state.createCollection);
+  const createCollectionOnApi = useStore((state) => state.createCollectionOnApi);
   const isSavedProduct = useStore((state) => state.isSavedProduct);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
+
+  const item = useMemo(() => listings.find((l) => l.id === itemId), [listings, itemId]);
 
   // Always read fresh state when toggling to avoid stale closure
   const handleToggleSaved = useCallback(() => {
@@ -48,30 +58,63 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
     show(currentlySaved ? 'Removed from saved' : 'Saved to items', 'success');
   }, [haptic, isSavedProduct, itemId, show, toggleSavedProduct]);
 
-  const handleToggleCollection = useCallback((collection: Collection) => {
+  const handleToggleCollection = useCallback(async (collection: Collection) => {
     haptic.light();
     const currentlyIn = isInCollection(collection.id, itemId);
+
+    // Optimistic local update
     if (currentlyIn) {
       removeFromCollection(collection.id, itemId);
-      show(`Removed from ${collection.name}`, 'info');
     } else {
       addToCollection(collection.id, itemId);
-      haptic.success();
-      show(`Added to ${collection.name}`, 'success');
     }
-  }, [addToCollection, haptic, isInCollection, itemId, removeFromCollection, show]);
 
-  const handleCreateCollection = useCallback(() => {
+    try {
+      if (currentlyIn) {
+        await removeFromCollectionOnApi(collection.id, itemId);
+        show(`Removed from ${collection.name}`, 'info');
+      } else {
+        await addToCollectionOnApi(collection.id, itemId);
+        haptic.success();
+        show(`Added to ${collection.name}`, 'success');
+      }
+    } catch {
+      // Rollback optimistic change
+      if (currentlyIn) {
+        addToCollection(collection.id, itemId);
+      } else {
+        removeFromCollection(collection.id, itemId);
+      }
+      show('Action failed. Please try again.', 'error');
+    }
+  }, [addToCollection, addToCollectionOnApi, haptic, isInCollection, itemId, removeFromCollection, removeFromCollectionOnApi, show]);
+
+  const handleCreateCollection = useCallback(async () => {
     const trimmed = newCollectionName.trim();
-    if (!trimmed) return;
+    if (!trimmed || isSubmitting) return;
     haptic.success();
-    const newId = createCollection(trimmed);
-    addToCollection(newId, itemId);
-    setNewCollectionName('');
-    setShowCreateInput(false);
-    Keyboard.dismiss();
-    show('Created and added to collection', 'success');
-  }, [addToCollection, createCollection, haptic, itemId, newCollectionName, show]);
+    setIsSubmitting(true);
+
+    try {
+      const newId = await createCollectionOnApi(trimmed);
+      // Also add the current item to the new collection via API
+      try {
+        await addToCollectionOnApi(newId, itemId);
+        addToCollection(newId, itemId);
+      } catch {
+        // Collection created but item add failed; user can retry manually
+        show('Collection created. Adding item failed.', 'info');
+      }
+      setNewCollectionName('');
+      setShowCreateInput(false);
+      Keyboard.dismiss();
+      show('Created and added to collection', 'success');
+    } catch {
+      show('Unable to create collection. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [addToCollection, addToCollectionOnApi, createCollectionOnApi, haptic, isSubmitting, itemId, newCollectionName, show]);
 
   const handleClose = useCallback(() => {
     setNewCollectionName('');
@@ -80,9 +123,17 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
     onClose();
   }, [onClose]);
 
+  const getCollectionCover = useCallback((collection: Collection) => {
+    const coverItem = collection.itemIds
+      .map((id) => listings.find((l) => l.id === id))
+      .filter((l): l is NonNullable<typeof l> => !!l && Array.isArray(l.images) && l.images.length > 0)[0];
+    return coverItem?.images?.[0] ?? null;
+  }, [listings]);
+
   const renderCollectionItem = ({ item: collection }: { item: Collection }) => {
     const selected = isInCollection(collection.id, itemId);
     const count = collection.itemIds?.length ?? 0;
+    const cover = getCollectionCover(collection);
     return (
       <AnimatedPressable
         style={[styles.collectionRow, selected && styles.collectionRowSelected]}
@@ -93,11 +144,26 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
         accessibilityLabel={`${selected ? 'Remove from' : 'Add to'} ${collection.name} collection`}
         accessibilityHint={selected ? 'Tap to remove from this collection' : 'Tap to add to this collection'}
       >
-        <View style={styles.collectionInfo}>
-          <Text style={styles.collectionName}>{collection.name}</Text>
-          <Text style={styles.collectionCount}>{count} {count === 1 ? 'item' : 'items'}</Text>
+        <View style={styles.collectionLeft}>
+          {cover ? (
+            <CachedImage uri={cover} style={styles.collectionThumb} contentFit="cover" />
+          ) : (
+            <View style={styles.collectionThumbEmpty}>
+              <Ionicons name="folder-open-outline" size={18} color={Colors.textMuted} />
+            </View>
+          )}
+          <View style={styles.collectionInfo}>
+            <Text style={styles.collectionName}>{collection.name}</Text>
+            <Text style={styles.collectionCount}>{count} {count === 1 ? 'item' : 'items'}</Text>
+          </View>
         </View>
-        {selected && <Ionicons name="checkmark-circle" size={24} color={Colors.brand} />}
+        {selected ? (
+          <View style={styles.checkWrap}>
+            <Ionicons name="checkmark-circle" size={24} color={Colors.brand} />
+          </View>
+        ) : (
+          <View style={styles.uncheckedWrap} />
+        )}
       </AnimatedPressable>
     );
   };
@@ -115,7 +181,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
       >
-        <View style={styles.card}>
+        <View style={[styles.card, { paddingBottom: Space.md + insets.bottom }]}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Save</Text>
@@ -123,6 +189,23 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
               <Ionicons name="close" size={24} color={Colors.textPrimary} />
             </AnimatedPressable>
           </View>
+
+          {/* Item context */}
+          {item && (
+            <View style={styles.itemContext}>
+              {item.images?.[0] ? (
+                <CachedImage uri={item.images[0]} style={styles.itemThumb} contentFit="cover" />
+              ) : (
+                <View style={styles.itemThumbEmpty}>
+                  <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
+                </View>
+              )}
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
+                <Text style={styles.itemBrand}>{item.brand}</Text>
+              </View>
+            </View>
+          )}
 
           {/* Saved Toggle */}
           <AnimatedPressable
@@ -134,7 +217,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
             accessibilityLabel={saved ? 'Saved to items' : 'Save for later'}
           >
             <View style={styles.savedRowLeft}>
-              <View style={[styles.savedIconWrap, { backgroundColor: saved ? `${Colors.success}20` : 'rgba(255,255,255,0.03)' }]}>
+              <View style={[styles.savedIconWrap, { backgroundColor: saved ? `${Colors.success}20` : Colors.surfaceAlt }]}>
                 <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color={saved ? Colors.success : Colors.textPrimary} />
               </View>
               <View>
@@ -181,7 +264,8 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
                 title="Create"
                 size="sm"
                 onPress={handleCreateCollection}
-                disabled={!newCollectionName.trim()}
+                disabled={!newCollectionName.trim() || isSubmitting}
+                loading={isSubmitting}
                 style={{ marginLeft: Space.sm }}
               />
             </View>
@@ -302,10 +386,81 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
+  collectionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  collectionThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceAlt,
+    overflow: 'hidden',
+  },
+  collectionThumbEmpty: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
   collectionCount: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
+    marginTop: 2,
+  },
+  checkWrap: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uncheckedWrap: {
+    width: 28,
+  },
+  itemContext: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    padding: Space.sm + 4,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceAlt,
+    marginBottom: Space.md,
+  },
+  itemThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surface,
+    overflow: 'hidden',
+  },
+  itemThumbEmpty: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemTitle: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  itemBrand: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
     marginTop: 2,
   },
   emptyWrap: {

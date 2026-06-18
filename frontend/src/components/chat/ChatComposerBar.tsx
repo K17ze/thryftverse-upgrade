@@ -1,8 +1,13 @@
-import React from 'react';
-import { View, TextInput, StyleSheet, Platform } from 'react-native';
+import React, { useRef } from 'react';
+import {
+  View,
+  TextInput,
+  StyleSheet,
+  Platform,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface ChatComposerBarProps {
@@ -16,6 +21,8 @@ interface ChatComposerBarProps {
   disabled?: boolean;
 }
 
+const MAX_INPUT_HEIGHT = 120;
+
 export function ChatComposerBar({
   value,
   onChangeText,
@@ -26,6 +33,7 @@ export function ChatComposerBar({
   isSending = false,
   disabled = false,
 }: ChatComposerBarProps) {
+  const inputRef = useRef<TextInput>(null);
   const canSend = value.trim().length > 0 && !isSending;
 
   return (
@@ -34,63 +42,62 @@ export function ChatComposerBar({
         onPress={onAttachmentPress}
         style={styles.actionBtn}
         activeOpacity={0.7}
-        scaleValue={0.88}
+        scaleValue={0.9}
         hapticFeedback="light"
         accessibilityLabel="Add attachment"
         accessibilityRole="button"
-        disabled={disabled}
+        disabled={disabled || isSending}
       >
         <Ionicons name="add-circle-outline" size={26} color={Colors.textSecondary} />
       </AnimatedPressable>
 
       <View style={styles.inputWrap}>
         <TextInput
+          ref={inputRef}
           style={styles.input}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={Colors.textMuted}
-          returnKeyType="send"
-          onSubmitEditing={canSend ? onSend : undefined}
-          blurOnSubmit={false}
-          editable={!disabled}
+          multiline
+          maxLength={2000}
+          editable={!disabled && !isSending}
           autoCapitalize="sentences"
           autoCorrect
-          maxLength={2000}
+          textAlignVertical="center"
           accessibilityLabel="Message input"
           accessibilityRole="text"
+          onSubmitEditing={canSend ? onSend : undefined}
         />
       </View>
 
-      <AnimatedPressable
-        onPress={onCameraPress}
-        style={styles.actionBtn}
-        activeOpacity={0.7}
-        scaleValue={0.88}
-        hapticFeedback="light"
-        accessibilityLabel="Open camera"
-        accessibilityRole="button"
-        disabled={disabled}
-      >
-        <Ionicons name="camera-outline" size={24} color={Colors.textSecondary} />
-      </AnimatedPressable>
-
-      <AnimatedPressable
-        onPress={canSend ? onSend : undefined}
-        style={[styles.sendBtn, canSend && styles.sendBtnActive]}
-        activeOpacity={0.7}
-        scaleValue={0.88}
-        hapticFeedback="medium"
-        accessibilityLabel="Send message"
-        accessibilityRole="button"
-        disabled={!canSend || disabled}
-      >
-        <Ionicons
-          name="arrow-up"
-          size={20}
-          color={canSend ? Colors.textInverse : Colors.textMuted}
-        />
-      </AnimatedPressable>
+      {canSend ? (
+        <AnimatedPressable
+          onPress={onSend}
+          style={[styles.sendBtn, styles.sendBtnActive]}
+          activeOpacity={0.7}
+          scaleValue={0.88}
+          hapticFeedback="medium"
+          accessibilityLabel="Send message"
+          accessibilityRole="button"
+          disabled={isSending}
+        >
+          <Ionicons name="arrow-up" size={20} color={Colors.background} />
+        </AnimatedPressable>
+      ) : (
+        <AnimatedPressable
+          onPress={onCameraPress}
+          style={styles.actionBtn}
+          activeOpacity={0.7}
+          scaleValue={0.9}
+          hapticFeedback="light"
+          accessibilityLabel="Open camera"
+          accessibilityRole="button"
+          disabled={disabled || isSending}
+        >
+          <Ionicons name="camera-outline" size={24} color={Colors.textSecondary} />
+        </AnimatedPressable>
+      )}
     </View>
   );
 }
@@ -99,8 +106,8 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: Space.sm,
-    paddingVertical: 10,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
     gap: Space.xs,
     backgroundColor: Colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -117,12 +124,13 @@ const styles = StyleSheet.create({
   inputWrap: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    paddingVertical: Platform.OS === 'ios' ? 8 : 6,
     minHeight: 44,
+    maxHeight: MAX_INPUT_HEIGHT + 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
   },
@@ -135,7 +143,9 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
     padding: 0,
     margin: 0,
-    maxHeight: 120,
+    paddingTop: Platform.OS === 'ios' ? 4 : 6,
+    paddingBottom: Platform.OS === 'ios' ? 4 : 6,
+    maxHeight: MAX_INPUT_HEIGHT,
   },
   sendBtn: {
     width: 36,

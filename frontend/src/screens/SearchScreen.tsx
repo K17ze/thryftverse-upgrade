@@ -11,12 +11,9 @@ import {
   Dimensions,
   RefreshControl,
 } from 'react-native';
-import { CachedImage } from '../components/CachedImage';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { MasonryGrid } from '../components/ProductCardV2';
 import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
@@ -24,17 +21,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { EmptyState } from '../components/EmptyState';
-import { SkeletonLoader } from '../components/SkeletonLoader';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
-import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
-import { getBackendSyncStatus } from '../utils/syncStatus';
-import { useToast } from '../context/ToastContext';
-import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
-import { AppButton } from '../components/ui/AppButton';
-import { SharedTransitionView } from '../components/SharedTransitionView';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Motion } from '../constants/motion';
 import { Type , Typography, Space, Radius  } from '../theme/designTokens';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import PulseTab from '../components/explore/PulseTab';
@@ -50,187 +38,16 @@ const EXPLORE_TABS = [
   { value: 'edit', label: 'Edit' },
 ];
 
-const PANEL_BG = Colors.surface;
-const PANEL_ALT = Colors.surfaceAlt;
-const BRAND = Colors.brand;
-
-// Saved look data
-interface SavedLook {
-  id: string;
-  title: string;
-  coverImage: string;
-  items: { id: string; label: string; x: number; y: number }[];
-  creator: { name: string; avatar: string };
-  likes: number;
-  comments: number;
-  saved: boolean;
-}
-
-const SAVED_LOOKS_SEED: SavedLook[] = [
-  {
-    id: 'look1',
-    title: 'Winter Layers',
-    coverImage: '',
-    items: [
-      { id: 'l5', label: 'Off-White Hoodie', x: 0.2, y: 0.3 },
-      { id: 'l7', label: 'Cargo Trousers', x: 0.6, y: 0.65 },
-      { id: 'l6', label: 'Air Max 90', x: 0.5, y: 0.85 },
-    ],
-    creator: { name: 'mariefullery', avatar: '' },
-    likes: 234,
-    comments: 18,
-    saved: true,
-  },
-  {
-    id: 'look2',
-    title: 'Minimal Monochrome',
-    coverImage: '',
-    items: [
-      { id: 'l2', label: 'AMI Striped Shirt', x: 0.35, y: 0.25 },
-      { id: 'l3', label: 'RL Harrington', x: 0.7, y: 0.4 },
-    ],
-    creator: { name: 'scott_art', avatar: '' },
-    likes: 156,
-    comments: 12,
-    saved: true,
-  },
-  {
-    id: 'look3',
-    title: 'Streetwear Daily',
-    coverImage: '',
-    items: [
-      { id: 'l4', label: 'Stussy Logo Tee', x: 0.4, y: 0.3 },
-      { id: 'l9', label: 'Represent Hoodie', x: 0.25, y: 0.15 },
-      { id: 'l10', label: 'Chuck Taylor', x: 0.6, y: 0.8 },
-    ],
-    creator: { name: 'dankdunksuk', avatar: '' },
-    likes: 89,
-    comments: 7,
-    saved: true,
-  },
-];
-
-const SAVED_LOOKS: SavedLook[] = ENABLE_RUNTIME_MOCKS ? SAVED_LOOKS_SEED : [];
-
-// Look card component — upgraded for editorial visual discovery
-function LookCard({
-  look,
-  onPress,
-  onLikePress,
-  onCommentPress,
-  onSavePress,
-  isLiked,
-  isSaved,
-  sharedTransitionTag,
-}: {
-  look: SavedLook;
-  onPress: () => void;
-  onLikePress: () => void;
-  onCommentPress: () => void;
-  onSavePress: () => void;
-  isLiked: boolean;
-  isSaved: boolean;
-  sharedTransitionTag?: string;
-}) {
-  const likeCount = look.likes + (isLiked ? 1 : 0);
-
-  return (
-    <AnimatedPressable style={lookStyles.card} onPress={onPress} activeOpacity={0.92}>
-      {/* Cover Image */}
-      <View style={lookStyles.imageWrap}>
-        <SharedTransitionView
-          style={lookStyles.imageShared}
-          sharedTransitionTag={sharedTransitionTag}
-        >
-          <CachedImage
-            uri={look.coverImage}
-            style={lookStyles.image}
-            containerStyle={{ width: '100%', height: '100%' }}
-            contentFit="cover"
-            emptyLabel={look.title}
-            emptyIcon="image-outline"
-          />
-        </SharedTransitionView>
-
-        {/* Floating item tags */}
-        {look.items.map((item) => (
-          <View
-            key={item.id}
-            style={[
-              lookStyles.itemTag,
-              { left: `${item.x * 100}%` as any, top: `${item.y * 100}%` as any },
-            ]}
-          >
-            <View style={lookStyles.tagDot} />
-            <Text style={lookStyles.tagLabel} numberOfLines={1}>{item.label}</Text>
-          </View>
-        ))}
-
-        {/* Gradient overlay + overlaid info */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={lookStyles.gradient}
-        />
-
-        {/* Overlaid title & creator (Instagram-style) */}
-        <View style={lookStyles.overlayInfo}>
-          <Text style={lookStyles.overlayTitle}>{look.title}</Text>
-          <Text style={lookStyles.overlayCreator}>by @{look.creator.name}</Text>
-        </View>
-
-        {/* Subtle stats row overlaid at bottom */}
-        <View style={lookStyles.overlayStats}>
-          <AnimatedPressable
-            style={lookStyles.overlayStatBtn}
-            onPress={(event) => {
-              event.stopPropagation();
-              onLikePress();
-            }}
-          >
-            <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={14} color={isLiked ? Colors.danger : '#fff'} />
-            <Text style={lookStyles.overlayStatCount}>{likeCount}</Text>
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={lookStyles.overlayStatBtn}
-            onPress={(event) => {
-              event.stopPropagation();
-              onCommentPress();
-            }}
-          >
-            <Ionicons name="chatbubble-outline" size={13} color="rgba(255,255,255,0.9)" />
-            <Text style={lookStyles.overlayStatCount}>{look.comments}</Text>
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={lookStyles.overlayStatBtn}
-            onPress={(event) => {
-              event.stopPropagation();
-              onSavePress();
-            }}
-          >
-            <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={13} color={isSaved ? BRAND : 'rgba(255,255,255,0.9)'} />
-          </AnimatedPressable>
-        </View>
-      </View>
-    </AnimatedPressable>
-  );
-}
-
 // Main screen
 export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [likedLooks, setLikedLooks] = useState<Record<string, boolean>>({});
   const navigation = useNavigation<NavT>();
-  const { show } = useToast();
-  const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
+  const { listings, isSyncing, lastError, refreshListings } = useBackendData();
 
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
-  const reducedMotionEnabled = useReducedMotion();
 
-  const listingIdSet = React.useMemo(() => new Set(listings.map((item) => item.id)), [listings]);
   const [activeTab, setActiveTab] = useState<'pulse' | 'looks' | 'edit'>('pulse');
 
   const scrollHandler = useAnimatedScrollHandler({
@@ -244,25 +61,6 @@ export default function SearchScreen() {
     await refreshListings();
     setTimeout(() => setRefreshing(false), 400);
   };
-
-  const handleToggleLookLike = React.useCallback(
-    (look: SavedLook) => {
-      setLikedLooks((prev) => {
-        const nextLiked = !prev[look.id];
-        show(nextLiked ? 'Added to liked looks' : 'Removed from liked looks', 'info');
-        return {
-          ...prev,
-          [look.id]: nextLiked,
-        };
-      });
-    },
-    [show],
-  );
-
-  const resolveLookItemId = React.useCallback(
-    (look: SavedLook) => look.items.find((entry) => listingIdSet.has(entry.id))?.id ?? listings[0]?.id,
-    [listingIdSet, listings],
-  );
 
   const { isDark } = useAppTheme();
 
@@ -392,104 +190,6 @@ export default function SearchScreen() {
   );
 }
 
-// -- Look Card Styles --
-const lookStyles = StyleSheet.create({
-  card: {
-    backgroundColor: PANEL_BG,
-    borderRadius: Radius.sm,
-    marginBottom: Space.lg,
-    overflow: 'hidden',
-  },
-  imageWrap: {
-    width: '100%',
-    height: SCREEN_WIDTH * 1.1,
-    position: 'relative',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  imageShared: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  gradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 140,
-  },
-  overlayInfo: {
-    position: 'absolute',
-    bottom: 44,
-    left: Space.md,
-    right: 100,
-  },
-  overlayTitle: {
-    fontFamily: Typography.family.bold,
-    fontSize: 18,
-    color: '#fff',
-    letterSpacing: -0.3,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  overlayCreator: {
-    fontFamily: Typography.family.medium,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 4,
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  overlayStats: {
-    position: 'absolute',
-    bottom: Space.sm,
-    right: Space.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  overlayStatBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  overlayStatCount: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-  itemTag: {
-    position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    maxWidth: 160,
-  },
-  tagDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: BRAND,
-    marginRight: 6,
-  },
-  tagLabel: {
-    color: '#fff',
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
-  },
-});
-
-// ------------------------------------------------------------------------------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
@@ -576,22 +276,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: Colors.surface,
-    borderRadius: 30,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
   },
   searchBarFocused: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.background,
     borderColor: Colors.brand,
-    shadowOpacity: 0.08,
-    elevation: 3,
   },
   searchInput: {
     flex: 1,

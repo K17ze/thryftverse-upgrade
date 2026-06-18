@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StatusBar,
   ScrollView,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +25,9 @@ import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
+import { useStore } from '../store/useStore';
+import { uploadMedia } from '../services/mediaUpload';
+import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingPreview'>;
 
@@ -36,16 +40,86 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   const haptic = useHaptic();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
+  const currentUser = useStore((s) => s.currentUser);
+
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const canPublish = useMemo(() => {
     return preview.title && preview.price !== undefined && preview.photos?.length > 0;
   }, [preview]);
 
-  const handlePublish = () => {
+  const handlePublish = useCallback(async () => {
+    if (!canPublish) return;
+    if (!currentUser?.id) {
+      show('Sign in to publish a listing.', 'error');
+      return;
+    }
+
     haptic.heavy();
-    show('Listing published', 'success');
-    navigation.navigate('MainTabs');
-  };
+    setIsPublishing(true);
+    setErrorMsg(null);
+
+    try {
+      // 1. Upload all media
+      const uploadedUrls: string[] = [];
+      for (let i = 0; i < preview.photos.length; i++) {
+        const uri = preview.photos[i];
+        if (uri.startsWith('http')) {
+          uploadedUrls.push(uri);
+        } else {
+          const url = await uploadMedia(uri, 'listings');
+          uploadedUrls.push(url);
+        }
+      }
+
+      const coverImage = uploadedUrls[0] ?? '';
+      const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+      // 2. Create listing
+      await createListingOnApi({
+        id: listingId,
+        sellerId: currentUser.id,
+        title: preview.title.trim(),
+        description: (preview.description ?? '').trim(),
+        priceGbp: preview.price ?? 0,
+        imageUrl: coverImage,
+        status: 'active',
+        category: preview.category || undefined,
+        brand: preview.brand || undefined,
+        size: preview.size || undefined,
+        condition: preview.condition || undefined,
+        originalPriceGbp: preview.originalPrice ? preview.originalPrice : undefined,
+        shippingMethod: preview.shippingMethod || undefined,
+        shippingPayer: preview.shippingPayer || undefined,
+      });
+
+      // 3. Create listing_images for all photos
+      for (let i = 0; i < uploadedUrls.length; i++) {
+        await createListingImageOnApi({
+          id: `${listingId}_img_${i}`,
+          listingId,
+          imageUrl: uploadedUrls[i],
+          sortOrder: i,
+        });
+      }
+
+      show('Listing published', 'success');
+      navigation.replace('ListingSuccess', {
+        listingId,
+        title: preview.title,
+        price: preview.price,
+        categoryId: preview.category,
+        photoUri: coverImage,
+      });
+    } catch (e: unknown) {
+      const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Please try again.';
+      setErrorMsg(msg);
+      show(msg, 'error');
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [canPublish, currentUser, preview, haptic, show, navigation]);
 
   const handleEdit = () => {
     haptic.light();
@@ -175,18 +249,18 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <AppButton
-          title="Publish Listing"
+          title={isPublishing ? 'Publishing…' : 'Publish Listing'}
           variant="primary"
           size="lg"
           style={{ flex: 1 }}
-          disabled={!canPublish}
+          disabled={!canPublish || isPublishing}
           onPress={handlePublish}
           hapticFeedback="heavy"
-          icon={<Ionicons name="cloud-upload-outline" size={16} color={Colors.background} />}
+          icon={isPublishing ? undefined : <Ionicons name="cloud-upload-outline" size={16} color={Colors.background} />}
         />
         <AnimatedPressable
           style={styles.draftBtn}
-          onPress={() => { haptic.light(); show('Saved to drafts', 'info'); navigation.goBack(); }}
+          onPress={() => { haptic.light(); navigation.goBack(); }}
           activeOpacity={0.8}
           scaleValue={0.96}
         >

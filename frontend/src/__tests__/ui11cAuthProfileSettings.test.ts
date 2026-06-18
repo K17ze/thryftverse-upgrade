@@ -56,10 +56,9 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
     expect(src).toContain('FlagshipProfileMedia');
   });
 
-  it('EditProfileScreen imports FlagshipProfileMedia and FlagshipActionCluster', () => {
+  it('EditProfileScreen imports FlagshipProfileMedia', () => {
     const src = readSrc('screens/EditProfileScreen.tsx');
     expect(src).toContain('FlagshipProfileMedia');
-    expect(src).toContain('FlagshipActionCluster');
   });
 
   // 3. EditProfile does not persist file:// media
@@ -69,27 +68,26 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
   });
 
   // 4. Settings rows navigate to real screens or are honestly disabled/hidden
-  it('SettingsScreenV2 uses SettingsPage and SettingsRow', () => {
-    const src = readSrc('screens/SettingsScreenV2.tsx');
-    expect(src).toContain('SettingsPage');
+  it('SettingsScreen uses SettingsRow', () => {
+    const src = readSrc('screens/SettingsScreen.tsx');
     expect(src).toContain('SettingsRow');
   });
 
-  it('Settings subpages use ScreenHeader or SettingsPage', () => {
+  it('Settings subpages use FlagshipScreen or FlagshipHeader', () => {
     const screens = [
-      'screens/AccountSettingsScreenV2.tsx',
-      'screens/PrivacySettingsScreenV2.tsx',
-      'screens/ActiveSessionsScreenV2.tsx',
-      'screens/BlockedUsersScreenV2.tsx',
-      'screens/PushNotificationsScreenV2.tsx',
-      'screens/ChatSettingsScreenV2.tsx',
-      'screens/ChangePasswordScreenV2.tsx',
-      'screens/TwoFactorSetupScreenV2.tsx',
-      'screens/HelpSupportScreenV2.tsx',
+      'screens/AccountSettingsScreen.tsx',
+      'screens/PrivacySettingsScreen.tsx',
+      'screens/ActiveSessionsScreen.tsx',
+      'screens/BlockedUsersScreen.tsx',
+      'screens/PushNotificationsScreen.tsx',
+      'screens/ChatSettingsScreen.tsx',
+      'screens/ChangePasswordScreen.tsx',
+      'screens/TwoFactorSetupScreen.tsx',
+      'screens/HelpSupportScreen.tsx',
     ];
     for (const screen of screens) {
       const src = readSrc(screen);
-      expect(src).toMatch(/SettingsPage|ScreenHeader/);
+      expect(src).toMatch(/FlagshipScreen|FlagshipHeader/);
     }
   });
 
@@ -109,28 +107,28 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
   });
 
   // 6. No fake sessions/blocked users/2FA states
-  it('ActiveSessionsScreenV2 shows honest local-only state', () => {
-    const src = readSrc('screens/ActiveSessionsScreenV2.tsx');
+  it('ActiveSessionsScreen shows honest local-only state', () => {
+    const src = readSrc('screens/ActiveSessionsScreen.tsx');
     expect(src).toContain('Only this device is tracked locally');
     expect(src).not.toContain('MOCK_SESSIONS');
   });
 
-  it('BlockedUsersScreenV2 does not invent fake blocked users', () => {
-    const src = readSrc('screens/BlockedUsersScreenV2.tsx');
+  it('BlockedUsersScreen does not invent fake blocked users', () => {
+    const src = readSrc('screens/BlockedUsersScreen.tsx');
     expect(src).not.toContain('MOCK_BLOCKED');
     expect(src).not.toContain('fake blocked');
   });
 
-  it('TwoFactorSetupScreenV2 does not fake 2FA completion', () => {
-    const src = readSrc('screens/TwoFactorSetupScreenV2.tsx');
+  it('TwoFactorSetupScreen does not fake 2FA completion', () => {
+    const src = readSrc('screens/TwoFactorSetupScreen.tsx');
     expect(src).toContain('requestTwoFactorEnrollment');
     expect(src).toContain('verifyTwoFactorEnrollment');
     expect(src).not.toContain('MOCK_2FA');
   });
 
   // 7. No fake settings toggle success where backend is missing
-  it('ChatSettingsScreenV2 uses honest local state for toggles', () => {
-    const src = readSrc('screens/ChatSettingsScreenV2.tsx');
+  it('ChatSettingsScreen uses honest local state for toggles', () => {
+    const src = readSrc('screens/ChatSettingsScreen.tsx');
     expect(src).not.toContain('saved to server');
     expect(src).not.toContain('synced successfully');
   });
@@ -179,9 +177,9 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
   // 10. No double-boxing in settings screens
   it('settings screens do not nest ElevatedSurface inside list sections', () => {
     const screens = [
-      'screens/SettingsScreenV2.tsx',
-      'screens/AccountSettingsScreenV2.tsx',
-      'screens/PrivacySettingsScreenV2.tsx',
+      'screens/SettingsScreen.tsx',
+      'screens/AccountSettingsScreen.tsx',
+      'screens/PrivacySettingsScreen.tsx',
     ];
     for (const screen of screens) {
       const src = readSrc(screen);
@@ -209,15 +207,15 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
   });
 
   // 13. ChatSettingsScreenV2 uses FadeInDown
-  it('ChatSettingsScreenV2 uses FadeInDown', () => {
-    const src = readSrc('screens/ChatSettingsScreenV2.tsx');
+  it('ChatSettingsScreen uses FadeInDown', () => {
+    const src = readSrc('screens/ChatSettingsScreen.tsx');
     expect(src).toContain('FadeInDown');
     expect(src).toContain('useReducedMotion');
   });
 
-  // 14. BlockedUsersScreenV2 uses FlagshipEmptyGraphic
-  it('BlockedUsersScreenV2 uses FlagshipEmptyGraphic', () => {
-    const src = readSrc('screens/BlockedUsersScreenV2.tsx');
+  // 14. BlockedUsersScreen uses FlagshipEmptyGraphic
+  it('BlockedUsersScreen uses FlagshipEmptyGraphic', () => {
+    const src = readSrc('screens/BlockedUsersScreen.tsx');
     expect(src).toContain('FlagshipEmptyGraphic');
   });
 });

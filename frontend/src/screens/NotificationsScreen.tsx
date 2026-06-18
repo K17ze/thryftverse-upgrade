@@ -355,7 +355,7 @@ export default function NotificationsScreen() {
                       {item.text}
                     </Text>
                     <View style={styles.notifMetaRow}>
-                      <View style={[styles.notifTypeIcon, { backgroundColor: icon.bg }]}> 
+                      <View style={[styles.notifTypeIcon, { backgroundColor: icon.bg }]}>
                         <Ionicons name={icon.name as never} size={12} color={icon.color} />
                       </View>
                       <Text style={styles.notifTime}>{item.time}</Text>

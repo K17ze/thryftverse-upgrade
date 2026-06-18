@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
+import { useHaptic } from '../hooks/useHaptic';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SettingsCard } from '../components/settings/SettingsCard';
 import { SettingsCell } from '../components/SettingsCell';
 import { Typography } from '../theme/designTokens';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type PreferencePickerMode = 'categories' | 'brands' | 'members' | null;
 
@@ -31,6 +31,17 @@ export default function PersonalisationScreen() {
   const membersPref = personalisationPreferences.membersPref;
   const [pickerMode, setPickerMode] = useState<PreferencePickerMode>(null);
   const { show } = useToast();
+  const haptic = useHaptic();
+
+  const profileStrength = useMemo(() => {
+    let score = 0;
+    const total = 4;
+    if (genderFilter.length > 0 && !(genderFilter.length === 1 && genderFilter[0] === 'All')) score++;
+    if (categoriesAndSizesPref !== 'Balanced') score++;
+    if (brandsPref !== 'Any') score++;
+    if (membersPref !== 'Everyone') score++;
+    return { score, total, percent: Math.round((score / total) * 100) };
+  }, [genderFilter, categoriesAndSizesPref, brandsPref, membersPref]);
 
   const genderOptions = ['Women', 'Men', 'Kids', 'All'];
 
@@ -84,103 +95,135 @@ export default function PersonalisationScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-        backgroundColor={Colors.background}
-      />
-
-      <ScreenHeader title="Personalisation" onBack={() => navigation.goBack()} />
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Hero */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <Text style={styles.heroLine}>See only good fits</Text>
-          <Text style={styles.heroSubtitle}>
-            Set your preferences to tailor your feed, search results and recommendations to your
-            exact taste.
+    <FlagshipScreen
+      header={<FlagshipHeader title="Personalisation" subtitle="Customise your experience" onBack={() => navigation.goBack()} />}
+    >
+      {/* Profile Strength */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <View style={styles.strengthHeader}>
+          <Text style={styles.strengthLabel}>Profile strength</Text>
+          <Text style={[styles.strengthValue, { color: profileStrength.percent === 100 ? Colors.success : Colors.brand }]}>
+            {profileStrength.percent}%
           </Text>
-        </Reanimated.View>
+        </View>
+        <View style={[styles.strengthTrack, { backgroundColor: Colors.surfaceAlt }]}>
+          <View
+            style={[
+              styles.strengthFill,
+              {
+                width: `${profileStrength.percent}%`,
+                backgroundColor: profileStrength.percent === 100 ? Colors.success : Colors.brand,
+              },
+            ]}
+          />
+        </View>
+        <Text style={styles.strengthHint}>
+          {profileStrength.percent === 100
+            ? 'Your profile is fully tuned. Great finds ahead.'
+            : `${profileStrength.total - profileStrength.score} more preference${profileStrength.total - profileStrength.score === 1 ? '' : 's'} will unlock better recommendations.`}
+        </Text>
+      </Reanimated.View>
 
-        {/* Gender Preference Pills */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-          <View style={styles.genderRow}>
-            {genderOptions.map((g) => (
-              <AnimatedPressable
-                key={g}
-                style={[styles.genderPill, genderFilter.includes(g) && styles.genderPillActive]}
-                onPress={() => toggleGender(g)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: genderFilter.includes(g) }}
-                accessibilityLabel={`Toggle ${g} preference`}
-                accessibilityHint="Adds or removes this preference from your feed filters"
-                hapticFeedback="light"
-                scaleValue={0.95}
-              >
-                <Text
-                  style={[styles.genderPillText, genderFilter.includes(g) && styles.genderPillTextActive]}
-                >
-                  {g}
-                </Text>
-              </AnimatedPressable>
-            ))}
+      {/* Visual Preview */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+        <View style={[styles.previewCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <View style={styles.previewHeader}>
+            <Ionicons name="options-outline" size={18} color={Colors.brand} />
+            <Text style={[styles.previewTitle, { color: Colors.textMuted }]}>YOUR FILTERS</Text>
           </View>
-        </Reanimated.View>
-
-        {/* Preference Rows */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-          <Text style={styles.sectionTitle}>Your Preferences</Text>
-          <SettingsCard>
-            <SettingsCell
-              icon="grid-outline"
-              iconColor={Colors.textPrimary}
-              title="Categories and sizes"
-              value={categoriesAndSizesPref}
-              isFirst
-              onPress={() => setPickerMode('categories')}
-            />
-            <SettingsCell
-              icon="barcode-outline"
-              iconColor={Colors.textPrimary}
-              title="Brands"
-              value={brandsPref}
-              onPress={() => setPickerMode('brands')}
-            />
-            <SettingsCell
-              icon="people-outline"
-              iconColor={Colors.textPrimary}
-              title="Members"
-              value={membersPref}
-              isLast
-              onPress={() => setPickerMode('members')}
-            />
-          </SettingsCard>
-        </Reanimated.View>
-
-        {/* Personalisation Info Card */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
-          <SettingsCard variant="tint" style={styles.personalisationInfoCard}>
-            <View style={styles.infoCardRow}>
-              <Ionicons name="sparkles-outline" size={20} color={Colors.brand} />
-              <Text style={styles.infoText}>
-                Personalisation helps us surface items you'll love. Your choices
-                update your feed, search, and recommendations instantly.
-              </Text>
-            </View>
-          </SettingsCard>
-        </Reanimated.View>
-
-        {/* Info Card */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
-          <View style={styles.infoCard}>
-            <Ionicons name="information-circle-outline" size={20} color={Colors.brand} />
-            <Text style={styles.infoText}>
-              Your preferences are applied as filters across your feed and search. They never hide
-              items permanently.
+          <View style={styles.previewRow}>
+            <Ionicons name="filter-outline" size={16} color={Colors.textSecondary} />
+            <Text style={[styles.previewText, { color: Colors.textPrimary }]}>
+              Gender: {genderFilter.length > 0 ? genderFilter.join(', ') : 'All'}
             </Text>
           </View>
-        </Reanimated.View>
-      </ScrollView>
+          <View style={styles.previewRow}>
+            <Ionicons name="grid-outline" size={16} color={Colors.textSecondary} />
+            <Text style={[styles.previewText, { color: Colors.textPrimary }]}>
+              Categories: {categoriesAndSizesPref}
+            </Text>
+          </View>
+          <View style={styles.previewRow}>
+            <Ionicons name="barcode-outline" size={16} color={Colors.textSecondary} />
+            <Text style={[styles.previewText, { color: Colors.textPrimary }]}>
+              Brands: {brandsPref}
+            </Text>
+          </View>
+          <View style={styles.previewRow}>
+            <Ionicons name="people-outline" size={16} color={Colors.textSecondary} />
+            <Text style={[styles.previewText, { color: Colors.textPrimary }]}>
+              Members: {membersPref}
+            </Text>
+          </View>
+        </View>
+      </Reanimated.View>
+
+      {/* Gender Preference Pills */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <Text style={styles.sectionTitle}>Gender</Text>
+        <View style={styles.genderRow}>
+          {genderOptions.map((g) => (
+            <AnimatedPressable
+              key={g}
+              style={[styles.genderPill, genderFilter.includes(g) && styles.genderPillActive]}
+              onPress={() => toggleGender(g)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: genderFilter.includes(g) }}
+              accessibilityLabel={`Toggle ${g} preference`}
+              accessibilityHint="Adds or removes this preference from your feed filters"
+              hapticFeedback="light"
+              scaleValue={0.95}
+            >
+              <Text
+                style={[styles.genderPillText, genderFilter.includes(g) && styles.genderPillTextActive]}
+              >
+                {g}
+              </Text>
+            </AnimatedPressable>
+          ))}
+        </View>
+      </Reanimated.View>
+
+      {/* Preference Rows */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
+        <Text style={styles.sectionTitle}>Your Preferences</Text>
+        <SettingsCard>
+          <SettingsCell
+            icon="grid-outline"
+            iconColor={Colors.textPrimary}
+            title="Categories and sizes"
+            value={categoriesAndSizesPref}
+            isFirst
+            onPress={() => { haptic.light(); setPickerMode('categories'); }}
+          />
+          <SettingsCell
+            icon="barcode-outline"
+            iconColor={Colors.textPrimary}
+            title="Brands"
+            value={brandsPref}
+            onPress={() => { haptic.light(); setPickerMode('brands'); }}
+          />
+          <SettingsCell
+            icon="people-outline"
+            iconColor={Colors.textPrimary}
+            title="Members"
+            value={membersPref}
+            isLast
+            onPress={() => { haptic.light(); setPickerMode('members'); }}
+          />
+        </SettingsCard>
+      </Reanimated.View>
+
+      {/* Footer Note */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <View style={styles.footerNote}>
+          <Ionicons name="information-circle-outline" size={16} color={Colors.textMuted} />
+          <Text style={styles.footerNoteText}>
+            Your preferences are applied as filters across your feed and search. They never hide
+            items permanently.
+          </Text>
+        </View>
+      </Reanimated.View>
 
       <BottomSheetPicker
         visible={pickerMode !== null}
@@ -190,34 +233,77 @@ export default function PersonalisationScreen() {
         selectedValue={selectedPickerValue}
         onSelect={handleSelectPreference}
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
-  },
-  heroLine: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+  strengthHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: Space.xs,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
   },
-  heroSubtitle: {
-    fontSize: Type.body.size,
+  strengthLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  strengthValue: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  strengthTrack: {
+    height: 6,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    marginBottom: Space.sm,
+  },
+  strengthFill: {
+    height: '100%',
+    borderRadius: Radius.full,
+  },
+  strengthHint: {
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
-    lineHeight: Type.body.lineHeight,
+    lineHeight: Type.caption.lineHeight,
     marginBottom: Space.lg,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginBottom: Space.sm,
+  },
+  previewCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Space.md,
+    marginBottom: Space.lg,
+  },
+  previewTitle: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: Space.sm,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginBottom: Space.xs,
+  },
+  previewText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
   genderRow: {
     flexDirection: 'row',
@@ -229,7 +315,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + Space.xs,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -261,26 +347,16 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     marginLeft: Space.xs,
   },
-  personalisationInfoCard: {
-    padding: Space.md,
-  },
-  infoCardRow: {
+  footerNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-    backgroundColor: 'rgba(255,255,255,0.025)',
     borderRadius: Radius.lg,
     padding: Space.md,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: Colors.surfaceAlt,
     marginTop: Space.md,
   },
-  infoText: {
+  footerNoteText: {
     flex: 1,
     fontSize: Type.caption.size,
     color: Colors.textSecondary,

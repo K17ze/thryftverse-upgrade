@@ -279,18 +279,24 @@ export default function ItemDetailScreen() {
 
           {/* ── Product Attributes ── */}
           <View style={styles.attributesRow}>
-            <View style={styles.attributeChip}>
-              <Text style={styles.attributeLabel}>Brand</Text>
-              <Text style={styles.attributeValue} numberOfLines={1}>{item.brand}</Text>
-            </View>
-            <View style={styles.attributeChip}>
-              <Text style={styles.attributeLabel}>Size</Text>
-              <Text style={styles.attributeValue}>{item.size}</Text>
-            </View>
-            <View style={styles.attributeChip}>
-              <Text style={styles.attributeLabel}>Condition</Text>
-              <Text style={styles.attributeValue}>{item.condition}</Text>
-            </View>
+            {item.brand ? (
+              <View style={styles.attributeChip}>
+                <Ionicons name="pricetag-outline" size={12} color={Colors.textMuted} />
+                <Text style={styles.attributeValue} numberOfLines={1}>{item.brand}</Text>
+              </View>
+            ) : null}
+            {item.size ? (
+              <View style={styles.attributeChip}>
+                <Ionicons name="resize-outline" size={12} color={Colors.textMuted} />
+                <Text style={styles.attributeValue}>{item.size}</Text>
+              </View>
+            ) : null}
+            {item.condition ? (
+              <View style={styles.attributeChip}>
+                <Ionicons name="checkbox-outline" size={12} color={Colors.textMuted} />
+                <Text style={styles.attributeValue}>{item.condition}</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* ── Description ── */}
@@ -479,12 +485,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   heroContainer: {
     width: width,
-    height: height * 0.72,
+    height: height * 0.62,
     position: 'relative',
     backgroundColor: Colors.surfaceAlt,
     overflow: 'hidden',
   },
-  heroTopScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 132, backgroundColor: TOP_SCRIM_BG },
+  heroTopScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 120, backgroundColor: 'rgba(0,0,0,0.12)' },
   heroImage: { width: width, height: '100%' },
   soldOverlay: { position: 'absolute', bottom: 32, left: 20, backgroundColor: Colors.success, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   soldText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold, letterSpacing: 1 },
@@ -492,13 +498,13 @@ const styles = StyleSheet.create({
   headerRight: { flexDirection: 'row', gap: 12 },
   blurBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   detailsContainer: { paddingHorizontal: 20, paddingTop: 24 },
-  price: { fontSize: 38, fontFamily: Typography.family.semibold, color: Colors.textPrimary, letterSpacing: -0.9, marginBottom: 2 },
-  brand: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, letterSpacing: 0.34, marginBottom: 8 },
+  price: { fontSize: 34, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: -0.6, marginBottom: 4 },
+  brand: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, letterSpacing: 0.2, marginBottom: 10 },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 10,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   protectionText: { fontSize: 13, color: Colors.textMuted, fontFamily: Typography.family.medium },
   trustBadge: {
@@ -506,11 +512,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 6,
-    backgroundColor: 'rgba(52, 199, 89, 0.08)',
-    borderRadius: Radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     marginBottom: Space.md,
+    paddingVertical: 4,
   },
   trustText: {
     fontSize: 13,
@@ -523,8 +526,9 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     width: '100%',
     marginTop: 2,
+    marginLeft: 22,
   },
-  title: { fontSize: 22, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 6, lineHeight: 30 },
+  title: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 8, lineHeight: 32 },
   sizeCondition: { fontSize: 15, fontFamily: Typography.family.medium, color: Colors.textSecondary },
   syncStatusCard: {
     marginTop: 14,
@@ -567,76 +571,74 @@ const styles = StyleSheet.create({
   },
   attributesRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-    marginBottom: 4,
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 16,
+    marginBottom: 8,
+    flexWrap: 'wrap',
   },
   attributeChip: {
-    flex: 1,
-    backgroundColor: PANEL_BG,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 0.5,
-    borderColor: PANEL_BORDER,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   attributeLabel: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
     color: Colors.textMuted,
-    marginBottom: 4,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
   attributeValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
   descriptionBox: {
-    marginTop: 4,
-    backgroundColor: PANEL_BG,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 0.5,
-    borderColor: PANEL_BORDER,
+    marginTop: 12,
+    paddingVertical: 4,
   },
   description: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, lineHeight: 24 },
-  timePosted: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted, marginTop: 12 },
+  timePosted: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted, marginTop: 14 },
   statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   statsText: { fontSize: 12, color: Colors.textSecondary, marginLeft: 6, fontFamily: Typography.family.medium },
   sellerCard: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 24,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 20,
-    backgroundColor: PANEL_BG,
-    gap: 12,
-    borderWidth: 0.5,
-    borderColor: PANEL_BORDER,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    gap: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   sellerIdentityTap: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
-  sellerAvatar: { width: 52, height: 52, borderRadius: 26 },
+  sellerAvatar: { width: 48, height: 48, borderRadius: 24 },
   sellerInfo: { flex: 1 },
   sellerName: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-  sellerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  sellerStats: { fontSize: 13, fontFamily: Typography.family.medium, color: Colors.textSecondary },
+  sellerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  sellerStats: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textSecondary },
   sellerLastSeen: { fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: 2 },
   messageSellerBtn: {
-    minHeight: 38,
-    paddingHorizontal: 16,
+    minHeight: 36,
+    paddingHorizontal: 14,
     borderRadius: 18,
-    borderWidth: 0.5,
-    borderColor: PANEL_BORDER,
-    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.background,
   },
   messageSellerBtnText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
   sellerItemsSection: { marginTop: 28, paddingBottom: 8 },
@@ -649,26 +651,27 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   sectionLink: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.brand },
-  sellerItemCard: { width: 140 },
-  sellerItemMediaWrap: { width: 140, height: 180, borderRadius: Radius.sm, overflow: 'hidden', marginBottom: 8 },
+  sellerItemCard: { width: 160 },
+  sellerItemMediaWrap: { width: 160, height: 200, borderRadius: Radius.md, overflow: 'hidden', marginBottom: 10 },
   sellerItemImg: { width: '100%', height: '100%' },
-  sellerItemPrice: { fontSize: 14, fontFamily: Typography.family.bold, color: Colors.textPrimary },
+  sellerItemPrice: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   floatingBuyBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.surface,
     overflow: 'hidden',
   },
   actionBtn: {
     flex: 1,
+    borderRadius: 16,
   },
 });

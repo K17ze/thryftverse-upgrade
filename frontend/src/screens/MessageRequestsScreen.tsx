@@ -3,10 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
@@ -18,7 +16,7 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarRing } from '../components/chat/AvatarRing';
@@ -29,7 +27,6 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function MessageRequestsScreen() {
   const navigation = useNavigation<NavT>();
-  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -37,7 +34,7 @@ export default function MessageRequestsScreen() {
   const messageRequests = useStore((state) => state.messageRequests);
   const acceptMessageRequest = useStore((state) => state.acceptMessageRequest);
   const declineMessageRequest = useStore((state) => state.declineMessageRequest);
-  const profileMediaOverrides = useStore((s) => s.profileMediaOverrides);
+  const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const currentUser = useStore((state) => state.currentUser);
 
   const requestConversations = useMemo(() => {
@@ -48,6 +45,7 @@ export default function MessageRequestsScreen() {
     haptic.medium();
     acceptMessageRequest(id);
     show('Request accepted', 'success');
+    navigation.navigate('Chat', { conversationId: id });
   };
 
   const handleDecline = (id: string) => {
@@ -71,9 +69,7 @@ export default function MessageRequestsScreen() {
 
   const renderItem = ({ item, index }: { item: typeof requestConversations[0]; index: number }) => {
     const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
-    const displayTitle = counterpartyId
-      ? (item.title ?? 'Thryft user')
-      : (item.title ?? 'Thryft user');
+    const displayTitle = item.title ?? 'Thryft user';
     const avatarUri = item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined);
 
     return (
@@ -82,13 +78,21 @@ export default function MessageRequestsScreen() {
           <View style={styles.cardHeader}>
             <AvatarRing
               uri={avatarUri}
-              size={48}
+              size={52}
               ringWidth={2}
               fallbackInitials={displayTitle.slice(0, 2).toUpperCase()}
             />
             <View style={styles.cardText}>
               <BodyEmphasis numberOfLines={1}>{displayTitle}</BodyEmphasis>
-              <Caption color={Colors.textMuted} numberOfLines={1}>{item.lastMessage ?? 'Wants to message you'}</Caption>
+              <Caption color={Colors.textMuted} numberOfLines={2} style={styles.previewText}>
+                {item.lastMessage ?? 'Wants to message you'}
+              </Caption>
+              {item.itemId && (
+                <View style={styles.contextPill}>
+                  <Ionicons name="pricetag-outline" size={12} color={Colors.brand} />
+                  <Caption color={Colors.brand} style={styles.contextPillText}>About a listing</Caption>
+                </View>
+              )}
             </View>
           </View>
 
@@ -118,13 +122,7 @@ export default function MessageRequestsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader
-        title="Message Requests"
-        onBack={() => navigation.goBack()}
-      />
-
+    <FlagshipScreen header={<FlagshipHeader title="Message Requests" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       {requestConversations.length === 0 ? (
         <EmptyState
           icon="mail-outline"
@@ -142,7 +140,7 @@ export default function MessageRequestsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -163,15 +161,36 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     ...Elevation.subtle,
     gap: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Space.sm + 6,
   },
   cardText: {
     flex: 1,
     justifyContent: 'center',
+    gap: 2,
+  },
+  previewText: {
+    lineHeight: Type.caption.lineHeight + 2,
+    marginTop: 2,
+  },
+  contextPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: Space.xs,
+    alignSelf: 'flex-start',
+    backgroundColor: `${Colors.brand}10`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.md,
+  },
+  contextPillText: {
+    fontFamily: Typography.family.semibold,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -181,7 +200,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: Radius.md,
     backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
@@ -196,7 +215,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: Radius.md,
     backgroundColor: Colors.textPrimary,
   },

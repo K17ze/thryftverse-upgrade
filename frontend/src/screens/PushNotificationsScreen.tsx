@@ -1,22 +1,12 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
-  Platform,
-  ActivityIndicator,
-  Linking,
-} from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Linking, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { PUSH_NOTIFICATION_DEFINITIONS } from '../preferences/settingsPreferences';
 import { useToast } from '../context/ToastContext';
@@ -24,11 +14,12 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
 import { deactivateNotificationDevice, registerNotificationDevice } from '../services/notificationsApi';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { SettingsCard } from '../components/settings/SettingsCard';
-import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Typography } from '../theme/designTokens';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { SettingsRow } from '../components/settings/SettingsRow';
+import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 
 type Props = StackScreenProps<RootStackParamList, 'PushNotifications'>;
 
@@ -50,7 +41,9 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const [pushPermissionStatus, setPushPermissionStatus] = React.useState<Notifications.NotificationPermissionsStatus | null>(null);
 
   React.useEffect(() => {
-    Notifications.getPermissionsAsync().then(setPushPermissionStatus);
+    Notifications.getPermissionsAsync()
+      .then(setPushPermissionStatus)
+      .catch(() => setPushPermissionStatus(null));
   }, []);
 
   const resolvePushPlatform = React.useCallback((): 'ios' | 'android' | 'web' => {
@@ -163,37 +156,28 @@ export default function PushNotificationsScreen({ navigation }: Props) {
 
   const allEnabled = enabledCount === pushTotalCount;
 
+  const rightAction = (
+    <AnimatedPressable
+      onPress={() => void handleToggleAll()}
+      disabled={isSyncingDevice}
+      accessibilityLabel={allEnabled ? 'Disable all push notifications' : 'Enable all push notifications'}
+      hapticFeedback="medium"
+      style={styles.iconBtn}
+    >
+      {isSyncingDevice ? (
+        <ActivityIndicator size="small" color={Colors.textPrimary} />
+      ) : (
+        <Ionicons
+          name={allEnabled ? 'notifications-off-outline' : 'notifications-outline'}
+          size={22}
+          color={Colors.textPrimary}
+        />
+      )}
+    </AnimatedPressable>
+  );
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-        backgroundColor={Colors.background}
-      />
-
-      <ScreenHeader
-        title="Push Notifications"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <AnimatedPressable
-            onPress={() => void handleToggleAll()}
-            disabled={isSyncingDevice}
-            accessibilityLabel={allEnabled ? 'Disable all push notifications' : 'Enable all push notifications'}
-            hapticFeedback="medium"
-            style={styles.iconBtn}
-          >
-            {isSyncingDevice ? (
-              <ActivityIndicator size="small" color={Colors.textPrimary} />
-            ) : (
-              <Ionicons
-                name={allEnabled ? 'notifications-off-outline' : 'notifications-outline'}
-                size={22}
-                color={Colors.textPrimary}
-              />
-            )}
-          </AnimatedPressable>
-        }
-      />
-
+    <FlagshipScreen header={<FlagshipHeader title="Push Notifications" onBack={() => navigation.goBack()} rightAction={rightAction} />}>
       {pushPermissionStatus?.status === 'denied' && (
         <View style={styles.permissionBanner}>
           <Ionicons name="notifications-off-outline" size={18} color={Colors.danger} />
@@ -212,59 +196,53 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Progress indicator */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <View style={styles.progressRow}>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressLabel}>
-              {enabledCount}/{pushTotalCount} enabled
-            </Text>
+      {/* Progress indicator */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <View style={styles.progressRow}>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%` },
+              ]}
+            />
           </View>
-        </Reanimated.View>
+          <Text style={styles.progressLabel}>
+            {enabledCount}/{pushTotalCount} enabled
+          </Text>
+        </View>
+      </Reanimated.View>
 
-        {/* Notification types */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-          <Text style={styles.sectionTitle}>Notification Types</Text>
-          <SettingsCard>
+      {/* Notification types */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <SettingsSection title="Notification Types" noCard>
+          <View style={styles.card}>
             {NOTIFICATIONS.map((item, idx) => (
-              <SettingsCell
+              <SettingsRow
                 key={item.key}
                 title={item.label}
                 subtitle={item.subtitle}
-                variant="toggle"
                 toggleValue={toggles[item.key]}
                 onToggle={() => void toggle(item.key)}
                 isFirst={idx === 0}
                 isLast={idx === NOTIFICATIONS.length - 1}
               />
             ))}
-          </SettingsCard>
-        </Reanimated.View>
+          </View>
+        </SettingsSection>
+      </Reanimated.View>
 
-        {/* Footer note */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-          <Text style={styles.footerNote}>
-            You can also manage push notifications from your device Settings app.
-          </Text>
-        </Reanimated.View>
-      </ScrollView>
-    </SafeAreaView>
+      {/* Footer note */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+        <Text style={styles.footerNote}>
+          You can also manage push notifications from your device Settings app.
+        </Text>
+      </Reanimated.View>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
   iconBtn: {
     width: 40,
     height: 40,
@@ -275,16 +253,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  content: {
-    padding: Space.md,
-    paddingBottom: Space.xl,
-  },
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     marginBottom: Space.md,
-    marginHorizontal: Space.xs,
+    marginHorizontal: Space.md,
   },
   progressTrack: {
     flex: 1,
@@ -306,14 +280,16 @@ const styles = StyleSheet.create({
     minWidth: 60,
     textAlign: 'right',
   },
-  sectionTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    marginLeft: Space.xs,
-    marginBottom: Space.sm,
-    textTransform: 'uppercase',
-    letterSpacing: Type.meta.letterSpacing,
+  card: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginHorizontal: Space.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   footerNote: {
     fontSize: Type.caption.size,
@@ -321,7 +297,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     marginTop: Space.sm,
-    marginHorizontal: Space.xs,
+    marginHorizontal: Space.md,
     letterSpacing: Type.caption.letterSpacing,
   },
   permissionBanner: {

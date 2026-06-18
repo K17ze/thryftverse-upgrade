@@ -4,26 +4,26 @@ import {
   Text,
   StyleSheet,
   Dimensions,
-  StatusBar,
   Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useHaptic } from '../hooks/useHaptic';
+import { FlagshipScreen } from '../components/flagship';
 import { Video, ResizeMode } from '../components/compat/Video';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 type Props = StackScreenProps<RootStackParamList, 'ChatMediaPreview'>;
 
 export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
-  const { mediaUri, mediaType = 'image' } = route.params;
+  const { mediaUri, mediaType = 'image', senderLabel, timestamp, messageId } = route.params;
   const haptic = useHaptic();
+  const insets = useSafeAreaInsets();
 
   const [imageError, setImageError] = useState(false);
   const [videoError, setVideoError] = useState(false);
@@ -35,6 +35,18 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
       <Ionicons name="image-outline" size={48} color="rgba(255,255,255,0.4)" />
       <Text style={styles.errorText}>Media unavailable</Text>
       <Text style={styles.errorSub}>This media could not be loaded.</Text>
+      <AnimatedPressable
+        style={styles.retryBtn}
+        onPress={() => {
+          setImageError(false);
+          setVideoError(false);
+        }}
+        activeOpacity={0.7}
+        scaleValue={0.95}
+        hapticFeedback="light"
+      >
+        <Text style={styles.retryText}>Retry</Text>
+      </AnimatedPressable>
     </View>
   );
 
@@ -70,13 +82,11 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
-
+    <FlagshipScreen scrollEnabled={false}>
       <View style={styles.backdrop}>
         {/* Close button */}
         <AnimatedPressable
-          style={styles.closeBtn}
+          style={[styles.closeBtn, { top: Math.max(insets.top + 8, 12) }]}
           onPress={() => {
             haptic.light();
             navigation.goBack();
@@ -100,37 +110,23 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
           {mediaType === 'video' ? renderVideo() : renderImage()}
         </Pressable>
 
-        {/* Bottom actions */}
-        <View style={styles.bottomBar}>
-          <AnimatedPressable
-            style={styles.bottomBtn}
-            onPress={() => {
-              haptic.light();
-              // Future: save to gallery when permissions allow
-            }}
-            activeOpacity={0.7}
-            scaleValue={0.92}
-            accessibilityLabel="Save to gallery"
-            accessibilityRole="button"
-          >
-            <Ionicons name="download-outline" size={24} color="#fff" />
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={styles.bottomBtn}
-            onPress={() => {
-              haptic.light();
-              // Future: share media when system share is available
-            }}
-            activeOpacity={0.7}
-            scaleValue={0.92}
-            accessibilityLabel="Share media"
-            accessibilityRole="button"
-          >
-            <Ionicons name="share-outline" size={24} color="#fff" />
-          </AnimatedPressable>
-        </View>
+        {/* Context overlay */}
+        {(senderLabel || timestamp) && (
+          <View style={[styles.contextOverlay, { bottom: Math.max(insets.bottom + 24, 24) }]}>
+            {senderLabel && (
+              <Text style={styles.contextSender}>{senderLabel}</Text>
+            )}
+            {timestamp && (
+              <Text style={styles.contextTime}>{timestamp}</Text>
+            )}
+            {messageId && (
+              <Text style={styles.contextId}>ID: {messageId.slice(-8)}</Text>
+            )}
+          </View>
+        )}
+
       </View>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -147,7 +143,6 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     position: 'absolute',
-    top: 12,
     left: 12,
     zIndex: 10,
     width: 44,
@@ -184,21 +179,44 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: 'rgba(255,255,255,0.4)',
   },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 32,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 40,
-  },
-  bottomBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  retryBtn: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
+  },
+  retryText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#fff',
+  },
+  contextOverlay: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
     alignItems: 'center',
+    gap: 4,
+  },
+  contextSender: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  contextTime: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: 'rgba(255,255,255,0.7)',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  contextId: {
+    fontSize: 11,
+    fontFamily: 'Inter-Regular',
+    color: 'rgba(255,255,255,0.4)',
   },
 });

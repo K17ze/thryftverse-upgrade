@@ -20,6 +20,7 @@ interface PremiumTextFieldProps extends Omit<TextInputProps, 'style'> {
   keyboardType?: KeyboardTypeOptions;
   multiline?: boolean;
   minHeight?: number;
+  containerStyle?: import('react-native').ViewStyle;
 }
 
 export const PremiumTextField = forwardRef<TextInput, PremiumTextFieldProps>(
@@ -40,6 +41,7 @@ export const PremiumTextField = forwardRef<TextInput, PremiumTextFieldProps>(
       editable = true,
       multiline = false,
       minHeight,
+      containerStyle,
       ...rest
     },
     ref
@@ -65,7 +67,7 @@ export const PremiumTextField = forwardRef<TextInput, PremiumTextFieldProps>(
       : Colors.border;
 
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, containerStyle]}>
         {label ? (
           <Text
             style={[

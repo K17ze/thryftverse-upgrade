@@ -72,10 +72,11 @@ import { CachedImage } from '../components/CachedImage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 
 import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
 
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipProfileMedia } from '../components/flagship';
-import { ProfileVisualHeader, ProfileTabRail } from '../components/profile';
+import { ProfileVisualHeader, ProfileTabRail, LookPreviewCard } from '../components/profile';
 
 import { Space, Radius } from '../theme/designTokens';
 
@@ -156,9 +157,10 @@ export default function MyProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const reducedMotionEnabled = useReducedMotion();
-  const [activeTab, setActiveTab] = React.useState<'wardrobe' | 'saved' | 'about'>('wardrobe');
+  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'about'>('listings');
 
   const { show } = useToast();
+  const haptic = useHaptic();
 
   const { formatFromFiat } = useFormattedPrice();
 
@@ -220,6 +222,7 @@ export default function MyProfileScreen() {
   const userCover = useStore((state) => state.userCover);
 
   const user = currentUser as any;
+  const userLooks = useStore((state) => state.userLooks);
 
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
 
@@ -513,23 +516,12 @@ export default function MyProfileScreen() {
 
 
 
-  const myListings = React.useMemo(() => {
-
-    const owned = listings.filter((item) => item.sellerId === profileUserId);
-
-    return owned.slice(0, 6);
-
-  }, [listings, profileUserId]);
+  const allOwnedListings = React.useMemo(() => listings.filter((item) => item.sellerId === profileUserId), [listings, profileUserId]);
+  const previewListings = React.useMemo(() => allOwnedListings.slice(0, 6), [allOwnedListings]);
 
 
 
-  const heroMediaListings = React.useMemo(
-
-    () => myListings.filter((item) => item.images && item.images.length > 0),
-
-    [myListings]
-
-  );
+  const heroMediaListings = React.useMemo(() => previewListings.filter((item) => item.images && item.images.length > 0), [previewListings]);
 
 
 
@@ -684,7 +676,6 @@ export default function MyProfileScreen() {
         value: `${coOwnHoldings.length} assets`,
 
         color: Colors.textSecondary,
-
       },
 
     ],
@@ -695,7 +686,6 @@ export default function MyProfileScreen() {
 
 
 
-  const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
 
 
 
@@ -726,13 +716,26 @@ export default function MyProfileScreen() {
           <AnimatedPressable
             style={styles.topUtilityIconBtn}
             activeOpacity={0.9}
-            onPress={() => navigation.navigate('Personalisation')}
+            onPress={() => { haptic.light(); navigation.navigate('Personalisation'); }}
             accessibilityLabel="Open personalisation settings"
             accessibilityRole="button"
             accessibilityHint="Opens your style and experience preferences"
           >
             <Ionicons name="apps-outline" size={18} color="#fff" />
           </AnimatedPressable>
+
+          <View style={styles.topUtilityRight}>
+            <AnimatedPressable
+              style={styles.topUtilityIconBtn}
+              activeOpacity={0.9}
+              onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
+              accessibilityLabel="Open settings"
+              accessibilityRole="button"
+              accessibilityHint="Opens account and app settings"
+            >
+              <Ionicons name="settings-outline" size={18} color="#fff" />
+            </AnimatedPressable>
+          </View>
         </Reanimated.View>
       </View>
 
@@ -751,8 +754,7 @@ export default function MyProfileScreen() {
       </Reanimated.View>
 
 
-
-      <AnimatedScrollView
+      <Reanimated.ScrollView
 
         showsVerticalScrollIndicator={false}
 
@@ -779,36 +781,59 @@ export default function MyProfileScreen() {
           onShare={handleShare}
           hideCover
           stats={[
-            { label: 'Listings', value: myListings.length },
-            { label: 'Saved', value: savedCount + wishlistCount },
-            { label: 'Co-Own', value: coOwnHoldings.length },
+            { label: 'Listings', value: allOwnedListings.length },
           ]}
         />
+
+        {/* Quick Access Grid */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+          <View style={styles.quickAccessCard}>
+            <View style={styles.quickGrid}>
+              {quickAccess.map((item, index) => (
+                <AnimatedPressable
+                  key={item.route}
+                  style={[
+                    styles.quickItem,
+                    index === quickAccess.length - 1 ? styles.quickItemLastInRow : null,
+                  ]}
+                  activeOpacity={0.85}
+                  onPress={() => { haptic.light(); navigation.navigate(item.route as any); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                >
+                  <Ionicons name={item.icon as any} size={22} color={item.color} />
+                  <Text style={styles.quickLabel}>{item.label}</Text>
+                  {item.value ? <Text style={styles.quickValue}>{item.value}</Text> : null}
+                </AnimatedPressable>
+              ))}
+            </View>
+          </View>
+        </Reanimated.View>
 
         {/* Profile Tab Rail */}
         <ProfileTabRail
           tabs={[
-            { key: 'wardrobe', label: 'Wardrobe', icon: 'shirt-outline', count: myListings.length },
-            { key: 'saved', label: 'Saved', icon: 'bookmark-outline', count: savedCount + wishlistCount },
+            { key: 'listings', label: 'Listings', icon: 'shirt-outline', count: allOwnedListings.length },
+            { key: 'looks', label: 'Looks', icon: 'sparkles-outline', count: userLooks.length },
             { key: 'about', label: 'About', icon: 'person-outline' },
           ]}
           activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as 'wardrobe' | 'saved' | 'about')}
+          onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
         />
 
         {/* Tab Content */}
-        {activeTab === 'wardrobe' && (
+        {activeTab === 'listings' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120 }}>
             {/* My Wardrobe */}
             <View style={styles.wardrobeSection}>
               <View style={styles.wardrobeHeader}>
                 <View>
-                  <Text style={styles.wardrobeSectionLabel}>YOUR LISTINGS</Text>
-                  <Text style={styles.wardrobeTitle}>My Wardrobe</Text>
+                  <Text style={styles.wardrobeSectionLabel}>YOUR EDITS</Text>
+                  <Text style={styles.wardrobeTitle}>Published Listings</Text>
                 </View>
                 <AnimatedPressable
                   style={styles.viewAllBtn}
-                  onPress={() => navigation.navigate('UserProfile', { userId: user.id, isMe: true })}
+                  onPress={() => navigation.navigate('MyListings')}
                   accessibilityRole="button"
                   accessibilityLabel="View all listings"
                 >
@@ -818,7 +843,7 @@ export default function MyProfileScreen() {
               </View>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wardrobeScroll}>
-                {myListings.length === 0 ? (
+                {previewListings.length === 0 ? (
                   <AnimatedPressable
                     style={styles.wardrobeEmptyState}
                     activeOpacity={0.85}
@@ -832,7 +857,7 @@ export default function MyProfileScreen() {
                     <Text style={styles.wardrobeEmptySubtitle}>Tap to start selling</Text>
                   </AnimatedPressable>
                 ) : (
-                  myListings.map((item) => (
+                  previewListings.map((item) => (
                     <AnimatedPressable
                       key={item.id}
                       style={styles.wardrobeItem}
@@ -864,116 +889,35 @@ export default function MyProfileScreen() {
           </View>
         )}
 
-        {activeTab === 'saved' && (
+        {activeTab === 'looks' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
-            <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
-              <View style={{ paddingHorizontal: Space.md, marginBottom: Space.lg }}>
-                <Text style={styles.wardrobeTitle}>Saved Items</Text>
-                <Text style={{ fontFamily: Typography.family.regular, fontSize: 14, color: Colors.textSecondary, marginTop: 4 }}>
-                  {savedCount + wishlistCount} items in your closet
-                </Text>
+            {userLooks.length === 0 ? (
+              <EmptyState icon="sparkles-outline" title="No Looks yet" subtitle="Create your first Look to showcase your style." ctaLabel="Create Look" onCtaPress={() => navigation.navigate('CreateLook')} />
+            ) : (
+              <View style={{ paddingHorizontal: Space.md }}>
+                {userLooks.map((look, index) => (
+                  <LookPreviewCard key={look.id} id={look.id} title={look.title} coverImage={look.coverImage} items={look.items} creatorName={user.username} creatorAvatar={displayAvatar ?? undefined} likes={look.likes} saved={false} onPress={() => navigation.navigate('LookDetail', { lookId: look.id })} index={index} />
+                ))}
               </View>
-              <AnimatedPressable
-                style={{
-                  marginHorizontal: Space.md,
-                  backgroundColor: Colors.surface,
-                  borderRadius: Radius.lg,
-                  borderWidth: 1,
-                  borderColor: Colors.border,
-                  padding: Space.md,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: Space.sm,
-                }}
-                onPress={() => navigation.navigate('Closet')}
-                activeOpacity={0.9}
-              >
-                <Ionicons name="bookmark-outline" size={22} color={Colors.textPrimary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: Typography.family.semibold, fontSize: 15, color: Colors.textPrimary }}>Open Closet</Text>
-                  <Text style={{ fontFamily: Typography.family.regular, fontSize: 13, color: Colors.textSecondary }}>View saved, wishlist, and collections</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-              </AnimatedPressable>
-            </Reanimated.View>
+            )}
           </View>
         )}
+
 
         {activeTab === 'about' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
-            {/* Co-Own Portfolio Summary */}
-            <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
-              <View style={styles.portfolioSummaryCard}>
-                <View style={styles.portfolioSummaryTop}>
-                  <Text style={styles.portfolioSummaryLabel}>MY CO-OWN HOLDINGS</Text>
-                  <AnimatedPressable
-                    style={styles.portfolioSummaryLinkBtn}
-                    activeOpacity={0.8}
-                    onPress={() => navigation.navigate('Portfolio')}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.portfolioSummaryLinkText}>Open</Text>
-                    <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
-                  </AnimatedPressable>
-                </View>
-                <Text style={styles.portfolioSummaryValue}>{formatFromFiat(holdingsValue, 'GBP')}</Text>
-                <View style={styles.portfolioSummaryMetaRow}>
-                  <Text style={styles.portfolioSummaryMeta}>
-                    {coOwnHoldings.length} active position{coOwnHoldings.length === 1 ? '' : 's'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.portfolioSummaryPnl,
-                      holdingsUnrealized >= 0 ? styles.portfolioPnlUp : styles.portfolioPnlDown,
-                    ]}
-                  >
-                    Unrealized {holdingsUnrealized >= 0 ? '+' : '-'}
-                    {formatFromFiat(Math.abs(holdingsUnrealized), 'GBP', { displayMode: 'fiat' })}
-                  </Text>
-                </View>
-                {coOwnHoldings.length === 0 && (
-                  <AnimatedPressable
-                    style={styles.portfolioSummaryCta}
-                    activeOpacity={0.85}
-                    onPress={() => navigation.navigate('CoOwnHub')}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="sparkles-outline" size={14} color={Colors.background} />
-                    <Text style={styles.portfolioSummaryCtaText}>Explore Co-Own Hub</Text>
-                  </AnimatedPressable>
-                )}
-              </View>
-            </Reanimated.View>
-
-            {/* Quick Access */}
-            <Reanimated.View entering={FadeInDown.duration(300).delay(100)} style={{ marginTop: Space.lg }}>
-              <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>
-                <Text style={styles.wardrobeTitle}>Quick Access</Text>
-              </View>
-              <View style={styles.quickAccessCard}>
-                <View style={styles.quickGrid}>
-                  {quickAccess.map((item, index) => (
-                    <AnimatedPressable
-                      key={item.label}
-                      style={[styles.quickItem, (index + 1) % 3 === 0 && styles.quickItemLastInRow]}
-                      activeOpacity={0.8}
-                      onPress={() => navigation.navigate(item.route as any)}
-                      accessibilityRole="button"
-                    >
-                      <View style={styles.quickIconCircle}>
-                        <Ionicons name={item.icon as any} size={18} color={item.color} />
-                      </View>
-                      <Text style={styles.quickLabel}>{item.label}</Text>
-                      {item.value && <Text style={styles.quickValue}>{item.value}</Text>}
-                    </AnimatedPressable>
-                  ))}
-                </View>
-              </View>
-            </Reanimated.View>
+            <View style={{ paddingHorizontal: Space.md, gap: Space.md }}>
+              {user.bio ? (<View style={styles.aboutBlock}><Text style={styles.aboutLabel}>Bio</Text><Text style={styles.aboutText}>{user.bio}</Text></View>) : null}
+              {user.location ? (<View style={styles.aboutBlock}><Text style={styles.aboutLabel}>Location</Text><Text style={styles.aboutText}>{user.location}</Text></View>) : null}
+              {user.website ? (<View style={styles.aboutBlock}><Text style={styles.aboutLabel}>Website</Text><Text style={styles.aboutText}>{user.website}</Text></View>) : null}
+              {user.createdAt ? (<View style={styles.aboutBlock}><Text style={styles.aboutLabel}>Member Since</Text><Text style={styles.aboutText}>{new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</Text></View>) : null}
+              {!user.bio && !user.location && !user.website && !user.createdAt && (
+                <EmptyState icon="person-outline" title="About you" subtitle="Add a bio, location, and website in Edit Profile." ctaLabel="Edit Profile" onCtaPress={() => navigation.navigate('EditProfile')} />
+              )}
+            </View>
           </View>
         )}
-
-      </AnimatedScrollView>
+      </Reanimated.ScrollView>
 
     </View>
 
@@ -1067,9 +1011,9 @@ const styles = StyleSheet.create({
 
   topUtilityIconBtn: {
 
-    width: 40,
+    width: 44,
 
-    height: 40,
+    height: 44,
 
     borderRadius: 20,
 
@@ -1148,19 +1092,29 @@ const styles = StyleSheet.create({
   },
 
   floatingHeaderTitle: {
-
-    fontSize: 18,
-
-    fontFamily: Typography.family.bold,
-
+    fontSize: 17,
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
-
-    textTransform: 'uppercase',
-
-    letterSpacing: 1,
-
+    letterSpacing: -0.3,
   },
 
+  floatingHeaderAction: {
+
+    width: 44,
+
+    height: 44,
+
+    borderRadius: 18,
+
+    backgroundColor: Colors.surfaceAlt,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    marginRight: 14,
+
+  },
 
 
   // Hero
@@ -1377,6 +1331,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.08,
 
   },
+  aboutBlock: { backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: Space.md },
+  aboutLabel: { fontSize: 11, fontFamily: Typography.family.bold, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: Space.xs },
+  aboutText: { fontSize: 14, fontFamily: Typography.family.regular, color: Colors.textPrimary, lineHeight: 20 },
 
 
 
@@ -1968,4 +1925,3 @@ const styles = StyleSheet.create({
 
 
 });
-

@@ -7,7 +7,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import type { CoOwnAsset } from '../data/tradeHub';
+
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
 import { useStore } from '../store/useStore';
@@ -32,6 +32,27 @@ import {
 } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
+
+interface CoOwnAsset {
+  id: string;
+  listingId: string;
+  issuerId: string;
+  title: string;
+  image: string;
+  totalUnits: number;
+  availableUnits: number;
+  unitPriceGBP: number;
+  unitPriceStable: number;
+  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID';
+  issuerJurisdiction?: string;
+  marketMovePct24h: number;
+  holders: number;
+  volume24hGBP: number;
+  yourUnits: number;
+  avgEntryPriceGBP?: number;
+  realizedProfitGBP?: number;
+  isOpen: boolean;
+}
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type CoOwnView = 'ISSUED' | 'HOLDINGS';

@@ -1,13 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
-  StatusBar,
   StyleSheet,
   Text,
   View,
+  ScrollView,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { Colors } from '../constants/colors';
@@ -17,11 +16,11 @@ import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { createGroupConversationOnApi } from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -37,9 +36,14 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const haptic = useHaptic();
 
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const MAX_MEMBERS = 50;
+  const MIN_MEMBERS = 1;
 
   const conversations = useStore((state) => state.conversations);
 
@@ -65,21 +69,32 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
 
   const toggleMember = (userId: string) => {
     haptic.light();
-    setSelectedIds((current) =>
-      current.includes(userId)
-        ? current.filter((id) => id !== userId)
-        : [...current, userId]
-    );
+    setErrorMsg('');
+    setSelectedIds((current) => {
+      if (current.includes(userId)) {
+        return current.filter((id) => id !== userId);
+      }
+      if (current.length >= MAX_MEMBERS) {
+        show(`Groups are limited to ${MAX_MEMBERS} members`, 'error');
+        return current;
+      }
+      return [...current, userId];
+    });
   };
 
   const handleCreateGroup = async () => {
     const groupTitle = title.trim();
     if (!groupTitle) {
-      show('Add a group title to continue.', 'error');
+      setErrorMsg('Add a group title to continue.');
+      return;
+    }
+    if (selectedIds.length < MIN_MEMBERS) {
+      setErrorMsg(`Select at least ${MIN_MEMBERS} member${MIN_MEMBERS === 1 ? '' : 's'}.`);
       return;
     }
 
     setIsCreating(true);
+    setErrorMsg('');
 
     try {
       const conversation = await createGroupConversationOnApi({
@@ -106,23 +121,15 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
-      />
-
-      <ScreenHeader
-        title="Create Group Chat"
-        onBack={() => navigation.goBack()}
-      />
+    <FlagshipScreen header={<FlagshipHeader title="Create Group Chat" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
 
       <View style={styles.body}>
+        {/* Title */}
         <ChatCard variant="surface" style={styles.titleCard}>
           <Meta color={Colors.textMuted} style={styles.label}>Group title</Meta>
           <AppInput
             value={title}
-            onChangeText={setTitle}
+            onChangeText={(t) => { setTitle(t); setErrorMsg(''); }}
             placeholder="Example: Thryft Snipers"
             placeholderTextColor={Colors.textMuted}
             maxLength={40}
@@ -133,9 +140,49 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           />
         </ChatCard>
 
+        {/* Description */}
+        <ChatCard variant="surface" style={styles.titleCard}>
+          <Meta color={Colors.textMuted} style={styles.label}>Description (optional)</Meta>
+          <AppInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder="What is this group about?"
+            placeholderTextColor={Colors.textMuted}
+            maxLength={120}
+            inputContainerStyle={styles.inputWrap}
+            inputStyle={styles.input}
+            accessibilityLabel="Group description input"
+            accessibilityHint="Enter a short description for the group"
+          />
+        </ChatCard>
+
+        {/* Selected rail */}
+        {selectedIds.length > 0 && (
+          <View style={styles.selectedRail}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectedRailContent}>
+              {selectedIds.map((id) => {
+                const user = members.find((m) => m.id === id);
+                return (
+                  <View key={id} style={styles.selectedChip}>
+                    <Caption color={Colors.textPrimary} style={styles.selectedChipText}>@{user?.username ?? id.slice(0, 8)}</Caption>
+                    <AnimatedPressable
+                      onPress={() => toggleMember(id)}
+                      activeOpacity={0.7}
+                      scaleValue={0.9}
+                      hapticFeedback="light"
+                    >
+                      <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+                    </AnimatedPressable>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
         <View style={styles.sectionRow}>
-          <BodyEmphasis>Members (optional)</BodyEmphasis>
-          <Caption color={Colors.textMuted}>{selectedIds.length} selected</Caption>
+          <BodyEmphasis>Members</BodyEmphasis>
+          <Caption color={Colors.textMuted}>{selectedIds.length} / {MAX_MEMBERS}</Caption>
         </View>
 
         <ChatCard variant="surface" style={styles.searchCard}>
@@ -164,66 +211,84 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           )}
         </ChatCard>
 
-        <FlashList
-          data={filteredMembers}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => {
-            const selected = selectedIds.includes(item.id);
-            return (
-              <View>
-                <ChatCard
-                  variant={selected ? 'tint' : 'surface'}
-                  style={[styles.memberRow, selected && styles.memberRowSelected]}
-                >
-                  <AnimatedPressable
-                    style={styles.memberSelectTap}
-                    activeOpacity={0.85}
-                    onPress={() => toggleMember(item.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${selected ? 'Deselect' : 'Select'} @${item.username}`}
-                    accessibilityHint="Toggles this member for the new group"
-                    scaleValue={0.98}
-                    hapticFeedback="light"
+        {errorMsg ? (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+            <Caption color={Colors.danger} style={styles.errorBannerText}>{errorMsg}</Caption>
+          </View>
+        ) : null}
+
+        {filteredMembers.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Ionicons name="people-outline" size={36} color={Colors.textMuted} />
+            <Caption color={Colors.textMuted} style={styles.emptyText}>
+              {searchQuery.trim()
+                ? 'No users match your search.'
+                : 'Start conversations to see contacts here.'}
+            </Caption>
+          </View>
+        ) : (
+          <FlashList
+            data={filteredMembers}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => {
+              const selected = selectedIds.includes(item.id);
+              return (
+                <View>
+                  <ChatCard
+                    variant={selected ? 'tint' : 'surface'}
+                    style={[styles.memberRow, selected && styles.memberRowSelected]}
                   >
-                    <View style={styles.memberAvatar}>
-                      <Ionicons name="person" size={18} color={Colors.textMuted} />
-                    </View>
+                    <AnimatedPressable
+                      style={styles.memberSelectTap}
+                      activeOpacity={0.85}
+                      onPress={() => toggleMember(item.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${selected ? 'Deselect' : 'Select'} @${item.username}`}
+                      accessibilityHint="Toggles this member for the new group"
+                      scaleValue={0.98}
+                      hapticFeedback="light"
+                    >
+                      <View style={styles.memberAvatar}>
+                        <Ionicons name="person" size={18} color={Colors.textMuted} />
+                      </View>
 
-                    <View style={styles.memberTextWrap}>
-                      <BodyEmphasis>@{item.username}</BodyEmphasis>
-                      <Caption color={Colors.textSecondary}>Conversation contact</Caption>
-                    </View>
+                      <View style={styles.memberTextWrap}>
+                        <BodyEmphasis>@{item.username}</BodyEmphasis>
+                        <Caption color={Colors.textSecondary}>Conversation contact</Caption>
+                      </View>
 
-                    <Ionicons
-                      name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={22}
-                      color={selected ? Colors.brand : Colors.textMuted}
-                    />
-                  </AnimatedPressable>
+                      <Ionicons
+                        name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={22}
+                        color={selected ? Colors.brand : Colors.textMuted}
+                      />
+                    </AnimatedPressable>
 
-                  <AnimatedPressable
-                    style={styles.memberProfileBtn}
-                    activeOpacity={0.85}
-                    onPress={() => navigation.navigate('UserProfile', { userId: item.id })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open @${item.username} profile`}
-                    accessibilityHint="Shows this member profile details"
-                    scaleValue={0.9}
-                    hapticFeedback="light"
-                  >
-                    <Ionicons name="person-circle-outline" size={20} color={Colors.textPrimary} />
-                  </AnimatedPressable>
-                </ChatCard>
-              </View>
-            );
-          }}
-          contentContainerStyle={styles.memberList}
-          ItemSeparatorComponent={() => <View style={{ height: Space.sm + 2 }} />}
-          showsVerticalScrollIndicator={false}
-        />
+                    <AnimatedPressable
+                      style={styles.memberProfileBtn}
+                      activeOpacity={0.85}
+                      onPress={() => navigation.navigate('UserProfile', { userId: item.id })}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open @${item.username} profile`}
+                      accessibilityHint="Shows this member profile details"
+                      scaleValue={0.9}
+                      hapticFeedback="light"
+                    >
+                      <Ionicons name="person-circle-outline" size={20} color={Colors.textPrimary} />
+                    </AnimatedPressable>
+                  </ChatCard>
+                </View>
+              );
+            }}
+            contentContainerStyle={styles.memberList}
+            ItemSeparatorComponent={() => <View style={{ height: Space.sm + 2 }} />}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
 
         <AppButton
-          style={[styles.createBtn, (!title.trim() || isCreating) && styles.createBtnDisabled]}
+          style={[styles.createBtn, (!title.trim() || isCreating || selectedIds.length < MIN_MEMBERS) && styles.createBtnDisabled]}
           variant="primary"
           size="md"
           align="center"
@@ -231,12 +296,12 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           onPress={() => {
             void handleCreateGroup();
           }}
-          disabled={!title.trim() || isCreating}
+          disabled={!title.trim() || isCreating || selectedIds.length < MIN_MEMBERS}
           accessibilityLabel={isCreating ? 'Creating group chat' : 'Create group chat'}
           accessibilityRole="button"
         />
       </View>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -331,5 +396,48 @@ const styles = StyleSheet.create({
   },
   createBtnDisabled: {
     opacity: 0.5,
+  },
+  selectedRail: {
+    marginBottom: Space.sm,
+  },
+  selectedRailContent: {
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+  },
+  selectedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  selectedChipText: {
+    fontFamily: Typography.family.medium,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    backgroundColor: `${Colors.danger}10`,
+    borderRadius: Radius.md,
+    marginBottom: Space.sm,
+  },
+  errorBannerText: {
+    fontFamily: Typography.family.medium,
+  },
+  emptyWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.xl,
+  },
+  emptyText: {
+    textAlign: 'center',
+    paddingHorizontal: Space.lg,
   },
 });

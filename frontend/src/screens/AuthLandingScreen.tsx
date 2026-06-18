@@ -52,10 +52,18 @@ export default function AuthLandingScreen() {
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
 
+  // UI-21P: Prevent crash when OAuth client IDs are not configured in dev builds
+  const hasGoogleOAuth = Boolean(
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID
+  );
+
   const [googleRequest, googleResponse, promptGoogleAuth] = Google.useIdTokenAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID,
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || 'dev-client-id-placeholder',
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID || 'dev-android-client-id-placeholder',
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID,
   });
 
@@ -318,6 +326,30 @@ export default function AuthLandingScreen() {
           <Text style={styles.termsText}>
             by continuing, you agree to our terms of service and privacy policy.
           </Text>
+
+          {__DEV__ && (
+            <AnimatedPressable
+              style={styles.devBypassBtn}
+              activeOpacity={0.8}
+              onPress={() => {
+                login({
+                  id: 'dev-user-1',
+                  username: 'devuser',
+                  displayName: 'Dev User',
+                  email: 'dev@thryftverse.app',
+                  avatar: '',
+                  cover: '',
+                  bio: '',
+                  reputationScore: 100,
+                  verified: true,
+                  createdAt: new Date().toISOString(),
+                } as any);
+                navigation.replace('MainTabs');
+              }}
+            >
+              <Text style={styles.devBypassText}>Dev Bypass (UI Testing)</Text>
+            </AnimatedPressable>
+          )}
         </Reanimated.View>
       </SafeAreaView>
     </View>
@@ -451,5 +483,20 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 4,
   },
+  devBypassBtn: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(52,199,89,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(52,199,89,0.4)',
+    alignSelf: 'center',
+  },
+  devBypassText: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: '#34C759',
+    textAlign: 'center',
+  },
 });
-

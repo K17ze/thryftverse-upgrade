@@ -27,7 +27,6 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { MasonrySkeleton } from '../components/skeletons/MasonrySkeleton';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
-import { SyncStatusPill } from '../components/SyncStatusPill';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { RootStackParamList } from '../navigation/types';
 import { Listing } from '../data/mockData';
@@ -36,7 +35,6 @@ import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { fetchFilteredListings } from '../services/listingsApi';
-import { getBackendSyncStatus } from '../utils/syncStatus';
 import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Elevation } from '../theme/designTokens';
@@ -254,16 +252,6 @@ export default function BrowseScreen() {
     return sorted;
   }, [browseFilters, categoryId, listings, subcategoryId, title]);
 
-  const browseStatus = useMemo(
-    () =>
-      getBackendSyncStatus({
-        isSyncing,
-        source,
-        hasError: Boolean(lastError),
-      }),
-    [isSyncing, lastError, source],
-  );
-
   const showBrowseLoadingSkeleton = isSyncing && dataToRender.length === 0 && !lastError;
 
   const renderBrowseLoadingState = () => (
@@ -281,7 +269,7 @@ export default function BrowseScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-      
+
       {/* Heavy Typography Header */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityLabel="Go back">
@@ -295,57 +283,48 @@ export default function BrowseScreen() {
       <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
         <View style={styles.titleMetaRow}>
-          <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items found`}</Text>
-          <SyncStatusPill tone={browseStatus.tone} label={browseStatus.label} compact />
+          <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
         </View>
       </Reanimated.View>
 
       <Reanimated.View entering={FadeInDown.duration(300).delay(90)} style={styles.filterBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          <AppButton
-            style={styles.filterPill}
-            variant="primary"
-            size="sm"
-            align="center"
-            title={hasActiveFilters ? 'Filter on' : 'Filter'}
-            titleStyle={styles.filterPillTextActive}
-            icon={<Ionicons name="options-outline" size={16} color={Colors.background} />}
+          <AnimatedPressable
+            style={[styles.filterPill, hasActiveFilters && styles.filterPillActive]}
             onPress={() => navigation.navigate('Filter', { categoryId, subcategoryId, title })}
+            activeOpacity={0.85}
             accessibilityLabel="Open filters"
-          />
-          <AppButton
+          >
+            <Ionicons name="options-outline" size={14} color={hasActiveFilters ? Colors.background : Colors.textPrimary} />
+            <Text style={[styles.filterPillText, hasActiveFilters && styles.filterPillTextActive]}>{hasActiveFilters ? 'Filter on' : 'Filter'}</Text>
+          </AnimatedPressable>
+          <AnimatedPressable
             style={styles.filterPillOutline}
-            variant="secondary"
-            size="sm"
-            align="center"
-            title={browseFilters.brands.length > 0 ? `Brand (${browseFilters.brands.length})` : 'Brand'}
-            titleStyle={styles.filterPillText}
-            icon={<Ionicons name="chevron-down" size={14} color={Colors.textPrimary} />}
             onPress={() => navigation.navigate('Filter', { categoryId, subcategoryId, title })}
+            activeOpacity={0.85}
             accessibilityLabel="Filter by brand"
-          />
-          <AppButton
+          >
+            <Text style={styles.filterPillText}>{browseFilters.brands.length > 0 ? `Brand (${browseFilters.brands.length})` : 'Brand'}</Text>
+            <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
+          </AnimatedPressable>
+          <AnimatedPressable
             style={styles.filterPillOutline}
-            variant="secondary"
-            size="sm"
-            align="center"
-            title={browseFilters.sizes.length > 0 ? `Size (${browseFilters.sizes.length})` : 'Size'}
-            titleStyle={styles.filterPillText}
-            icon={<Ionicons name="chevron-down" size={14} color={Colors.textPrimary} />}
             onPress={() => navigation.navigate('Filter', { categoryId, subcategoryId, title })}
+            activeOpacity={0.85}
             accessibilityLabel="Filter by size"
-          />
-          <AppButton
+          >
+            <Text style={styles.filterPillText}>{browseFilters.sizes.length > 0 ? `Size (${browseFilters.sizes.length})` : 'Size'}</Text>
+            <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
+          </AnimatedPressable>
+          <AnimatedPressable
             style={styles.filterPillOutline}
-            variant="secondary"
-            size="sm"
-            align="center"
-            title={browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}
-            titleStyle={styles.filterPillText}
-            icon={<Ionicons name="chevron-down" size={14} color={Colors.textPrimary} />}
             onPress={() => navigation.navigate('Filter', { categoryId, subcategoryId, title })}
+            activeOpacity={0.85}
             accessibilityLabel="Filter by condition"
-          />
+          >
+            <Text style={styles.filterPillText}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
+            <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
+          </AnimatedPressable>
         </ScrollView>
       </Reanimated.View>
 
@@ -362,7 +341,7 @@ export default function BrowseScreen() {
       {/* Masonry Grid - Pinterest/Depop Style */}
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={40} />
-        
+
         {backendLoading || showBrowseLoadingSkeleton ? (
           renderBrowseLoadingState()
         ) : backendError ? (
@@ -416,10 +395,10 @@ export default function BrowseScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
@@ -427,44 +406,63 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   searchBtn: { width: 44, height: 44, borderRadius: Radius.full, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  
+
   titleContainer: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
   },
-  hugeTitle: { 
-    fontSize: 44, 
-    fontFamily: Typography.family.bold, 
-    color: Colors.textPrimary, 
-    letterSpacing: -1.5,
-    textTransform: 'uppercase',
-    lineHeight: 48,
+  hugeTitle: {
+    fontSize: 32,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.8,
+    lineHeight: 38,
   },
   itemCountText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
     color: Colors.textMuted,
-    marginTop: 8,
+    marginTop: 6,
   },
   titleMetaRow: {
-    marginTop: 8,
+    marginTop: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
   },
 
-  filterBar: { paddingBottom: 20 },
-  filterRow: { paddingHorizontal: 20, gap: 10 },
-  filterPill: { 
-    paddingHorizontal: 16,
+  filterBar: { paddingBottom: 16 },
+  filterRow: { paddingHorizontal: 20, gap: 8, alignItems: 'center' },
+  filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
-  filterPillTextActive: { color: Colors.background, fontSize: 13, fontFamily: Typography.family.bold },
+  filterPillActive: {
+    backgroundColor: Colors.textPrimary,
+    borderColor: Colors.textPrimary,
+  },
+  filterPillTextActive: { color: Colors.background, fontSize: 13, fontFamily: Typography.family.semibold },
   filterPillOutline: {
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
-  filterPillText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
+  filterPillText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.medium },
   syncRetryBanner: {
     marginHorizontal: 20,
     marginBottom: 14,
@@ -489,7 +487,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingHorizontal: 4,
   },
-  
+
   gridItem: { width: ITEM_WIDTH },
   imageWrap: {
     width: ITEM_WIDTH,
@@ -518,7 +516,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   infoWrap: { paddingHorizontal: 4 },
   priceRow: {
     flexDirection: 'row',

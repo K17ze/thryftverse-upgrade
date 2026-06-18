@@ -31,7 +31,8 @@ import { SettingsCell } from '../components/SettingsCell';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { fetchListingByIdFromApi, patchListingOnApi } from '../services/listingsApi';
+import { fetchListingByIdFromApi, patchListingOnApi, createListingImageOnApi } from '../services/listingsApi';
+import { uploadMedia } from '../services/mediaUpload';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -59,6 +60,7 @@ export default function EditListingScreen() {
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [originalPhotos, setOriginalPhotos] = useState<string[]>([]);
   const [category, setCategory] = useState('');
   const [brand, setBrand] = useState('');
   const [size, setSize] = useState('');
@@ -79,7 +81,9 @@ export default function EditListingScreen() {
           setTitle(l.title ?? '');
           setDescription(l.description ?? '');
           setPrice(String(l.priceGbp ?? ''));
-          setPhotos(l.images ?? (l.imageUrl ? [l.imageUrl] : []));
+          const initialPhotos = l.images ?? (l.imageUrl ? [l.imageUrl] : []);
+          setPhotos(initialPhotos);
+          setOriginalPhotos(initialPhotos);
           setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
           setBrand(l.brand ?? '');
           setSize(l.size ?? '');
@@ -157,6 +161,7 @@ export default function EditListingScreen() {
     setIsSaving(true);
 
     try {
+      // 1. Patch text metadata
       await patchListingOnApi(itemId, {
         title: title.trim(),
         description: description.trim(),
@@ -166,6 +171,30 @@ export default function EditListingScreen() {
         size: size || undefined,
         condition: condition || undefined,
       });
+
+      // 2. Upload any new local media and create listing image records
+      const newLocalPhotos = photos.filter((uri) => !uri.startsWith('http'));
+      const existingRemotePhotos = photos.filter((uri) => uri.startsWith('http'));
+      const removedOriginals = originalPhotos.filter((uri) => !existingRemotePhotos.includes(uri));
+
+      if (newLocalPhotos.length > 0) {
+        for (let i = 0; i < newLocalPhotos.length; i++) {
+          const url = await uploadMedia(newLocalPhotos[i], 'listings');
+          await createListingImageOnApi({
+            id: `${itemId}_img_new_${Date.now()}_${i}`,
+            listingId: itemId,
+            imageUrl: url,
+            sortOrder: existingRemotePhotos.length + i,
+          });
+        }
+      }
+
+      if (removedOriginals.length > 0) {
+        // Backend does not currently support deleting listing images.
+        // Removed originals will remain on the listing server-side.
+        showToast('Note: removed original photos may still appear until backend deletion is supported.', 'info');
+      }
+
       showToast('Listing updated successfully.', 'success');
       navigation.goBack();
     } catch (e) {
@@ -173,7 +202,7 @@ export default function EditListingScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [validate, itemId, title, description, price, brand, size, condition, category, showToast, navigation]);
+  }, [validate, itemId, title, description, price, brand, size, condition, category, photos, originalPhotos, showToast, navigation]);
 
   const getPickerOptions = () => {
     switch (pickerMode) {

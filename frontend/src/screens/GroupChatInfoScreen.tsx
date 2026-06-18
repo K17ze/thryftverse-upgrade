@@ -5,10 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  StatusBar,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -16,7 +14,7 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
@@ -30,6 +28,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const haptic = useHaptic();
 
   const conversations = useStore((state) => state.conversations);
+  const currentUser = useStore((state) => state.currentUser);
   const archiveConversation = useStore((state) => state.archiveConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
   const mutedIds = useStore((state) => state.mutedConversationIds);
@@ -46,13 +45,11 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 
   if (!conversation || conversation.type !== 'group') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <ScreenHeader title="Group Info" onBack={() => navigation.goBack()} />
+      <FlagshipScreen header={<FlagshipHeader title="Group Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
         <View style={styles.center}>
           <Caption color={Colors.textMuted}>Group not found</Caption>
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -115,11 +112,11 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     .slice(0, 2)
     .toUpperCase();
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader title="Group Info" onBack={() => navigation.goBack()} />
+  const description = (conversation as any)?.description;
+  const isOwner = (conversation as any)?.creatorId === currentUser?.id;
 
+  return (
+    <FlagshipScreen header={<FlagshipHeader title="Group Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Group Identity */}
         <View style={styles.identityCard}>
@@ -129,6 +126,9 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <BodyEmphasis style={styles.groupName} numberOfLines={1}>
             {conversation.title ?? 'Group chat'}
           </BodyEmphasis>
+          {description ? (
+            <Caption color={Colors.textMuted} style={styles.groupDesc}>{description}</Caption>
+          ) : null}
           <Caption color={Colors.textMuted}>{memberCount} members</Caption>
           {deployedBotCount > 0 && (
             <View style={styles.botBadge}>
@@ -170,26 +170,6 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           />
         </Section>
 
-        {/* Media & shared */}
-        <Section title="Media & shared">
-          <RowItem
-            icon="images-outline"
-            label="Photos & videos"
-            onPress={() => {
-              // Future: open shared media gallery when backend supports it
-            }}
-            showChevron
-          />
-          <RowItem
-            icon="document-outline"
-            label="Shared links"
-            onPress={() => {
-              // Future: open shared links when backend supports it
-            }}
-            showChevron
-          />
-        </Section>
-
         {/* Group Actions */}
         <Section title="Actions">
           <RowItem
@@ -202,6 +182,10 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             label="Archive chat"
             onPress={handleArchive}
           />
+        </Section>
+
+        {/* Danger zone */}
+        <Section title="Danger zone" danger>
           <RowItem
             icon="log-out-outline"
             label="Leave group"
@@ -216,17 +200,25 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           />
         </Section>
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, danger }: { title: string; children: React.ReactNode; danger?: boolean }) {
+  const childArray = React.Children.toArray(children);
+  const lastIndex = childArray.length - 1;
+  const childrenWithIsLast = childArray.map((child, index) => {
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, { isLast: index === lastIndex } as any);
+    }
+    return child;
+  });
   return (
     <View style={styles.section}>
-      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={danger ? Colors.danger : Colors.textMuted} style={styles.sectionLabel}>
         {title.toUpperCase()}
       </Meta>
-      <View style={styles.sectionCard}>{children}</View>
+      <View style={[styles.sectionCard, danger && styles.sectionCardDanger]}>{childrenWithIsLast}</View>
     </View>
   );
 }
@@ -237,15 +229,17 @@ function RowItem({
   onPress,
   showChevron,
   danger,
+  isLast,
 }: {
   icon: string;
   label: string;
   onPress?: () => void;
   showChevron?: boolean;
   danger?: boolean;
+  isLast?: boolean;
 }) {
   const content = (
-    <View style={styles.row}>
+    <View style={[styles.row, !isLast && styles.rowBorder]}>
       <Ionicons
         name={icon as any}
         size={20}
@@ -321,6 +315,11 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginTop: Space.sm,
   },
+  groupDesc: {
+    textAlign: 'center',
+    paddingHorizontal: Space.lg,
+    marginTop: 2,
+  },
   botBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -345,12 +344,19 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     overflow: 'hidden',
   },
+  sectionCardDanger: {
+    borderColor: `${Colors.danger}30`,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: 14,
     gap: Space.sm,
+  },
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   rowLabel: {
     flex: 1,

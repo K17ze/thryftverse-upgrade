@@ -121,11 +121,11 @@ describe('VISUAL-13B.2 Profile Final Polish', () => {
     expect(src).toContain('hideCover');
   });
 
-  it('12. MyProfileScreen tab content is modular (wardrobe/saved/about)', () => {
+  it('12. MyProfileScreen tab content is modular (edits/looks/pulse)', () => {
     const src = readFile('screens/MyProfileScreen.tsx');
-    expect(src).toContain("activeTab === 'wardrobe'");
-    expect(src).toContain("activeTab === 'saved'");
-    expect(src).toContain("activeTab === 'about'");
+    expect(src).toContain("activeTab === 'edits'");
+    expect(src).toContain("activeTab === 'looks'");
+    expect(src).toContain("activeTab === 'pulse'");
   });
 
   it('13. CachedImage renders honest placeholder when uri is empty', () => {

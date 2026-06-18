@@ -25,16 +25,22 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
+import { CommerceOrder, getOrder } from '../services/commerceApi';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { CachedImage } from '../components/CachedImage';
+import { getListingCoverUri } from '../utils/media';
 
 type Props = StackScreenProps<RootStackParamList, 'OrderSupport'>;
 
-const SUPPORT_TOPICS = [
-  { id: 'not_received', icon: 'cube-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.' },
-  { id: 'not_as_described', icon: 'alert-circle-outline', label: 'Not as described', description: 'The item condition, size, or authenticity does not match the listing.' },
-  { id: 'damaged', icon: 'bandage-outline', label: 'Item arrived damaged', description: 'The item was damaged during shipping or arrived broken.' },
-  { id: 'wrong_item', icon: 'shuffle-outline', label: 'Wrong item sent', description: 'I received a different item than what I ordered.' },
-  { id: 'return', icon: 'return-down-back-outline', label: 'Request a return', description: 'I want to return the item for a refund.' },
-  { id: 'other', icon: 'chatbubble-outline', label: 'Other issue', description: 'Something else is wrong with my order.' },
+const ALL_SUPPORT_TOPICS = [
+  { id: 'not_received', icon: 'cube-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.', requiresStatus: ['shipped', 'delivered'] },
+  { id: 'not_as_described', icon: 'alert-circle-outline', label: 'Not as described', description: 'The item condition, size, or authenticity does not match the listing.', requiresStatus: ['delivered'] },
+  { id: 'damaged', icon: 'bandage-outline', label: 'Item arrived damaged', description: 'The item was damaged during shipping or arrived broken.', requiresStatus: ['delivered'] },
+  { id: 'wrong_item', icon: 'shuffle-outline', label: 'Wrong item sent', description: 'I received a different item than what I ordered.', requiresStatus: ['delivered'] },
+  { id: 'return', icon: 'return-down-back-outline', label: 'Request a return', description: 'I want to return the item for a refund.', requiresStatus: ['delivered'] },
+  { id: 'payment_issue', icon: 'card-outline', label: 'Payment issue', description: 'There was a problem with payment or billing.', requiresStatus: ['created', 'paid'] },
+  { id: 'other', icon: 'chatbubble-outline', label: 'Other issue', description: 'Something else is wrong with my order.', requiresStatus: null },
 ];
 
 export default function OrderSupportScreen({ navigation, route }: Props) {
@@ -42,14 +48,42 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
+  const { formatFromFiat } = useFormattedPrice();
 
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [details, setDetails] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
+  const [order, setOrder] = React.useState<CommerceOrder | null>(null);
 
   const createSupportTicketOnApi = useStore((state) => state.createSupportTicketOnApi);
+  const getSupportTicketsForOrder = useStore((state) => state.getSupportTicketsForOrder);
+  const loadSupportTicketsForOrderFromApi = useStore((state) => state.loadSupportTicketsForOrderFromApi);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const fetchOrder = async () => {
+      try {
+        const fetched = await getOrder(orderId);
+        if (!cancelled) setOrder(fetched);
+      } catch {
+        // Order context unavailable; support form still usable
+      }
+    };
+    void fetchOrder();
+    void loadSupportTicketsForOrderFromApi(orderId);
+    return () => { cancelled = true; };
+  }, [orderId, loadSupportTicketsForOrderFromApi]);
+
+  const existingTickets = getSupportTicketsForOrder(orderId);
+  const openTicket = existingTickets.find((t) => t.status === 'open');
+
+  const orderStatus = order?.status ?? 'unknown';
+  const availableTopics = ALL_SUPPORT_TOPICS.filter((t) => {
+    if (t.requiresStatus === null) return true;
+    return t.requiresStatus.includes(orderStatus);
+  });
 
   const canSubmit = selectedTopic && details.trim().length > 10 && !isSubmitting && !isSubmitted;
 
@@ -59,7 +93,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
     setIsSubmitting(true);
 
     try {
-      const topic = SUPPORT_TOPICS.find((t) => t.id === selectedTopic)!;
+      const topic = ALL_SUPPORT_TOPICS.find((t) => t.id === selectedTopic)!;
       const ticketId = await createSupportTicketOnApi({
         orderId,
         topicId: topic.id,
@@ -70,7 +104,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       setIsSubmitting(false);
       setIsSubmitted(true);
       setSubmittedTicketId(ticketId);
-      show('Support request submitted. We will review and respond within 24 hours.', 'success');
+      show('Support request submitted. We will review and respond as soon as possible.', 'success');
     } catch {
       setIsSubmitting(false);
       show('Unable to submit support request. Please check your connection and try again.', 'error');
@@ -90,10 +124,53 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          {/* Order Context Card */}
+          {order && (
+            <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+              <ElevatedSurface variant="surface" style={styles.orderCard}>
+                <View style={styles.orderRow}>
+                  {order.listingImageUrl && (
+                    <CachedImage
+                      uri={getListingCoverUri([order.listingImageUrl], '')}
+                      style={styles.orderThumb}
+                      contentFit="cover"
+                    />
+                  )}
+                  <View style={styles.orderInfo}>
+                    <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
+                    <Text style={styles.orderMeta}>Order #{orderId.slice(-8).toUpperCase()}</Text>
+                    <Text style={styles.orderStatus}>{order.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</Text>
+                  </View>
+                </View>
+              </ElevatedSurface>
+            </Reanimated.View>
+          )}
+
+          {/* Existing Open Ticket */}
+          {openTicket && !isSubmitted && (
+            <Reanimated.View entering={FadeInDown.duration(300).delay(20)}>
+              <ElevatedSurface variant="surface" style={styles.existingTicketCard}>
+                <View style={styles.existingTicketRow}>
+                  <Ionicons name="help-circle-outline" size={22} color={Colors.brand} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.existingTicketLabel}>Open support request</Text>
+                    <Caption color={Colors.textMuted}>{openTicket.topicLabel}</Caption>
+                  </View>
+                </View>
+                <AppButton
+                  title="View ticket"
+                  variant="secondary"
+                  size="sm"
+                  onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id })}
+                />
+              </ElevatedSurface>
+            </Reanimated.View>
+          )}
+
           <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
             <Meta color={Colors.textMuted} style={styles.sectionLabel}>SELECT TOPIC</Meta>
             <View style={styles.topicsCard}>
-              {SUPPORT_TOPICS.map((topic) => {
+              {availableTopics.map((topic) => {
                 const isActive = selectedTopic === topic.id;
                 return (
                   <AnimatedPressable
@@ -161,8 +238,15 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                 Ticket #{submittedTicketId.slice(-8).toUpperCase()}
               </Caption>
               <Caption color={Colors.textMuted} style={styles.successSub}>
-                Our support team typically responds within 24 hours.
+                Our support team will review your request and respond as soon as possible.
               </Caption>
+              <AppButton
+                title="View ticket"
+                variant="secondary"
+                size="md"
+                style={{ marginTop: Space.sm }}
+                onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: submittedTicketId })}
+              />
             </Reanimated.View>
           )}
 
@@ -170,7 +254,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.honestNote}>
               <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
               <Caption color={Colors.textMuted} style={styles.honestNoteText}>
-                Our support team typically responds within 24 hours. For urgent issues, contact us through the Help & Support page.
+                Our support team reviews requests as quickly as possible. For urgent issues, contact us through the Help & Support page.
               </Caption>
             </Reanimated.View>
           )}
@@ -318,5 +402,57 @@ const styles = StyleSheet.create({
   successSub: {
     textAlign: 'center',
     lineHeight: Type.caption.lineHeight + 2,
+  },
+  orderCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    ...Elevation.subtle,
+  },
+  orderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  orderThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+  },
+  orderInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  orderTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  orderMeta: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+  },
+  orderStatus: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+    textTransform: 'capitalize',
+  },
+  existingTicketCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    gap: Space.sm,
+    ...Elevation.subtle,
+  },
+  existingTicketRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  existingTicketLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
 });

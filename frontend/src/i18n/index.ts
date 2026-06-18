@@ -190,6 +190,7 @@ const EN_TRANSLATIONS = {
   'checkout.status.ready': 'Ready to pay',
   'checkout.status.incomplete': 'Incomplete setup',
   'checkout.toast.addAddressPayment': 'Add delivery address and payment method before paying.',
+  'checkout.toast.signInRequired': 'Please sign in to complete checkout.',
   'checkout.toast.paymentActionRequired': 'Additional authentication required. Complete it in browser, then return to continue.',
   'checkout.toast.paymentCompleted': 'Payment completed',
   'checkout.toast.paymentPending': 'Payment is processing. We will update your order shortly.',

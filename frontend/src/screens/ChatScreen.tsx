@@ -10,10 +10,6 @@ import {
 
   StyleSheet,
 
-  StatusBar,
-
-  KeyboardAvoidingView,
-
   Platform,
 
   FlatList,
@@ -24,7 +20,6 @@ import {
 
 } from 'react-native';
 
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Reanimated from 'react-native-reanimated';
 
@@ -33,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import NetInfo from '@react-native-community/netinfo';
 
 import { AppState } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StackScreenProps } from '@react-navigation/stack';
 
@@ -53,6 +49,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { getListingCoverUri, isVideoUri } from '../utils/media';
 
 import { useStore } from '../store/useStore';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 import {
 
@@ -74,11 +71,10 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 
 import { useHaptic } from '../hooks/useHaptic';
 
-import { ChatTopBar } from '../components/chat/ChatTopBar';
 
 import { ChatComposerBar } from '../components/chat/ChatComposerBar';
 
-import { ChatBubbleV2 } from '../components/chat/ChatBubbleV2';
+import { MessageBubble } from '../components/chat/MessageBubble';
 
 import { MarketplaceChatCard } from '../components/chat/MarketplaceChatCard';
 
@@ -151,21 +147,15 @@ const INITIAL_MESSAGES: Message[] = [];
 
 
 function TaggedItemCard({
-
   itemId,
-
   navigation,
-
   formatFromFiat,
-
+  currentUserId,
 }: {
-
   itemId?: string;
-
   navigation: any;
-
   formatFromFiat: any;
-
+  currentUserId?: string | null;
 }) {
 
   const { listings } = useBackendData();
@@ -182,7 +172,8 @@ function TaggedItemCard({
 
   if (!listing) return null;
 
-
+  const isOwner = listing.sellerId === currentUserId;
+  const isSold = !!listing.isSold;
 
   return (
 
@@ -237,30 +228,51 @@ function TaggedItemCard({
 
         </View>
 
-        {/* Quick actions */}
+        {/* Quick actions — gated by ownership and status */}
         <View style={styles.itemQuickActions}>
-          <AnimatedPressable
-            style={styles.itemQuickBtn}
-            onPress={() => navigation.navigate('Checkout', { itemId: listing.id })}
-            activeOpacity={0.8}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            accessibilityLabel="Buy now"
-          >
-            <Ionicons name="flash-outline" size={14} color={Colors.brand} />
-            <Caption color={Colors.brand} style={styles.itemQuickText}>Buy</Caption>
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={styles.itemQuickBtn}
-            onPress={() => navigation.navigate('MakeOffer', { itemId: listing.id, price: listing.price, title: listing.title })}
-            activeOpacity={0.8}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            accessibilityLabel="Make offer"
-          >
-            <Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />
-            <Caption color={Colors.textPrimary} style={styles.itemQuickText}>Offer</Caption>
-          </AnimatedPressable>
+          {isOwner ? (
+            <AnimatedPressable
+              style={styles.itemQuickBtn}
+              onPress={() => navigation.navigate('ManageListing', { itemId: listing.id })}
+              activeOpacity={0.8}
+              scaleValue={0.95}
+              hapticFeedback="light"
+              accessibilityLabel="Manage listing"
+            >
+              <Ionicons name="settings-outline" size={14} color={Colors.brand} />
+              <Caption color={Colors.brand} style={styles.itemQuickText}>Manage</Caption>
+            </AnimatedPressable>
+          ) : isSold ? (
+            <View style={styles.itemQuickBtn}>
+              <Ionicons name="bag-check-outline" size={14} color={Colors.textMuted} />
+              <Caption color={Colors.textMuted} style={styles.itemQuickText}>Sold</Caption>
+            </View>
+          ) : (
+            <>
+              <AnimatedPressable
+                style={styles.itemQuickBtn}
+                onPress={() => navigation.navigate('Checkout', { itemId: listing.id })}
+                activeOpacity={0.8}
+                scaleValue={0.95}
+                hapticFeedback="light"
+                accessibilityLabel="Buy now"
+              >
+                <Ionicons name="flash-outline" size={14} color={Colors.brand} />
+                <Caption color={Colors.brand} style={styles.itemQuickText}>Buy</Caption>
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.itemQuickBtn}
+                onPress={() => navigation.navigate('MakeOffer', { itemId: listing.id, price: listing.price, title: listing.title })}
+                activeOpacity={0.8}
+                scaleValue={0.95}
+                hapticFeedback="light"
+                accessibilityLabel="Make offer"
+              >
+                <Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />
+                <Caption color={Colors.textPrimary} style={styles.itemQuickText}>Offer</Caption>
+              </AnimatedPressable>
+            </>
+          )}
         </View>
 
       </AnimatedPressable>
@@ -1273,453 +1285,314 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const mediaTypeLabel = (t: 'image' | 'video') => t === 'video' ? 'Video' : 'Photo';
 
+  // Date separator computation: show a date pill when the day changes between consecutive messages
+  const dateSeparatorIndices = useMemo(() => {
+    const indices = new Set<number>();
+    const extractDate = (d?: string) => {
+      if (!d) return '';
+      // Extract YYYY-MM-DD portion if available
+      const match = d.match(/^(\d{4}-\d{2}-\d{2})/);
+      return match ? match[1] : d.split('T')[0] ?? d.split(' ')[0] ?? '';
+    };
+    for (let i = 0; i < messages.length; i++) {
+      if (i === 0) {
+        indices.add(i);
+        continue;
+      }
+      const prevDate = extractDate(messages[i - 1]?.date);
+      const currDate = extractDate(messages[i]?.date);
+      if (currDate && prevDate && currDate !== prevDate) {
+        indices.add(i);
+      }
+    }
+    return indices;
+  }, [messages]);
 
+  const scrollToMessage = (messageId: string) => {
+    const idx = messages.findIndex((m) => m.id === messageId);
+    if (idx >= 0 && listRef.current) {
+      try {
+        listRef.current.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+      } catch {
+        // FlatList may not have rendered the item yet
+      }
+    }
+  };
 
   const renderMessage = (msg: Message, index: number) => {
-
-
-
-    // Clustering logic
-
     const prevMsg = messages[index - 1];
-
     const nextMsg = messages[index + 1];
-
     const isFirstInCluster = !prevMsg || prevMsg.sender !== msg.sender;
-
     const isLastInCluster = !nextMsg || nextMsg.sender !== msg.sender;
 
-
-
     // Spacing tiers (8px base grid)
-
-    let spacingTop: number = Space.sm; // normal medium = 8px
-
-    if (!prevMsg) spacingTop = Space.md; // first message = 16px
-
-    else if (prevMsg.sender === msg.sender) spacingTop = 2; // same sender = tight
-
-    else spacingTop = Space.md; // sender switch = large = 16px
-
-
+    let spacingTop: number = Space.sm;
+    if (!prevMsg) spacingTop = Space.md;
+    else if (prevMsg.sender === msg.sender) spacingTop = 2;
+    else spacingTop = Space.md;
 
     // Cluster rhythm: tight bottom inside cluster, normal at cluster end
-
     let marginBottom: number = 2;
-
     if (isLastInCluster) marginBottom = Space.sm;
 
+    const showDateSeparator = dateSeparatorIndices.has(index);
+    const dateLabel = msg.date
+      ? (() => {
+          try {
+            const d = new Date(msg.date);
+            return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+          } catch {
+            return msg.date.split('T')[0] ?? msg.date;
+          }
+        })()
+      : null;
 
+    const dateSeparator = showDateSeparator && dateLabel ? (
+      <View style={styles.dateWrap}>
+        <View style={styles.datePill}>
+          <Caption color={Colors.textMuted} style={styles.dateText}>{dateLabel}</Caption>
+        </View>
+      </View>
+    ) : null;
 
-    if (msg.date && !msg.text && !msg.offer) {
-
-      return (
-
-        <Reanimated.View
-
-          key={msg.id + '_date'}
-
-
-
-          style={styles.dateWrap}
-
-        >
-
-          <View style={styles.datePill}>
-
-            <Caption color={Colors.textMuted} style={styles.dateText}>{msg.date}</Caption>
-
-          </View>
-
-        </Reanimated.View>
-
-      );
-
-    }
-
-
-
+    // Purchase status message
     if (msg.type === 'purchase_status') {
-
       const lines = msg.text!.split('\n');
-
-      return (
-
-        <Reanimated.View
-
-          key={msg.id}
-
-
-
-          style={styles.statusWrap}
-
-        >
-
+      const content = (
+        <Reanimated.View key={msg.id} style={styles.statusWrap}>
           <View style={styles.statusCardSolid}>
-
             <BodyEmphasis style={styles.statusTitle}>{lines[0]}</BodyEmphasis>
-
             <Caption color={Colors.textSecondary} style={styles.statusBody}>{lines.slice(1).join('\n')}</Caption>
-
             <AnimatedPressable
-
               onPress={() => show('Tracking requires a linked order. Use My Orders for tracking.', 'info')}
-
               accessibilityRole="button"
-
               accessibilityLabel="Open tracking"
-
               activeOpacity={0.7}
-
               scaleValue={0.98}
-
               hapticFeedback="light"
-
             >
-
               <Caption color={Colors.brand} style={styles.statusLink}>Tracking information</Caption>
-
             </AnimatedPressable>
-
           </View>
-
         </Reanimated.View>
-
       );
-
+      return dateSeparator ? (
+        <View key={msg.id + '_group'}>
+          {dateSeparator}
+          {content}
+        </View>
+      ) : content;
     }
 
-
-
+    // Offer message
     if (msg.type === 'offer' || msg.type === 'offer_declined') {
-
       const isMe = msg.sender === 'me';
-
       const offerStatus = msg.offer!.status;
-
-      return (
-
-        <Reanimated.View
-
-          key={msg.id}
-
-          style={[styles.msgRow, isMe && styles.msgRowRight, { marginTop: spacingTop, marginBottom }]}
-
-        >
-
+      const content = (
+        <Reanimated.View key={msg.id} style={[styles.msgRow, isMe && styles.msgRowRight, { marginTop: spacingTop, marginBottom }]}>
           <View style={[styles.offerCard, isMe && styles.offerCardMe]}>
-
             {isGroup && !isMe && msg.senderLabel ? (
-
               <Meta color={Colors.textMuted} style={styles.offerSender}>{msg.senderLabel}</Meta>
-
             ) : null}
-
             <View style={styles.offerPriceRow}>
-
               <Text style={styles.offerPriceText}>{formatFromFiat(msg.offer!.price, 'GBP', { displayMode: 'fiat' })}</Text>
-
               <Caption color={Colors.textMuted}>
-
                 <Text style={styles.strike}>{formatFromFiat(msg.offer!.originalPrice, 'GBP', { displayMode: 'fiat' })}</Text>
-
               </Caption>
-
             </View>
-
             {offerStatus === 'declined' && (
-
               <AppStatusPill style={styles.offerPill} tone="negative" iconName="close-circle-outline" label="Declined" />
-
             )}
-
             {offerStatus === 'accepted' && (
-
               <AppStatusPill style={styles.offerPill} tone="positive" iconName="checkmark-circle-outline" label="Accepted" />
-
             )}
-
             {!offerStatus && isMe && (
-
               <AppStatusPill style={styles.offerPill} tone="neutral" iconName="time-outline" label="Waiting" />
-
             )}
-
             {!isMe && !offerStatus && (
-
               <View style={styles.offerActions}>
-
                 <AnimatedPressable
-
                   style={styles.passBtn}
-
                   onPress={() => handleDeclineOffer(msg.id)}
-
                   activeOpacity={0.85}
-
                   scaleValue={0.96}
-
                   hapticFeedback="light"
-
                 >
-
                   <Ionicons name="close-outline" size={14} color={Colors.textPrimary} />
-
                   <Text style={styles.passBtnText}>Pass</Text>
-
                 </AnimatedPressable>
-
                 <AnimatedPressable
-
                   style={styles.acceptBtn}
-
                   onPress={() => handleAcceptOffer(msg.id)}
-
                   activeOpacity={0.85}
-
                   scaleValue={0.96}
-
                   hapticFeedback="medium"
-
                 >
-
                   <Ionicons name="flash-outline" size={14} color={Colors.textInverse} />
-
                   <Text style={styles.acceptBtnText}>Accept</Text>
-
                 </AnimatedPressable>
-
               </View>
-
             )}
-
           </View>
-
         </Reanimated.View>
-
       );
-
+      return dateSeparator ? (
+        <View key={msg.id + '_group'}>
+          {dateSeparator}
+          {content}
+        </View>
+      ) : content;
     }
-
-
 
     const isMe = msg.sender === 'me';
-
     const isMedia = msg.type === 'media' && msg.mediaUri;
-
     if (!msg.text && !isMedia) return null;
 
-    return (
-
+    const bubble = (
       <View style={[styles.selectionRow, isMe && styles.selectionRowRight]}>
-
         {selectionMode ? (
-
           <AnimatedPressable
-
             style={[styles.checkbox, selectedMessageIds.has(msg.id) && styles.checkboxActive]}
-
             onPress={() => toggleMessageSelection(msg.id)}
-
             activeOpacity={0.7}
-
             hapticFeedback="light"
-
           >
-
             {selectedMessageIds.has(msg.id) ? (
-
               <Ionicons name="checkmark" size={14} color={Colors.textInverse} />
-
             ) : null}
-
           </AnimatedPressable>
-
         ) : null}
-
         <Reanimated.View
-
           key={msg.id}
-
           style={[styles.msgRow, isMe && styles.msgRowRight, { marginTop: spacingTop, marginBottom }]}
-
         >
-
-          <ChatBubbleV2
-
+          <MessageBubble
             text={msg.text ?? ''}
-
             isMe={isMe}
-
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
-
-            timestamp={msg.date || 'just now'}
-
+            timestamp={isLastInCluster ? (msg.date || 'just now') : undefined}
             status={
-
               isMe
-
                 ? (msg.status === 'sending' ? 'sending'
-
                   : msg.status === 'failed' ? 'failed'
-
                   : msg.uploadStatus === 'uploading' ? 'sending'
-
                   : msg.uploadStatus === 'failed' ? 'failed'
-
                   : 'sent')
-
                 : undefined
-
             }
-
             onLongPress={() => handleMessageLongPress(msg)}
-
             onReactionPress={() => setReactingToMessage(msg)}
-
             onMediaPress={
-
               msg.mediaUri
-
                 ? () => {
-
                     const uri = msg.mediaUri!;
-
                     navigation.navigate('ChatMediaPreview', {
-
                       mediaUri: uri,
-
                       mediaType: msg.mediaType ?? 'image',
-
+                      senderLabel: msg.senderLabel,
+                      timestamp: msg.date,
+                      messageId: msg.id,
                     });
-
                   }
-
                 : undefined
-
             }
-
             replyTo={
-
               msg.replyToMessageId
-
                 ? (() => {
-
                     const parent = messages.find((m) => m.id === msg.replyToMessageId);
-
                     return parent
-
                       ? { senderName: parent.senderLabel ?? 'Thryft user', text: parent.text ?? '' }
-
                       : null;
-
                   })()
-
                 : null
-
             }
-
+            onReplyPress={msg.replyToMessageId ? () => scrollToMessage(msg.replyToMessageId!) : undefined}
             reactions={msg.reactions}
-
             mediaUri={msg.mediaUri}
-
             mediaType={msg.mediaType}
-
             uploadStatus={msg.uploadStatus}
-
             onRetry={msg.uploadStatus === 'failed' ? () => handleRetryUpload(msg.id) : undefined}
-
             isFirstInCluster={isFirstInCluster}
-
             isLastInCluster={isLastInCluster}
-
             showAvatar={!isMe && isFirstInCluster}
-
           />
-
           {!isMedia && (() => {
-
             const url = extractFirstUrl(msg.text ?? '');
-
             return url ? (
-
               <View style={[styles.linkPreviewWrap, isMe && styles.linkPreviewWrapRight]}>
-
                 <LinkPreviewCard url={url} />
-
               </View>
-
             ) : null;
-
           })()}
-
         </Reanimated.View>
-
       </View>
-
     );
 
+    if (showDateSeparator && dateLabel) {
+      return (
+        <View key={msg.id + '_group'}>
+          {dateSeparator}
+          {bubble}
+        </View>
+      );
+    }
+
+    return bubble;
   };
 
 
 
   return (
 
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-
-
-      <ChatTopBar
-
-        title={isGroup ? (conversation?.title ?? 'Group chat') : '@' + sellerHandle}
-
-        subtitle={
-
-          isGroup
-
-            ? (conversation?.participantIds?.length ?? 0) + ' members'
-
-            : undefined
-
-        }
-
-        initials={isGroup ? 'G' : (sellerHandle?.[0]?.toUpperCase() ?? '?')}
-
-        variant={isGroup ? 'group' : 'dm'}
-
-        onBack={() => navigation.goBack()}
-
-        onSearch={() => setIsSearchActive((v) => !v)}
-
-        onTitlePress={
-
-          isGroup && conversation
-
-            ? () => navigation.navigate('GroupChatInfo', { conversationId: conversation.id })
-
-            : undefined
-
-        }
-
-        onInfo={
-
-          conversation
-
-            ? () => navigation.navigate(
-
-                isGroup ? 'GroupChatInfo' : 'ConversationInfo',
-
-                { conversationId: conversation.id }
-
-              )
-
-            : undefined
-
-        }
-
-      />
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title={isGroup ? (conversation?.title ?? 'Group chat') : '@' + sellerHandle}
+          subtitle={isGroup ? (conversation?.participantIds?.length ?? 0) + ' members' : undefined}
+          onBack={() => navigation.goBack()}
+          avatar={
+            !isGroup ? (
+              (() => {
+                const avatarUri =
+                  conversation?.avatar ||
+                  (resolvedPartnerId ? profileMediaOverrides[resolvedPartnerId]?.avatar : undefined) ||
+                  '';
+                return (
+                  <CachedImage
+                    uri={avatarUri}
+                    style={{ width: 32, height: 32, borderRadius: 16 }}
+                    contentFit="cover"
+                  />
+                );
+              })()
+            ) : null
+          }
+          rightAction={
+            <View style={{ flexDirection: 'row', gap: Space.sm }}>
+              <AnimatedPressable
+                onPress={() => setIsSearchActive((v) => !v)}
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light">
+                <Ionicons name="search-outline" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => {
+                  if (!conversation) return;
+                  navigation.navigate(isGroup ? 'GroupChatInfo' : 'ConversationInfo', { conversationId: conversation.id });
+                }}
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light">
+                <Ionicons name="information-circle-outline" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
+          }
+        />
+      }
+      keyboardAvoiding
+      scrollEnabled={false}
+    >
 
 
 
@@ -1827,13 +1700,12 @@ export default function ChatScreen({ navigation, route }: Props) {
 
       {!isGroup && routeItemId ? (
 
-        <TaggedItemCard itemId={routeItemId} navigation={navigation} formatFromFiat={formatFromFiat} />
+        <TaggedItemCard itemId={routeItemId} navigation={navigation} formatFromFiat={formatFromFiat} currentUserId={currentUser?.id} />
 
       ) : null}
 
 
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
         {isSyncing ? (
 
@@ -2009,9 +1881,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         </View>
 
-      </KeyboardAvoidingView>
-
-
 
       <ChatActionSheet
 
@@ -2155,7 +2024,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
       />
 
-    </SafeAreaView>
+    </FlagshipScreen>
 
   );
 
@@ -2857,4 +2726,3 @@ const styles = StyleSheet.create({
   },
 
 });
-

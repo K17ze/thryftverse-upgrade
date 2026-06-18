@@ -6,10 +6,9 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
-  StatusBar,
+  Alert,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -17,7 +16,7 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
@@ -40,17 +39,18 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   );
 
   const [name, setName] = useState(conversation?.title ?? '');
+  const [description, setDescription] = useState((conversation as any)?.description ?? '');
   const [isSaving, setIsSaving] = useState(false);
+
+  const hasChanges = name.trim() !== (conversation?.title ?? '').trim() || description.trim() !== ((conversation as any)?.description ?? '').trim();
 
   if (!conversation || conversation.type !== 'group') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <ScreenHeader title="Edit Group" onBack={() => navigation.goBack()} />
+      <FlagshipScreen header={<FlagshipHeader title="Edit Group" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
         <View style={styles.center}>
           <Caption color={Colors.textMuted}>Group not found</Caption>
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -67,14 +67,49 @@ export default function EditGroupScreen({ navigation, route }: Props) {
       upsertConversation({
         ...conversation,
         title: name.trim(),
-      });
-      show('Group name updated', 'success');
+        description: description.trim(),
+      } as any);
+      show('Group updated', 'success');
       navigation.goBack();
     } catch {
-      show('Failed to update group name', 'error');
+      show('Failed to update group', 'error');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleBack = () => {
+    if (hasChanges) {
+      Alert.alert(
+        'Unsaved changes',
+        'Discard your edits?',
+        [
+          { text: 'Keep editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+        ]
+      );
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const handleLeaveGroup = () => {
+    Alert.alert(
+      'Leave group?',
+      'You will no longer receive messages from this group.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            haptic.heavy();
+            show('You left the group', 'info');
+            navigation.navigate('MainTabs');
+          },
+        },
+      ]
+    );
   };
 
   const initials = name
@@ -85,10 +120,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     .toUpperCase();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader title="Edit Group" onBack={() => navigation.goBack()} />
-
+    <FlagshipScreen header={<FlagshipHeader title="Edit Group" onBack={handleBack} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Avatar preview */}
         <View style={styles.identity}>
@@ -113,16 +145,47 @@ export default function EditGroupScreen({ navigation, route }: Props) {
           />
         </Section>
 
+        {/* Group description */}
+        <Section title="DESCRIPTION">
+          <TextInput
+            style={[styles.input, styles.textarea]}
+            value={description}
+            onChangeText={setDescription}
+            placeholder="What is this group about?"
+            placeholderTextColor={Colors.textMuted}
+            maxLength={120}
+            multiline
+            numberOfLines={3}
+            accessibilityLabel="Group description"
+          />
+          <Caption color={Colors.textMuted} style={styles.charCount}>{description.length}/120</Caption>
+        </Section>
+
         <AppButton
           title={isSaving ? 'Saving...' : 'Save changes'}
           variant="primary"
           size="md"
           align="center"
           onPress={handleSave}
-          disabled={isSaving || !name.trim()}
+          disabled={isSaving || !name.trim() || !hasChanges}
         />
+
+        {/* Danger zone */}
+        <View style={styles.dangerZone}>
+          <Meta color={Colors.danger} style={styles.dangerLabel}>DANGER ZONE</Meta>
+          <AnimatedPressable
+            style={styles.dangerRow}
+            onPress={handleLeaveGroup}
+            activeOpacity={0.7}
+            scaleValue={0.98}
+            hapticFeedback="medium"
+          >
+            <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
+            <Text style={styles.dangerText}>Leave group</Text>
+          </AnimatedPressable>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -187,6 +250,39 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: Colors.textPrimary,
+  },
+  textarea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+    paddingTop: 14,
+  },
+  charCount: {
+    textAlign: 'right',
+    marginTop: 2,
+  },
+  dangerZone: {
+    marginTop: Space.lg,
+    gap: Space.sm,
+  },
+  dangerLabel: {
+    marginLeft: Space.xs,
+  },
+  dangerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: 14,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.danger}30`,
+  },
+  dangerText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.danger,
   },
   limitationBanner: {
     flexDirection: 'row',

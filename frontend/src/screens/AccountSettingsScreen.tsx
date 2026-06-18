@@ -3,30 +3,29 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
-  ScrollView,
   Alert,
   ActivityIndicator,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
 import { parseApiError } from '../lib/apiClient';
 import { requestMyDataExport, deleteMyAccount, updateUserProfile as updateUserProfileApi } from '../services/accountApi';
 import { disableTwoFactor, logoutFromSession } from '../services/authApi';
-import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../theme/designTokens';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
+import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipDangerZone } from '../components/flagship';
 
 export default function AccountSettingsScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -38,6 +37,7 @@ export default function AccountSettingsScreen() {
   const updateAccountPreferences = useStore((state) => state.updateAccountPreferences);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
   const { show } = useToast();
+  const haptic = useHaptic();
 
   const user = currentUser;
   const userAny = user as any;
@@ -141,10 +141,7 @@ export default function AccountSettingsScreen() {
       await logoutFromSession();
       logout();
       show(`Account deleted. Request ID: ${result.requestId}`, 'success');
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'AuthLanding' }],
-      });
+      navigation.reset({ index: 0, routes: [{ name: 'AuthLanding' }] });
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to delete account right now.');
       show(parsed.message, 'error');
@@ -213,140 +210,107 @@ export default function AccountSettingsScreen() {
 
   const isBusy = isExporting || isDeleting || isSaving;
 
-  function DetailRow({
+  const DetailRow = ({
     label,
     value,
-    editable = true,
     onPress,
+    isFirst = false,
     isLast = false,
+    danger = false,
+    loading = false,
   }: {
     label: string;
     value: string;
-    editable?: boolean;
     onPress?: () => void;
+    isFirst?: boolean;
     isLast?: boolean;
-  }) {
-    return (
-      <AnimatedPressable
-        onPress={onPress}
-        activeOpacity={0.75}
-        scaleValue={0.995}
-        hapticFeedback="light"
-        disabled={!onPress}
-      >
-        <View style={[styles.detailRow, !isLast && styles.detailRowBorder]}>
-          <Text style={styles.detailLabel}>{label}</Text>
-          <View style={styles.detailRight}>
-            <Text style={styles.detailValue} numberOfLines={1}>{value || '—'}</Text>
-            {editable && onPress && (
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} style={{ marginLeft: 4 }} />
-            )}
-          </View>
-        </View>
-      </AnimatedPressable>
-    );
-  }
+    danger?: boolean;
+    loading?: boolean;
+  }) => (
+    <SettingsRow
+      title={label}
+      value={loading ? undefined : value}
+      onPress={onPress}
+      isFirst={isFirst}
+      isLast={isLast}
+      danger={danger}
+    >
+      {loading ? <ActivityIndicator size="small" color={danger ? Colors.danger : Colors.textMuted} /> : null}
+    </SettingsRow>
+  );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-        backgroundColor={Colors.background}
-      />
+    <FlagshipScreen
+      header={<FlagshipHeader title="Account Details" subtitle="Manage your account" onBack={() => navigation.goBack()} />}
+      stickyFooter={
+        <FlagshipStickyFooter
+          actions={[
+            {
+              label: isSaving ? 'Saving…' : 'Save Changes',
+              onPress: () => void handleSaveChanges(),
+              variant: 'primary',
+              disabled: isSaving || isBusy,
+              loading: isSaving,
+            },
+          ]}
+        />
+      }
+    >
+      {/* User Details */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <SettingsSection title="User details">
+            {isHydrating ? (
+              <View style={{ padding: 16 }}>
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+                <View style={{ height: 8 }} />
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+                <View style={{ height: 8 }} />
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+              </View>
+            ) : (
+              <>
+                <DetailRow label="Username" value={user?.username ?? '—'} />
+                <DetailRow label="Email" value={email} onPress={() => openEdit('email', email)} />
+                <DetailRow
+                  label="Picture"
+                  value={user?.avatar ? 'Change' : 'Add'}
+                  onPress={() => navigation.navigate('EditProfile')}
+                  isLast
+                />
+              </>
+            )}
+        </SettingsSection>
+      </Reanimated.View>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          style={styles.headerBack}
-          scaleValue={0.92}
-          hapticFeedback="light"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Account details</Text>
-        <View style={styles.headerBack} />
-      </View>
+      {/* About me */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <SettingsSection title="About me">
+            {isHydrating ? (
+              <View style={{ padding: 16 }}>
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+                <View style={{ height: 8 }} />
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+                <View style={{ height: 8 }} />
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+              </View>
+            ) : (
+              <>
+                <DetailRow label="Display name" value={displayName} onPress={() => openEdit('fullName', displayName)} />
+                <DetailRow label="Date of birth" value={birthday} onPress={() => openEdit('birthday', birthday)} />
+                <DetailRow label="Phone" value={phone} onPress={() => openEdit('phone', phone)} />
+                <DetailRow
+                  label="Country"
+                  value={(userAny?.country as string) || '—'}
+                  isLast
+                />
+              </>
+            )}
+        </SettingsSection>
+      </Reanimated.View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* User Details */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <Text style={styles.sectionLabel}>User details</Text>
-          {isHydrating ? (
-            <View style={styles.skeletonWrap}>
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: Space.sm }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: Space.sm }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-            </View>
-          ) : (
-            <View style={styles.rowGroup}>
-              <DetailRow
-                label="Username"
-                value={user?.username ?? '—'}
-                editable={false}
-                isLast={false}
-              />
-              <DetailRow
-                label="Email"
-                value={email}
-                onPress={() => openEdit('email', email)}
-              />
-              <DetailRow
-                label="Picture"
-                value={user?.avatar ? 'Change' : 'Add'}
-                onPress={() => navigation.navigate('EditProfile')}
-                isLast
-              />
-            </View>
-          )}
-        </Reanimated.View>
-
-        {/* About me */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
-          <Text style={styles.sectionLabel}>About me</Text>
-          {isHydrating ? (
-            <View style={styles.skeletonWrap}>
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: Space.sm }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: Space.sm }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: Space.sm }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-            </View>
-          ) : (
-            <View style={styles.rowGroup}>
-              <DetailRow
-                label="Display name"
-                value={displayName}
-                onPress={() => openEdit('fullName', displayName)}
-              />
-              <DetailRow
-                label="Date of birth"
-                value={birthday}
-                onPress={() => openEdit('birthday', birthday)}
-              />
-              <DetailRow
-                label="Phone"
-                value={phone}
-                onPress={() => openEdit('phone', phone)}
-              />
-              <DetailRow
-                label="Country"
-                value={(userAny?.country as string) || 'United Kingdom'}
-                editable={false}
-                isLast
-              />
-            </View>
-          )}
-        </Reanimated.View>
-
-        {/* Preferences */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
-          <Text style={styles.sectionLabel}>Preferences</Text>
-          <View style={styles.rowGroup}>
+      {/* Preferences */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+        <SettingsSection title="Preferences">
             <DetailRow
               label="Holiday Mode"
               value={holidayMode ? 'On' : 'Off'}
@@ -358,93 +322,49 @@ export default function AccountSettingsScreen() {
               onPress={() => updateAccountPreferences({ privateProfile: !privateProfile })}
               isLast
             />
-          </View>
-        </Reanimated.View>
+        </SettingsSection>
+      </Reanimated.View>
 
-        {/* Security */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
-          <Text style={styles.sectionLabel}>Security</Text>
-          <View style={styles.rowGroup}>
-            <DetailRow
-              label="Password"
-              value="••••••••"
-              onPress={() => navigation.navigate('ChangePassword')}
-            />
+      {/* Security */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
+        <SettingsSection title="Security">
+            <DetailRow label="Password" value="••••••••" onPress={() => navigation.navigate('ChangePassword')} />
             <DetailRow
               label="Two-Factor Authentication"
               value={twoFactorEnabled ? 'On' : 'Off'}
               onPress={() => handleToggleTwoFactor(!twoFactorEnabled)}
               isLast
             />
-          </View>
-        </Reanimated.View>
+        </SettingsSection>
+      </Reanimated.View>
 
-        {/* Manage */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
-          <Text style={styles.sectionLabel}>Manage</Text>
-          <View style={styles.rowGroup}>
-            <AnimatedPressable
+      {/* Manage */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <SettingsSection title="Manage">
+            <DetailRow
+              label="Download my data"
+              value=""
               onPress={() => void handleDownloadData()}
-              activeOpacity={0.75}
-              scaleValue={0.995}
-              hapticFeedback="light"
-            >
-              <View style={[styles.detailRow, styles.detailRowBorder]}>
-                <Text style={styles.detailLabel}>Download my data</Text>
-                <View style={styles.detailRight}>
-                  {isExporting ? (
-                    <ActivityIndicator size="small" color={Colors.textMuted} />
-                  ) : (
-                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-                  )}
-                </View>
-              </View>
-            </AnimatedPressable>
-            <AnimatedPressable
-              onPress={handleDeleteAccount}
-              activeOpacity={0.75}
-              scaleValue={0.995}
-              hapticFeedback="medium"
-            >
-              <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: Colors.danger }]}>Delete account</Text>
-                <View style={styles.detailRight}>
-                  {isDeleting ? (
-                    <ActivityIndicator size="small" color={Colors.danger} />
-                  ) : (
-                    <Ionicons name="chevron-forward" size={16} color={Colors.danger} />
-                  )}
-                </View>
-              </View>
-            </AnimatedPressable>
-          </View>
-        </Reanimated.View>
+              loading={isExporting}
+              isLast
+            />
+        </SettingsSection>
+      </Reanimated.View>
 
-        {/* Save */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(220)}>
-          <AppButton
-            title={isSaving ? 'Saving…' : 'Save Changes'}
-            onPress={() => void handleSaveChanges()}
-            disabled={isSaving || isBusy}
-            variant="primary"
-            size="md"
-            style={styles.saveBtn}
-            accessibilityLabel="Save account settings"
-          />
-        </Reanimated.View>
-
-        <View style={{ height: Space.xl }} />
-      </ScrollView>
+      {/* Danger Zone */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(220)}>
+        <FlagshipDangerZone
+          title="Delete Account"
+          description="This will permanently remove your account and all associated data. This action cannot be undone."
+          actionLabel="Delete Account"
+          onAction={handleDeleteAccount}
+        />
+      </Reanimated.View>
 
       {/* Inline Edit Modal */}
-      <Modal
-        visible={editingField !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={closeEdit}
-      >
+      <Modal visible={editingField !== null} transparent animationType="slide" onRequestClose={closeEdit}>
         <View style={styles.editModalOverlay}>
-          <View style={styles.editModalCard}>
+          <View style={[styles.editModalCard, { backgroundColor: Colors.surface }]}>
             <Text style={styles.editModalTitle}>
               Edit {editingField === 'fullName' ? 'name' : editingField}
             </Text>
@@ -455,10 +375,10 @@ export default function AccountSettingsScreen() {
               containerStyle={{ marginBottom: Space.md }}
             />
             <View style={styles.editModalActions}>
-              <AnimatedPressable onPress={closeEdit} style={styles.editModalBtn}>
+              <AnimatedPressable onPress={() => { haptic.light(); closeEdit(); }} style={styles.editModalBtn} activeOpacity={0.8}>
                 <Text style={styles.editModalBtnText}>Cancel</Text>
               </AnimatedPressable>
-              <AnimatedPressable onPress={saveEdit} style={[styles.editModalBtn, styles.editModalBtnPrimary]}>
+              <AnimatedPressable onPress={() => { haptic.medium(); saveEdit(); }} style={[styles.editModalBtn, styles.editModalBtnPrimary]} activeOpacity={0.8}>
                 <Text style={[styles.editModalBtnText, styles.editModalBtnPrimaryText]}>Save</Text>
               </AnimatedPressable>
             </View>
@@ -467,14 +387,9 @@ export default function AccountSettingsScreen() {
       </Modal>
 
       {/* Disable 2FA Modal */}
-      <Modal
-        visible={disableTwoFactorModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeDisableTwoFactorModal}
-      >
+      <Modal visible={disableTwoFactorModalVisible} transparent animationType="fade" onRequestClose={closeDisableTwoFactorModal}>
         <View style={styles.modalOverlay}>
-          <View style={{ marginHorizontal: 0, marginBottom: 0, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.lg }}>
+          <View style={[styles.modalCard, { backgroundColor: Colors.surface }]}>
             <Text style={styles.modalTitle}>Disable 2FA</Text>
             <Text style={styles.modalCopy}>
               Confirm with your authenticator code or a recovery code.
@@ -488,7 +403,7 @@ export default function AccountSettingsScreen() {
               placeholder="123456"
               editable={!isTogglingTwoFactor}
               maxLength={12}
-              containerStyle={styles.modalInputSpacing}
+              containerStyle={{ marginBottom: Space.xs }}
             />
 
             <AppInput
@@ -497,7 +412,7 @@ export default function AccountSettingsScreen() {
               onChangeText={setDisableTwoFactorRecoveryCode}
               placeholder="XXXX-XXXX-XXXX"
               editable={!isTogglingTwoFactor}
-              containerStyle={styles.modalInputSpacing}
+              containerStyle={{ marginBottom: Space.xs }}
             />
 
             <View style={styles.modalActionRow}>
@@ -523,93 +438,11 @@ export default function AccountSettingsScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
-  },
-  headerBack: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-  },
-  content: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
-  skeletonWrap: {
-    marginBottom: Space.md,
-  },
-  sectionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginBottom: Space.sm + 4,
-    marginTop: Space.lg,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  rowGroup: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    marginBottom: Space.sm,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: Space.md,
-    minHeight: 56,
-  },
-  detailRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  detailLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
-  detailRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    maxWidth: 160,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  saveBtn: {
-    marginTop: Space.lg,
-    borderRadius: Radius.xl,
-  },
-
-  // Edit modal
   editModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -620,9 +453,6 @@ const styles = StyleSheet.create({
   editModalCard: {
     padding: Space.lg,
     borderRadius: Radius.xl,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
   editModalTitle: {
     fontSize: Type.subtitle.size,
@@ -654,8 +484,12 @@ const styles = StyleSheet.create({
   editModalBtnPrimaryText: {
     color: Colors.textInverse,
   },
-
-  // 2FA modal
+  modalCard: {
+    padding: Space.lg,
+    borderRadius: Radius.xl,
+    marginHorizontal: 0,
+    marginBottom: 0,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -673,9 +507,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
-    marginBottom: Space.xs,
-  },
-  modalInputSpacing: {
     marginBottom: Space.xs,
   },
   modalActionRow: {

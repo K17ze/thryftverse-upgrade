@@ -14,7 +14,7 @@ import ItemDetailScreen from '../screens/ItemDetailScreen';
 import ClosetScreen from '../screens/ClosetScreen';
 import CollectionDetailScreen from '../screens/CollectionDetailScreen';
 import PosterViewerScreen from '../screens/PosterViewerScreen';
-import CreatePosterScreen from '../screens/CreatePosterScreenV2';
+import CreatePosterScreen from '../screens/CreatePosterScreen';
 
 import CreateAuctionScreen from '../screens/CreateAuctionScreen';
 import CreateCoOwnScreen from '../screens/CreateSyndicateScreen';
@@ -47,20 +47,20 @@ import BalanceScreen from '../screens/BalanceScreen';
 import WalletScreen from '../screens/WalletScreen';
 import MyOrdersScreen from '../screens/MyOrdersScreen';
 import PersonalisationScreen from '../screens/PersonalisationScreen';
-import SettingsScreen from '../screens/SettingsScreenV2';
+import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
-import AccountSettingsScreen from '../screens/AccountSettingsScreenV2';
+import AccountSettingsScreen from '../screens/AccountSettingsScreen';
 import PaymentsScreen from '../screens/PaymentsScreen';
 
 // Phase 16 new screens
 import MakeOfferScreen from '../screens/MakeOfferScreen';
-import PushNotificationsScreen from '../screens/PushNotificationsScreenV2';
+import PushNotificationsScreen from '../screens/PushNotificationsScreen';
 import PostageScreen from '../screens/PostageScreen';
 import InviteFriendsScreen from '../screens/InviteFriendsScreen';
 import BalanceHistoryScreen from '../screens/BalanceHistoryScreen';
 
 import AddBankAccountScreen from '../screens/AddBankAccountScreen';
-import HelpSupportScreen from '../screens/HelpSupportScreenV2';
+import HelpSupportScreen from '../screens/HelpSupportScreen';
 
 // Phase 18 new screens
 import OrderDetailScreen from '../screens/OrderDetailScreen';
@@ -85,8 +85,8 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 // Phase 28
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import VisualSearchScreen from '../screens/VisualSearchScreen';
-import ChangePasswordScreen from '../screens/ChangePasswordScreenV2';
-import TwoFactorSetupScreen from '../screens/TwoFactorSetupScreenV2';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import TwoFactorSetupScreen from '../screens/TwoFactorSetupScreen';
 import WriteReviewScreen from '../screens/WriteReviewScreen';
 import ReportScreen from '../screens/ReportScreen';
 import EditListingScreen from '../screens/EditListingScreen';
@@ -95,10 +95,18 @@ import EditListingScreen from '../screens/EditListingScreen';
 import CreateLookScreen from '../screens/CreateLookScreen';
 import OutfitBuilderScreen from '../screens/OutfitBuilderScreen';
 import CoOwnIssueScreen from '../screens/CoOwnIssueScreen';
+// UI-22R.6B — Experience elevation
+import LookDetailScreen from '../screens/LookDetailScreen';
+import PulseFeedScreen from '../screens/PulseFeedScreen';
+import ExploreCollectionScreen from '../screens/ExploreCollectionScreen';
+import StyleQuizScreen from '../screens/StyleQuizScreen';
 
 // VISUAL-15 — UI Architecture + Feature Depth
 import ConversationInfoScreen from '../screens/ConversationInfoScreen';
 import MessageRequestsScreen from '../screens/MessageRequestsScreen';
+import NewMessageScreen from '../screens/NewMessageScreen';
+import SharedConversationMediaScreen from '../screens/SharedConversationMediaScreen';
+import ManageCollectionItemsScreen from '../screens/ManageCollectionItemsScreen';
 import CreateCollectionScreen from '../screens/CreateCollectionScreen';
 import OrderSupportScreen from '../screens/OrderSupportScreen';
 import ChatMediaPreviewScreen from '../screens/ChatMediaPreviewScreen';
@@ -110,10 +118,10 @@ import ListingPreviewScreen from '../screens/ListingPreviewScreen';
 import TradeConfirmScreen from '../screens/TradeConfirmScreen';
 
 // Phase 13 — Settings integrity
-import ChatSettingsScreen from '../screens/ChatSettingsScreenV2';
-import ActiveSessionsScreen from '../screens/ActiveSessionsScreenV2';
-import BlockedUsersScreen from '../screens/BlockedUsersScreenV2';
-import PrivacySettingsScreen from '../screens/PrivacySettingsScreenV2';
+import ChatSettingsScreen from '../screens/ChatSettingsScreen';
+import ActiveSessionsScreen from '../screens/ActiveSessionsScreen';
+import BlockedUsersScreen from '../screens/BlockedUsersScreen';
+import PrivacySettingsScreen from '../screens/PrivacySettingsScreen';
 import AboutScreen from '../screens/AboutScreen';
 
 // Diagnostic — dev only
@@ -181,7 +189,7 @@ export default function AppNavigator() {
       initialRouteName={isAuthenticated ? 'MainTabs' : 'AuthLanding'}
       screenOptions={pushScreenOptions}
     >
-      
+
       {/* Auth Flow */}
       <Stack.Screen name="AuthLanding" component={AuthLandingScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
@@ -251,7 +259,7 @@ export default function AppNavigator() {
       <Stack.Screen name="ManageListing" component={ManageListingScreen} />
       <Stack.Screen name="Withdraw" component={WithdrawScreen} />
       <Stack.Screen name="CategoryTree" component={CategoryTreeScreen} />
-      
+
       {/* Phase 24 new screens */}
       <Stack.Screen name="GlobalSearch" component={GlobalSearchScreen} />
 
@@ -276,6 +284,11 @@ export default function AppNavigator() {
       <Stack.Screen name="CreateLook" component={CreateLookScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" component={OutfitBuilderScreen} options={modalScreenOptions} />
       <Stack.Screen name="CoOwnIssue" component={CoOwnIssueScreen} options={modalScreenOptions} />
+      {/* UI-22R.6B — Experience elevation */}
+      <Stack.Screen name="LookDetail" component={LookDetailScreen} />
+      <Stack.Screen name="PulseFeed" component={PulseFeedScreen} />
+      <Stack.Screen name="ExploreCollection" component={ExploreCollectionScreen} />
+      <Stack.Screen name="StyleQuiz" component={StyleQuizScreen} options={modalScreenOptions} />
 
       {/* Phase 13 — Settings integrity */}
       <Stack.Screen name="ChatSettings" component={ChatSettingsScreen} />
@@ -287,6 +300,9 @@ export default function AppNavigator() {
       {/* VISUAL-15 — UI Architecture + Feature Depth */}
       <Stack.Screen name="ConversationInfo" component={ConversationInfoScreen} />
       <Stack.Screen name="MessageRequests" component={MessageRequestsScreen} />
+      <Stack.Screen name="NewMessage" component={NewMessageScreen} />
+      <Stack.Screen name="SharedConversationMedia" component={SharedConversationMediaScreen} />
+      <Stack.Screen name="ManageCollectionItems" component={ManageCollectionItemsScreen} />
       <Stack.Screen name="CreateCollection" component={CreateCollectionScreen} options={modalScreenOptions} />
       <Stack.Screen name="OrderSupport" component={OrderSupportScreen} />
       <Stack.Screen name="ChatMediaPreview" component={ChatMediaPreviewScreen} options={modalScreenOptions} />

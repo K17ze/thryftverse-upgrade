@@ -14,7 +14,7 @@ export type RootStackParamList = {
   Closet: undefined;
   PosterViewer: { posterId: string };
   CreatePoster: undefined;
-  CreateAuction: undefined;
+  CreateAuction: { listingId?: string } | undefined;
   CreateCoOwn:
     | {
         listingId?: string;
@@ -72,7 +72,7 @@ export type RootStackParamList = {
   OrderDetail: { orderId: string };
   // Phase 19 new screens
   Checkout: { itemId: string };
-  Success: undefined;
+  Success: { orderId: string };
   ManageListing: { itemId: string };
   EditListing: { itemId: string };
   Withdraw: undefined;
@@ -113,6 +113,21 @@ export type RootStackParamList = {
   CreateLook: undefined;
   CoOwnIssue: { assetId?: string };
   OutfitBuilder: undefined;
+  // UI-22R.6B — Experience elevation
+  LookDetail: { lookId: string };
+  PulseFeed: undefined;
+  ExploreCollection: {
+    title: string;
+    subtitle?: string;
+    source:
+      | { type: 'category'; categoryId: string }
+      | { type: 'brand'; brand: string }
+      | { type: 'price_drop' }
+      | { type: 'newest' }
+      | { type: 'saved_affinity' }
+      | { type: 'auction' };
+  };
+  StyleQuiz: undefined;
   // Phase 13 — Settings integrity
   ChatSettings: undefined;
   ActiveSessions: undefined;
@@ -122,9 +137,14 @@ export type RootStackParamList = {
   // VISUAL-15 — UI Architecture + Feature Depth
   ConversationInfo: { conversationId: string };
   MessageRequests: undefined;
+  NewMessage:
+    | { preselectedUserId?: string; preselectedDisplayName?: string }
+    | undefined;
+  SharedConversationMedia: { conversationId: string };
+  ManageCollectionItems: { collectionId: string };
   CreateCollection: undefined;
   OrderSupport: { orderId: string };
-  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video' };
+  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
   // UI-18 — Reference-perfect product UX
   EditCollection: { collectionId: string };
   SupportTicketDetail: { ticketId: string };

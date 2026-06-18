@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: HANDLE_BG },
   header: { alignItems: 'center', marginBottom: 12 },
   headerTitle: { fontSize: 20, fontFamily: Typography.family.semibold, color: Colors.textPrimary, letterSpacing: 0.08 },
-  
+
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -182,10 +182,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   searchInput: { flex: 1, marginLeft: 10, color: Colors.textPrimary, fontFamily: Typography.family.medium, fontSize: 16, letterSpacing: 0.08 },
-  
+
   scrollList: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
-  
+
   optionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -196,6 +196,6 @@ const styles = StyleSheet.create({
   },
   optionText: { fontSize: 16, fontFamily: Typography.family.medium, color: Colors.textPrimary, letterSpacing: 0.08 },
   optionTextActive: { fontFamily: Typography.family.semibold, color: Colors.brand },
-  
+
   noResultsText: { textAlign: 'center', color: Colors.textMuted, marginTop: 40, fontFamily: Typography.family.medium },
 });

@@ -125,10 +125,16 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
     const last4 = cardNumber.replace(/\s/g, '').slice(-4);
     const localPaymentMethod = buildCardPaymentMethod(last4, expiry, 'Visa');
 
+    const userId = currentUser?.id;
+    if (!userId) {
+      show('You must be signed in to save a payment method.', 'error');
+      setIsSaving(false);
+      return;
+    }
+
     setIsSaving(true);
     let shouldDismiss = true;
     try {
-      const userId = currentUser?.id ?? 'u1';
       const saved = await createUserPaymentMethod(userId, {
         type: 'card',
         label: localPaymentMethod.label,
@@ -163,7 +169,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.88}>
       <Text style={styles.sheetTitle}>Add card</Text>
       {policyLabel ? <Text style={styles.policyLabel}>Policy scope: {policyLabel}</Text> : null}
-      
+
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {!cardAllowed ? (
           <View style={styles.blockedCard}>
@@ -314,4 +320,3 @@ const styles = StyleSheet.create({
   saveBtn: { backgroundColor: Colors.brand, borderRadius: 30, paddingVertical: 16, alignItems: 'center' },
   saveBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textInverse },
 });
-

@@ -1,23 +1,15 @@
 import React, { useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Colors } from '../constants/colors';
+import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Typography } from '../theme/designTokens';
-import { EmptyState } from '../components/EmptyState';
+import { FlagshipEmptyGraphic, FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'BlockedUsers'>;
 
@@ -31,120 +23,74 @@ export default function BlockedUsersScreen({ navigation }: Props) {
     show('User unblocked', 'success');
   };
 
+  const deterministicInitials = useMemo(() => {
+    return (id: string) => {
+      const hash = id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      return letters[hash % 26] + letters[(hash * 7) % 26];
+    };
+  }, []);
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-        backgroundColor={Colors.background}
-      />
-
-      <View style={styles.header}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          style={styles.headerBack}
-          scaleValue={0.92}
-          hapticFeedback="light"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Blocked Users</Text>
-        <View style={styles.headerBack} />
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {blockedIds.length === 0 ? (
-          <EmptyState
-            icon="shield-checkmark-outline"
-            title="No blocked users"
-            subtitle="When you block someone, they will appear here. You can unblock them at any time."
-          />
-        ) : (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-            <View style={styles.rowGroup}>
-              {blockedIds.map((userId, index) => (
-                <View
-                  key={userId}
-                  style={[
-                    styles.userRow,
-                    index < blockedIds.length - 1 && styles.userRowBorder,
-                  ]}
-                >
-                  <View style={styles.avatar}>
-                    <View style={styles.avatarCircle}>
-                      <Text style={styles.avatarInitial}>
-                        {userId.slice(0, 2).toUpperCase()}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.userText}>
-                    <Text style={styles.userName}>Blocked account</Text>
-                    <Text style={styles.userMeta} numberOfLines={1}>ID: {userId}</Text>
-                  </View>
-                  <AnimatedPressable
-                    onPress={() => handleUnblock(userId)}
-                    activeOpacity={0.75}
-                    scaleValue={0.96}
-                    hapticFeedback="light"
-                  >
-                    <View style={styles.unblockBtn}>
-                      <Text style={styles.unblockText}>Unblock</Text>
-                    </View>
-                  </AnimatedPressable>
+    <FlagshipScreen header={<FlagshipHeader title="Blocked Users" onBack={() => navigation.goBack()} />}>
+      {blockedIds.length === 0 ? (
+        <View style={{ alignItems: 'center', paddingVertical: Space.xl * 2 }}>
+          <FlagshipEmptyGraphic variant="box" size={120} />
+          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.lg }}>No blocked users</Text>
+          <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', marginTop: Space.xs, paddingHorizontal: Space.lg }}>When you block someone, they will appear here. You can unblock them at any time.</Text>
+        </View>
+      ) : (
+        <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+          <View style={styles.card}>
+            {blockedIds.map((userId, index) => (
+              <View
+                key={userId}
+                style={[
+                  styles.userRow,
+                  index < blockedIds.length - 1 && styles.userRowBorder,
+                ]}
+              >
+                <View style={styles.avatarCircle}>
+                  <Text style={styles.avatarInitial}>{deterministicInitials(userId)}</Text>
                 </View>
-              ))}
-            </View>
-          </Reanimated.View>
-        )}
-
-        <View style={{ height: Space.xl }} />
-      </ScrollView>
-    </SafeAreaView>
+                <View style={styles.userText}>
+                  <Text style={styles.userName}>User {userId.slice(-6)}</Text>
+                  <Text style={styles.userId}>ID: {userId}</Text>
+                </View>
+                <AnimatedPressable
+                  onPress={() => handleUnblock(userId)}
+                  scaleValue={0.92}
+                  hapticFeedback="light"
+                >
+                  <View style={styles.unblockBtn}>
+                    <Text style={styles.unblockText}>Unblock</Text>
+                  </View>
+                </AnimatedPressable>
+              </View>
+            ))}
+          </View>
+        </Reanimated.View>
+      )}
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
-  },
-  headerBack: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-  },
-  scrollContent: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
-  rowGroup: {
+  card: {
     backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    marginBottom: Space.sm,
+    marginHorizontal: Space.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     paddingHorizontal: Space.md,
     minHeight: 56,
     gap: Space.sm + 4,
@@ -153,7 +99,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
-  avatar: {},
   avatarCircle: {
     width: 40,
     height: 40,
@@ -163,7 +108,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarInitial: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
@@ -175,28 +120,24 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
   },
-  userMeta: {
+  userId: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     marginTop: 2,
     letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
   },
   unblockBtn: {
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm - 2,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    backgroundColor: Colors.danger + '15',
   },
   unblockText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: Colors.danger,
     letterSpacing: Type.caption.letterSpacing,
   },
 });

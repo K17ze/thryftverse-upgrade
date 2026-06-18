@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { CachedImage } from '../CachedImage';
 
 interface ChatTopBarProps {
   title: string;
@@ -55,7 +56,11 @@ export function ChatTopBar({
           accessibilityLabel={onTitlePress ? 'Open group info' : undefined}
         >
           <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
-            <Text style={styles.avatarText}>{initials ?? '?'}</Text>
+            {avatarUrl ? (
+              <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
+            ) : (
+              <Text style={styles.avatarText}>{initials ?? '?'}</Text>
+            )}
           </View>
           <View style={styles.titleWrap}>
             <Text style={styles.title} numberOfLines={1}>{title}</Text>
@@ -135,6 +140,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.full,
   },
   avatarText: {
     fontSize: 15,

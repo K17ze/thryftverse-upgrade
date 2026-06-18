@@ -232,7 +232,7 @@ export default function FilterScreen() {
   const toggleBrand = (b: string) => {
     setSelectedBrands(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
   };
-  
+
   const toggleSize = (s: string) => {
     setSelectedSizes(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
   };
@@ -488,46 +488,46 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: width,
-    height: height, // allow scroll but cut off below screen
+    height: height,
     backgroundColor: SHEET_BG,
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 20,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 16,
   },
   handleContainer: {
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   handle: {
-    width: 44,
-    height: 5,
-    borderRadius: 3,
+    width: 36,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: HANDLE_BG,
   },
-  
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
-  headerTitle: { fontSize: Typography.size.heading, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: Typography.tracking.tight },
+  headerTitle: { fontSize: 20, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: -0.3 },
   clearBtn: {
-    minHeight: 34,
-    borderRadius: 17,
+    minHeight: 32,
+    borderRadius: 16,
     paddingHorizontal: 8,
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  clearText: { color: Colors.brand, fontSize: Typography.size.body, fontFamily: Typography.family.semibold },
+  clearText: { color: Colors.brand, fontSize: 15, fontFamily: Typography.family.semibold },
   statusRow: {
     paddingHorizontal: 24,
-    paddingBottom: 10,
+    paddingBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -535,12 +535,12 @@ const styles = StyleSheet.create({
   },
   statusMeta: {
     color: Colors.textMuted,
-    fontSize: Typography.size.caption,
+    fontSize: 13,
     fontFamily: Typography.family.medium,
   },
   contextActionRow: {
     marginHorizontal: 24,
-    marginBottom: 10,
+    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -548,9 +548,9 @@ const styles = StyleSheet.create({
   },
   contextIdentity: {
     flex: 1,
-    minHeight: 34,
-    borderRadius: 14,
-    borderWidth: 1,
+    minHeight: 32,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: CHIP_BORDER,
     backgroundColor: CHIP_BG,
     paddingHorizontal: 10,
@@ -566,14 +566,14 @@ const styles = StyleSheet.create({
   },
   syncRetryBanner: {
     marginHorizontal: 24,
-    marginBottom: 10,
+    marginBottom: 8,
     backgroundColor: RETRY_BANNER_BG,
   },
   syncRetryBtn: {
     backgroundColor: RETRY_BUTTON_BG,
   },
 
-  scrollContent: { paddingTop: 10, paddingBottom: 40 },
+  scrollContent: { paddingTop: 8, paddingBottom: 40 },
   loadingStateWrap: {
     paddingHorizontal: 20,
     gap: 22,
@@ -590,21 +590,21 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
-  
+
   sectionHeading: {
-    fontSize: Typography.size.bodyLarge,
+    fontSize: 16,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     paddingHorizontal: 20,
-    marginBottom: 16,
-    letterSpacing: Typography.tracking.tight,
+    marginBottom: 12,
+    letterSpacing: -0.2,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingRight: 20,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   seeAllBtn: {
     minHeight: 32,
@@ -613,35 +613,35 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  seeAllText: { color: Colors.brand, fontSize: Typography.size.body, fontFamily: Typography.family.semibold },
+  seeAllText: { color: Colors.brand, fontSize: 14, fontFamily: Typography.family.semibold },
 
-  hScroll: { paddingHorizontal: 20, gap: 10 },
-  
+  hScroll: { paddingHorizontal: 20, gap: 8 },
+
   wrapContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 20,
-    gap: 10,
+    gap: 8,
   },
 
   chip: {
-    minHeight: 42,
-    paddingHorizontal: 16,
-    borderRadius: 21,
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
     backgroundColor: CHIP_BG,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: CHIP_BORDER,
   },
-  sizeChip: { minWidth: 64, alignItems: 'center' },
+  sizeChip: { minWidth: 56, alignItems: 'center' },
   chipActive: { backgroundColor: Colors.textPrimary, borderColor: Colors.textPrimary },
-  
-  chipText: { fontSize: Typography.size.body, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
+
+  chipText: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
   chipTextActive: { color: Colors.background, fontFamily: Typography.family.bold },
 
   sectionDivider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: DIVIDER_COLOR,
-    marginVertical: 24,
+    marginVertical: 20,
     marginHorizontal: 20,
   },
 
@@ -649,28 +649,27 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+    paddingTop: 14,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 22,
     backgroundColor: FOOTER_BG,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: DIVIDER_COLOR,
   },
   applyBtn: {
     width: '100%',
-    minHeight: 60,
-    borderRadius: 30,
+    minHeight: 52,
+    borderRadius: 16,
   },
   applyBtnDisabled: {
     opacity: 0.6,
   },
   applyBtnText: {
     color: Colors.textPrimary,
-    fontSize: Typography.size.bodyLarge,
+    fontSize: 16,
     fontFamily: Typography.family.bold,
-    letterSpacing: Typography.tracking.wide,
+    letterSpacing: 0.2,
   },
   applyBtnTextDisabled: {
     color: Colors.textMuted,
   },
 });
-

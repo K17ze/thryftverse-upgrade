@@ -25,10 +25,10 @@ const REASONS = [
 export default function ReportScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  
+
   // Could be 'item' or 'user'
   const reportType = route.params?.type || 'item';
-  
+
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -41,7 +41,7 @@ export default function ReportScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-      
+
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="close" size={24} color={Colors.textPrimary} />
@@ -50,8 +50,8 @@ export default function ReportScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      <KeyboardAvoidingView 
-        style={styles.content} 
+      <KeyboardAvoidingView
+        style={styles.content}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {isSubmitted ? (
@@ -66,11 +66,11 @@ export default function ReportScreen() {
         ) : (
           <View style={styles.form}>
             <Text style={styles.promptText}>Why are you reporting this {reportType}?</Text>
-            
+
             <View style={styles.reasonsList}>
               {REASONS.map((reason) => (
-                <AnimatedPressable 
-                  key={reason} 
+                <AnimatedPressable
+                  key={reason}
                   style={[styles.reasonRow, selectedReason === reason && styles.selectedRow]}
                   onPress={() => setSelectedReason(reason)}
                 >
@@ -83,9 +83,9 @@ export default function ReportScreen() {
             </View>
 
             <View style={styles.footer}>
-              <AnimatedPressable 
-                style={[styles.primaryBtn, !selectedReason && styles.disabledBtn]} 
-                onPress={handleSubmit} 
+              <AnimatedPressable
+                style={[styles.primaryBtn, !selectedReason && styles.disabledBtn]}
+                onPress={handleSubmit}
                 activeOpacity={0.9}
                 disabled={!selectedReason}
               >
@@ -101,24 +101,24 @@ export default function ReportScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20, 
-    paddingTop: 10, 
+    paddingHorizontal: 20,
+    paddingTop: 10,
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: Colors.textPrimary, textTransform: 'capitalize' },
-  
+
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
   form: { flex: 1 },
-  
+
   promptText: { fontSize: 18, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 24 },
-  
+
   reasonsList: { gap: 12 },
   reasonRow: {
     flexDirection: 'row',
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   },
   reasonText: { fontSize: 15, fontFamily: Typography.family.medium, color: Colors.textPrimary },
   selectedText: { color: Colors.textInverse, fontFamily: Typography.family.bold },
-  
+
   footer: { flex: 1, justifyContent: 'flex-end', paddingBottom: 40 },
   primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   disabledBtn: { opacity: 0.5 },

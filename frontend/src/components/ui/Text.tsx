@@ -20,36 +20,36 @@ interface TextComponentProps extends RNTextProps {
 // CAPTIONS (12px)
 // ============================================================================
 
-export const Caption: React.FC<TextComponentProps> = ({ 
-  children, 
-  color = Colors.textSecondary, 
-  style, 
-  ...props 
+export const Caption: React.FC<TextComponentProps> = ({
+  children,
+  color = Colors.textSecondary,
+  style,
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.caption,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {children}
   </RNText>
 );
 
-export const CaptionEmphasis: React.FC<TextComponentProps> = ({ 
-  children, 
-  color = Colors.textPrimary, 
-  style, 
-  ...props 
+export const CaptionEmphasis: React.FC<TextComponentProps> = ({
+  children,
+  color = Colors.textPrimary,
+  style,
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.captionEmphasis,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {children}
@@ -60,36 +60,36 @@ export const CaptionEmphasis: React.FC<TextComponentProps> = ({
 // BODY TEXT (14px)
 // ============================================================================
 
-export const Body: React.FC<TextComponentProps> = ({ 
-  children, 
-  color = Colors.textPrimary, 
-  style, 
-  ...props 
+export const Body: React.FC<TextComponentProps> = ({
+  children,
+  color = Colors.textPrimary,
+  style,
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.body,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {children}
   </RNText>
 );
 
-export const BodyEmphasis: React.FC<TextComponentProps> = ({ 
-  children, 
-  color = Colors.textPrimary, 
-  style, 
-  ...props 
+export const BodyEmphasis: React.FC<TextComponentProps> = ({
+  children,
+  color = Colors.textPrimary,
+  style,
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.bodyEmphasis,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {children}
@@ -100,18 +100,18 @@ export const BodyEmphasis: React.FC<TextComponentProps> = ({
 // HEADLINES (17px - iOS style)
 // ============================================================================
 
-export const Headline: React.FC<TextComponentProps> = ({ 
-  children, 
-  color = Colors.textPrimary, 
-  style, 
-  ...props 
+export const Headline: React.FC<TextComponentProps> = ({
+  children,
+  color = Colors.textPrimary,
+  style,
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.headline,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {children}
@@ -122,54 +122,54 @@ export const Headline: React.FC<TextComponentProps> = ({
 // TITLES (20px, 24px, 32px)
 // ============================================================================
 
-export const Title3: React.FC<TextComponentProps> = ({ 
-  children, 
-  color = Colors.textPrimary, 
-  style, 
-  ...props 
+export const Title3: React.FC<TextComponentProps> = ({
+  children,
+  color = Colors.textPrimary,
+  style,
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.title3,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {children}
   </RNText>
 );
 
-export const Title2: React.FC<TextComponentProps> = ({ 
-  children, 
-  color = Colors.textPrimary, 
-  style, 
-  ...props 
+export const Title2: React.FC<TextComponentProps> = ({
+  children,
+  color = Colors.textPrimary,
+  style,
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.title2,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {children}
   </RNText>
 );
 
-export const Title1: React.FC<TextComponentProps> = ({ 
-  children, 
-  color = Colors.textPrimary, 
-  style, 
-  ...props 
+export const Title1: React.FC<TextComponentProps> = ({
+  children,
+  color = Colors.textPrimary,
+  style,
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.title1,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {children}
@@ -185,57 +185,57 @@ interface PriceProps extends Omit<TextComponentProps, 'children'> {
   currency?: string;
 }
 
-export const Price: React.FC<PriceProps> = ({ 
-  amount, 
-  currency = '£', 
+export const Price: React.FC<PriceProps> = ({
+  amount,
+  currency = '£',
   color = Colors.textPrimary,
   style,
-  ...props 
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.price,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {currency}{amount.toFixed(2)}
   </RNText>
 );
 
-export const PriceCompact: React.FC<PriceProps> = ({ 
-  amount, 
-  currency = '£', 
+export const PriceCompact: React.FC<PriceProps> = ({
+  amount,
+  currency = '£',
   color = Colors.textPrimary,
   style,
-  ...props 
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.priceCompact,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {currency}{amount.toFixed(0)}
   </RNText>
 );
 
-export const PriceLarge: React.FC<PriceProps> = ({ 
-  amount, 
-  currency = '£', 
+export const PriceLarge: React.FC<PriceProps> = ({
+  amount,
+  currency = '£',
   color = Colors.textPrimary,
   style,
-  ...props 
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.priceLarge,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {currency}{amount.toFixed(2)}
@@ -246,18 +246,18 @@ export const PriceLarge: React.FC<PriceProps> = ({
 // META - Small metadata text (ELEVATED)
 // ============================================================================
 
-export const Meta: React.FC<TextComponentProps> = ({ 
-  children, 
-  color = Colors.textSecondary, 
-  style, 
-  ...props 
+export const Meta: React.FC<TextComponentProps> = ({
+  children,
+  color = Colors.textSecondary,
+  style,
+  ...props
 }) => (
-  <RNText 
+  <RNText
     style={[
       styles.meta,
       { color },
       style,
-    ]} 
+    ]}
     {...props}
   >
     {children}

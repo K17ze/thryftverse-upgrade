@@ -1,35 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
   View,
   Text,
   StyleSheet,
-  TextInput,
-  StatusBar,
-  KeyboardAvoidingView,
-  Platform,
+  Image,
   Alert,
   ActivityIndicator,
-  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
+import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { requestTwoFactorEnrollment, verifyTwoFactorEnrollment } from '../services/authApi';
-import { Typography } from '../theme/designTokens';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
+import { AppInput } from '../components/ui/AppInput';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { AppButton } from '../components/ui/AppButton';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import QRCode from 'qrcode';
 import * as Clipboard from 'expo-clipboard';
 
 type Props = StackScreenProps<RootStackParamList, 'TwoFactorSetup'>;
-const PANEL_BG = Colors.surface;
-const PANEL_BORDER = Colors.border;
 
 export default function TwoFactorSetupScreen({ navigation }: Props) {
+  const { show } = useToast();
+  const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
+
   const [code, setCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [manualKey, setManualKey] = useState('');
@@ -37,15 +41,13 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [isLoadingEnrollment, setIsLoadingEnrollment] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
-  const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
-  const { show } = useToast();
+
   const canEnable = code.trim().length === 6 && !isLoadingEnrollment && !isVerifying;
 
   const fetchEnrollment = async () => {
     setIsLoadingEnrollment(true);
     setErrorMsg('');
     setQrDataUrl('');
-
     try {
       const result = await requestTwoFactorEnrollment();
       setManualKey(result.secret);
@@ -75,19 +77,24 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
     return () => { cancelled = true; };
   }, [otpauthUrl]);
 
+  const handleCopyKey = async () => {
+    if (!manualKey) return;
+    await Clipboard.setStringAsync(manualKey);
+    show('Manual key copied to clipboard', 'success');
+  };
+
   const handleEnable = async () => {
     if (code.trim().length !== 6) {
       setErrorMsg('Enter the 6-digit code from your authenticator app.');
       return;
     }
-
     setErrorMsg('');
     setIsVerifying(true);
     try {
       const result = await verifyTwoFactorEnrollment(code.trim());
       setTwoFactorEnabled(true);
       const recoveryCodesText = result.recoveryCodes.join('\n');
-      void Clipboard.setStringAsync(recoveryCodesText);
+      await Clipboard.setStringAsync(recoveryCodesText);
       show('Recovery codes copied to clipboard', 'success');
       Alert.alert(
         '2FA Enabled',
@@ -108,207 +115,179 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <FlagshipScreen header={<FlagshipHeader title="Two-Factor Authentication" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <Reanimated.View entering={FadeInDown.duration(300).delay(0)} style={{ flex: 1 }}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingTop: Space.sm, paddingBottom: Space.xl }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Explanation */}
+            <SettingsSection title="Security" noCard>
+              <SettingsInfoBanner
+                text="Two-factor authentication adds an extra layer of security to your account. Even if your password is compromised, your account stays protected."
+                icon="shield-checkmark-outline"
+                variant="info"
+              />
+            </SettingsSection>
 
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Two-Factor Setup</Text>
-        <View style={{ width: 44 }} />
-      </View>
+            {/* QR / Secret */}
+            <SettingsSection title="Setup">
+              <View style={styles.qrWrap}>
+                {isLoadingEnrollment ? (
+                  <ActivityIndicator color={Colors.textPrimary} size="large" />
+                ) : qrDataUrl ? (
+                  <Image source={{ uri: qrDataUrl }} style={styles.qrImage} />
+                ) : (
+                  <View style={styles.qrError}>
+                    <Ionicons name="alert-circle-outline" size={32} color={Colors.danger} />
+                    <Text style={styles.qrErrorText}>Could not generate QR code</Text>
+                  </View>
+                )}
 
-      <KeyboardAvoidingView style={styles.content} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Text style={styles.title}>Secure your account</Text>
-        <Text style={styles.subtitle}>
-          Scan this code with an authenticator app, then enter the 6-digit verification code below.
-        </Text>
+                {!isLoadingEnrollment && !!manualKey && (
+                  <View style={styles.manualKeyWrap}>
+                    <Text style={styles.manualKeyLabel}>Manual key</Text>
+                    <View style={styles.manualKeyRow}>
+                      <Text style={styles.manualKeyValue} numberOfLines={1}>{manualKey}</Text>
+                      <AnimatedPressable onPress={handleCopyKey} hapticFeedback="light" scaleValue={0.92}>
+                        <Ionicons name="copy-outline" size={20} color={Colors.brand} />
+                      </AnimatedPressable>
+                    </View>
+                  </View>
+                )}
+              </View>
 
-        <View style={styles.qrCard}>
-          {isLoadingEnrollment ? (
-            <ActivityIndicator color={Colors.textPrimary} size="large" />
-          ) : qrDataUrl ? (
-            <Image source={{ uri: qrDataUrl }} style={styles.qrImage} />
-          ) : (
-            <View style={styles.qrError}>
-              <Ionicons name="alert-circle-outline" size={32} color={Colors.danger} />
-              <Text style={styles.qrErrorText}>Could not generate QR code</Text>
-              <Text style={styles.qrHint}>You can still use the manual key below.</Text>
+              <View style={styles.otpauthUrlWrap}>
+                <Text style={styles.otpauthUrlText} numberOfLines={2}>
+                  {otpauthUrl || 'Generating secure enrollment secret...'}
+                </Text>
+              </View>
+
+              <View style={styles.refreshWrap}>
+                <AppButton
+                  title={isLoadingEnrollment ? 'Refreshing...' : 'Generate new secret'}
+                  onPress={() => void fetchEnrollment()}
+                  variant="secondary"
+                  size="sm"
+                  disabled={isLoadingEnrollment}
+                />
+              </View>
+            </SettingsSection>
+
+            {/* Verification */}
+            <SettingsSection title="Verify">
+              <View style={{ paddingHorizontal: Space.md }}>
+                <AppInput
+                  label="Verification code"
+                  value={code}
+                  onChangeText={(value) => {
+                    const digitsOnly = value.replace(/\D/g, '').slice(0, 6);
+                    setCode(digitsOnly);
+                    if (errorMsg) setErrorMsg('');
+                  }}
+                  keyboardType="number-pad"
+                  placeholder="123456"
+                  maxLength={6}
+                  containerStyle={{ marginBottom: Space.sm }}
+                />
+                {!!errorMsg && (
+                  <Text style={styles.errorText}>{errorMsg}</Text>
+                )}
+              </View>
+            </SettingsSection>
+
+            {/* CTA */}
+            <View style={{ paddingHorizontal: Space.md, marginTop: Space.md, marginBottom: Space.xl }}>
+              <AppButton
+                title={isVerifying ? 'Verifying...' : 'Enable 2FA'}
+                onPress={() => void handleEnable()}
+                variant="primary"
+                size="md"
+                disabled={!canEnable}
+                style={{ borderRadius: Radius.xl }}
+              />
             </View>
-          )}
-          {!isLoadingEnrollment && (
-            <>
-              <Text style={styles.qrHint} numberOfLines={3}>{otpauthUrl || 'Generating secure enrollment secret...'}</Text>
-              {!!manualKey && <Text style={styles.manualKeyText}>Manual key: {manualKey}</Text>}
-            </>
-          )}
-        </View>
-
-        <Text style={styles.inputLabel}>Verification code</Text>
-        <TextInput
-          style={styles.input}
-          value={code}
-          onChangeText={(value) => {
-            setCode(value.replace(/\D/g, '').slice(0, 6));
-            if (errorMsg) {
-              setErrorMsg('');
-            }
-          }}
-          keyboardType="number-pad"
-          placeholder="123456"
-          placeholderTextColor={Colors.textMuted}
-          maxLength={6}
-        />
-
-        {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
-
-        <AnimatedPressable style={styles.secondaryBtn} onPress={() => void fetchEnrollment()} activeOpacity={0.8}>
-          <Text style={styles.secondaryBtnText}>{isLoadingEnrollment ? 'Refreshing secret...' : 'I need a new secret'}</Text>
-        </AnimatedPressable>
-
-        <AnimatedPressable
-          style={[styles.primaryBtn, !canEnable && styles.primaryBtnDisabled]}
-          onPress={() => void handleEnable()}
-          activeOpacity={0.9}
-          disabled={!canEnable}
-        >
-          <Text style={styles.primaryBtnText}>{isVerifying ? 'Verifying...' : 'Enable 2FA'}</Text>
-        </AnimatedPressable>
+          </ScrollView>
+        </Reanimated.View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: 'row',
+  qrWrap: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 20,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: PANEL_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
-  title: {
-    fontSize: 30,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginBottom: 12,
-    letterSpacing: -0.8,
-  },
-  subtitle: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  qrCard: {
-    backgroundColor: PANEL_BG,
-    borderRadius: 20,
-    paddingVertical: 28,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-  },
-  qrHint: {
-    marginTop: 16,
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: Typography.family.regular,
-    textAlign: 'center',
+    paddingVertical: Space.lg,
+    gap: Space.md,
   },
   qrImage: {
     width: 220,
     height: 220,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
   },
   qrError: {
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 20,
+    gap: Space.sm,
+    paddingVertical: Space.lg,
   },
   qrErrorText: {
     color: Colors.danger,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.body.letterSpacing,
   },
-  manualKeyText: {
-    marginTop: 10,
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
-    textAlign: 'center',
+  manualKeyWrap: {
+    width: '100%',
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
   },
-  inputLabel: {
-    fontSize: 13,
+  manualKeyLabel: {
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: Type.caption.letterSpacing,
   },
-  input: {
-    height: 56,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+  manualKeyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  manualKeyValue: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
-    fontSize: 24,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 6,
-    paddingHorizontal: 2,
-    marginBottom: 8,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  otpauthUrlWrap: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.md,
+  },
+  otpauthUrlText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  refreshWrap: {
+    alignItems: 'center',
+    paddingBottom: Space.md,
   },
   errorText: {
     color: Colors.danger,
-    fontSize: 13,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    marginBottom: 16,
-  },
-  secondaryBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: 8,
-    marginBottom: 24,
-  },
-  secondaryBtnText: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontFamily: Typography.family.medium,
-    textDecorationLine: 'underline',
-  },
-  primaryBtn: {
-    backgroundColor: Colors.textPrimary,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryBtnDisabled: {
-    opacity: 0.45,
-  },
-  primaryBtnText: {
-    color: Colors.background,
-    fontSize: 16,
-    fontFamily: Typography.family.bold,
+    marginBottom: Space.sm,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });

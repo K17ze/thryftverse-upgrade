@@ -3,15 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  Alert,
   ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,14 +16,11 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
-import { BottomSheetPicker } from '../components/BottomSheetPicker';
+import { CachedImage } from '../components/CachedImage';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
-import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
-import { AppButton } from '../components/ui/AppButton';
-import { FlagshipProfileMedia, FlagshipActionCluster } from '../components/flagship';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { FlagshipProfileMedia, FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship';
 import { updateMyProfile } from '../services/profileApi';
 import { uploadMedia } from '../services/mediaUpload';
 import {
@@ -38,7 +31,6 @@ import {
 } from '../preferences/profileMediaPreferences';
 import { persistProfileMediaUri } from '../utils/profileMediaAsset';
 
-const GENDER_OPTIONS = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
 
 export default function EditProfileScreen() {
   const { isDark } = useAppTheme();
@@ -53,16 +45,14 @@ export default function EditProfileScreen() {
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
 
   const user = currentUser;
-  const initialGender = user?.gender ?? 'Prefer not to say';
-  const initialName = user?.displayName ?? user?.username ?? '';
+    const initialName = user?.displayName ?? user?.username ?? '';
   const initialUsername = user?.username ?? '';
 
   const [name, setName] = useState(initialName);
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(user?.bio ?? '');
   const [website, setWebsite] = useState(user?.website ?? '');
-  const [gender, setGender] = useState(initialGender);
-  const [genderPickerVisible, setGenderPickerVisible] = useState(false);
+  
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
@@ -72,8 +62,7 @@ export default function EditProfileScreen() {
     name !== initialName ||
     username !== initialUsername ||
     bio !== (user?.bio ?? '') ||
-    website !== (user?.website ?? '') ||
-    gender !== initialGender;
+    website !== (user?.website ?? '');
 
   const hasMediaChanges = React.useMemo(() => {
     const avatarChanged = userAvatar !== (user?.avatar ?? null);
@@ -174,7 +163,6 @@ export default function EditProfileScreen() {
       if (username !== initialUsername) updates.username = username;
       if (bio !== (user?.bio ?? '')) updates.bio = bio;
       if (website !== (user?.website ?? '')) updates.website = website;
-      if (gender !== initialGender) updates.gender = gender;
       if (Object.keys(updates).length > 0) {
         const updated = await updateMyProfile(updates);
         updateUserProfile({
@@ -193,8 +181,9 @@ export default function EditProfileScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       show('Profile updated', 'success');
       navigation.goBack();
-    } catch {
-      show('Failed to save profile. Please try again.', 'error');
+    } catch (err: any) {
+      const message = err?.message || 'Failed to save profile. Please try again.';
+      show(message, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -203,10 +192,26 @@ export default function EditProfileScreen() {
   const currentAvatar = user?.avatar || userAvatar || '';
   const currentCover = user?.coverPhoto || userCover || '';
 
+  const handleDiscard = () => {
+    if (!hasChanges) {
+      navigation.goBack();
+      return;
+    }
+    Alert.alert(
+      'Unsaved changes',
+      'You have unsaved changes. Are you sure you want to discard them?',
+      [
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+      ]
+    );
+  };
+
   if (!user) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Edit Profile" onBack={() => navigation.goBack()} />}
+      >
         <EmptyState
           icon="person-outline"
           title="Not signed in"
@@ -214,105 +219,23 @@ export default function EditProfileScreen() {
           ctaLabel="Sign In"
           onCtaPress={() => (navigation as any).navigate('Login')}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {/* Header */}
-          <View style={styles.header}>
-            <AnimatedPressable onPress={() => navigation.goBack()} scaleValue={0.92} hapticFeedback="light">
-              <Ionicons name="close" size={28} color={Colors.textPrimary} />
-            </AnimatedPressable>
-            <Text style={styles.headerTitle}>Edit Profile</Text>
-            <View style={{ width: 44 }} />
-          </View>
-
-          {/* Hero Media Section */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
-            <FlagshipProfileMedia
-              coverUri={currentCover}
-              avatarUri={currentAvatar}
-              isSelf
-              onEditCover={pickCover}
-              onEditAvatar={pickAvatar}
-              isUploadingCover={isUploadingCover}
-              isUploadingAvatar={isUploadingAvatar}
-              style={{ marginBottom: Space.lg }}
-            />
-          </Reanimated.View>
-
-          {/* Identity Fields */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.section}>
-            <Text style={styles.sectionLabel}>Identity</Text>
-            <View style={styles.fieldGroup}>
-              <PremiumTextField label="Name" value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" />
-              <View style={styles.divider} />
-              <PremiumTextField
-                label="Username"
-                value={username}
-                onChangeText={setUsername}
-                placeholder="username"
-                autoCapitalize="none"
-                helperText="How people find you on Thryftverse."
-              />
-            </View>
-          </Reanimated.View>
-
-          {/* About */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.section}>
-            <Text style={styles.sectionLabel}>About</Text>
-            <View style={styles.fieldGroup}>
-              <PremiumTextField
-                label="Bio"
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Tell people about yourself..."
-                multiline
-                minHeight={100}
-                maxLength={200}
-                helperText={`${bio.length}/200`}
-              />
-              <View style={styles.divider} />
-              <PremiumTextField
-                label="Website"
-                value={website}
-                onChangeText={setWebsite}
-                onBlur={() => validateWebsite(website)}
-                placeholder="https://"
-                autoCapitalize="none"
-                keyboardType="url"
-                errorText={websiteError || undefined}
-              />
-            </View>
-          </Reanimated.View>
-
-          {/* Personal */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.section}>
-            <Text style={styles.sectionLabel}>Personal</Text>
-            <View style={styles.fieldGroup}>
-              <PremiumSelectRow
-                label="Gender"
-                value={gender}
-                placeholder="Select gender"
-                icon="person-outline"
-                onPress={() => setGenderPickerVisible(true)}
-              />
-            </View>
-          </Reanimated.View>
-
-          <View style={{ height: Space.xl }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      {/* Sticky Save Action */}
-      <View style={styles.actionBar}>
-        <FlagshipActionCluster
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Edit Profile"
+          onBack={handleDiscard}
+          backIcon="arrow-back"
+          rightAction={undefined}
+        />
+      }
+      keyboardAvoiding
+      stickyFooter={
+        <FlagshipStickyFooter
           actions={[
             {
               label: isSaving ? 'Saving...' : 'Save Changes',
@@ -323,150 +246,79 @@ export default function EditProfileScreen() {
             },
           ]}
         />
-      </View>
+      }
+    >
+      {/* Hero Media Section */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
+        <FlagshipProfileMedia
+          coverUri={currentCover}
+          avatarUri={currentAvatar}
+          isSelf
+          onEditCover={pickCover}
+          onEditAvatar={pickAvatar}
+          isUploadingCover={isUploadingCover}
+          isUploadingAvatar={isUploadingAvatar}
+          style={{ marginBottom: Space.lg }}
+        />
+      </Reanimated.View>
 
-      <BottomSheetPicker
-        visible={genderPickerVisible}
-        onClose={() => setGenderPickerVisible(false)}
-        title="Gender"
-        options={GENDER_OPTIONS}
-        selectedValue={gender}
-        onSelect={(value) => setGender(value)}
-      />
-    </SafeAreaView>
+      
+      <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <FlagshipFormSection title="Identity">
+          <PremiumTextField
+            label="Name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Your name"
+            autoCapitalize="words"
+          />
+          <View style={styles.divider} />
+          <PremiumTextField
+            label="Username"
+            value={username}
+            onChangeText={setUsername}
+            placeholder="username"
+            autoCapitalize="none"
+            helperText="How people find you on Thryftverse."
+          />
+        </FlagshipFormSection>
+      </Reanimated.View>
+
+      {/* About */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <FlagshipFormSection title="About">
+          <PremiumTextField
+            label="Bio"
+            value={bio}
+            onChangeText={setBio}
+            placeholder="Tell people about yourself..."
+            multiline
+            minHeight={100}
+            maxLength={200}
+            helperText={`${bio.length}/200`}
+          />
+          <View style={styles.divider} />
+          <PremiumTextField
+            label="Website"
+            value={website}
+            onChangeText={setWebsite}
+            onBlur={() => validateWebsite(website)}
+            placeholder="https://"
+            autoCapitalize="none"
+            keyboardType="url"
+            errorText={websiteError || undefined}
+          />
+        </FlagshipFormSection>
+      </Reanimated.View>
+
+          </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
-  },
-  headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-  },
-  content: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xxl,
-  },
-
-  // Hero
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: Space.xl,
-  },
-  coverFrame: {
-    width: '100%',
-    height: 160,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  coverImage: {
-    width: '100%',
-    height: '100%',
-  },
-  uploadOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coverEditBadge: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.background,
-  },
-  avatarOuter: {
-    marginTop: -48,
-    alignItems: 'center',
-  },
-  avatarFrame: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 3,
-    borderColor: Colors.background,
-  },
-  avatarImage: {
-    width: 96,
-    height: 96,
-  },
-  avatarEditBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.background,
-  },
-
-  // Sections
-  section: {
-    marginBottom: Space.lg,
-  },
-  sectionLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: Space.sm,
-    marginLeft: Space.xs,
-  },
-  fieldGroup: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
-  },
   divider: {
     height: 1,
     backgroundColor: Colors.border,
     marginLeft: Space.md,
-  },
-
-  // Action bar
-  actionBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.md + 8,
-    backgroundColor: Colors.background,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
   },
 });

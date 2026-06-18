@@ -133,7 +133,7 @@ describe('VISUAL-15 UI Architecture + Feature Depth', () => {
   });
 
   // ── 6. Premium components used in new screens ──
-  it('new screens use ScreenHeader', () => {
+  it('new screens use FlagshipHeader or ScreenHeader', () => {
     const screens = [
       'ConversationInfoScreen.tsx',
       'MessageRequestsScreen.tsx',
@@ -142,7 +142,8 @@ describe('VISUAL-15 UI Architecture + Feature Depth', () => {
     ];
     for (const s of screens) {
       const src = read(resolve(SCREENS, s));
-      expect(src).toContain('ScreenHeader');
+      const hasHeader = src.includes('FlagshipHeader') || src.includes('ScreenHeader');
+      expect(hasHeader).toBe(true);
     }
   });
 

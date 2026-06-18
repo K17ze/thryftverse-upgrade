@@ -6,10 +6,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  StatusBar,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -17,7 +15,7 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
@@ -98,26 +96,29 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader
-        title="Bots"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <AnimatedPressable
-            onPress={() => navigation.navigate({ name: 'CustomBots', params: undefined })}
-            activeOpacity={0.7}
-            scaleValue={0.92}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="My bots"
-          >
-            <View style={styles.headerActionBtn}>
-              <Ionicons name="hardware-chip-outline" size={20} color={Colors.textPrimary} />
-            </View>
-          </AnimatedPressable>
-        }
-      />
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Bots"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable
+              onPress={() => navigation.navigate({ name: 'CustomBots', params: undefined })}
+              activeOpacity={0.7}
+              scaleValue={0.92}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="My bots"
+            >
+              <View style={styles.headerActionBtn}>
+                <Ionicons name="hardware-chip-outline" size={20} color={Colors.textPrimary} />
+              </View>
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+    >
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Deployed bots */}
@@ -172,7 +173,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 

@@ -11,7 +11,7 @@ import { View,
   Platform
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { EmptyState } from '../components/EmptyState';
@@ -135,6 +135,7 @@ async function waitForPaymentIntentSettlement(
 }
 
 export default function CheckoutScreen() {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { itemId } = route.params;
@@ -297,9 +298,14 @@ export default function CheckoutScreen() {
     let cancelled = false;
 
     const hydrateCheckoutDefaults = async () => {
+      const userId = currentUser?.id;
+      if (!userId) {
+        setIsHydratingCheckout(false);
+        return;
+      }
+
       setIsHydratingCheckout(true);
       try {
-        const userId = currentUser?.id ?? 'u1';
         const [addresses, paymentMethods] = await Promise.all([
           listUserAddresses(userId),
           listUserPaymentMethods(userId),
@@ -362,9 +368,15 @@ export default function CheckoutScreen() {
       return;
     }
 
+    const userId = currentUser?.id;
+    if (!userId) {
+      show(t('checkout.toast.signInRequired'), 'error');
+      setIsSubmittingPayment(false);
+      return;
+    }
+
     setIsSubmittingPayment(true);
     try {
-      const userId = currentUser?.id ?? 'u1';
       const order = await createOrder({
         buyerId: userId,
         listingId: item.id,
@@ -378,14 +390,26 @@ export default function CheckoutScreen() {
       const intent = await createCommercePaymentIntent({ orderId: order.id });
 
       if (intent.nextActionUrl) {
-        await Linking.openURL(intent.nextActionUrl);
-        show(t('checkout.toast.paymentActionRequired'), 'info');
+        try {
+          const supported = await Linking.canOpenURL(intent.nextActionUrl);
+          if (!supported) {
+            show('Unable to open payment action URL.', 'error');
+            setIsSubmittingPayment(false);
+            return;
+          }
+          await Linking.openURL(intent.nextActionUrl);
+          show(t('checkout.toast.paymentActionRequired'), 'info');
+        } catch {
+          show('Could not open payment page. Please try again.', 'error');
+          setIsSubmittingPayment(false);
+          return;
+        }
       }
 
       const settlementStatus = await waitForPaymentIntentSettlement(intent.intentId);
       if (settlementStatus === 'succeeded') {
         show(t('checkout.toast.paymentCompleted'), 'success');
-        navigation.replace('Success');
+        navigation.replace('Success', { orderId: order.id });
         return;
       }
 
@@ -396,8 +420,11 @@ export default function CheckoutScreen() {
       }
 
       throw new Error('payment-intent-failed');
-    } catch {
-      show(t('checkout.toast.paymentFailed'), 'error');
+    } catch (error: any) {
+      const message = error?.message === 'payment-intent-failed'
+        ? t('checkout.toast.paymentFailed')
+        : (error?.message || t('checkout.toast.paymentFailed'));
+      show(message, 'error');
     } finally {
       setIsSubmittingPayment(false);
     }
@@ -424,7 +451,7 @@ export default function CheckoutScreen() {
       />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
+
         {/* Item Summary Card */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
         <ElevatedSurface variant="surface" style={styles.itemCard}>
@@ -816,4 +843,3 @@ const styles = StyleSheet.create({
   footerTotalPrice: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   payBtn: { minWidth: 186, marginLeft: 16 },
 });
-

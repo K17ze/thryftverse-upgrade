@@ -231,6 +231,9 @@ export default function CreateLookScreen() {
     return Object.keys(nextErrors).length === 0;
   };
 
+  const addUserLook = useStore((state) => state.addUserLook);
+  const currentUser = useStore((state) => state.currentUser);
+
   const handleSubmit = async () => {
     if (!validate()) { haptic.error(); return; }
     if (!imageUri) return;
@@ -238,7 +241,22 @@ export default function CreateLookScreen() {
     haptic.medium();
     try {
       const mediaUrl = await uploadMedia(imageUri, 'looks');
-      const lookId = `look_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const lookId = addUserLook({
+        title: title.trim(),
+        coverImage: mediaUrl,
+        items: tags.map((t) => ({
+          id: t.id,
+          label: t.label,
+          x: t.x,
+          y: t.y,
+        })),
+        creator: {
+          name: currentUser?.username ?? 'you',
+          avatar: currentUser?.avatar ?? undefined,
+        },
+        likes: 0,
+        comments: 0,
+      });
       await createLookOnApi({
         id: lookId,
         title: title.trim(),
@@ -253,7 +271,7 @@ export default function CreateLookScreen() {
         status: 'published',
       });
       show('Look published', 'success');
-      navigation.goBack();
+      navigation.navigate('LookDetail', { lookId });
     } catch (e) {
       show(typeof e === 'object' && e && 'message' in e ? String((e as Error).message) : 'Failed to publish look', 'error');
       haptic.error();

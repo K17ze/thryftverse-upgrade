@@ -31,6 +31,7 @@ import { CachedImage } from '../components/CachedImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
+import { useStore } from '../store/useStore';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_BG = Colors.surface;
@@ -53,23 +54,32 @@ export default function ManageListingScreen() {
 
   const [item, setItem] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [isSold, setIsSold] = React.useState(false);
-  const [hasRecentBoost, setHasRecentBoost] = React.useState(false);
+  const [isNotFound, setIsNotFound] = React.useState(false);
+  const [hasError, setHasError] = React.useState(false);
   const [imgIndex, setImgIndex] = React.useState(0);
-  const bumpFeeLabel = formatFromFiat(1.95, 'GBP', { displayMode: 'fiat' });
+  const currentUser = useStore((s) => s.currentUser);
 
   React.useEffect(() => {
     let mounted = true;
     setIsLoading(true);
+    setHasError(false);
+    setIsNotFound(false);
     fetchListingByIdFromApi(itemId)
       .then((res) => {
         if (!mounted) return;
         if (res.ok && res.listing) {
           setItem(res.listing);
-          setIsSold(res.listing.status === 'sold');
+          setIsNotFound(false);
+        } else {
+          setIsNotFound(true);
         }
       })
-      .catch(() => { if (mounted) show('Could not load listing', 'error'); })
+      .catch(() => {
+        if (mounted) {
+          setHasError(true);
+          show('Could not load listing', 'error');
+        }
+      })
       .finally(() => { if (mounted) setIsLoading(false); });
     return () => { mounted = false; };
   }, [itemId, show]);
@@ -84,11 +94,72 @@ export default function ManageListingScreen() {
     return item.images?.length ? item.images : (item.imageUrl ? [item.imageUrl] : []);
   }, [item]);
 
-  if (isLoading || !item) {
+  const isOwner = currentUser?.id && item?.sellerId === currentUser.id;
+
+  if (isLoading) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
         <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
         <ActivityIndicator size="large" color={Colors.brand} />
+      </View>
+    );
+  }
+
+  if (isNotFound || !item) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+        <Ionicons name="pricetag-outline" size={48} color={Colors.textMuted} />
+        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.md }}>
+          Listing not found
+        </Text>
+        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
+          This listing may have been removed or you may not have access to it.
+        </Text>
+        <AppButton title="Go back" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => navigation.goBack()} />
+      </View>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+        <Ionicons name="warning-outline" size={48} color={Colors.textMuted} />
+        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.md }}>
+          Could not load listing
+        </Text>
+        <AppButton title="Retry" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => {
+          setHasError(false);
+          setIsLoading(true);
+          fetchListingByIdFromApi(itemId)
+            .then((res) => {
+              if (res.ok && res.listing) {
+                setItem(res.listing);
+                setIsNotFound(false);
+              } else {
+                setIsNotFound(true);
+              }
+            })
+            .catch(() => setHasError(true))
+            .finally(() => setIsLoading(false));
+        }} />
+      </View>
+    );
+  }
+
+  if (!isOwner) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+        <Ionicons name="lock-closed-outline" size={48} color={Colors.textMuted} />
+        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.md }}>
+          Permission denied
+        </Text>
+        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
+          You do not have permission to manage this listing.
+        </Text>
+        <AppButton title="Go back" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => navigation.goBack()} />
       </View>
     );
   }
@@ -114,17 +185,7 @@ export default function ManageListingScreen() {
   }, [item.title, item.priceGbp, formatFromFiat]);
 
   const handleBumpListing = () => {
-    Alert.alert('Bump Listing', `Push this item to the top of the feed for ${bumpFeeLabel}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Confirm',
-        style: 'default',
-        onPress: () => {
-          setHasRecentBoost(true);
-          show('Listing bumped for 3 days.', 'success');
-        },
-      },
-    ]);
+    show('Listing promotions are not currently available.', 'info');
   };
 
   const handleDeleteListing = () => {
@@ -146,28 +207,46 @@ export default function ManageListingScreen() {
     ]);
   };
 
-  const toggleSold = (next: boolean) => {
-    if (next) {
-      Alert.alert('Mark as Sold', 'This item will no longer be available for purchase.', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Mark Sold',
-          style: 'default',
-          onPress: async () => {
-            try {
-              await patchListingOnApi(itemId, { status: 'sold' });
-              setIsSold(true);
-              show('Listing marked as sold.', 'success');
-            } catch {
-              show('Failed to update listing', 'error');
-            }
-          },
+  const status = item.status ?? 'active';
+  const isSold = status === 'sold';
+  const isPaused = status === 'paused';
+
+  const handleMarkSold = () => {
+    Alert.alert('Mark as Sold', 'This item will no longer be available for purchase.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Mark Sold',
+        style: 'default',
+        onPress: async () => {
+          try {
+            await patchListingOnApi(itemId, { status: 'sold' });
+            setItem((prev: any) => ({ ...prev, status: 'sold' }));
+            show('Listing marked as sold.', 'success');
+          } catch {
+            show('Failed to update listing', 'error');
+          }
         },
-      ]);
-    } else {
-      patchListingOnApi(itemId, { status: 'active' })
-        .then(() => { setIsSold(false); show('Item relisted', 'success'); })
-        .catch(() => show('Failed to update listing', 'error'));
+      },
+    ]);
+  };
+
+  const handlePause = async () => {
+    try {
+      await patchListingOnApi(itemId, { status: 'paused' });
+      setItem((prev: any) => ({ ...prev, status: 'paused' }));
+      show('Listing paused', 'info');
+    } catch {
+      show('Failed to update listing', 'error');
+    }
+  };
+
+  const handleReactivate = async () => {
+    try {
+      await patchListingOnApi(itemId, { status: 'active' });
+      setItem((prev: any) => ({ ...prev, status: 'active' }));
+      show('Listing reactivated', 'success');
+    } catch {
+      show('Failed to update listing', 'error');
     }
   };
 
@@ -212,8 +291,8 @@ export default function ManageListingScreen() {
           <View style={styles.heroOverlay} />
 
           <View style={styles.statusPill}>
-            <View style={[styles.statusDot, { backgroundColor: isSold ? DANGER_TEXT : SUCCESS_TEXT }]} />
-            <Text style={styles.statusPillText}>{isSold ? 'Sold' : 'Active'}</Text>
+            <View style={[styles.statusDot, { backgroundColor: isSold ? DANGER_TEXT : isPaused ? WARN_TINT.replace('0.12', '1') : SUCCESS_TEXT }]} />
+            <Text style={styles.statusPillText}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
           </View>
 
           {images.length > 1 && (
@@ -262,10 +341,10 @@ export default function ManageListingScreen() {
         {/* Action Cluster */}
         <FlagshipActionCluster
           actions={[
-            { icon: <Ionicons name="flash-outline" size={20} color={Colors.brand} />, label: 'Bump', onPress: handleBumpListing },
             { icon: <Ionicons name="image-outline" size={20} color={Colors.brand} />, label: 'Poster', onPress: () => navigation.navigate('CreatePoster') },
             { icon: <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />, label: 'Share', onPress: handleShare },
             { icon: <Ionicons name="eye-outline" size={20} color={Colors.textPrimary} />, label: 'Preview', onPress: () => navigation.push('ItemDetail', { itemId: item.id }) },
+            ...(status === 'active' ? [{ icon: <Ionicons name="hammer-outline" size={20} color={Colors.brand} />, label: 'Auction', onPress: () => navigation.navigate('CreateAuction', { listingId: item.id }) }] : []),
           ]}
           style={{ marginHorizontal: Space.md, marginBottom: Space.md }}
         />
@@ -297,26 +376,39 @@ export default function ManageListingScreen() {
           </View>
         )}
 
-        {/* Status Toggle */}
+        {/* Status Actions */}
         <View style={styles.card}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleLeft}>
-              <View style={[styles.toggleIconWrap, { backgroundColor: isSold ? 'rgba(255,59,48,0.12)' : 'rgba(52,199,89,0.12)' }]}>
-                <Ionicons name={isSold ? 'close-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? DANGER_TEXT : SUCCESS_TEXT} />
+              <View style={[styles.toggleIconWrap, { backgroundColor: isSold ? 'rgba(255,59,48,0.12)' : isPaused ? WARN_TINT : 'rgba(52,199,89,0.12)' }]}>
+                <Ionicons name={isSold ? 'close-circle-outline' : isPaused ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? DANGER_TEXT : isPaused ? '#F5A623' : SUCCESS_TEXT} />
               </View>
               <View>
-                <Text style={styles.toggleTitle}>{isSold ? 'Sold' : 'Active'}</Text>
-                <Text style={styles.toggleSub}>{isSold ? 'Buyers cannot purchase this item' : 'Visible to buyers in search and browse'}</Text>
+                <Text style={styles.toggleTitle}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
+                <Text style={styles.toggleSub}>
+                  {isSold ? 'Buyers cannot purchase this item' : isPaused ? 'Hidden from buyers temporarily' : 'Visible to buyers in search and browse'}
+                </Text>
               </View>
             </View>
-            <Switch
-              value={!isSold}
-              onValueChange={(v) => toggleSold(!v)}
-              trackColor={{ false: Colors.border, true: SUCCESS_TEXT }}
-              thumbColor={Colors.background}
-              ios_backgroundColor={Colors.border}
-            />
           </View>
+
+          {status === 'active' && (
+            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }}>
+              <AppButton title="Pause" variant="secondary" size="sm" style={{ flex: 1 }} onPress={handlePause} />
+              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: Colors.danger }} onPress={handleMarkSold} />
+            </View>
+          )}
+          {status === 'paused' && (
+            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }}>
+              <AppButton title="Reactivate" variant="primary" size="sm" style={{ flex: 1 }} onPress={handleReactivate} />
+              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: Colors.danger }} onPress={handleMarkSold} />
+            </View>
+          )}
+          {status === 'sold' && (
+            <View style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }}>
+              <AppButton title="Reactivate Listing" variant="secondary" size="sm" style={{ width: '100%' }} onPress={handleReactivate} />
+            </View>
+          )}
         </View>
 
         {/* Delete */}

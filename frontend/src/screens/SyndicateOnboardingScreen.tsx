@@ -206,4 +206,3 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
   },
 });
-

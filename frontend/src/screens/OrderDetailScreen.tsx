@@ -10,12 +10,14 @@ import {
   ScrollView,
   StatusBar,
   Linking,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
+import * as Clipboard from 'expo-clipboard';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
@@ -275,23 +277,29 @@ export default function OrderDetailScreen() {
       setBackendOrder(order);
       setParcelEvents(events);
     } catch {
-      setBackendOrder(null);
-      setParcelEvents([]);
+      // Preserve last known valid order; show sync warning instead of replacing with null.
+      show('Unable to refresh order. Showing last known state.', 'info');
     } finally {
       setIsSyncingOrder(false);
     }
-  }, [orderId]);
+  }, [orderId, show]);
+
+  const isTerminalState = React.useMemo(() => {
+    const status = backendOrder?.status;
+    return status === 'delivered' || status === 'cancelled' || status === 'refunded';
+  }, [backendOrder?.status]);
 
   React.useEffect(() => {
     void syncOrder();
+    const intervalMs = isTerminalState ? 300_000 : 30_000;
     const refreshInterval = setInterval(() => {
       void syncOrder();
-    }, 30_000);
+    }, intervalMs);
 
     return () => {
       clearInterval(refreshInterval);
     };
-  }, [syncOrder]);
+  }, [syncOrder, isTerminalState]);
 
   const loadSupportTicketsForOrderFromApi = useStore((state) => state.loadSupportTicketsForOrderFromApi);
 
@@ -345,8 +353,8 @@ export default function OrderDetailScreen() {
     backendOrder?.platformChargeGbp ??
     backendOrder?.buyerProtectionFeeGbp ??
     calculatePlatformChargeGbp(listing.price);
-  const postageFee = backendOrder?.postageFeeGbp ?? 2.89;
-  const totalPaid = backendOrder?.totalGbp ?? subtotal + platformCharge + postageFee;
+  const postageFee = backendOrder?.postageFeeGbp;
+  const totalPaid = backendOrder?.totalGbp ?? subtotal + platformCharge + (postageFee ?? 0);
 
   const trackingSteps = buildTrackingSteps(orderStatus, sellerName, backendOrder, parcelEvents);
   const statusBanner = getStatusBanner(orderStatus, sellerName);
@@ -366,9 +374,24 @@ export default function OrderDetailScreen() {
         title="Order Details"
         onBack={() => navigation.goBack()}
         rightAction={
-          <AnimatedPressable onPress={() => navigation.navigate('OrderSupport', { orderId })}>
-            <Ionicons name="ellipsis-horizontal" size={22} color={Colors.textPrimary} />
-          </AnimatedPressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <AnimatedPressable
+              onPress={() => { haptics.tap(); void syncOrder(); }}
+              scaleValue={0.92}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh order"
+            >
+              <Ionicons name="refresh-outline" size={22} color={Colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable
+              onPress={() => navigation.navigate('OrderSupport', { orderId })}
+              scaleValue={0.92}
+              accessibilityRole="button"
+              accessibilityLabel="Order support"
+            >
+              <Ionicons name="ellipsis-horizontal" size={22} color={Colors.textPrimary} />
+            </AnimatedPressable>
+          </View>
         }
       />
 
@@ -426,7 +449,20 @@ export default function OrderDetailScreen() {
                 <ShipmentMetaRow label="Carrier" value={backendOrder.shippingProvider} />
               ) : null}
               {backendOrder?.trackingNumber ? (
-                <ShipmentMetaRow label="Tracking #" value={backendOrder.trackingNumber} />
+                <View style={styles.shipmentMetaRow}>
+                  <Text style={styles.shipmentMetaLabel}>Tracking #</Text>
+                  <AnimatedPressable
+                    onPress={async () => {
+                      await Clipboard.setStringAsync(backendOrder.trackingNumber!);
+                      show('Tracking number copied', 'success');
+                    }}
+                    scaleValue={0.98}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy tracking number"
+                  >
+                    <Text style={[styles.shipmentMetaValue, { color: Colors.brand }]}>{backendOrder.trackingNumber}</Text>
+                  </AnimatedPressable>
+                </View>
               ) : null}
               {shipmentLastUpdated ? (
                 <ShipmentMetaRow label="Last update" value={shipmentLastUpdated} />
@@ -544,7 +580,10 @@ export default function OrderDetailScreen() {
         <ElevatedSurface variant="surface" style={styles.txCard}>
           <TxRow label="Item price" value={formatFromFiat(subtotal, 'GBP', { displayMode: 'fiat' })} />
           <TxRow label="Platform charge" value={formatFromFiat(platformCharge, 'GBP', { displayMode: 'fiat' })} />
-          <TxRow label="Postage" value={`from ${formatFromFiat(postageFee, 'GBP', { displayMode: 'fiat' })}`} />
+          <TxRow
+            label="Postage"
+            value={postageFee != null ? formatFromFiat(postageFee, 'GBP', { displayMode: 'fiat' }) : 'Not specified'}
+          />
           <View style={styles.txDivider} />
           <TxRow label="Total paid" value={formatFromFiat(totalPaid, 'GBP', { displayMode: 'fiat' })} bold />
         </ElevatedSurface>
@@ -589,13 +628,26 @@ export default function OrderDetailScreen() {
               size="md"
               onPress={async () => {
                 haptics.heavyPress();
-                try {
-                  await cancelOrder(orderId);
-                  show('Order cancelled', 'info');
-                  void syncOrder();
-                } catch (e) {
-                  show(parseApiError(e).message, 'error');
-                }
+                Alert.alert(
+                  'Cancel this order?',
+                  'This will cancel the order and notify the seller. This action cannot be undone.',
+                  [
+                    { text: 'Keep order', style: 'cancel' },
+                    {
+                      text: 'Cancel order',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          await cancelOrder(orderId);
+                          show('Order cancelled', 'info');
+                          void syncOrder();
+                        } catch (e) {
+                          show(parseApiError(e).message, 'error');
+                        }
+                      },
+                    },
+                  ]
+                );
               }}
               accessibilityLabel="Cancel order"
             />
@@ -653,13 +705,26 @@ export default function OrderDetailScreen() {
               size="md"
               onPress={async () => {
                 haptics.heavyPress();
-                try {
-                  await refundOrder(orderId);
-                  show('Refund processed', 'info');
-                  void syncOrder();
-                } catch (e) {
-                  show(parseApiError(e).message, 'error');
-                }
+                Alert.alert(
+                  'Request a refund?',
+                  'This will initiate a refund request for this order. The seller will be notified.',
+                  [
+                    { text: 'Keep order', style: 'cancel' },
+                    {
+                      text: 'Request refund',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          await refundOrder(orderId);
+                          show('Refund request submitted', 'info');
+                          void syncOrder();
+                        } catch (e) {
+                          show(parseApiError(e).message, 'error');
+                        }
+                      },
+                    },
+                  ]
+                );
               }}
               accessibilityLabel="Request refund"
             />
@@ -673,7 +738,7 @@ export default function OrderDetailScreen() {
               iconContainerStyle={styles.actionSecondaryIconWrap}
               variant="secondary"
               size="md"
-              onPress={() => navigation.navigate('Report', { type: 'item' })}
+              onPress={() => navigation.navigate('OrderSupport', { orderId })}
               accessibilityLabel="Report issue"
             />
           )}

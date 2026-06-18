@@ -61,23 +61,23 @@ export default function ForgotPasswordScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-      
+
       <ScreenHeader
         title=""
         onBack={() => navigation.goBack()}
         showBackButton
       />
 
-      <KeyboardAvoidingView 
-        style={styles.content} 
+      <KeyboardAvoidingView
+        style={styles.content}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.delay(0).duration(400)}>
           <Text style={styles.title}>Reset{'\n'}Password</Text>
         </Reanimated.View>
-        
+
         {isSent ? (
-          <Reanimated.View 
+          <Reanimated.View
             style={styles.successState}
             entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)}
           >
@@ -92,7 +92,7 @@ export default function ForgotPasswordScreen() {
             />
           </Reanimated.View>
         ) : (
-          <Reanimated.View 
+          <Reanimated.View
             style={styles.form}
             entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)}
           >
@@ -114,7 +114,7 @@ export default function ForgotPasswordScreen() {
 
             {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
-            <Reanimated.View 
+            <Reanimated.View
               style={styles.footer}
               entering={reducedMotionEnabled ? undefined : FadeInDown.delay(200).duration(400)}
             >
@@ -138,14 +138,14 @@ export default function ForgotPasswordScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  
+
   content: { flex: 1, paddingHorizontal: Space.lg, justifyContent: 'center' },
   title: { fontSize: 44, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: 48, letterSpacing: -1, marginBottom: Space.lg },
   subtitle: { fontSize: 16, fontFamily: Typography.family.regular, color: Colors.textSecondary, marginBottom: Space.xl, lineHeight: 24 },
-  
+
   form: { marginBottom: Space.xl },
   inputGroup: { marginBottom: Space.xl },
-  
+
   footer: { paddingBottom: Space.xl },
   errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, marginBottom: Space.xs },
 

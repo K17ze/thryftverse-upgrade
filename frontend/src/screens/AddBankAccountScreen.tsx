@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -293,4 +293,3 @@ const styles = StyleSheet.create({
   footer: { padding: 20, borderTopWidth: 1, borderTopColor: BORDER },
   saveBtn: { borderRadius: 30 },
 });
-

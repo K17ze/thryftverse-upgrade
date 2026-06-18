@@ -5,7 +5,6 @@ import {
 import { View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   Dimensions,
   RefreshControl
@@ -167,7 +166,6 @@ export default function MyOrdersScreen() {
     return activeOrders.filter((order) => !order.isDone && !/cancel/i.test(order.status));
   }, [activeOrders, statusFilter]);
 
-  const AnimatedScrollView = Reanimated.createAnimatedComponent(ScrollView);
 
   // Map order status to premium pill tone
   const getStatusTone = (status: string): import('../components/ui/PremiumStatusPill').StatusPillTone => {
@@ -190,7 +188,7 @@ export default function MyOrdersScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-      
+
       <ScreenHeader
         title="My Orders"
         onBack={() => navigation.goBack()}
@@ -227,9 +225,9 @@ export default function MyOrdersScreen() {
 
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={10} />
-        
-        <AnimatedScrollView 
-          contentContainerStyle={[styles.content, filteredOrders.length === 0 && { flex: 1, justifyContent: 'center' }]} 
+
+        <Reanimated.ScrollView
+          contentContainerStyle={[styles.content, filteredOrders.length === 0 && { flex: 1, justifyContent: 'center' }]}
           showsVerticalScrollIndicator={false}
           onScroll={scrollHandler}
           scrollEventThrottle={16}
@@ -292,7 +290,7 @@ export default function MyOrdersScreen() {
               );
             })
           )}
-        </AnimatedScrollView>
+        </Reanimated.ScrollView>
       </View>
 
     </SafeAreaView>
@@ -301,7 +299,7 @@ export default function MyOrdersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  
+
   tabsContainer: { marginHorizontal: 20, backgroundColor: Colors.surface, borderRadius: 24, padding: 4, marginBottom: 16 },
   tabBtn: { flex: 1, paddingVertical: 12, borderRadius: 20, borderWidth: 0, backgroundColor: 'transparent' },
   activeTabBtn: { backgroundColor: Colors.surfaceAlt },

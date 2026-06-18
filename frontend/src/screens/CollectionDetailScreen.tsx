@@ -33,13 +33,10 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { AppInput } from '../components/ui/AppInput';
-import { AppButton } from '../components/ui/AppButton';
 import { Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
-import { ShareSheet } from '../components/ShareSheet';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 180;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -51,16 +48,12 @@ export default function CollectionDetailScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const [refreshing, setRefreshing] = useState(false);
-  const [renameModalVisible, setRenameModalVisible] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [shareVisible, setShareVisible] = useState(false);
   const scrollY = useSharedValue(0);
 
   const collectionId = route.params?.collectionId;
 
   const collections = useStore((state) => state.collections);
-  const deleteCollection = useStore((state) => state.deleteCollection);
-  const renameCollection = useStore((state) => state.renameCollection);
+  const deleteCollectionOnApi = useStore((state) => state.deleteCollectionOnApi);
   const { listings, refreshListings } = useBackendData();
 
   const collection = useMemo(
@@ -93,7 +86,7 @@ export default function CollectionDetailScreen() {
     }
   }, [navigation]);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback(async () => {
     haptic.heavy();
     Alert.alert(
       'Delete Collection',
@@ -103,32 +96,21 @@ export default function CollectionDetailScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             if (collectionId) {
-              deleteCollection(collectionId);
-              show('Collection deleted', 'info');
-              handleGoBack();
+              try {
+                await deleteCollectionOnApi(collectionId);
+                show('Collection deleted', 'info');
+                handleGoBack();
+              } catch {
+                show('Unable to delete collection. Please try again.', 'error');
+              }
             }
           },
         },
       ]
     );
-  }, [collection, collectionId, deleteCollection, haptic, show, handleGoBack]);
-
-  const openRename = useCallback(() => {
-    haptic.medium();
-    setNewName(collection?.name ?? '');
-    setRenameModalVisible(true);
-  }, [collection, haptic]);
-
-  const handleRename = useCallback(() => {
-    const trimmed = newName.trim();
-    if (trimmed && collectionId) {
-      renameCollection(collectionId, trimmed);
-      show('Collection renamed', 'success');
-    }
-    setRenameModalVisible(false);
-  }, [newName, collectionId, renameCollection, show]);
+  }, [collection, collectionId, deleteCollectionOnApi, haptic, show, handleGoBack]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -206,16 +188,24 @@ export default function CollectionDetailScreen() {
             <CachedImage uri={coverImage} style={styles.coverImage} contentFit="cover" />
             <View style={styles.coverGradient} />
             <View style={styles.coverInfo}>
-              <Text style={styles.coverTitle} numberOfLines={1}>{collection.name}</Text>
+              <View style={styles.coverTitleRow}>
+                <Text style={styles.coverTitle} numberOfLines={1}>{collection.name}</Text>
+                {collection.isPrivate && (
+                  <View style={styles.privacyBadge}>
+                    <Ionicons name="lock-closed" size={10} color={Colors.textInverse} />
+                    <Text style={styles.privacyText}>Private</Text>
+                  </View>
+                )}
+              </View>
+              {collection.description ? (
+                <Text style={styles.coverDesc} numberOfLines={2}>{collection.description}</Text>
+              ) : null}
               <Text style={styles.coverMeta}>{count} {count === 1 ? 'item' : 'items'}</Text>
             </View>
             {/* Actions overlay */}
             <View style={styles.coverActions} pointerEvents="box-none">
               <View style={{ width: 40 }} />
               <View style={styles.actionRow}>
-                <AnimatedPressable style={styles.actionBtnOverlay} onPress={() => { haptic.light(); setShareVisible(true); }} activeOpacity={0.85} accessibilityLabel="Share collection">
-                  <Ionicons name="share-outline" size={18} color="#fff" />
-                </AnimatedPressable>
                 <AnimatedPressable style={styles.actionBtnOverlay} onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }} activeOpacity={0.85} accessibilityLabel="Edit collection">
                   <Ionicons name="settings-outline" size={18} color="#fff" />
                 </AnimatedPressable>
@@ -228,18 +218,42 @@ export default function CollectionDetailScreen() {
         {!coverImage && (
           <View style={styles.noCoverHeader}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.noCoverTitle}>{collection.name}</Text>
+              <View style={styles.coverTitleRow}>
+                <Text style={styles.noCoverTitle}>{collection.name}</Text>
+                {collection.isPrivate && (
+                  <View style={styles.privacyBadgeOutline}>
+                    <Ionicons name="lock-closed" size={10} color={Colors.textMuted} />
+                    <Text style={styles.privacyTextOutline}>Private</Text>
+                  </View>
+                )}
+              </View>
+              {collection.description ? (
+                <Text style={styles.noCoverDesc} numberOfLines={2}>{collection.description}</Text>
+              ) : null}
               <Text style={styles.noCoverMeta}>{count} {count === 1 ? 'item' : 'items'}</Text>
             </View>
             <View style={styles.actionRow}>
-              <AnimatedPressable style={styles.actionBtn} onPress={() => { haptic.light(); setShareVisible(true); }} activeOpacity={0.85}>
-                <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
-              </AnimatedPressable>
               <AnimatedPressable style={styles.actionBtn} onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }} activeOpacity={0.85}>
                 <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
               </AnimatedPressable>
             </View>
           </View>
+        )}
+
+        {/* Manage items row */}
+        {count > 0 && (
+          <AnimatedPressable
+            style={styles.manageRow}
+            onPress={() => navigation.navigate('ManageCollectionItems', { collectionId })}
+            activeOpacity={0.85}
+            hapticFeedback="light"
+            accessibilityLabel="Manage collection items"
+            accessibilityRole="button"
+          >
+            <Ionicons name="list-outline" size={18} color={Colors.textSecondary} />
+            <Text style={styles.manageRowText}>Manage items</Text>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </AnimatedPressable>
         )}
 
         {/* Grid */}
@@ -269,22 +283,6 @@ export default function CollectionDetailScreen() {
         <View style={{ height: 120 }} />
       </Reanimated.ScrollView>
 
-      <ShareSheet
-        visible={shareVisible}
-        onDismiss={() => setShareVisible(false)}
-        url={`https://thryftverse.com/collection/${collectionId}`}
-        title={collection?.name ?? 'Check out this collection'}
-        imageUri={coverImage ?? undefined}
-      />
-
-      {/* Rename Bottom Sheet Modal */}
-      <RenameCollectionSheet
-        visible={renameModalVisible}
-        value={newName}
-        onChangeText={setNewName}
-        onSubmit={handleRename}
-        onCancel={() => setRenameModalVisible(false)}
-      />
     </SafeAreaView>
   );
 }
@@ -344,80 +342,6 @@ function MoreLikeThisRow({
     </View>
   );
 }
-
-// ============================================================================
-// Rename Bottom Sheet (cross-platform, replaces Alert.prompt)
-// ============================================================================
-function RenameCollectionSheet({
-  visible,
-  value,
-  onChangeText,
-  onSubmit,
-  onCancel,
-}: {
-  visible: boolean;
-  value: string;
-  onChangeText: (v: string) => void;
-  onSubmit: () => void;
-  onCancel: () => void;
-}) {
-  if (!visible) return null;
-  return (
-    <View style={renameStyles.overlay}>
-      <View style={renameStyles.backdrop}>
-        <AnimatedPressable style={StyleSheet.absoluteFill} onPress={onCancel} activeOpacity={1} />
-      </View>
-      <View style={renameStyles.card}>
-        <Text style={renameStyles.title}>Rename Collection</Text>
-        <AppInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder="Collection name"
-          autoFocus
-          returnKeyType="done"
-          onSubmitEditing={onSubmit}
-        />
-        <View style={renameStyles.btnRow}>
-          <AppButton title="Cancel" variant="secondary" size="sm" onPress={onCancel} style={{ flex: 1 }} />
-          <AppButton title="Rename" size="sm" onPress={onSubmit} disabled={!value.trim()} style={{ flex: 1, marginLeft: Space.sm }} />
-        </View>
-      </View>
-    </View>
-  );
-}
-
-const renameStyles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-    zIndex: 100,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  card: {
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    padding: Space.md,
-    paddingBottom: Space.xl,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  title: {
-    fontSize: 18,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginBottom: Space.md,
-  },
-  btnRow: {
-    flexDirection: 'row',
-    marginTop: Space.md,
-  },
-});
 
 const styles = StyleSheet.create({
   container: {
@@ -537,6 +461,53 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 2,
   },
+  coverTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  coverDesc: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
+  },
+  noCoverDesc: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  privacyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  privacyText: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
+    color: Colors.textInverse,
+  },
+  privacyBadgeOutline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  privacyTextOutline: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
+    color: Colors.textMuted,
+  },
   actionBtn: {
     width: 40,
     height: 40,
@@ -546,6 +517,25 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  manageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginHorizontal: Space.md,
+    marginTop: Space.md,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  manageRowText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   listContent: {
     paddingBottom: 120,

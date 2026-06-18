@@ -33,11 +33,11 @@ export function RetryState({ onRetry, message = 'Something went wrong.' }: Retry
       <Reanimated.View entering={iconEnterAnimation} style={styles.iconBox}>
         <Ionicons name="warning-outline" size={64} color={Colors.danger} />
       </Reanimated.View>
-      
+
       <Reanimated.Text entering={titleEnterAnimation} style={styles.title}>
         Oops!
       </Reanimated.Text>
-      
+
       <Reanimated.Text entering={subtitleEnterAnimation} style={styles.subtext}>
         {message}
       </Reanimated.Text>

@@ -103,7 +103,7 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
     { label: 'Browse', screen: 'Browse', params: { categoryId: 'all', title: 'Browse' } },
     { label: 'Search', screen: 'MainTabs', params: { screen: 'Search' } },
     { label: 'VisualSearch', screen: 'VisualSearch' },
-    { label: 'SellScreenV2', screen: 'MainTabs', params: { screen: 'Sell' } },
+    { label: 'SellScreen', screen: 'MainTabs', params: { screen: 'Sell' } },
     { label: 'Inbox', screen: 'MainTabs', params: { screen: 'Inbox' } },
     { label: 'Chat DM', screen: 'Chat', needsData: 'conversation' },
     { label: 'Chat Group', screen: 'Chat', params: { isGroup: true }, needsData: 'conversation' },
