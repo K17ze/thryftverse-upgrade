@@ -69,7 +69,9 @@ export default function EditProfileScreen() {
     updateUserCover
   );
 
-  const hasChanges = hasTextChanges || hasUnsavedMedia;
+  const hasChanges = hasTextChanges;
+  const isMediaActive = avatarState.status === 'uploading' || coverState.status === 'uploading';
+  const hasMediaFailure = avatarState.status === 'failed' || coverState.status === 'failed';
 
   const validateWebsite = useCallback((value: string) => {
     if (!value) {
@@ -87,6 +89,10 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!validateWebsite(website)) return;
+    if (isMediaActive) {
+      show('Media upload in progress. Please wait.', 'info');
+      return;
+    }
     setIsSaving(true);
     try {
       const updates: Record<string, unknown> = {};
@@ -109,8 +115,12 @@ export default function EditProfileScreen() {
         });
       }
       await fetchMyProfile();
-      show('Profile updated', 'success');
-      navigation.goBack();
+      if (hasMediaFailure) {
+        show('Text saved. Media upload failed — retry or revert below.', 'info');
+      } else {
+        show('Profile updated', 'success');
+        navigation.goBack();
+      }
     } catch (err: any) {
       const message = err?.message || 'Failed to save profile. Please try again.';
       show(message, 'error');
@@ -123,13 +133,16 @@ export default function EditProfileScreen() {
   const displayCover = coverState.pendingLocal || coverState.confirmedRemote || userCover || '';
 
   const handleDiscard = () => {
-    if (!hasChanges) {
+    if (!hasChanges && !hasUnsavedMedia) {
       navigation.goBack();
       return;
     }
+    let message = 'You have unsaved changes. Are you sure you want to discard them?';
+    if (isMediaActive) message = 'Media upload in progress. Leaving now will discard the upload.';
+    if (hasMediaFailure) message = 'Media upload failed. Leaving now will discard your changes.';
     Alert.alert(
       'Unsaved changes',
-      'You have unsaved changes. Are you sure you want to discard them?',
+      message,
       [
         { text: 'Keep editing', style: 'cancel' },
         { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
@@ -196,10 +209,10 @@ export default function EditProfileScreen() {
           <View style={styles.mediaErrorRow}>
             <Ionicons name="warning-outline" size={16} color={Colors.danger} />
             <Text style={styles.mediaErrorText}>{avatarState.error || 'Avatar upload failed'}</Text>
-            <AnimatedPressable onPress={retryAvatar} activeOpacity={0.8} scaleValue={0.96}>
+            <AnimatedPressable onPress={retryAvatar} activeOpacity={0.8} scaleValue={0.96} accessibilityLabel="Retry avatar upload" accessibilityRole="button">
               <Text style={styles.mediaActionText}>Retry</Text>
             </AnimatedPressable>
-            <AnimatedPressable onPress={revertAvatar} activeOpacity={0.8} scaleValue={0.96}>
+            <AnimatedPressable onPress={revertAvatar} activeOpacity={0.8} scaleValue={0.96} accessibilityLabel="Revert avatar to previous" accessibilityRole="button">
               <Text style={styles.mediaActionText}>Revert</Text>
             </AnimatedPressable>
           </View>
@@ -210,10 +223,10 @@ export default function EditProfileScreen() {
           <View style={styles.mediaErrorRow}>
             <Ionicons name="warning-outline" size={16} color={Colors.danger} />
             <Text style={styles.mediaErrorText}>{coverState.error || 'Cover upload failed'}</Text>
-            <AnimatedPressable onPress={retryCover} activeOpacity={0.8} scaleValue={0.96}>
+            <AnimatedPressable onPress={retryCover} activeOpacity={0.8} scaleValue={0.96} accessibilityLabel="Retry cover upload" accessibilityRole="button">
               <Text style={styles.mediaActionText}>Retry</Text>
             </AnimatedPressable>
-            <AnimatedPressable onPress={revertCover} activeOpacity={0.8} scaleValue={0.96}>
+            <AnimatedPressable onPress={revertCover} activeOpacity={0.8} scaleValue={0.96} accessibilityLabel="Revert cover to previous" accessibilityRole="button">
               <Text style={styles.mediaActionText}>Revert</Text>
             </AnimatedPressable>
           </View>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { MediaUploadAsset, convertPickerAsset, validateMediaAssets } from '../utils/mediaUploadAsset';
@@ -55,6 +55,20 @@ export function useProfileMediaUpload(
   });
 
   const pendingAssetRef = useRef<{ avatar?: MediaUploadAsset; cover?: MediaUploadAsset }>({});
+  const opIdRef = useRef(0);
+
+  // Sync external remote URLs when no local operation is active
+  useEffect(() => {
+    if (avatar.status === 'idle' || avatar.status === 'confirmed') {
+      setAvatar((prev) => (prev.confirmedRemote === currentAvatarRemote ? prev : { ...prev, confirmedRemote: currentAvatarRemote }));
+    }
+  }, [currentAvatarRemote, avatar.status]);
+
+  useEffect(() => {
+    if (cover.status === 'idle' || cover.status === 'confirmed') {
+      setCover((prev) => (prev.confirmedRemote === currentCoverRemote ? prev : { ...prev, confirmedRemote: currentCoverRemote }));
+    }
+  }, [currentCoverRemote, cover.status]);
 
   const updateAvatarState = useCallback((patch: Partial<ProfileMediaState>) => {
     setAvatar((prev) => ({ ...prev, ...patch }));
@@ -67,7 +81,8 @@ export function useProfileMediaUpload(
   const performUpload = useCallback(async (
     type: ProfileMediaType,
     asset: MediaUploadAsset,
-    localUri: string
+    localUri: string,
+    opId: number
   ): Promise<void> => {
     const updateState = type === 'avatar' ? updateAvatarState : updateCoverState;
     const onConfirmed = type === 'avatar' ? onAvatarConfirmed : onCoverConfirmed;
@@ -81,6 +96,9 @@ export function useProfileMediaUpload(
     try {
       const publicUrl = await uploadMedia(asset, type === 'avatar' ? 'avatars' : 'covers');
       await updateMyProfile(type === 'avatar' ? { avatar: publicUrl } : { coverPhoto: publicUrl });
+
+      // Guard against stale operation
+      if (opId !== opIdRef.current) return;
 
       onConfirmed(publicUrl);
       await Promise.all([
@@ -135,6 +153,7 @@ export function useProfileMediaUpload(
 
       const localUri = await persistProfileMediaUri(asset.uri, type);
       pendingAssetRef.current[type] = asset;
+      const opId = ++opIdRef.current;
 
       updateState({
         pendingLocal: localUri,
@@ -143,7 +162,7 @@ export function useProfileMediaUpload(
         error: null,
       });
 
-      await performUpload(type, asset, localUri);
+      await performUpload(type, asset, localUri, opId);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Could not select photo';
       updateState({ status: 'failed', error: message });
@@ -158,7 +177,8 @@ export function useProfileMediaUpload(
       return;
     }
     const localUri = pending.uri; // retry with original picked URI
-    await performUpload(type, pending, localUri);
+    const opId = ++opIdRef.current;
+    await performUpload(type, pending, localUri, opId);
   }, [performUpload, updateAvatarState, updateCoverState]);
 
   const revertMedia = useCallback((type: ProfileMediaType): void => {
@@ -167,7 +187,7 @@ export function useProfileMediaUpload(
     const onConfirmed = type === 'avatar' ? onAvatarConfirmed : onCoverConfirmed;
 
     pendingAssetRef.current[type] = undefined;
-    onConfirmed(previousRemote ?? '');
+    if (previousRemote) onConfirmed(previousRemote);
     updateState({
       pendingLocal: null,
       status: 'idle',
