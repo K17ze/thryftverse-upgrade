@@ -28,6 +28,8 @@ interface ProfileVisualHeaderProps {
   displayName?: string;
   username?: string;
   bio?: string | null;
+  userLocation?: string | null;
+  memberSince?: string | null;
   stats?: StatItem[];
   isSelf?: boolean;
   onEditCover?: () => void;
@@ -46,6 +48,8 @@ export function ProfileVisualHeader({
   displayName,
   username,
   bio,
+  userLocation,
+  memberSince,
   stats,
   isSelf = false,
   onEditCover,
@@ -113,6 +117,22 @@ export function ProfileVisualHeader({
           {username && <Text style={styles.handle}>@{username}</Text>}
           {bio ? <Text style={styles.bio} numberOfLines={2}>{bio}</Text> : null}
         </View>
+      </View>
+
+      {/* Context row */}
+      <View style={styles.contextRow}>
+        {userLocation ? (
+          <View style={styles.contextPill}>
+            <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.contextPillText}>{userLocation}</Text>
+          </View>
+        ) : null}
+        {memberSince ? (
+          <View style={styles.contextPill}>
+            <Ionicons name="calendar-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.contextPillText}>{memberSince}</Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Stats rail */}
@@ -322,5 +342,26 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: 14,
     color: Colors.textPrimary,
+  },
+  contextRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+  },
+  contextPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.md,
+  },
+  contextPillText: {
+    fontFamily: Typography.family.medium,
+    fontSize: 12,
+    color: Colors.textMuted,
   },
 });
