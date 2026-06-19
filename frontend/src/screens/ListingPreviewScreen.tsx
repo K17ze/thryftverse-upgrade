@@ -232,13 +232,19 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
           </Reanimated.View>
         )}
 
+        {/* Preview indicator */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={styles.previewBanner}>
+          <Ionicons name="eye-outline" size={18} color={Colors.brand} />
+          <Text style={styles.previewBannerText}>Preview — this is how buyers will see your listing</Text>
+        </Reanimated.View>
+
         {/* Trust */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(200)} style={styles.trustCard}>
           <Ionicons name="shield-checkmark" size={20} color={Colors.success} />
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.trustTitle}>Thryft Buyer Protection</Text>
             <Caption color={Colors.textMuted}>
-              Buyers are covered for this listing. You will receive payment only after delivery is confirmed.
+              Secure payment and tracked delivery help protect every order.
             </Caption>
           </View>
         </Reanimated.View>
@@ -424,5 +430,22 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  previewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    padding: Space.md,
+    backgroundColor: Colors.surface,
+  },
+  previewBannerText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.brand,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });
