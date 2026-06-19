@@ -68,6 +68,7 @@ interface DraftListing {
   price?: string;
   originalPrice?: string;
   photos?: string[];
+  mediaDraftItems?: import('../utils/mediaUploadAsset').ListingMediaDraftItem[];
   tags?: string[];
   listingMode?: 'sell_now' | 'co_own' | 'auction';
   shippingMethod?: 'standard' | 'express' | null;

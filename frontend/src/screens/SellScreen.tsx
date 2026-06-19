@@ -49,7 +49,7 @@ import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAut
 import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { filterImageUris } from '../utils/media';
 import { haptics } from '../utils/haptics';
-import { convertPickerAsset, validateMediaAssets } from '../utils/mediaUploadAsset';
+import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { uploadMedia } from '../services/mediaUpload';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
@@ -226,6 +226,9 @@ export default function SellScreen() {
   const publishedListingIdRef = useRef<string | null>(null);
   const uploadedUrlsRef = useRef<string[]>([]);
 
+  /* ── stable media draft items ── */
+  const [mediaDraftItems, setMediaDraftItems] = useState<ListingMediaDraftItem[]>([]);
+
   /* ── upload queue ── */
   const uploadQueueRef = useRef(new MediaUploadQueue());
   const [queueState, setQueueState] = useState(uploadQueueRef.current.getState());
@@ -264,7 +267,22 @@ export default function SellScreen() {
 
   /* ── draft sync on mount ── */
   useEffect(() => {
-    if (sellDraft.photos) setPhotos(sellDraft.photos);
+    if (sellDraft.mediaDraftItems && sellDraft.mediaDraftItems.length > 0) {
+      setMediaDraftItems(sellDraft.mediaDraftItems);
+      setPhotos(sellDraft.mediaDraftItems.map((m) => m.publicUrl || m.uri));
+    } else if (sellDraft.photos) {
+      setPhotos(sellDraft.photos);
+      setMediaDraftItems(
+        sellDraft.photos.map((uri) => ({
+          id: `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          uri,
+          kind: 'image' as const,
+          source: uri.startsWith('http') ? ('remote' as const) : ('local' as const),
+          status: uri.startsWith('http') ? ('uploaded' as const) : ('draft' as const),
+          publicUrl: uri.startsWith('http') ? uri : undefined,
+        }))
+      );
+    }
     if (sellDraft.title) setTitle(sellDraft.title);
     if (sellDraft.description) setDesc(sellDraft.description);
     if (sellDraft.price) setPrice(sellDraft.price);
@@ -291,6 +309,7 @@ export default function SellScreen() {
   useEffect(() => {
     updateSellDraft({
       photos,
+      mediaDraftItems,
       title,
       description: desc,
       price,
@@ -312,7 +331,7 @@ export default function SellScreen() {
       offeringWindowHours,
       authPhotos,
     });
-  }, [photos, title, desc, price, originalPrice, brand, size, condition, category, tags, listingMode, shippingMethod, shippingPayer, startingBid, reservePrice, auctionDurationHours, coOwnEnabled, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, updateSellDraft]);
+  }, [photos, mediaDraftItems, title, desc, price, originalPrice, brand, size, condition, category, tags, listingMode, shippingMethod, shippingPayer, startingBid, reservePrice, auctionDurationHours, coOwnEnabled, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, updateSellDraft]);
 
   /* ── co-own bidirectional math: price = shareCount * sharePrice ── */
   useEffect(() => {
@@ -517,6 +536,20 @@ export default function SellScreen() {
       }
       return next;
     });
+    setMediaDraftItems((prev) => {
+      if (prev.some((m) => m.uri === uri)) return prev;
+      const next = [
+        ...prev,
+        {
+          id: `sell_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          uri,
+          kind: 'image' as const,
+          source: 'local' as const,
+          status: 'draft' as const,
+        },
+      ].slice(0, 10);
+      return next;
+    });
   }, [listingMode, coOwnEnabled, authPhotos.length]);
 
   const handlePickFromLibrary = useCallback(async () => {
@@ -589,7 +622,11 @@ export default function SellScreen() {
   }, [appendPhotoUri, photos]);
 
   const removePhoto = useCallback((index: number) => {
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    setPhotos((prev) => {
+      const removedUri = prev[index];
+      setMediaDraftItems((md) => md.filter((m) => m.uri !== removedUri));
+      return prev.filter((_, i) => i !== index);
+    });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
@@ -700,16 +737,29 @@ export default function SellScreen() {
       setErrorMsg(null);
       setIsPublishing(true);
       try {
-        const uploadedUrls: string[] = [];
-        for (let i = 0; i < photos.length; i++) {
-          const uri = photos[i];
-          if (uri.startsWith('http')) {
-            uploadedUrls.push(uri);
-          } else {
-            const url = await uploadMedia(uri, 'listings');
-            uploadedUrls.push(url);
-          }
+        const queue = uploadQueueRef.current;
+        const itemsToUpload = mediaDraftItems.filter((m) => m.source === 'local' && m.status !== 'uploaded');
+        if (itemsToUpload.length > 0) {
+          queue.addAssets(
+            itemsToUpload.map((m) => ({
+              id: m.id,
+              uri: m.uri,
+              fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
+              mimeType: m.mimeType || 'image/jpeg',
+              kind: m.kind,
+            }))
+          );
+          await queue.run();
+          const queueItems = queue.getItems();
+          setMediaDraftItems((prev) =>
+            prev.map((m) => {
+              const qi = queueItems.find((q) => q.id === m.id);
+              if (!qi) return m;
+              return { ...m, status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status, publicUrl: qi.publicUrl || m.publicUrl, error: qi.error || m.error };
+            })
+          );
         }
+        const uploadedUrls = mediaDraftItems.map((m) => m.publicUrl || m.uri).filter((u): u is string => !!u);
         const coverImage = uploadedUrls[0] ?? '';
         const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
         await createListingOnApi({
@@ -737,6 +787,8 @@ export default function SellScreen() {
           });
         }
         clearSellDraft();
+        setMediaDraftItems([]);
+        queue.reset();
         haptics.success();
         navigation.replace('CreateAuction', { listingId });
       } catch (e: unknown) {
@@ -765,32 +817,35 @@ export default function SellScreen() {
     try {
       const queue = uploadQueueRef.current;
 
-      // 1. Upload all local media via queue (skip already-uploaded or http URIs)
-      const existingItems = queue.getItems();
-      const remoteUrls = new Map<string, string>();
-      for (const item of existingItems) {
-        if (item.state === 'uploaded' && item.publicUrl) {
-          remoteUrls.set(item.asset.uri, item.publicUrl);
-        }
-      }
-
-      const newLocalPhotos = photos.filter((uri) => !uri.startsWith('http') && !remoteUrls.has(uri));
-      if (newLocalPhotos.length > 0) {
-        const assets = newLocalPhotos.map((uri) => ({
-          id: `sell_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          uri,
-          fileName: uri.split('/').pop() || 'photo.jpg',
-          mimeType: 'image/jpeg',
-          kind: 'image' as const,
+      // 1. Upload all local media via queue (skip already-uploaded or remote URIs)
+      const itemsToUpload = mediaDraftItems.filter((m) => m.source === 'local' && m.status !== 'uploaded');
+      if (itemsToUpload.length > 0) {
+        const assets = itemsToUpload.map((m) => ({
+          id: m.id,
+          uri: m.uri,
+          fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
+          mimeType: m.mimeType || 'image/jpeg',
+          kind: m.kind,
         }));
         queue.addAssets(assets);
         await queue.run();
+        // Sync queue results back into mediaDraftItems
+        const queueItems = queue.getItems();
+        setMediaDraftItems((prev) =>
+          prev.map((m) => {
+            const qi = queueItems.find((q) => q.id === m.id);
+            if (!qi) return m;
+            return {
+              ...m,
+              status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status,
+              publicUrl: qi.publicUrl || m.publicUrl,
+              error: qi.error || m.error,
+            };
+          })
+        );
       }
 
-      const uploadedUrls: string[] = photos.map((uri) => {
-        if (uri.startsWith('http')) return uri;
-        return remoteUrls.get(uri) || queue.getItems().find((i) => i.asset.uri === uri && i.publicUrl)?.publicUrl || uri;
-      }).filter((u): u is string => !!u);
+      const uploadedUrls: string[] = mediaDraftItems.map((m) => m.publicUrl || m.uri).filter((u): u is string => !!u);
 
       const coverImage = uploadedUrls[0] ?? '';
       let listingId = publishedListingIdRef.current;
@@ -831,6 +886,7 @@ export default function SellScreen() {
 
       setPublicationStage('completed');
       clearSellDraft();
+      setMediaDraftItems([]);
       queue.reset();
       publishedListingIdRef.current = null;
       haptics.success();
@@ -844,7 +900,7 @@ export default function SellScreen() {
     } catch (e: unknown) {
       const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Please try again.';
       const hasListing = !!publishedListingIdRef.current;
-      const hasMedia = uploadQueueRef.current.getItems().some((i) => i.state === 'uploaded');
+      const hasMedia = mediaDraftItems.some((m) => m.status === 'uploaded');
       setPublicationStage('failed_recoverable');
       setErrorMsg(hasListing ? `${msg} — your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} — some media uploaded. Tap Publish to retry.` : msg);
       triggerShake();
@@ -852,7 +908,7 @@ export default function SellScreen() {
     } finally {
       setIsPublishing(false);
     }
-  }, [isPublishing, listingMode, photos, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, triggerShake, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer]);
+  }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, triggerShake, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer]);
 
   /* ── picker helpers ── */
   const getPickerOptions = useCallback(() => {
@@ -1021,7 +1077,17 @@ export default function SellScreen() {
               </Animated.View>
 
               <View style={{ marginTop: 12 }}>
-                <SortablePhotoStrip photos={photos} onReorder={setPhotos} onAddPhoto={handlePickFromLibrary} />
+                <SortablePhotoStrip
+                  photos={photos}
+                  onReorder={(newOrder) => {
+                    setPhotos(newOrder);
+                    setMediaDraftItems((prev) => {
+                      const uriToItem = new Map(prev.map((m) => [m.uri, m]));
+                      return newOrder.map((uri) => uriToItem.get(uri) || { id: `reorder_${uri}`, uri, kind: 'image' as const, source: 'local' as const, status: 'draft' as const }).filter(Boolean);
+                    });
+                  }}
+                  onAddPhoto={handlePickFromLibrary}
+                />
               </View>
 
               {/* Queue upload status */}

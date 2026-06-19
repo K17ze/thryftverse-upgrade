@@ -202,6 +202,18 @@ export function validateMediaAssets(
   return { valid: errors.length === 0, errors, assets: validAssets };
 }
 
+export interface ListingMediaDraftItem {
+  id: string;
+  uri: string;
+  kind: 'image' | 'video';
+  source: 'local' | 'remote';
+  fileName?: string;
+  mimeType?: string;
+  publicUrl?: string;
+  status: 'draft' | 'pending' | 'uploading' | 'uploaded' | 'failed';
+  error?: string;
+}
+
 export function isImageAsset(asset: MediaUploadAsset): boolean {
   return asset.kind === 'image';
 }
