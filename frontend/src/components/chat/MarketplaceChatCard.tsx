@@ -35,29 +35,33 @@ export function MarketplaceChatCard({
   if (type === 'offer' && offer) {
     const status = offer.status;
     return (
-      <View style={[styles.card, isMe && styles.cardMe]}>
-        {senderLabel && !isMe ? (
-          <Text style={styles.senderName}>{senderLabel}</Text>
-        ) : null}
-        <View style={styles.priceRow}>
-          <Text style={styles.priceText}>£{offer.price.toFixed(2)}</Text>
-          <Text style={styles.strikeText}>£{offer.originalPrice.toFixed(2)}</Text>
+      <View style={[styles.commerceCard, isMe && styles.commerceCardMe]}>
+        <View style={styles.commerceAccent}>
+          <Ionicons name="pricetag-outline" size={14} color={Colors.brand} />
         </View>
-        {status === 'declined' && <StatusBadge tone="negative" label="Declined" icon="close-circle-outline" />}
-        {status === 'accepted' && <StatusBadge tone="positive" label="Accepted" icon="checkmark-circle-outline" />}
-        {!status && isMe && <StatusBadge tone="neutral" label="Waiting" icon="time-outline" />}
-        {!isMe && !status && (
-          <View style={styles.actions}>
-            <AnimatedPressable style={styles.passBtn} onPress={onDecline} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light">
-              <Ionicons name="close-outline" size={14} color={Colors.textPrimary} />
-              <Text style={styles.passText}>Pass</Text>
-            </AnimatedPressable>
-            <AnimatedPressable style={styles.acceptBtn} onPress={onAccept} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="medium">
-              <Ionicons name="flash-outline" size={14} color={Colors.textInverse} />
-              <Text style={styles.acceptText}>Accept</Text>
-            </AnimatedPressable>
+        <View style={styles.commerceBody}>
+          {senderLabel && !isMe ? (
+            <Text style={styles.commerceSender}>{senderLabel}</Text>
+          ) : null}
+          <View style={styles.commercePriceRow}>
+            <Text style={styles.commercePrice}>£{offer.price.toFixed(2)}</Text>
+            <Text style={styles.commerceStrike}>£{offer.originalPrice.toFixed(2)}</Text>
           </View>
-        )}
+          {status === 'declined' && <StatusBadge tone="negative" label="Declined" icon="close-circle-outline" />}
+          {status === 'accepted' && <StatusBadge tone="positive" label="Accepted" icon="checkmark-circle-outline" />}
+          {!status && isMe && <StatusBadge tone="neutral" label="Waiting for response" icon="time-outline" />}
+          {!isMe && !status && (
+            <View style={styles.commerceActions}>
+              <AnimatedPressable style={styles.commercePass} onPress={onDecline} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light">
+                <Text style={styles.commercePassText}>Pass</Text>
+              </AnimatedPressable>
+              <AnimatedPressable style={styles.commerceAccept} onPress={onAccept} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="medium">
+                <Ionicons name="flash-outline" size={14} color={Colors.textInverse} />
+                <Text style={styles.commerceAcceptText}>Accept</Text>
+              </AnimatedPressable>
+            </View>
+          )}
+        </View>
       </View>
     );
   }
@@ -220,5 +224,88 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
     lineHeight: Type.caption.lineHeight,
+  },
+  commerceCard: {
+    maxWidth: '78%',
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  commerceCardMe: {
+    alignSelf: 'flex-end',
+  },
+  commerceAccent: {
+    width: 32,
+    backgroundColor: `${Colors.brand}10`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: Colors.border,
+  },
+  commerceBody: {
+    flex: 1,
+    padding: Space.md,
+    gap: Space.xs,
+  },
+  commerceSender: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  commercePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.sm,
+  },
+  commercePrice: {
+    fontSize: Type.price.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  commerceStrike: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    textDecorationLine: 'line-through',
+  },
+  commerceActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: 4,
+  },
+  commercePass: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  commercePassText: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  commerceAccept: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.brand,
+  },
+  commerceAcceptText: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
   },
 });
