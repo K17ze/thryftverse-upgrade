@@ -37,6 +37,7 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { PressPresets } from '../hooks/usePremiumPressFeedback';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { isVideoUri } from '../utils/media';
 import { Motion } from '../constants/motion';
 // Phase 3: Removed SyncStatusPill - no status indicators on detail screen
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
@@ -213,12 +214,12 @@ export default function ItemDetailScreen() {
           {/* Media count badge */}
           {item.images.length > 1 && (
             <View style={styles.mediaCountBadge}>
-              <Text style={styles.mediaCountText}>{item.images.length} photos</Text>
+              <Text style={styles.mediaCountText}>{item.images.length} media</Text>
             </View>
           )}
 
           {/* Video indicator */}
-          {item.images.length > 0 && item.images[0].endsWith('.mp4') && (
+          {item.images.length > 0 && isVideoUri(item.images[0]) && (
             <View style={styles.videoIndicator}>
               <Ionicons name="play-circle" size={20} color="#fff" />
               <Text style={styles.videoIndicatorText}>Video</Text>
@@ -289,7 +290,7 @@ export default function ItemDetailScreen() {
             <Ionicons name="shield-checkmark" size={16} color={Colors.success} />
             <Text style={styles.trustText}>Thryft Buyer Protection</Text>
             <Text style={styles.trustSub}>
-              Payment held securely until delivery is confirmed. Shipping details shown at checkout.
+              Payment and delivery options are confirmed at checkout.
             </Text>
           </View>
 

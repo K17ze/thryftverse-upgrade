@@ -26,6 +26,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
 import { useStore } from '../store/useStore';
+import { isVideoUri } from '../utils/media';
 import { uploadMedia } from '../services/mediaUpload';
 import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 
@@ -152,7 +153,13 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               />
               {preview.photos.length > 1 && (
                 <View style={styles.photoCounter}>
-                  <Caption color={Colors.background}>{preview.photos.length} photos</Caption>
+                  <Caption color={Colors.background}>{preview.photos.length} media</Caption>
+                </View>
+              )}
+              {preview.photos.length > 0 && isVideoUri(preview.photos[0]) && (
+                <View style={[styles.photoCounter, { right: 'auto', left: Space.sm }]}>
+                  <Ionicons name="play-circle" size={16} color="#fff" />
+                  <Caption color={Colors.background} style={{ marginLeft: 4 }}>Video</Caption>
                 </View>
               )}
             </View>
@@ -180,9 +187,6 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
           {preview.brand && (
             <View style={styles.metaRow}>
               <PremiumStatusPill tone="paid" label={preview.brand} icon="pricetag-outline" />
-              {preview.condition && (
-                <PremiumStatusPill tone="delivered" label={preview.condition} icon="shield-checkmark-outline" />
-              )}
             </View>
           )}
         </Reanimated.View>
@@ -195,6 +199,12 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <Text style={styles.description}>{preview.description}</Text>
             ) : null}
             <View style={styles.detailGrid}>
+              {preview.brand && (
+                <View style={styles.detailItem}>
+                  <Caption color={Colors.textMuted}>Brand</Caption>
+                  <Text style={styles.detailValue}>{preview.brand}</Text>
+                </View>
+              )}
               {preview.category && (
                 <View style={styles.detailItem}>
                   <Caption color={Colors.textMuted}>Category</Caption>
@@ -205,6 +215,12 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
                 <View style={styles.detailItem}>
                   <Caption color={Colors.textMuted}>Size</Caption>
                   <Text style={styles.detailValue}>{preview.size}</Text>
+                </View>
+              )}
+              {preview.condition && (
+                <View style={styles.detailItem}>
+                  <Caption color={Colors.textMuted}>Condition</Caption>
+                  <Text style={styles.detailValue}>{preview.condition}</Text>
                 </View>
               )}
               {preview.shippingMethod && (
@@ -252,7 +268,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.trustTitle}>Thryft Buyer Protection</Text>
             <Caption color={Colors.textMuted}>
-              Secure payment and tracked delivery help protect every order.
+              Payment and delivery options are confirmed at checkout.
             </Caption>
           </View>
         </Reanimated.View>
