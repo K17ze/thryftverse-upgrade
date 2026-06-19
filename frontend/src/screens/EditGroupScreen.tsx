@@ -222,6 +222,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    marginHorizontal: Space.xs,
+    backgroundColor: Colors.surface,
   },
   avatar: {
     width: 80,

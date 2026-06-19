@@ -294,6 +294,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xl,
     gap: Space.sm,
     ...Elevation.subtle,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    marginHorizontal: Space.xs,
   },
   avatarRing: {
     width: 88,

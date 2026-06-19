@@ -126,7 +126,15 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
           <View style={styles.listCard}>
             {filteredMembers.map((member, index) => (
               <View key={member.id}>
-                <View style={styles.memberRow}>
+                <AnimatedPressable
+                  onPress={() => navigation.navigate('UserProfile', { userId: member.id })}
+                  activeOpacity={0.85}
+                  scaleValue={0.98}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${member.name} profile`}
+                  style={styles.memberRow}
+                >
                   <View style={[styles.memberAvatar, { backgroundColor: Colors.surfaceAlt }]}>
                     <Text style={styles.memberAvatarText}>
                       {member.name.slice(0, 2).toUpperCase()}
@@ -141,17 +149,8 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                       <Caption color={Colors.textMuted}>{member.isMe ? 'You · Group creator' : 'Group creator'}</Caption>
                     )}
                   </View>
-                  <AnimatedPressable
-                    onPress={() => navigation.navigate('UserProfile', { userId: member.id })}
-                    activeOpacity={0.7}
-                    scaleValue={0.92}
-                    hapticFeedback="light"
-                    accessibilityRole="button"
-                    accessibilityLabel={`View ${member.name} profile`}
-                  >
-                    <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-                  </AnimatedPressable>
-                </View>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+                </AnimatedPressable>
                 {index < filteredMembers.length - 1 && (
                   <View style={styles.divider} />
                 )}
@@ -251,6 +250,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   emptyText: {
     textAlign: 'center',

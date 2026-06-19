@@ -127,6 +127,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             accessibilityLabel="Group title input"
             accessibilityHint="Enter a name for the new group chat"
           />
+          <Caption color={Colors.textMuted} style={styles.charCount}>{title.length}/40</Caption>
         </ChatCard>
 
         {/* Selected rail */}
@@ -385,7 +386,13 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: 10,
     paddingVertical: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     ...Elevation.subtle,
+  },
+  charCount: {
+    textAlign: 'right',
+    marginTop: 2,
   },
   selectedChipText: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
