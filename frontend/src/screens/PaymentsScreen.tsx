@@ -315,6 +315,15 @@ export default function PaymentsScreen({ navigation }: Props) {
         <Text style={styles.policyLabel}>Payment policy: {policyLabel}</Text>
       ) : null}
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <View style={[styles.trustBanner, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={Colors.success} />
+          <Text style={[styles.trustBannerText, { color: Colors.textSecondary }]}>
+            Your payment details are protected by industry-standard encryption.
+          </Text>
+        </View>
+      </Reanimated.View>
+
       {isSyncing && backendPaymentMethods.length === 0 && (
         <FlagshipState variant="loading" />
       )}
@@ -692,5 +701,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
+  },
+  trustBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+  },
+  trustBannerText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
+  },
+  paymentText: {
+    flex: 1,
   },
 });
