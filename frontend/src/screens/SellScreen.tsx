@@ -753,51 +753,79 @@ export default function SellScreen() {
         haptics.error();
         return;
       }
-      // Auction mode: create the listing first, then route to CreateAuction
       setErrorMsg(null);
       setIsPublishing(true);
       try {
         const queue = uploadQueueRef.current;
         const itemsToUpload = mediaDraftItems.filter((m) => m.source === 'local' && m.status !== 'uploaded');
+        let resolvedMedia = [...mediaDraftItems];
         if (itemsToUpload.length > 0) {
           queue.addAssets(
             itemsToUpload.map((m) => ({
               id: m.id,
               uri: m.uri,
-              fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
-              mimeType: m.mimeType || 'image/jpeg',
+              fileName: m.fileName,
+              mimeType: m.mimeType,
               kind: m.kind,
+              fileSize: m.fileSize,
+              width: m.width,
+              height: m.height,
+              durationMs: m.durationMs,
             }))
           );
           await queue.run();
-          const queueItems = queue.getItems();
-          setMediaDraftItems((prev) =>
-            prev.map((m) => {
-              const qi = queueItems.find((q) => q.id === m.id);
-              if (!qi) return m;
-              return { ...m, status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status, publicUrl: qi.publicUrl || m.publicUrl, error: qi.error || m.error };
-            })
-          );
+          const resultMap = queue.getResultMap();
+          resolvedMedia = mediaDraftItems.map((m) => {
+            const res = resultMap.get(m.id);
+            if (!res || m.source !== 'local') return m;
+            return {
+              ...m,
+              status: res.state === 'uploaded' ? 'uploaded' : res.state === 'failed' ? 'failed' : m.status,
+              publicUrl: res.publicUrl || m.publicUrl,
+              error: res.error || m.error,
+            };
+          });
         }
-        const uploadedUrls = mediaDraftItems.map((m) => m.publicUrl || m.uri).filter((u): u is string => !!u);
+        const unresolvedLocals = resolvedMedia.filter((m) => m.source === 'local' && !m.publicUrl);
+        if (unresolvedLocals.length > 0) {
+          setMediaDraftItems(resolvedMedia);
+          setErrorMsg(`${unresolvedLocals.length} media item(s) failed to upload. Tap Retry on failed items.`);
+          setPublicationStage('failed_recoverable');
+          triggerShake();
+          haptics.error();
+          return;
+        }
+        const uploadedUrls = resolvedMedia.map((m) => m.publicUrl || m.uri).filter((u): u is string => !!u);
         const coverImage = uploadedUrls[0] ?? '';
-        const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-        await createListingOnApi({
-          id: listingId,
-          sellerId: currentUser.id,
-          title: trimmedTitle,
-          description: trimmedDescription,
-          priceGbp: numericPrice,
-          imageUrl: coverImage,
-          status: 'active',
-          category,
-          brand: brand || undefined,
-          size,
-          condition,
-          originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-          shippingMethod: shippingMethod || undefined,
-          shippingPayer: shippingPayer || undefined,
-        });
+        // Guard: no local URI may reach the API
+        if (uploadedUrls.some((u) => u.startsWith('file://') || u.startsWith('content://') || u.startsWith('ph://') || u.startsWith('assets-library://'))) {
+          setErrorMsg('Some media is still local. Upload all media before publishing.');
+          setPublicationStage('failed_recoverable');
+          triggerShake();
+          haptics.error();
+          return;
+        }
+        let listingId = publishedListingIdRef.current;
+        if (!listingId) {
+          listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+          await createListingOnApi({
+            id: listingId,
+            sellerId: currentUser.id,
+            title: trimmedTitle,
+            description: trimmedDescription,
+            priceGbp: numericPrice,
+            imageUrl: coverImage,
+            status: 'active',
+            category,
+            brand: brand || undefined,
+            size,
+            condition,
+            originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
+            shippingMethod: shippingMethod || undefined,
+            shippingPayer: shippingPayer || undefined,
+          });
+          publishedListingIdRef.current = listingId;
+        }
         for (let i = 0; i < uploadedUrls.length; i++) {
           await createListingImageOnApi({
             id: `${listingId}_img_${i}`,
@@ -806,14 +834,19 @@ export default function SellScreen() {
             sortOrder: i,
           });
         }
+        setMediaDraftItems(resolvedMedia);
         clearSellDraft();
         setMediaDraftItems([]);
         queue.reset();
+        publishedListingIdRef.current = null;
         haptics.success();
         navigation.replace('CreateAuction', { listingId });
       } catch (e: unknown) {
         const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to prepare auction. Please try again.';
-        setErrorMsg(msg);
+        const hasListing = !!publishedListingIdRef.current;
+        const hasMedia = mediaDraftItems.some((m) => m.status === 'uploaded');
+        setPublicationStage('failed_recoverable');
+        setErrorMsg(hasListing ? `${msg} — your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} — some media uploaded. Tap Publish to retry.` : msg);
         triggerShake();
         haptics.error();
       } finally {
@@ -839,33 +872,53 @@ export default function SellScreen() {
 
       // 1. Upload all local media via queue (skip already-uploaded or remote URIs)
       const itemsToUpload = mediaDraftItems.filter((m) => m.source === 'local' && m.status !== 'uploaded');
+      let resolvedMedia = [...mediaDraftItems];
       if (itemsToUpload.length > 0) {
         const assets = itemsToUpload.map((m) => ({
           id: m.id,
           uri: m.uri,
-          fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
-          mimeType: m.mimeType || 'image/jpeg',
+          fileName: m.fileName,
+          mimeType: m.mimeType,
           kind: m.kind,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
+          durationMs: m.durationMs,
         }));
         queue.addAssets(assets);
         await queue.run();
-        // Sync queue results back into mediaDraftItems
-        const queueItems = queue.getItems();
-        setMediaDraftItems((prev) =>
-          prev.map((m) => {
-            const qi = queueItems.find((q) => q.id === m.id);
-            if (!qi) return m;
-            return {
-              ...m,
-              status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status,
-              publicUrl: qi.publicUrl || m.publicUrl,
-              error: qi.error || m.error,
-            };
-          })
-        );
+        const resultMap = queue.getResultMap();
+        resolvedMedia = mediaDraftItems.map((m) => {
+          const res = resultMap.get(m.id);
+          if (!res || m.source !== 'local') return m;
+          return {
+            ...m,
+            status: res.state === 'uploaded' ? 'uploaded' : res.state === 'failed' ? 'failed' : m.status,
+            publicUrl: res.publicUrl || m.publicUrl,
+            error: res.error || m.error,
+          };
+        });
       }
 
-      const uploadedUrls: string[] = mediaDraftItems.map((m) => m.publicUrl || m.uri).filter((u): u is string => !!u);
+      const unresolvedLocals = resolvedMedia.filter((m) => m.source === 'local' && !m.publicUrl);
+      if (unresolvedLocals.length > 0) {
+        setMediaDraftItems(resolvedMedia);
+        setErrorMsg(`${unresolvedLocals.length} media item(s) failed to upload. Tap Retry on failed items.`);
+        setPublicationStage('failed_recoverable');
+        triggerShake();
+        haptics.error();
+        return;
+      }
+
+      const uploadedUrls: string[] = resolvedMedia.map((m) => m.publicUrl || m.uri).filter((u): u is string => !!u);
+      // Guard: no local URI may reach the API
+      if (uploadedUrls.some((u) => u.startsWith('file://') || u.startsWith('content://') || u.startsWith('ph://') || u.startsWith('assets-library://'))) {
+        setErrorMsg('Some media is still local. Upload all media before publishing.');
+        setPublicationStage('failed_recoverable');
+        triggerShake();
+        haptics.error();
+        return;
+      }
 
       const coverImage = uploadedUrls[0] ?? '';
       let listingId = publishedListingIdRef.current;
@@ -905,6 +958,7 @@ export default function SellScreen() {
       }
 
       setPublicationStage('completed');
+      setMediaDraftItems(resolvedMedia);
       clearSellDraft();
       setMediaDraftItems([]);
       queue.reset();
