@@ -196,11 +196,11 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       accessibilityLabel={`Message ${item.name}`}
       accessibilityRole="button"
     >
-      <View style={styles.avatarRing}>
+      <View style={styles.contactAvatar}>
         {item.avatar ? (
-          <CachedImage uri={item.avatar} style={styles.avatarImage} contentFit="cover" />
+          <CachedImage uri={item.avatar} style={styles.contactAvatarImage} contentFit="cover" />
         ) : (
-          <Text style={styles.avatarText}>
+          <Text style={styles.contactAvatarText}>
             {item.name.slice(0, 2).toUpperCase()}
           </Text>
         )}
@@ -383,6 +383,25 @@ const styles = StyleSheet.create({
 
     color: Colors.textPrimary,
 
+  },
+  contactAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
+  },
+  contactAvatarImage: {
+    width: 52,
+    height: 52,
+    borderRadius: Radius.full,
+  },
+  contactAvatarText: {
+    fontSize: 16,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
   },
 
   rowBody: {
