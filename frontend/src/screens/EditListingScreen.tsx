@@ -125,9 +125,9 @@ export default function EditListingScreen() {
         setPhotos((prev) => [...prev, ...result.assets.map((a) => a.uri)]);
       }
     } catch {
-      // silently ignore picker errors
+      showToast('Could not open photo library. Check permissions and try again.', 'error');
     }
-  }, []);
+  }, [showToast]);
 
   const handleRemovePhoto = useCallback((index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -273,6 +273,27 @@ export default function EditListingScreen() {
                 <Text style={styles.heroTitle} numberOfLines={1}>{title || listing?.title || 'Untitled'}</Text>
                 <Text style={styles.heroSubtitle}>{photos.length} photo{photos.length !== 1 ? 's' : ''}</Text>
               </View>
+              <View style={styles.coverBadge}>
+                <Text style={styles.coverBadgeText}>Cover</Text>
+              </View>
+            </Reanimated.View>
+          )}
+
+          {/* Media trust banner */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
+            <View style={styles.mediaTrustBanner}>
+              <Ionicons name="cloud-upload-outline" size={16} color={Colors.brand} />
+              <Text style={styles.mediaTrustBannerText}>
+                New photos upload on save. Existing photos are preserved.
+              </Text>
+            </View>
+          </Reanimated.View>
+
+          {/* Unsaved changes indicator */}
+          {hasChanges && (
+            <Reanimated.View entering={FadeInDown.duration(200)} style={styles.unsavedBanner}>
+              <Ionicons name="information-circle-outline" size={16} color={Colors.brand} />
+              <Text style={styles.unsavedBannerText}>You have unsaved changes</Text>
             </Reanimated.View>
           )}
 
@@ -568,5 +589,53 @@ const styles = StyleSheet.create({
     marginTop: Space.lg,
     marginHorizontal: Space.md,
     lineHeight: Type.caption.lineHeight,
+  },
+  coverBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.md,
+  },
+  coverBadgeText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  mediaTrustBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    padding: Space.md,
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    backgroundColor: Colors.surface,
+  },
+  mediaTrustBannerText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
+  },
+  unsavedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+  },
+  unsavedBannerText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.brand,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });
