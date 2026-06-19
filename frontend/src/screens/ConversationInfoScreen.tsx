@@ -120,7 +120,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
         {/* Partner Identity */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
           <AnimatedPressable
-            style={styles.identityCard}
+            style={styles.identityCardV2}
             onPress={handleViewProfile}
             disabled={!counterpartyId}
             activeOpacity={0.85}
@@ -129,16 +129,16 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             accessibilityRole="button"
             accessibilityLabel={`View ${displayName}'s profile`}
           >
-            <View style={styles.avatarRing}>
+            <View style={styles.identityAvatarWrap}>
               {avatarUrl ? (
-                <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
+                <CachedImage uri={avatarUrl} style={styles.identityAvatarImage} contentFit="cover" />
               ) : (
-                <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
-                  <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
+                <View style={[styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+                  <Text style={styles.identityAvatarText}>{displayName.charAt(0).toUpperCase()}</Text>
                 </View>
               )}
             </View>
-            <BodyEmphasis style={styles.name} numberOfLines={1}>{displayName}</BodyEmphasis>
+            <BodyEmphasis style={styles.identityName} numberOfLines={1}>{displayName}</BodyEmphasis>
             <Caption color={Colors.textMuted}>{handle}</Caption>
           </AnimatedPressable>
         </Reanimated.View>
@@ -357,6 +357,46 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   name: {
+    fontSize: Type.subtitle.size,
+    letterSpacing: Type.subtitle.letterSpacing,
+    lineHeight: Type.subtitle.lineHeight,
+  },
+  identityCardV2: {
+    alignItems: 'center',
+    paddingVertical: Space.lg + 8,
+    gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    marginHorizontal: Space.xs,
+  },
+  identityAvatarWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    marginBottom: Space.xs,
+  },
+  identityAvatarImage: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  identityAvatarFallback: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  identityAvatarText: {
+    fontSize: 32,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+    textTransform: 'uppercase',
+  },
+  identityName: {
     fontSize: Type.subtitle.size,
     letterSpacing: Type.subtitle.letterSpacing,
     lineHeight: Type.subtitle.lineHeight,
