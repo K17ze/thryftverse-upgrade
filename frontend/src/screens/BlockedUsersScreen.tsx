@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -22,6 +22,14 @@ export default function BlockedUsersScreen({ navigation }: Props) {
     toggleBlocked(userId);
     show('User unblocked', 'success');
   };
+
+  const deterministicInitials = useMemo(() => {
+    return (id: string) => {
+      const hash = id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      return letters[hash % 26] + letters[(hash * 7) % 26];
+    };
+  }, []);
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Blocked Users" subtitle="Accounts you have restricted" onBack={() => navigation.goBack()} />}>

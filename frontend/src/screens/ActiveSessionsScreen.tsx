@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
+import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type , Typography  } from '../theme/designTokens';
+import { AppButton } from '../components/ui/AppButton';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
@@ -21,6 +23,7 @@ interface SessionItem {
 }
 
 export default function ActiveSessionsScreen({ navigation }: Props) {
+  const { show } = useToast();
   const currentUser = useStore((s) => s.currentUser);
 
   const [sessions] = useState<SessionItem[]>([
@@ -32,6 +35,23 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
       isCurrent: true,
     },
   ]);
+
+  const handleEndAllOthers = () => {
+    Alert.alert(
+      'End all other sessions?',
+      'This will sign you out everywhere except this device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'End all others',
+          style: 'destructive',
+          onPress: () => {
+            show('Session management requires backend support. Only this device is tracked locally.', 'info');
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Active Sessions" subtitle="Device security overview" onBack={() => navigation.goBack()} />}>
@@ -79,6 +99,19 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
             </Text>
           </View>
         </SettingsSection>
+      </Reanimated.View>
+
+      <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={{ paddingHorizontal: 16, marginTop: 16 }}>
+        <AppButton
+          title="End all other sessions"
+          onPress={handleEndAllOthers}
+          variant="secondary"
+          size="md"
+          style={{ borderRadius: Radius.xl }}
+        />
+        <Text style={styles.honestNote}>
+          Full session tracking requires backend support. This screen shows your current device only.
+        </Text>
       </Reanimated.View>
     </FlagshipScreen>
   );

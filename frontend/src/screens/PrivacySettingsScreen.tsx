@@ -42,8 +42,23 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         </SettingsSection>
       </Reanimated.View>
 
-      {/* Communication */}
+      {/* Activity */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <SettingsSection title="Activity" noCard>
+          <SettingsRow
+            icon="bag-outline"
+            title="Holiday Mode"
+            subtitle="Pause your listings and hide your shop while you're away"
+            toggleValue={accountPreferences.holidayMode}
+            onToggle={(v) => updateAccountPreferences({ holidayMode: v })}
+            isFirst
+            isLast
+          />
+        </SettingsSection>
+      </Reanimated.View>
+
+      {/* Communication */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
         <SettingsSection title="Communication" noCard>
           <SettingsRow
             icon="chatbubble-ellipses-outline"
