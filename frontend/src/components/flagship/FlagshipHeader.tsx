@@ -18,6 +18,8 @@ export interface FlagshipHeaderProps {
   showBackButton?: boolean;
   backIcon?: React.ComponentProps<typeof Ionicons>['name'];
   avatar?: React.ReactNode;
+  onTitlePress?: () => void;
+  titleAccessibilityLabel?: string;
 }
 
 export function FlagshipHeader({
@@ -31,6 +33,8 @@ export function FlagshipHeader({
   showBackButton = true,
   backIcon,
   avatar,
+  onTitlePress,
+  titleAccessibilityLabel,
 }: FlagshipHeaderProps) {
   const { colors } = useAppTheme();
   const isLarge = variant === 'large';
@@ -38,6 +42,36 @@ export function FlagshipHeader({
 
   const effectiveBackIcon = backIcon ?? (isModal ? 'close' : 'arrow-back');
   const effectiveOnBack = onClose ?? onBack;
+
+  const identity = (
+    <>
+      {avatar ? (
+        <View style={styles.avatarWrap}>{avatar}</View>
+      ) : null}
+      <View style={styles.titleWrap}>
+        <Text
+          style={[
+            styles.title,
+            {
+              color: colors.textPrimary,
+              fontSize: isLarge ? Type.title.size : Type.subtitle.size,
+              fontFamily: isLarge ? TypeStyles.title.fontFamily : TypeStyles.bodyEmphasis.fontFamily,
+              lineHeight: isLarge ? Type.title.lineHeight : Type.subtitle.lineHeight,
+              letterSpacing: isLarge ? Type.title.letterSpacing : Type.subtitle.letterSpacing,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+    </>
+  );
 
   return (
     <View style={[styles.root, style]}>
@@ -57,31 +91,20 @@ export function FlagshipHeader({
           <View style={styles.iconBtnPlaceholder} />
         )}
 
-        {avatar ? (
-          <View style={styles.avatarWrap}>{avatar}</View>
-        ) : null}
-        <View style={styles.titleWrap}>
-          <Text
-            style={[
-              styles.title,
-              {
-                color: colors.textPrimary,
-                fontSize: isLarge ? Type.title.size : Type.subtitle.size,
-                fontFamily: isLarge ? TypeStyles.title.fontFamily : TypeStyles.bodyEmphasis.fontFamily,
-                lineHeight: isLarge ? Type.title.lineHeight : Type.subtitle.lineHeight,
-                letterSpacing: isLarge ? Type.title.letterSpacing : Type.subtitle.letterSpacing,
-              },
-            ]}
-            numberOfLines={1}
+        {onTitlePress ? (
+          <AnimatedPressable
+            style={styles.identityPress}
+            onPress={onTitlePress}
+            accessibilityRole="button"
+            accessibilityLabel={titleAccessibilityLabel ?? `${title} details`}
+            scaleValue={0.98}
+            hapticFeedback="light"
           >
-            {title}
-          </Text>
-          {subtitle ? (
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
+            {identity}
+          </AnimatedPressable>
+        ) : (
+          identity
+        )}
 
         <View style={styles.rightSlot}>
           {rightAction || <View style={styles.iconBtnPlaceholder} />}
@@ -138,5 +161,10 @@ const styles = StyleSheet.create({
   },
   avatarWrap: {
     marginRight: Space.sm,
+  },
+  identityPress: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

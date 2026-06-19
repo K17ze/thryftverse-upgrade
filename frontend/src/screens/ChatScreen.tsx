@@ -1584,6 +1584,17 @@ export default function ChatScreen({ navigation, route }: Props) {
           title={isGroup ? (conversation?.title ?? 'Group chat') : '@' + sellerHandle}
           subtitle={isGroup ? (conversation?.participantIds?.length ?? 0) + ' members' : undefined}
           onBack={() => navigation.goBack()}
+          titleAccessibilityLabel={isGroup ? 'Open group info' : 'Open profile'}
+          onTitlePress={() => {
+            if (!conversation) return;
+            if (isGroup) {
+              navigation.navigate('GroupChatInfo', { conversationId: conversation.id });
+            } else if (resolvedPartnerId) {
+              navigation.navigate('UserProfile', { userId: resolvedPartnerId });
+            } else {
+              navigation.navigate('ConversationInfo', { conversationId: conversation.id });
+            }
+          }}
           avatar={
             !isGroup ? (
               (() => {
@@ -1610,7 +1621,10 @@ export default function ChatScreen({ navigation, route }: Props) {
                 onPress={() => setIsSearchActive((v) => !v)}
                 activeOpacity={0.7}
                 scaleValue={0.9}
-                hapticFeedback="light">
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel={isSearchActive ? 'Close search' : 'Search in conversation'}
+                accessibilityState={{ selected: isSearchActive }}>
                 <Ionicons name="search-outline" size={20} color={Colors.textSecondary} />
               </AnimatedPressable>
               <AnimatedPressable
@@ -1621,7 +1635,9 @@ export default function ChatScreen({ navigation, route }: Props) {
                 }}
                 activeOpacity={0.7}
                 scaleValue={0.9}
-                hapticFeedback="light">
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel={isGroup ? 'Group info' : 'Conversation info'}>
                 <Ionicons name="information-circle-outline" size={20} color={Colors.textSecondary} />
               </AnimatedPressable>
             </View>

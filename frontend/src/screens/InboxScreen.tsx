@@ -744,6 +744,7 @@ export default function InboxScreen() {
       header={
         <FlagshipHeader
           title="Inbox"
+          subtitle={unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
           rightAction={
           <View style={styles.headerActions}>
             <AnimatedPressable
@@ -779,15 +780,6 @@ export default function InboxScreen() {
 
 
       <View style={styles.header}>
-
-
-        <View style={styles.headerTitleBlock}>
-
-          <Text style={styles.headerTitle}>Inbox</Text>
-
-          <Text style={styles.headerSubtitle}>{unreadCount} unread</Text>
-
-        </View>
 
 
         <AppSearchBar
