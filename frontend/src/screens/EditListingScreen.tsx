@@ -68,6 +68,7 @@ export default function EditListingScreen() {
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -131,7 +132,17 @@ export default function EditListingScreen() {
 
   const handleRemovePhoto = useCallback((index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    setPhotos((prev) => {
+      const removed = prev[index];
+      if (removed) setRemovedPhotos((r) => [...r, removed]);
+      return prev.filter((_, i) => i !== index);
+    });
+  }, []);
+
+  const undoRemovePhoto = useCallback((uri: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPhotos((prev) => [...prev, uri]);
+    setRemovedPhotos((prev) => prev.filter((u) => u !== uri));
   }, []);
 
   const validate = useCallback(() => {
@@ -303,6 +314,11 @@ export default function EditListingScreen() {
               {photos.map((uri, idx) => (
                 <View key={`${uri}-${idx}`} style={styles.thumbWrap}>
                   <CachedImage uri={uri} style={[styles.thumb, idx === 0 && styles.thumbActive]} contentFit="cover" />
+                  {idx === 0 && (
+                    <View style={styles.thumbCoverLabel}>
+                      <Text style={styles.thumbCoverLabelText}>Cover</Text>
+                    </View>
+                  )}
                   <AnimatedPressable
                     style={styles.removeBadge}
                     onPress={() => handleRemovePhoto(idx)}
@@ -318,6 +334,28 @@ export default function EditListingScreen() {
               </AnimatedPressable>
             </ScrollView>
           </Reanimated.View>
+
+          {/* Undo removed photos */}
+          {removedPhotos.length > 0 && (
+            <Reanimated.View entering={FadeInDown.duration(200)} style={styles.removedSection}>
+              <Text style={styles.removedSectionTitle}>Removed</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {removedPhotos.map((uri) => (
+                  <View key={`removed-${uri}`} style={styles.removedThumbWrap}>
+                    <CachedImage uri={uri} style={styles.removedThumb} contentFit="cover" />
+                    <AnimatedPressable
+                      style={styles.undoBadge}
+                      onPress={() => undoRemovePhoto(uri)}
+                      activeOpacity={0.7}
+                      hapticFeedback="light"
+                    >
+                      <Ionicons name="arrow-undo" size={12} color="#fff" />
+                    </AnimatedPressable>
+                  </View>
+                ))}
+              </ScrollView>
+            </Reanimated.View>
+          )}
 
           {/* Basics */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
@@ -637,5 +675,59 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.brand,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  thumbCoverLabel: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  thumbCoverLabelText: {
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
+  },
+  removedSection: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    padding: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  removedSectionTitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    marginBottom: Space.sm,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  removedThumbWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    marginRight: Space.sm,
+    position: 'relative',
+    opacity: 0.5,
+  },
+  removedThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  undoBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
