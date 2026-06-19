@@ -100,7 +100,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       header={(
         <FlagshipHeader
           title="Shared Media"
-          subtitle={mediaItems.length > 0 ? `${mediaItems.length} item${mediaItems.length === 1 ? '' : 's'}` : undefined}
+          subtitle={mediaItems.length > 0 ? `${mediaItems.length} photo${mediaItems.length === 1 ? '' : 's'} & video${mediaItems.length === 1 ? '' : 's'}` : undefined}
           onBack={() => navigation.goBack()}
         />
       )}
@@ -140,12 +140,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
     marginRight: GAP,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   thumb: {
     borderRadius: Radius.sm,
   },
   videoTile: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },

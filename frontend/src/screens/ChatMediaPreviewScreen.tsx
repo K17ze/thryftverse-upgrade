@@ -138,9 +138,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.25)',
     ...Elevation.subtle,
   },
   mediaWrap: {
@@ -177,10 +179,13 @@ const styles = StyleSheet.create({
   },
   contextOverlay: {
     position: 'absolute',
-    left: 16,
-    right: 16,
+    left: 0,
+    right: 0,
     alignItems: 'center',
     gap: 4,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   contextSender: {
     fontSize: Type.subtitle.size,

@@ -186,56 +186,33 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
 
 
-  const renderItem = ({ item, index }: { item: ContactItem; index: number }) => (
-
+  const renderItem = ({ item }: { item: ContactItem }) => (
     <AnimatedPressable
-
       style={styles.row}
-
       onPress={() => handlePress(item)}
-
       activeOpacity={0.85}
-
       scaleValue={0.98}
-
       hapticFeedback="light"
-
       accessibilityLabel={`Message ${item.name}`}
-
       accessibilityRole="button"
-
     >
-
       <View style={styles.avatarRing}>
-
         {item.avatar ? (
-
           <CachedImage uri={item.avatar} style={styles.avatarImage} contentFit="cover" />
-
         ) : (
-
           <Text style={styles.avatarText}>
-
             {item.name.slice(0, 2).toUpperCase()}
-
           </Text>
-
         )}
-
       </View>
-
       <View style={styles.rowBody}>
-
         <BodyEmphasis numberOfLines={1}>{item.name}</BodyEmphasis>
-
-        <Caption color={Colors.textMuted}>Tap to open conversation</Caption>
-
+        <Caption color={Colors.textMuted}>
+          {item.conversationId ? 'Existing conversation' : 'New message'}
+        </Caption>
       </View>
-
       <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-
     </AnimatedPressable>
-
   );
 
 
@@ -357,15 +334,13 @@ const styles = StyleSheet.create({
   },
 
   row: {
-
     flexDirection: 'row',
-
     alignItems: 'center',
-
     gap: Space.sm + 6,
-
     paddingVertical: Space.md,
-
+    paddingHorizontal: Space.md,
+    marginHorizontal: -Space.md,
+    borderRadius: Radius.lg,
   },
 
   avatarRing: {

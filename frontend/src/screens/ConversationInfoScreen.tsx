@@ -163,6 +163,10 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               label="Photos & videos"
               onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
               showChevron
+              detail={(() => {
+                const count = conversation.messages?.filter((m) => m.mediaUri).length ?? 0;
+                return count > 0 ? `${count}` : undefined;
+              })()}
             />
           </Section>
         </Reanimated.View>
@@ -249,6 +253,7 @@ function RowItem({
   showChevron,
   danger,
   isLast,
+  detail,
 }: {
   icon: string;
   label: string;
@@ -256,6 +261,7 @@ function RowItem({
   showChevron?: boolean;
   danger?: boolean;
   isLast?: boolean;
+  detail?: string;
 }) {
   const content = (
     <View style={[styles.row, !isLast && styles.rowBorder]}>
@@ -272,6 +278,9 @@ function RowItem({
       >
         {label}
       </Text>
+      {detail && (
+        <Caption color={Colors.textMuted}>{detail}</Caption>
+      )}
       {showChevron && (
         <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
       )}
@@ -312,6 +321,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.lg,
     gap: Space.sm,
     ...Elevation.subtle,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    marginHorizontal: Space.xs,
   },
   avatarRing: {
     width: 88,
