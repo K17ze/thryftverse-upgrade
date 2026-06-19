@@ -54,16 +54,17 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const handleLeave = () => {
     Alert.alert(
       'Leave group?',
-      'You will no longer receive messages from this group.',
+      'This removes the group from your inbox on this device. You can rejoin if you receive a new invite.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Leave',
+          text: 'Leave group',
           style: 'destructive',
           onPress: () => {
             haptic.heavy();
+            deleteConversation(conversationId);
             show('You left the group', 'info');
-            navigation.goBack();
+            navigation.navigate('MainTabs', { screen: 'Inbox' });
           },
         },
       ]
@@ -72,18 +73,18 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete conversation?',
-      'This cannot be undone.',
+      'Delete for me?',
+      'This removes the conversation from your inbox on this device.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Delete for me',
           style: 'destructive',
           onPress: () => {
             haptic.heavy();
             deleteConversation(conversationId);
-            show('Conversation deleted', 'info');
-            navigation.navigate('MainTabs');
+            show('Conversation removed from your inbox', 'info');
+            navigation.navigate('MainTabs', { screen: 'Inbox' });
           },
         },
       ]
@@ -94,7 +95,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     haptic.medium();
     archiveConversation(conversationId);
     show('Conversation archived', 'success');
-    navigation.goBack();
+    navigation.navigate('MainTabs', { screen: 'Inbox' });
   };
 
   const handleToggleMute = () => {

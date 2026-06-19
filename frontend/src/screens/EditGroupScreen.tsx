@@ -32,6 +32,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 
   const conversations = useStore((state) => state.conversations);
   const upsertConversation = useStore((state) => state.upsertConversation);
+  const deleteConversation = useStore((state) => state.deleteConversation);
 
   const conversation = useMemo(
     () => conversations.find((c) => c.id === conversationId),
@@ -96,16 +97,17 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const handleLeaveGroup = () => {
     Alert.alert(
       'Leave group?',
-      'You will no longer receive messages from this group.',
+      'This removes the group from your inbox on this device. You can rejoin if you receive a new invite.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Leave',
+          text: 'Leave group',
           style: 'destructive',
           onPress: () => {
             haptic.heavy();
+            deleteConversation(conversationId);
             show('You left the group', 'info');
-            navigation.navigate('MainTabs');
+            navigation.navigate('MainTabs', { screen: 'Inbox' });
           },
         },
       ]

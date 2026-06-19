@@ -18,6 +18,8 @@ import {
 
   Alert,
 
+  Share,
+
 } from 'react-native';
 
 
@@ -156,6 +158,7 @@ function TaggedItemCard({
   currentUserId?: string | null;
 }) {
 
+  const { show } = useToast();
   const { listings } = useBackendData();
 
   const listing = useMemo(() => {
@@ -172,6 +175,15 @@ function TaggedItemCard({
 
   const isOwner = listing.sellerId === currentUserId;
   const isSold = !!listing.isSold;
+
+  const handleShareListing = async () => {
+    try {
+      await Share.share({ message: `Check out "${listing.title}" on ThryftVerse` });
+    } catch {
+      await Clipboard.setStringAsync(`ThryftVerse listing: ${listing.title}`);
+      show('Listing link copied to clipboard', 'success');
+    }
+  };
 
   return (
 
@@ -270,6 +282,32 @@ function TaggedItemCard({
                 <Caption color={Colors.textPrimary} style={styles.itemQuickText}>Offer</Caption>
               </AnimatedPressable>
             </>
+          )}
+          <AnimatedPressable
+            style={styles.itemQuickBtn}
+            onPress={handleShareListing}
+            activeOpacity={0.8}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityLabel="Share listing"
+            accessibilityRole="button"
+          >
+            <Ionicons name="share-outline" size={14} color={Colors.textSecondary} />
+            <Caption color={Colors.textSecondary} style={styles.itemQuickText}>Share</Caption>
+          </AnimatedPressable>
+          {!isOwner && (
+            <AnimatedPressable
+              style={styles.itemQuickBtn}
+              onPress={() => navigation.navigate('Report', { type: 'item' })}
+              activeOpacity={0.8}
+              scaleValue={0.95}
+              hapticFeedback="light"
+              accessibilityLabel="Report listing"
+              accessibilityRole="button"
+            >
+              <Ionicons name="flag-outline" size={14} color={Colors.danger} />
+              <Caption color={Colors.danger} style={styles.itemQuickText}>Report</Caption>
+            </AnimatedPressable>
           )}
         </View>
 
@@ -1811,8 +1849,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
               }}
 
-              onShowMore={() => setReactingToMessage(null)}
-
             />
 
           ) : null}
@@ -1883,81 +1919,13 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 
       <ChatActionSheet
-
         visible={attachmentPickerVisible}
-
         onClose={() => setAttachmentPickerVisible(false)}
-
         onSelect={(action) => {
-
           if (action === 'gallery' || action === 'camera') {
-
             handleAttachmentSelect(action);
-
-          } else if (action === 'report') {
-
-            navigation.navigate('Report', { type: 'user' });
-
-          } else if (action === 'makeOffer') {
-
-            const linkedItemId = routeItemId || conversation?.itemId;
-
-            if (linkedItemId) {
-
-              // Navigate to item detail where offer can be made
-
-              navigation.navigate('ItemDetail', { itemId: linkedItemId });
-
-            } else {
-
-              show('No linked item found', 'error');
-
-            }
-
-          } else if (action === 'shareListing') {
-
-            const linkedItemId = routeItemId || conversation?.itemId;
-
-            if (linkedItemId) {
-
-              show('Listing link copied to clipboard', 'success');
-
-            } else {
-
-              show('No linked item found', 'error');
-
-            }
-
-          } else if (action === 'orderStatus') {
-
-            show('Order status: not linked to an order', 'info');
-
-          } else if (action === 'bot') {
-
-            if (conversation) {
-
-              navigation.navigate('GroupBotManagement', { conversationId: conversation.id });
-
-            }
-
-          } else if (action === 'groupInfo') {
-
-            if (conversation) {
-
-              navigation.navigate('GroupChatInfo', { conversationId: conversation.id });
-
-            }
-
           }
-
         }}
-
-        isGroup={isGroup}
-
-        hasLinkedItem={!!(routeItemId || conversation?.itemId)}
-
-        hasOrder={false}
-
       />
 
 

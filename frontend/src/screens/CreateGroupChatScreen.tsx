@@ -28,13 +28,11 @@ type Props = StackScreenProps<RootStackParamList, 'CreateGroupChat'>;
 
 export default function CreateGroupChatScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
-  const createGroupConversation = useStore((state) => state.createGroupConversation);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const { show } = useToast();
   const haptic = useHaptic();
 
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -103,16 +101,9 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
       upsertConversation(conversation);
       show('Group chat created.', 'success');
       navigation.replace('Chat', { conversationId: conversation.id });
-      return;
-    } catch {
-      const conversationId = createGroupConversation({
-        title: groupTitle,
-        memberIds: selectedIds,
-        creatorId: currentUser?.id ?? 'me',
-      });
-
-      show('Backend sync unavailable. Created locally.', 'info');
-      navigation.replace('Chat', { conversationId });
+    } catch (err) {
+      setErrorMsg(parseApiError(err, 'Could not create the group. Check your connection and try again.').message);
+      show('Could not create group chat. Please try again.', 'error');
     } finally {
       setIsCreating(false);
     }
@@ -135,22 +126,6 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             inputStyle={styles.input}
             accessibilityLabel="Group title input"
             accessibilityHint="Enter a name for the new group chat"
-          />
-        </ChatCard>
-
-        {/* Description */}
-        <ChatCard variant="surface" style={styles.titleCard}>
-          <Meta color={Colors.textMuted} style={styles.label}>Description (optional)</Meta>
-          <AppInput
-            value={description}
-            onChangeText={setDescription}
-            placeholder="What is this group about?"
-            placeholderTextColor={Colors.textMuted}
-            maxLength={120}
-            inputContainerStyle={styles.inputWrap}
-            inputStyle={styles.input}
-            accessibilityLabel="Group description input"
-            accessibilityHint="Enter a short description for the group"
           />
         </ChatCard>
 
@@ -290,7 +265,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           variant="primary"
           size="md"
           align="center"
-          title={isCreating ? 'Creating...' : 'Create Group'}
+          title={isCreating ? 'Creating...' : errorMsg ? 'Retry' : 'Create Group'}
           onPress={() => {
             void handleCreateGroup();
           }}

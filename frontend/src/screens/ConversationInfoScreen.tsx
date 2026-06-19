@@ -58,18 +58,18 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete conversation?',
-      'This cannot be undone. Messages will be removed from this device.',
+      'Delete for me?',
+      'This removes the conversation from your inbox on this device. The other participant keeps their copy.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Delete for me',
           style: 'destructive',
           onPress: () => {
             haptic.heavy();
             deleteConversation(conversationId);
-            show('Conversation deleted', 'info');
-            navigation.navigate('MainTabs');
+            show('Conversation removed from your inbox', 'info');
+            navigation.navigate('MainTabs', { screen: 'Inbox' });
           },
         },
       ]
@@ -80,7 +80,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     haptic.medium();
     archiveConversation(conversationId);
     show('Conversation archived', 'success');
-    navigation.goBack();
+    navigation.navigate('MainTabs', { screen: 'Inbox' });
   };
 
   const handleToggleMute = () => {
@@ -147,14 +147,6 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
               showChevron
             />
-            <RowItem
-              icon="document-outline"
-              label="Shared links"
-              onPress={() => {
-                // Future: open shared links when backend supports it
-              }}
-              showChevron
-            />
           </Section>
         </Reanimated.View>
 
@@ -203,7 +195,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             />
             <RowItem
               icon="trash-outline"
-              label="Delete chat"
+              label="Delete for me"
               onPress={handleDelete}
               danger
             />

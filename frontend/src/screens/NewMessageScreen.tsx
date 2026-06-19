@@ -78,8 +78,6 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
   const currentUser = useStore((state) => state.currentUser);
 
-  const upsertConversation = useStore((state) => state.upsertConversation);
-
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
 
 
@@ -160,9 +158,17 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
       navigation.navigate('Chat', { conversationId: existing.conversationId, partnerUserId: preselectedUserId });
 
+      return;
+
     }
 
-  }, [preselectedUserId, recentContacts, navigation]);
+    if (preselectedDisplayName) {
+
+      show(`You don't have a conversation with ${preselectedDisplayName} yet. Message them from one of their listings to start one.`, 'info');
+
+    }
+
+  }, [preselectedUserId, preselectedDisplayName, recentContacts, navigation, show]);
 
 
 
@@ -174,33 +180,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
       navigation.navigate('Chat', { conversationId: contact.conversationId });
 
-      return;
-
     }
-
-    // Create a new direct conversation
-
-    const newConvoId = `dm_${currentUser?.id ?? 'me'}_${contact.userId}`;
-
-    upsertConversation({
-
-      id: newConvoId,
-
-      type: 'dm',
-
-      participantIds: ['me', contact.userId],
-
-      lastMessage: '',
-
-      lastMessageTime: new Date().toISOString(),
-
-      unread: false,
-
-      messages: [],
-
-    });
-
-    navigation.navigate('Chat', { conversationId: newConvoId, partnerUserId: contact.userId });
 
   };
 
@@ -248,11 +228,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
         <BodyEmphasis numberOfLines={1}>{item.name}</BodyEmphasis>
 
-        <Caption color={Colors.textMuted}>
-
-          {item.conversationId ? 'Existing conversation' : 'Start new conversation'}
-
-        </Caption>
+        <Caption color={Colors.textMuted}>Tap to open conversation</Caption>
 
       </View>
 
