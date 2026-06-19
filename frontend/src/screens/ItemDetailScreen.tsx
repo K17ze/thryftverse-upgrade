@@ -210,6 +210,21 @@ export default function ItemDetailScreen() {
 
           <View style={styles.heroTopScrim} />
 
+          {/* Media count badge */}
+          {item.images.length > 1 && (
+            <View style={styles.mediaCountBadge}>
+              <Text style={styles.mediaCountText}>{item.images.length} photos</Text>
+            </View>
+          )}
+
+          {/* Video indicator */}
+          {item.images.length > 0 && item.images[0].endsWith('.mp4') && (
+            <View style={styles.videoIndicator}>
+              <Ionicons name="play-circle" size={20} color="#fff" />
+              <Text style={styles.videoIndicatorText}>Video</Text>
+            </View>
+          )}
+
           <Reanimated.View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 5 }, bigHeartStyle]}>
             <Ionicons name="heart" size={100} color="#fff" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 }} />
           </Reanimated.View>
@@ -273,7 +288,9 @@ export default function ItemDetailScreen() {
           <View style={styles.trustBadge}>
             <Ionicons name="shield-checkmark" size={16} color={Colors.success} />
             <Text style={styles.trustText}>Thryft Buyer Protection</Text>
-            <Text style={styles.trustSub}>Secure payment and tracked delivery on every order</Text>
+            <Text style={styles.trustSub}>
+              Payment held securely until delivery is confirmed. Shipping details shown at checkout.
+            </Text>
           </View>
 
           {/* ── Product Attributes ── */}
@@ -526,6 +543,10 @@ const styles = StyleSheet.create({
   heroImage: { width: width, height: '100%' },
   soldOverlay: { position: 'absolute', bottom: 32, left: 20, backgroundColor: Colors.success, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   soldText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold, letterSpacing: 1 },
+  mediaCountBadge: { position: 'absolute', bottom: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.md },
+  mediaCountText: { color: Colors.background, fontSize: 12, fontFamily: Typography.family.medium },
+  videoIndicator: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.md },
+  videoIndicatorText: { color: Colors.background, fontSize: 12, fontFamily: Typography.family.medium },
   floatingHeader: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, zIndex: 10 },
   headerRight: { flexDirection: 'row', gap: 12 },
   blurBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
