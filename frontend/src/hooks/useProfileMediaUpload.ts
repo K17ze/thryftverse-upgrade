@@ -122,7 +122,7 @@ export function useProfileMediaUpload(
 
       // Validate single asset conservatively
       const validation = validateMediaAssets([asset], [], {
-        maxCount: 1,
+        maxTotalCount: 1,
         maxImageSizeBytes: 20 * 1024 * 1024,
         maxVideoSizeBytes: 100 * 1024 * 1024,
       });

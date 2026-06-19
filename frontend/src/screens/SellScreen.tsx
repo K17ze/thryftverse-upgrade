@@ -518,11 +518,6 @@ export default function SellScreen() {
         triggerShake();
         return;
       }
-      const remaining = 10 - photos.length;
-      if (remaining <= 0) {
-        setErrorMsg('Maximum 10 photos per listing.');
-        return;
-      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
@@ -532,11 +527,10 @@ export default function SellScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const assets = result.assets.map(convertPickerAsset);
         const existing = photos.map((uri) => ({ id: uri, uri, fileName: 'existing', mimeType: 'image/jpeg', kind: 'image' as const }));
-        const validation = validateMediaAssets(assets, existing, { maxCount: remaining });
+        const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
 
         if (validation.errors.length > 0) {
           const skipped = validation.errors
-            .filter((e) => e.field === 'count' || e.field === 'duplicate' || e.field === 'mimeType')
             .map((e) => e.message)
             .join('. ');
           if (skipped) setErrorMsg(skipped);
@@ -546,12 +540,13 @@ export default function SellScreen() {
           appendPhotoUri(asset.uri);
         }
         if (validation.assets.length > 0) {
-          setErrorMsg(null);
           haptics.success();
         }
       }
-    } catch { /* noop */ }
-  }, [appendPhotoUri, photos.length]);
+    } catch (e) {
+      setErrorMsg('Could not open photo library. Try again.');
+    }
+  }, [appendPhotoUri, photos]);
 
   const handlePickFromCamera = useCallback(async () => {
     try {
@@ -561,21 +556,28 @@ export default function SellScreen() {
         triggerShake();
         return;
       }
-      if (photos.length >= 10) {
-        setErrorMsg('Maximum 10 photos per listing.');
-        return;
-      }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.9,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
-        appendPhotoUri(result.assets[0].uri);
-        setErrorMsg(null);
-        haptics.success();
+        const asset = convertPickerAsset(result.assets[0]);
+        const existing = photos.map((uri) => ({ id: uri, uri, fileName: 'existing', mimeType: 'image/jpeg', kind: 'image' as const }));
+        const validation = validateMediaAssets([asset], existing, { maxTotalCount: 10 });
+        if (validation.errors.length > 0) {
+          setErrorMsg(validation.errors.map((e) => e.message).join('. '));
+        }
+        for (const a of validation.assets) {
+          appendPhotoUri(a.uri);
+        }
+        if (validation.assets.length > 0) {
+          haptics.success();
+        }
       }
-    } catch { /* noop */ }
-  }, [appendPhotoUri, photos.length]);
+    } catch (e) {
+      setErrorMsg('Could not open camera. Try again.');
+    }
+  }, [appendPhotoUri, photos]);
 
   const removePhoto = useCallback((index: number) => {
     setPhotos((prev) => prev.filter((_, i) => i !== index));

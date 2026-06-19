@@ -108,7 +108,7 @@ export function convertPickerAsset(asset: ImagePicker.ImagePickerAsset): MediaUp
     width: asset.width ?? undefined,
     height: asset.height ?? undefined,
     durationMs: 'duration' in asset && typeof (asset as any).duration === 'number'
-      ? Math.round((asset as any).duration * 1000)
+      ? Math.round((asset as any).duration)
       : undefined,
     kind: resolveKind(mimeType),
   };
@@ -116,7 +116,7 @@ export function convertPickerAsset(asset: ImagePicker.ImagePickerAsset): MediaUp
 
 /* ── validation ── */
 export interface MediaValidationOptions {
-  maxCount?: number;
+  maxTotalCount?: number;
   maxImageSizeBytes?: number;
   maxVideoSizeBytes?: number;
   maxVideoDurationMs?: number;
@@ -125,7 +125,7 @@ export interface MediaValidationOptions {
 }
 
 const DEFAULT_OPTIONS: Required<MediaValidationOptions> = {
-  maxCount: 10,
+  maxTotalCount: 10,
   maxImageSizeBytes: 20 * 1024 * 1024, // 20 MB
   maxVideoSizeBytes: 100 * 1024 * 1024, // 100 MB
   maxVideoDurationMs: 60 * 1000, // 60 seconds
@@ -165,8 +165,8 @@ export function validateMediaAssets(
 
     // Total count
     const totalCount = existingAssets.length + validAssets.length;
-    if (totalCount >= opts.maxCount) {
-      errors.push({ field: 'count', message: `Maximum ${opts.maxCount} assets allowed. Skipped: ${asset.fileName}`, assetId: asset.id });
+    if (totalCount >= opts.maxTotalCount) {
+      errors.push({ field: 'count', message: `Maximum ${opts.maxTotalCount} assets allowed. Skipped: ${asset.fileName}`, assetId: asset.id });
       continue;
     }
 
