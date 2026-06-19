@@ -36,9 +36,7 @@ import { RootStackParamList } from '../navigation/types';
 
 import { Colors } from '../constants/colors';
 
-import { Typography } from '../theme/designTokens';
-
-import { useAppTheme } from '../theme/ThemeContext';
+import { TypeStyles } from '../theme/designTokens';
 
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
@@ -80,7 +78,7 @@ import { MarketplaceChatCard } from '../components/chat/MarketplaceChatCard';
 
 import { ChatActionSheet, ChatAction } from '../components/chat/ChatActionSheet';
 
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Space, Radius, Type, Elevation } from '../theme/designTokens';
 
 import { MessageContextMenu } from '../components/chat/MessageContextMenu';
 
@@ -488,8 +486,6 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [isSearchActive, setIsSearchActive] = useState(!!route.params?.focusQuery);
 
   const [isOffline, setIsOffline] = useState(false);
-
-  const { isDark } = useAppTheme();
 
   const [composerSending, setComposerSending] = useState(false);
 
@@ -1558,17 +1554,19 @@ export default function ChatScreen({ navigation, route }: Props) {
                   (resolvedPartnerId ? profileMediaOverrides[resolvedPartnerId]?.avatar : undefined) ||
                   '';
                 return (
-                  <CachedImage
-                    uri={avatarUri}
-                    style={{ width: 32, height: 32, borderRadius: 16 }}
-                    contentFit="cover"
-                  />
+                  <View style={styles.headerAvatarRing}>
+                    <CachedImage
+                      uri={avatarUri}
+                      style={styles.headerAvatarImage}
+                      contentFit="cover"
+                    />
+                  </View>
                 );
               })()
             ) : null
           }
           rightAction={
-            <View style={{ flexDirection: 'row', gap: Space.sm }}>
+            <View style={styles.headerActions}>
               <AnimatedPressable
                 onPress={() => setIsSearchActive((v) => !v)}
                 activeOpacity={0.7}
@@ -1723,7 +1721,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
             keyExtractor={(item) => item.id}
 
-            contentContainerStyle={{ paddingVertical: Space.md }}
+            contentContainerStyle={styles.messageList}
 
             showsVerticalScrollIndicator={false}
 
@@ -2034,19 +2032,19 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
 
-  container: { flex: 1, backgroundColor: Colors.background },
+  headerAvatarRing: {
 
+    width: 38,
 
-
-  headerIconBtn: {
-
-    width: 40,
-
-    height: 40,
+    height: 38,
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 2,
+
+    borderColor: Colors.border,
+
+    padding: 2,
 
     justifyContent: 'center',
 
@@ -2054,7 +2052,23 @@ const styles = StyleSheet.create({
 
   },
 
+  headerAvatarImage: {
 
+    width: 30,
+
+    height: 30,
+
+    borderRadius: Radius.full,
+
+  },
+
+  headerActions: {
+
+    flexDirection: 'row',
+
+    gap: Space.sm,
+
+  },
 
   selectionToolbar: {
 
@@ -2073,6 +2087,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
 
     borderBottomColor: Colors.border,
+
+    ...Elevation.subtle,
 
   },
 
@@ -2109,6 +2125,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
 
     borderWidth: StyleSheet.hairlineWidth,
+
+    ...Elevation.subtle,
 
   },
 
@@ -2158,7 +2176,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   itemQuickText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
   itemInfo: {
@@ -2201,15 +2219,7 @@ const styles = StyleSheet.create({
 
     marginBottom: Space.sm,
 
-    shadowColor: '#000',
-
-    shadowOffset: { width: 0, height: 4 },
-
-    shadowOpacity: 0.06,
-
-    shadowRadius: 12,
-
-    elevation: 2,
+    ...Elevation.subtle,
 
   },
 
@@ -2217,7 +2227,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.subtitle.size,
 
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
 
     color: Colors.textPrimary,
 
@@ -2231,7 +2241,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.body.size,
 
-    fontFamily: Typography.family.regular,
+    fontFamily: TypeStyles.body.fontFamily,
 
     color: Colors.textSecondary,
 
@@ -2257,6 +2267,12 @@ const styles = StyleSheet.create({
 
 
 
+  messageList: {
+
+    paddingVertical: Space.md,
+
+  },
+
   dateWrap: {
 
     alignItems: 'center',
@@ -2281,6 +2297,8 @@ const styles = StyleSheet.create({
 
     fontSize: Type.meta.size,
 
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+
     textTransform: 'uppercase',
 
     letterSpacing: 0.5,
@@ -2294,12 +2312,6 @@ const styles = StyleSheet.create({
     marginVertical: Space.xs,
 
     paddingHorizontal: Space.md,
-
-  },
-
-  statusCard: {
-
-    gap: Space.xs,
 
   },
 
@@ -2363,6 +2375,8 @@ const styles = StyleSheet.create({
 
     borderColor: Colors.border,
 
+    ...Elevation.subtle,
+
   },
 
   offerCardMe: {
@@ -2391,7 +2405,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.price.size,
 
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
 
     color: Colors.textPrimary,
 
@@ -2449,7 +2463,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     color: Colors.textPrimary,
 
@@ -2483,7 +2497,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     color: Colors.textInverse,
 
@@ -2571,15 +2585,7 @@ const styles = StyleSheet.create({
 
     borderTopColor: Colors.border,
 
-    shadowColor: '#000',
-
-    shadowOffset: { width: 0, height: -6 },
-
-    shadowOpacity: 0.08,
-
-    shadowRadius: 16,
-
-    elevation: 6,
+    ...Elevation.floating,
 
   },
 
@@ -2615,7 +2621,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 
@@ -2625,7 +2631,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 
@@ -2677,7 +2683,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     color: Colors.textMuted,
 
@@ -2721,7 +2727,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 interface Reaction {
@@ -214,8 +214,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   avatarText: {
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
   },
   avatarSpacer: {
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   senderName: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.brand,
     marginBottom: 2,
     marginLeft: Space.xs,
@@ -260,16 +260,16 @@ const styles = StyleSheet.create({
   },
   replyName: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   replyText: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypeStyles.body.fontFamily,
     lineHeight: Type.caption.lineHeight,
   },
   messageText: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypeStyles.body.fontFamily,
     lineHeight: Type.body.lineHeight + 2,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -284,8 +284,8 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   timestamp: {
-    fontSize: 10,
-    fontFamily: Typography.family.regular,
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.body.fontFamily,
   },
   statusWrap: {
     flexDirection: 'row',
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   uploadText: {
     color: Colors.textInverse,
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   retryBadge: {
     flexDirection: 'row',
@@ -338,8 +338,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   retryText: {
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.danger,
   },
   reactions: {
@@ -373,8 +373,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   reactionCount: {
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textSecondary,
   },
 });

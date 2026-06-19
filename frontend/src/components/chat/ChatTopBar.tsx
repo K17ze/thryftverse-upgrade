@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontSize: 15,
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
     textTransform: 'uppercase',
   },
@@ -158,13 +158,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   subtitle: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypeStyles.body.fontFamily,
     color: Colors.textMuted,
     marginTop: 1,
     letterSpacing: Type.caption.letterSpacing,
