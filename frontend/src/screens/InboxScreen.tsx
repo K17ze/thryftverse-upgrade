@@ -626,6 +626,12 @@ export default function InboxScreen() {
               <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
             </View>
             <Caption color={Colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
+            {item.itemId && (
+              <View style={styles.requestListingContext}>
+                <ListingContextThumbnail itemId={item.itemId} />
+                <Caption color={Colors.textSecondary} style={styles.requestListingText}>About a listing</Caption>
+              </View>
+            )}
             <View style={styles.requestActions}>
               <AnimatedPressable
                 style={styles.requestBtnDecline}
@@ -671,7 +677,7 @@ export default function InboxScreen() {
         accessibilityRole="button"
         accessibilityHint="Opens the conversation thread"
       >
-        <View style={styles.rowInner}>
+        <View style={[styles.rowInner, item.unread && styles.rowInnerUnread]}>
           <View style={styles.avatarWrap}>{avatarEl}</View>
           <View style={styles.messageBody}>
             <View style={styles.titleRow}>
@@ -1541,6 +1547,18 @@ const styles = StyleSheet.create({
 
   },
 
+  rowInnerUnread: {
+    backgroundColor: `${Colors.brand}06`,
+  },
+  requestListingContext: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    marginTop: Space.xs,
+  },
+  requestListingText: {
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
   swipeRightGroup: {
 
     flexDirection: 'row',

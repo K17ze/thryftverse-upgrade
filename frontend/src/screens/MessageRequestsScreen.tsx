@@ -19,8 +19,10 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarRing } from '../components/chat/AvatarRing';
+import { CachedImage } from '../components/CachedImage';
 import { Caption, BodyEmphasis } from '../components/ui/Text';
 import { EmptyState } from '../components/EmptyState';
+import { useBackendData } from '../context/BackendDataContext';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -66,10 +68,13 @@ export default function MessageRequestsScreen() {
     );
   };
 
+  const { listings } = useBackendData();
+
   const renderItem = ({ item, index }: { item: typeof requestConversations[0]; index: number }) => {
     const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
     const displayTitle = item.title ?? 'Thryft user';
     const avatarUri = item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined);
+    const listing = item.itemId ? listings.find((l) => l.id === item.itemId) : undefined;
 
     return (
       <Reanimated.View entering={FadeInDown.duration(300).delay(index * 60)}>
@@ -82,14 +87,25 @@ export default function MessageRequestsScreen() {
               fallbackInitials={displayTitle.slice(0, 2).toUpperCase()}
             />
             <View style={styles.cardText}>
-              <BodyEmphasis numberOfLines={1}>{displayTitle}</BodyEmphasis>
+              <View style={styles.nameRow}>
+                <BodyEmphasis numberOfLines={1} style={styles.nameText}>{displayTitle}</BodyEmphasis>
+                {item.lastMessageTime && (
+                  <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
+                )}
+              </View>
               <Caption color={Colors.textMuted} numberOfLines={2} style={styles.previewText}>
                 {item.lastMessage ?? 'Wants to message you'}
               </Caption>
-              {item.itemId && (
-                <View style={styles.contextPill}>
-                  <Ionicons name="pricetag-outline" size={12} color={Colors.brand} />
-                  <Caption color={Colors.brand} style={styles.contextPillText}>About a listing</Caption>
+              {listing && (
+                <View style={styles.listingContext}>
+                  {listing.images?.[0] ? (
+                    <CachedImage uri={listing.images[0]} style={styles.listingThumb} contentFit="cover" />
+                  ) : (
+                    <View style={styles.listingThumbPlaceholder}>
+                      <Ionicons name="pricetag-outline" size={12} color={Colors.textMuted} />
+                    </View>
+                  )}
+                  <Caption color={Colors.textSecondary} numberOfLines={1} style={styles.listingTitle}>{listing.title}</Caption>
                 </View>
               )}
             </View>
@@ -102,6 +118,8 @@ export default function MessageRequestsScreen() {
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Decline message request"
             >
               <Text style={styles.declineText}>Decline</Text>
             </AnimatedPressable>
@@ -111,6 +129,8 @@ export default function MessageRequestsScreen() {
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="medium"
+              accessibilityRole="button"
+              accessibilityLabel="Accept message request"
             >
               <Text style={styles.acceptText}>Accept</Text>
             </AnimatedPressable>
@@ -164,6 +184,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.sm + 6,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  nameText: {
+    flex: 1,
+  },
   cardText: {
     flex: 1,
     justifyContent: 'center',
@@ -173,19 +202,35 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight + 2,
     marginTop: 2,
   },
-  contextPill: {
+  listingContext: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs + 2,
     marginTop: Space.xs,
     alignSelf: 'flex-start',
-    backgroundColor: `${Colors.brand}10`,
+    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
-  contextPillText: {
+  listingThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.sm,
+  },
+  listingThumbPlaceholder: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listingTitle: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    maxWidth: 180,
   },
   actionsRow: {
     flexDirection: 'row',
