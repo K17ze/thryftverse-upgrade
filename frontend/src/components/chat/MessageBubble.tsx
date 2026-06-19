@@ -130,10 +130,7 @@ export function MessageBubble({
             <Pressable onPress={onMediaPress} style={styles.mediaWrap}>
               <CachedImage
                 uri={mediaUri}
-                style={[
-                  styles.mediaImage,
-                  mediaType === 'video' && { width: 220, height: 154 },
-                ]}
+                style={styles.mediaImage}
                 contentFit="cover"
               />
               {mediaType === 'video' ? (
@@ -240,6 +237,7 @@ const styles = StyleSheet.create({
   bubbleMe: {
     backgroundColor: Colors.textPrimary,
     alignSelf: 'flex-end',
+    ...Elevation.subtle,
   },
   bubbleThem: {
     backgroundColor: Colors.surface,
@@ -298,8 +296,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
   },
   mediaImage: {
-    width: 220,
-    height: 176,
+    width: '100%',
+    minWidth: 180,
+    maxWidth: 260,
+    aspectRatio: 1.25,
     borderRadius: Radius.md,
   },
   videoBadge: {
@@ -359,11 +359,11 @@ const styles = StyleSheet.create({
   reactionChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     ...Elevation.subtle,
