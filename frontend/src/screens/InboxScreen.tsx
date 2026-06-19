@@ -353,6 +353,10 @@ export default function InboxScreen() {
 
 
 
+  const unreadCount = useMemo(() => visibleConversations.filter((c) => c.unread).length, [visibleConversations]);
+
+
+
   const handleDelete = useCallback((id: string) => {
 
     haptic.medium();
@@ -670,17 +674,12 @@ export default function InboxScreen() {
         <View style={styles.rowInner}>
           <View style={styles.avatarWrap}>{avatarEl}</View>
           <View style={styles.messageBody}>
-            <View style={styles.messageTop}>
-              <View style={styles.titleRow}>
-                <Text style={[styles.nameText, item.unread && styles.nameUnread]} numberOfLines={1}>
-                  {displayTitle}
-                </Text>
-                {item.isPinned && <Ionicons name="pin" size={12} color={Colors.brand} style={styles.pinIcon} />}
-                {isMuted && <Ionicons name="volume-mute" size={12} color={Colors.textMuted} style={styles.pinIcon} />}
-              </View>
-              <Caption color={item.unread ? Colors.textPrimary : Colors.textMuted} style={item.unread && styles.timeUnread}>
-                {item.lastMessageTime}
-              </Caption>
+            <View style={styles.titleRow}>
+              <Text style={[styles.nameText, item.unread && styles.nameUnread]} numberOfLines={1}>
+                {displayTitle}
+              </Text>
+              {item.isPinned && <Ionicons name="pin" size={12} color={Colors.brand} style={styles.pinIcon} />}
+              {isMuted && <Ionicons name="volume-mute" size={12} color={Colors.textMuted} style={styles.pinIcon} />}
             </View>
             <View style={styles.snippetRow}>
               {isGroup && (
@@ -702,12 +701,17 @@ export default function InboxScreen() {
                   {item.lastMessage}
                 </Text>
               )}
-              <View style={styles.rowMeta}>
-                {item.itemId && <ListingContextThumbnail itemId={item.itemId} />}
-                {item.unread && !item.draftText ? (
-                  <View style={styles.unreadDot} />
-                ) : null}
-              </View>
+            </View>
+          </View>
+          <View style={styles.rowMeta}>
+            <Caption color={item.unread ? Colors.textPrimary : Colors.textMuted} style={item.unread && styles.timeUnread}>
+              {item.lastMessageTime}
+            </Caption>
+            <View style={styles.rowMetaBottom}>
+              {item.itemId && <ListingContextThumbnail itemId={item.itemId} />}
+              {item.unread && !item.draftText ? (
+                <View style={styles.unreadDot} />
+              ) : null}
             </View>
           </View>
         </View>
@@ -751,18 +755,19 @@ export default function InboxScreen() {
               accessibilityLabel="Create new group chat"
               accessibilityRole="button"
             >
-              <Ionicons name="people-outline" size={20} color={Colors.textPrimary} />
+              <Ionicons name="people-outline" size={20} color={Colors.textSecondary} />
             </AnimatedPressable>
             <AnimatedPressable
-              style={styles.iconBtn}
+              style={styles.newMessageBtn}
               onPress={() => navigation.navigate('NewMessage')}
               activeOpacity={0.7}
-              scaleValue={0.9}
+              scaleValue={0.95}
               hapticFeedback="light"
               accessibilityLabel="New message"
               accessibilityRole="button"
             >
-              <Ionicons name="create-outline" size={20} color={Colors.textPrimary} />
+              <Ionicons name="create-outline" size={18} color={Colors.textInverse} />
+              <Text style={styles.newMessageBtnText}>New</Text>
             </AnimatedPressable>
           </View>
           }
@@ -776,9 +781,18 @@ export default function InboxScreen() {
       <View style={styles.header}>
 
 
+        <View style={styles.headerTitleBlock}>
+
+          <Text style={styles.headerTitle}>Inbox</Text>
+
+          <Text style={styles.headerSubtitle}>{unreadCount} unread</Text>
+
+        </View>
+
+
         <AppSearchBar
 
-          placeholder="Search"
+          placeholder="Search messages"
 
           value={searchQuery}
 
@@ -1145,13 +1159,45 @@ const styles = StyleSheet.create({
 
   header: {
 
-    paddingHorizontal: Space.md + 4,
+    paddingHorizontal: Space.md,
 
     paddingTop: Space.sm,
 
-    paddingBottom: Space.sm + 4,
+    paddingBottom: Space.sm,
 
-    gap: Space.sm + 4,
+    gap: Space.sm,
+
+  },
+
+  headerTitleBlock: {
+
+    gap: 2,
+
+    marginBottom: Space.xs,
+
+  },
+
+  headerTitle: {
+
+    fontSize: Type.title.size,
+
+    fontFamily: TypeStyles.title.fontFamily,
+
+    color: Colors.textPrimary,
+
+    letterSpacing: Type.title.letterSpacing,
+
+    lineHeight: Type.title.lineHeight,
+
+  },
+
+  headerSubtitle: {
+
+    fontSize: Type.caption.size,
+
+    fontFamily: TypeStyles.body.fontFamily,
+
+    color: Colors.textMuted,
 
   },
 
@@ -1159,7 +1205,9 @@ const styles = StyleSheet.create({
 
     flexDirection: 'row',
 
-    gap: Space.sm + 2,
+    alignItems: 'center',
+
+    gap: Space.sm,
 
   },
 
@@ -1179,6 +1227,34 @@ const styles = StyleSheet.create({
 
   },
 
+  newMessageBtn: {
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    gap: Space.xs,
+
+    paddingHorizontal: Space.md,
+
+    paddingVertical: 10,
+
+    borderRadius: Radius.full,
+
+    backgroundColor: Colors.textPrimary,
+
+  },
+
+  newMessageBtnText: {
+
+    fontSize: Type.caption.size,
+
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+
+    color: Colors.textInverse,
+
+  },
+
   searchWrap: {
 
     backgroundColor: Colors.surfaceAlt,
@@ -1187,7 +1263,7 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: Space.md,
 
-    minHeight: 44,
+    minHeight: 40,
 
   },
 
@@ -1237,7 +1313,7 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    paddingVertical: Space.md - 2,
+    paddingVertical: Space.sm,
 
     paddingHorizontal: Space.md,
 
@@ -1249,7 +1325,7 @@ const styles = StyleSheet.create({
 
     backgroundColor: Colors.border,
 
-    marginLeft: 80,
+    marginLeft: 72,
 
     marginRight: Space.md,
 
@@ -1311,7 +1387,7 @@ const styles = StyleSheet.create({
 
   },
 
-  messageBody: { flex: 1 },
+  messageBody: { flex: 1, justifyContent: 'center', gap: 2 },
 
   messageTop: {
 
@@ -1373,15 +1449,9 @@ const styles = StyleSheet.create({
 
     fontSize: Type.meta.size,
 
-    backgroundColor: Colors.surfaceAlt,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    paddingHorizontal: Space.sm - 2,
-
-    paddingVertical: 1,
-
-    borderRadius: Radius.sm,
-
-    overflow: 'hidden',
+    color: Colors.textMuted,
 
   },
 
@@ -1408,17 +1478,23 @@ const styles = StyleSheet.create({
   },
 
   unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: Colors.textPrimary,
-    marginLeft: Space.xs,
   },
   timeUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textPrimary,
   },
   rowMeta: {
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: Space.xs,
+    minWidth: 40,
+    paddingLeft: Space.xs,
+  },
+  rowMetaBottom: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
