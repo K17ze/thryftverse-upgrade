@@ -221,6 +221,9 @@ export default function SellScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPublishing, setIsPublishing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [publicationStage, setPublicationStage] = useState<'idle' | 'uploading_media' | 'creating_listing' | 'attaching_media' | 'completed' | 'failed_recoverable'>('idle');
+  const publishedListingIdRef = useRef<string | null>(null);
+  const uploadedUrlsRef = useRef<string[]>([]);
 
   /* ── currency ── */
   const currency = useCurrencyPref();
@@ -743,44 +746,55 @@ export default function SellScreen() {
       return;
     }
 
+    if (isPublishing) return;
     setIsPublishing(true);
     setErrorMsg(null);
+    setPublicationStage('uploading_media');
 
     try {
-      // 1. Upload all media
-      const uploadedUrls: string[] = [];
-      for (let i = 0; i < photos.length; i++) {
+      // 1. Upload all media (skip already-uploaded URLs)
+      const uploadedUrls: string[] = [...uploadedUrlsRef.current];
+      const startIndex = uploadedUrls.length;
+      for (let i = startIndex; i < photos.length; i++) {
         const uri = photos[i];
         if (uri.startsWith('http')) {
           uploadedUrls.push(uri);
         } else {
+          setPublicationStage('uploading_media');
           const url = await uploadMedia(uri, 'listings');
           uploadedUrls.push(url);
+          uploadedUrlsRef.current = [...uploadedUrls];
         }
       }
 
       const coverImage = uploadedUrls[0] ?? '';
-      const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      let listingId = publishedListingIdRef.current;
 
-      // 2. Create listing
-      await createListingOnApi({
-        id: listingId,
-        sellerId: currentUser.id,
-        title: trimmedTitle,
-        description: trimmedDescription,
-        priceGbp: numericPrice,
-        imageUrl: coverImage,
-        status: 'active',
-        category,
-        brand: brand || undefined,
-        size,
-        condition,
-        originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-        shippingMethod: shippingMethod || undefined,
-        shippingPayer: shippingPayer || undefined,
-      });
+      // 2. Create listing if not already created
+      if (!listingId) {
+        setPublicationStage('creating_listing');
+        listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        await createListingOnApi({
+          id: listingId,
+          sellerId: currentUser.id,
+          title: trimmedTitle,
+          description: trimmedDescription,
+          priceGbp: numericPrice,
+          imageUrl: coverImage,
+          status: 'active',
+          category,
+          brand: brand || undefined,
+          size,
+          condition,
+          originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
+          shippingMethod: shippingMethod || undefined,
+          shippingPayer: shippingPayer || undefined,
+        });
+        publishedListingIdRef.current = listingId;
+      }
 
       // 3. Create listing_images for all photos
+      setPublicationStage('attaching_media');
       for (let i = 0; i < uploadedUrls.length; i++) {
         await createListingImageOnApi({
           id: `${listingId}_img_${i}`,
@@ -790,7 +804,10 @@ export default function SellScreen() {
         });
       }
 
+      setPublicationStage('completed');
       clearSellDraft();
+      uploadedUrlsRef.current = [];
+      publishedListingIdRef.current = null;
       haptics.success();
       navigation.replace('ListingSuccess', {
         listingId,
@@ -801,13 +818,15 @@ export default function SellScreen() {
       });
     } catch (e: unknown) {
       const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Please try again.';
-      setErrorMsg(msg);
+      const hasListing = !!publishedListingIdRef.current;
+      setPublicationStage(hasListing ? 'failed_recoverable' : 'failed_recoverable');
+      setErrorMsg(hasListing ? `${msg} — your listing was created. Tap Publish to retry attaching media.` : msg);
       triggerShake();
       haptics.error();
     } finally {
       setIsPublishing(false);
     }
-  }, [listingMode, photos, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, triggerShake, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer]);
+  }, [isPublishing, listingMode, photos, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, triggerShake, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer]);
 
   /* ── picker helpers ── */
   const getPickerOptions = useCallback(() => {
