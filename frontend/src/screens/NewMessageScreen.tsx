@@ -11,9 +11,8 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -34,7 +33,6 @@ interface ContactItem {
 export default function NewMessageScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const haptic = useHaptic();
-  const { isDark } = useAppTheme();
 
   const conversations = useStore((state) => state.conversations);
     const preselectedUserId = route.params?.preselectedUserId;
@@ -114,7 +112,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       accessibilityLabel={`Message ${item.name}`}
       accessibilityRole="button"
     >
-      <View style={styles.avatar}>
+      <View style={styles.avatarRing}>
         {item.avatar ? (
           <CachedImage uri={item.avatar} style={styles.avatarImage} contentFit="cover" />
         ) : (
@@ -197,23 +195,25 @@ const styles = StyleSheet.create({
     gap: Space.sm + 6,
     paddingVertical: Space.md,
   },
-  avatar: {
-    width: 48,
-    height: 48,
+  avatarRing: {
+    width: 50,
+    height: 50,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    padding: 2,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
   avatarImage: {
-    width: 48,
-    height: 48,
+    width: 42,
+    height: 42,
     borderRadius: Radius.full,
   },
   avatarText: {
     fontSize: 15,
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
   },
   rowBody: {

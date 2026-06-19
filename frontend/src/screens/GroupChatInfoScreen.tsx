@@ -11,9 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -23,7 +22,6 @@ type Props = StackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
 export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
-  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -120,8 +118,10 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Group Identity */}
         <View style={styles.identityCard}>
-          <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
-            <Text style={styles.avatarText}>{initials}</Text>
+          <View style={styles.avatarRing}>
+            <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
           </View>
           <BodyEmphasis style={styles.groupName} numberOfLines={1}>
             {conversation.title ?? 'Group chat'}
@@ -278,10 +278,6 @@ function RowItem({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
@@ -296,22 +292,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
+    ...Elevation.subtle,
+  },
+  avatarRing: {
+    width: 88,
+    height: 88,
+    borderRadius: Radius.full,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatar: {
-    width: 80,
-    height: 80,
+    width: 76,
+    height: 76,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 28,
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
   },
   groupName: {
     fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
     marginTop: Space.sm,
   },
@@ -343,6 +350,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     overflow: 'hidden',
+    ...Elevation.subtle,
   },
   sectionCardDanger: {
     borderColor: `${Colors.danger}30`,
@@ -361,6 +369,6 @@ const styles = StyleSheet.create({
   rowLabel: {
     flex: 1,
     fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 });

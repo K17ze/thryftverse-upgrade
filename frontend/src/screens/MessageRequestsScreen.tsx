@@ -13,9 +13,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -78,7 +77,7 @@ export default function MessageRequestsScreen() {
           <View style={styles.cardHeader}>
             <AvatarRing
               uri={avatarUri}
-              size={52}
+              size={56}
               ringWidth={2}
               fallbackInitials={displayTitle.slice(0, 2).toUpperCase()}
             />
@@ -145,10 +144,6 @@ export default function MessageRequestsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
   listContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
@@ -190,7 +185,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   contextPillText: {
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -205,10 +200,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
+    ...Elevation.subtle,
   },
   declineText: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textPrimary,
   },
   acceptBtn: {
@@ -218,10 +214,11 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: Radius.md,
     backgroundColor: Colors.textPrimary,
+    ...Elevation.subtle,
   },
   acceptText: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.background,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textInverse,
   },
 });

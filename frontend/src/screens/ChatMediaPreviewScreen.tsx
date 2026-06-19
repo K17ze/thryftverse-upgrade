@@ -15,6 +15,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen } from '../components/flagship';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Type, TypeStyles, Radius, Elevation } from '../theme/designTokens';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -131,10 +132,6 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
   backdrop: {
     flex: 1,
     backgroundColor: '#000',
@@ -147,10 +144,11 @@ const styles = StyleSheet.create({
     zIndex: 10,
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+    ...Elevation.subtle,
   },
   mediaWrap: {
     width: SCREEN_W,
@@ -170,25 +168,26 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   errorText: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: Type.subtitle.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: 'rgba(255,255,255,0.7)',
   },
   errorSub: {
-    fontSize: 13,
-    fontFamily: 'Inter-Regular',
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.body.fontFamily,
     color: 'rgba(255,255,255,0.4)',
   },
   retryBtn: {
     marginTop: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.15)',
+    ...Elevation.subtle,
   },
   retryText: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: Type.body.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: '#fff',
   },
   contextOverlay: {
@@ -199,24 +198,24 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   contextSender: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: Type.subtitle.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   contextTime: {
-    fontSize: 13,
-    fontFamily: 'Inter-Regular',
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.body.fontFamily,
     color: 'rgba(255,255,255,0.7)',
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   contextId: {
-    fontSize: 11,
-    fontFamily: 'Inter-Regular',
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.body.fontFamily,
     color: 'rgba(255,255,255,0.4)',
   },
 });

@@ -20,9 +20,8 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
-import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateGroupChat'>;
@@ -31,7 +30,6 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const createGroupConversation = useStore((state) => state.createGroupConversation);
   const upsertConversation = useStore((state) => state.upsertConversation);
-  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -306,7 +304,6 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
   body: {
     flex: 1,
     paddingHorizontal: Space.md,
@@ -362,6 +359,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: Space.sm + 2,
+    ...Elevation.subtle,
   },
   memberRowSelected: {
     borderColor: Colors.brand,
@@ -412,9 +410,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: 10,
     paddingVertical: 5,
+    ...Elevation.subtle,
   },
   selectedChipText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -425,9 +424,10 @@ const styles = StyleSheet.create({
     backgroundColor: `${Colors.danger}10`,
     borderRadius: Radius.md,
     marginBottom: Space.sm,
+    ...Elevation.subtle,
   },
   errorBannerText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   emptyWrap: {
     flex: 1,

@@ -12,9 +12,8 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -25,7 +24,6 @@ type Props = StackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
 export default function ConversationInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
-  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -114,13 +112,15 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
         {/* Partner Identity */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
           <View style={styles.identityCard}>
-            {avatarUrl ? (
-              <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
-            ) : (
-              <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
-                <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
-              </View>
-            )}
+            <View style={styles.avatarRing}>
+              {avatarUrl ? (
+                <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
+                  <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
+            </View>
             <BodyEmphasis style={styles.name} numberOfLines={1}>{displayName}</BodyEmphasis>
             <Caption color={Colors.textMuted}>Direct message</Caption>
           </View>
@@ -288,10 +288,6 @@ function RowItem({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
@@ -306,23 +302,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.lg,
     gap: Space.sm,
+    ...Elevation.subtle,
   },
-  avatar: {
-    width: 80,
-    height: 80,
+  avatarRing: {
+    width: 88,
+    height: 88,
     borderRadius: Radius.full,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    padding: 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Elevation.subtle,
+  },
   avatarImage: {
-    width: 80,
-    height: 80,
+    width: 76,
+    height: 76,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceAlt,
   },
   avatarText: {
     fontSize: 28,
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
     textTransform: 'uppercase',
   },
@@ -362,7 +370,7 @@ const styles = StyleSheet.create({
   rowLabel: {
     flex: 1,
     fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
   },
