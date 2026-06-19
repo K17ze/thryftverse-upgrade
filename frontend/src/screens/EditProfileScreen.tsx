@@ -110,7 +110,7 @@ export default function EditProfileScreen() {
           ]).catch(() => {});
           show('Cover updated', 'success');
         } catch {
-          show('Cover upload requires media storage connection.', 'error');
+          show('Cover upload failed. Try again.', 'error');
         } finally {
           setIsUploadingCover(false);
         }
@@ -144,7 +144,7 @@ export default function EditProfileScreen() {
           ]).catch(() => {});
           show('Avatar updated', 'success');
         } catch {
-          show('Avatar upload requires media storage connection.', 'error');
+          show('Avatar upload failed. Try again.', 'error');
         } finally {
           setIsUploadingAvatar(false);
         }
