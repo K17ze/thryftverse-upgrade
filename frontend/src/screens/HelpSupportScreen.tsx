@@ -66,7 +66,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
   }, [allFaqs, faqSearch]);
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Help & Support" onBack={() => navigation.goBack()} />} keyboardAvoiding>
+    <FlagshipScreen header={<FlagshipHeader title="Help & Support" subtitle="Get answers and contact us" onBack={() => navigation.goBack()} />} keyboardAvoiding>
         {/* Contact options */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
           <SettingsSection title="Contact us">
