@@ -107,6 +107,15 @@ export default function PostageScreen({ navigation }: Props) {
         />
       }
     >
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <View style={[styles.deliveryTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <Ionicons name="cube-outline" size={18} color={Colors.brand} />
+          <Text style={[styles.deliveryTrustText, { color: Colors.textSecondary }]}>
+            Set your default delivery address and preferred carrier for faster checkout.
+          </Text>
+        </View>
+      </Reanimated.View>
+
       {/* Addresses */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
         <FlagshipFormSection title="Your Addresses" description="Add a default delivery address for faster checkout.">
@@ -320,5 +329,22 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     letterSpacing: Type.caption.letterSpacing,
     textAlign: 'center',
+  },
+  deliveryTrust: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+  },
+  deliveryTrustText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
 });
