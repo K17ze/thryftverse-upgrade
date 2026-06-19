@@ -118,21 +118,21 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     <FlagshipScreen header={<FlagshipHeader title="Group Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Group Identity */}
-        <View style={styles.identityCard}>
-          <View style={styles.avatarRing}>
-            <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
-              <Text style={styles.avatarText}>{initials}</Text>
+        <View style={styles.identityCardV2}>
+          <View style={styles.groupAvatarWrap}>
+            <View style={[styles.groupAvatar, { backgroundColor: Colors.surfaceAlt }]}>
+              <Text style={styles.groupAvatarText}>{initials}</Text>
             </View>
           </View>
-          <BodyEmphasis style={styles.groupName} numberOfLines={1}>
+          <BodyEmphasis style={styles.groupNameV2} numberOfLines={1}>
             {conversation.title ?? 'Group chat'}
           </BodyEmphasis>
           {description ? (
-            <Caption color={Colors.textMuted} style={styles.groupDesc}>{description}</Caption>
+            <Caption color={Colors.textMuted} style={styles.groupDescV2}>{description}</Caption>
           ) : null}
           <Caption color={Colors.textMuted}>{memberCount} members</Caption>
           {deployedBotCount > 0 && (
-            <View style={styles.botBadge}>
+            <View style={styles.botBadgeV2}>
               <Ionicons name="hardware-chip-outline" size={12} color={Colors.brand} />
               <Caption color={Colors.brand} style={styles.botBadgeText}>
                 {deployedBotCount} bot{deployedBotCount > 1 ? 's' : ''} active
@@ -340,6 +340,53 @@ const styles = StyleSheet.create({
   },
   botBadgeText: {
     fontSize: Type.caption.size,
+  },
+  identityCardV2: {
+    alignItems: 'center',
+    paddingVertical: Space.xl + 8,
+    gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    marginHorizontal: Space.xs,
+  },
+  groupAvatarWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    marginBottom: Space.xs,
+  },
+  groupAvatar: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  groupAvatarText: {
+    fontSize: 32,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+  },
+  groupNameV2: {
+    fontSize: Type.title.size,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+    marginTop: Space.sm,
+  },
+  groupDescV2: {
+    textAlign: 'center',
+    paddingHorizontal: Space.lg,
+    marginTop: 2,
+  },
+  botBadgeV2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
   },
   section: {
     gap: Space.sm,
