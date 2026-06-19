@@ -253,16 +253,26 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           displayName={displayUsername}
           username={targetProfile?.username}
           bio={targetProfile?.bio}
+          userLocation={targetProfile?.location}
+          memberSince={targetProfile?.createdAt ? new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }) : undefined}
           isSelf={isSelfProfile}
           onEditProfile={isSelfProfile ? () => navigation.navigate('EditProfile') : undefined}
           onShare={handleShare}
-          
           hideCover
           stats={[
             { label: 'Listings', value: profileListings.length },
-            
           ]}
         />
+
+        {/* Seller trust banner */}
+        {!isSelfProfile && (
+          <View style={styles.trustBanner}>
+            <Ionicons name="shield-checkmark-outline" size={16} color={Colors.success} />
+            <Text style={styles.trustBannerText}>
+              Thryftverse protects your purchase with secure payment and tracked delivery.
+            </Text>
+          </View>
+        )}
 
         {/* Index 1: Sticky Tabs */}
         <View style={styles.stickyTabWrapper}>
@@ -683,6 +693,26 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: TEXT,
     lineHeight: 22,
+  },
+  trustBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    padding: Space.md,
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    backgroundColor: Colors.surface,
+  },
+  trustBannerText: {
+    flex: 1,
+    fontSize: Typography.size.caption,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    letterSpacing: Typography.tracking.normal,
+    lineHeight: 18,
   },
 });
 
