@@ -109,6 +109,11 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.xxl,
     gap: Space.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 8,
   },
   handle: {
     width: 36,
@@ -172,6 +177,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   cancelText: {
     fontSize: Type.body.size,

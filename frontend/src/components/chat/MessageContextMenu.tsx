@@ -121,29 +121,31 @@ export function MessageContextMenu({
         ) : null}
 
         <View style={styles.actionsList}>
-          {actions.map((action) => (
-            <AnimatedPressable
-              key={action.id}
-              style={styles.actionRow}
-              onPress={() => handleAction(action.id)}
-              accessibilityRole="button"
-              accessibilityLabel={action.label}
-              activeOpacity={0.7}
-              scaleValue={0.98}
-              hapticFeedback="light"
-            >
-              <Ionicons
-                name={action.icon as any}
-                size={22}
-                color={action.destructive ? Colors.danger : Colors.textPrimary}
-              />
-              <BodyEmphasis
-                color={action.destructive ? Colors.danger : Colors.textPrimary}
-                style={styles.actionLabel}
+          {actions.map((action, index) => (
+            <React.Fragment key={action.id}>
+              {action.destructive && index > 0 && <View style={styles.destructiveDivider} />}
+              <AnimatedPressable
+                style={styles.actionRow}
+                onPress={() => handleAction(action.id)}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                activeOpacity={0.7}
+                scaleValue={0.98}
+                hapticFeedback="light"
               >
-                {action.label}
-              </BodyEmphasis>
-            </AnimatedPressable>
+                <Ionicons
+                  name={action.icon as any}
+                  size={22}
+                  color={action.destructive ? Colors.danger : Colors.textPrimary}
+                />
+                <BodyEmphasis
+                  color={action.destructive ? Colors.danger : Colors.textPrimary}
+                  style={styles.actionLabel}
+                >
+                  {action.label}
+                </BodyEmphasis>
+              </AnimatedPressable>
+            </React.Fragment>
           ))}
         </View>
 
@@ -217,5 +219,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     alignItems: 'center',
+  },
+  destructiveDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginHorizontal: Space.md,
   },
 });

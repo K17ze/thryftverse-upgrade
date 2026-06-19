@@ -89,9 +89,12 @@ export function EmojiReactionsBar({
       </View>
 
       {expanded && (
-        <View style={styles.expandedGrid}>
-          {EXTENDED_EMOJIS.map(renderChip)}
-        </View>
+        <>
+          <View style={styles.expandedDivider} />
+          <View style={styles.expandedGrid}>
+            {EXTENDED_EMOJIS.map(renderChip)}
+          </View>
+        </>
       )}
     </View>
   );
@@ -146,8 +149,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs + 2,
-    minHeight: 32,
+    paddingVertical: Space.xs + 3,
+    minHeight: 36,
   },
   chipActive: {
     borderColor: Colors.brand,
@@ -163,6 +166,12 @@ const styles = StyleSheet.create({
   plus: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
+  },
+  expandedDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginHorizontal: Space.xs,
+    marginTop: Space.xs,
   },
   expandedGrid: {
     flexDirection: 'row',
