@@ -456,7 +456,7 @@ export default function MyProfileScreen() {
 
         } catch {
 
-          show('Avatar upload requires media storage connection.', 'error');
+          show('Avatar upload failed. Tap to try again.', 'error');
 
           // Keep local URI for preview, but user knows it's not saved to backend.
 

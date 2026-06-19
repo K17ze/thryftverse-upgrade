@@ -4,10 +4,7 @@ import {
   Text,
   StyleSheet,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as Haptics from 'expo-haptics';
 import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,19 +14,11 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
-import { CachedImage } from '../components/CachedImage';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipProfileMedia, FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship';
 import { updateMyProfile } from '../services/profileApi';
-import { uploadMedia } from '../services/mediaUpload';
-import {
-  setStoredUserAvatar,
-  setStoredUserAvatarForUser,
-  setStoredUserCover,
-  setStoredUserCoverForUser,
-} from '../preferences/profileMediaPreferences';
-import { persistProfileMediaUri } from '../utils/profileMediaAsset';
+import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 
 
 export default function EditProfileScreen() {
@@ -54,8 +43,6 @@ export default function EditProfileScreen() {
   const [website, setWebsite] = useState(user?.website ?? '');
   
   const [isSaving, setIsSaving] = useState(false);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [websiteError, setWebsiteError] = useState('');
 
   const hasTextChanges =
@@ -64,13 +51,25 @@ export default function EditProfileScreen() {
     bio !== (user?.bio ?? '') ||
     website !== (user?.website ?? '');
 
-  const hasMediaChanges = React.useMemo(() => {
-    const avatarChanged = userAvatar !== (user?.avatar ?? null);
-    const coverChanged = userCover !== (user?.coverPhoto ?? null);
-    return avatarChanged || coverChanged;
-  }, [userAvatar, userCover, user]);
+  const {
+    avatar: avatarState,
+    cover: coverState,
+    pickAvatar,
+    pickCover,
+    retryAvatar,
+    retryCover,
+    revertAvatar,
+    revertCover,
+    hasUnsavedMedia,
+  } = useProfileMediaUpload(
+    currentUser?.id,
+    user?.avatar ?? null,
+    user?.coverPhoto ?? null,
+    updateUserAvatar,
+    updateUserCover
+  );
 
-  const hasChanges = hasTextChanges || hasMediaChanges;
+  const hasChanges = hasTextChanges || hasUnsavedMedia;
 
   const validateWebsite = useCallback((value: string) => {
     if (!value) {
@@ -85,74 +84,6 @@ export default function EditProfileScreen() {
     setWebsiteError('');
     return true;
   }, []);
-
-  const pickCover = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [3, 1],
-        quality: 0.9,
-      });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        const pickedUri = result.assets[0].uri;
-        setIsUploadingCover(true);
-        try {
-          const localUri = await persistProfileMediaUri(pickedUri, 'cover');
-          updateUserCover(localUri);
-          const publicUrl = await uploadMedia(pickedUri, 'covers');
-          await updateMyProfile({ coverPhoto: publicUrl });
-          updateUserCover(publicUrl);
-          await Promise.all([
-            setStoredUserCover(publicUrl),
-            currentUser?.id ? setStoredUserCoverForUser(currentUser.id, publicUrl) : Promise.resolve(),
-          ]).catch(() => {});
-          show('Cover updated', 'success');
-        } catch {
-          show('Cover upload failed. Try again.', 'error');
-        } finally {
-          setIsUploadingCover(false);
-        }
-      }
-    } catch {
-      show('Could not select cover photo', 'error');
-    }
-  };
-
-  const pickAvatar = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.9,
-      });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        const pickedUri = result.assets[0].uri;
-        setIsUploadingAvatar(true);
-        try {
-          const localUri = await persistProfileMediaUri(pickedUri, 'avatar');
-          updateUserAvatar(localUri);
-          const publicUrl = await uploadMedia(pickedUri, 'avatars');
-          await updateMyProfile({ avatar: publicUrl });
-          updateUserAvatar(publicUrl);
-          await Promise.all([
-            setStoredUserAvatar(publicUrl),
-            currentUser?.id ? setStoredUserAvatarForUser(currentUser.id, publicUrl) : Promise.resolve(),
-          ]).catch(() => {});
-          show('Avatar updated', 'success');
-        } catch {
-          show('Avatar upload failed. Try again.', 'error');
-        } finally {
-          setIsUploadingAvatar(false);
-        }
-      }
-    } catch {
-      show('Could not select profile photo', 'error');
-    }
-  };
 
   const handleSave = async () => {
     if (!validateWebsite(website)) return;
@@ -178,7 +109,6 @@ export default function EditProfileScreen() {
         });
       }
       await fetchMyProfile();
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       show('Profile updated', 'success');
       navigation.goBack();
     } catch (err: any) {
@@ -189,8 +119,8 @@ export default function EditProfileScreen() {
     }
   };
 
-  const currentAvatar = user?.avatar || userAvatar || '';
-  const currentCover = user?.coverPhoto || userCover || '';
+  const displayAvatar = avatarState.pendingLocal || avatarState.confirmedRemote || userAvatar || '';
+  const displayCover = coverState.pendingLocal || coverState.confirmedRemote || userCover || '';
 
   const handleDiscard = () => {
     if (!hasChanges) {
@@ -251,18 +181,45 @@ export default function EditProfileScreen() {
       {/* Hero Media Section */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
         <FlagshipProfileMedia
-          coverUri={currentCover}
-          avatarUri={currentAvatar}
+          coverUri={displayCover}
+          avatarUri={displayAvatar}
           isSelf
           onEditCover={pickCover}
           onEditAvatar={pickAvatar}
-          isUploadingCover={isUploadingCover}
-          isUploadingAvatar={isUploadingAvatar}
+          isUploadingCover={coverState.status === 'uploading'}
+          isUploadingAvatar={avatarState.status === 'uploading'}
           style={{ marginBottom: Space.lg }}
         />
+
+        {/* Avatar upload failure */}
+        {avatarState.status === 'failed' && (
+          <View style={styles.mediaErrorRow}>
+            <Ionicons name="warning-outline" size={16} color={Colors.danger} />
+            <Text style={styles.mediaErrorText}>{avatarState.error || 'Avatar upload failed'}</Text>
+            <AnimatedPressable onPress={retryAvatar} activeOpacity={0.8} scaleValue={0.96}>
+              <Text style={styles.mediaActionText}>Retry</Text>
+            </AnimatedPressable>
+            <AnimatedPressable onPress={revertAvatar} activeOpacity={0.8} scaleValue={0.96}>
+              <Text style={styles.mediaActionText}>Revert</Text>
+            </AnimatedPressable>
+          </View>
+        )}
+
+        {/* Cover upload failure */}
+        {coverState.status === 'failed' && (
+          <View style={styles.mediaErrorRow}>
+            <Ionicons name="warning-outline" size={16} color={Colors.danger} />
+            <Text style={styles.mediaErrorText}>{coverState.error || 'Cover upload failed'}</Text>
+            <AnimatedPressable onPress={retryCover} activeOpacity={0.8} scaleValue={0.96}>
+              <Text style={styles.mediaActionText}>Retry</Text>
+            </AnimatedPressable>
+            <AnimatedPressable onPress={revertCover} activeOpacity={0.8} scaleValue={0.96}>
+              <Text style={styles.mediaActionText}>Revert</Text>
+            </AnimatedPressable>
+          </View>
+        )}
       </Reanimated.View>
 
-      
       <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
         <FlagshipFormSection title="Identity">
           <PremiumTextField
@@ -320,5 +277,30 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.border,
     marginLeft: Space.md,
+  },
+  mediaErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    padding: Space.sm,
+    backgroundColor: 'rgba(255,77,77,0.06)',
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,77,77,0.15)',
+  },
+  mediaErrorText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.danger,
+    lineHeight: Type.caption.lineHeight,
+  },
+  mediaActionText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+    lineHeight: Type.caption.lineHeight,
   },
 });
