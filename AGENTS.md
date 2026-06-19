@@ -763,10 +763,3 @@ Never:
 * damage existing product depth for minimalism
 
 The correct outcome is a richer, clearer, more coherent and more trustworthy native product—not merely a smaller or cleaner codebase.
-
- explicitly not take out LOC's unnecessirily  while upgrading ! it will degrade  the project quality the LOC's might have been left for future upgradation ! if you find any check and analyse why thats there !
-
-
-
-
-
