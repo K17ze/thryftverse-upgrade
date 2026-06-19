@@ -1,4 +1,5 @@
 import { fetchJson } from '../lib/apiClient';
+import { MediaUploadAsset } from '../utils/mediaUploadAsset';
 
 export interface PresignResponse {
   bucket: string;
@@ -42,22 +43,38 @@ export async function uploadToPresignedUrl(
   }
 }
 
-export async function uploadMedia(fileUri: string, folder = 'uploads'): Promise<string> {
-  const ext = fileUri.split('.').pop()?.toLowerCase() ?? 'jpg';
-  const contentType =
-    ext === 'png'
-      ? 'image/png'
-      : ext === 'gif'
-      ? 'image/gif'
-      : ext === 'webp'
-      ? 'image/webp'
-      : ext === 'mp4'
-      ? 'video/mp4'
-      : ext === 'mov'
-      ? 'video/quicktime'
-      : 'image/jpeg';
+export async function uploadMedia(fileUri: string, folder?: string): Promise<string>;
+export async function uploadMedia(asset: MediaUploadAsset, folder?: string): Promise<string>;
+export async function uploadMedia(
+  source: string | MediaUploadAsset,
+  folder = 'uploads'
+): Promise<string> {
+  let fileUri: string;
+  let fileName: string;
+  let contentType: string;
 
-  const fileName = `media_${Date.now()}.${ext}`;
+  if (typeof source === 'string') {
+    fileUri = source;
+    const ext = fileUri.split('.').pop()?.toLowerCase() ?? 'jpg';
+    contentType =
+      ext === 'png'
+        ? 'image/png'
+        : ext === 'gif'
+        ? 'image/gif'
+        : ext === 'webp'
+        ? 'image/webp'
+        : ext === 'mp4'
+        ? 'video/mp4'
+        : ext === 'mov'
+        ? 'video/quicktime'
+        : 'image/jpeg';
+    fileName = `media_${Date.now()}_${Math.floor(Math.random() * 1_000_000).toString(36)}.${ext}`;
+  } else {
+    fileUri = source.uri;
+    fileName = source.fileName;
+    contentType = source.mimeType;
+  }
+
   const presign = await presignUpload(fileName, contentType, folder);
   await uploadToPresignedUrl(presign.url, fileUri, contentType);
   return presign.publicUrl;
