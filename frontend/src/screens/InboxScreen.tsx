@@ -18,9 +18,7 @@ import NetInfo from '@react-native-community/netinfo';
 
 import { Colors } from '../constants/colors';
 
-import { Typography } from '../theme/designTokens';
-
-import { useAppTheme } from '../theme/ThemeContext';
+import { TypeStyles } from '../theme/designTokens';
 
 import type { Conversation } from '../data/mockData';
 
@@ -45,13 +43,11 @@ import { fetchConversationsFromApi, deleteConversationOnApi } from '../services/
 
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 
-import { AppSegmentControl } from '../components/ui/AppSegmentControl';
-
 import { useHaptic } from '../hooks/useHaptic';
 
 import { Space, Radius, Type, Elevation } from '../theme/designTokens';
 
-import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
+import { Caption } from '../components/ui/Text';
 
 import { AvatarRing } from '../components/chat/AvatarRing';
 
@@ -144,8 +140,6 @@ export default function InboxScreen() {
   const [syncError, setSyncError] = useState('');
 
   const [isOffline, setIsOffline] = useState(false);
-
-  const { isDark } = useAppTheme();
 
   const scrollY = useSharedValue(0);
 
@@ -611,7 +605,7 @@ export default function InboxScreen() {
     ) : (
           <AvatarRing
         uri={item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined)}
-        size={52}
+        size={56}
         isUnread={item.unread}
             ringWidth={2}
         fallbackInitials={safeDisplayTitle === 'Thryft user' ? 'T' : safeDisplayTitle.slice(0, 2).toUpperCase()}
@@ -619,33 +613,39 @@ export default function InboxScreen() {
     );
 
     const requestRow = (
-      <View style={styles.rowInner}>
-        {avatarEl}
-        <View style={styles.messageBody}>
-          <View style={styles.messageTop}>
-            <Text style={[styles.nameText, styles.nameUnread]}>{displayTitle}</Text>
-            <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
-          </View>
-          <Caption color={Colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
-          <View style={styles.requestActions}>
-            <AnimatedPressable
-              style={styles.requestBtnDecline}
-              onPress={() => handleDeclineRequest(item.id)}
-              activeOpacity={0.85}
-              scaleValue={0.96}
-              hapticFeedback="light"
-            >
-              <Text style={styles.requestBtnDeclineText}>Decline</Text>
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.requestBtnAccept}
-              onPress={() => handleAcceptRequest(item.id)}
-              activeOpacity={0.85}
-              scaleValue={0.96}
-              hapticFeedback="medium"
-            >
-              <Text style={styles.requestBtnAcceptText}>Accept</Text>
-            </AnimatedPressable>
+      <View style={styles.requestRowSurface}>
+        <View style={styles.rowInner}>
+          {avatarEl}
+          <View style={styles.messageBody}>
+            <View style={styles.messageTop}>
+              <Text style={[styles.nameText, styles.nameUnread]}>{displayTitle}</Text>
+              <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
+            </View>
+            <Caption color={Colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
+            <View style={styles.requestActions}>
+              <AnimatedPressable
+                style={styles.requestBtnDecline}
+                onPress={() => handleDeclineRequest(item.id)}
+                activeOpacity={0.85}
+                scaleValue={0.96}
+                hapticFeedback="light"
+                accessibilityLabel="Decline message request"
+                accessibilityRole="button"
+              >
+                <Text style={styles.requestBtnDeclineText}>Decline</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.requestBtnAccept}
+                onPress={() => handleAcceptRequest(item.id)}
+                activeOpacity={0.85}
+                scaleValue={0.96}
+                hapticFeedback="medium"
+                accessibilityLabel="Accept message request"
+                accessibilityRole="button"
+              >
+                <Text style={styles.requestBtnAcceptText}>Accept</Text>
+              </AnimatedPressable>
+            </View>
           </View>
         </View>
       </View>
@@ -688,23 +688,27 @@ export default function InboxScreen() {
                   {item.participantIds?.length ?? 0} members
                 </Caption>
               )}
-              <Text style={[styles.snippet, item.unread && styles.snippetUnread]} numberOfLines={1}>
-                {item.draftText ? (
-                  <Text>
-                    <Text style={styles.draftLabel}>Draft: </Text>
+              {item.draftText ? (
+                <View style={styles.snippetWithBadge}>
+                  <View style={styles.draftBadge}>
+                    <Text style={styles.draftBadgeText}>Draft</Text>
+                  </View>
+                  <Text style={[styles.snippet, styles.snippetUnread]} numberOfLines={1}>
                     {item.draftText}
                   </Text>
-                ) : (
-                  item.lastMessage
-                )}
-              </Text>
+                </View>
+              ) : (
+                <Text style={[styles.snippet, item.unread && styles.snippetUnread]} numberOfLines={1}>
+                  {item.lastMessage}
+                </Text>
+              )}
               <View style={styles.rowMeta}>
                 {item.itemId && <ListingContextThumbnail itemId={item.itemId} />}
-                {item.unread ? (
+                {item.unread && !item.draftText ? (
                   <View style={styles.unreadDot} />
                 ) : null}
               </View>
-        </View>
+            </View>
           </View>
         </View>
       </AnimatedPressable>
@@ -723,7 +727,7 @@ export default function InboxScreen() {
             {conversationRow}
           </Swipeable>
         )}
-        <View style={styles.rowSeparator} />
+        {!isRequest && <View style={styles.rowSeparator} />}
       </View>
     );
   };
@@ -881,7 +885,7 @@ export default function InboxScreen() {
 
               <View key={i} style={styles.skeletonRow}>
 
-                <SkeletonLoader width={52} height={52} borderRadius={Radius.full} />
+                <SkeletonLoader width={56} height={56} borderRadius={Radius.full} />
 
                 <View style={styles.skeletonText}>
 
@@ -1139,14 +1143,6 @@ export default function InboxScreen() {
 
 const styles = StyleSheet.create({
 
-  container: {
-
-    flex: 1,
-
-    backgroundColor: Colors.background,
-
-  },
-
   header: {
 
     paddingHorizontal: Space.md + 4,
@@ -1156,28 +1152,6 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm + 4,
 
     gap: Space.sm + 4,
-
-  },
-
-  headerRow: {
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    justifyContent: 'space-between',
-
-  },
-
-  title: {
-
-    fontSize: Type.title.size,
-
-    fontFamily: Typography.family.bold,
-
-    color: Colors.textPrimary,
-
-    letterSpacing: -0.3,
 
   },
 
@@ -1237,12 +1211,12 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: Colors.background,
-    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
   listContent: {
@@ -1259,11 +1233,11 @@ const styles = StyleSheet.create({
 
     flexDirection: 'row',
 
-    gap: Space.sm + 6,
+    gap: Space.md - 4,
 
     alignItems: 'center',
 
-    paddingVertical: Space.md,
+    paddingVertical: Space.md - 2,
 
     paddingHorizontal: Space.md,
 
@@ -1275,7 +1249,7 @@ const styles = StyleSheet.create({
 
     backgroundColor: Colors.border,
 
-    marginLeft: 68,
+    marginLeft: 80,
 
     marginRight: Space.md,
 
@@ -1285,9 +1259,9 @@ const styles = StyleSheet.create({
 
   groupAvatar: {
 
-    width: 48,
+    width: 56,
 
-    height: 48,
+    height: 56,
 
     borderRadius: Radius.full,
 
@@ -1303,9 +1277,9 @@ const styles = StyleSheet.create({
 
   groupAvatarText: {
 
-    fontSize: 15,
+    fontSize: Type.subtitle.size,
 
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
 
     color: Colors.textPrimary,
 
@@ -1365,7 +1339,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.body.size,
 
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     color: Colors.textPrimary,
 
@@ -1375,7 +1349,7 @@ const styles = StyleSheet.create({
 
   nameUnread: {
 
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
 
   },
 
@@ -1397,11 +1371,11 @@ const styles = StyleSheet.create({
 
   memberCount: {
 
-    fontSize: 11,
+    fontSize: Type.meta.size,
 
     backgroundColor: Colors.surfaceAlt,
 
-    paddingHorizontal: 6,
+    paddingHorizontal: Space.sm - 2,
 
     paddingVertical: 1,
 
@@ -1417,7 +1391,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.regular,
+    fontFamily: TypeStyles.body.fontFamily,
 
     lineHeight: Type.caption.lineHeight,
 
@@ -1429,19 +1403,19 @@ const styles = StyleSheet.create({
 
     color: Colors.textPrimary,
 
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: Colors.textPrimary,
     marginLeft: Space.xs,
   },
   timeUnread: {
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textPrimary,
   },
   rowMeta: {
@@ -1450,8 +1424,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   contextThumb: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     borderRadius: Radius.sm,
     backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1461,15 +1435,41 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   contextThumbImage: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
   },
 
-  draftLabel: {
+  snippetWithBadge: {
+
+    flex: 1,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    gap: Space.sm,
+
+  },
+
+  draftBadge: {
+
+    backgroundColor: `${Colors.brand}1A`,
+
+    paddingHorizontal: Space.sm - 2,
+
+    paddingVertical: 2,
+
+    borderRadius: Radius.sm,
+
+  },
+
+  draftBadgeText: {
+
+    fontSize: Type.meta.size,
+
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     color: Colors.brand,
-
-    fontFamily: Typography.family.semibold,
 
   },
 
@@ -1495,7 +1495,7 @@ const styles = StyleSheet.create({
 
   swipeDelete: {
 
-    backgroundColor: 'rgba(255,77,77,0.12)',
+    backgroundColor: `${Colors.danger}1F`,
 
     justifyContent: 'center',
 
@@ -1503,13 +1503,15 @@ const styles = StyleSheet.create({
 
     width: 72,
 
-    borderRadius: Radius.xl,
+    borderRadius: Radius.md,
+
+    flex: 1,
 
   },
 
   swipePin: {
 
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: `${Colors.brand}14`,
 
     justifyContent: 'center',
 
@@ -1517,13 +1519,15 @@ const styles = StyleSheet.create({
 
     width: 72,
 
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
+
+    flex: 1,
 
   },
 
   swipeArchive: {
 
-    backgroundColor: 'rgba(59,130,246,0.12)',
+    backgroundColor: `${Colors.brand}14`,
 
     justifyContent: 'center',
 
@@ -1531,13 +1535,15 @@ const styles = StyleSheet.create({
 
     width: 72,
 
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
+
+    flex: 1,
 
   },
 
   swipeMute: {
 
-    backgroundColor: 'rgba(107,114,128,0.12)',
+    backgroundColor: `${Colors.textMuted}1F`,
 
     justifyContent: 'center',
 
@@ -1545,7 +1551,23 @@ const styles = StyleSheet.create({
 
     width: 72,
 
-    borderRadius: Radius.xl,
+    borderRadius: Radius.md,
+
+    flex: 1,
+
+  },
+
+  requestRowSurface: {
+
+    backgroundColor: Colors.surface,
+
+    borderRadius: Radius.lg,
+
+    marginHorizontal: Space.md,
+
+    marginVertical: Space.xs,
+
+    ...Elevation.subtle,
 
   },
 
@@ -1583,7 +1605,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     color: Colors.textPrimary,
 
@@ -1639,7 +1661,7 @@ const styles = StyleSheet.create({
 
     height: 24,
 
-    borderRadius: 12,
+    borderRadius: Radius.md,
 
     backgroundColor: Colors.textPrimary,
 
@@ -1651,11 +1673,11 @@ const styles = StyleSheet.create({
 
   requestsBadgeText: {
 
-    fontSize: 12,
+    fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
 
-    color: Colors.background,
+    color: Colors.textInverse,
 
   },
 
@@ -1669,13 +1691,13 @@ const styles = StyleSheet.create({
   },
   requestsBannerText: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   requestsBannerSub: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypeStyles.body.fontFamily,
     color: Colors.textMuted,
     marginTop: 2,
   },
@@ -1684,7 +1706,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     color: Colors.textInverse,
 
@@ -1718,7 +1740,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 
@@ -1750,7 +1772,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 
@@ -1760,7 +1782,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 
