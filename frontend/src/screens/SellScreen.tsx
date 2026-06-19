@@ -49,6 +49,7 @@ import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAut
 import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { filterImageUris } from '../utils/media';
 import { haptics } from '../utils/haptics';
+import { convertPickerAsset, validateMediaAssets } from '../utils/mediaUploadAsset';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { uploadMedia } from '../services/mediaUpload';
 import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
@@ -514,18 +515,40 @@ export default function SellScreen() {
         triggerShake();
         return;
       }
+      const remaining = 10 - photos.length;
+      if (remaining <= 0) {
+        setErrorMsg('Maximum 10 photos per listing.');
+        return;
+      }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        allowsMultipleSelection: false,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        allowsEditing: false,
         quality: 0.9,
       });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        appendPhotoUri(result.assets[0].uri);
-        setErrorMsg(null);
-        haptics.success();
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const assets = result.assets.map(convertPickerAsset);
+        const existing = photos.map((uri) => ({ id: uri, uri, fileName: 'existing', mimeType: 'image/jpeg', kind: 'image' as const }));
+        const validation = validateMediaAssets(assets, existing, { maxCount: remaining });
+
+        if (validation.errors.length > 0) {
+          const skipped = validation.errors
+            .filter((e) => e.field === 'count' || e.field === 'duplicate' || e.field === 'mimeType')
+            .map((e) => e.message)
+            .join('. ');
+          if (skipped) setErrorMsg(skipped);
+        }
+
+        for (const asset of validation.assets) {
+          appendPhotoUri(asset.uri);
+        }
+        if (validation.assets.length > 0) {
+          setErrorMsg(null);
+          haptics.success();
+        }
       }
     } catch { /* noop */ }
-  }, [appendPhotoUri]);
+  }, [appendPhotoUri, photos.length]);
 
   const handlePickFromCamera = useCallback(async () => {
     try {
@@ -535,8 +558,12 @@ export default function SellScreen() {
         triggerShake();
         return;
       }
+      if (photos.length >= 10) {
+        setErrorMsg('Maximum 10 photos per listing.');
+        return;
+      }
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.9,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
@@ -545,7 +572,7 @@ export default function SellScreen() {
         haptics.success();
       }
     } catch { /* noop */ }
-  }, [appendPhotoUri]);
+  }, [appendPhotoUri, photos.length]);
 
   const removePhoto = useCallback((index: number) => {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
@@ -937,6 +964,11 @@ export default function SellScreen() {
                 <Image source={{ uri: photos[0] }} style={styles.heroImage as any} resizeMode="cover" />
                 <View style={styles.heroCoverBadge}>
                   <T.CaptionEmphasis color="#fff" style={{ fontSize: 10 }}>COVER</T.CaptionEmphasis>
+                </View>
+                <View style={styles.mediaCountBadge}>
+                  <T.CaptionEmphasis color="#fff" style={{ fontSize: 10 }}>
+                    {photos.length}/10
+                  </T.CaptionEmphasis>
                 </View>
                 <AnimatedPressable style={styles.heroRemoveBtn} onPress={() => removePhoto(0)}>
                   <Ionicons name="close-circle" size={24} color="#fff" />
@@ -1748,6 +1780,15 @@ const styles = StyleSheet.create({
     right: 12,
     backgroundColor: 'rgba(0,0,0,0.4)',
     borderRadius: 12,
+  },
+  mediaCountBadge: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
   },
 
   /* ── identity ── */
