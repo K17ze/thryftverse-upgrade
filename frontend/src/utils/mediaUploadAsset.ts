@@ -207,10 +207,21 @@ export interface ListingMediaDraftItem {
   uri: string;
   kind: 'image' | 'video';
   source: 'local' | 'remote';
-  fileName?: string;
-  mimeType?: string;
+  fileName: string;
+  mimeType: string;
+  fileSize?: number;
+  width?: number;
+  height?: number;
+  durationMs?: number;
   publicUrl?: string;
-  status: 'draft' | 'pending' | 'uploading' | 'uploaded' | 'failed';
+  status:
+    | 'draft'
+    | 'pending'
+    | 'preparing'
+    | 'uploading'
+    | 'uploaded'
+    | 'failed'
+    | 'cancelled';
   error?: string;
 }
 

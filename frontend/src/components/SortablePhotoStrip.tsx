@@ -23,16 +23,32 @@ const ITEM_SIZE = 80;
 const SPACING = 12;
 const TOTAL_SIZE = ITEM_SIZE + SPACING;
 
-interface Props {
-  photos: string[];
-  onReorder: (newOrder: string[]) => void;
-  onAddPhoto: () => void;
+export type MediaItemStatus =
+  | 'draft'
+  | 'pending'
+  | 'preparing'
+  | 'uploading'
+  | 'uploaded'
+  | 'failed'
+  | 'cancelled';
+
+export interface MediaStripItem {
+  id: string;
+  uri: string;
+  kind?: 'image' | 'video';
+  status?: MediaItemStatus;
+  error?: string | null;
 }
 
-// Helper to get object values sorted by key (not needed strictly if we map properly)
-// We will just manage an array of IDs sorted.
+interface Props {
+  items: MediaStripItem[];
+  onReorder: (newOrder: MediaStripItem[]) => void;
+  onAddPhoto: () => void;
+  onRemoveItem?: (id: string) => void;
+  onRetryItem?: (id: string) => void;
+}
 
-export function SortablePhotoStrip({ photos, onReorder, onAddPhoto }: Props) {
+export function SortablePhotoStrip({ items, onReorder, onAddPhoto, onRemoveItem, onRetryItem }: Props) {
   return (
     <View style={styles.container}>
       <Reanimated.ScrollView
@@ -41,19 +57,21 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto }: Props) {
         contentContainerStyle={{ paddingHorizontal: 20 }}
       >
         <View style={{ flexDirection: 'row', position: 'relative', height: ITEM_SIZE }}>
-          {photos.map((photo, index) => (
+          {items.map((item, index) => (
             <SortableItem
-              key={photo}
-              id={photo}
+              key={item.id}
+              item={item}
               index={index}
-              total={photos.length}
-              photos={photos}
+              total={items.length}
+              items={items}
               onReorder={onReorder}
+              onRemoveItem={onRemoveItem}
+              onRetryItem={onRetryItem}
             />
           ))}
           {/* Add more button */}
           <AnimatedPressable
-            style={[styles.addBtn, { left: photos.length * TOTAL_SIZE }]}
+            style={[styles.addBtn, { left: items.length * TOTAL_SIZE }]}
             onPress={() => {
               haptics.tap();
               onAddPhoto();
@@ -70,20 +88,41 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto }: Props) {
 }
 
 interface ItemProps {
-  id: string;
+  item: MediaStripItem;
   index: number;
   total: number;
-  photos: string[];
-  onReorder: (newOrder: string[]) => void;
+  items: MediaStripItem[];
+  onReorder: (newOrder: MediaStripItem[]) => void;
+  onRemoveItem?: (id: string) => void;
+  onRetryItem?: (id: string) => void;
 }
 
-function SortableItem({ id, index, total, photos, onReorder }: ItemProps) {
-  const isVideo = isVideoUri(id);
+function StatusBadge({ status }: { status?: MediaItemStatus }) {
+  if (!status || status === 'draft' || status === 'uploaded') return null;
+  const label =
+    status === 'pending' ? 'Pending'
+    : status === 'preparing' ? 'Preparing'
+    : status === 'uploading' ? 'Uploading'
+    : status === 'failed' ? 'Failed'
+    : status === 'cancelled' ? 'Cancelled'
+    : '';
+  const bg =
+    status === 'failed' ? Colors.danger
+    : status === 'cancelled' ? Colors.textMuted
+    : Colors.brand;
+  return (
+    <View style={[styles.statusBadge, { backgroundColor: bg }]}>
+      <Text style={styles.statusText}>{label}</Text>
+    </View>
+  );
+}
+
+function SortableItem({ item, index, total, items, onReorder, onRemoveItem, onRetryItem }: ItemProps) {
+  const isVideo = item.kind === 'video' || isVideoUri(item.uri);
   const isDragging = useSharedValue(false);
   const position = useSharedValue(index * TOTAL_SIZE);
   const zIndex = useSharedValue(0);
 
-  // When props update (like after drop), update position gently
   useAnimatedReaction(
     () => index,
     (currIndex) => {
@@ -110,8 +149,7 @@ function SortableItem({ id, index, total, photos, onReorder }: ItemProps) {
       });
 
       if (newIndex !== index) {
-        // Trigger React re-order on JS thread
-        const newOrder = [...photos];
+        const newOrder = [...items];
         const [moved] = newOrder.splice(index, 1);
         newOrder.splice(newIndex, 0, moved);
         runOnJS(onReorder)(newOrder);
@@ -137,7 +175,7 @@ function SortableItem({ id, index, total, photos, onReorder }: ItemProps) {
       <Reanimated.View style={[styles.itemWrap, animatedStyle]}>
         {isVideo ? (
           <Video
-            source={{ uri: id }}
+            source={{ uri: item.uri }}
             style={styles.image}
             resizeMode={ResizeMode.COVER}
             shouldPlay={false}
@@ -145,13 +183,35 @@ function SortableItem({ id, index, total, photos, onReorder }: ItemProps) {
             isLooping={false}
           />
         ) : (
-          <Image source={{ uri: id }} style={styles.image} />
+          <Image source={{ uri: item.uri }} style={styles.image} />
         )}
 
         {isVideo && (
           <View style={styles.videoBadge}>
             <Ionicons name="videocam" size={11} color="#fff" />
           </View>
+        )}
+
+        <StatusBadge status={item.status} />
+
+        {item.status === 'failed' && onRetryItem && (
+          <AnimatedPressable
+            style={styles.retryBtn}
+            onPress={() => onRetryItem(item.id)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="refresh" size={14} color="#fff" />
+          </AnimatedPressable>
+        )}
+
+        {onRemoveItem && (
+          <AnimatedPressable
+            style={styles.removeBtn}
+            onPress={() => onRemoveItem(item.id)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="close-circle" size={18} color="#fff" />
+          </AnimatedPressable>
         )}
 
         {index === 0 && (
@@ -219,6 +279,41 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: 10,
     fontFamily: Typography.family.bold,
+  },
+  statusBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 9,
+    fontFamily: Typography.family.bold,
+  },
+  retryBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 28,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hintText: {
     color: Colors.textMuted,

@@ -49,7 +49,7 @@ import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAut
 import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { filterImageUris } from '../utils/media';
 import { haptics } from '../utils/haptics';
-import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
+import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem, MediaUploadAsset } from '../utils/mediaUploadAsset';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { uploadMedia } from '../services/mediaUpload';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
@@ -268,19 +268,36 @@ export default function SellScreen() {
   /* ── draft sync on mount ── */
   useEffect(() => {
     if (sellDraft.mediaDraftItems && sellDraft.mediaDraftItems.length > 0) {
-      setMediaDraftItems(sellDraft.mediaDraftItems);
-      setPhotos(sellDraft.mediaDraftItems.map((m) => m.publicUrl || m.uri));
+      const migrated = sellDraft.mediaDraftItems.map((m) => {
+        const ext = m.uri.split('.').pop()?.toLowerCase() || 'jpg';
+        const inferredMime = m.mimeType || (ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : ext === 'heic' ? 'image/heic' : ext === 'mp4' ? 'video/mp4' : ext === 'mov' ? 'video/quicktime' : 'image/jpeg');
+        return {
+          ...m,
+          fileName: m.fileName || `migrated_${Date.now()}_${m.id.slice(-4)}.${ext}`,
+          mimeType: inferredMime,
+          kind: m.kind || (inferredMime.startsWith('video') ? 'video' : 'image') as 'image' | 'video',
+        };
+      });
+      setMediaDraftItems(migrated);
+      setPhotos(migrated.map((m) => m.publicUrl || m.uri));
     } else if (sellDraft.photos) {
       setPhotos(sellDraft.photos);
       setMediaDraftItems(
-        sellDraft.photos.map((uri) => ({
-          id: `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          uri,
-          kind: 'image' as const,
-          source: uri.startsWith('http') ? ('remote' as const) : ('local' as const),
-          status: uri.startsWith('http') ? ('uploaded' as const) : ('draft' as const),
-          publicUrl: uri.startsWith('http') ? uri : undefined,
-        }))
+        sellDraft.photos.map((uri) => {
+          const isRemote = uri.startsWith('http');
+          const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
+          const inferredMime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : ext === 'heic' ? 'image/heic' : ext === 'mp4' ? 'video/mp4' : ext === 'mov' ? 'video/quicktime' : 'image/jpeg';
+          return {
+            id: `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            uri,
+            kind: (inferredMime.startsWith('video') ? 'video' : 'image') as 'image' | 'video',
+            source: isRemote ? ('remote' as const) : ('local' as const),
+            fileName: `legacy_${Date.now()}.${ext}`,
+            mimeType: inferredMime,
+            status: isRemote ? ('uploaded' as const) : ('draft' as const),
+            publicUrl: isRemote ? uri : undefined,
+          };
+        })
       );
     }
     if (sellDraft.title) setTitle(sellDraft.title);
@@ -528,23 +545,29 @@ export default function SellScreen() {
   }, []);
 
   /* ── photo handling ── */
-  const appendPhotoUri = useCallback((uri: string) => {
+  const appendMediaAsset = useCallback((asset: MediaUploadAsset) => {
     setPhotos((prev) => {
-      const next = [...prev, uri].slice(0, 10);
+      const next = [...prev, asset.uri].slice(0, 10);
       if (listingMode === 'co_own' && coOwnEnabled && authPhotos.length === 0) {
         setAuthPhotos(filterImageUris(next, 2));
       }
       return next;
     });
     setMediaDraftItems((prev) => {
-      if (prev.some((m) => m.uri === uri)) return prev;
+      if (prev.some((m) => m.uri === asset.uri)) return prev;
       const next = [
         ...prev,
         {
-          id: `sell_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          uri,
-          kind: 'image' as const,
+          id: asset.id,
+          uri: asset.uri,
+          kind: asset.kind,
           source: 'local' as const,
+          fileName: asset.fileName,
+          mimeType: asset.mimeType,
+          fileSize: asset.fileSize,
+          width: asset.width,
+          height: asset.height,
+          durationMs: asset.durationMs,
           status: 'draft' as const,
         },
       ].slice(0, 10);
@@ -579,7 +602,7 @@ export default function SellScreen() {
         }
 
         for (const asset of validation.assets) {
-          appendPhotoUri(asset.uri);
+          appendMediaAsset(asset);
         }
         if (validation.assets.length > 0) {
           haptics.success();
@@ -588,7 +611,7 @@ export default function SellScreen() {
     } catch (e) {
       setErrorMsg('Could not open photo library. Try again.');
     }
-  }, [appendPhotoUri, photos]);
+  }, [appendMediaAsset, photos]);
 
   const handlePickFromCamera = useCallback(async () => {
     try {
@@ -610,7 +633,7 @@ export default function SellScreen() {
           setErrorMsg(validation.errors.map((e) => e.message).join('. '));
         }
         for (const a of validation.assets) {
-          appendPhotoUri(a.uri);
+          appendMediaAsset(a);
         }
         if (validation.assets.length > 0) {
           haptics.success();
@@ -619,16 +642,13 @@ export default function SellScreen() {
     } catch (e) {
       setErrorMsg('Could not open camera. Try again.');
     }
-  }, [appendPhotoUri, photos]);
+  }, [appendMediaAsset, photos]);
 
-  const removePhoto = useCallback((index: number) => {
-    setPhotos((prev) => {
-      const removedUri = prev[index];
-      setMediaDraftItems((md) => md.filter((m) => m.uri !== removedUri));
-      return prev.filter((_, i) => i !== index);
-    });
+  const removePhotoById = useCallback((id: string) => {
+    setMediaDraftItems((prev) => prev.filter((m) => m.id !== id));
+    setPhotos((prev) => prev.filter((uri) => mediaDraftItems.find((m) => m.id === id)?.uri !== uri));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
+  }, [mediaDraftItems]);
 
   /* ── price handling ── */
   const handlePriceChange = useCallback((text: string) => {
@@ -1071,22 +1091,28 @@ export default function SellScreen() {
                     {photos.length}/10
                   </T.CaptionEmphasis>
                 </View>
-                <AnimatedPressable style={styles.heroRemoveBtn} onPress={() => removePhoto(0)}>
+                <AnimatedPressable style={styles.heroRemoveBtn} onPress={() => { const firstId = mediaDraftItems[0]?.id; if (firstId) removePhotoById(firstId); }}>
                   <Ionicons name="close-circle" size={24} color="#fff" />
                 </AnimatedPressable>
               </Animated.View>
 
               <View style={{ marginTop: 12 }}>
                 <SortablePhotoStrip
-                  photos={photos}
+                  items={mediaDraftItems.map((m) => ({
+                    id: m.id,
+                    uri: m.publicUrl || m.uri,
+                    kind: m.kind,
+                    status: m.status,
+                    error: m.error || null,
+                  }))}
                   onReorder={(newOrder) => {
-                    setPhotos(newOrder);
-                    setMediaDraftItems((prev) => {
-                      const uriToItem = new Map(prev.map((m) => [m.uri, m]));
-                      return newOrder.map((uri) => uriToItem.get(uri) || { id: `reorder_${uri}`, uri, kind: 'image' as const, source: 'local' as const, status: 'draft' as const }).filter(Boolean);
-                    });
+                    const idToItem = new Map(mediaDraftItems.map((m) => [m.id, m]));
+                    const reordered = newOrder.map((item) => idToItem.get(item.id)).filter(Boolean) as ListingMediaDraftItem[];
+                    setMediaDraftItems(reordered);
+                    setPhotos(reordered.map((m) => m.publicUrl || m.uri));
                   }}
                   onAddPhoto={handlePickFromLibrary}
+                  onRemoveItem={removePhotoById}
                 />
               </View>
 
