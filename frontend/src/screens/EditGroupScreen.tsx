@@ -124,13 +124,14 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Edit Group" onBack={handleBack} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Avatar preview */}
+        {/* Group preview */}
         <View style={styles.identity}>
           <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
             <Text style={styles.avatarText}>{initials || 'G'}</Text>
           </View>
+          <BodyEmphasis numberOfLines={1}>{name.trim() || 'Untitled group'}</BodyEmphasis>
           <Caption color={Colors.textMuted}>
-            Avatar editing requires backend support.
+            {conversation.participantIds?.length ?? 0} member{(conversation.participantIds?.length ?? 0) === 1 ? '' : 's'}
           </Caption>
         </View>
 

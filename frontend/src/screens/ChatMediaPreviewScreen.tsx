@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
-  Pressable,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -17,14 +16,14 @@ import { Video, ResizeMode } from '../components/compat/Video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Type, TypeStyles, Radius, Elevation } from '../theme/designTokens';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
 type Props = StackScreenProps<RootStackParamList, 'ChatMediaPreview'>;
 
 export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
-  const { mediaUri, mediaType = 'image', senderLabel, timestamp, messageId } = route.params;
+  const { mediaUri, mediaType = 'image', senderLabel, timestamp } = route.params;
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const mediaSize = { width, height: height * 0.72 };
 
   const [imageError, setImageError] = useState(false);
   const [videoError, setVideoError] = useState(false);
@@ -32,7 +31,7 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
   const hasUri = Boolean(mediaUri && mediaUri.length > 0);
 
   const renderMissingState = () => (
-    <View style={styles.errorWrap}>
+    <View style={[styles.errorWrap, mediaSize]}>
       <Ionicons name="image-outline" size={48} color="rgba(255,255,255,0.4)" />
       <Text style={styles.errorText}>Media unavailable</Text>
       <Text style={styles.errorSub}>This media could not be loaded.</Text>
@@ -58,7 +57,7 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
     return (
       <CachedImage
         uri={mediaUri}
-        style={styles.mediaImage}
+        style={mediaSize}
         contentFit="contain"
         transition={200}
       />
@@ -72,10 +71,8 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
     return (
       <Video
         source={{ uri: mediaUri }}
-        style={styles.mediaImage}
+        style={mediaSize}
         resizeMode={ResizeMode.CONTAIN}
-        shouldPlay
-        isLooping
         useNativeControls
         onError={() => setVideoError(true)}
       />
@@ -102,14 +99,13 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
         </AnimatedPressable>
 
         {/* Media */}
-        <Pressable
-          style={styles.mediaWrap}
-          onPress={() => navigation.goBack()}
+        <View
+          style={[styles.mediaWrap, mediaSize]}
           accessibilityLabel="Media preview"
           accessibilityRole="image"
         >
           {mediaType === 'video' ? renderVideo() : renderImage()}
-        </Pressable>
+        </View>
 
         {/* Context overlay */}
         {(senderLabel || timestamp) && (
@@ -119,9 +115,6 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
             )}
             {timestamp && (
               <Text style={styles.contextTime}>{timestamp}</Text>
-            )}
-            {messageId && (
-              <Text style={styles.contextId}>ID: {messageId.slice(-8)}</Text>
             )}
           </View>
         )}
@@ -151,18 +144,10 @@ const styles = StyleSheet.create({
     ...Elevation.subtle,
   },
   mediaWrap: {
-    width: SCREEN_W,
-    height: SCREEN_H * 0.7,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  mediaImage: {
-    width: SCREEN_W,
-    height: SCREEN_H * 0.7,
-  },
   errorWrap: {
-    width: SCREEN_W,
-    height: SCREEN_H * 0.7,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
@@ -212,10 +197,5 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
-  },
-  contextId: {
-    fontSize: Type.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: 'rgba(255,255,255,0.4)',
   },
 });

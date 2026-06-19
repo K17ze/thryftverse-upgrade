@@ -34,6 +34,8 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const toggleMuted = useStore((state) => state.toggleMutedConversation);
   const blockedUsers = useStore((state) => state.blockedUsers);
   const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
+  const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
+  const participantNameLookup = useStore((state) => (state as any).participantNameLookup as Map<string, string> | undefined);
 
   const conversation = useMemo(
     () => conversations.find((c) => c.id === conversationId),
@@ -102,8 +104,14 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     }
   };
 
-  const displayName = conversation.title ?? 'Thryft user';
-  const avatarUrl = conversation.avatar ?? null;
+  const displayName =
+    (counterpartyId ? participantNameLookup?.get(counterpartyId) : undefined) ??
+    conversation.title ??
+    'Thryft user';
+  const avatarUrl =
+    conversation.avatar ??
+    (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? null : null);
+  const handle = counterpartyId ? `@${counterpartyId.slice(0, 12)}` : 'Direct message';
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Conversation Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
@@ -111,7 +119,16 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Partner Identity */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
-          <View style={styles.identityCard}>
+          <AnimatedPressable
+            style={styles.identityCard}
+            onPress={handleViewProfile}
+            disabled={!counterpartyId}
+            activeOpacity={0.85}
+            scaleValue={0.98}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={`View ${displayName}'s profile`}
+          >
             <View style={styles.avatarRing}>
               {avatarUrl ? (
                 <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
@@ -122,8 +139,8 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               )}
             </View>
             <BodyEmphasis style={styles.name} numberOfLines={1}>{displayName}</BodyEmphasis>
-            <Caption color={Colors.textMuted}>Direct message</Caption>
-          </View>
+            <Caption color={Colors.textMuted}>{handle}</Caption>
+          </AnimatedPressable>
         </Reanimated.View>
 
         {/* Profile */}

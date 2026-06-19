@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,12 +93,17 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         {/* Search */}
         <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
-          <Text
+          <TextInput
             style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search members..."
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
             accessibilityLabel="Search members"
-          >
-            {searchQuery || 'Search members...'}
-          </Text>
+          />
           {searchQuery.length > 0 && (
             <AnimatedPressable
               onPress={() => setSearchQuery('')}
@@ -131,8 +137,8 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                       <BodyEmphasis>{member.name}</BodyEmphasis>
                       {roleBadge(member.role)}
                     </View>
-                    {member.isMe && (
-                      <Caption color={Colors.textMuted}>Group creator</Caption>
+                    {member.role === 'owner' && (
+                      <Caption color={Colors.textMuted}>{member.isMe ? 'You · Group creator' : 'Group creator'}</Caption>
                     )}
                   </View>
                   <AnimatedPressable
