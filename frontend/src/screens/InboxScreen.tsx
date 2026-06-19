@@ -617,8 +617,8 @@ export default function InboxScreen() {
     );
 
     const requestRow = (
-      <View style={styles.requestRowSurface}>
-        <View style={styles.rowInner}>
+      <View style={styles.requestRowAccent}>
+        <View style={styles.requestRowInner}>
           {avatarEl}
           <View style={styles.messageBody}>
             <View style={styles.messageTop}>
@@ -680,12 +680,19 @@ export default function InboxScreen() {
         <View style={[styles.rowInner, item.unread && styles.rowInnerUnread]}>
           <View style={styles.avatarWrap}>{avatarEl}</View>
           <View style={styles.messageBody}>
-            <View style={styles.titleRow}>
-              <Text style={[styles.nameText, item.unread && styles.nameUnread]} numberOfLines={1}>
-                {displayTitle}
-              </Text>
-              {item.isPinned && <Ionicons name="pin" size={12} color={Colors.brand} style={styles.pinIcon} />}
-              {isMuted && <Ionicons name="volume-mute" size={12} color={Colors.textMuted} style={styles.pinIcon} />}
+            <View style={styles.messageTop}>
+              <View style={styles.titleRow}>
+                <Text style={[styles.nameText, item.unread && styles.nameUnread]} numberOfLines={1}>
+                  {displayTitle}
+                </Text>
+                {item.isPinned && <Ionicons name="pin" size={12} color={Colors.brand} style={styles.pinIcon} />}
+                {isMuted && <Ionicons name="volume-mute" size={12} color={Colors.textMuted} style={styles.pinIcon} />}
+              </View>
+              <View style={styles.rowMeta}>
+                <Caption color={item.unread ? Colors.textPrimary : Colors.textMuted} style={item.unread && styles.timeUnread}>
+                  {item.lastMessageTime}
+                </Caption>
+              </View>
             </View>
             <View style={styles.snippetRow}>
               {isGroup && (
@@ -707,16 +714,13 @@ export default function InboxScreen() {
                   {item.lastMessage}
                 </Text>
               )}
-            </View>
-          </View>
-          <View style={styles.rowMeta}>
-            <Caption color={item.unread ? Colors.textPrimary : Colors.textMuted} style={item.unread && styles.timeUnread}>
-              {item.lastMessageTime}
-            </Caption>
-            <View style={styles.rowMetaBottom}>
-              {item.itemId && <ListingContextThumbnail itemId={item.itemId} />}
               {item.unread && !item.draftText ? (
-                <View style={styles.unreadDot} />
+                <View style={styles.unreadPill}>
+                  <Text style={styles.unreadPillText}>New</Text>
+                </View>
+              ) : null}
+              {item.itemId && !item.unread ? (
+                <ListingContextThumbnail itemId={item.itemId} />
               ) : null}
             </View>
           </View>
@@ -920,51 +924,30 @@ export default function InboxScreen() {
             {segment === 'all' && messageRequests.length > 0 && (
 
               <Reanimated.View entering={FadeInDown.duration(300)} style={styles.requestsBanner}>
-
+                <View style={styles.requestsBannerRule} />
                 <AnimatedPressable
-
                   onPress={() => navigation.navigate('MessageRequests')}
-
-                  activeOpacity={0.7}
-
+                  activeOpacity={0.85}
                   scaleValue={0.98}
-
                   hapticFeedback="light"
-
                   accessibilityLabel={`${messageRequests.length} message requests`}
-
                   accessibilityRole="button"
-
+                  style={styles.requestsBannerTap}
                 >
-
-                  <View style={styles.requestsBannerInner}>
-
-                    <View style={styles.requestsIconWrap}>
-
-                      <Ionicons name="mail-unread-outline" size={20} color={Colors.brand} />
-
+                  <View style={styles.requestsAvatarStack}>
+                    <View style={styles.requestsAvatar}>
+                      <Ionicons name="mail-unread-outline" size={16} color={Colors.brand} />
                     </View>
-
-                    <View style={{ flex: 1 }}>
-
-                      <Text style={styles.requestsBannerText}>Message requests</Text>
-
-                      <Text style={styles.requestsBannerSub}>{messageRequests.length} pending</Text>
-
-                    </View>
-
-                    <View style={styles.requestsBadge}>
-
-                      <Text style={styles.requestsBadgeText}>{messageRequests.length}</Text>
-
-                    </View>
-
-                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-
                   </View>
-
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.requestsBannerText}>Requests</Text>
+                    <Text style={styles.requestsBannerSub}>{messageRequests.length} pending</Text>
+                  </View>
+                  <View style={styles.requestsBadge}>
+                    <Text style={styles.requestsBadgeText}>{messageRequests.length}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
                 </AnimatedPressable>
-
               </Reanimated.View>
 
             )}
@@ -1272,8 +1255,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   filterChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1284,7 +1267,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.textPrimary,
   },
   filterChipText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textSecondary,
   },
@@ -1309,9 +1292,9 @@ const styles = StyleSheet.create({
 
     gap: Space.md - 4,
 
-    alignItems: 'center',
+    alignItems: 'flex-start',
 
-    paddingVertical: Space.sm,
+    paddingVertical: Space.md - 2,
 
     paddingHorizontal: Space.md,
 
@@ -1480,6 +1463,18 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: Colors.textPrimary,
+  },
+  unreadPill: {
+    backgroundColor: Colors.textPrimary,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: Space.xs,
+  },
+  unreadPillText: {
+    fontSize: 10,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textInverse,
   },
   timeUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
@@ -1656,6 +1651,22 @@ const styles = StyleSheet.create({
     ...Elevation.subtle,
 
   },
+  requestRowAccent: {
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.brand,
+    backgroundColor: `${Colors.brand}06`,
+    marginHorizontal: Space.md,
+    marginVertical: Space.xs,
+    borderRadius: Radius.sm,
+  },
+  requestRowInner: {
+    flexDirection: 'row',
+    gap: Space.md - 4,
+    alignItems: 'center',
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingLeft: Space.md - 2,
+  },
 
   requestActions: {
 
@@ -1719,6 +1730,30 @@ const styles = StyleSheet.create({
 
     marginBottom: Space.sm,
 
+  },
+  requestsBannerRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginBottom: Space.sm,
+    marginHorizontal: Space.md,
+  },
+  requestsBannerTap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: 10,
+    paddingHorizontal: Space.md,
+  },
+  requestsAvatarStack: {
+    flexDirection: 'row',
+  },
+  requestsAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: `${Colors.brand}12`,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   requestsBannerInner: {
