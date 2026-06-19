@@ -1,6 +1,8 @@
 import React from 'react';
 import { Linking, View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -185,13 +187,6 @@ export default function SettingsScreen({ navigation }: Props) {
         <FlagshipHeader
           title="Settings"
           onBack={() => navigation.goBack()}
-          rightAction={
-            currentUser ? (
-              <View style={styles.headerMeta}>
-                <Text style={styles.headerMetaText}>{currentUser.username}</Text>
-              </View>
-            ) : undefined
-          }
         />
       }
     >
@@ -207,42 +202,80 @@ export default function SettingsScreen({ navigation }: Props) {
         </View>
       </Reanimated.View>
 
-      {/* Account Centre */}
+      {/* Identity First */}
       {showSection('Account Centre') && (
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
-          <SettingsSection title="Account Centre" noCard>
-            <View style={[styles.accountCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-              <IdentityCard
-                user={currentUser}
+          <View style={[styles.identitySurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+            <IdentityCard
+              user={currentUser}
+              onPress={() => navigation.navigate('EditProfile')}
+              variant="commanding"
+            />
+            <View style={styles.quickActions}>
+              <AnimatedPressable
+                style={styles.quickAction}
                 onPress={() => navigation.navigate('EditProfile')}
-              />
-              <View style={[styles.accountDivider, { backgroundColor: Colors.border }]} />
-              <SettingsRow
-                icon="location-outline"
-                title="Addresses"
-                value={savedAddress ? 'Manage' : 'None'}
-                onPress={() => navigation.navigate('Postage')}
-                isFirst
-              />
-              <SettingsRow
-                icon="shirt-outline"
-                title="Closet"
-                subtitle="Saved, Wishlist & Collections"
-                onPress={() => navigation.navigate('Closet')}
-                isLast
-              />
+                activeOpacity={0.85}
+                scaleValue={0.97}
+                hapticFeedback="light"
+              >
+                <Ionicons name="create-outline" size={18} color={Colors.textPrimary} />
+                <Text style={styles.quickActionText}>Edit Profile</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.quickAction}
+                onPress={() => navigation.navigate('Wallet')}
+                activeOpacity={0.85}
+                scaleValue={0.97}
+                hapticFeedback="light"
+              >
+                <Ionicons name="wallet-outline" size={18} color={Colors.textPrimary} />
+                <Text style={styles.quickActionText}>Wallet</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.quickAction}
+                onPress={() => navigation.navigate('AccountSettings')}
+                activeOpacity={0.85}
+                scaleValue={0.97}
+                hapticFeedback="light"
+              >
+                <Ionicons name="shield-checkmark-outline" size={18} color={Colors.textPrimary} />
+                <Text style={styles.quickActionText}>Security</Text>
+              </AnimatedPressable>
             </View>
+          </View>
+        </Reanimated.View>
+      )}
+
+      {/* Account Centre */}
+      {showSection('Account Centre') && (
+        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          <SettingsSection title="Account" noCard>
+            <SettingsRow
+              icon="location-outline"
+              title="Addresses"
+              subtitle={savedAddress ? 'Manage delivery addresses' : 'None saved'}
+              value={savedAddress ? 'Manage' : 'Add'}
+              onPress={() => navigation.navigate('Postage')}
+              isFirst
+            />
+            <SettingsRow
+              icon="shirt-outline"
+              title="Closet"
+              subtitle="Saved, Wishlist & Collections"
+              onPress={() => navigation.navigate('Closet')}
+              isLast
+            />
           </SettingsSection>
         </Reanimated.View>
       )}
 
       {/* Seller Hub */}
       {showSection('Seller Hub') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-          <SettingsSection title="Seller Hub" description="Manage selling, payments and shipping">
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+          <SettingsSection title="Selling & Money" noCard>
             <SettingsRow
               icon="wallet-outline"
-              iconColor={Colors.brand}
               title="Balance & Wallet"
               value="Manage"
               onPress={() => navigation.navigate('Wallet')}
@@ -250,21 +283,18 @@ export default function SettingsScreen({ navigation }: Props) {
             />
             <SettingsRow
               icon="card-outline"
-              iconColor={Colors.brand}
               title="Payment Methods"
               value={savedPaymentMethod ? 'Manage' : 'None'}
               onPress={() => navigation.navigate('Payments')}
             />
             <SettingsRow
               icon="cash-outline"
-              iconColor={Colors.brand}
               title="Payouts"
               value="Manage"
               onPress={() => navigation.navigate('BalanceHistory')}
             />
             <SettingsRow
               icon="cube-outline"
-              iconColor={Colors.brand}
               title="Shipping"
               value="Manage"
               onPress={() => navigation.navigate('Postage')}
@@ -276,8 +306,8 @@ export default function SettingsScreen({ navigation }: Props) {
 
       {/* Trust & Security */}
       {showSection('Trust & Security') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
-          <SettingsSection title="Trust & Security" description="Security, access and privacy">
+        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+          <SettingsSection title="Trust & Security" noCard>
             <SettingsRow
               icon="person-circle-outline"
               title="Account Details"
@@ -287,14 +317,12 @@ export default function SettingsScreen({ navigation }: Props) {
             />
             <SettingsRow
               icon="lock-closed-outline"
-              iconColor={Colors.success}
               title="Password"
               value="••••••••"
               onPress={() => navigation.navigate('ChangePassword')}
             />
             <SettingsRow
               icon="shield-checkmark-outline"
-              iconColor={Colors.success}
               title="Two-Factor Authentication"
               value={twoFactorEnabled ? 'On' : 'Off'}
               onPress={() => navigation.navigate('TwoFactorSetup')}
@@ -307,14 +335,12 @@ export default function SettingsScreen({ navigation }: Props) {
             />
             <SettingsRow
               icon="ban-outline"
-              iconColor={Colors.danger}
               title="Blocked Users"
               value="View"
               onPress={() => navigation.navigate('BlockedUsers')}
             />
             <SettingsRow
               icon="eye-outline"
-              iconColor={Colors.success}
               title="Privacy Controls"
               value="Manage"
               onPress={() => navigation.navigate('PrivacySettings')}
@@ -326,8 +352,8 @@ export default function SettingsScreen({ navigation }: Props) {
 
       {/* Preferences */}
       {showSection('Preferences') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-          <SettingsSection title="Preferences">
+        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
+          <SettingsSection title="Preferences" noCard>
             <SettingsRow
               icon="swap-horizontal-outline"
               title="Currency Display"
@@ -378,8 +404,8 @@ export default function SettingsScreen({ navigation }: Props) {
 
       {/* Support */}
       {showSection('Support') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
-          <SettingsSection title="Support">
+        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+          <SettingsSection title="Support" noCard>
             <SettingsRow
               icon="help-circle-outline"
               title="Help Centre"
@@ -410,7 +436,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
       {/* Logout / Danger Zone */}
       {matchesSearch('log out sign out') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(280)}>
           <FlagshipDangerZone
             title="Sign Out"
             description="You will be signed out of your account on this device."
@@ -475,5 +501,36 @@ const styles = StyleSheet.create({
   accountDivider: {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: Space.md,
+  },
+  identitySurface: {
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    marginHorizontal: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Space.lg,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.md,
+    gap: Space.sm,
+  },
+  quickAction: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs + 2,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  quickActionText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });

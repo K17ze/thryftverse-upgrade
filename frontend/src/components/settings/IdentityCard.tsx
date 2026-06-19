@@ -10,16 +10,19 @@ import { User } from '../../store/useStore';
 export interface IdentityCardProps {
   user: User | null;
   onPress?: () => void;
+  variant?: 'default' | 'commanding';
 }
 
-export function IdentityCard({ user, onPress }: IdentityCardProps) {
+export function IdentityCard({ user, onPress, variant = 'default' }: IdentityCardProps) {
   const { colors } = useAppTheme();
   const avatarUri = (user as any)?.avatar || null;
   const displayName = user?.username ?? 'Not signed in';
+  const handle = (user as any)?.handle ?? (user as any)?.username ?? '';
   const hasRealReputation = user != null && ((user as any).rating != null || (user as any).reviewCount != null);
   const reputationLabel = hasRealReputation
     ? `${(user as any).rating?.toFixed(1) ?? '0.0'} · ${(user as any).reviewCount ?? 0} reviews`
     : null;
+  const isCommanding = variant === 'commanding';
 
   return (
     <AnimatedPressable
@@ -28,22 +31,25 @@ export function IdentityCard({ user, onPress }: IdentityCardProps) {
       scaleValue={0.98}
       hapticFeedback="light"
     >
-      <View style={styles.root}>
+      <View style={[styles.root, isCommanding && styles.rootCommanding]}>
         {avatarUri ? (
-          <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
-            <CachedImage uri={avatarUri} style={styles.avatarImage} contentFit="cover" />
+          <View style={[isCommanding ? styles.avatarLarge : styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
+            <CachedImage uri={avatarUri} style={isCommanding ? styles.avatarImageLarge : styles.avatarImage} contentFit="cover" />
           </View>
         ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
-            <Text style={[styles.avatarInitial, { color: colors.textPrimary }]}>{displayName.charAt(0).toUpperCase()}</Text>
+          <View style={[isCommanding ? styles.avatarFallbackLarge : styles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
+            <Text style={[isCommanding ? styles.avatarInitialLarge : styles.avatarInitial, { color: colors.textPrimary }]}>{displayName.charAt(0).toUpperCase()}</Text>
           </View>
         )}
         <View style={styles.text}>
-          <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>{displayName}</Text>
+          <Text style={[isCommanding ? styles.nameLarge : styles.name, { color: colors.textPrimary }]} numberOfLines={1}>{displayName}</Text>
+          {isCommanding && handle ? (
+            <Text style={[styles.handle, { color: colors.textMuted }]}>@{handle}</Text>
+          ) : null}
           {reputationLabel ? (
             <Text style={[styles.meta, { color: colors.textSecondary }]}>{reputationLabel}</Text>
           ) : (
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>Manage your account details, privacy and security</Text>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>{isCommanding ? 'Tap to edit your profile' : 'Manage your account details, privacy and security'}</Text>
           )}
           {(user as any)?.isVerified && (
             <View style={[styles.verifiedRow, { backgroundColor: `${colors.success}18` }]}>
@@ -120,5 +126,44 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     letterSpacing: Type.meta.letterSpacing,
+  },
+  rootCommanding: {
+    paddingVertical: Space.lg,
+    paddingHorizontal: Space.md,
+  },
+  avatarLarge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    overflow: 'hidden',
+  },
+  avatarImageLarge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  avatarFallbackLarge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitialLarge: {
+    fontSize: 32,
+    fontFamily: Typography.family.bold,
+  },
+  nameLarge: {
+    fontSize: Type.title.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.title.letterSpacing,
+    lineHeight: Type.title.lineHeight,
+  },
+  handle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
 });
