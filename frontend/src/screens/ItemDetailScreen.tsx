@@ -70,13 +70,12 @@ export default function ItemDetailScreen() {
 
   const isFav = useStore(state => state.isWishlisted(route.params?.itemId));
   const toggleFav = useStore(state => state.toggleWishlist);
+  const currentUser = useStore((state) => state.currentUser);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
 
   const { itemId } = route.params || {};
   const item = listings.find(l => l.id === itemId);
-  const resolvedSeller = item
-    ? (item.seller ?? { id: item.sellerId, username: item.sellerId.slice(0, 8), avatar: '', rating: 0, reviewCount: 0, location: '' })
-    : undefined;
+  const resolvedSeller = item?.seller ?? undefined;
   const sellerItems = item ? listings.filter(l => l.sellerId === item.sellerId && l.id !== item.id) : [];
   const otherListings = listings.filter(l => l.id !== itemId).slice(0, 12);
 
@@ -270,11 +269,11 @@ export default function ItemDetailScreen() {
             )}
           </View>
 
-          {/* ── Trust Badge ── */}
+          {/* ── Trust surface ── */}
           <View style={styles.trustBadge}>
             <Ionicons name="shield-checkmark" size={16} color={Colors.success} />
             <Text style={styles.trustText}>Thryft Buyer Protection</Text>
-            <Text style={styles.trustSub}>Money back guarantee · Authenticity check</Text>
+            <Text style={styles.trustSub}>Secure payment and tracked delivery on every order</Text>
           </View>
 
           {/* ── Product Attributes ── */}
@@ -359,12 +358,13 @@ export default function ItemDetailScreen() {
                 titleStyle={styles.messageSellerBtnText}
                 variant="secondary"
                 size="sm"
-                onPress={() =>
-                  navigation.navigate('Chat', {
-                    conversationId: `${resolvedSeller.id}_${item.id}`,
-                    focusQuery: resolvedSeller.username,
-                    partnerUserId: resolvedSeller.id,
-                  })}
+                onPress={() => {
+                  if (!resolvedSeller?.id) return;
+                  navigation.navigate('NewMessage', {
+                    preselectedUserId: resolvedSeller.id,
+                    preselectedDisplayName: resolvedSeller.username,
+                  });
+                }}
               />
             </View>
           ) : item.sellerId ? (
@@ -375,7 +375,7 @@ export default function ItemDetailScreen() {
                 </View>
                 <View style={styles.sellerInfo}>
                   <Text style={styles.sellerName}>Seller</Text>
-                  <Text style={styles.sellerLastSeen}>Seller details require backend connection.</Text>
+                  <Text style={styles.sellerLastSeen}>Seller information unavailable</Text>
                 </View>
               </View>
             </View>
@@ -439,30 +439,62 @@ export default function ItemDetailScreen() {
         </Reanimated.View>
       </Reanimated.ScrollView>
 
-      {/* ── Floating Buy Bar ── */}
-      {!item.isSold && (
-        <Reanimated.View style={[styles.floatingBuyBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Colors.surfaceAlt }]} />
+      {/* ── Floating Action Bar ── */}
+      <Reanimated.View style={[styles.floatingBuyBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Colors.surfaceAlt }]} />
+        {item.isSold ? (
           <AppButton
-            style={styles.actionBtn}
-            variant="primary"
-            size="lg"
-            title="Buy now"
-            icon={<Ionicons name="flash-outline" size={15} color={Colors.background} />}
-            onPress={() => navigation.navigate('Checkout', { itemId: item.id })}
-            accessibilityLabel={`Buy ${item.title} for ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
-          />
-          <AppButton
-            style={styles.actionBtn}
+            style={[styles.actionBtn, { opacity: 0.6 }]}
             variant="secondary"
             size="lg"
-            title="Make offer"
-            icon={<Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />}
-            onPress={() => navigation.navigate('MakeOffer', { itemId: item.id, price: item.price, title: item.title })}
-            accessibilityLabel={`Make an offer on ${item.title}`}
+            title="Sold"
+            disabled
+            accessibilityLabel={`${item.title} is sold`}
           />
-        </Reanimated.View>
-      )}
+        ) : currentUser?.id && item.sellerId === currentUser.id ? (
+          <>
+            <AppButton
+              style={styles.actionBtn}
+              variant="secondary"
+              size="lg"
+              title="Edit listing"
+              icon={<Ionicons name="create-outline" size={14} color={Colors.textPrimary} />}
+              onPress={() => navigation.navigate('EditListing', { itemId: item.id })}
+              accessibilityLabel={`Edit ${item.title}`}
+            />
+            <AppButton
+              style={styles.actionBtn}
+              variant="primary"
+              size="lg"
+              title="Manage"
+              icon={<Ionicons name="settings-outline" size={14} color={Colors.background} />}
+              onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
+              accessibilityLabel={`Manage ${item.title}`}
+            />
+          </>
+        ) : (
+          <>
+            <AppButton
+              style={styles.actionBtn}
+              variant="primary"
+              size="lg"
+              title="Buy now"
+              icon={<Ionicons name="flash-outline" size={15} color={Colors.background} />}
+              onPress={() => navigation.navigate('Checkout', { itemId: item.id })}
+              accessibilityLabel={`Buy ${item.title} for ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
+            />
+            <AppButton
+              style={styles.actionBtn}
+              variant="secondary"
+              size="lg"
+              title="Make offer"
+              icon={<Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />}
+              onPress={() => navigation.navigate('MakeOffer', { itemId: item.id, price: item.price, title: item.title })}
+              accessibilityLabel={`Make an offer on ${item.title}`}
+            />
+          </>
+        )}
+      </Reanimated.View>
 
       <SaveToCollectionModal
         visible={collectionModalVisible}
