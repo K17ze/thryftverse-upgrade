@@ -22,6 +22,7 @@ import { disableTwoFactor, logoutFromSession } from '../services/authApi';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
+import { CachedImage } from '../components/CachedImage';
 import { Typography } from '../theme/designTokens';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -241,7 +242,7 @@ export default function AccountSettingsScreen() {
 
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title="Account Details" subtitle="Manage your account" onBack={() => navigation.goBack()} />}
+      header={<FlagshipHeader title="Account" subtitle="Manage your identity and information" onBack={() => navigation.goBack()} />}
       stickyFooter={
         <FlagshipStickyFooter
           actions={[
@@ -256,35 +257,37 @@ export default function AccountSettingsScreen() {
         />
       }
     >
-      {/* User Details */}
+      {/* Identity Summary */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <SettingsSection title="User details">
-            {isHydrating ? (
-              <View style={{ padding: 16 }}>
-                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-                <View style={{ height: 8 }} />
-                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-                <View style={{ height: 8 }} />
-                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+        <View style={[styles.identitySurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <View style={styles.identityRow}>
+            {user?.avatar ? (
+              <View style={styles.identityAvatar}>
+                <CachedImage uri={user.avatar} style={styles.identityAvatarImage} contentFit="cover" />
               </View>
             ) : (
-              <>
-                <DetailRow label="Username" value={user?.username ?? '—'} />
-                <DetailRow label="Email" value={email} onPress={() => openEdit('email', email)} />
-                <DetailRow
-                  label="Picture"
-                  value={user?.avatar ? 'Change' : 'Add'}
-                  onPress={() => navigation.navigate('EditProfile')}
-                  isLast
-                />
-              </>
+              <View style={[styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+                <Text style={styles.identityAvatarText}>{(user?.username ?? '?').charAt(0).toUpperCase()}</Text>
+              </View>
             )}
-        </SettingsSection>
+            <View style={styles.identityText}>
+              <Text style={styles.identityName}>{displayName || user?.username || 'Not signed in'}</Text>
+              <Text style={[styles.identityMeta, { color: Colors.textMuted }]}>@{user?.username ?? '—'}</Text>
+            </View>
+            <AnimatedPressable
+              onPress={() => navigation.navigate('EditProfile')}
+              scaleValue={0.92}
+              hapticFeedback="light"
+            >
+              <Text style={[styles.identityEdit, { color: Colors.brand }]}>Edit</Text>
+            </AnimatedPressable>
+          </View>
+        </View>
       </Reanimated.View>
 
-      {/* About me */}
+      {/* Personal Information */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
-        <SettingsSection title="About me">
+        <SettingsSection title="Personal information" noCard>
             {isHydrating ? (
               <View style={{ padding: 16 }}>
                 <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
@@ -296,8 +299,7 @@ export default function AccountSettingsScreen() {
             ) : (
               <>
                 <DetailRow label="Display name" value={displayName} onPress={() => openEdit('fullName', displayName)} />
-                <DetailRow label="Date of birth" value={birthday} onPress={() => openEdit('birthday', birthday)} />
-                <DetailRow label="Phone" value={phone} onPress={() => openEdit('phone', phone)} />
+                <DetailRow label="Username" value={user?.username ?? '—'} />
                 <DetailRow
                   label="Country"
                   value={(userAny?.country as string) || '—'}
@@ -308,9 +310,40 @@ export default function AccountSettingsScreen() {
         </SettingsSection>
       </Reanimated.View>
 
-      {/* Preferences */}
+      {/* Contact Information */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
-        <SettingsSection title="Preferences">
+        <SettingsSection title="Contact" noCard>
+            {isHydrating ? (
+              <View style={{ padding: 16 }}>
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+                <View style={{ height: 8 }} />
+                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+              </View>
+            ) : (
+              <>
+                <DetailRow label="Phone" value={phone || '—'} onPress={() => openEdit('phone', phone)} />
+                <DetailRow label="Email" value={email || '—'} isLast />
+              </>
+            )}
+        </SettingsSection>
+      </Reanimated.View>
+
+      {/* Security */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
+        <SettingsSection title="Security" noCard>
+            <DetailRow label="Password" value="••••••••" onPress={() => navigation.navigate('ChangePassword')} />
+            <DetailRow
+              label="Two-Factor Authentication"
+              value={twoFactorEnabled ? 'Enabled' : 'Off'}
+              onPress={() => handleToggleTwoFactor(!twoFactorEnabled)}
+              isLast
+            />
+        </SettingsSection>
+      </Reanimated.View>
+
+      {/* Preferences */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <SettingsSection title="Preferences" noCard>
             <DetailRow
               label="Holiday Mode"
               value={holidayMode ? 'On' : 'Off'}
@@ -325,22 +358,9 @@ export default function AccountSettingsScreen() {
         </SettingsSection>
       </Reanimated.View>
 
-      {/* Security */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
-        <SettingsSection title="Security">
-            <DetailRow label="Password" value="••••••••" onPress={() => navigation.navigate('ChangePassword')} />
-            <DetailRow
-              label="Two-Factor Authentication"
-              value={twoFactorEnabled ? 'On' : 'Off'}
-              onPress={() => handleToggleTwoFactor(!twoFactorEnabled)}
-              isLast
-            />
-        </SettingsSection>
-      </Reanimated.View>
-
-      {/* Manage */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
-        <SettingsSection title="Manage">
+      {/* Data Controls */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(220)}>
+        <SettingsSection title="Data" noCard>
             <DetailRow
               label="Download my data"
               value=""
@@ -352,7 +372,7 @@ export default function AccountSettingsScreen() {
       </Reanimated.View>
 
       {/* Danger Zone */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(220)}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(260)}>
         <FlagshipDangerZone
           title="Delete Account"
           description="This will permanently remove your account and all associated data. This action cannot be undone."
@@ -536,5 +556,63 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontFamily: Typography.family.bold,
     fontSize: Type.body.size,
+  },
+  identitySurface: {
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    marginHorizontal: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Space.lg,
+  },
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Space.md,
+    gap: Space.md,
+  },
+  identityAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  identityAvatarImage: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.full,
+  },
+  identityAvatarFallback: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  identityAvatarText: {
+    fontSize: 24,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  identityText: {
+    flex: 1,
+  },
+  identityName: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
+    lineHeight: Type.subtitle.lineHeight,
+  },
+  identityMeta: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
+  },
+  identityEdit: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
   },
 });
