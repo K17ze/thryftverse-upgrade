@@ -900,6 +900,13 @@ export default function SellScreen() {
         <Animated.View entering={FadeInUp.duration(300)} layout={Layout.springify()} style={{ marginTop: SECTION_GAP }}>
           <SectionHeader step={2} title="Photos" subtitle="First photo is your cover" />
 
+          <View style={styles.mediaTrustBanner}>
+            <Ionicons name="cube-outline" size={16} color={Colors.brand} />
+            <T.Caption color={Colors.textSecondary} style={{ flex: 1 }}>
+              Your photos are uploaded securely. Add up to 10 images for the best results.
+            </T.Caption>
+          </View>
+
           {photos.length === 0 ? (
             <View style={[styles.mediaEmptyCard, styles.mediaEmptyInner]}>
               <View style={styles.mediaEmptyIconCircle}>
@@ -2026,5 +2033,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
+  },
+  mediaTrustBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    padding: Space.md,
+    marginBottom: Space.md,
+    backgroundColor: Colors.surface,
   },
 });
