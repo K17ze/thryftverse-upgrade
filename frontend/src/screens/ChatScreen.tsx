@@ -206,72 +206,59 @@ function TaggedItemCard({
       >
 
         <View style={[styles.itemCardRow, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-
           <CachedImage
-
             uri={getListingCoverUri(listing.images, '')}
-
-            style={styles.itemThumbImage}
-
-            containerStyle={styles.itemThumb}
-
+            style={styles.itemThumbImageV2}
+            containerStyle={styles.itemThumbV2}
             contentFit="cover"
-
           />
-
           <View style={styles.itemInfo}>
-
             <BodyEmphasis numberOfLines={1}>{listing.title}</BodyEmphasis>
-
             <Caption color={Colors.textSecondary}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Caption>
-
             {listing.condition && (
               <View style={styles.itemMetaRow}>
                 <Caption color={Colors.textMuted}>{listing.condition}</Caption>
                 {listing.brand && <Caption color={Colors.textMuted}> · {listing.brand}</Caption>}
               </View>
             )}
-
           </View>
-
           <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-
         </View>
 
-        {/* Quick actions — gated by ownership and status */}
-        <View style={styles.itemQuickActions}>
+        {/* Quick actions — refined to primary + secondary only */}
+        <View style={styles.itemQuickActionsV2}>
           {isOwner ? (
             <AnimatedPressable
-              style={styles.itemQuickBtn}
+              style={styles.itemPrimaryBtn}
               onPress={() => navigation.navigate('ManageListing', { itemId: listing.id })}
               activeOpacity={0.8}
               scaleValue={0.95}
               hapticFeedback="light"
               accessibilityLabel="Manage listing"
             >
-              <Ionicons name="settings-outline" size={14} color={Colors.brand} />
-              <Caption color={Colors.brand} style={styles.itemQuickText}>Manage</Caption>
+              <Ionicons name="settings-outline" size={14} color={Colors.textInverse} />
+              <Caption color={Colors.textInverse} style={styles.itemPrimaryBtnText}>Manage</Caption>
             </AnimatedPressable>
           ) : isSold ? (
-            <View style={styles.itemQuickBtn}>
-              <Ionicons name="bag-check-outline" size={14} color={Colors.textMuted} />
-              <Caption color={Colors.textMuted} style={styles.itemQuickText}>Sold</Caption>
+            <View style={styles.itemPrimaryBtn}>
+              <Ionicons name="bag-check-outline" size={14} color={Colors.textInverse} />
+              <Caption color={Colors.textInverse} style={styles.itemPrimaryBtnText}>Sold</Caption>
             </View>
           ) : (
             <>
               <AnimatedPressable
-                style={styles.itemQuickBtn}
+                style={styles.itemPrimaryBtn}
                 onPress={() => navigation.navigate('Checkout', { itemId: listing.id })}
                 activeOpacity={0.8}
                 scaleValue={0.95}
                 hapticFeedback="light"
                 accessibilityLabel="Buy now"
               >
-                <Ionicons name="flash-outline" size={14} color={Colors.brand} />
-                <Caption color={Colors.brand} style={styles.itemQuickText}>Buy</Caption>
+                <Ionicons name="flash-outline" size={14} color={Colors.textInverse} />
+                <Caption color={Colors.textInverse} style={styles.itemPrimaryBtnText}>Buy now</Caption>
               </AnimatedPressable>
               <AnimatedPressable
-                style={styles.itemQuickBtn}
+                style={styles.itemSecondaryBtn}
                 onPress={() => navigation.navigate('MakeOffer', { itemId: listing.id, price: listing.price, title: listing.title })}
                 activeOpacity={0.8}
                 scaleValue={0.95}
@@ -279,12 +266,12 @@ function TaggedItemCard({
                 accessibilityLabel="Make offer"
               >
                 <Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />
-                <Caption color={Colors.textPrimary} style={styles.itemQuickText}>Offer</Caption>
+                <Caption color={Colors.textPrimary} style={styles.itemSecondaryBtnText}>Offer</Caption>
               </AnimatedPressable>
             </>
           )}
           <AnimatedPressable
-            style={styles.itemQuickBtn}
+            style={styles.itemSecondaryBtn}
             onPress={handleShareListing}
             activeOpacity={0.8}
             scaleValue={0.95}
@@ -293,22 +280,8 @@ function TaggedItemCard({
             accessibilityRole="button"
           >
             <Ionicons name="share-outline" size={14} color={Colors.textSecondary} />
-            <Caption color={Colors.textSecondary} style={styles.itemQuickText}>Share</Caption>
+            <Caption color={Colors.textSecondary} style={styles.itemSecondaryBtnText}>Share</Caption>
           </AnimatedPressable>
-          {!isOwner && (
-            <AnimatedPressable
-              style={styles.itemQuickBtn}
-              onPress={() => navigation.navigate('Report', { type: 'item' })}
-              activeOpacity={0.8}
-              scaleValue={0.95}
-              hapticFeedback="light"
-              accessibilityLabel="Report listing"
-              accessibilityRole="button"
-            >
-              <Ionicons name="flag-outline" size={14} color={Colors.danger} />
-              <Caption color={Colors.danger} style={styles.itemQuickText}>Report</Caption>
-            </AnimatedPressable>
-          )}
         </View>
 
       </AnimatedPressable>
@@ -1603,10 +1576,10 @@ export default function ChatScreen({ navigation, route }: Props) {
                   (resolvedPartnerId ? profileMediaOverrides[resolvedPartnerId]?.avatar : undefined) ||
                   '';
                 return (
-                  <View style={styles.headerAvatarRing}>
+                  <View style={styles.headerAvatarV2}>
                     <CachedImage
                       uri={avatarUri}
-                      style={styles.headerAvatarImage}
+                      style={styles.headerAvatarImageV2}
                       contentFit="cover"
                     />
                   </View>
@@ -1802,29 +1775,17 @@ export default function ChatScreen({ navigation, route }: Props) {
         ) : (
 
           <View style={styles.emptyState}>
-
-            <View style={styles.emptyIconCircle}>
-
-              <Ionicons name="chatbubbles-outline" size={32} color={Colors.brand} />
-
+            <View style={styles.emptyGlyph}>
+              <Ionicons name="chatbubbles-outline" size={40} color={Colors.textMuted} />
             </View>
-
-            <Text style={styles.emptyTitle}>No messages yet</Text>
-
+            <Text style={styles.emptyTitle}>Start the conversation</Text>
             <Text style={styles.emptyBody}>
-
-              Send a message or photo to get the conversation started.
-
+              Send a message, photo, or make an offer to get started.
             </Text>
-
             <View style={styles.emptyCtaRow}>
-
               <Ionicons name="arrow-down" size={16} color={Colors.textMuted} />
-
               <Caption color={Colors.textMuted}>Type below</Caption>
-
             </View>
-
           </View>
 
         )}
@@ -2049,6 +2010,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
 
   },
+  headerAvatarV2: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  headerAvatarImageV2: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+  },
 
   headerActions: {
 
@@ -2181,6 +2153,54 @@ const styles = StyleSheet.create({
   itemQuickText: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
+  itemThumbV2: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    overflow: 'hidden',
+  },
+  itemThumbImageV2: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+  },
+  itemQuickActionsV2: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.sm,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  itemPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.textPrimary,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: 8,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  itemPrimaryBtnText: {
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
+  itemSecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  itemSecondaryBtnText: {
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
 
   itemInfo: {
 
@@ -2224,6 +2244,12 @@ const styles = StyleSheet.create({
 
     ...Elevation.subtle,
 
+  },
+  emptyGlyph: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Space.md,
+    opacity: 0.5,
   },
 
   emptyTitle: {
@@ -2584,13 +2610,11 @@ const styles = StyleSheet.create({
 
     paddingTop: Space.xs,
 
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.surface,
 
     borderTopWidth: StyleSheet.hairlineWidth,
 
     borderTopColor: Colors.border,
-
-    ...Elevation.subtle,
 
   },
 
