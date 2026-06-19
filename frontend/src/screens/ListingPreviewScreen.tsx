@@ -131,6 +131,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScreenHeader
         title="Preview"
+        subtitle="Buyers will see this"
         onBack={() => navigation.goBack()}
         rightAction={
           <AnimatedPressable onPress={handleEdit} activeOpacity={0.7} scaleValue={0.95}>
@@ -232,11 +233,18 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
           </Reanimated.View>
         )}
 
-        {/* Preview indicator */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={styles.previewBanner}>
-          <Ionicons name="eye-outline" size={18} color={Colors.brand} />
-          <Text style={styles.previewBannerText}>Preview — this is how buyers will see your listing</Text>
-        </Reanimated.View>
+        {/* Seller identity */}
+        {currentUser && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.sellerRow}>
+            <View style={styles.sellerAvatarFallback}>
+              <Ionicons name="person" size={16} color={Colors.textMuted} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sellerName}>{currentUser.displayName || currentUser.username || 'You'}</Text>
+              <Caption color={Colors.textMuted}>Seller</Caption>
+            </View>
+          </Reanimated.View>
+        )}
 
         {/* Trust */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(200)} style={styles.trustCard}>
@@ -431,21 +439,28 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 2,
   },
-  previewBanner: {
+  sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    padding: Space.md,
-    backgroundColor: Colors.surface,
   },
-  previewBannerText: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.brand,
-    letterSpacing: Type.caption.letterSpacing,
+  sellerAvatarFallback: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sellerName: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
 });
