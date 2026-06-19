@@ -264,13 +264,29 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           ]}
         />
 
-        {/* Seller trust banner */}
-        {!isSelfProfile && (
-          <View style={styles.trustBanner}>
-            <Ionicons name="shield-checkmark-outline" size={16} color={Colors.success} />
-            <Text style={styles.trustBannerText}>
-              Thryftverse protects your purchase with secure payment and tracked delivery.
-            </Text>
+        {/* Seller context — real data only */}
+        {!isSelfProfile && targetProfile && (
+          <View style={styles.sellerContextBar}>
+            <View style={styles.sellerContextInner}>
+              {targetProfile.createdAt && (
+                <View style={styles.sellerContextItem}>
+                  <Ionicons name="calendar-outline" size={14} color={Colors.textMuted} />
+                  <Text style={styles.sellerContextText}>
+                    Member since {new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
+                  </Text>
+                </View>
+              )}
+              {targetProfile.location && (
+                <View style={styles.sellerContextItem}>
+                  <Ionicons name="location-outline" size={14} color={Colors.textMuted} />
+                  <Text style={styles.sellerContextText}>{targetProfile.location}</Text>
+                </View>
+              )}
+              <View style={styles.sellerContextItem}>
+                <Ionicons name="shirt-outline" size={14} color={Colors.textMuted} />
+                <Text style={styles.sellerContextText}>{profileListings.length} listing{profileListings.length !== 1 ? 's' : ''}</Text>
+              </View>
+            </View>
           </View>
         )}
 
@@ -694,23 +710,31 @@ const styles = StyleSheet.create({
     color: TEXT,
     lineHeight: 22,
   },
-  trustBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
+  sellerContextBar: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    padding: Space.md,
-    marginHorizontal: Space.md,
-    marginBottom: Space.md,
     backgroundColor: Colors.surface,
+    overflow: 'hidden',
   },
-  trustBannerText: {
-    flex: 1,
+  sellerContextInner: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: Space.sm,
+    padding: Space.md,
+  },
+  sellerContextItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sellerContextText: {
     fontSize: Typography.size.caption,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: Colors.textMuted,
     letterSpacing: Typography.tracking.normal,
     lineHeight: 18,
   },
