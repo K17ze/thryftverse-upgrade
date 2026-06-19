@@ -19,21 +19,16 @@ interface MessageContextMenuProps {
   onClose: () => void;
   onAction: (action: MessageAction) => void;
   messageText?: string;
+  isOwnMessage?: boolean;
 }
 
-const ACTIONS: Array<{
+type ActionDef = {
   id: MessageAction;
   label: string;
   icon: string;
   color?: string;
   destructive?: boolean;
-}> = [
-  { id: 'select', label: 'Select', icon: 'checkbox-outline' },
-  { id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' },
-  { id: 'react', label: 'React', icon: 'happy-outline' },
-  { id: 'copy', label: 'Copy', icon: 'copy-outline' },
-  { id: 'delete', label: 'Delete', icon: 'trash-outline', color: Colors.danger, destructive: true },
-];
+};
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -42,7 +37,26 @@ export function MessageContextMenu({
   onClose,
   onAction,
   messageText,
+  isOwnMessage,
 }: MessageContextMenuProps) {
+  const actions = React.useMemo<ActionDef[]>(() => {
+    const list: ActionDef[] = [
+      { id: 'select', label: 'Select', icon: 'checkbox-outline' },
+      { id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' },
+      { id: 'react', label: 'React', icon: 'happy-outline' },
+    ];
+    if (messageText && messageText.trim().length > 0) {
+      list.push({ id: 'copy', label: 'Copy', icon: 'copy-outline' });
+    }
+    list.push({
+      id: 'delete',
+      label: isOwnMessage ? 'Delete message' : 'Delete for me',
+      icon: 'trash-outline',
+      color: Colors.danger,
+      destructive: true,
+    });
+    return list;
+  }, [messageText, isOwnMessage]);
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -107,7 +121,7 @@ export function MessageContextMenu({
         ) : null}
 
         <View style={styles.actionsList}>
-          {ACTIONS.map((action) => (
+          {actions.map((action) => (
             <AnimatedPressable
               key={action.id}
               style={styles.actionRow}

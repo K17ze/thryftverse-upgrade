@@ -1990,6 +1990,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         messageText={selectedMessage?.text ?? undefined}
 
+        isOwnMessage={selectedMessage?.sender === 'me'}
+
       />
 
     </FlagshipScreen>

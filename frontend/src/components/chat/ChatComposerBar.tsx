@@ -4,6 +4,7 @@ import {
   TextInput,
   StyleSheet,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -34,7 +35,8 @@ export function ChatComposerBar({
   disabled = false,
 }: ChatComposerBarProps) {
   const inputRef = useRef<TextInput>(null);
-  const canSend = value.trim().length > 0 && !isSending;
+  const hasText = value.trim().length > 0;
+  const canSend = hasText && !isSending && !disabled;
 
   return (
     <View style={styles.root}>
@@ -71,18 +73,23 @@ export function ChatComposerBar({
         />
       </View>
 
-      {canSend ? (
+      {hasText ? (
         <AnimatedPressable
           onPress={onSend}
-          style={[styles.sendBtn, styles.sendBtnActive]}
+          style={[styles.sendBtn, canSend && styles.sendBtnActive]}
           activeOpacity={0.7}
           scaleValue={0.88}
           hapticFeedback="medium"
-          accessibilityLabel="Send message"
+          accessibilityLabel={isSending ? 'Sending message' : 'Send message'}
           accessibilityRole="button"
-          disabled={isSending}
+          accessibilityState={{ disabled: !canSend, busy: isSending }}
+          disabled={!canSend}
         >
-          <Ionicons name="arrow-up" size={20} color={Colors.background} />
+          {isSending ? (
+            <ActivityIndicator size="small" color={Colors.textSecondary} />
+          ) : (
+            <Ionicons name="arrow-up" size={20} color={canSend ? Colors.background : Colors.textMuted} />
+          )}
         </AnimatedPressable>
       ) : (
         <AnimatedPressable
