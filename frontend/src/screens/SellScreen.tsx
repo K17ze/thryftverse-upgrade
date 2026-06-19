@@ -52,6 +52,7 @@ import { haptics } from '../utils/haptics';
 import { convertPickerAsset, validateMediaAssets } from '../utils/mediaUploadAsset';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { uploadMedia } from '../services/mediaUpload';
+import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 
 const CARD_PADDING = 20;
@@ -224,6 +225,14 @@ export default function SellScreen() {
   const [publicationStage, setPublicationStage] = useState<'idle' | 'uploading_media' | 'creating_listing' | 'attaching_media' | 'completed' | 'failed_recoverable'>('idle');
   const publishedListingIdRef = useRef<string | null>(null);
   const uploadedUrlsRef = useRef<string[]>([]);
+
+  /* ── upload queue ── */
+  const uploadQueueRef = useRef(new MediaUploadQueue());
+  const [queueState, setQueueState] = useState(uploadQueueRef.current.getState());
+  useEffect(() => {
+    const unsub = uploadQueueRef.current.subscribe((s) => setQueueState(s));
+    return () => { unsub(); };
+  }, []);
 
   /* ── currency ── */
   const currency = useCurrencyPref();
@@ -754,20 +763,34 @@ export default function SellScreen() {
     setPublicationStage('uploading_media');
 
     try {
-      // 1. Upload all media (skip already-uploaded URLs)
-      const uploadedUrls: string[] = [...uploadedUrlsRef.current];
-      const startIndex = uploadedUrls.length;
-      for (let i = startIndex; i < photos.length; i++) {
-        const uri = photos[i];
-        if (uri.startsWith('http')) {
-          uploadedUrls.push(uri);
-        } else {
-          setPublicationStage('uploading_media');
-          const url = await uploadMedia(uri, 'listings');
-          uploadedUrls.push(url);
-          uploadedUrlsRef.current = [...uploadedUrls];
+      const queue = uploadQueueRef.current;
+
+      // 1. Upload all local media via queue (skip already-uploaded or http URIs)
+      const existingItems = queue.getItems();
+      const remoteUrls = new Map<string, string>();
+      for (const item of existingItems) {
+        if (item.state === 'uploaded' && item.publicUrl) {
+          remoteUrls.set(item.asset.uri, item.publicUrl);
         }
       }
+
+      const newLocalPhotos = photos.filter((uri) => !uri.startsWith('http') && !remoteUrls.has(uri));
+      if (newLocalPhotos.length > 0) {
+        const assets = newLocalPhotos.map((uri) => ({
+          id: `sell_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          uri,
+          fileName: uri.split('/').pop() || 'photo.jpg',
+          mimeType: 'image/jpeg',
+          kind: 'image' as const,
+        }));
+        queue.addAssets(assets);
+        await queue.run();
+      }
+
+      const uploadedUrls: string[] = photos.map((uri) => {
+        if (uri.startsWith('http')) return uri;
+        return remoteUrls.get(uri) || queue.getItems().find((i) => i.asset.uri === uri && i.publicUrl)?.publicUrl || uri;
+      }).filter((u): u is string => !!u);
 
       const coverImage = uploadedUrls[0] ?? '';
       let listingId = publishedListingIdRef.current;
@@ -808,7 +831,7 @@ export default function SellScreen() {
 
       setPublicationStage('completed');
       clearSellDraft();
-      uploadedUrlsRef.current = [];
+      queue.reset();
       publishedListingIdRef.current = null;
       haptics.success();
       navigation.replace('ListingSuccess', {
@@ -821,8 +844,9 @@ export default function SellScreen() {
     } catch (e: unknown) {
       const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Please try again.';
       const hasListing = !!publishedListingIdRef.current;
-      setPublicationStage(hasListing ? 'failed_recoverable' : 'failed_recoverable');
-      setErrorMsg(hasListing ? `${msg} — your listing was created. Tap Publish to retry attaching media.` : msg);
+      const hasMedia = uploadQueueRef.current.getItems().some((i) => i.state === 'uploaded');
+      setPublicationStage('failed_recoverable');
+      setErrorMsg(hasListing ? `${msg} — your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} — some media uploaded. Tap Publish to retry.` : msg);
       triggerShake();
       haptics.error();
     } finally {
@@ -999,6 +1023,35 @@ export default function SellScreen() {
               <View style={{ marginTop: 12 }}>
                 <SortablePhotoStrip photos={photos} onReorder={setPhotos} onAddPhoto={handlePickFromLibrary} />
               </View>
+
+              {/* Queue upload status */}
+              {queueState.items.length > 0 && (
+                <View style={styles.queueStatusRow}>
+                  {queueState.items.map((item) => (
+                    <View key={item.id} style={styles.queueStatusPill}>
+                      <T.Caption
+                        color={
+                          item.state === 'uploaded'
+                            ? Colors.success
+                            : item.state === 'failed'
+                            ? Colors.danger
+                            : item.state === 'uploading' || item.state === 'preparing'
+                            ? Colors.brand
+                            : Colors.textMuted
+                        }
+                        style={{ fontSize: 10 }}
+                      >
+                        {item.state === 'pending' && 'Pending'}
+                        {item.state === 'preparing' && 'Preparing'}
+                        {item.state === 'uploading' && 'Uploading'}
+                        {item.state === 'uploaded' && 'Uploaded'}
+                        {item.state === 'failed' && 'Failed'}
+                        {item.state === 'cancelled' && 'Cancelled'}
+                      </T.Caption>
+                    </View>
+                  ))}
+                </View>
+              )}
 
               {errors.photos ? (
                 <T.Caption color={Colors.danger} style={{ marginTop: 8, marginLeft: 4 }}>{errors.photos}</T.Caption>
@@ -1810,6 +1863,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: Radius.sm,
+  },
+  queueStatusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+    marginHorizontal: Space.md,
+  },
+  queueStatusPill: {
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
 
   /* ── identity ── */

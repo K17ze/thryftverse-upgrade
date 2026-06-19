@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { fetchListingByIdFromApi, patchListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 import { uploadMedia } from '../services/mediaUpload';
+import { MediaUploadQueue } from '../services/mediaUploadQueue';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -69,6 +70,14 @@ export default function EditListingScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
+
+  /* ── upload queue ── */
+  const uploadQueueRef = useRef(new MediaUploadQueue());
+  const [queueState, setQueueState] = useState(uploadQueueRef.current.getState());
+  useEffect(() => {
+    const unsub = uploadQueueRef.current.subscribe((s: import('../services/mediaUploadQueue').UploadQueueState) => setQueueState(s));
+    return () => { unsub(); };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -183,18 +192,28 @@ export default function EditListingScreen() {
         condition: condition || undefined,
       });
 
-      // 2. Upload any new local media and create listing image records
+      // 2. Upload any new local media via queue and create listing image records
       const newLocalPhotos = photos.filter((uri) => !uri.startsWith('http'));
       const existingRemotePhotos = photos.filter((uri) => uri.startsWith('http'));
       const removedOriginals = originalPhotos.filter((uri) => !existingRemotePhotos.includes(uri));
 
+      const queue = uploadQueueRef.current;
       if (newLocalPhotos.length > 0) {
-        for (let i = 0; i < newLocalPhotos.length; i++) {
-          const url = await uploadMedia(newLocalPhotos[i], 'listings');
+        const assets = newLocalPhotos.map((uri) => ({
+          id: `edit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          uri,
+          fileName: uri.split('/').pop() || 'photo.jpg',
+          mimeType: 'image/jpeg',
+          kind: 'image' as const,
+        }));
+        queue.addAssets(assets);
+        await queue.run();
+        const urls = queue.getUploadedUrls();
+        for (let i = 0; i < urls.length; i++) {
           await createListingImageOnApi({
             id: `${itemId}_img_new_${Date.now()}_${i}`,
             listingId: itemId,
-            imageUrl: url,
+            imageUrl: urls[i],
             sortOrder: existingRemotePhotos.length + i,
           });
         }
@@ -354,6 +373,31 @@ export default function EditListingScreen() {
                   </View>
                 ))}
               </ScrollView>
+            </Reanimated.View>
+          )}
+
+          {/* Queue upload status */}
+          {queueState.items.length > 0 && (
+            <Reanimated.View entering={FadeInDown.duration(200)} style={styles.queueStatusRow}>
+              {queueState.items.map((item) => (
+                <View key={item.id} style={styles.queueStatusPill}>
+                  <Text
+                    style={[
+                      styles.queueStatusText,
+                      item.state === 'uploaded' && { color: Colors.success },
+                      item.state === 'failed' && { color: Colors.danger },
+                      (item.state === 'uploading' || item.state === 'preparing') && { color: Colors.brand },
+                    ]}
+                  >
+                    {item.state === 'pending' && 'Pending'}
+                    {item.state === 'preparing' && 'Preparing'}
+                    {item.state === 'uploading' && 'Uploading'}
+                    {item.state === 'uploaded' && 'Uploaded'}
+                    {item.state === 'failed' && 'Failed'}
+                    {item.state === 'cancelled' && 'Cancelled'}
+                  </Text>
+                </View>
+              ))}
             </Reanimated.View>
           )}
 
@@ -729,5 +773,25 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  queueStatusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+  },
+  queueStatusPill: {
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  queueStatusText: {
+    fontSize: 10,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
   },
 });

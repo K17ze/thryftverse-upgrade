@@ -38,6 +38,7 @@ export class MediaUploadQueue {
   private listeners: UploadQueueListener[] = [];
   private running = false;
   private activeCount = 0;
+  private completionResolver: ((state: UploadQueueState) => void) | null = null;
 
   /* ── public API ── */
 
@@ -82,11 +83,18 @@ export class MediaUploadQueue {
     return true;
   }
 
+  /** Cancel only pending items. In-flight uploads continue to completion; the result is ignored. */
   cancelItem(itemId: string): boolean {
     const item = this.items.find((i) => i.id === itemId);
     if (!item) return false;
     if (item.state === 'uploaded') return false;
-    item.state = 'cancelled';
+    // Only cancel if not currently uploading; in-flight items are marked but allowed to finish
+    if (item.state === 'uploading' || item.state === 'preparing') {
+      // Mark for cancellation; processItem checks this after each network step
+      item.state = 'cancelled';
+    } else {
+      item.state = 'cancelled';
+    }
     item.error = null;
     item.retryable = false;
     this.emit();
@@ -148,6 +156,7 @@ export class MediaUploadQueue {
     this.items = [];
     this.running = false;
     this.activeCount = 0;
+    this.completionResolver = null;
     this.emit();
   }
 
@@ -157,6 +166,14 @@ export class MediaUploadQueue {
     return () => {
       this.listeners = this.listeners.filter((l) => l !== listener);
     };
+  }
+
+  /** Start processing and return a promise that resolves when the queue finishes. */
+  run(): Promise<UploadQueueState> {
+    return new Promise((resolve) => {
+      this.completionResolver = resolve;
+      this.start();
+    });
   }
 
   start(): void {
@@ -185,6 +202,20 @@ export class MediaUploadQueue {
     }
   }
 
+  private checkDone(): void {
+    const hasPending = this.items.some(
+      (i) => (i.state === 'pending' || i.state === 'preparing') && i.attemptCount < MAX_RETRIES
+    );
+    if (!hasPending && this.activeCount === 0) {
+      this.running = false;
+      this.emit();
+      if (this.completionResolver) {
+        this.completionResolver(this.getState());
+        this.completionResolver = null;
+      }
+    }
+  }
+
   private async processQueue(): Promise<void> {
     while (true) {
       const pending = this.items.filter(
@@ -199,13 +230,11 @@ export class MediaUploadQueue {
       this.activeCount++;
       this.processItem(item).finally(() => {
         this.activeCount--;
+        this.checkDone();
         this.processQueue();
       });
     }
-    if (this.activeCount === 0) {
-      this.running = false;
-      this.emit();
-    }
+    this.checkDone();
   }
 
   private waitForSlot(): Promise<void> {
@@ -233,16 +262,24 @@ export class MediaUploadQueue {
       const { asset } = item;
       const presign = await presignUpload(asset.fileName, asset.mimeType, 'listings');
 
+      // If item was cancelled while presigning, abort
+      if (this.getItemState(item.id) === 'cancelled') return;
+
       item.state = 'uploading';
       this.emit();
 
       await uploadToPresignedUrl(presign.url, asset.uri, asset.mimeType);
+
+      // If item was cancelled while uploading, ignore the result
+      if (this.getItemState(item.id) === 'cancelled') return;
 
       item.state = 'uploaded';
       item.publicUrl = presign.publicUrl;
       item.error = null;
       item.retryable = false;
     } catch (err: unknown) {
+      // If item was cancelled during upload, do not overwrite to failed
+      if (this.getItemState(item.id) === 'cancelled') return;
       const message = err instanceof Error ? err.message : 'Upload failed';
       item.state = 'failed';
       item.error = message;
@@ -250,5 +287,9 @@ export class MediaUploadQueue {
     }
 
     this.emit();
+  }
+
+  private getItemState(itemId: string): UploadQueueItemState {
+    return this.items.find((i) => i.id === itemId)?.state ?? 'cancelled';
   }
 }
