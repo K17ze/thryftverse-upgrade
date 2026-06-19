@@ -1568,13 +1568,15 @@ export default function ChatScreen({ navigation, route }: Props) {
           rightAction={
             <View style={styles.headerActions}>
               <AnimatedPressable
+                style={styles.headerActionBtn}
                 onPress={() => setIsSearchActive((v) => !v)}
                 activeOpacity={0.7}
                 scaleValue={0.9}
                 hapticFeedback="light">
-                <Ionicons name="search-outline" size={20} color={Colors.textPrimary} />
+                <Ionicons name="search-outline" size={20} color={Colors.textSecondary} />
               </AnimatedPressable>
               <AnimatedPressable
+                style={styles.headerActionBtn}
                 onPress={() => {
                   if (!conversation) return;
                   navigation.navigate(isGroup ? 'GroupChatInfo' : 'ConversationInfo', { conversationId: conversation.id });
@@ -1582,7 +1584,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 activeOpacity={0.7}
                 scaleValue={0.9}
                 hapticFeedback="light">
-                <Ionicons name="information-circle-outline" size={20} color={Colors.textPrimary} />
+                <Ionicons name="information-circle-outline" size={20} color={Colors.textSecondary} />
               </AnimatedPressable>
             </View>
           }
@@ -2034,9 +2036,9 @@ const styles = StyleSheet.create({
 
   headerAvatarRing: {
 
-    width: 38,
+    width: 42,
 
-    height: 38,
+    height: 42,
 
     borderRadius: Radius.full,
 
@@ -2054,9 +2056,9 @@ const styles = StyleSheet.create({
 
   headerAvatarImage: {
 
-    width: 30,
+    width: 34,
 
-    height: 30,
+    height: 34,
 
     borderRadius: Radius.full,
 
@@ -2066,7 +2068,21 @@ const styles = StyleSheet.create({
 
     flexDirection: 'row',
 
-    gap: Space.sm,
+    gap: Space.xs,
+
+  },
+
+  headerActionBtn: {
+
+    width: 40,
+
+    height: 40,
+
+    borderRadius: Radius.full,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
 
   },
 
@@ -2118,7 +2134,7 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    gap: Space.sm + 6,
+    gap: Space.sm,
 
     padding: Space.sm,
 
@@ -2132,9 +2148,9 @@ const styles = StyleSheet.create({
 
   itemThumb: {
 
-    width: 36,
+    width: 44,
 
-    height: 36,
+    height: 44,
 
     borderRadius: Radius.md,
 
@@ -2146,9 +2162,9 @@ const styles = StyleSheet.create({
 
   itemThumbImage: {
 
-    width: 36,
+    width: 44,
 
-    height: 36,
+    height: 44,
 
     borderRadius: Radius.md,
 
@@ -2174,6 +2190,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     paddingHorizontal: Space.sm,
     paddingVertical: 6,
+    ...Elevation.subtle,
   },
   itemQuickText: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
@@ -2205,9 +2222,9 @@ const styles = StyleSheet.create({
 
   emptyIconCircle: {
 
-    width: 88,
+    width: 72,
 
-    height: 88,
+    height: 72,
 
     borderRadius: Radius.full,
 
@@ -2239,7 +2256,7 @@ const styles = StyleSheet.create({
 
   emptyBody: {
 
-    fontSize: Type.body.size,
+    fontSize: Type.caption.size,
 
     fontFamily: TypeStyles.body.fontFamily,
 
@@ -2247,7 +2264,7 @@ const styles = StyleSheet.create({
 
     textAlign: 'center',
 
-    lineHeight: Type.body.lineHeight,
+    lineHeight: Type.caption.lineHeight,
 
     marginTop: Space.xs,
 
@@ -2269,7 +2286,7 @@ const styles = StyleSheet.create({
 
   messageList: {
 
-    paddingVertical: Space.md,
+    paddingVertical: Space.sm,
 
   },
 
@@ -2277,7 +2294,7 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    marginVertical: Space.sm + 4,
+    marginVertical: Space.md,
 
   },
 
@@ -2287,9 +2304,9 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.full,
 
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.sm,
 
-    paddingVertical: Space.xs + 2,
+    paddingVertical: Space.xs,
 
   },
 
@@ -2319,15 +2336,17 @@ const styles = StyleSheet.create({
 
     gap: Space.xs,
 
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
 
     borderRadius: Radius.lg,
 
-    padding: Space.md,
+    padding: Space.sm,
 
     borderWidth: StyleSheet.hairlineWidth,
 
     borderColor: Colors.border,
+
+    ...Elevation.subtle,
 
   },
 
@@ -2345,7 +2364,7 @@ const styles = StyleSheet.create({
 
     alignItems: 'flex-end',
 
-    gap: Space.sm,
+    gap: Space.xs,
 
     paddingHorizontal: Space.md,
 
@@ -2361,15 +2380,15 @@ const styles = StyleSheet.create({
 
   offerCard: {
 
-    maxWidth: '72%',
+    maxWidth: '78%',
 
     gap: Space.xs,
 
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
 
     borderRadius: Radius.lg,
 
-    padding: Space.md,
+    padding: Space.sm,
 
     borderWidth: StyleSheet.hairlineWidth,
 
@@ -2403,7 +2422,7 @@ const styles = StyleSheet.create({
 
   offerPriceText: {
 
-    fontSize: Type.price.size,
+    fontSize: Type.priceLarge.size,
 
     fontFamily: TypeStyles.title.fontFamily,
 
@@ -2507,11 +2526,11 @@ const styles = StyleSheet.create({
 
   linkPreviewWrap: {
 
-    maxWidth: '68%',
+    maxWidth: '78%',
 
     alignSelf: 'flex-start',
 
-    marginTop: 2,
+    marginTop: Space.xs,
 
   },
 
@@ -2585,7 +2604,7 @@ const styles = StyleSheet.create({
 
     borderTopColor: Colors.border,
 
-    ...Elevation.floating,
+    ...Elevation.subtle,
 
   },
 

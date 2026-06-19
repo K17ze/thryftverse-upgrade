@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface ChatComposerBarProps {
@@ -106,12 +106,10 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Platform.OS === 'ios' ? 8 : 6,
     gap: Space.xs,
     backgroundColor: Colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
   actionBtn: {
     width: 40,
@@ -148,8 +146,8 @@ const styles = StyleSheet.create({
     maxHeight: MAX_INPUT_HEIGHT,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
@@ -161,5 +159,6 @@ const styles = StyleSheet.create({
   sendBtnActive: {
     backgroundColor: Colors.textPrimary,
     borderColor: Colors.textPrimary,
+    ...Elevation.subtle,
   },
 });

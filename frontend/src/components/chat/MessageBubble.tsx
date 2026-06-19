@@ -132,7 +132,7 @@ export function MessageBubble({
                 uri={mediaUri}
                 style={[
                   styles.mediaImage,
-                  mediaType === 'video' && { width: 200, height: 140 },
+                  mediaType === 'video' && { width: 220, height: 154 },
                 ]}
                 contentFit="cover"
               />
@@ -222,8 +222,8 @@ const styles = StyleSheet.create({
     width: 28,
   },
   bubbleColumn: {
-    maxWidth: '74%',
-    gap: 2,
+    maxWidth: '78%',
+    gap: 4,
   },
   senderName: {
     fontSize: Type.caption.size,
@@ -253,9 +253,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.danger,
   },
   replyBlock: {
-    borderLeftWidth: 2,
+    borderLeftWidth: 3,
     paddingLeft: Space.sm,
-    marginBottom: 2,
+    marginBottom: Space.xs,
     gap: 2,
   },
   replyName: {
@@ -298,8 +298,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
   },
   mediaImage: {
-    width: 200,
-    height: 160,
+    width: 220,
+    height: 176,
     borderRadius: Radius.md,
   },
   videoBadge: {
@@ -332,9 +332,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
+    marginTop: Space.xs,
     marginLeft: Space.xs,
-    paddingVertical: 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.md,
+    backgroundColor: `${Colors.danger}14`,
     alignSelf: 'flex-start',
   },
   retryText: {
