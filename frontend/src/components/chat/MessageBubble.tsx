@@ -237,14 +237,12 @@ const styles = StyleSheet.create({
   bubbleMe: {
     backgroundColor: Colors.textPrimary,
     alignSelf: 'flex-end',
-    ...Elevation.subtle,
   },
   bubbleThem: {
     backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     alignSelf: 'flex-start',
-    ...Elevation.subtle,
   },
   bubbleFailed: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -297,9 +295,9 @@ const styles = StyleSheet.create({
   },
   mediaImage: {
     width: '100%',
-    minWidth: 180,
-    maxWidth: 260,
-    aspectRatio: 1.25,
+    minWidth: 200,
+    maxWidth: 280,
+    aspectRatio: 1.15,
     borderRadius: Radius.md,
   },
   videoBadge: {
@@ -362,11 +360,11 @@ const styles = StyleSheet.create({
     gap: 3,
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    ...Elevation.subtle,
+    minHeight: 28,
   },
   reactionChipActive: {
     borderColor: Colors.brand,
