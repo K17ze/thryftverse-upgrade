@@ -1,45 +1,25 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
-  Image,
   TextInput,
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  useAnimatedScrollHandler,
-  interpolate,
-  interpolateColor,
-  Extrapolation,
-  withSpring,
-  withTiming,
-  withSequence,
-  FadeInUp,
-  FadeIn,
-  FadeOut,
-  SlideInRight,
-  ZoomIn,
-  Layout,
-} from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type , Typography  } from '../theme/designTokens';
-import { T } from '../components/ui/Text';
+import { Space, Typography } from '../theme/designTokens';
 import { AppInput } from '../components/ui/AppInput';
-import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { SortablePhotoStrip } from '../components/SortablePhotoStrip';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { CURRENCIES } from '../constants/currencies';
 import { useStore } from '../store/useStore';
@@ -50,142 +30,27 @@ import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { filterImageUris } from '../utils/media';
 import { haptics } from '../utils/haptics';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
-import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { uploadMedia } from '../services/mediaUpload';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
+import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
+import { ListingModeSelector, ListingMode } from '../components/listing/ListingModeSelector';
+import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
 
-const CARD_PADDING = 20;
-const SECTION_GAP = 28;
-const INNER_GAP = 16;
+const { width: SCREEN_W } = Dimensions.get('window');
 
-/* ─── condition options ─── */
 const CONDITION_OPTIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory'];
-
-/* ─── auction durations ─── */
 const AUCTION_DURATIONS = [24, 48, 72, 168];
 
-/* ─── mode type ─── */
-type ListingMode = 'sell_now' | 'co_own' | 'auction';
-
-/* ─── inline helpers ─── */
-function SectionHeader({ step, title, subtitle }: { step: number; title: string; subtitle?: string }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <View style={styles.stepBadge}>
-        <T.CaptionEmphasis color={Colors.brand}>{step}</T.CaptionEmphasis>
-      </View>
-      <View style={styles.sectionHeaderText}>
-        <T.BodyEmphasis color={Colors.textPrimary}>{title}</T.BodyEmphasis>
-        {subtitle ? <T.Caption color={Colors.textMuted}>{subtitle}</T.Caption> : null}
-      </View>
-    </View>
-  );
-}
-
-function TrustChip({ text, icon }: { text: string; icon: string }) {
-  return (
-    <View style={styles.trustChip}>
-      <Ionicons name={icon as any} size={12} color={Colors.textMuted} />
-      <T.Caption color={Colors.textMuted} style={{ marginLeft: 4 }}>{text}</T.Caption>
-    </View>
-  );
-}
-
-/* ─── staged trust reveal engine ─── */
-function TrustReveal({
-  readiness,
-  mode,
-}: {
-  readiness: { score: number; total: number; steps: boolean[] };
-  mode: ListingMode;
-}) {
-  const { score, steps } = readiness;
-  let tip: { text: string; icon: string } | null = null;
-
-  if (mode === 'sell_now') {
-    if (score === 0) {
-      tip = { text: 'Start with a great photo to boost views', icon: 'camera-outline' };
-    } else if (!steps[0]) {
-      tip = { text: 'Add 2+ photos so buyers can see details', icon: 'images-outline' };
-    } else if (!steps[1]) {
-      tip = { text: 'A clear title helps buyers find your item', icon: 'text-outline' };
-    } else if (!steps[3]) {
-      tip = { text: 'Pick a category so buyers can filter to you', icon: 'grid-outline' };
-    } else if (!steps[4]) {
-      tip = { text: 'Condition builds trust — be honest', icon: 'shield-checkmark-outline' };
-    } else if (!steps[2]) {
-      tip = { text: 'Set a competitive price to sell faster', icon: 'trending-up-outline' };
-    } else if (!steps[5]) {
-      tip = { text: 'Add a description to close the sale', icon: 'chatbubble-outline' };
-    } else {
-      tip = { text: 'Ready to publish! Your listing looks great', icon: 'checkmark-circle-outline' };
-    }
-  } else if (mode === 'co_own') {
-    if (score === 0) {
-      tip = { text: 'Photos build investor confidence', icon: 'camera-outline' };
-    } else if (!steps[0]) {
-      tip = { text: 'Add auth photos for higher trust', icon: 'images-outline' };
-    } else if (!steps[1]) {
-      tip = { text: 'Item name helps with valuation research', icon: 'text-outline' };
-    } else if (!steps[3]) {
-      tip = { text: 'Category helps buyers find your proposal', icon: 'grid-outline' };
-    } else if (!steps[2]) {
-      tip = { text: 'Set a fair total valuation', icon: 'trending-up-outline' };
-    } else if (!steps[4]) {
-      tip = { text: 'Define share structure clearly', icon: 'people-outline' };
-    } else if (!steps[5]) {
-      tip = { text: 'Describe condition and provenance', icon: 'chatbubble-outline' };
-    } else {
-      tip = { text: 'Ready to propose co-ownership!', icon: 'checkmark-circle-outline' };
-    }
-  } else {
-    if (score === 0) {
-      tip = { text: 'Quality photos attract more bidders', icon: 'camera-outline' };
-    } else if (!steps[0]) {
-      tip = { text: 'Multiple angles increase bids', icon: 'images-outline' };
-    } else if (!steps[1]) {
-      tip = { text: 'Descriptive title draws bidder attention', icon: 'text-outline' };
-    } else if (!steps[3]) {
-      tip = { text: 'Category reaches the right bidders', icon: 'grid-outline' };
-    } else if (!steps[4]) {
-      tip = { text: 'Condition matters to serious bidders', icon: 'shield-checkmark-outline' };
-    } else if (!steps[2]) {
-      tip = { text: 'Low starting bid drives competition', icon: 'trending-up-outline' };
-    } else if (!steps[5]) {
-      tip = { text: 'Detail description builds bidder confidence', icon: 'chatbubble-outline' };
-    } else {
-      tip = { text: 'Ready to start your auction!', icon: 'checkmark-circle-outline' };
-    }
-  }
-
-  if (!tip) return null;
-  return (
-    <Animated.View entering={FadeIn.duration(400)} exiting={FadeOut.duration(300)} style={styles.trustRevealCard}>
-      <Ionicons name={tip.icon as any} size={16} color={Colors.brand} style={{ marginRight: 8 }} />
-      <T.Caption color={Colors.textPrimary} style={{ flex: 1 }}>
-        {tip.text}
-      </T.Caption>
-      <View style={styles.trustRevealScoreRing}>
-        <T.CaptionEmphasis color={Colors.brand} style={{ fontSize: 10 }}>
-          {score}/{readiness.total}
-        </T.CaptionEmphasis>
-      </View>
-    </Animated.View>
-  );
-}
-
-/* ─── main component ─── */
 export default function SellScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  /* ── store ── */
+
   const sellDraft = useStore((s) => s.sellDraft);
   const updateSellDraft = useStore((s) => s.updateSellDraft);
   const clearSellDraft = useStore((s) => s.clearSellDraft);
   const currentUser = useStore((s) => s.currentUser);
 
-  /* ── form state ── */
   const [photos, setPhotos] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
@@ -200,25 +65,20 @@ export default function SellScreen() {
   const [shippingMethod, setShippingMethod] = useState<'standard' | 'express' | null>(null);
   const [shippingPayer, setShippingPayer] = useState<'buyer' | 'seller' | null>(null);
 
-  /* ── listing mode ── */
   const [listingMode, setListingMode] = useState<ListingMode>('sell_now');
 
-  /* ── co-own state ── */
   const [coOwnEnabled, setCoOwnEnabled] = useState(false);
   const [shareCountInput, setShareCountInput] = useState('');
   const [sharePriceInput, setSharePriceInput] = useState('');
   const [offeringWindowHours, setOfferingWindowHours] = useState(48);
   const [authPhotos, setAuthPhotos] = useState<string[]>([]);
 
-  /* ── auction state ── */
   const [startingBid, setStartingBid] = useState('');
   const [reservePrice, setReservePrice] = useState('');
   const [auctionDurationHours, setAuctionDurationHours] = useState(48);
 
-  /* ── picker ── */
   const [pickerMode, setPickerMode] = useState<'Brand' | 'Size' | 'Condition' | 'Category' | null>(null);
 
-  /* ── validation ── */
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPublishing, setIsPublishing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -226,10 +86,8 @@ export default function SellScreen() {
   const publishedListingIdRef = useRef<string | null>(null);
   const uploadedUrlsRef = useRef<string[]>([]);
 
-  /* ── stable media draft items ── */
   const [mediaDraftItems, setMediaDraftItems] = useState<ListingMediaDraftItem[]>([]);
 
-  /* ── upload queue ── */
   const uploadQueueRef = useRef(new MediaUploadQueue());
   const [queueState, setQueueState] = useState(uploadQueueRef.current.getState());
   useEffect(() => {
@@ -237,33 +95,8 @@ export default function SellScreen() {
     return () => { unsub(); };
   }, []);
 
-  /* ── currency ── */
   const currency = useCurrencyPref();
   const currencySymbol = CURRENCIES[currency.currencyCode].symbol;
-
-  /* ── scroll ref ── */
-  const scrollRef = useRef<Animated.ScrollView>(null);
-
-  /* ── scroll momentum ── */
-  const scrollY = useSharedValue(0);
-  // SAFETY: useAnimatedScrollHandler returns an object; it must be passed to
-  // Animated.ScrollView (from react-native-reanimated), NOT a regular ScrollView.
-  const onScroll = useAnimatedScrollHandler({
-    onScroll: (event) => { scrollY.value = event.contentOffset.y; },
-  });
-  const topBarStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      scrollY.value,
-      [0, 60],
-      ['rgba(0,0,0,0.01)', Colors.background],
-    ) as any,
-    borderBottomWidth: interpolate(scrollY.value, [0, 60], [0, 1], Extrapolation.CLAMP) as any,
-    borderBottomColor: interpolateColor(
-      scrollY.value,
-      [0, 60],
-      ['rgba(0,0,0,0)', Colors.border],
-    ) as any,
-  }));
 
   /* ── draft sync on mount ── */
   useEffect(() => {
@@ -333,7 +166,7 @@ export default function SellScreen() {
     });
   }, [photos, mediaDraftItems, title, desc, price, originalPrice, brand, size, condition, category, tags, listingMode, shippingMethod, shippingPayer, startingBid, reservePrice, auctionDurationHours, coOwnEnabled, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, updateSellDraft]);
 
-  /* ── co-own bidirectional math: price = shareCount * sharePrice ── */
+  /* ── co-own bidirectional math ── */
   useEffect(() => {
     if (listingMode !== 'co_own') return;
     const listingPrice = Number(sanitizeDecimalInput(price));
@@ -351,48 +184,11 @@ export default function SellScreen() {
     }
   }, [price, shareCountInput, sharePriceInput, listingMode]);
 
-  /* ── auto-sync coOwnEnabled with listingMode ── */
   useEffect(() => {
     setCoOwnEnabled(listingMode === 'co_own');
   }, [listingMode]);
 
-  /* ── readiness bar (mode-specific) ── */
-  const readiness = useMemo(() => {
-    let score = 0;
-    let steps: boolean[] = [];
-    if (listingMode === 'sell_now') {
-      steps = [
-        photos.length > 0,
-        title.trim().length >= 3,
-        price.trim().length > 0 && Number(price) > 0,
-        category.length > 0,
-        condition.length > 0,
-        desc.trim().length >= 10,
-      ];
-    } else if (listingMode === 'co_own') {
-      steps = [
-        photos.length > 0,
-        title.trim().length >= 3,
-        price.trim().length > 0 && Number(price) > 0,
-        category.length > 0,
-        shareCountInput.trim().length > 0 && Number(shareCountInput) > 0,
-        desc.trim().length >= 10,
-      ];
-    } else {
-      steps = [
-        photos.length > 0,
-        title.trim().length >= 3,
-        startingBid.trim().length > 0 && Number(startingBid) > 0,
-        category.length > 0,
-        condition.length > 0,
-        desc.trim().length >= 10,
-      ];
-    }
-    steps.forEach((s) => { if (s) score += 1; });
-    return { score, total: steps.length, steps };
-  }, [listingMode, photos, title, price, category, condition, desc, shareCountInput, startingBid]);
-
-  /* ── restored readiness + flow logic from .bak ── */
+  /* ── validation computed ── */
   const hasBasePhotos = photos.length > 0;
   const hasRequiredDetails = Boolean(title.trim() && category && size && condition);
   const hasDescription = desc.trim().length >= 10;
@@ -407,110 +203,21 @@ export default function SellScreen() {
   const coOwnFinancialReady = listingMode !== 'co_own' || (hasValidShareCount && hasValidSharePrice);
   const coOwnAuthReady = listingMode !== 'co_own' || authPhotos.length > 0;
 
-  const readinessItems = [
-    { key: 'photos', label: 'Media', done: hasBasePhotos },
-    { key: 'details', label: 'Details', done: hasRequiredDetails },
-    { key: 'description', label: 'Description', done: hasDescription },
-    { key: 'price', label: listingMode === 'auction' ? 'Starting bid' : 'Price', done: listingMode === 'auction' ? hasValidStartingBid : hasValidPrice },
-    { key: 'coOwnPrice', label: 'Share setup', done: coOwnFinancialReady },
-    { key: 'coOwnAuth', label: 'Auth proof', done: coOwnAuthReady },
-  ];
+  const publishReady = useMemo(() => {
+    if (!hasBasePhotos) return false;
+    if (!hasRequiredDetails) return false;
+    if (!hasDescription) return false;
+    if (listingMode === 'auction') return hasValidStartingBid;
+    if (listingMode === 'co_own') return hasValidPrice && coOwnFinancialReady && coOwnAuthReady;
+    return hasValidPrice;
+  }, [hasBasePhotos, hasRequiredDetails, hasDescription, listingMode, hasValidPrice, hasValidStartingBid, coOwnFinancialReady, coOwnAuthReady]);
 
-  const visibleReadinessItems = listingMode === 'co_own'
-    ? readinessItems
-    : readinessItems.filter((item) => item.key !== 'coOwnPrice' && item.key !== 'coOwnAuth');
-
-  const incompleteReadinessCount = visibleReadinessItems.reduce(
-    (count, item) => (item.done ? count : count + 1),
-    0,
-  );
-
-  const publishReady = incompleteReadinessCount === 0;
-
-  const flowSteps = [
-    { key: 'media', label: 'Media', done: hasBasePhotos },
-    { key: 'details', label: 'Details', done: hasRequiredDetails && hasDescription },
-    { key: 'pricing', label: 'Pricing', done: listingMode === 'auction' ? hasValidStartingBid : hasValidPrice },
-    { key: 'launch', label: listingMode === 'co_own' ? 'Issue' : listingMode === 'auction' ? 'Auction' : 'Publish', done: publishReady },
-  ];
-
-  const currentFlowStep = flowSteps.findIndex((step) => !step.done);
-  const flowStepCount = flowSteps.length;
-  const flowProgressLabel = currentFlowStep === -1
-    ? `Step ${flowStepCount}/${flowStepCount}`
-    : `Step ${currentFlowStep + 1}/${flowStepCount}`;
-
-  const nextFlowActionHint = !hasBasePhotos
-    ? 'Add at least one photo or video to unlock the listing flow.'
-    : !hasRequiredDetails
-      ? 'Complete title, category, size, and condition.'
-      : !hasDescription
-        ? 'Add a description with key details buyers care about.'
-        : listingMode === 'auction' && !hasValidStartingBid
-          ? 'Set a starting bid to start your auction.'
-          : listingMode !== 'auction' && !hasValidPrice
-            ? 'Set a valid price to enable publishing.'
-            : listingMode === 'co_own' && !coOwnFinancialReady
-              ? 'Complete share count and share price for co-own.'
-              : listingMode === 'co_own' && !coOwnAuthReady
-                ? 'Attach authentication photos before issuing co-own units.'
-                : 'Everything is ready. You can continue now.';
-
-  const missingReadinessItems = visibleReadinessItems.filter((item) => !item.done);
-  const primaryCtaTitle = publishReady
-    ? listingMode === 'co_own' ? 'Continue to Issue' : listingMode === 'auction' ? 'Start Auction' : 'Publish Item'
-    : 'Review Required Fields';
-  const primaryCtaSubtitle = publishReady
-    ? listingMode === 'co_own'
-      ? 'Opens issuer setup with this listing prefilled.'
-      : listingMode === 'auction'
-      ? 'Starts your auction immediately.'
-      : 'Publishes this listing to your storefront.'
-    : missingReadinessItems.length > 2
-      ? `${missingReadinessItems.slice(0, 2).map((item) => item.label).join(' + ')} +${missingReadinessItems.length - 2} more`
-      : missingReadinessItems.map((item) => item.label).join(' + ');
-
-  /* ── clear error when publish-ready ── */
   useEffect(() => {
     if (publishReady && (errorMsg || Object.keys(errors).length > 0)) {
       setErrorMsg(null);
       setErrors({});
     }
   }, [publishReady, errorMsg, errors]);
-
-  /* ── spring progress fill ── */
-  const progressWidth = useSharedValue(0);
-  const prevScoreRef = useRef(0);
-  const progressFillStyle = useAnimatedStyle(() => ({
-    width: `${progressWidth.value}%`,
-  }));
-  useEffect(() => {
-    progressWidth.value = withSpring((readiness.score / readiness.total) * 100, { damping: 14, stiffness: 120 });
-    if (readiness.score > prevScoreRef.current && readiness.score < readiness.total) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    prevScoreRef.current = readiness.score;
-  }, [readiness.score, readiness.total]);
-
-  /* ── shake animation ── */
-  const shakeOffset = useSharedValue(0);
-  const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeOffset.value }] }));
-  const triggerShake = useCallback(() => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    shakeOffset.value = withSequence(
-      withTiming(-8, { duration: 50 }),
-      withTiming(8, { duration: 50 }),
-      withTiming(-6, { duration: 50 }),
-      withTiming(6, { duration: 50 }),
-      withTiming(-3, { duration: 50 }),
-      withTiming(3, { duration: 50 }),
-      withTiming(0, { duration: 50 })
-    );
-  }, []);
-
-  /* ── price focus animation ── */
-  const priceScale = useSharedValue(1);
-  const priceFocusStyle = useAnimatedStyle(() => ({ transform: [{ scale: priceScale.value }] }));
 
   /* ── tag handling ── */
   const handleTagSubmit = useCallback(() => {
@@ -557,7 +264,6 @@ export default function SellScreen() {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
         setErrorMsg('Allow gallery access to upload media.');
-        triggerShake();
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -572,9 +278,7 @@ export default function SellScreen() {
         const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
 
         if (validation.errors.length > 0) {
-          const skipped = validation.errors
-            .map((e) => e.message)
-            .join('. ');
+          const skipped = validation.errors.map((e) => e.message).join('. ');
           if (skipped) setErrorMsg(skipped);
         }
 
@@ -595,7 +299,6 @@ export default function SellScreen() {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
         setErrorMsg('Allow camera access to capture listing media.');
-        triggerShake();
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -630,12 +333,10 @@ export default function SellScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
-  /* ── price handling ── */
   const handlePriceChange = useCallback((text: string) => {
     setPrice(sanitizeDecimalInput(text));
   }, []);
 
-  /* ── share count handling ── */
   const handleShareCountChange = useCallback((value: string) => {
     const sanitized = sanitizeIntegerInput(value);
     if (!sanitized) { setShareCountInput(''); return; }
@@ -644,61 +345,37 @@ export default function SellScreen() {
     setShareCountInput(String(Math.min(20, parsed)));
   }, []);
 
-  /* ── publish (mode-specific validation + real backend) ── */
+  /* ── publish ── */
   const handlePublish = useCallback(async () => {
     const trimmedTitle = title.trim();
     const trimmedDescription = desc.trim();
     const numericPrice = Number(sanitizeDecimalInput(price));
     const nextErrors: Record<string, string> = {};
 
-    if (photos.length === 0) {
-      nextErrors.photos = 'Add at least one photo or video before publishing.';
-    }
-
-    if (!trimmedTitle) {
-      nextErrors.title = 'Please provide a title.';
-    }
-    if (!category) {
-      nextErrors.category = 'Please select a category.';
-    }
-    if (!size) {
-      nextErrors.size = 'Please choose a size.';
-    }
-    if (!condition) {
-      nextErrors.condition = 'Please choose a condition.';
-    }
-    if (!trimmedDescription || trimmedDescription.length < 10) {
-      nextErrors.description = 'Add a description with at least 10 characters.';
-    }
-    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
-      nextErrors.price = 'Enter a valid price greater than 0.';
-    }
+    if (photos.length === 0) nextErrors.photos = 'Add at least one photo or video before publishing.';
+    if (!trimmedTitle) nextErrors.title = 'Please provide a title.';
+    if (!category) nextErrors.category = 'Please select a category.';
+    if (!size) nextErrors.size = 'Please choose a size.';
+    if (!condition) nextErrors.condition = 'Please choose a condition.';
+    if (!trimmedDescription || trimmedDescription.length < 10) nextErrors.description = 'Add a description with at least 10 characters.';
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0) nextErrors.price = 'Enter a valid price greater than 0.';
 
     if (listingMode === 'co_own') {
       const shareCount = Math.floor(Number(shareCountInput));
       const sharePrice = Number(sanitizeDecimalInput(sharePriceInput));
-      if (!Number.isFinite(shareCount) || shareCount <= 0) {
-        nextErrors.shareCount = 'Enter a valid share count.';
-      }
-      if (!Number.isFinite(sharePrice) || sharePrice <= 0) {
-        nextErrors.sharePrice = 'Enter a valid share price.';
-      }
-      if (authPhotos.length === 0) {
-        nextErrors.authPhotos = 'Attach authentication photos before issuing co-own units.';
-      }
+      if (!Number.isFinite(shareCount) || shareCount <= 0) nextErrors.shareCount = 'Enter a valid share count.';
+      if (!Number.isFinite(sharePrice) || sharePrice <= 0) nextErrors.sharePrice = 'Enter a valid share price.';
+      if (authPhotos.length === 0) nextErrors.authPhotos = 'Attach authentication photos before issuing co-own units.';
     }
 
     if (listingMode === 'auction') {
       const bid = Number(sanitizeDecimalInput(startingBid));
-      if (!Number.isFinite(bid) || bid <= 0) {
-        nextErrors.startingBid = 'Enter a valid starting bid greater than 0.';
-      }
+      if (!Number.isFinite(bid) || bid <= 0) nextErrors.startingBid = 'Enter a valid starting bid greater than 0.';
     }
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       setErrorMsg('Please fix the errors above before publishing.');
-      triggerShake();
       haptics.error();
       return;
     }
@@ -715,7 +392,6 @@ export default function SellScreen() {
 
       if (!prefillResult.ok) {
         setErrorMsg(prefillResult.error ?? 'Unable to prepare co-own listing.');
-        triggerShake();
         haptics.error();
         return;
       }
@@ -729,11 +405,9 @@ export default function SellScreen() {
     if (listingMode === 'auction') {
       if (!currentUser?.id) {
         setErrorMsg('Sign in to publish a listing.');
-        triggerShake();
         haptics.error();
         return;
       }
-      // Auction mode: create the listing first, then route to CreateAuction
       setErrorMsg(null);
       setIsPublishing(true);
       try {
@@ -794,7 +468,6 @@ export default function SellScreen() {
       } catch (e: unknown) {
         const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to prepare auction. Please try again.';
         setErrorMsg(msg);
-        triggerShake();
         haptics.error();
       } finally {
         setIsPublishing(false);
@@ -804,7 +477,6 @@ export default function SellScreen() {
 
     if (!currentUser?.id) {
       setErrorMsg('Sign in to publish a listing.');
-      triggerShake();
       haptics.error();
       return;
     }
@@ -816,8 +488,6 @@ export default function SellScreen() {
 
     try {
       const queue = uploadQueueRef.current;
-
-      // 1. Upload all local media via queue (skip already-uploaded or remote URIs)
       const itemsToUpload = mediaDraftItems.filter((m) => m.source === 'local' && m.status !== 'uploaded');
       if (itemsToUpload.length > 0) {
         const assets = itemsToUpload.map((m) => ({
@@ -829,7 +499,6 @@ export default function SellScreen() {
         }));
         queue.addAssets(assets);
         await queue.run();
-        // Sync queue results back into mediaDraftItems
         const queueItems = queue.getItems();
         setMediaDraftItems((prev) =>
           prev.map((m) => {
@@ -846,11 +515,9 @@ export default function SellScreen() {
       }
 
       const uploadedUrls: string[] = mediaDraftItems.map((m) => m.publicUrl || m.uri).filter((u): u is string => !!u);
-
       const coverImage = uploadedUrls[0] ?? '';
       let listingId = publishedListingIdRef.current;
 
-      // 2. Create listing if not already created
       if (!listingId) {
         setPublicationStage('creating_listing');
         listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
@@ -873,7 +540,6 @@ export default function SellScreen() {
         publishedListingIdRef.current = listingId;
       }
 
-      // 3. Create listing_images for all photos
       setPublicationStage('attaching_media');
       for (let i = 0; i < uploadedUrls.length; i++) {
         await createListingImageOnApi({
@@ -903,12 +569,11 @@ export default function SellScreen() {
       const hasMedia = mediaDraftItems.some((m) => m.status === 'uploaded');
       setPublicationStage('failed_recoverable');
       setErrorMsg(hasListing ? `${msg} — your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} — some media uploaded. Tap Publish to retry.` : msg);
-      triggerShake();
       haptics.error();
     } finally {
       setIsPublishing(false);
     }
-  }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, triggerShake, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer]);
+  }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer]);
 
   /* ── picker helpers ── */
   const getPickerOptions = useCallback(() => {
@@ -959,465 +624,391 @@ export default function SellScreen() {
     return Math.round(((orig - curr) / orig) * 100);
   }, [hasDiscount, originalPrice, price]);
 
+  const publishDisabled = isPublishing || (!publishReady && !isPublishing);
+
+  /* ── preview handler ── */
+  const handlePreview = useCallback(() => {
+    haptics.press();
+    navigation.navigate('ListingPreview', {
+      preview: {
+        title: title.trim(),
+        price: Number(sanitizeDecimalInput(price)) || undefined,
+        originalPrice: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
+        brand: brand || undefined,
+        condition: condition || undefined,
+        category: category || undefined,
+        size: size || undefined,
+        description: desc.trim() || undefined,
+        photos,
+        tags,
+        shippingMethod: shippingMethod || undefined,
+        shippingPayer: shippingPayer || undefined,
+      },
+    });
+  }, [title, price, originalPrice, brand, condition, category, size, desc, photos, tags, shippingMethod, shippingPayer, navigation]);
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Animated.ScrollView
-          ref={scrollRef}
+        {/* ── 1. COMPACT NAVIGATION HEADER ── */}
+        <View style={[styles.navHeader, { paddingTop: 0 }]}>
+          <Pressable
+            style={styles.navCloseBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Close and go back"
+          >
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          </Pressable>
+          <Text style={styles.navTitle}>Create listing</Text>
+          <View style={styles.navDraftStatus}>
+            <Text style={styles.navDraftText}>Draft saved</Text>
+          </View>
+        </View>
+
+        <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
         >
-        {/* ── top bar ── */}
-        <Animated.View style={[styles.topBar, topBarStyle]}>
-          <AnimatedPressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
-          </AnimatedPressable>
-          <T.BodyEmphasis style={styles.topBarTitle}>Create listing</T.BodyEmphasis>
-          <AnimatedPressable onPress={handlePickFromCamera} style={styles.iconBtn}>
-            <Ionicons name="camera-outline" size={22} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        </Animated.View>
+          {/* ── 2. LARGE LISTING MEDIA STUDIO ── */}
+          <ListingMediaStudio
+            photos={photos}
+            mediaDraftItems={mediaDraftItems}
+            queueItems={queueState.items}
+            maxCount={10}
+            errorText={errors.photos}
+            onPickFromLibrary={handlePickFromLibrary}
+            onPickFromCamera={handlePickFromCamera}
+            onReorder={(newOrder) => {
+              setPhotos(newOrder);
+              setMediaDraftItems((prev) => {
+                const uriToItem = new Map(prev.map((m) => [m.uri, m]));
+                return newOrder.map((uri) => uriToItem.get(uri) || { id: `reorder_${uri}`, uri, kind: 'image' as const, source: 'local' as const, status: 'draft' as const }).filter(Boolean);
+              });
+            }}
+            onRemovePhoto={removePhoto}
+          />
 
-        {/* ── step progress ── */}
-        <View style={styles.progressBarWrap}>
-          <View style={styles.progressBarTrack}>
-            <Animated.View
-              style={[
-                styles.progressBarFill,
-                progressFillStyle,
-              ]}
+          {/* ── 3. LISTING MODE SELECTOR ── */}
+          <View style={styles.sectionSpacing}>
+            <ListingModeSelector
+              mode={listingMode}
+              onChange={(m) => { setListingMode(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             />
           </View>
-          <T.Caption color={Colors.textMuted} style={styles.progressLabel}>
-            {readiness.score} of {readiness.total} steps complete &middot; {flowProgressLabel}
-          </T.Caption>
-        </View>
 
-        {/* ── staged trust reveal ── */}
-        <TrustReveal readiness={readiness} mode={listingMode} />
+          {/* ── 4. PRODUCT DETAILS ── */}
+          <View style={styles.sectionGroup}>
+            <Text style={styles.sectionHeading}>Details</Text>
 
-        {/* ── listing type selector ── */}
-        <Animated.View entering={FadeInUp.duration(300)} style={{ marginTop: SECTION_GAP }}>
-          <SectionHeader step={1} title="Listing type" />
-          <View style={styles.typeToggleRow}>
-            {(['sell_now', 'co_own', 'auction'] as const).map((t) => {
-              const active = listingMode === t;
-              const label = t === 'sell_now' ? 'Sell now' : t === 'co_own' ? 'Co-own' : 'Auction';
-              const icon = t === 'sell_now' ? 'pricetag-outline' : t === 'co_own' ? 'people-outline' : 'hammer-outline';
-              return (
-                <AnimatedPressable
-                  key={t}
-                  style={[styles.typeTogglePill, active && styles.typeTogglePillActive]}
-                  onPress={() => { setListingMode(t); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                >
-                  <Ionicons name={icon as any} size={16} color={active ? '#fff' : Colors.textMuted} style={{ marginRight: 6 }} />
-                  <T.Caption color={active ? '#fff' : Colors.textPrimary} style={active ? { fontWeight: '700' } : {}}>
-                    {label}
-                  </T.Caption>
-                </AnimatedPressable>
-              );
-            })}
-          </View>
-        </Animated.View>
-
-        {/* ═══════ SECTION 1 — MEDIA FIRST ═══════ */}
-        <Animated.View entering={FadeInUp.duration(300)} layout={Layout.springify()} style={{ marginTop: SECTION_GAP }}>
-          <SectionHeader step={2} title="Photos" subtitle="First photo is your cover" />
-
-          <View style={styles.mediaTrustBanner}>
-            <Ionicons name="cube-outline" size={16} color={Colors.brand} />
-            <T.Caption color={Colors.textSecondary} style={{ flex: 1 }}>
-              Your photos are uploaded securely. Add up to 10 images for the best results.
-            </T.Caption>
-          </View>
-
-          {photos.length === 0 ? (
-            <View style={[styles.mediaEmptyCard, styles.mediaEmptyInner]}>
-              <View style={styles.mediaEmptyIconCircle}>
-                <Ionicons name="camera" size={32} color={Colors.brand} />
-              </View>
-              <T.BodyEmphasis style={styles.mediaEmptyTitle}>Add photos to get started</T.BodyEmphasis>
-              <T.Caption color={Colors.textMuted} style={styles.mediaEmptySub}>
-                Adding more photos helps buyers see details
-              </T.Caption>
-              <View style={styles.mediaEmptyActions}>
-                <AnimatedPressable style={styles.mediaActionBtn} onPress={handlePickFromCamera}>
-                  <Ionicons name="camera-outline" size={22} color={Colors.brand} />
-                  <T.Caption color={Colors.textMuted} style={{ marginTop: 6 }}>Camera</T.Caption>
-                </AnimatedPressable>
-                <View style={{ width: 16 }} />
-                <AnimatedPressable style={styles.mediaActionBtn} onPress={handlePickFromLibrary}>
-                  <Ionicons name="images-outline" size={22} color={Colors.brand} />
-                  <T.Caption color={Colors.textMuted} style={{ marginTop: 6 }}>Gallery</T.Caption>
-                </AnimatedPressable>
-              </View>
-              {errors.photos ? (
-                <T.Caption color={Colors.danger} style={{ marginTop: 12 }}>{errors.photos}</T.Caption>
-              ) : null}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Title</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={title}
+                onChangeText={(t) => { setTitle(t); if (errors.title) setErrors((p) => ({ ...p, title: '' })); }}
+                placeholder="e.g. Vintage Levi's 501 Denim Jacket"
+                placeholderTextColor={Colors.textMuted}
+                returnKeyType="next"
+              />
+              {errors.title ? <Text style={styles.fieldError}>{errors.title}</Text> : null}
+              <View style={styles.hairline} />
             </View>
-          ) : (
-            <View>
-              <Animated.View entering={ZoomIn.springify().dampingRatio(0.6).stiffness(200)} style={styles.heroWrap}>
-                <Image source={{ uri: photos[0] }} style={styles.heroImage as any} resizeMode="cover" />
-                <View style={styles.heroCoverBadge}>
-                  <T.CaptionEmphasis color="#fff" style={{ fontSize: 10 }}>COVER</T.CaptionEmphasis>
-                </View>
-                <View style={styles.mediaCountBadge}>
-                  <T.CaptionEmphasis color="#fff" style={{ fontSize: 10 }}>
-                    {photos.length}/10
-                  </T.CaptionEmphasis>
-                </View>
-                <AnimatedPressable style={styles.heroRemoveBtn} onPress={() => removePhoto(0)}>
-                  <Ionicons name="close-circle" size={24} color="#fff" />
-                </AnimatedPressable>
-              </Animated.View>
 
-              <View style={{ marginTop: 12 }}>
-                <SortablePhotoStrip
-                  photos={photos}
-                  onReorder={(newOrder) => {
-                    setPhotos(newOrder);
-                    setMediaDraftItems((prev) => {
-                      const uriToItem = new Map(prev.map((m) => [m.uri, m]));
-                      return newOrder.map((uri) => uriToItem.get(uri) || { id: `reorder_${uri}`, uri, kind: 'image' as const, source: 'local' as const, status: 'draft' as const }).filter(Boolean);
-                    });
-                  }}
-                  onAddPhoto={handlePickFromLibrary}
-                />
-              </View>
-
-              {/* Queue upload status */}
-              {queueState.items.length > 0 && (
-                <View style={styles.queueStatusRow}>
-                  {queueState.items.map((item) => (
-                    <View key={item.id} style={styles.queueStatusPill}>
-                      <T.Caption
-                        color={
-                          item.state === 'uploaded'
-                            ? Colors.success
-                            : item.state === 'failed'
-                            ? Colors.danger
-                            : item.state === 'uploading' || item.state === 'preparing'
-                            ? Colors.brand
-                            : Colors.textMuted
-                        }
-                        style={{ fontSize: 10 }}
-                      >
-                        {item.state === 'pending' && 'Pending'}
-                        {item.state === 'preparing' && 'Preparing'}
-                        {item.state === 'uploading' && 'Uploading'}
-                        {item.state === 'uploaded' && 'Uploaded'}
-                        {item.state === 'failed' && 'Failed'}
-                        {item.state === 'cancelled' && 'Cancelled'}
-                      </T.Caption>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {errors.photos ? (
-                <T.Caption color={Colors.danger} style={{ marginTop: 8, marginLeft: 4 }}>{errors.photos}</T.Caption>
-              ) : null}
-
-              <TrustChip text="Listings with 3+ photos get more views" icon="images-outline" />
-            </View>
-          )}
-        </Animated.View>
-
-        {/* ═══════ SECTION 2 — CORE PRODUCT IDENTITY ═══════ */}
-        <Animated.View entering={FadeInUp.delay(100).duration(300)} style={{ marginTop: SECTION_GAP }}>
-          <SectionHeader step={3} title="What are you selling?" />
-          <ElevatedSurface variant="surface" style={[styles.identityCard, { marginBottom: 0 }]}>
-            <AppInput
-              label="Title"
-              placeholder="e.g. Vintage Levi's 501 Denim Jacket"
-              value={title}
-              onChangeText={(t) => { setTitle(t); if (errors.title) setErrors((p) => ({ ...p, title: '' })); }}
-              errorText={errors.title}
-              containerStyle={{ marginBottom: INNER_GAP }}
-            />
-
-            <AnimatedPressable
-              style={[styles.selectorRow, errors.category ? { borderColor: Colors.danger } : {}]}
+            <Pressable
+              style={styles.pickerRow}
               onPress={() => setPickerMode('Category')}
+              accessibilityRole="button"
+              accessibilityLabel="Select category"
             >
-              <View style={styles.selectorRowInner}>
-                <Ionicons name="grid-outline" size={18} color={Colors.textMuted} />
-                <View style={{ marginLeft: 12, flex: 1 }}>
-                  <T.Caption color={Colors.textMuted}>Category</T.Caption>
-                  <T.Body color={category ? Colors.textPrimary : Colors.textMuted}>
-                    {category || 'Select category'}
-                  </T.Body>
-                </View>
+              <View style={styles.pickerRowInner}>
+                <Text style={styles.fieldLabel}>Category</Text>
+                <Text style={[styles.pickerValue, !category && styles.pickerPlaceholder]}>
+                  {category || 'Select category'}
+                </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </AnimatedPressable>
-            {errors.category ? (
-              <T.Caption color={Colors.danger} style={{ marginTop: 4, marginBottom: INNER_GAP }}>{errors.category}</T.Caption>
-            ) : (
-              <View style={{ height: INNER_GAP }} />
+              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            </Pressable>
+            {errors.category ? <Text style={styles.fieldError}>{errors.category}</Text> : null}
+            <View style={styles.hairline} />
+
+            <Pressable
+              style={styles.pickerRow}
+              onPress={() => setPickerMode('Brand')}
+              accessibilityRole="button"
+              accessibilityLabel="Select brand"
+            >
+              <View style={styles.pickerRowInner}>
+                <Text style={styles.fieldLabel}>Brand</Text>
+                <Text style={[styles.pickerValue, !brand && styles.pickerPlaceholder]}>
+                  {brand || 'Select brand'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            </Pressable>
+            <View style={styles.hairline} />
+
+            <Pressable
+              style={styles.pickerRow}
+              onPress={() => setPickerMode('Size')}
+              accessibilityRole="button"
+              accessibilityLabel="Select size"
+            >
+              <View style={styles.pickerRowInner}>
+                <Text style={styles.fieldLabel}>Size</Text>
+                <Text style={[styles.pickerValue, !size && styles.pickerPlaceholder]}>
+                  {size || 'Select size'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            </Pressable>
+            {errors.size ? <Text style={styles.fieldError}>{errors.size}</Text> : null}
+            <View style={styles.hairline} />
+
+            <Pressable
+              style={styles.pickerRow}
+              onPress={() => setPickerMode('Condition')}
+              accessibilityRole="button"
+              accessibilityLabel="Select condition"
+            >
+              <View style={styles.pickerRowInner}>
+                <Text style={styles.fieldLabel}>Condition</Text>
+                <Text style={[styles.pickerValue, !condition && styles.pickerPlaceholder]}>
+                  {condition || 'Select condition'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            </Pressable>
+            {errors.condition ? <Text style={styles.fieldError}>{errors.condition}</Text> : null}
+            <View style={styles.hairline} />
+          </View>
+
+          {/* ── 5. MODE-SPECIFIC PRICING ── */}
+          <View style={styles.sectionGroup}>
+            <Text style={styles.sectionHeading}>Pricing</Text>
+
+            {listingMode === 'sell_now' && (
+              <>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Price</Text>
+                  <View style={styles.priceInputRow}>
+                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="0"
+                      placeholderTextColor={Colors.textMuted}
+                      keyboardType="decimal-pad"
+                      value={price}
+                      onChangeText={(t) => { handlePriceChange(t); setErrors((p) => ({ ...p, price: '' })); }}
+                      maxLength={8}
+                    />
+                  </View>
+                  {errors.price ? <Text style={styles.fieldError}>{errors.price}</Text> : null}
+                  <View style={styles.hairline} />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Original price (optional)</Text>
+                  <View style={styles.priceInputRow}>
+                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="0"
+                      placeholderTextColor={Colors.textMuted}
+                      keyboardType="decimal-pad"
+                      value={originalPrice}
+                      onChangeText={(t) => setOriginalPrice(sanitizeDecimalInput(t))}
+                      maxLength={8}
+                    />
+                  </View>
+                  {hasDiscount && (
+                    <Text style={styles.discountPreview}>−{discountPercent}% off original</Text>
+                  )}
+                  <View style={styles.hairline} />
+                </View>
+              </>
             )}
 
-            <T.Caption color={Colors.textMuted} style={{ marginBottom: 8 }}>Condition</T.Caption>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.pillRow}>
-                {CONDITION_OPTIONS.map((opt) => {
-                  const active = condition === opt;
-                  return (
-                    <AnimatedPressable
-                      key={opt}
-                      style={[styles.conditionPill, active && { backgroundColor: Colors.brand, borderColor: Colors.brand }]}
-                      onPress={() => { setCondition(opt); setErrors((p) => ({ ...p, condition: '' })); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                    >
-                      <T.Caption color={active ? '#fff' : Colors.textPrimary} style={active ? { fontWeight: '700' } : {}}>
-                        {opt}
-                      </T.Caption>
-                    </AnimatedPressable>
-                  );
-                })}
-              </View>
-            </ScrollView>
-            {errors.condition ? (
-              <T.Caption color={Colors.danger} style={{ marginTop: 6 }}>{errors.condition}</T.Caption>
-            ) : null}
-
-            <TrustChip text="Buyers filter by condition — be honest" icon="shield-checkmark-outline" />
-          </ElevatedSurface>
-        </Animated.View>
-
-        {/* ═══════ SECTION 3 — MODE-SPECIFIC PRICING ═══════ */}
-        {listingMode === 'sell_now' && (
-          <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ marginTop: SECTION_GAP }}>
-            <SectionHeader step={4} title="Pricing" />
-            <Animated.View style={[styles.pricingWrap, priceFocusStyle]}>
-              <ElevatedSurface variant="surface" style={[styles.pricingCard, { marginBottom: 0 }]}>
-                <View style={styles.priceInputWrap}>
-                  <T.Headline color={Colors.textMuted} style={styles.priceCurrency}>{currencySymbol}</T.Headline>
-                  <TextInput
-                    style={styles.priceInput}
-                    placeholder="0"
-                    placeholderTextColor={Colors.textMuted}
-                    keyboardType="decimal-pad"
-                    value={price}
-                    onChangeText={(t) => { handlePriceChange(t); setErrors((p) => ({ ...p, price: '' })); }}
-                    onFocus={() => { priceScale.value = withSpring(1.02, { damping: 12 }); }}
-                    onBlur={() => { priceScale.value = withSpring(1, { damping: 12 }); }}
-                    maxLength={8}
-                  />
-                </View>
-                {errors.price ? (
-                  <T.Caption color={Colors.danger} style={{ marginTop: 8 }}>{errors.price}</T.Caption>
-                ) : null}
-
-                <View style={styles.originalPriceRow}>
-                  <AppInput
-                    label="Original price (optional)"
-                    placeholder="0"
-                    prefix={currencySymbol}
-                    keyboardType="decimal-pad"
-                    value={originalPrice}
-                    onChangeText={(t) => setOriginalPrice(sanitizeDecimalInput(t))}
-                    containerStyle={{ flex: 1 }}
-                  />
-                  {hasDiscount && (
-                    <View style={styles.discountBadge}>
-                      <T.Caption color="#fff" style={{ fontWeight: '700' }}>-{discountPercent}%</T.Caption>
-                    </View>
-                  )}
-                </View>
-
-                <TrustChip text="Research similar listings to price competitively" icon="trending-up-outline" />
-              </ElevatedSurface>
-            </Animated.View>
-          </Animated.View>
-        )}
-
-        {listingMode === 'co_own' && (
-          <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ marginTop: SECTION_GAP }}>
-            <SectionHeader step={4} title="Valuation & Shares" />
-            <Animated.View style={[styles.pricingWrap, priceFocusStyle]}>
-              <ElevatedSurface variant="surface" style={[styles.pricingCard, { marginBottom: 0 }]}>
-                <View style={styles.coOwnTopRow}>
-                  <View style={{ flex: 1 }}>
-                    <T.BodyEmphasis>Tokenize this item</T.BodyEmphasis>
-                    <T.Caption color={Colors.textSecondary}>
-                      Create fractional shares for the Co-Own marketplace.
-                    </T.Caption>
-                  </View>
-                  <View style={[styles.togglePill, styles.togglePillActive]}>
-                    <T.Caption color="#fff" style={{ fontWeight: '700' }}>On</T.Caption>
-                  </View>
-                </View>
-
-                <>
-                    <View style={styles.priceInputWrap}>
-                      <T.Headline color={Colors.textMuted} style={styles.priceCurrency}>{currencySymbol}</T.Headline>
-                      <TextInput
-                        style={styles.priceInput}
-                        placeholder="Total valuation"
-                        placeholderTextColor={Colors.textMuted}
-                        keyboardType="decimal-pad"
-                        value={price}
-                        onChangeText={(t) => { handlePriceChange(t); setErrors((p) => ({ ...p, price: '' })); }}
-                        onFocus={() => { priceScale.value = withSpring(1.02, { damping: 12 }); }}
-                        onBlur={() => { priceScale.value = withSpring(1, { damping: 12 }); }}
-                        maxLength={8}
-                      />
-                    </View>
-                    {errors.price ? (
-                      <T.Caption color={Colors.danger} style={{ marginTop: 8 }}>{errors.price}</T.Caption>
-                    ) : null}
-
-                    <AppInput
-                      label="Share count"
-                      placeholder="20"
-                      keyboardType="number-pad"
-                      value={shareCountInput}
-                      onChangeText={(t) => { handleShareCountChange(t); setErrors((p) => ({ ...p, shareCount: '' })); }}
-                      errorText={errors.shareCount}
-                      helperText="Maximum 20 units per co-own"
-                      containerStyle={{ marginTop: INNER_GAP }}
-                    />
-
-                    <AppInput
-                      label={`Initial share price (${currency.currencyCode})`}
-                      placeholder="0.00"
+            {listingMode === 'auction' && (
+              <>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Starting bid</Text>
+                  <View style={styles.priceInputRow}>
+                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="0"
+                      placeholderTextColor={Colors.textMuted}
                       keyboardType="decimal-pad"
-                      prefix={currencySymbol}
+                      value={startingBid}
+                      onChangeText={(t) => { setStartingBid(sanitizeDecimalInput(t)); setErrors((p) => ({ ...p, startingBid: '' })); }}
+                      maxLength={8}
+                    />
+                  </View>
+                  {errors.startingBid ? <Text style={styles.fieldError}>{errors.startingBid}</Text> : null}
+                  <View style={styles.hairline} />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Reserve price (optional)</Text>
+                  <View style={styles.priceInputRow}>
+                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="0"
+                      placeholderTextColor={Colors.textMuted}
+                      keyboardType="decimal-pad"
+                      value={reservePrice}
+                      onChangeText={(t) => setReservePrice(sanitizeDecimalInput(t))}
+                      maxLength={8}
+                    />
+                  </View>
+                  <View style={styles.hairline} />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Duration</Text>
+                  <View style={styles.toggleRow}>
+                    {AUCTION_DURATIONS.map((h) => {
+                      const active = auctionDurationHours === h;
+                      return (
+                        <Pressable
+                          key={h}
+                          style={[styles.togglePill, active && styles.togglePillActive]}
+                          onPress={() => setAuctionDurationHours(h)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Set duration to ${h} hours`}
+                        >
+                          <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+                            {h < 72 ? `${h}h` : `${h / 24}d`}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.hairline} />
+                </View>
+              </>
+            )}
+
+            {listingMode === 'co_own' && (
+              <>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Total valuation</Text>
+                  <View style={styles.priceInputRow}>
+                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="0"
+                      placeholderTextColor={Colors.textMuted}
+                      keyboardType="decimal-pad"
+                      value={price}
+                      onChangeText={(t) => { handlePriceChange(t); setErrors((p) => ({ ...p, price: '' })); }}
+                      maxLength={8}
+                    />
+                  </View>
+                  {errors.price ? <Text style={styles.fieldError}>{errors.price}</Text> : null}
+                  <View style={styles.hairline} />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Share count</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="20"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="number-pad"
+                    value={shareCountInput}
+                    onChangeText={(t) => { handleShareCountChange(t); setErrors((p) => ({ ...p, shareCount: '' })); }}
+                  />
+                  <Text style={styles.fieldHelper}>Maximum 20 units per co-own</Text>
+                  {errors.shareCount ? <Text style={styles.fieldError}>{errors.shareCount}</Text> : null}
+                  <View style={styles.hairline} />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Share price ({currency.currencyCode})</Text>
+                  <View style={styles.priceInputRow}>
+                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="0.00"
+                      placeholderTextColor={Colors.textMuted}
+                      keyboardType="decimal-pad"
                       value={sharePriceInput}
                       onChangeText={(t) => { setSharePriceInput(sanitizeDecimalInput(t)); setErrors((p) => ({ ...p, sharePrice: '' })); }}
-                      errorText={errors.sharePrice}
-                      containerStyle={{ marginTop: INNER_GAP }}
+                      maxLength={8}
                     />
-
-                    {Number(price) > 0 && Number(shareCountInput) > 0 && (
-                      <Animated.View entering={FadeInUp.duration(250)} style={styles.sharePriceRow}>
-                        <T.Caption color={Colors.textMuted}>Price per share</T.Caption>
-                        <T.BodyEmphasis color={Colors.brand}>
-                          {currencySymbol}{(Number(price) / Number(shareCountInput)).toFixed(2)}
-                        </T.BodyEmphasis>
-                      </Animated.View>
-                    )}
-
-                    <T.Caption color={Colors.textMuted} style={{ marginTop: INNER_GAP, marginBottom: 8 }}>Offering window</T.Caption>
-                    <View style={styles.toggleRow}>
-                      {[24, 48, 72, 168].map((h) => {
-                        const active = offeringWindowHours === h;
-                        return (
-                          <AnimatedPressable
-                            key={h}
-                            style={[styles.togglePill, active && styles.togglePillActive]}
-                            onPress={() => setOfferingWindowHours(h)}
-                          >
-                            <T.Caption color={active ? '#fff' : Colors.textPrimary} style={active ? { fontWeight: '700' } : {}}>
-                              {h < 72 ? `${h}h` : `${h / 24}d`}
-                            </T.Caption>
-                          </AnimatedPressable>
-                        );
-                      })}
-                    </View>
-                    {errors.authPhotos ? (
-                      <T.Caption color={Colors.danger} style={{ marginTop: 8 }}>{errors.authPhotos}</T.Caption>
-                    ) : null}
-                  </>
-
-                <TrustChip text="Clear valuation builds investor confidence" icon="shield-checkmark-outline" />
-              </ElevatedSurface>
-            </Animated.View>
-          </Animated.View>
-        )}
-
-        {listingMode === 'auction' && (
-          <Animated.View entering={FadeInUp.delay(200).duration(300)} style={{ marginTop: SECTION_GAP }}>
-            <SectionHeader step={4} title="Auction Setup" />
-            <Animated.View style={[styles.pricingWrap, priceFocusStyle]}>
-              <ElevatedSurface variant="surface" style={[styles.pricingCard, { marginBottom: 0 }]}>
-                <View style={styles.priceInputWrap}>
-                  <T.Headline color={Colors.textMuted} style={styles.priceCurrency}>{currencySymbol}</T.Headline>
-                  <TextInput
-                    style={styles.priceInput}
-                    placeholder="Starting bid"
-                    placeholderTextColor={Colors.textMuted}
-                    keyboardType="decimal-pad"
-                    value={startingBid}
-                    onChangeText={(t) => { setStartingBid(sanitizeDecimalInput(t)); setErrors((p) => ({ ...p, startingBid: '' })); }}
-                    onFocus={() => { priceScale.value = withSpring(1.02, { damping: 12 }); }}
-                    onBlur={() => { priceScale.value = withSpring(1, { damping: 12 }); }}
-                    maxLength={8}
-                  />
-                </View>
-                {errors.startingBid ? (
-                  <T.Caption color={Colors.danger} style={{ marginTop: 8 }}>{errors.startingBid}</T.Caption>
-                ) : null}
-
-                <AppInput
-                  label="Reserve price (optional)"
-                  placeholder="0"
-                  prefix={currencySymbol}
-                  keyboardType="decimal-pad"
-                  value={reservePrice}
-                  onChangeText={(t) => setReservePrice(sanitizeDecimalInput(t))}
-                  containerStyle={{ marginTop: INNER_GAP }}
-                />
-
-                <T.Caption color={Colors.textMuted} style={{ marginTop: INNER_GAP, marginBottom: 8 }}>Duration</T.Caption>
-                <View style={styles.toggleRow}>
-                  {AUCTION_DURATIONS.map((h) => {
-                    const active = auctionDurationHours === h;
-                    return (
-                      <AnimatedPressable
-                        key={h}
-                        style={[styles.togglePill, active && styles.togglePillActive]}
-                        onPress={() => setAuctionDurationHours(h)}
-                      >
-                        <T.Caption color={active ? '#fff' : Colors.textPrimary} style={active ? { fontWeight: '700' } : {}}>
-                          {h < 72 ? `${h}h` : `${h / 24}d`}
-                        </T.Caption>
-                      </AnimatedPressable>
-                    );
-                  })}
+                  </View>
+                  {errors.sharePrice ? <Text style={styles.fieldError}>{errors.sharePrice}</Text> : null}
+                  {Number(price) > 0 && Number(shareCountInput) > 0 && (
+                    <Text style={styles.fieldHelper}>
+                      {currencySymbol}{(Number(price) / Number(shareCountInput)).toFixed(2)} per share
+                    </Text>
+                  )}
+                  <View style={styles.hairline} />
                 </View>
 
-                <TrustChip text="Low starting bids drive more competitive bidding" icon="trending-up-outline" />
-              </ElevatedSurface>
-            </Animated.View>
-          </Animated.View>
-        )}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Offering window</Text>
+                  <View style={styles.toggleRow}>
+                    {[24, 48, 72, 168].map((h) => {
+                      const active = offeringWindowHours === h;
+                      return (
+                        <Pressable
+                          key={h}
+                          style={[styles.togglePill, active && styles.togglePillActive]}
+                          onPress={() => setOfferingWindowHours(h)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Set offering window to ${h} hours`}
+                        >
+                          <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+                            {h < 72 ? `${h}h` : `${h / 24}d`}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.hairline} />
+                </View>
+              </>
+            )}
+          </View>
 
-        {/* ═══════ SECTION 4 — DETAILS ═══════ */}
-        <Animated.View entering={FadeInUp.delay(300).duration(300)} style={{ marginTop: SECTION_GAP }}>
-          <SectionHeader step={5} title="Details" subtitle="Help buyers find your item" />
-          <ElevatedSurface variant="surface" style={[styles.detailsCard, { marginBottom: 0 }]}>
-            <AppInput
-              label="Description"
-              placeholder="Describe the fit, fabric, flaws, and why you love it..."
-              multiline
-              numberOfLines={4}
-              value={desc}
-              onChangeText={(t) => { setDesc(t); setErrors((p) => ({ ...p, description: '' })); }}
-              errorText={errors.description}
-              containerStyle={{ marginBottom: INNER_GAP }}
-            />
+          {/* ── 6. DESCRIPTION AND TAGS ── */}
+          <View style={styles.sectionGroup}>
+            <Text style={styles.sectionHeading}>Description</Text>
 
-            <T.Caption color={Colors.textMuted} style={{ marginBottom: 8 }}>
-              Tags (press space or comma to add)
-            </T.Caption>
+            <View style={styles.fieldGroup}>
+              <TextInput
+                style={[styles.fieldInput, styles.fieldInputMultiline]}
+                value={desc}
+                onChangeText={(t) => { setDesc(t); setErrors((p) => ({ ...p, description: '' })); }}
+                placeholder="Describe the fit, fabric, flaws, and why you love it…"
+                placeholderTextColor={Colors.textMuted}
+                multiline
+                textAlignVertical="top"
+              />
+              <Text style={styles.fieldHelper}>{desc.length} characters</Text>
+              {errors.description ? <Text style={styles.fieldError}>{errors.description}</Text> : null}
+              <View style={styles.hairline} />
+            </View>
+
+            <Text style={styles.fieldLabel}>Tags</Text>
             <View style={styles.tagWrap}>
               {tags.map((t) => (
                 <View key={t} style={styles.tagChip}>
-                  <T.Caption color={Colors.brand}>#{t}</T.Caption>
-                  <Pressable onPress={() => removeTag(t)} hitSlop={8}>
-                    <Ionicons name="close" size={14} color={Colors.textMuted} />
+                  <Text style={styles.tagText}>#{t}</Text>
+                  <Pressable onPress={() => removeTag(t)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remove tag ${t}`}>
+                    <Ionicons name="close" size={12} color={Colors.textMuted} />
                   </Pressable>
                 </View>
               ))}
               <TextInput
                 style={styles.tagInput}
-                placeholder={tags.length === 0 ? 'vintage, denim, oversized...' : ''}
+                placeholder={tags.length === 0 ? 'vintage, denim, oversized…' : ''}
                 placeholderTextColor={Colors.textMuted}
                 value={tagInput}
                 onChangeText={setTagInput}
@@ -1426,321 +1017,110 @@ export default function SellScreen() {
                 returnKeyType="done"
               />
             </View>
+            <Text style={styles.fieldHelper}>Press space or comma to add. Up to 8 tags.</Text>
+          </View>
 
-            <AnimatedPressable style={[styles.selectorRow, { marginTop: INNER_GAP }]} onPress={() => setPickerMode('Brand')}>
-              <View style={styles.selectorRowInner}>
-                <Ionicons name="pricetag-outline" size={18} color={Colors.textMuted} />
-                <View style={{ marginLeft: 12, flex: 1 }}>
-                  <T.Caption color={Colors.textMuted}>Brand</T.Caption>
-                  <T.Body color={brand ? Colors.textPrimary : Colors.textMuted}>{brand || 'Select brand'}</T.Body>
-                </View>
+          {/* ── 7. SHIPPING ── */}
+          <View style={styles.sectionGroup}>
+            <Text style={styles.sectionHeading}>Shipping</Text>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Shipping method</Text>
+              <View style={styles.toggleRow}>
+                {(['standard', 'express'] as const).map((m) => {
+                  const active = shippingMethod === m;
+                  return (
+                    <Pressable
+                      key={m}
+                      style={[styles.togglePill, active && styles.togglePillActive]}
+                      onPress={() => { setShippingMethod(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set shipping method to ${m}`}
+                    >
+                      <Ionicons name={m === 'standard' ? 'cube-outline' : 'rocket-outline'} size={14} color={active ? Colors.textInverse : Colors.textMuted} style={{ marginRight: 6 }} />
+                      <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+                        {m === 'standard' ? 'Standard' : 'Express'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </AnimatedPressable>
-
-            <AnimatedPressable style={[styles.selectorRow, errors.size ? { borderColor: Colors.danger } : {}, { marginTop: 12 }]} onPress={() => setPickerMode('Size')}>
-              <View style={styles.selectorRowInner}>
-                <Ionicons name="resize-outline" size={18} color={Colors.textMuted} />
-                <View style={{ marginLeft: 12, flex: 1 }}>
-                  <T.Caption color={Colors.textMuted}>Size</T.Caption>
-                  <T.Body color={size ? Colors.textPrimary : Colors.textMuted}>{size || 'Select size'}</T.Body>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </AnimatedPressable>
-            {errors.size ? (
-              <T.Caption color={Colors.danger} style={{ marginTop: 4 }}>{errors.size}</T.Caption>
-            ) : null}
-          </ElevatedSurface>
-        </Animated.View>
-
-        {/* ═══════ SECTION 5 — DELIVERY / SHIPPING ═══════ */}
-        <Animated.View entering={FadeInUp.delay(400).duration(300)} style={{ marginTop: SECTION_GAP }}>
-          <SectionHeader step={6} title="Delivery" />
-          <ElevatedSurface variant="surface" style={[styles.deliveryCard, { marginBottom: 0 }]}>
-            <T.Caption color={Colors.textMuted} style={{ marginBottom: 10 }}>Shipping method</T.Caption>
-            <View style={styles.toggleRow}>
-              {(['standard', 'express'] as const).map((m) => {
-                const active = shippingMethod === m;
-                return (
-                  <AnimatedPressable
-                    key={m}
-                    style={[styles.togglePill, active && styles.togglePillActive]}
-                    onPress={() => { setShippingMethod(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                  >
-                    <Ionicons name={m === 'standard' ? 'cube-outline' : 'rocket-outline'} size={16} color={active ? '#fff' : Colors.textMuted} style={{ marginRight: 6 }} />
-                    <T.Caption color={active ? '#fff' : Colors.textPrimary} style={active ? { fontWeight: '700' } : {}}>
-                      {m === 'standard' ? 'Standard' : 'Express'}
-                    </T.Caption>
-                  </AnimatedPressable>
-                );
-              })}
+              <View style={styles.hairline} />
             </View>
 
-            <T.Caption color={Colors.textMuted} style={{ marginTop: INNER_GAP, marginBottom: 10 }}>Who pays for shipping?</T.Caption>
-            <View style={styles.toggleRow}>
-              {(['buyer', 'seller'] as const).map((p) => {
-                const active = shippingPayer === p;
-                return (
-                  <AnimatedPressable
-                    key={p}
-                    style={[styles.togglePill, active && styles.togglePillActive]}
-                    onPress={() => { setShippingPayer(p); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                  >
-                    <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={16} color={active ? '#fff' : Colors.textMuted} style={{ marginRight: 6 }} />
-                    <T.Caption color={active ? '#fff' : Colors.textPrimary} style={active ? { fontWeight: '700' } : {}}>
-                      {p === 'buyer' ? 'Buyer pays' : 'I pay (free shipping)'}
-                    </T.Caption>
-                  </AnimatedPressable>
-                );
-              })}
-            </View>
-
-            <TrustChip text="Free shipping can help your listing stand out" icon="flash-outline" />
-          </ElevatedSurface>
-        </Animated.View>
-
-        {/* ═══════ SECTION 6 — MODE-SPECIFIC PREVIEW EVOLUTION ═══════ */}
-        <Animated.View entering={FadeInUp.delay(500).duration(300)} style={{ marginTop: SECTION_GAP }}>
-          <SectionHeader step={listingMode === 'sell_now' ? 5 : listingMode === 'co_own' ? 6 : 6} title="Preview" subtitle={listingMode === 'sell_now' ? 'This is how buyers will see your listing' : listingMode === 'co_own' ? 'Investors will see this proposal' : 'Bidders will see this auction'} />
-
-          {listingMode === 'sell_now' && (
-            <ElevatedSurface variant="surface" style={[styles.previewCard, { marginBottom: 0 }]}>
-              <View style={styles.previewFeedCard}>
-                <View style={styles.previewImageWrap}>
-                  {photos.length > 0 ? (
-                    <Animated.View entering={ZoomIn.springify().dampingRatio(0.7)}>
-                      <Image source={{ uri: photos[0] }} style={styles.previewImage as any} resizeMode="cover" />
-                    </Animated.View>
-                  ) : (
-                    <View style={[styles.previewImage, { backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center' }]}>
-                      <Ionicons name="image-outline" size={40} color={Colors.textMuted} />
-                    </View>
-                  )}
-                  {condition ? (
-                    <Animated.View entering={SlideInRight.springify().dampingRatio(0.7)} style={styles.previewConditionBadge}>
-                      <T.Caption color="#fff" style={{ fontSize: 10, fontWeight: '700' }}>{condition}</T.Caption>
-                    </Animated.View>
-                  ) : null}
-                  {hasDiscount ? (
-                    <Animated.View entering={SlideInRight.springify().dampingRatio(0.7)} style={[styles.previewConditionBadge, styles.previewDiscountBadge]}>
-                      <T.Caption color="#fff" style={{ fontSize: 10, fontWeight: '700' }}>-{discountPercent}%</T.Caption>
-                    </Animated.View>
-                  ) : null}
-                </View>
-
-                <View style={styles.previewInfo}>
-                  <View style={styles.previewPriceRow}>
-                    {price ? (
-                      <Animated.View entering={FadeInUp.springify().dampingRatio(0.7)}>
-                        <T.BodyEmphasis color={Colors.textPrimary}>{currencySymbol}{price}</T.BodyEmphasis>
-                      </Animated.View>
-                    ) : (
-                      <T.BodyEmphasis color={Colors.textPrimary}>{currencySymbol}0</T.BodyEmphasis>
-                    )}
-                    {hasDiscount && (
-                      <Animated.View entering={FadeInUp.springify().dampingRatio(0.7)}>
-                        <T.Caption color={Colors.textMuted} style={{ textDecorationLine: 'line-through', marginLeft: 8 }}>
-                          {currencySymbol}{originalPrice}
-                        </T.Caption>
-                      </Animated.View>
-                    )}
-                  </View>
-                  <T.Caption color={Colors.textPrimary} numberOfLines={2} style={{ marginTop: 4 }}>
-                    {title || 'Your listing title'}
-                  </T.Caption>
-                  <View style={styles.previewMetaRow}>
-                    {size ? (
-                      <Animated.View entering={FadeInUp.springify().dampingRatio(0.8)}>
-                        <T.Caption color={Colors.textMuted}>{size}</T.Caption>
-                      </Animated.View>
-                    ) : null}
-                    {brand ? (
-                      <Animated.View entering={FadeInUp.springify().dampingRatio(0.8)}>
-                        <T.Caption color={Colors.textMuted}>{brand}</T.Caption>
-                      </Animated.View>
-                    ) : null}
-                    <T.Caption color={Colors.textMuted}>{category || 'Category'}</T.Caption>
-                  </View>
-                </View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Who pays</Text>
+              <View style={styles.toggleRow}>
+                {(['buyer', 'seller'] as const).map((p) => {
+                  const active = shippingPayer === p;
+                  return (
+                    <Pressable
+                      key={p}
+                      style={[styles.togglePill, active && styles.togglePillActive]}
+                      onPress={() => { setShippingPayer(p); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set shipping payer to ${p}`}
+                    >
+                      <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={14} color={active ? Colors.textInverse : Colors.textMuted} style={{ marginRight: 6 }} />
+                      <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+                        {p === 'buyer' ? 'Buyer pays' : 'I pay (free)'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-            </ElevatedSurface>
-          )}
+            </View>
+          </View>
 
+          {/* ── CO-OWN AUTHENTICATION MEDIA ── */}
           {listingMode === 'co_own' && (
-            <ElevatedSurface variant="surface" style={[styles.previewCard, { marginBottom: 0 }]}>
-              <View style={styles.previewFeedCard}>
-                <View style={styles.previewImageWrap}>
-                  {photos.length > 0 ? (
-                    <Animated.View entering={ZoomIn.springify().dampingRatio(0.7)}>
-                      <Image source={{ uri: photos[0] }} style={styles.previewImage as any} resizeMode="cover" />
-                    </Animated.View>
-                  ) : (
-                    <View style={[styles.previewImage, { backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center' }]}>
-                      <Ionicons name="image-outline" size={40} color={Colors.textMuted} />
-                    </View>
-                  )}
-                  <Animated.View entering={SlideInRight.springify().dampingRatio(0.7)} style={[styles.previewConditionBadge, { backgroundColor: Colors.brand }]}>
-                    <T.Caption color="#fff" style={{ fontSize: 10, fontWeight: '700' }}>CO-OWN</T.Caption>
-                  </Animated.View>
-                </View>
-
-                <View style={styles.previewInfo}>
-                  <Animated.View entering={FadeInUp.springify().dampingRatio(0.7)} style={{ marginBottom: 4 }}>
-                    <T.Caption color={Colors.textMuted}>Total valuation</T.Caption>
-                    <T.Headline color={Colors.textPrimary} style={{ fontSize: 24 }}>
-                      {currencySymbol}{price || '0'}
-                    </T.Headline>
-                  </Animated.View>
-
-                  {Number(price) > 0 && Number(shareCountInput) > 0 && (
-                    <Animated.View entering={FadeInUp.springify().dampingRatio(0.8)} style={styles.previewShareRow}>
-                      <T.Caption color={Colors.brand} style={{ fontWeight: '700' }}>
-                        {shareCountInput} shares @ {currencySymbol}{(Number(price) / Number(shareCountInput)).toFixed(2)} each
-                      </T.Caption>
-                    </Animated.View>
-                  )}
-
-                  <T.Caption color={Colors.textPrimary} numberOfLines={2} style={{ marginTop: 4 }}>
-                    {title || 'Your proposal title'}
-                  </T.Caption>
-                  <View style={styles.previewMetaRow}>
-                    {size ? (
-                      <Animated.View entering={FadeInUp.springify().dampingRatio(0.85)}>
-                        <T.Caption color={Colors.textMuted}>{size}</T.Caption>
-                      </Animated.View>
-                    ) : null}
-                    {brand ? (
-                      <Animated.View entering={FadeInUp.springify().dampingRatio(0.85)}>
-                        <T.Caption color={Colors.textMuted}>{brand}</T.Caption>
-                      </Animated.View>
-                    ) : null}
+            <View style={styles.sectionGroup}>
+              <Text style={styles.sectionHeading}>Authentication photos</Text>
+              <Text style={styles.fieldHelper}>Attach proof-of-authenticity photos for investor confidence.</Text>
+              {errors.authPhotos ? <Text style={styles.fieldError}>{errors.authPhotos}</Text> : null}
+              <View style={styles.authPhotoRow}>
+                {authPhotos.map((uri, i) => (
+                  <View key={`auth_${i}_${uri}`} style={styles.authThumb}>
+                    <View style={styles.authThumbImage} />
                   </View>
-                </View>
+                ))}
+                {authPhotos.length < 2 && (
+                  <Pressable
+                    style={styles.authAddBtn}
+                    onPress={handlePickFromLibrary}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add authentication photo"
+                  >
+                    <Ionicons name="add" size={20} color={Colors.textMuted} />
+                  </Pressable>
+                )}
               </View>
-            </ElevatedSurface>
+            </View>
           )}
 
-          {listingMode === 'auction' && (
-            <ElevatedSurface variant="surface" style={[styles.previewCard, { marginBottom: 0 }]}>
-              <View style={styles.previewFeedCard}>
-                <View style={styles.previewImageWrap}>
-                  {photos.length > 0 ? (
-                    <Animated.View entering={ZoomIn.springify().dampingRatio(0.7)}>
-                      <Image source={{ uri: photos[0] }} style={styles.previewImage as any} resizeMode="cover" />
-                    </Animated.View>
-                  ) : (
-                    <View style={[styles.previewImage, { backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center' }]}>
-                      <Ionicons name="image-outline" size={40} color={Colors.textMuted} />
-                    </View>
-                  )}
-                  <Animated.View entering={SlideInRight.springify().dampingRatio(0.7)} style={[styles.previewConditionBadge, { backgroundColor: Colors.danger }]}>
-                    <T.Caption color="#fff" style={{ fontSize: 10, fontWeight: '700' }}>AUCTION</T.Caption>
-                  </Animated.View>
-                </View>
-
-                <View style={styles.previewInfo}>
-                  <View style={styles.previewPriceRow}>
-                    <Animated.View entering={FadeInUp.springify().dampingRatio(0.7)}>
-                      <T.Caption color={Colors.textMuted}>Starting bid</T.Caption>
-                      <T.Headline color={Colors.textPrimary} style={{ fontSize: 22 }}>
-                        {currencySymbol}{startingBid || '0'}
-                      </T.Headline>
-                    </Animated.View>
-                    {reservePrice ? (
-                      <Animated.View entering={FadeInUp.springify().dampingRatio(0.75)} style={{ marginLeft: 12 }}>
-                        <T.Caption color={Colors.textMuted}>Reserve</T.Caption>
-                        <T.BodyEmphasis color={Colors.textPrimary}>{currencySymbol}{reservePrice}</T.BodyEmphasis>
-                      </Animated.View>
-                    ) : null}
-                  </View>
-
-                  <Animated.View entering={FadeInUp.springify().dampingRatio(0.8)} style={styles.previewBidUrgencyRow}>
-                    <Ionicons name="flame-outline" size={14} color={Colors.danger} />
-                    <T.Caption color={Colors.danger} style={{ marginLeft: 4 }}>No bids yet — be the first</T.Caption>
-                  </Animated.View>
-
-                  <T.Caption color={Colors.textPrimary} numberOfLines={2} style={{ marginTop: 4 }}>
-                    {title || 'Your auction title'}
-                  </T.Caption>
-                  <View style={styles.previewMetaRow}>
-                    {condition ? (
-                      <Animated.View entering={FadeInUp.springify().dampingRatio(0.85)}>
-                        <T.Caption color={Colors.textMuted}>{condition}</T.Caption>
-                      </Animated.View>
-                    ) : null}
-                    {size ? (
-                      <Animated.View entering={FadeInUp.springify().dampingRatio(0.85)}>
-                        <T.Caption color={Colors.textMuted}>{size}</T.Caption>
-                      </Animated.View>
-                    ) : null}
-                    {brand ? (
-                      <Animated.View entering={FadeInUp.springify().dampingRatio(0.85)}>
-                        <T.Caption color={Colors.textMuted}>{brand}</T.Caption>
-                      </Animated.View>
-                    ) : null}
-                  </View>
-                </View>
-              </View>
-            </ElevatedSurface>
+          {/* ── error message (inline, above footer) ── */}
+          {errorMsg && publicationStage === 'idle' && (
+            <View style={styles.inlineErrorRow}>
+              <Ionicons name="alert-circle" size={14} color={Colors.danger} />
+              <Text style={styles.inlineErrorText}>{errorMsg}</Text>
+            </View>
           )}
-        </Animated.View>
 
-        {/* ── bottom spacer for floating CTA ── */}
-        <View style={{ height: 100 }} />
-        </Animated.ScrollView>
+          <View style={{ height: 120 }} />
+        </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── error banner ── */}
-      {errorMsg ? (
-        <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(200)} style={styles.errorBanner}>
-          <Ionicons name="alert-circle" size={16} color={Colors.danger} />
-          <T.Caption color={Colors.danger} style={{ marginLeft: 8, flex: 1 }}>{errorMsg}</T.Caption>
-        </Animated.View>
-      ) : null}
-
-      {/* ── floating publish CTA ── */}
-      <Animated.View style={[styles.floatingCtaWrap, shakeStyle, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <View style={styles.floatingCtaRow}>
-          <AppButton
-            title="Preview"
-            variant="secondary"
-            size="lg"
-            style={styles.previewBtn}
-            onPress={() => {
-              haptics.press();
-              navigation.navigate('ListingPreview', {
-                preview: {
-                  title: title.trim(),
-                  price: Number(sanitizeDecimalInput(price)) || undefined,
-                  originalPrice: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-                  brand: brand || undefined,
-                  condition: condition || undefined,
-                  category: category || undefined,
-                  size: size || undefined,
-                  description: desc.trim() || undefined,
-                  photos,
-                  tags,
-                  shippingMethod: shippingMethod || undefined,
-                  shippingPayer: shippingPayer || undefined,
-                },
-              });
-            }}
-          />
-          <AppButton
-            title={
-              isPublishing
-                ? listingMode === 'sell_now' ? 'Publishing...' : listingMode === 'co_own' ? 'Sending proposal...' : 'Starting auction...'
-                : listingMode === 'sell_now' ? 'Publish listing' : listingMode === 'co_own' ? 'Propose Co-ownership' : 'Start Auction'
-            }
-            subtitle={readiness.score < readiness.total ? `${readiness.score} of ${readiness.total} complete` : undefined}
-            onPress={handlePublish}
-            disabled={isPublishing}
-            style={styles.publishBtn}
-            size="lg"
-          />
-        </View>
-      </Animated.View>
+      {/* ── 9. RECOVERABLE PUBLICATION FEEDBACK + 10. STICKY PREVIEW / PUBLISH FOOTER ── */}
+      <ListingPublishFooter
+        mode={listingMode}
+        isPublishing={isPublishing}
+        publishDisabled={publishDisabled}
+        publicationStage={publicationStage}
+        errorMsg={errorMsg}
+        onPreview={handlePreview}
+        onPublish={handlePublish}
+        bottomInset={insets.bottom}
+      />
 
       {/* ── picker ── */}
       <BottomSheetPicker
@@ -1763,273 +1143,190 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
+
+  /* ── nav header ── */
+  navHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  navCloseBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTitle: {
+    fontSize: 16,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  navDraftStatus: {
+    minWidth: 40,
+    alignItems: 'flex-end',
+  },
+  navDraftText: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+
+  /* ── scroll ── */
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingBottom: Space.md,
   },
-  topBar: {
+
+  /* ── sections ── */
+  sectionSpacing: {
+    paddingTop: Space.md,
+  },
+  sectionGroup: {
+    paddingTop: Space.lg,
+    paddingHorizontal: Space.md,
+  },
+  sectionHeading: {
+    fontSize: 11,
+    fontFamily: Typography.family.bold,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: Space.sm,
+  },
+
+  /* ── fields ── */
+  fieldGroup: {
+    paddingVertical: 8,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    marginBottom: 6,
+  },
+  fieldInput: {
+    fontSize: 15,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    minHeight: 40,
+  },
+  fieldInputMultiline: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+    paddingTop: 8,
+  },
+  fieldHelper: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  fieldError: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.danger,
+    marginTop: 4,
+  },
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginTop: 8,
+  },
+
+  /* ── picker rows ── */
+  pickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    marginBottom: 4,
+    paddingVertical: 10,
   },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-  },
-  topBarTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-  },
-  progressBarWrap: {
-    marginBottom: 8,
-  },
-  progressBarTrack: {
-    height: 4,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.sm,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: Colors.brand,
-    borderRadius: Radius.sm,
-  },
-  progressLabel: {
-    marginTop: 6,
-    textAlign: 'right',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  stepBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  sectionHeaderText: {
+  pickerRowInner: {
     flex: 1,
-    gap: 2,
   },
-  trustChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingHorizontal: 4,
+  pickerValue: {
+    fontSize: 15,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+  },
+  pickerPlaceholder: {
+    color: Colors.textMuted,
   },
 
-  /* ── listing type ── */
-  typeToggleRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 4,
-  },
-  typeTogglePill: {
+  /* ── price input ── */
+  priceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  currencySymbol: {
+    fontSize: 20,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
+    marginRight: 6,
+  },
+  priceInput: {
+    fontSize: 28,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    minWidth: 100,
+    padding: 0,
+  },
+  discountPreview: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.danger,
+    marginTop: 4,
+  },
+
+  /* ── toggles ── */
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  togglePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: Radius.lg,
+    borderRadius: 8,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  typeTogglePillActive: {
+  togglePillActive: {
     backgroundColor: Colors.brand,
     borderColor: Colors.brand,
   },
-
-  /* ── media ── */
-  mediaEmptyCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.lg,
-    marginHorizontal: 4,
-  },
-  mediaEmptyInner: {
-    alignItems: 'center',
-    paddingVertical: 36,
-  },
-  mediaEmptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  mediaEmptyTitle: {
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  mediaEmptySub: {
-    textAlign: 'center',
-    maxWidth: 240,
-    marginBottom: 20,
-  },
-  mediaEmptyActions: {
-    flexDirection: 'row',
-  },
-  mediaActionBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-  },
-  heroWrap: {
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    marginHorizontal: 4,
-    position: 'relative',
-  },
-  heroImage: {
-    width: '100%',
-    height: 320,
-  } as any,
-  heroCoverBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
-  },
-  heroRemoveBtn: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 12,
-  },
-  mediaCountBadge: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
-  },
-  queueStatusRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 12,
-    marginHorizontal: Space.md,
-  },
-  queueStatusPill: {
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-
-  /* ── identity ── */
-  identityCard: {
-    borderRadius: Radius.lg,
-    padding: CARD_PADDING,
-  },
-  selectorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  selectorRowInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pillRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingRight: 16,
-  },
-  conditionPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-
-  /* ── pricing ── */
-  pricingWrap: {
-    marginHorizontal: 4,
-  },
-  pricingCard: {
-    borderRadius: Radius.lg,
-    padding: CARD_PADDING,
-  },
-  priceInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  priceCurrency: {
-    fontSize: 32,
+  toggleText: {
+    fontSize: 13,
     fontFamily: Typography.family.medium,
-    marginRight: 8,
-  },
-  priceInput: {
-    fontSize: 48,
-    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    minWidth: 120,
-    textAlign: 'center',
-    padding: 0,
   },
-  originalPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 8,
-  },
-  discountBadge: {
-    backgroundColor: Colors.danger,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.md,
-    alignSelf: 'center',
+  toggleTextActive: {
+    fontFamily: Typography.family.bold,
+    color: Colors.textInverse,
   },
 
-  /* ── details ── */
-  detailsCard: {
-    borderRadius: Radius.lg,
-    padding: CARD_PADDING,
-  },
+  /* ── tags ── */
   tagWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
     alignItems: 'center',
+    marginTop: 4,
   },
   tagChip: {
     flexDirection: 'row',
@@ -2037,8 +1334,15 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: Radius.md,
+    borderRadius: 6,
     backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  tagText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.brand,
   },
   tagInput: {
     flex: 1,
@@ -2049,196 +1353,47 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
 
-  /* ── delivery ── */
-  deliveryCard: {
-    borderRadius: Radius.lg,
-    padding: CARD_PADDING,
-  },
-  toggleRow: {
+  /* ── co-own auth photos ── */
+  authPhotoRow: {
     flexDirection: 'row',
     gap: 8,
-  },
-  togglePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  togglePillActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-  },
-
-  /* ── co-own / auction ── */
-  coOwnCard: {
-    padding: CARD_PADDING,
-  },
-  auctionCard: {
-    padding: CARD_PADDING,
-  },
-  coOwnTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: INNER_GAP,
-  },
-  sharePriceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-  },
-  previewShareRow: {
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.04)',
-    alignSelf: 'flex-start',
-  },
-  previewBidUrgencyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,59,48,0.08)',
-    alignSelf: 'flex-start',
   },
-
-  /* ── preview ── */
-  previewCard: {
-    borderRadius: Radius.lg,
-    padding: CARD_PADDING,
-  },
-  previewFeedCard: {
-    borderRadius: Radius.lg,
+  authThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceAlt,
   },
-  previewImageWrap: {
-    position: 'relative',
+  authThumbImage: {
+    width: 56,
+    height: 56,
   },
-  previewImage: {
-    width: '100%',
-    height: 220,
-  } as any,
-  previewConditionBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
-  },
-  previewDiscountBadge: {
-    left: 'auto',
-    right: 10,
-    backgroundColor: Colors.danger,
-  },
-  previewInfo: {
-    padding: 14,
-  },
-  previewPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  previewMetaRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 6,
-  },
-
-  /* ── floating CTA ── */
-  floatingCtaWrap: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(0,0,0,0.01)',
-  },
-  floatingCtaGlow: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
+  authAddBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: Radius.xl,
-  },
-  floatingCtaRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.xl,
-    padding: Space.sm,
-  },
-  previewBtn: {
-    flex: 1,
-  },
-  publishBtn: {
-    flex: 1.4,
-  },
-  errorBanner: {
-    position: 'absolute',
-    bottom: 86,
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
+    borderStyle: 'dashed',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.danger,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    zIndex: 10,
-  },
-
-  /* ── staged trust reveal ── */
-  trustRevealCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    marginHorizontal: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  trustRevealScoreRing: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.04)',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
+    backgroundColor: Colors.surface,
   },
-  mediaTrustBanner: {
+
+  /* ── inline error ── */
+  inlineErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    padding: Space.md,
-    marginBottom: Space.md,
-    backgroundColor: Colors.surface,
+    gap: 6,
+    paddingHorizontal: Space.md,
+    paddingVertical: 8,
+  },
+  inlineErrorText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.danger,
   },
 });
