@@ -324,11 +324,38 @@ export default function SellScreen() {
     }
   }, [appendPhotoUri, photos]);
 
-  const removePhoto = useCallback((index: number) => {
-    setPhotos((prev) => {
-      const removedUri = prev[index];
-      setMediaDraftItems((md) => md.filter((m) => m.uri !== removedUri));
-      return prev.filter((_, i) => i !== index);
+  const removeItem = useCallback((itemId: string) => {
+    setMediaDraftItems((prev) => {
+      const item = prev.find((m) => m.id === itemId);
+      if (!item) return prev;
+      const removedUri = item.publicUrl || item.uri;
+      setPhotos((ps) => ps.filter((u) => u !== removedUri));
+      return prev.filter((m) => m.id !== itemId);
+    });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
+  const handleRetryItem = useCallback((itemId: string) => {
+    const queue = uploadQueueRef.current;
+    const ok = queue.retryItem(itemId);
+    if (ok) {
+      setMediaDraftItems((prev) =>
+        prev.map((m) =>
+          m.id === itemId ? { ...m, status: 'pending', error: undefined } : m
+        )
+      );
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  }, []);
+
+  const handleReorderIds = useCallback((newOrderedIds: string[]) => {
+    setMediaDraftItems((prev) => {
+      const itemMap = new Map(prev.map((m) => [m.id, m]));
+      const reordered = newOrderedIds.map((id) => itemMap.get(id)).filter(Boolean) as ListingMediaDraftItem[];
+      setPhotos(reordered.map((m) => m.publicUrl || m.uri));
+      return reordered;
     });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
@@ -674,21 +701,15 @@ export default function SellScreen() {
         >
           {/* ── 2. LARGE LISTING MEDIA STUDIO ── */}
           <ListingMediaStudio
-            photos={photos}
-            mediaDraftItems={mediaDraftItems}
+            items={mediaDraftItems}
             queueItems={queueState.items}
             maxCount={10}
             errorText={errors.photos}
             onPickFromLibrary={handlePickFromLibrary}
             onPickFromCamera={handlePickFromCamera}
-            onReorder={(newOrder) => {
-              setPhotos(newOrder);
-              setMediaDraftItems((prev) => {
-                const uriToItem = new Map(prev.map((m) => [m.uri, m]));
-                return newOrder.map((uri) => uriToItem.get(uri) || { id: `reorder_${uri}`, uri, kind: 'image' as const, source: 'local' as const, status: 'draft' as const }).filter(Boolean);
-              });
-            }}
-            onRemovePhoto={removePhoto}
+            onReorder={handleReorderIds}
+            onRemoveItem={removeItem}
+            onRetryItem={handleRetryItem}
           />
 
           {/* ── 3. LISTING MODE SELECTOR ── */}

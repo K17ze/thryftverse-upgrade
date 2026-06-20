@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, StyleSheet, Image, Dimensions, Text } from 'react-native';
 import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
@@ -26,13 +26,20 @@ const TOTAL_SIZE = ITEM_SIZE + SPACING;
 interface Props {
   photos: string[];
   onReorder: (newOrder: string[]) => void;
-  onAddPhoto: () => void;
+  onAddPhoto?: () => void;
+  /** Stable item IDs — when provided, keys and onReorder use IDs instead of URIs */
+  itemIds?: string[];
+  /** Custom content for each item — when provided, replaces default Image/Video rendering */
+  renderItem?: (index: number) => React.ReactNode;
+  /** Whether to show the trailing add button — default true */
+  showAddButton?: boolean;
 }
 
 // Helper to get object values sorted by key (not needed strictly if we map properly)
 // We will just manage an array of IDs sorted.
 
-export function SortablePhotoStrip({ photos, onReorder, onAddPhoto }: Props) {
+export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, renderItem, showAddButton = true }: Props) {
+  const ids = itemIds ?? photos;
   return (
     <View style={styles.container}>
       <Reanimated.ScrollView
@@ -43,25 +50,32 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto }: Props) {
         <View style={{ flexDirection: 'row', position: 'relative', height: ITEM_SIZE }}>
           {photos.map((photo, index) => (
             <SortableItem
-              key={photo}
+              key={ids[index] ?? photo}
               id={photo}
+              itemId={ids[index]}
               index={index}
               total={photos.length}
               photos={photos}
+              itemIds={ids}
               onReorder={onReorder}
+              renderItem={renderItem}
             />
           ))}
           {/* Add more button */}
-          <AnimatedPressable
-            style={[styles.addBtn, { left: photos.length * TOTAL_SIZE }]}
-            onPress={() => {
-              haptics.tap();
-              onAddPhoto();
-            }}
-            hapticFeedback="light"
-          >
-            <Ionicons name="add" size={28} color={Colors.background} />
-          </AnimatedPressable>
+          {showAddButton && onAddPhoto && (
+            <AnimatedPressable
+              style={[styles.addBtn, { left: photos.length * TOTAL_SIZE }]}
+              onPress={() => {
+                haptics.tap();
+                onAddPhoto();
+              }}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Add more photos"
+            >
+              <Ionicons name="add" size={28} color={Colors.background} />
+            </AnimatedPressable>
+          )}
         </View>
       </Reanimated.ScrollView>
       <Text style={styles.hintText}>Drag to reorder. First media item is the cover.</Text>
@@ -71,17 +85,21 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto }: Props) {
 
 interface ItemProps {
   id: string;
+  itemId?: string;
   index: number;
   total: number;
   photos: string[];
+  itemIds?: string[];
   onReorder: (newOrder: string[]) => void;
+  renderItem?: (index: number) => React.ReactNode;
 }
 
-function SortableItem({ id, index, total, photos, onReorder }: ItemProps) {
+function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem }: ItemProps) {
   const isVideo = isVideoUri(id);
   const isDragging = useSharedValue(false);
   const position = useSharedValue(index * TOTAL_SIZE);
   const zIndex = useSharedValue(0);
+  const orderArray = itemIds ?? photos;
 
   // When props update (like after drop), update position gently
   useAnimatedReaction(
@@ -111,7 +129,7 @@ function SortableItem({ id, index, total, photos, onReorder }: ItemProps) {
 
       if (newIndex !== index) {
         // Trigger React re-order on JS thread
-        const newOrder = [...photos];
+        const newOrder = [...orderArray];
         const [moved] = newOrder.splice(index, 1);
         newOrder.splice(newIndex, 0, moved);
         runOnJS(onReorder)(newOrder);
@@ -132,32 +150,64 @@ function SortableItem({ id, index, total, photos, onReorder }: ItemProps) {
     };
   });
 
+  const accessibilityActions = [
+    { name: 'moveEarlier', label: 'Move earlier' },
+    { name: 'moveLater', label: 'Move later' },
+  ];
+
+  const handleAccessibilityAction = useCallback((event: { nativeEvent: { actionName: string } }) => {
+    const { actionName } = event.nativeEvent;
+    if (actionName === 'moveEarlier' && index > 0) {
+      const newOrder = [...orderArray];
+      const [moved] = newOrder.splice(index, 1);
+      newOrder.splice(index - 1, 0, moved);
+      onReorder(newOrder);
+    } else if (actionName === 'moveLater' && index < total - 1) {
+      const newOrder = [...orderArray];
+      const [moved] = newOrder.splice(index, 1);
+      newOrder.splice(index + 1, 0, moved);
+      onReorder(newOrder);
+    }
+  }, [index, total, orderArray, onReorder]);
+
   return (
     <GestureDetector gesture={panGesture}>
-      <Reanimated.View style={[styles.itemWrap, animatedStyle]}>
-        {isVideo ? (
-          <Video
-            source={{ uri: id }}
-            style={styles.image}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay={false}
-            isMuted
-            isLooping={false}
-          />
+      <Reanimated.View
+        style={[styles.itemWrap, animatedStyle]}
+        accessibilityRole="adjustable"
+        accessibilityLabel={`Media item ${index + 1} of ${total}${index === 0 ? ', cover' : ''}${isVideo ? ', video' : ''}`}
+        accessibilityActions={accessibilityActions}
+        onAccessibilityAction={handleAccessibilityAction}
+      >
+        {renderItem ? (
+          renderItem(index)
         ) : (
-          <Image source={{ uri: id }} style={styles.image} />
-        )}
+          <>
+            {isVideo ? (
+              <Video
+                source={{ uri: id }}
+                style={styles.image}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay={false}
+                isMuted
+                isLooping={false}
+              />
+            ) : (
+              <Image source={{ uri: id }} style={styles.image} />
+            )}
 
-        {isVideo && (
-          <View style={styles.videoBadge}>
-            <Ionicons name="videocam" size={11} color="#fff" />
-          </View>
-        )}
+            {isVideo && (
+              <View style={styles.videoBadge}>
+                <Ionicons name="videocam" size={11} color="#fff" />
+              </View>
+            )}
 
-        {index === 0 && (
-          <View style={styles.coverBadge}>
-            <Text style={styles.coverText}>COVER</Text>
-          </View>
+            {index === 0 && (
+              <View style={styles.coverBadge}>
+                <Text style={styles.coverText}>COVER</Text>
+              </View>
+            )}
+          </>
         )}
       </Reanimated.View>
     </GestureDetector>

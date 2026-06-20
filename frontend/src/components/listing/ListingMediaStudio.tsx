@@ -7,64 +7,80 @@ import {
   Image,
   Pressable,
   ActivityIndicator,
-  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Typography } from '../../theme/designTokens';
 import { SortablePhotoStrip } from '../SortablePhotoStrip';
 import { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
-import { UploadQueueItem } from '../../services/mediaUploadQueue';
+import { UploadQueueItem, UploadQueueItemState } from '../../services/mediaUploadQueue';
 import { isVideoUri } from '../../utils/media';
+import { Video, ResizeMode } from '../compat/Video';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = Math.round(SCREEN_W * 10 / 16);
-const THUMB_SIZE = 72;
+const THUMB_SIZE = 80;
+
+type ItemStatus = 'draft' | 'pending' | 'preparing' | 'uploading' | 'uploaded' | 'failed' | 'cancelled';
 
 interface ListingMediaStudioProps {
-  photos: string[];
-  mediaDraftItems: ListingMediaDraftItem[];
+  items: ListingMediaDraftItem[];
   queueItems: UploadQueueItem[];
   maxCount: number;
   errorText?: string;
   onPickFromLibrary: () => void;
   onPickFromCamera: () => void;
-  onReorder: (newOrder: string[]) => void;
-  onRemovePhoto: (index: number) => void;
+  onReorder: (newOrderedIds: string[]) => void;
+  onRemoveItem: (itemId: string) => void;
+  onRetryItem: (itemId: string) => void;
 }
 
-function getMediaStatus(
-  uri: string,
-  mediaDraftItems: ListingMediaDraftItem[],
+function getItemStatus(
+  item: ListingMediaDraftItem,
   queueItems: UploadQueueItem[]
-): 'draft' | 'pending' | 'preparing' | 'uploading' | 'uploaded' | 'failed' | 'cancelled' | null {
-  const draft = mediaDraftItems.find((m) => m.uri === uri);
-  if (draft) {
-    if (draft.status === 'uploaded') return 'uploaded';
-    if (draft.status === 'failed') return 'failed';
-    if (draft.status === 'uploading') return 'uploading';
-    if (draft.status === 'pending') return 'pending';
-    if (draft.status === 'draft') return 'draft';
-  }
-  const queueItem = queueItems.find((q) => q.asset.uri === uri);
+): ItemStatus {
+  const queueItem = queueItems.find((q) => q.id === item.id);
   if (queueItem) {
-    return queueItem.state;
+    return queueItem.state as ItemStatus;
   }
-  return null;
+  return item.status as ItemStatus;
+}
+
+function getDisplayUri(item: ListingMediaDraftItem): string {
+  return item.publicUrl || item.uri;
+}
+
+function StatusLabel({ status }: { status: ItemStatus }) {
+  switch (status) {
+    case 'pending':
+      return <Text style={styles.statusLabelText}>Queued</Text>;
+    case 'preparing':
+      return <Text style={styles.statusLabelText}>Preparing…</Text>;
+    case 'uploading':
+      return <Text style={styles.statusLabelText}>Uploading…</Text>;
+    case 'uploaded':
+      return null;
+    case 'failed':
+      return <Text style={styles.statusLabelFailed}>Failed</Text>;
+    case 'cancelled':
+      return <Text style={styles.statusLabelText}>Cancelled</Text>;
+    default:
+      return null;
+  }
 }
 
 export function ListingMediaStudio({
-  photos,
-  mediaDraftItems,
+  items,
   queueItems,
   maxCount,
   errorText,
   onPickFromLibrary,
   onPickFromCamera,
   onReorder,
-  onRemovePhoto,
+  onRemoveItem,
+  onRetryItem,
 }: ListingMediaStudioProps) {
-  if (photos.length === 0) {
+  if (items.length === 0) {
     return (
       <View style={styles.container}>
         <View style={styles.emptyCanvas}>
@@ -104,15 +120,116 @@ export function ListingMediaStudio({
     );
   }
 
-  const coverUri = photos[0];
-  const coverStatus = getMediaStatus(coverUri, mediaDraftItems, queueItems);
-  const isCoverVideo = isVideoUri(coverUri);
+  const coverItem = items[0];
+  const coverDisplayUri = getDisplayUri(coverItem);
+  const coverStatus = getItemStatus(coverItem, queueItems);
+  const isCoverVideo = isVideoUri(coverDisplayUri);
+  const photoUris = items.map(getDisplayUri);
+  const itemIds = items.map((m) => m.id);
+
+  /* Render each thumbnail inside SortablePhotoStrip */
+  const renderThumbItem = (index: number) => {
+    const item = items[index];
+    if (!item) return null;
+    const displayUri = getDisplayUri(item);
+    const status = getItemStatus(item, queueItems);
+    const isVideo = isVideoUri(displayUri);
+
+    return (
+      <View style={styles.thumbContent}>
+        {isVideo ? (
+          <View style={styles.thumbVideoTile}>
+            <Ionicons name="videocam" size={22} color={Colors.textMuted} />
+          </View>
+        ) : (
+          <Image source={{ uri: displayUri }} style={styles.thumbImage} resizeMode="cover" />
+        )}
+
+        {isVideo && (
+          <View style={styles.thumbVideoBadge}>
+            <Ionicons name="videocam" size={10} color="#fff" />
+          </View>
+        )}
+
+        {index === 0 && (
+          <View style={styles.thumbCoverBadge}>
+            <Text style={styles.thumbCoverText}>COVER</Text>
+          </View>
+        )}
+
+        {/* Per-item status overlays */}
+        {(status === 'pending' || status === 'preparing' || status === 'uploading') && (
+          <View style={styles.thumbStatusOverlay}>
+            <ActivityIndicator size="small" color="#fff" />
+            <View style={styles.thumbStatusLabel}>
+              <StatusLabel status={status} />
+            </View>
+          </View>
+        )}
+
+        {status === 'uploaded' && (
+          <View style={styles.thumbUploadedBadge}>
+            <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+          </View>
+        )}
+
+        {status === 'failed' && (
+          <View style={styles.thumbFailedOverlay}>
+            <Ionicons name="warning" size={14} color="#fff" />
+            <Pressable
+              style={styles.thumbRetryBtn}
+              onPress={() => onRetryItem(item.id)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Retry upload for ${isVideo ? 'video' : 'photo'} ${index + 1}`}
+            >
+              <Ionicons name="refresh" size={12} color="#fff" />
+              <Text style={styles.thumbRetryText}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {status === 'cancelled' && (
+          <View style={styles.thumbCancelledOverlay}>
+            <Ionicons name="ban" size={14} color="#fff" />
+            <Text style={styles.thumbCancelledText}>Cancelled</Text>
+          </View>
+        )}
+
+        {/* Remove button — 44x44 effective target via hitSlop */}
+        <Pressable
+          style={styles.thumbRemoveBtn}
+          onPress={() => onRemoveItem(item.id)}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${isVideo ? 'video' : 'photo'} ${index + 1}`}
+        >
+          <Ionicons name="close" size={12} color="#fff" />
+        </Pressable>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
-      {/* Large cover preview */}
+      {/* ── Large cover preview ── */}
       <View style={styles.coverWrap}>
-        <Image source={{ uri: coverUri }} style={styles.coverImage} resizeMode="cover" />
+        {isCoverVideo ? (
+          <Video
+            source={{ uri: coverDisplayUri }}
+            style={styles.coverImage}
+            resizeMode={ResizeMode.COVER}
+            shouldPlay={false}
+            isMuted
+            isLooping={false}
+            useNativeControls
+            onError={() => {
+              /* fallback handled by background color */
+            }}
+          />
+        ) : (
+          <Image source={{ uri: coverDisplayUri }} style={styles.coverImage} resizeMode="cover" />
+        )}
 
         {/* Cover badge */}
         <View style={styles.coverBadge}>
@@ -129,101 +246,84 @@ export function ListingMediaStudio({
 
         {/* Media count */}
         <View style={styles.countBadge}>
-          <Text style={styles.countText}>{photos.length} / {maxCount}</Text>
+          <Text style={styles.countText}>{items.length} / {maxCount}</Text>
         </View>
 
-        {/* Remove cover */}
+        {/* Remove cover — 44x44 effective target via hitSlop */}
         <Pressable
           style={styles.coverRemoveBtn}
-          onPress={() => onRemovePhoto(0)}
+          onPress={() => onRemoveItem(coverItem.id)}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           accessibilityRole="button"
-          accessibilityLabel="Remove cover photo"
+          accessibilityLabel={`Remove cover ${isCoverVideo ? 'video' : 'photo'}`}
         >
           <Ionicons name="close-circle" size={22} color="#fff" />
         </Pressable>
 
         {/* Cover upload status overlay */}
-        {coverStatus === 'uploading' && (
+        {(coverStatus === 'pending' || coverStatus === 'preparing' || coverStatus === 'uploading') && (
           <View style={styles.coverStatusOverlay}>
             <ActivityIndicator size="small" color="#fff" />
+            <View style={styles.coverStatusLabel}>
+              <StatusLabel status={coverStatus} />
+            </View>
           </View>
         )}
+
+        {/* Cover failed overlay with Retry + Remove */}
         {coverStatus === 'failed' && (
           <View style={styles.coverFailedOverlay}>
             <Ionicons name="warning" size={16} color="#fff" />
             <Text style={styles.coverFailedText}>Upload failed</Text>
+            <Pressable
+              style={styles.coverRetryBtn}
+              onPress={() => onRetryItem(coverItem.id)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Retry upload for cover ${isCoverVideo ? 'video' : 'photo'}`}
+            >
+              <Ionicons name="refresh" size={14} color="#fff" />
+              <Text style={styles.coverRetryText}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Cover cancelled overlay */}
+        {coverStatus === 'cancelled' && (
+          <View style={styles.coverCancelledOverlay}>
+            <Ionicons name="ban" size={16} color="#fff" />
+            <Text style={styles.coverCancelledText}>Cancelled</Text>
           </View>
         )}
       </View>
 
-      {/* Thumbnail rail with per-item status */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.thumbScroll}
-      >
-        {photos.map((uri, index) => {
-          if (index === 0) return null;
-          const status = getMediaStatus(uri, mediaDraftItems, queueItems);
-          const isVideo = isVideoUri(uri);
-          return (
-            <View key={`thumb_${index}_${uri}`} style={styles.thumbWrap}>
-              <Image source={{ uri }} style={styles.thumbImage} resizeMode="cover" />
+      {/* ── Sortable thumbnail rail ── */}
+      <SortablePhotoStrip
+        photos={photoUris}
+        itemIds={itemIds}
+        onReorder={onReorder}
+        renderItem={renderThumbItem}
+        showAddButton={false}
+      />
 
-              {isVideo && (
-                <View style={styles.thumbVideoBadge}>
-                  <Ionicons name="videocam" size={10} color="#fff" />
-                </View>
-              )}
-
-              {/* Per-item status overlay */}
-              {status === 'uploading' && (
-                <View style={styles.thumbStatusOverlay}>
-                  <ActivityIndicator size="small" color="#fff" />
-                </View>
-              )}
-              {status === 'uploaded' && (
-                <View style={styles.thumbUploadedBadge}>
-                  <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-                </View>
-              )}
-              {status === 'failed' && (
-                <View style={styles.thumbFailedOverlay}>
-                  <Ionicons name="warning" size={14} color="#fff" />
-                </View>
-              )}
-
-              {/* Remove button */}
-              <Pressable
-                style={styles.thumbRemoveBtn}
-                onPress={() => onRemovePhoto(index)}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove photo ${index + 1}`}
-              >
-                <Ionicons name="close" size={12} color="#fff" />
-              </Pressable>
-            </View>
-          );
-        })}
-
-        {/* Add more button */}
-        {photos.length < maxCount && (
+      {/* ── Add more + Camera actions ── */}
+      <View style={styles.studioActions}>
+        {items.length < maxCount && (
           <Pressable
-            style={styles.thumbAddBtn}
+            style={styles.studioActionBtn}
             onPress={onPickFromLibrary}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
-            accessibilityLabel="Add more photos"
+            accessibilityLabel="Add more photos from library"
           >
-            <Ionicons name="add" size={24} color={Colors.textMuted} />
+            <Ionicons name="images-outline" size={16} color={Colors.textSecondary} />
+            <Text style={styles.studioActionText}>Add more</Text>
           </Pressable>
         )}
-      </ScrollView>
-
-      {/* Camera action */}
-      <View style={styles.studioActions}>
         <Pressable
           style={styles.studioActionBtn}
           onPress={onPickFromCamera}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
           accessibilityLabel="Take photo with camera"
         >
@@ -232,22 +332,7 @@ export function ListingMediaStudio({
         </Pressable>
       </View>
 
-      {/* Failed items retry/remove actions */}
-      {mediaDraftItems.filter((m) => m.status === 'failed').length > 0 && (
-        <View style={styles.failedItemsRow}>
-          {mediaDraftItems
-            .filter((m) => m.status === 'failed')
-            .map((m) => (
-              <View key={`failed_${m.id}`} style={styles.failedItemChip}>
-                <Ionicons name="warning-outline" size={12} color={Colors.danger} />
-                <Text style={styles.failedItemText} numberOfLines={1}>
-                  {m.error || 'Upload failed'}
-                </Text>
-              </View>
-            ))}
-        </View>
-      )}
-
+      {/* Overall media validation error (not asset-specific) */}
       {errorText ? (
         <Text style={styles.errorText}>{errorText}</Text>
       ) : null}
@@ -400,11 +485,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: Space.sm,
     right: Space.sm,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  coverStatusLabel: {
     justifyContent: 'center',
   },
   coverFailedOverlay: {
@@ -413,26 +502,53 @@ const styles = StyleSheet.create({
     right: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     backgroundColor: 'rgba(255,59,48,0.85)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   coverFailedText: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
-  thumbScroll: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.sm,
+  coverRetryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  thumbWrap: {
+  coverRetryText: {
+    fontSize: 11,
+    fontFamily: Typography.family.bold,
+    color: '#fff',
+  },
+  coverCancelledOverlay: {
+    position: 'absolute',
+    bottom: Space.sm,
+    right: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  coverCancelledText: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
+  },
+  /* ── thumbnail content (inside SortablePhotoStrip) ── */
+  thumbContent: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: 8,
+    borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: Colors.surfaceAlt,
@@ -440,6 +556,15 @@ const styles = StyleSheet.create({
   thumbImage: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
+    borderRadius: 16,
+  },
+  thumbVideoTile: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   thumbVideoBadge: {
     position: 'absolute',
@@ -452,15 +577,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  thumbCoverBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.brand,
+    paddingVertical: 2,
+    alignItems: 'center',
+  },
+  thumbCoverText: {
+    color: Colors.background,
+    fontSize: 9,
+    fontFamily: Typography.family.bold,
+  },
   thumbStatusOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  thumbStatusLabel: {
+    position: 'absolute',
+    bottom: 4,
+    alignItems: 'center',
+  },
+  statusLabelText: {
+    fontSize: 9,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
+  },
+  statusLabelFailed: {
+    fontSize: 9,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
   },
   thumbUploadedBadge: {
     position: 'absolute',
@@ -473,13 +627,44 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255,59,48,0.5)',
+    backgroundColor: 'rgba(255,59,48,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
+  },
+  thumbRetryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  thumbRetryText: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
+    color: '#fff',
+  },
+  thumbCancelledOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  thumbCancelledText: {
+    fontSize: 9,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
   },
   thumbRemoveBtn: {
     position: 'absolute',
-    bottom: 4,
+    top: 4,
     left: 4,
     width: 20,
     height: 20,
@@ -488,51 +673,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  thumbAddBtn: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surface,
-  },
+  /* ── studio actions ── */
   studioActions: {
+    flexDirection: 'row',
     paddingHorizontal: Space.md,
     paddingVertical: 6,
+    gap: Space.md,
   },
   studioActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    minHeight: 44,
   },
   studioActionText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
-  },
-  failedItemsRow: {
-    paddingHorizontal: Space.md,
-    paddingVertical: 4,
-    gap: 4,
-  },
-  failedItemChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,59,48,0.06)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  failedItemText: {
-    flex: 1,
-    fontSize: 11,
-    fontFamily: Typography.family.regular,
-    color: Colors.danger,
   },
   errorText: {
     fontSize: 12,
