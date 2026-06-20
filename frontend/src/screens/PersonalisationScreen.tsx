@@ -1,19 +1,16 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Space, Typography } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { SettingsCard } from '../components/settings/SettingsCard';
-import { SettingsCell } from '../components/SettingsCell';
-import { Typography } from '../theme/designTokens';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { AudiencePreferenceGrid } from '../components/personalisation/AudiencePreferenceGrid';
+import { DiscoveryPreferenceRow } from '../components/personalisation/DiscoveryPreferenceRow';
 
 type PreferencePickerMode = 'categories' | 'brands' | 'members' | null;
 
@@ -21,8 +18,14 @@ const CATEGORY_SIZE_OPTIONS = ['Balanced', 'Mostly XS-S', 'Mostly M-L', 'All siz
 const BRAND_OPTIONS = ['Any', 'Streetwear first', 'Luxury first', 'Vintage first'];
 const MEMBER_OPTIONS = ['Everyone', 'Verified sellers first', 'People I follow first'];
 
+const DEFAULT_GENDER_FILTER = ['Women', 'Men'];
+const DEFAULT_CATEGORIES_PREF = 'Balanced';
+const DEFAULT_BRANDS_PREF = 'Any';
+const DEFAULT_MEMBERS_PREF = 'Everyone';
+
 export default function PersonalisationScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const personalisationPreferences = useStore((state) => state.personalisationPreferences);
   const updatePersonalisationPreferences = useStore((state) => state.updatePersonalisationPreferences);
   const genderFilter = personalisationPreferences.genderFilter;
@@ -33,22 +36,32 @@ export default function PersonalisationScreen() {
   const { show } = useToast();
   const haptic = useHaptic();
 
-  const profileStrength = useMemo(() => {
-    let score = 0;
-    const total = 4;
-    if (genderFilter.length > 0 && !(genderFilter.length === 1 && genderFilter[0] === 'All')) score++;
-    if (categoriesAndSizesPref !== 'Balanced') score++;
-    if (brandsPref !== 'Any') score++;
-    if (membersPref !== 'Everyone') score++;
-    return { score, total, percent: Math.round((score / total) * 100) };
-  }, [genderFilter, categoriesAndSizesPref, brandsPref, membersPref]);
+  const handleSelectGender = useCallback(
+    (gender: string) => {
+      haptic.light();
 
-  const genderOptions = ['Women', 'Men', 'Kids', 'All'];
+      if (gender === 'All') {
+        updatePersonalisationPreferences({ genderFilter: ['All'] });
+        return;
+      }
 
-  const toggleGender = (g: string) => {
-    const next = genderFilter.includes(g) ? genderFilter.filter((x) => x !== g) : [...genderFilter, g];
-    updatePersonalisationPreferences({ genderFilter: next });
-  };
+      const withoutAll = genderFilter.filter((g) => g !== 'All');
+      const isSelected = withoutAll.includes(gender);
+      let next: string[];
+
+      if (isSelected) {
+        next = withoutAll.filter((g) => g !== gender);
+        if (next.length === 0) {
+          next = ['All'];
+        }
+      } else {
+        next = [...withoutAll, gender];
+      }
+
+      updatePersonalisationPreferences({ genderFilter: next });
+    },
+    [genderFilter, updatePersonalisationPreferences, haptic]
+  );
 
   const pickerTitle =
     pickerMode === 'categories'
@@ -94,146 +107,119 @@ export default function PersonalisationScreen() {
     }
   };
 
+  const handleReset = () => {
+    Alert.alert(
+      'Reset preferences',
+      'Reset all preferences to their default values?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          onPress: () => {
+            haptic.medium();
+            updatePersonalisationPreferences({
+              genderFilter: DEFAULT_GENDER_FILTER,
+              categoriesAndSizesPref: DEFAULT_CATEGORIES_PREF,
+              brandsPref: DEFAULT_BRANDS_PREF,
+              membersPref: DEFAULT_MEMBERS_PREF,
+            });
+            show('Preferences reset to defaults.', 'success');
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <FlagshipScreen
-      header={<FlagshipHeader title="Personalisation" subtitle="Customise your experience" onBack={() => navigation.goBack()} />}
-    >
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <View style={[styles.personalisationTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-          <Ionicons name="options-outline" size={18} color={Colors.brand} />
-          <Text style={[styles.personalisationTrustText, { color: Colors.textSecondary }]}>
-            Your preferences shape what you see. They never hide items permanently.
+    <View style={styles.container}>
+      {/* 1. Compact navigation header */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <Pressable
+          style={styles.headerBack}
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Personalisation</Text>
+        <View style={styles.headerRight}>
+          <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+          <Text style={styles.headerSaved}>Saved</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Space.xxl + Space.lg },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 2. Editorial introduction */}
+        <View style={styles.intro}>
+          <Text style={styles.introTitle}>Personalisation</Text>
+          <Text style={styles.introBody}>
+            Set the shopping preferences you want to keep.
+          </Text>
+          <Text style={styles.introBody}>
+            Your choices are saved automatically.
           </Text>
         </View>
-      </Reanimated.View>
 
-      {/* Profile Strength */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <View style={styles.strengthHeader}>
-          <Text style={styles.strengthLabel}>Profile strength</Text>
-          <Text style={[styles.strengthValue, { color: profileStrength.percent === 100 ? Colors.success : Colors.brand }]}>
-            {profileStrength.percent}%
-          </Text>
-        </View>
-        <View style={[styles.strengthTrack, { backgroundColor: Colors.surfaceAlt }]}>
-          <View
-            style={[
-              styles.strengthFill,
-              {
-                width: `${profileStrength.percent}%`,
-                backgroundColor: profileStrength.percent === 100 ? Colors.success : Colors.brand,
-              },
-            ]}
+        {/* 3. Visual shopping-audience selection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Shop for</Text>
+          <AudiencePreferenceGrid
+            selectedGenders={genderFilter}
+            onSelect={handleSelectGender}
           />
         </View>
-        <Text style={styles.strengthHint}>
-          {profileStrength.percent === 100
-            ? 'Your profile is fully tuned. Great finds ahead.'
-            : `${profileStrength.total - profileStrength.score} more preference${profileStrength.total - profileStrength.score === 1 ? '' : 's'} will unlock better recommendations.`}
-        </Text>
-      </Reanimated.View>
 
-      {/* Visual Preview */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
-        <View style={[styles.previewCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-          <View style={styles.previewHeader}>
-            <Ionicons name="options-outline" size={18} color={Colors.brand} />
-            <Text style={[styles.previewTitle, { color: Colors.textMuted }]}>YOUR FILTERS</Text>
-          </View>
-          <View style={styles.previewRow}>
-            <Ionicons name="filter-outline" size={16} color={Colors.textSecondary} />
-            <Text style={[styles.previewText, { color: Colors.textPrimary }]}>
-              Gender: {genderFilter.length > 0 ? genderFilter.join(', ') : 'All'}
-            </Text>
-          </View>
-          <View style={styles.previewRow}>
-            <Ionicons name="grid-outline" size={16} color={Colors.textSecondary} />
-            <Text style={[styles.previewText, { color: Colors.textPrimary }]}>
-              Categories: {categoriesAndSizesPref}
-            </Text>
-          </View>
-          <View style={styles.previewRow}>
-            <Ionicons name="barcode-outline" size={16} color={Colors.textSecondary} />
-            <Text style={[styles.previewText, { color: Colors.textPrimary }]}>
-              Brands: {brandsPref}
-            </Text>
-          </View>
-          <View style={styles.previewRow}>
-            <Ionicons name="people-outline" size={16} color={Colors.textSecondary} />
-            <Text style={[styles.previewText, { color: Colors.textPrimary }]}>
-              Members: {membersPref}
-            </Text>
+        {/* 4. Discovery preference rows */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Discovery preferences</Text>
+          <View style={styles.discoveryGroup}>
+            <DiscoveryPreferenceRow
+              icon="grid-outline"
+              title="Categories and sizes"
+              explanation="Keep a preferred size mix."
+              value={categoriesAndSizesPref}
+              onPress={() => { haptic.light(); setPickerMode('categories'); }}
+            />
+            <DiscoveryPreferenceRow
+              icon="barcode-outline"
+              title="Brands"
+              explanation="Choose a general brand direction."
+              value={brandsPref}
+              onPress={() => { haptic.light(); setPickerMode('brands'); }}
+            />
+            <DiscoveryPreferenceRow
+              icon="people-outline"
+              title="Members"
+              explanation="Choose whose listings you prefer to browse."
+              value={membersPref}
+              onPress={() => { haptic.light(); setPickerMode('members'); }}
+              isLast
+            />
           </View>
         </View>
-      </Reanimated.View>
 
-      {/* Gender Preference Pills */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-        <Text style={styles.sectionTitle}>Gender</Text>
-        <View style={styles.genderRow}>
-          {genderOptions.map((g) => (
-            <AnimatedPressable
-              key={g}
-              style={[styles.genderPill, genderFilter.includes(g) && styles.genderPillActive]}
-              onPress={() => toggleGender(g)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: genderFilter.includes(g) }}
-              accessibilityLabel={`Toggle ${g} preference`}
-              accessibilityHint="Adds or removes this preference from your feed filters"
-              hapticFeedback="light"
-              scaleValue={0.95}
-            >
-              <Text
-                style={[styles.genderPillText, genderFilter.includes(g) && styles.genderPillTextActive]}
-              >
-                {g}
-              </Text>
-            </AnimatedPressable>
-          ))}
-        </View>
-      </Reanimated.View>
+        {/* 6. Optional reset action */}
+        <Pressable
+          style={styles.resetBtn}
+          onPress={handleReset}
+          hitSlop={{ top: 8, bottom: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Reset preferences to defaults"
+        >
+          <Ionicons name="refresh-outline" size={16} color={Colors.textMuted} />
+          <Text style={styles.resetBtnText}>Reset preferences</Text>
+        </Pressable>
+      </ScrollView>
 
-      {/* Preference Rows */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
-        <Text style={styles.sectionTitle}>Your Preferences</Text>
-        <SettingsCard>
-          <SettingsCell
-            icon="grid-outline"
-            iconColor={Colors.textPrimary}
-            title="Categories and sizes"
-            value={categoriesAndSizesPref}
-            isFirst
-            onPress={() => { haptic.light(); setPickerMode('categories'); }}
-          />
-          <SettingsCell
-            icon="barcode-outline"
-            iconColor={Colors.textPrimary}
-            title="Brands"
-            value={brandsPref}
-            onPress={() => { haptic.light(); setPickerMode('brands'); }}
-          />
-          <SettingsCell
-            icon="people-outline"
-            iconColor={Colors.textPrimary}
-            title="Members"
-            value={membersPref}
-            isLast
-            onPress={() => { haptic.light(); setPickerMode('members'); }}
-          />
-        </SettingsCard>
-      </Reanimated.View>
-
-      {/* Footer Note */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
-        <View style={styles.footerNote}>
-          <Ionicons name="information-circle-outline" size={16} color={Colors.textMuted} />
-          <Text style={styles.footerNoteText}>
-            Your preferences are applied as filters across your feed and search. They never hide
-            items permanently.
-          </Text>
-        </View>
-      </Reanimated.View>
-
+      {/* 7. BottomSheetPicker */}
       <BottomSheetPicker
         visible={pickerMode !== null}
         onClose={() => setPickerMode(null)}
@@ -242,152 +228,104 @@ export default function PersonalisationScreen() {
         selectedValue={selectedPickerValue}
         onSelect={handleSelectPreference}
       />
-    </FlagshipScreen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  strengthHeader: {
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+
+  // Compact header
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+    gap: Space.sm,
   },
-  strengthLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: Type.meta.letterSpacing,
+  headerBack: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -Space.xs,
   },
-  strengthValue: {
-    fontSize: Type.meta.size,
+  headerTitle: {
+    flex: 1,
+    fontSize: 26,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.meta.letterSpacing,
+    color: Colors.textPrimary,
+    letterSpacing: -0.5,
   },
-  strengthTrack: {
-    height: 6,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-    marginBottom: Space.sm,
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  strengthFill: {
-    height: '100%',
-    borderRadius: Radius.full,
+  headerSaved: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.success,
   },
-  strengthHint: {
-    fontSize: Type.caption.size,
+
+  // Scroll
+  scrollContent: {
+    paddingHorizontal: Space.md,
+  },
+
+  // Editorial introduction
+  intro: {
+    paddingTop: Space.lg,
+    paddingBottom: Space.lg,
+    gap: Space.xs,
+  },
+  introTitle: {
+    fontSize: 28,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  introBody: {
+    fontSize: 15,
     fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
-    lineHeight: Type.caption.lineHeight,
-    marginBottom: Space.lg,
-    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: 21,
   },
-  previewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginBottom: Space.sm,
-  },
-  previewCard: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Space.md,
+
+  // Section
+  section: {
     marginBottom: Space.lg,
   },
-  previewTitle: {
-    fontSize: Type.meta.size,
+  sectionTitle: {
+    fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: Space.sm,
   },
-  previewRow: {
+
+  // Discovery group
+  discoveryGroup: {
+    paddingHorizontal: Space.xs,
+  },
+
+  // Reset
+  resetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: Space.sm,
-    marginBottom: Space.xs,
+    paddingVertical: Space.md,
+    marginTop: Space.sm,
+    minHeight: 48,
   },
-  previewText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  genderRow: {
-    flexDirection: 'row',
-    gap: Space.sm + Space.xs,
-    marginBottom: Space.lg,
-    flexWrap: 'wrap',
-  },
-  genderPill: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + Space.xs,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  genderPillActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  genderPillText: {
-    fontSize: Type.body.size,
+  resetBtnText: {
+    fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  genderPillTextActive: {
-    color: Colors.textInverse,
-    fontFamily: Typography.family.semibold,
-  },
-  sectionTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: Type.meta.letterSpacing,
-    marginBottom: Space.sm,
-    marginLeft: Space.xs,
-  },
-  footerNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    backgroundColor: Colors.surfaceAlt,
-    marginTop: Space.md,
-  },
-  footerNoteText: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    color: Colors.textSecondary,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  personalisationTrust: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
-  personalisationTrustText: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
+    color: Colors.textMuted,
   },
 });
