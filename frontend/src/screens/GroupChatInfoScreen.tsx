@@ -11,9 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -23,7 +22,6 @@ type Props = StackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
 export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
-  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -56,16 +54,17 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const handleLeave = () => {
     Alert.alert(
       'Leave group?',
-      'You will no longer receive messages from this group.',
+      'This removes the group from your inbox on this device. You can rejoin if you receive a new invite.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Leave',
+          text: 'Leave group',
           style: 'destructive',
           onPress: () => {
             haptic.heavy();
+            deleteConversation(conversationId);
             show('You left the group', 'info');
-            navigation.goBack();
+            navigation.navigate('MainTabs', { screen: 'Inbox' });
           },
         },
       ]
@@ -74,18 +73,18 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete conversation?',
-      'This cannot be undone.',
+      'Delete for me?',
+      'This removes the conversation from your inbox on this device.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Delete for me',
           style: 'destructive',
           onPress: () => {
             haptic.heavy();
             deleteConversation(conversationId);
-            show('Conversation deleted', 'info');
-            navigation.navigate('MainTabs');
+            show('Conversation removed from your inbox', 'info');
+            navigation.navigate('MainTabs', { screen: 'Inbox' });
           },
         },
       ]
@@ -96,7 +95,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     haptic.medium();
     archiveConversation(conversationId);
     show('Conversation archived', 'success');
-    navigation.goBack();
+    navigation.navigate('MainTabs', { screen: 'Inbox' });
   };
 
   const handleToggleMute = () => {
@@ -119,19 +118,21 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     <FlagshipScreen header={<FlagshipHeader title="Group Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Group Identity */}
-        <View style={styles.identityCard}>
-          <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
-            <Text style={styles.avatarText}>{initials}</Text>
+        <View style={styles.identityCardV2}>
+          <View style={styles.groupAvatarWrap}>
+            <View style={[styles.groupAvatar, { backgroundColor: Colors.surfaceAlt }]}>
+              <Text style={styles.groupAvatarText}>{initials}</Text>
+            </View>
           </View>
-          <BodyEmphasis style={styles.groupName} numberOfLines={1}>
+          <BodyEmphasis style={styles.groupNameV2} numberOfLines={1}>
             {conversation.title ?? 'Group chat'}
           </BodyEmphasis>
           {description ? (
-            <Caption color={Colors.textMuted} style={styles.groupDesc}>{description}</Caption>
+            <Caption color={Colors.textMuted} style={styles.groupDescV2}>{description}</Caption>
           ) : null}
           <Caption color={Colors.textMuted}>{memberCount} members</Caption>
           {deployedBotCount > 0 && (
-            <View style={styles.botBadge}>
+            <View style={styles.botBadgeV2}>
               <Ionicons name="hardware-chip-outline" size={12} color={Colors.brand} />
               <Caption color={Colors.brand} style={styles.botBadgeText}>
                 {deployedBotCount} bot{deployedBotCount > 1 ? 's' : ''} active
@@ -278,10 +279,6 @@ function RowItem({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
@@ -296,22 +293,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
+    ...Elevation.subtle,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    marginHorizontal: Space.xs,
+  },
+  avatarRing: {
+    width: 88,
+    height: 88,
+    borderRadius: Radius.full,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatar: {
-    width: 80,
-    height: 80,
+    width: 76,
+    height: 76,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 28,
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
   },
   groupName: {
     fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
     marginTop: Space.sm,
   },
@@ -329,6 +341,53 @@ const styles = StyleSheet.create({
   botBadgeText: {
     fontSize: Type.caption.size,
   },
+  identityCardV2: {
+    alignItems: 'center',
+    paddingVertical: Space.xl + 8,
+    gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    marginHorizontal: Space.xs,
+  },
+  groupAvatarWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    marginBottom: Space.xs,
+  },
+  groupAvatar: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  groupAvatarText: {
+    fontSize: 32,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+  },
+  groupNameV2: {
+    fontSize: Type.title.size,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+    marginTop: Space.sm,
+  },
+  groupDescV2: {
+    textAlign: 'center',
+    paddingHorizontal: Space.lg,
+    marginTop: 2,
+  },
+  botBadgeV2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
   section: {
     gap: Space.sm,
   },
@@ -343,6 +402,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     overflow: 'hidden',
+    ...Elevation.subtle,
   },
   sectionCardDanger: {
     borderColor: `${Colors.danger}30`,
@@ -361,6 +421,6 @@ const styles = StyleSheet.create({
   rowLabel: {
     flex: 1,
     fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 });

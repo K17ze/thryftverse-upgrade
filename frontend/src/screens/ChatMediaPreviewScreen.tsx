@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
-  Pressable,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -15,15 +14,16 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen } from '../components/flagship';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+import { Type, TypeStyles, Radius, Elevation } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'ChatMediaPreview'>;
 
 export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
-  const { mediaUri, mediaType = 'image', senderLabel, timestamp, messageId } = route.params;
+  const { mediaUri, mediaType = 'image', senderLabel, timestamp } = route.params;
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const mediaSize = { width, height: height * 0.72 };
 
   const [imageError, setImageError] = useState(false);
   const [videoError, setVideoError] = useState(false);
@@ -31,7 +31,7 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
   const hasUri = Boolean(mediaUri && mediaUri.length > 0);
 
   const renderMissingState = () => (
-    <View style={styles.errorWrap}>
+    <View style={[styles.errorWrap, mediaSize]}>
       <Ionicons name="image-outline" size={48} color="rgba(255,255,255,0.4)" />
       <Text style={styles.errorText}>Media unavailable</Text>
       <Text style={styles.errorSub}>This media could not be loaded.</Text>
@@ -57,7 +57,7 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
     return (
       <CachedImage
         uri={mediaUri}
-        style={styles.mediaImage}
+        style={mediaSize}
         contentFit="contain"
         transition={200}
       />
@@ -71,10 +71,8 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
     return (
       <Video
         source={{ uri: mediaUri }}
-        style={styles.mediaImage}
+        style={mediaSize}
         resizeMode={ResizeMode.CONTAIN}
-        shouldPlay
-        isLooping
         useNativeControls
         onError={() => setVideoError(true)}
       />
@@ -101,14 +99,13 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
         </AnimatedPressable>
 
         {/* Media */}
-        <Pressable
-          style={styles.mediaWrap}
-          onPress={() => navigation.goBack()}
+        <View
+          style={[styles.mediaWrap, mediaSize]}
           accessibilityLabel="Media preview"
           accessibilityRole="image"
         >
           {mediaType === 'video' ? renderVideo() : renderImage()}
-        </Pressable>
+        </View>
 
         {/* Context overlay */}
         {(senderLabel || timestamp) && (
@@ -119,9 +116,6 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
             {timestamp && (
               <Text style={styles.contextTime}>{timestamp}</Text>
             )}
-            {messageId && (
-              <Text style={styles.contextId}>ID: {messageId.slice(-8)}</Text>
-            )}
           </View>
         )}
 
@@ -131,10 +125,6 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
   backdrop: {
     flex: 1,
     backgroundColor: '#000',
@@ -147,76 +137,70 @@ const styles = StyleSheet.create({
     zIndex: 10,
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.25)',
+    ...Elevation.subtle,
   },
   mediaWrap: {
-    width: SCREEN_W,
-    height: SCREEN_H * 0.7,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  mediaImage: {
-    width: SCREEN_W,
-    height: SCREEN_H * 0.7,
-  },
   errorWrap: {
-    width: SCREEN_W,
-    height: SCREEN_H * 0.7,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
   },
   errorText: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: Type.subtitle.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: 'rgba(255,255,255,0.7)',
   },
   errorSub: {
-    fontSize: 13,
-    fontFamily: 'Inter-Regular',
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.body.fontFamily,
     color: 'rgba(255,255,255,0.4)',
   },
   retryBtn: {
     marginTop: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.15)',
+    ...Elevation.subtle,
   },
   retryText: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: Type.body.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: '#fff',
   },
   contextOverlay: {
     position: 'absolute',
-    left: 16,
-    right: 16,
+    left: 0,
+    right: 0,
     alignItems: 'center',
     gap: 4,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   contextSender: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: Type.subtitle.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   contextTime: {
-    fontSize: 13,
-    fontFamily: 'Inter-Regular',
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.body.fontFamily,
     color: 'rgba(255,255,255,0.7)',
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
-  },
-  contextId: {
-    fontSize: 11,
-    fontFamily: 'Inter-Regular',
-    color: 'rgba(255,255,255,0.4)',
   },
 });

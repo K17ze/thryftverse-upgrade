@@ -12,9 +12,8 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -25,7 +24,6 @@ type Props = StackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
 export default function ConversationInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
-  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -36,6 +34,8 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const toggleMuted = useStore((state) => state.toggleMutedConversation);
   const blockedUsers = useStore((state) => state.blockedUsers);
   const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
+  const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
+  const participantNameLookup = useStore((state) => (state as any).participantNameLookup as Map<string, string> | undefined);
 
   const conversation = useMemo(
     () => conversations.find((c) => c.id === conversationId),
@@ -60,18 +60,18 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete conversation?',
-      'This cannot be undone. Messages will be removed from this device.',
+      'Delete for me?',
+      'This removes the conversation from your inbox on this device. The other participant keeps their copy.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Delete for me',
           style: 'destructive',
           onPress: () => {
             haptic.heavy();
             deleteConversation(conversationId);
-            show('Conversation deleted', 'info');
-            navigation.navigate('MainTabs');
+            show('Conversation removed from your inbox', 'info');
+            navigation.navigate('MainTabs', { screen: 'Inbox' });
           },
         },
       ]
@@ -82,7 +82,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     haptic.medium();
     archiveConversation(conversationId);
     show('Conversation archived', 'success');
-    navigation.goBack();
+    navigation.navigate('MainTabs', { screen: 'Inbox' });
   };
 
   const handleToggleMute = () => {
@@ -104,8 +104,14 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     }
   };
 
-  const displayName = conversation.title ?? 'Thryft user';
-  const avatarUrl = conversation.avatar ?? null;
+  const displayName =
+    (counterpartyId ? participantNameLookup?.get(counterpartyId) : undefined) ??
+    conversation.title ??
+    'Thryft user';
+  const avatarUrl =
+    conversation.avatar ??
+    (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? null : null);
+  const handle = counterpartyId ? `@${counterpartyId.slice(0, 12)}` : 'Direct message';
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Conversation Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
@@ -113,17 +119,28 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Partner Identity */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
-          <View style={styles.identityCard}>
-            {avatarUrl ? (
-              <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
-            ) : (
-              <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
-                <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
-              </View>
-            )}
-            <BodyEmphasis style={styles.name} numberOfLines={1}>{displayName}</BodyEmphasis>
-            <Caption color={Colors.textMuted}>Direct message</Caption>
-          </View>
+          <AnimatedPressable
+            style={styles.identityCardV2}
+            onPress={handleViewProfile}
+            disabled={!counterpartyId}
+            activeOpacity={0.85}
+            scaleValue={0.98}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={`View ${displayName}'s profile`}
+          >
+            <View style={styles.identityAvatarWrap}>
+              {avatarUrl ? (
+                <CachedImage uri={avatarUrl} style={styles.identityAvatarImage} contentFit="cover" />
+              ) : (
+                <View style={[styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+                  <Text style={styles.identityAvatarText}>{displayName.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
+            </View>
+            <BodyEmphasis style={styles.identityName} numberOfLines={1}>{displayName}</BodyEmphasis>
+            <Caption color={Colors.textMuted}>{handle}</Caption>
+          </AnimatedPressable>
         </Reanimated.View>
 
         {/* Profile */}
@@ -146,14 +163,10 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               label="Photos & videos"
               onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
               showChevron
-            />
-            <RowItem
-              icon="document-outline"
-              label="Shared links"
-              onPress={() => {
-                // Future: open shared links when backend supports it
-              }}
-              showChevron
+              detail={(() => {
+                const count = conversation.messages?.filter((m) => m.mediaUri).length ?? 0;
+                return count > 0 ? `${count}` : undefined;
+              })()}
             />
           </Section>
         </Reanimated.View>
@@ -203,7 +216,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             />
             <RowItem
               icon="trash-outline"
-              label="Delete chat"
+              label="Delete for me"
               onPress={handleDelete}
               danger
             />
@@ -240,6 +253,7 @@ function RowItem({
   showChevron,
   danger,
   isLast,
+  detail,
 }: {
   icon: string;
   label: string;
@@ -247,6 +261,7 @@ function RowItem({
   showChevron?: boolean;
   danger?: boolean;
   isLast?: boolean;
+  detail?: string;
 }) {
   const content = (
     <View style={[styles.row, !isLast && styles.rowBorder]}>
@@ -263,6 +278,9 @@ function RowItem({
       >
         {label}
       </Text>
+      {detail && (
+        <Caption color={Colors.textMuted}>{detail}</Caption>
+      )}
       {showChevron && (
         <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
       )}
@@ -288,10 +306,6 @@ function RowItem({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
@@ -306,27 +320,83 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.lg,
     gap: Space.sm,
+    ...Elevation.subtle,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    marginHorizontal: Space.xs,
   },
-  avatar: {
-    width: 80,
-    height: 80,
+  avatarRing: {
+    width: 88,
+    height: 88,
     borderRadius: Radius.full,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    padding: 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Elevation.subtle,
+  },
   avatarImage: {
-    width: 80,
-    height: 80,
+    width: 76,
+    height: 76,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceAlt,
   },
   avatarText: {
     fontSize: 28,
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
     textTransform: 'uppercase',
   },
   name: {
+    fontSize: Type.subtitle.size,
+    letterSpacing: Type.subtitle.letterSpacing,
+    lineHeight: Type.subtitle.lineHeight,
+  },
+  identityCardV2: {
+    alignItems: 'center',
+    paddingVertical: Space.lg + 8,
+    gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    marginHorizontal: Space.xs,
+  },
+  identityAvatarWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    marginBottom: Space.xs,
+  },
+  identityAvatarImage: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  identityAvatarFallback: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  identityAvatarText: {
+    fontSize: 32,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+    textTransform: 'uppercase',
+  },
+  identityName: {
     fontSize: Type.subtitle.size,
     letterSpacing: Type.subtitle.letterSpacing,
     lineHeight: Type.subtitle.lineHeight,
@@ -362,7 +432,7 @@ const styles = StyleSheet.create({
   rowLabel: {
     flex: 1,
     fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
   },

@@ -4,10 +4,11 @@ import {
   TextInput,
   StyleSheet,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface ChatComposerBarProps {
@@ -34,7 +35,8 @@ export function ChatComposerBar({
   disabled = false,
 }: ChatComposerBarProps) {
   const inputRef = useRef<TextInput>(null);
-  const canSend = value.trim().length > 0 && !isSending;
+  const hasText = value.trim().length > 0;
+  const canSend = hasText && !isSending && !disabled;
 
   return (
     <View style={styles.root}>
@@ -71,18 +73,23 @@ export function ChatComposerBar({
         />
       </View>
 
-      {canSend ? (
+      {hasText ? (
         <AnimatedPressable
           onPress={onSend}
-          style={[styles.sendBtn, styles.sendBtnActive]}
+          style={[styles.sendBtn, canSend && styles.sendBtnActive]}
           activeOpacity={0.7}
           scaleValue={0.88}
           hapticFeedback="medium"
-          accessibilityLabel="Send message"
+          accessibilityLabel={isSending ? 'Sending message' : 'Send message'}
           accessibilityRole="button"
-          disabled={isSending}
+          accessibilityState={{ disabled: !canSend, busy: isSending }}
+          disabled={!canSend}
         >
-          <Ionicons name="arrow-up" size={20} color={Colors.background} />
+          {isSending ? (
+            <ActivityIndicator size="small" color={Colors.textSecondary} />
+          ) : (
+            <Ionicons name="arrow-up" size={20} color={canSend ? Colors.background : Colors.textMuted} />
+          )}
         </AnimatedPressable>
       ) : (
         <AnimatedPressable
@@ -106,12 +113,10 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: Space.sm + 2,
+    paddingHorizontal: Space.sm,
     paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-    gap: Space.xs,
-    backgroundColor: Colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    gap: Space.xs + 2,
+    backgroundColor: Colors.surface,
   },
   actionBtn: {
     width: 40,
@@ -126,7 +131,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Platform.OS === 'ios' ? 8 : 6,
     minHeight: 44,
@@ -137,7 +142,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypeStyles.body.fontFamily,
     color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
@@ -148,13 +153,13 @@ const styles = StyleSheet.create({
     maxHeight: MAX_INPUT_HEIGHT,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
+    width: 42,
+    height: 42,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
   },

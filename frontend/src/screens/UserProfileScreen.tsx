@@ -253,16 +253,43 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           displayName={displayUsername}
           username={targetProfile?.username}
           bio={targetProfile?.bio}
+          userLocation={targetProfile?.location}
+          memberSince={targetProfile?.createdAt ? new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }) : undefined}
           isSelf={isSelfProfile}
           onEditProfile={isSelfProfile ? () => navigation.navigate('EditProfile') : undefined}
           onShare={handleShare}
-          
+          onMessage={!isSelfProfile ? handleMessageProfile : undefined}
           hideCover
           stats={[
             { label: 'Listings', value: profileListings.length },
-            
           ]}
         />
+
+        {/* Seller context — real data only */}
+        {!isSelfProfile && targetProfile && (
+          <View style={styles.sellerContextBar}>
+            <View style={styles.sellerContextInner}>
+              {targetProfile.createdAt && (
+                <View style={styles.sellerContextItem}>
+                  <Ionicons name="calendar-outline" size={14} color={Colors.textMuted} />
+                  <Text style={styles.sellerContextText}>
+                    Member since {new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
+                  </Text>
+                </View>
+              )}
+              {targetProfile.location && (
+                <View style={styles.sellerContextItem}>
+                  <Ionicons name="location-outline" size={14} color={Colors.textMuted} />
+                  <Text style={styles.sellerContextText}>{targetProfile.location}</Text>
+                </View>
+              )}
+              <View style={styles.sellerContextItem}>
+                <Ionicons name="shirt-outline" size={14} color={Colors.textMuted} />
+                <Text style={styles.sellerContextText}>{profileListings.length} listing{profileListings.length !== 1 ? 's' : ''}</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Index 1: Sticky Tabs */}
         <View style={styles.stickyTabWrapper}>
@@ -683,6 +710,34 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: TEXT,
     lineHeight: 22,
+  },
+  sellerContextBar: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    overflow: 'hidden',
+  },
+  sellerContextInner: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: Space.sm,
+    padding: Space.md,
+  },
+  sellerContextItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sellerContextText: {
+    fontSize: Typography.size.caption,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    letterSpacing: Typography.tracking.normal,
+    lineHeight: 18,
   },
 });
 

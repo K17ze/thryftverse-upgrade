@@ -98,6 +98,15 @@ export default function PersonalisationScreen() {
     <FlagshipScreen
       header={<FlagshipHeader title="Personalisation" subtitle="Customise your experience" onBack={() => navigation.goBack()} />}
     >
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <View style={[styles.personalisationTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <Ionicons name="options-outline" size={18} color={Colors.brand} />
+          <Text style={[styles.personalisationTrustText, { color: Colors.textSecondary }]}>
+            Your preferences shape what you see. They never hide items permanently.
+          </Text>
+        </View>
+      </Reanimated.View>
+
       {/* Profile Strength */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
         <View style={styles.strengthHeader}>
@@ -363,5 +372,22 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  personalisationTrust: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+  },
+  personalisationTrustText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
 });

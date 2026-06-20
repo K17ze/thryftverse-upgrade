@@ -28,6 +28,8 @@ interface ProfileVisualHeaderProps {
   displayName?: string;
   username?: string;
   bio?: string | null;
+  userLocation?: string | null;
+  memberSince?: string | null;
   stats?: StatItem[];
   isSelf?: boolean;
   onEditCover?: () => void;
@@ -35,6 +37,7 @@ interface ProfileVisualHeaderProps {
   onEditProfile?: () => void;
   onShare?: () => void;
   onFollow?: () => void;
+  onMessage?: () => void;
   following?: boolean;
   verified?: boolean;
   hideCover?: boolean;
@@ -46,6 +49,8 @@ export function ProfileVisualHeader({
   displayName,
   username,
   bio,
+  userLocation,
+  memberSince,
   stats,
   isSelf = false,
   onEditCover,
@@ -53,6 +58,7 @@ export function ProfileVisualHeader({
   onEditProfile,
   onShare,
   onFollow,
+  onMessage,
   following = false,
   verified = false,
   hideCover = false,
@@ -115,6 +121,22 @@ export function ProfileVisualHeader({
         </View>
       </View>
 
+      {/* Context row */}
+      <View style={styles.contextRow}>
+        {userLocation ? (
+          <View style={styles.contextPill}>
+            <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.contextPillText}>{userLocation}</Text>
+          </View>
+        ) : null}
+        {memberSince ? (
+          <View style={styles.contextPill}>
+            <Ionicons name="calendar-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.contextPillText}>{memberSince}</Text>
+          </View>
+        ) : null}
+      </View>
+
       {/* Stats rail */}
       {stats && stats.length > 0 && (
         <View style={styles.statsRail}>
@@ -141,16 +163,17 @@ export function ProfileVisualHeader({
         ) : (
           <>
             <AnimatedPressable
-              style={[styles.actionBtn, following ? styles.actionBtnSecondary : styles.actionBtnPrimary]}
-              onPress={() => { haptic.medium(); onFollow?.(); }}
+              style={[styles.actionBtn, styles.actionBtnPrimary]}
+              onPress={() => { haptic.medium(); onMessage?.(); }}
               {...PressPresets.primaryButton}
             >
-              <Text style={following ? styles.actionBtnSecondaryText : styles.actionBtnPrimaryText}>
-                {following ? 'Following' : 'Follow'}
-              </Text>
+              <Text style={styles.actionBtnPrimaryText}>Message</Text>
             </AnimatedPressable>
             <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); onShare?.(); }} {...PressPresets.iconButton}>
               <Ionicons name="share-outline" size={16} color={Colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); /* more actions */ }} {...PressPresets.iconButton}>
+              <Ionicons name="ellipsis-horizontal" size={16} color={Colors.textPrimary} />
             </AnimatedPressable>
           </>
         )}
@@ -322,5 +345,26 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: 14,
     color: Colors.textPrimary,
+  },
+  contextRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+  },
+  contextPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.md,
+  },
+  contextPillText: {
+    fontFamily: Typography.family.medium,
+    fontSize: 12,
+    color: Colors.textMuted,
   },
 });

@@ -22,8 +22,6 @@ import { EmptyState } from '../components/EmptyState';
 
 import { Video, ResizeMode } from '../components/compat/Video';
 
-import * as ImagePicker from 'expo-image-picker';
-
 import Reanimated, {
 
   useSharedValue,
@@ -324,155 +322,13 @@ export default function MyProfileScreen() {
 
 
 
-  const pickCover = async () => {
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permission.granted) {
-
-      show('Allow photo library access to upload cover', 'error');
-
-      return;
-
-    }
-
-
-
-    try {
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-
-        allowsEditing: false,
-
-        quality: 1,
-
-      });
-
-
-
-      if (!result.canceled && result.assets?.[0]?.uri) {
-
-        const nextCoverUri = await persistProfileMediaUri(result.assets[0].uri, 'cover');
-
-        updateUserCover(nextCoverUri);
-
-        if (currentUser?.id) {
-
-          Promise.all([
-
-            setStoredUserCover(nextCoverUri),
-
-            setStoredUserCoverForUser(currentUser.id, nextCoverUri),
-
-          ]).catch(() => {
-
-            // Keep UX responsive when local persistence fails.
-
-          });
-
-        }
-
-        show('Cover updated', 'success');
-
-      }
-
-    } catch {
-
-      // Silently fail - user can try again
-
-    }
-
+  const handleEditCover = () => {
+    navigation.navigate('EditProfile', { focus: 'cover' });
   };
 
-
-
-  const pickAvatar = async () => {
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permission.granted) {
-
-      show('Allow photo library access to upload avatar', 'error');
-
-      return;
-
-    }
-
-
-
-    try {
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-
-        allowsEditing: true,
-
-        aspect: [1, 1],
-
-        quality: 0.86,
-
-      });
-
-
-
-      if (!result.canceled && result.assets?.[0]?.uri) {
-
-        const pickedUri = result.assets[0].uri;
-
-        // 1. Persist locally first for immediate display
-        const localUri = await persistProfileMediaUri(pickedUri, 'avatar');
-
-        updateUserAvatar(localUri);
-
-        // 2. Upload to backend/MinIO and save public URL
-        try {
-
-          const publicUrl = await uploadMedia(pickedUri, 'avatars');
-
-          await updateMyProfile({ avatar: publicUrl });
-
-          updateUserAvatar(publicUrl);
-
-          if (currentUser?.id) {
-
-            Promise.all([
-
-              setStoredUserAvatar(publicUrl),
-
-              setStoredUserAvatarForUser(currentUser.id, publicUrl),
-
-            ]).catch(() => {
-
-              // Keep UX responsive when local persistence fails.
-
-            });
-
-          }
-
-          show('Avatar updated', 'success');
-
-        } catch {
-
-          show('Avatar upload requires media storage connection.', 'error');
-
-          // Keep local URI for preview, but user knows it's not saved to backend.
-
-        }
-
-      }
-
-    } catch {
-
-      // Silently fail - user can try again
-
-    }
-
+  const handleEditAvatar = () => {
+    navigation.navigate('EditProfile', { focus: 'avatar' });
   };
-
-
 
   if (!user) {
 
@@ -703,7 +559,7 @@ export default function MyProfileScreen() {
           coverUri={displayCover}
           coverVideoUri={isVideoUri(displayCover) ? displayCover : undefined}
           isSelf
-          onEditCover={pickCover}
+          onEditCover={handleEditCover}
           coverOnly
           style={{ width: '100%' }}
         />
@@ -775,8 +631,8 @@ export default function MyProfileScreen() {
           bio={user.bio}
           verified={false}
           isSelf
-          onEditCover={pickCover}
-          onEditAvatar={pickAvatar}
+          onEditCover={handleEditCover}
+          onEditAvatar={handleEditAvatar}
           onEditProfile={() => navigation.navigate('EditProfile')}
           onShare={handleShare}
           hideCover
@@ -1442,41 +1298,19 @@ const styles = StyleSheet.create({
 
     flexDirection: 'row',
 
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
 
-    justifyContent: 'space-between',
+    gap: 8,
 
   },
 
   quickItem: {
 
-    width: '31%',
+    flex: 1,
 
     alignItems: 'center',
 
-    marginBottom: 10,
-
-    backgroundColor: Colors.surfaceAlt,
-
-    borderRadius: 12,
-
-    borderWidth: 0.5,
-
-    borderColor: Colors.border,
-
-    paddingHorizontal: 4,
-
     paddingVertical: 8,
-
-    shadowColor: '#000',
-
-    shadowOffset: { width: 0, height: 1 },
-
-    shadowOpacity: 0.04,
-
-    shadowRadius: 4,
-
-    elevation: 2,
 
   },
 

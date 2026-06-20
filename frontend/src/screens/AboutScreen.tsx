@@ -30,7 +30,7 @@ export default function AboutScreen({ navigation }: Props) {
   };
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="About" onBack={() => navigation.goBack()} />}>
+    <FlagshipScreen header={<FlagshipHeader title="About" subtitle="Thryftverse app information" onBack={() => navigation.goBack()} />}>
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)} style={styles.brandWrap}>
           <View style={styles.brandIcon}>
             <Ionicons name="shirt-outline" size={40} color={Colors.brand} />

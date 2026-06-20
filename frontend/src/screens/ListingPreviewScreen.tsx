@@ -26,8 +26,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
 import { useStore } from '../store/useStore';
-import { uploadMedia } from '../services/mediaUpload';
-import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
+import { isVideoUri } from '../utils/media';
+import { ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingPreview'>;
 
@@ -42,95 +42,51 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);
 
-  const [isPublishing, setIsPublishing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const canPublish = useMemo(() => {
-    return preview.title && preview.price !== undefined && preview.photos?.length > 0;
+    return preview.title && preview.price !== undefined && (preview.mediaDraftItems?.length ?? preview.photos?.length) > 0;
   }, [preview]);
 
-  const handlePublish = useCallback(async () => {
-    if (!canPublish) return;
-    if (!currentUser?.id) {
-      show('Sign in to publish a listing.', 'error');
-      return;
-    }
+  const mediaItems: ListingMediaDraftItem[] = useMemo(() => {
+    if (preview.mediaDraftItems && preview.mediaDraftItems.length > 0) return preview.mediaDraftItems;
+    return preview.photos.map((uri) => ({
+      id: `preview_${uri}`,
+      uri,
+      kind: isVideoUri(uri) ? 'video' : 'image',
+      source: uri.startsWith('http') ? 'remote' : 'local',
+      fileName: 'preview',
+      mimeType: isVideoUri(uri) ? 'video/mp4' : 'image/jpeg',
+      status: uri.startsWith('http') ? 'uploaded' : 'draft',
+      publicUrl: uri.startsWith('http') ? uri : undefined,
+    }));
+  }, [preview.mediaDraftItems, preview.photos]);
 
+  const coverUri = mediaItems[0]?.publicUrl || mediaItems[0]?.uri || '';
+  const hasVideo = mediaItems.some((m) => m.kind === 'video' || isVideoUri(m.uri));
+
+  const handlePublish = useCallback(() => {
+    // Preview defers to SellScreen's orchestrated publication flow
     haptic.heavy();
-    setIsPublishing(true);
-    setErrorMsg(null);
-
-    try {
-      // 1. Upload all media
-      const uploadedUrls: string[] = [];
-      for (let i = 0; i < preview.photos.length; i++) {
-        const uri = preview.photos[i];
-        if (uri.startsWith('http')) {
-          uploadedUrls.push(uri);
-        } else {
-          const url = await uploadMedia(uri, 'listings');
-          uploadedUrls.push(url);
-        }
-      }
-
-      const coverImage = uploadedUrls[0] ?? '';
-      const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-
-      // 2. Create listing
-      await createListingOnApi({
-        id: listingId,
-        sellerId: currentUser.id,
-        title: preview.title.trim(),
-        description: (preview.description ?? '').trim(),
-        priceGbp: preview.price ?? 0,
-        imageUrl: coverImage,
-        status: 'active',
-        category: preview.category || undefined,
-        brand: preview.brand || undefined,
-        size: preview.size || undefined,
-        condition: preview.condition || undefined,
-        originalPriceGbp: preview.originalPrice ? preview.originalPrice : undefined,
-        shippingMethod: preview.shippingMethod || undefined,
-        shippingPayer: preview.shippingPayer || undefined,
-      });
-
-      // 3. Create listing_images for all photos
-      for (let i = 0; i < uploadedUrls.length; i++) {
-        await createListingImageOnApi({
-          id: `${listingId}_img_${i}`,
-          listingId,
-          imageUrl: uploadedUrls[i],
-          sortOrder: i,
-        });
-      }
-
-      show('Listing published', 'success');
-      navigation.replace('ListingSuccess', {
-        listingId,
-        title: preview.title,
-        price: preview.price,
-        categoryId: preview.category,
-        photoUri: coverImage,
-      });
-    } catch (e: unknown) {
-      const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Please try again.';
-      setErrorMsg(msg);
-      show(msg, 'error');
-    } finally {
-      setIsPublishing(false);
-    }
-  }, [canPublish, currentUser, preview, haptic, show, navigation]);
+    navigation.goBack();
+  }, [haptic, navigation]);
 
   const handleEdit = () => {
     haptic.light();
     navigation.goBack();
   };
 
+  const modeLabel =
+    preview.listingMode === 'auction' ? 'Auction' :
+    preview.listingMode === 'co_own' ? 'Co-Own' :
+    'Fixed price';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScreenHeader
         title="Preview"
+        subtitle="Buyers will see this"
         onBack={() => navigation.goBack()}
         rightAction={
           <AnimatedPressable onPress={handleEdit} activeOpacity={0.7} scaleValue={0.95}>
@@ -142,16 +98,22 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Photo hero */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
-          {preview.photos?.length > 0 ? (
+          {mediaItems.length > 0 ? (
             <View style={styles.hero}>
               <CachedImage
-                uri={preview.photos[0]}
+                uri={coverUri}
                 style={styles.heroImage}
                 contentFit="cover"
               />
-              {preview.photos.length > 1 && (
+              {mediaItems.length > 1 && (
                 <View style={styles.photoCounter}>
-                  <Caption color={Colors.background}>{preview.photos.length} photos</Caption>
+                  <Caption color={Colors.background}>{mediaItems.length} media</Caption>
+                </View>
+              )}
+              {hasVideo && (
+                <View style={[styles.photoCounter, { right: 'auto', left: Space.sm }]}>
+                  <Ionicons name="play-circle" size={16} color="#fff" />
+                  <Caption color={Colors.background} style={{ marginLeft: 4 }}>Video</Caption>
                 </View>
               )}
             </View>
@@ -176,14 +138,12 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               RRP {formatFromFiat(preview.originalPrice, 'GBP', { displayMode: 'fiat' })}
             </Text>
           )}
-          {preview.brand && (
-            <View style={styles.metaRow}>
+          <View style={styles.metaRow}>
+            {preview.brand && (
               <PremiumStatusPill tone="paid" label={preview.brand} icon="pricetag-outline" />
-              {preview.condition && (
-                <PremiumStatusPill tone="delivered" label={preview.condition} icon="shield-checkmark-outline" />
-              )}
-            </View>
-          )}
+            )}
+            <PremiumStatusPill tone="neutral" label={modeLabel} icon="pricetag-outline" />
+          </View>
         </Reanimated.View>
 
         {/* Details */}
@@ -194,6 +154,12 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <Text style={styles.description}>{preview.description}</Text>
             ) : null}
             <View style={styles.detailGrid}>
+              {preview.brand && (
+                <View style={styles.detailItem}>
+                  <Caption color={Colors.textMuted}>Brand</Caption>
+                  <Text style={styles.detailValue}>{preview.brand}</Text>
+                </View>
+              )}
               {preview.category && (
                 <View style={styles.detailItem}>
                   <Caption color={Colors.textMuted}>Category</Caption>
@@ -204,6 +170,12 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
                 <View style={styles.detailItem}>
                   <Caption color={Colors.textMuted}>Size</Caption>
                   <Text style={styles.detailValue}>{preview.size}</Text>
+                </View>
+              )}
+              {preview.condition && (
+                <View style={styles.detailItem}>
+                  <Caption color={Colors.textMuted}>Condition</Caption>
+                  <Text style={styles.detailValue}>{preview.condition}</Text>
                 </View>
               )}
               {preview.shippingMethod && (
@@ -232,13 +204,49 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
           </Reanimated.View>
         )}
 
-        {/* Trust */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(200)} style={styles.trustCard}>
-          <Ionicons name="shield-checkmark" size={20} color={Colors.success} />
+        {/* Seller identity */}
+        {currentUser && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.sellerRow}>
+            <View style={styles.sellerAvatarFallback}>
+              <Ionicons name="person" size={16} color={Colors.textMuted} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sellerName}>{currentUser.displayName || currentUser.username || 'You'}</Text>
+              <Caption color={Colors.textMuted}>Seller</Caption>
+            </View>
+          </Reanimated.View>
+        )}
+
+        {/* Edit jumps */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(200)} style={styles.card}>
+          <Meta color={Colors.textMuted} style={styles.sectionLabel}>EDIT</Meta>
+          <View style={styles.editJumpRow}>
+            <AnimatedPressable style={styles.editJumpBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+              <Ionicons name="images-outline" size={16} color={Colors.textPrimary} />
+              <Caption color={Colors.textPrimary}>Media</Caption>
+            </AnimatedPressable>
+            <AnimatedPressable style={styles.editJumpBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+              <Ionicons name="document-text-outline" size={16} color={Colors.textPrimary} />
+              <Caption color={Colors.textPrimary}>Details</Caption>
+            </AnimatedPressable>
+            <AnimatedPressable style={styles.editJumpBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+              <Ionicons name="cash-outline" size={16} color={Colors.textPrimary} />
+              <Caption color={Colors.textPrimary}>Pricing</Caption>
+            </AnimatedPressable>
+            <AnimatedPressable style={styles.editJumpBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+              <Ionicons name="cube-outline" size={16} color={Colors.textPrimary} />
+              <Caption color={Colors.textPrimary}>Shipping</Caption>
+            </AnimatedPressable>
+          </View>
+        </Reanimated.View>
+
+        {/* Trust — neutral */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={styles.trustCard}>
+          <Ionicons name="shield-checkmark-outline" size={20} color={Colors.textMuted} />
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.trustTitle}>Thryft Buyer Protection</Text>
+            <Text style={styles.trustTitle}>Secure payment & tracked delivery</Text>
             <Caption color={Colors.textMuted}>
-              Buyers are covered for this listing. You will receive payment only after delivery is confirmed.
+              Payment and delivery options are confirmed at checkout.
             </Caption>
           </View>
         </Reanimated.View>
@@ -246,17 +254,16 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* Bottom action bar */}
+      {/* Bottom action bar — no direct publish from preview; defer to SellScreen orchestrator */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <AppButton
-          title={isPublishing ? 'Publishing…' : 'Publish Listing'}
+          title="Back to editor"
           variant="primary"
           size="lg"
           style={{ flex: 1 }}
-          disabled={!canPublish || isPublishing}
           onPress={handlePublish}
           hapticFeedback="heavy"
-          icon={isPublishing ? undefined : <Ionicons name="cloud-upload-outline" size={16} color={Colors.background} />}
+          icon={<Ionicons name="create-outline" size={16} color={Colors.background} />}
         />
         <AnimatedPressable
           style={styles.draftBtn}
@@ -380,14 +387,27 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
   },
+  editJumpRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.sm,
+  },
+  editJumpBtn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
   trustCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(52, 199, 89, 0.06)',
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     padding: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(52, 199, 89, 0.2)',
+    borderColor: Colors.border,
   },
   trustTitle: {
     fontSize: Type.body.size,
@@ -424,5 +444,29 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  sellerAvatarFallback: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sellerName: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
 });

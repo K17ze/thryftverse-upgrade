@@ -37,6 +37,7 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { PressPresets } from '../hooks/usePremiumPressFeedback';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { isVideoUri } from '../utils/media';
 import { Motion } from '../constants/motion';
 // Phase 3: Removed SyncStatusPill - no status indicators on detail screen
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
@@ -70,18 +71,18 @@ export default function ItemDetailScreen() {
 
   const isFav = useStore(state => state.isWishlisted(route.params?.itemId));
   const toggleFav = useStore(state => state.toggleWishlist);
+  const currentUser = useStore((state) => state.currentUser);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
 
   const { itemId } = route.params || {};
   const item = listings.find(l => l.id === itemId);
-  const resolvedSeller = item
-    ? (item.seller ?? { id: item.sellerId, username: item.sellerId.slice(0, 8), avatar: '', rating: 0, reviewCount: 0, location: '' })
-    : undefined;
+  const resolvedSeller = item?.seller ?? undefined;
   const sellerItems = item ? listings.filter(l => l.sellerId === item.sellerId && l.id !== item.id) : [];
   const otherListings = listings.filter(l => l.id !== itemId).slice(0, 12);
 
   const [relatedListings, setRelatedListings] = React.useState<Listing[]>([]);
   const [relatedLoading, setRelatedLoading] = React.useState(false);
+  const [activeMediaIndex, setActiveMediaIndex] = React.useState(0);
 
   React.useEffect(() => {
     if (!itemId) return;
@@ -207,9 +208,24 @@ export default function ItemDetailScreen() {
 
         {/* ── Image Carousel ── */}
         <Reanimated.View style={[styles.heroContainer, heroStyle]}>
-          <ImageViewer images={item.images} height={height * 0.65} onDoubleTap={handleDoubleTap} itemId={item.id} />
+          <ImageViewer images={item.images} height={height * 0.65} onDoubleTap={handleDoubleTap} itemId={item.id} onIndexChange={setActiveMediaIndex} />
 
           <View style={styles.heroTopScrim} />
+
+          {/* Media count badge */}
+          {item.images.length > 1 && (
+            <View style={styles.mediaCountBadge}>
+              <Text style={styles.mediaCountText}>{activeMediaIndex + 1} / {item.images.length}</Text>
+            </View>
+          )}
+
+          {/* Video indicator — reflects active media, not only first */}
+          {item.images.length > 0 && isVideoUri(item.images[activeMediaIndex]) && (
+            <View style={styles.videoIndicator}>
+              <Ionicons name="play-circle" size={20} color="#fff" />
+              <Text style={styles.videoIndicatorText}>Video</Text>
+            </View>
+          )}
 
           <Reanimated.View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 5 }, bigHeartStyle]}>
             <Ionicons name="heart" size={100} color="#fff" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 }} />
@@ -270,11 +286,13 @@ export default function ItemDetailScreen() {
             )}
           </View>
 
-          {/* ── Trust Badge ── */}
+          {/* ── Trust surface — neutral, no branded promise ── */}
           <View style={styles.trustBadge}>
-            <Ionicons name="shield-checkmark" size={16} color={Colors.success} />
-            <Text style={styles.trustText}>Thryft Buyer Protection</Text>
-            <Text style={styles.trustSub}>Money back guarantee · Authenticity check</Text>
+            <Ionicons name="shield-checkmark-outline" size={16} color={Colors.textMuted} />
+            <Text style={styles.trustText}>Secure payment & tracked delivery</Text>
+            <Text style={styles.trustSub}>
+              Payment and delivery options are confirmed at checkout.
+            </Text>
           </View>
 
           {/* ── Product Attributes ── */}
@@ -297,6 +315,18 @@ export default function ItemDetailScreen() {
                 <Text style={styles.attributeValue}>{item.condition}</Text>
               </View>
             ) : null}
+          </View>
+
+          {/* ── Delivery & Payment ── */}
+          <View style={styles.deliveryRow}>
+            <View style={styles.deliveryItem}>
+              <Ionicons name="card-outline" size={14} color={Colors.textMuted} />
+              <Text style={styles.deliveryText}>Secure checkout</Text>
+            </View>
+            <View style={styles.deliveryItem}>
+              <Ionicons name="cube-outline" size={14} color={Colors.textMuted} />
+              <Text style={styles.deliveryText}>Tracked delivery</Text>
+            </View>
           </View>
 
           {/* ── Description ── */}
@@ -359,12 +389,13 @@ export default function ItemDetailScreen() {
                 titleStyle={styles.messageSellerBtnText}
                 variant="secondary"
                 size="sm"
-                onPress={() =>
-                  navigation.navigate('Chat', {
-                    conversationId: `${resolvedSeller.id}_${item.id}`,
-                    focusQuery: resolvedSeller.username,
-                    partnerUserId: resolvedSeller.id,
-                  })}
+                onPress={() => {
+                  if (!resolvedSeller?.id) return;
+                  navigation.navigate('NewMessage', {
+                    preselectedUserId: resolvedSeller.id,
+                    preselectedDisplayName: resolvedSeller.username,
+                  });
+                }}
               />
             </View>
           ) : item.sellerId ? (
@@ -375,7 +406,7 @@ export default function ItemDetailScreen() {
                 </View>
                 <View style={styles.sellerInfo}>
                   <Text style={styles.sellerName}>Seller</Text>
-                  <Text style={styles.sellerLastSeen}>Seller details require backend connection.</Text>
+                  <Text style={styles.sellerLastSeen}>Seller information unavailable</Text>
                 </View>
               </View>
             </View>
@@ -439,30 +470,62 @@ export default function ItemDetailScreen() {
         </Reanimated.View>
       </Reanimated.ScrollView>
 
-      {/* ── Floating Buy Bar ── */}
-      {!item.isSold && (
-        <Reanimated.View style={[styles.floatingBuyBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Colors.surfaceAlt }]} />
+      {/* ── Floating Action Bar ── */}
+      <Reanimated.View style={[styles.floatingBuyBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Colors.surfaceAlt }]} />
+        {item.isSold ? (
           <AppButton
-            style={styles.actionBtn}
-            variant="primary"
-            size="lg"
-            title="Buy now"
-            icon={<Ionicons name="flash-outline" size={15} color={Colors.background} />}
-            onPress={() => navigation.navigate('Checkout', { itemId: item.id })}
-            accessibilityLabel={`Buy ${item.title} for ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
-          />
-          <AppButton
-            style={styles.actionBtn}
+            style={[styles.actionBtn, { opacity: 0.6 }]}
             variant="secondary"
             size="lg"
-            title="Make offer"
-            icon={<Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />}
-            onPress={() => navigation.navigate('MakeOffer', { itemId: item.id, price: item.price, title: item.title })}
-            accessibilityLabel={`Make an offer on ${item.title}`}
+            title="Sold"
+            disabled
+            accessibilityLabel={`${item.title} is sold`}
           />
-        </Reanimated.View>
-      )}
+        ) : currentUser?.id && item.sellerId === currentUser.id ? (
+          <>
+            <AppButton
+              style={styles.actionBtn}
+              variant="secondary"
+              size="lg"
+              title="Edit listing"
+              icon={<Ionicons name="create-outline" size={14} color={Colors.textPrimary} />}
+              onPress={() => navigation.navigate('EditListing', { itemId: item.id })}
+              accessibilityLabel={`Edit ${item.title}`}
+            />
+            <AppButton
+              style={styles.actionBtn}
+              variant="primary"
+              size="lg"
+              title="Manage"
+              icon={<Ionicons name="settings-outline" size={14} color={Colors.background} />}
+              onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
+              accessibilityLabel={`Manage ${item.title}`}
+            />
+          </>
+        ) : (
+          <>
+            <AppButton
+              style={styles.actionBtn}
+              variant="primary"
+              size="lg"
+              title="Buy now"
+              icon={<Ionicons name="flash-outline" size={15} color={Colors.background} />}
+              onPress={() => navigation.navigate('Checkout', { itemId: item.id })}
+              accessibilityLabel={`Buy ${item.title} for ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
+            />
+            <AppButton
+              style={styles.actionBtn}
+              variant="secondary"
+              size="lg"
+              title="Make offer"
+              icon={<Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />}
+              onPress={() => navigation.navigate('MakeOffer', { itemId: item.id, price: item.price, title: item.title })}
+              accessibilityLabel={`Make an offer on ${item.title}`}
+            />
+          </>
+        )}
+      </Reanimated.View>
 
       <SaveToCollectionModal
         visible={collectionModalVisible}
@@ -494,6 +557,10 @@ const styles = StyleSheet.create({
   heroImage: { width: width, height: '100%' },
   soldOverlay: { position: 'absolute', bottom: 32, left: 20, backgroundColor: Colors.success, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   soldText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold, letterSpacing: 1 },
+  mediaCountBadge: { position: 'absolute', bottom: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.md },
+  mediaCountText: { color: Colors.background, fontSize: 12, fontFamily: Typography.family.medium },
+  videoIndicator: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.md },
+  videoIndicatorText: { color: Colors.background, fontSize: 12, fontFamily: Typography.family.medium },
   floatingHeader: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, zIndex: 10 },
   headerRight: { flexDirection: 'row', gap: 12 },
   blurBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
@@ -612,13 +679,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 24,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
+    paddingVertical: 8,
     gap: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   sellerIdentityTap: {
     flex: 1,
@@ -641,6 +703,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   messageSellerBtnText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
+  deliveryRow: { flexDirection: 'row', gap: 16, marginTop: 16 },
+  deliveryItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  deliveryText: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted },
   sellerItemsSection: { marginTop: 28, paddingBottom: 8 },
   sectionHeader: {
     flexDirection: 'row',

@@ -39,14 +39,11 @@ export function LinkPreviewCard({
 
   useEffect(() => {
     if (preview) return;
-    // In a real app, you'd call a link preview API here
-    // For now, generate a minimal preview from the URL
+    // No real preview source available: show only truthful data derived from the URL itself
+    // (domain + URL). Never fabricate an article title or image.
     try {
       const urlObj = new URL(url);
-      setLocalPreview({
-        domain: urlObj.hostname.replace(/^www\./, ''),
-        title: urlObj.hostname,
-      });
+      setLocalPreview({ domain: urlObj.hostname.replace(/^www\./, '') });
     } catch {
       setLocalPreview({ domain: 'Link' });
     }
@@ -80,13 +77,17 @@ export function LinkPreviewCard({
         />
       )}
       <View style={styles.textWrap}>
-        {localPreview.title && (
+        {localPreview.title ? (
           <BodyEmphasis numberOfLines={1}>{localPreview.title}</BodyEmphasis>
+        ) : (
+          <BodyEmphasis numberOfLines={1}>{localPreview.domain}</BodyEmphasis>
         )}
-        {localPreview.description && (
+        {localPreview.description ? (
           <Caption color={Colors.textSecondary} numberOfLines={2}>
             {localPreview.description}
           </Caption>
+        ) : (
+          <Caption color={Colors.textSecondary} numberOfLines={1}>{url}</Caption>
         )}
         <View style={styles.domainRow}>
           <Ionicons name="link-outline" size={12} color={Colors.textMuted} />

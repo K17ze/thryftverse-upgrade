@@ -54,10 +54,23 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
   };
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Active Sessions" onBack={() => navigation.goBack()} />}>
-      {/* This device */}
+    <FlagshipScreen header={<FlagshipHeader title="Active Sessions" subtitle="Device security overview" onBack={() => navigation.goBack()} />}>
+      {/* Security overview */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <SettingsSection title="This device">
+        <View style={[styles.trustSurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <View style={styles.trustHeader}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.success} />
+            <Text style={styles.trustTitle}>Your account is secure</Text>
+          </View>
+          <Text style={[styles.trustBody, { color: Colors.textSecondary }]}>
+            Only this device is currently signed in. When you sign in on other devices, they will appear here.
+          </Text>
+        </View>
+      </Reanimated.View>
+
+      {/* This device */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <SettingsSection title="This device" noCard>
           {sessions.filter((s) => s.isCurrent).map((session) => (
             <View key={session.id} style={styles.sessionRow}>
               <View style={styles.deviceIcon}>
@@ -76,19 +89,19 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Other devices */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
-        <SettingsSection title="Other devices">
+      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <SettingsSection title="Other devices" noCard>
           <View style={styles.emptyGroup}>
             <Ionicons name="desktop-outline" size={32} color={Colors.textMuted} />
             <Text style={styles.emptyTitle}>No other active sessions</Text>
             <Text style={styles.emptyBody}>
-              When you sign in on another device, it will appear here so you can review or end it.
+              When you sign in on another device, it will appear here so you can review it.
             </Text>
           </View>
         </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={{ paddingHorizontal: 16, marginTop: 16 }}>
+      <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={{ paddingHorizontal: 16, marginTop: 16 }}>
         <AppButton
           title="End all other sessions"
           onPress={handleEndAllOthers}
@@ -174,5 +187,30 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     paddingHorizontal: Space.lg,
     lineHeight: Type.meta.lineHeight,
+  },
+  trustSurface: {
+    borderRadius: Radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.lg,
+    marginHorizontal: Space.md,
+    marginBottom: Space.lg,
+  },
+  trustHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginBottom: Space.sm,
+  },
+  trustTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  trustBody: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });

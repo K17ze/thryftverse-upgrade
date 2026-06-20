@@ -11,6 +11,7 @@ interface ScrollToBottomFABProps {
   onPress: () => void;
   visible: boolean;
   style?: ViewStyle;
+  bottomOffset?: number;
 }
 
 export function ScrollToBottomFAB({
@@ -18,11 +19,12 @@ export function ScrollToBottomFAB({
   onPress,
   visible,
   style,
+  bottomOffset,
 }: ScrollToBottomFABProps) {
   if (!visible) return null;
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, bottomOffset !== undefined && { bottom: bottomOffset }, style]}>
       <AnimatedPressable
         style={styles.button}
         onPress={onPress}
@@ -49,7 +51,7 @@ export function ScrollToBottomFAB({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: Space.xl + 16,
+    bottom: Space.xl + 52,
     right: Space.md,
     zIndex: 10,
   },

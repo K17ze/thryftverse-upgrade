@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -9,7 +9,8 @@ import Reanimated, {
 import { Colors } from '../../constants/colors';
 import { Space, Radius } from '../../theme/designTokens';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Deterministic bubble-width fractions so the skeleton layout does not jump between renders.
+const BUBBLE_FRACTIONS = [0.62, 0.44, 0.7, 0.38, 0.55, 0.48, 0.66, 0.42];
 
 function SkeletonBar({ width, height = 14, style }: { width: number | string; height?: number; style?: any }) {
   const opacity = useSharedValue(0.3);
@@ -39,13 +40,12 @@ function SkeletonBar({ width, height = 14, style }: { width: number | string; he
 }
 
 export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
+  const { width: screenWidth } = useWindowDimensions();
   return (
     <View style={styles.container}>
       {Array.from({ length: count }).map((_, index) => {
         const isMe = index % 3 === 0;
-        const bubbleWidth = isMe
-          ? SCREEN_WIDTH * (0.4 + Math.random() * 0.3)
-          : SCREEN_WIDTH * (0.3 + Math.random() * 0.4);
+        const bubbleWidth = screenWidth * BUBBLE_FRACTIONS[index % BUBBLE_FRACTIONS.length];
 
         return (
           <View

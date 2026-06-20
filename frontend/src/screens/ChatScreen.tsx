@@ -18,6 +18,8 @@ import {
 
   Alert,
 
+  Share,
+
 } from 'react-native';
 
 
@@ -36,9 +38,7 @@ import { RootStackParamList } from '../navigation/types';
 
 import { Colors } from '../constants/colors';
 
-import { Typography } from '../theme/designTokens';
-
-import { useAppTheme } from '../theme/ThemeContext';
+import { TypeStyles } from '../theme/designTokens';
 
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
@@ -80,7 +80,7 @@ import { MarketplaceChatCard } from '../components/chat/MarketplaceChatCard';
 
 import { ChatActionSheet, ChatAction } from '../components/chat/ChatActionSheet';
 
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Space, Radius, Type, Elevation } from '../theme/designTokens';
 
 import { MessageContextMenu } from '../components/chat/MessageContextMenu';
 
@@ -158,6 +158,7 @@ function TaggedItemCard({
   currentUserId?: string | null;
 }) {
 
+  const { show } = useToast();
   const { listings } = useBackendData();
 
   const listing = useMemo(() => {
@@ -174,6 +175,15 @@ function TaggedItemCard({
 
   const isOwner = listing.sellerId === currentUserId;
   const isSold = !!listing.isSold;
+
+  const handleShareListing = async () => {
+    try {
+      await Share.share({ message: `Check out "${listing.title}" on ThryftVerse` });
+    } catch {
+      await Clipboard.setStringAsync(`ThryftVerse listing: ${listing.title}`);
+      show('Listing link copied to clipboard', 'success');
+    }
+  };
 
   return (
 
@@ -196,72 +206,59 @@ function TaggedItemCard({
       >
 
         <View style={[styles.itemCardRow, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-
           <CachedImage
-
             uri={getListingCoverUri(listing.images, '')}
-
-            style={styles.itemThumbImage}
-
-            containerStyle={styles.itemThumb}
-
+            style={styles.itemThumbImageV2}
+            containerStyle={styles.itemThumbV2}
             contentFit="cover"
-
           />
-
           <View style={styles.itemInfo}>
-
             <BodyEmphasis numberOfLines={1}>{listing.title}</BodyEmphasis>
-
             <Caption color={Colors.textSecondary}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Caption>
-
             {listing.condition && (
               <View style={styles.itemMetaRow}>
                 <Caption color={Colors.textMuted}>{listing.condition}</Caption>
                 {listing.brand && <Caption color={Colors.textMuted}> · {listing.brand}</Caption>}
               </View>
             )}
-
           </View>
-
           <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-
         </View>
 
-        {/* Quick actions — gated by ownership and status */}
-        <View style={styles.itemQuickActions}>
+        {/* Quick actions — refined to primary + secondary only */}
+        <View style={styles.itemQuickActionsV2}>
           {isOwner ? (
             <AnimatedPressable
-              style={styles.itemQuickBtn}
+              style={styles.itemPrimaryBtn}
               onPress={() => navigation.navigate('ManageListing', { itemId: listing.id })}
               activeOpacity={0.8}
               scaleValue={0.95}
               hapticFeedback="light"
               accessibilityLabel="Manage listing"
             >
-              <Ionicons name="settings-outline" size={14} color={Colors.brand} />
-              <Caption color={Colors.brand} style={styles.itemQuickText}>Manage</Caption>
+              <Ionicons name="settings-outline" size={14} color={Colors.textInverse} />
+              <Caption color={Colors.textInverse} style={styles.itemPrimaryBtnText}>Manage</Caption>
             </AnimatedPressable>
           ) : isSold ? (
-            <View style={styles.itemQuickBtn}>
-              <Ionicons name="bag-check-outline" size={14} color={Colors.textMuted} />
-              <Caption color={Colors.textMuted} style={styles.itemQuickText}>Sold</Caption>
+            <View style={styles.itemPrimaryBtn}>
+              <Ionicons name="bag-check-outline" size={14} color={Colors.textInverse} />
+              <Caption color={Colors.textInverse} style={styles.itemPrimaryBtnText}>Sold</Caption>
             </View>
           ) : (
             <>
               <AnimatedPressable
-                style={styles.itemQuickBtn}
+                style={styles.itemPrimaryBtn}
                 onPress={() => navigation.navigate('Checkout', { itemId: listing.id })}
                 activeOpacity={0.8}
                 scaleValue={0.95}
                 hapticFeedback="light"
                 accessibilityLabel="Buy now"
               >
-                <Ionicons name="flash-outline" size={14} color={Colors.brand} />
-                <Caption color={Colors.brand} style={styles.itemQuickText}>Buy</Caption>
+                <Ionicons name="flash-outline" size={14} color={Colors.textInverse} />
+                <Caption color={Colors.textInverse} style={styles.itemPrimaryBtnText}>Buy now</Caption>
               </AnimatedPressable>
               <AnimatedPressable
-                style={styles.itemQuickBtn}
+                style={styles.itemSecondaryBtn}
                 onPress={() => navigation.navigate('MakeOffer', { itemId: listing.id, price: listing.price, title: listing.title })}
                 activeOpacity={0.8}
                 scaleValue={0.95}
@@ -269,10 +266,22 @@ function TaggedItemCard({
                 accessibilityLabel="Make offer"
               >
                 <Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />
-                <Caption color={Colors.textPrimary} style={styles.itemQuickText}>Offer</Caption>
+                <Caption color={Colors.textPrimary} style={styles.itemSecondaryBtnText}>Offer</Caption>
               </AnimatedPressable>
             </>
           )}
+          <AnimatedPressable
+            style={styles.itemSecondaryBtn}
+            onPress={handleShareListing}
+            activeOpacity={0.8}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityLabel="Share listing"
+            accessibilityRole="button"
+          >
+            <Ionicons name="share-outline" size={14} color={Colors.textSecondary} />
+            <Caption color={Colors.textSecondary} style={styles.itemSecondaryBtnText}>Share</Caption>
+          </AnimatedPressable>
         </View>
 
       </AnimatedPressable>
@@ -488,8 +497,6 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [isSearchActive, setIsSearchActive] = useState(!!route.params?.focusQuery);
 
   const [isOffline, setIsOffline] = useState(false);
-
-  const { isDark } = useAppTheme();
 
   const [composerSending, setComposerSending] = useState(false);
 
@@ -1550,6 +1557,17 @@ export default function ChatScreen({ navigation, route }: Props) {
           title={isGroup ? (conversation?.title ?? 'Group chat') : '@' + sellerHandle}
           subtitle={isGroup ? (conversation?.participantIds?.length ?? 0) + ' members' : undefined}
           onBack={() => navigation.goBack()}
+          titleAccessibilityLabel={isGroup ? 'Open group info' : 'Open profile'}
+          onTitlePress={() => {
+            if (!conversation) return;
+            if (isGroup) {
+              navigation.navigate('GroupChatInfo', { conversationId: conversation.id });
+            } else if (resolvedPartnerId) {
+              navigation.navigate('UserProfile', { userId: resolvedPartnerId });
+            } else {
+              navigation.navigate('ConversationInfo', { conversationId: conversation.id });
+            }
+          }}
           avatar={
             !isGroup ? (
               (() => {
@@ -1558,33 +1576,42 @@ export default function ChatScreen({ navigation, route }: Props) {
                   (resolvedPartnerId ? profileMediaOverrides[resolvedPartnerId]?.avatar : undefined) ||
                   '';
                 return (
-                  <CachedImage
-                    uri={avatarUri}
-                    style={{ width: 32, height: 32, borderRadius: 16 }}
-                    contentFit="cover"
-                  />
+                  <View style={styles.headerAvatarV2}>
+                    <CachedImage
+                      uri={avatarUri}
+                      style={styles.headerAvatarImageV2}
+                      contentFit="cover"
+                    />
+                  </View>
                 );
               })()
             ) : null
           }
           rightAction={
-            <View style={{ flexDirection: 'row', gap: Space.sm }}>
+            <View style={styles.headerActions}>
               <AnimatedPressable
+                style={styles.headerActionBtn}
                 onPress={() => setIsSearchActive((v) => !v)}
                 activeOpacity={0.7}
                 scaleValue={0.9}
-                hapticFeedback="light">
-                <Ionicons name="search-outline" size={20} color={Colors.textPrimary} />
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel={isSearchActive ? 'Close search' : 'Search in conversation'}
+                accessibilityState={{ selected: isSearchActive }}>
+                <Ionicons name="search-outline" size={20} color={Colors.textSecondary} />
               </AnimatedPressable>
               <AnimatedPressable
+                style={styles.headerActionBtn}
                 onPress={() => {
                   if (!conversation) return;
                   navigation.navigate(isGroup ? 'GroupChatInfo' : 'ConversationInfo', { conversationId: conversation.id });
                 }}
                 activeOpacity={0.7}
                 scaleValue={0.9}
-                hapticFeedback="light">
-                <Ionicons name="information-circle-outline" size={20} color={Colors.textPrimary} />
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel={isGroup ? 'Group info' : 'Conversation info'}>
+                <Ionicons name="information-circle-outline" size={20} color={Colors.textSecondary} />
               </AnimatedPressable>
             </View>
           }
@@ -1723,7 +1750,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
             keyExtractor={(item) => item.id}
 
-            contentContainerStyle={{ paddingVertical: Space.md }}
+            contentContainerStyle={styles.messageList}
 
             showsVerticalScrollIndicator={false}
 
@@ -1748,29 +1775,17 @@ export default function ChatScreen({ navigation, route }: Props) {
         ) : (
 
           <View style={styles.emptyState}>
-
-            <View style={styles.emptyIconCircle}>
-
-              <Ionicons name="chatbubbles-outline" size={32} color={Colors.brand} />
-
+            <View style={styles.emptyGlyph}>
+              <Ionicons name="chatbubbles-outline" size={40} color={Colors.textMuted} />
             </View>
-
-            <Text style={styles.emptyTitle}>No messages yet</Text>
-
+            <Text style={styles.emptyTitle}>Start the conversation</Text>
             <Text style={styles.emptyBody}>
-
-              Send a message or photo to get the conversation started.
-
+              Send a message, photo, or make an offer to get started.
             </Text>
-
             <View style={styles.emptyCtaRow}>
-
               <Ionicons name="arrow-down" size={16} color={Colors.textMuted} />
-
               <Caption color={Colors.textMuted}>Type below</Caption>
-
             </View>
-
           </View>
 
         )}
@@ -1810,8 +1825,6 @@ export default function ChatScreen({ navigation, route }: Props) {
                 setReactingToMessage(null);
 
               }}
-
-              onShowMore={() => setReactingToMessage(null)}
 
             />
 
@@ -1883,81 +1896,13 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 
       <ChatActionSheet
-
         visible={attachmentPickerVisible}
-
         onClose={() => setAttachmentPickerVisible(false)}
-
         onSelect={(action) => {
-
           if (action === 'gallery' || action === 'camera') {
-
             handleAttachmentSelect(action);
-
-          } else if (action === 'report') {
-
-            navigation.navigate('Report', { type: 'user' });
-
-          } else if (action === 'makeOffer') {
-
-            const linkedItemId = routeItemId || conversation?.itemId;
-
-            if (linkedItemId) {
-
-              // Navigate to item detail where offer can be made
-
-              navigation.navigate('ItemDetail', { itemId: linkedItemId });
-
-            } else {
-
-              show('No linked item found', 'error');
-
-            }
-
-          } else if (action === 'shareListing') {
-
-            const linkedItemId = routeItemId || conversation?.itemId;
-
-            if (linkedItemId) {
-
-              show('Listing link copied to clipboard', 'success');
-
-            } else {
-
-              show('No linked item found', 'error');
-
-            }
-
-          } else if (action === 'orderStatus') {
-
-            show('Order status: not linked to an order', 'info');
-
-          } else if (action === 'bot') {
-
-            if (conversation) {
-
-              navigation.navigate('GroupBotManagement', { conversationId: conversation.id });
-
-            }
-
-          } else if (action === 'groupInfo') {
-
-            if (conversation) {
-
-              navigation.navigate('GroupChatInfo', { conversationId: conversation.id });
-
-            }
-
           }
-
         }}
-
-        isGroup={isGroup}
-
-        hasLinkedItem={!!(routeItemId || conversation?.itemId)}
-
-        hasOrder={false}
-
       />
 
 
@@ -2022,6 +1967,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         messageText={selectedMessage?.text ?? undefined}
 
+        isOwnMessage={selectedMessage?.sender === 'me'}
+
       />
 
     </FlagshipScreen>
@@ -2034,19 +1981,19 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
 
-  container: { flex: 1, backgroundColor: Colors.background },
+  headerAvatarRing: {
 
+    width: 42,
 
-
-  headerIconBtn: {
-
-    width: 40,
-
-    height: 40,
+    height: 42,
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 2,
+
+    borderColor: Colors.border,
+
+    padding: 2,
 
     justifyContent: 'center',
 
@@ -2054,7 +2001,48 @@ const styles = StyleSheet.create({
 
   },
 
+  headerAvatarImage: {
 
+    width: 34,
+
+    height: 34,
+
+    borderRadius: Radius.full,
+
+  },
+  headerAvatarV2: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  headerAvatarImageV2: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+  },
+
+  headerActions: {
+
+    flexDirection: 'row',
+
+    gap: Space.xs,
+
+  },
+
+  headerActionBtn: {
+
+    width: 40,
+
+    height: 40,
+
+    borderRadius: Radius.full,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+  },
 
   selectionToolbar: {
 
@@ -2073,6 +2061,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
 
     borderBottomColor: Colors.border,
+
+    ...Elevation.subtle,
 
   },
 
@@ -2102,7 +2092,7 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    gap: Space.sm + 6,
+    gap: Space.sm,
 
     padding: Space.sm,
 
@@ -2110,13 +2100,15 @@ const styles = StyleSheet.create({
 
     borderWidth: StyleSheet.hairlineWidth,
 
+    ...Elevation.subtle,
+
   },
 
   itemThumb: {
 
-    width: 36,
+    width: 44,
 
-    height: 36,
+    height: 44,
 
     borderRadius: Radius.md,
 
@@ -2128,9 +2120,9 @@ const styles = StyleSheet.create({
 
   itemThumbImage: {
 
-    width: 36,
+    width: 44,
 
-    height: 36,
+    height: 44,
 
     borderRadius: Radius.md,
 
@@ -2156,9 +2148,58 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     paddingHorizontal: Space.sm,
     paddingVertical: 6,
+    ...Elevation.subtle,
   },
   itemQuickText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
+  itemThumbV2: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    overflow: 'hidden',
+  },
+  itemThumbImageV2: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+  },
+  itemQuickActionsV2: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.sm,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  itemPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.textPrimary,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: 8,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  itemPrimaryBtnText: {
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
+  itemSecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  itemSecondaryBtnText: {
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
   itemInfo: {
@@ -2187,9 +2228,9 @@ const styles = StyleSheet.create({
 
   emptyIconCircle: {
 
-    width: 88,
+    width: 72,
 
-    height: 88,
+    height: 72,
 
     borderRadius: Radius.full,
 
@@ -2201,23 +2242,21 @@ const styles = StyleSheet.create({
 
     marginBottom: Space.sm,
 
-    shadowColor: '#000',
+    ...Elevation.subtle,
 
-    shadowOffset: { width: 0, height: 4 },
-
-    shadowOpacity: 0.06,
-
-    shadowRadius: 12,
-
-    elevation: 2,
-
+  },
+  emptyGlyph: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Space.md,
+    opacity: 0.5,
   },
 
   emptyTitle: {
 
     fontSize: Type.subtitle.size,
 
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
 
     color: Colors.textPrimary,
 
@@ -2229,15 +2268,15 @@ const styles = StyleSheet.create({
 
   emptyBody: {
 
-    fontSize: Type.body.size,
+    fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.regular,
+    fontFamily: TypeStyles.body.fontFamily,
 
     color: Colors.textSecondary,
 
     textAlign: 'center',
 
-    lineHeight: Type.body.lineHeight,
+    lineHeight: Type.caption.lineHeight,
 
     marginTop: Space.xs,
 
@@ -2257,11 +2296,17 @@ const styles = StyleSheet.create({
 
 
 
+  messageList: {
+
+    paddingVertical: Space.sm,
+
+  },
+
   dateWrap: {
 
     alignItems: 'center',
 
-    marginVertical: Space.sm + 4,
+    marginVertical: Space.md,
 
   },
 
@@ -2271,15 +2316,17 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.full,
 
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.sm,
 
-    paddingVertical: Space.xs + 2,
+    paddingVertical: Space.xs,
 
   },
 
   dateText: {
 
     fontSize: Type.meta.size,
+
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     textTransform: 'uppercase',
 
@@ -2297,25 +2344,21 @@ const styles = StyleSheet.create({
 
   },
 
-  statusCard: {
-
-    gap: Space.xs,
-
-  },
-
   statusCardSolid: {
 
     gap: Space.xs,
 
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
 
     borderRadius: Radius.lg,
 
-    padding: Space.md,
+    padding: Space.sm,
 
     borderWidth: StyleSheet.hairlineWidth,
 
     borderColor: Colors.border,
+
+    ...Elevation.subtle,
 
   },
 
@@ -2333,7 +2376,7 @@ const styles = StyleSheet.create({
 
     alignItems: 'flex-end',
 
-    gap: Space.sm,
+    gap: Space.xs,
 
     paddingHorizontal: Space.md,
 
@@ -2349,19 +2392,21 @@ const styles = StyleSheet.create({
 
   offerCard: {
 
-    maxWidth: '72%',
+    maxWidth: '78%',
 
     gap: Space.xs,
 
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
 
     borderRadius: Radius.lg,
 
-    padding: Space.md,
+    padding: Space.sm,
 
     borderWidth: StyleSheet.hairlineWidth,
 
     borderColor: Colors.border,
+
+    ...Elevation.subtle,
 
   },
 
@@ -2389,9 +2434,9 @@ const styles = StyleSheet.create({
 
   offerPriceText: {
 
-    fontSize: Type.price.size,
+    fontSize: Type.priceLarge.size,
 
-    fontFamily: Typography.family.bold,
+    fontFamily: TypeStyles.title.fontFamily,
 
     color: Colors.textPrimary,
 
@@ -2449,7 +2494,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     color: Colors.textPrimary,
 
@@ -2483,7 +2528,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     color: Colors.textInverse,
 
@@ -2493,11 +2538,11 @@ const styles = StyleSheet.create({
 
   linkPreviewWrap: {
 
-    maxWidth: '68%',
+    maxWidth: '78%',
 
     alignSelf: 'flex-start',
 
-    marginTop: 2,
+    marginTop: Space.xs,
 
   },
 
@@ -2565,21 +2610,11 @@ const styles = StyleSheet.create({
 
     paddingTop: Space.xs,
 
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.surface,
 
     borderTopWidth: StyleSheet.hairlineWidth,
 
     borderTopColor: Colors.border,
-
-    shadowColor: '#000',
-
-    shadowOffset: { width: 0, height: -6 },
-
-    shadowOpacity: 0.08,
-
-    shadowRadius: 16,
-
-    elevation: 6,
 
   },
 
@@ -2615,7 +2650,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 
@@ -2625,7 +2660,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 
@@ -2677,7 +2712,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
     color: Colors.textMuted,
 
@@ -2721,7 +2756,7 @@ const styles = StyleSheet.create({
 
     fontSize: Type.caption.size,
 
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 

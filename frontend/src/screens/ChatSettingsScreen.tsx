@@ -71,10 +71,10 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   };
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Chat Settings" onBack={() => navigation.goBack()} />}>
+    <FlagshipScreen header={<FlagshipHeader title="Chat Privacy" subtitle="Messaging controls and preferences" onBack={() => navigation.goBack()} />}>
       {/* Privacy */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
-        <SettingsSection title="Privacy">
+        <SettingsSection title="Privacy" noCard>
           <SettingsRow
             icon="lock-closed-outline"
             title="Who can message me"
@@ -85,7 +85,7 @@ export default function ChatSettingsScreen({ navigation }: Props) {
           <SettingsRow
             icon="eye-outline"
             title="Read receipts"
-            subtitle="Let others know when you’ve seen their messages"
+            subtitle="Let others know when you've seen their messages"
             toggleValue={readReceipts}
             onToggle={setReadReceipts}
           />
@@ -100,8 +100,8 @@ export default function ChatSettingsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Conversations */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
-        <SettingsSection title="Conversations">
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+        <SettingsSection title="Conversations" noCard>
           <SettingsRow
             icon="volume-mute-outline"
             title="Muted conversations"
@@ -132,8 +132,8 @@ export default function ChatSettingsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Marketplace chat */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
-        <SettingsSection title="Marketplace Chat">
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+        <SettingsSection title="Marketplace Chat" noCard>
           <SettingsRow
             icon="pricetag-outline"
             title="Offers in chat"
@@ -160,8 +160,8 @@ export default function ChatSettingsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Bots */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
-        <SettingsSection title="Bots & Automation">
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+        <SettingsSection title="Bots & Automation" noCard>
           <SettingsRow
             icon="hardware-chip-outline"
             title="Bot directory"
@@ -192,8 +192,8 @@ export default function ChatSettingsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Message requests */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
-        <SettingsSection title="Message Requests">
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
+        <SettingsSection title="Message Requests" noCard>
           <SettingsRow
             icon="mail-unread-outline"
             title="Pending requests"
@@ -212,8 +212,8 @@ export default function ChatSettingsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Notifications */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
-        <SettingsSection title="Notifications">
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
+        <SettingsSection title="Notifications" noCard>
           <SettingsRow
             icon="notifications-outline"
             title="Chat notifications"

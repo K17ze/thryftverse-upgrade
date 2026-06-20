@@ -26,10 +26,10 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   };
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Privacy Controls" onBack={() => navigation.goBack()} />}>
+    <FlagshipScreen header={<FlagshipHeader title="Privacy" subtitle="Control your visibility and safety" onBack={() => navigation.goBack()} />}>
       {/* Profile visibility */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <SettingsSection title="Profile">
+        <SettingsSection title="Profile visibility" noCard>
           <SettingsRow
             icon="eye-outline"
             title="Private Profile"
@@ -44,11 +44,11 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
 
       {/* Activity */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
-        <SettingsSection title="Activity">
+        <SettingsSection title="Activity" noCard>
           <SettingsRow
             icon="bag-outline"
             title="Holiday Mode"
-            subtitle="Pause your listings and hide your shop while you’re away"
+            subtitle="Pause your listings and hide your shop while you're away"
             toggleValue={accountPreferences.holidayMode}
             onToggle={(v) => updateAccountPreferences({ holidayMode: v })}
             isFirst
@@ -57,21 +57,29 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         </SettingsSection>
       </Reanimated.View>
 
+      {/* Communication */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+        <SettingsSection title="Communication" noCard>
+          <SettingsRow
+            icon="chatbubble-ellipses-outline"
+            title="Chat privacy"
+            subtitle="Who can message me, read receipts, and more"
+            onPress={() => navigation.navigate('ChatSettings')}
+            isFirst
+            isLast
+          />
+        </SettingsSection>
+      </Reanimated.View>
+
       {/* Safety */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
-        <SettingsSection title="Safety">
+        <SettingsSection title="Safety" noCard>
           <SettingsRow
             icon="people-circle-outline"
             title="Blocked users"
             value={blockedCount > 0 ? `${blockedCount}` : 'None'}
             onPress={() => navigation.navigate('BlockedUsers')}
             isFirst
-          />
-          <SettingsRow
-            icon="chatbubble-ellipses-outline"
-            title="Chat privacy"
-            subtitle="Who can message me, read receipts, and more"
-            onPress={() => navigation.navigate('ChatSettings')}
             isLast
           />
         </SettingsSection>
@@ -79,7 +87,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
 
       {/* Data */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
-        <SettingsSection title="Data & transparency">
+        <SettingsSection title="Data & transparency" noCard>
           <SettingsRow
             icon="document-text-outline"
             title="Privacy Policy"

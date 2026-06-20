@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 interface Reaction {
@@ -130,10 +130,7 @@ export function MessageBubble({
             <Pressable onPress={onMediaPress} style={styles.mediaWrap}>
               <CachedImage
                 uri={mediaUri}
-                style={[
-                  styles.mediaImage,
-                  mediaType === 'video' && { width: 200, height: 140 },
-                ]}
+                style={styles.mediaImage}
                 contentFit="cover"
               />
               {mediaType === 'video' ? (
@@ -214,20 +211,20 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   avatarText: {
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
   },
   avatarSpacer: {
     width: 28,
   },
   bubbleColumn: {
-    maxWidth: '74%',
-    gap: 2,
+    maxWidth: '78%',
+    gap: 4,
   },
   senderName: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.brand,
     marginBottom: 2,
     marginLeft: Space.xs,
@@ -246,30 +243,29 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     alignSelf: 'flex-start',
-    ...Elevation.subtle,
   },
   bubbleFailed: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.danger,
   },
   replyBlock: {
-    borderLeftWidth: 2,
+    borderLeftWidth: 3,
     paddingLeft: Space.sm,
-    marginBottom: 2,
+    marginBottom: Space.xs,
     gap: 2,
   },
   replyName: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   replyText: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypeStyles.body.fontFamily,
     lineHeight: Type.caption.lineHeight,
   },
   messageText: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypeStyles.body.fontFamily,
     lineHeight: Type.body.lineHeight + 2,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -284,8 +280,8 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   timestamp: {
-    fontSize: 10,
-    fontFamily: Typography.family.regular,
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.body.fontFamily,
   },
   statusWrap: {
     flexDirection: 'row',
@@ -298,8 +294,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
   },
   mediaImage: {
-    width: 200,
-    height: 160,
+    width: '100%',
+    minWidth: 200,
+    maxWidth: 280,
+    aspectRatio: 1.15,
     borderRadius: Radius.md,
   },
   videoBadge: {
@@ -326,20 +324,23 @@ const styles = StyleSheet.create({
   uploadText: {
     color: Colors.textInverse,
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   retryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
+    marginTop: Space.xs,
     marginLeft: Space.xs,
-    paddingVertical: 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.md,
+    backgroundColor: `${Colors.danger}14`,
     alignSelf: 'flex-start',
   },
   retryText: {
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.danger,
   },
   reactions: {
@@ -356,14 +357,14 @@ const styles = StyleSheet.create({
   reactionChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    ...Elevation.subtle,
+    minHeight: 28,
   },
   reactionChipActive: {
     borderColor: Colors.brand,
@@ -373,8 +374,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   reactionCount: {
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textSecondary,
   },
 });

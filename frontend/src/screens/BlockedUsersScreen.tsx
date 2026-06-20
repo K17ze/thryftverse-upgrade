@@ -32,40 +32,39 @@ export default function BlockedUsersScreen({ navigation }: Props) {
   }, []);
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Blocked Users" onBack={() => navigation.goBack()} />}>
+    <FlagshipScreen header={<FlagshipHeader title="Blocked Users" subtitle="Accounts you have restricted" onBack={() => navigation.goBack()} />}>
       {blockedIds.length === 0 ? (
         <View style={{ alignItems: 'center', paddingVertical: Space.xl * 2 }}>
           <FlagshipEmptyGraphic variant="box" size={120} />
-          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.lg }}>No blocked users</Text>
+          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.lg }}>No blocked accounts</Text>
           <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', marginTop: Space.xs, paddingHorizontal: Space.lg }}>When you block someone, they will appear here. You can unblock them at any time.</Text>
         </View>
       ) : (
         <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-          <View style={styles.card}>
+          <View style={styles.list}>
             {blockedIds.map((userId, index) => (
-              <View
-                key={userId}
-                style={[
-                  styles.userRow,
-                  index < blockedIds.length - 1 && styles.userRowBorder,
-                ]}
-              >
-                <View style={styles.avatarCircle}>
-                  <Text style={styles.avatarInitial}>{deterministicInitials(userId)}</Text>
-                </View>
-                <View style={styles.userText}>
-                  <Text style={styles.userName}>User {userId.slice(-6)}</Text>
-                  <Text style={styles.userId}>ID: {userId}</Text>
-                </View>
-                <AnimatedPressable
-                  onPress={() => handleUnblock(userId)}
-                  scaleValue={0.92}
-                  hapticFeedback="light"
-                >
-                  <View style={styles.unblockBtn}>
-                    <Text style={styles.unblockText}>Unblock</Text>
+              <View key={userId}>
+                <View style={styles.userRow}>
+                  <View style={[styles.avatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+                    <Ionicons name="person-outline" size={16} color={Colors.textMuted} />
                   </View>
-                </AnimatedPressable>
+                  <View style={styles.userText}>
+                    <Text style={styles.userName}>Blocked account</Text>
+                    <Text style={styles.userId}>Profile information unavailable</Text>
+                  </View>
+                  <AnimatedPressable
+                    onPress={() => handleUnblock(userId)}
+                    scaleValue={0.92}
+                    hapticFeedback="light"
+                  >
+                    <View style={styles.unblockBtn}>
+                      <Text style={styles.unblockText}>Unblock</Text>
+                    </View>
+                  </AnimatedPressable>
+                </View>
+                {index < blockedIds.length - 1 && (
+                  <View style={styles.listDivider} />
+                )}
               </View>
             ))}
           </View>
@@ -139,5 +138,20 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     color: Colors.danger,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  list: {
+    marginHorizontal: Space.md,
+  },
+  avatarFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginLeft: 40 + Space.sm + 4 + Space.md,
   },
 });

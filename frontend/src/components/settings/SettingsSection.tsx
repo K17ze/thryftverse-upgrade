@@ -21,7 +21,7 @@ export function SettingsSection({
   const { colors } = useAppTheme();
   return (
     <View style={[styles.wrapper, style]}>
-      <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+      <Text style={[noCard ? styles.titleFlat : styles.title, { color: colors.textPrimary }]}>{title}</Text>
       {description ? <Text style={[styles.description, { color: colors.textMuted }]}>{description}</Text> : null}
       {noCard ? (
         <View style={styles.noCard}>{children}</View>
@@ -45,6 +45,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     lineHeight: Type.caption.lineHeight,
+  },
+  titleFlat: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.bold,
+    marginBottom: Space.sm,
+    marginTop: Space.lg,
+    paddingHorizontal: Space.md,
+    letterSpacing: Type.subtitle.letterSpacing,
+    lineHeight: Type.subtitle.lineHeight,
   },
   description: {
     fontSize: Type.caption.size,

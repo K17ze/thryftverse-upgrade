@@ -19,21 +19,16 @@ interface MessageContextMenuProps {
   onClose: () => void;
   onAction: (action: MessageAction) => void;
   messageText?: string;
+  isOwnMessage?: boolean;
 }
 
-const ACTIONS: Array<{
+type ActionDef = {
   id: MessageAction;
   label: string;
   icon: string;
   color?: string;
   destructive?: boolean;
-}> = [
-  { id: 'select', label: 'Select', icon: 'checkbox-outline' },
-  { id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' },
-  { id: 'react', label: 'React', icon: 'happy-outline' },
-  { id: 'copy', label: 'Copy', icon: 'copy-outline' },
-  { id: 'delete', label: 'Delete', icon: 'trash-outline', color: Colors.danger, destructive: true },
-];
+};
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -42,7 +37,26 @@ export function MessageContextMenu({
   onClose,
   onAction,
   messageText,
+  isOwnMessage,
 }: MessageContextMenuProps) {
+  const actions = React.useMemo<ActionDef[]>(() => {
+    const list: ActionDef[] = [
+      { id: 'select', label: 'Select', icon: 'checkbox-outline' },
+      { id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' },
+      { id: 'react', label: 'React', icon: 'happy-outline' },
+    ];
+    if (messageText && messageText.trim().length > 0) {
+      list.push({ id: 'copy', label: 'Copy', icon: 'copy-outline' });
+    }
+    list.push({
+      id: 'delete',
+      label: isOwnMessage ? 'Delete message' : 'Delete for me',
+      icon: 'trash-outline',
+      color: Colors.danger,
+      destructive: true,
+    });
+    return list;
+  }, [messageText, isOwnMessage]);
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -107,29 +121,31 @@ export function MessageContextMenu({
         ) : null}
 
         <View style={styles.actionsList}>
-          {ACTIONS.map((action) => (
-            <AnimatedPressable
-              key={action.id}
-              style={styles.actionRow}
-              onPress={() => handleAction(action.id)}
-              accessibilityRole="button"
-              accessibilityLabel={action.label}
-              activeOpacity={0.7}
-              scaleValue={0.98}
-              hapticFeedback="light"
-            >
-              <Ionicons
-                name={action.icon as any}
-                size={22}
-                color={action.destructive ? Colors.danger : Colors.textPrimary}
-              />
-              <BodyEmphasis
-                color={action.destructive ? Colors.danger : Colors.textPrimary}
-                style={styles.actionLabel}
+          {actions.map((action, index) => (
+            <React.Fragment key={action.id}>
+              {action.destructive && index > 0 && <View style={styles.destructiveDivider} />}
+              <AnimatedPressable
+                style={styles.actionRow}
+                onPress={() => handleAction(action.id)}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                activeOpacity={0.7}
+                scaleValue={0.98}
+                hapticFeedback="light"
               >
-                {action.label}
-              </BodyEmphasis>
-            </AnimatedPressable>
+                <Ionicons
+                  name={action.icon as any}
+                  size={22}
+                  color={action.destructive ? Colors.danger : Colors.textPrimary}
+                />
+                <BodyEmphasis
+                  color={action.destructive ? Colors.danger : Colors.textPrimary}
+                  style={styles.actionLabel}
+                >
+                  {action.label}
+                </BodyEmphasis>
+              </AnimatedPressable>
+            </React.Fragment>
           ))}
         </View>
 
@@ -203,5 +219,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     alignItems: 'center',
+  },
+  destructiveDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginHorizontal: Space.md,
   },
 });

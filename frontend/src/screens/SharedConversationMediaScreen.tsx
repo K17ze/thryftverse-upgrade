@@ -1,32 +1,41 @@
 import React, { useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
+import { isVideoUri } from '../utils/media';
 import { useHaptic } from '../hooks/useHaptic';
-import { Caption } from '../components/ui/Text';
 import { EmptyState } from '../components/EmptyState';
 
 type Props = StackScreenProps<RootStackParamList, 'SharedConversationMedia'>;
 
-const { width: SCREEN_W } = Dimensions.get('window');
 const GAP = 2;
 const COLS = 3;
-const THUMB_SIZE = (SCREEN_W - Space.md * 2 - GAP * (COLS - 1)) / COLS;
+
+type MediaItem = {
+  id: string;
+  mediaUri: string;
+  isVideo: boolean;
+  senderLabel: string;
+  timestamp?: string;
+};
 
 export default function SharedConversationMediaScreen({ navigation, route }: Props) {
   const { conversationId } = route.params as { conversationId: string };
   const haptic = useHaptic();
+  const { width } = useWindowDimensions();
+  const thumbSize = (width - Space.md * 2 - GAP * (COLS - 1)) / COLS;
 
   const conversations = useStore((state) => state.conversations);
   const conversation = useMemo(
@@ -34,28 +43,70 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
     [conversations, conversationId]
   );
 
-  const mediaMessages = useMemo(() => {
+  const mediaItems = useMemo<MediaItem[]>(() => {
     if (!conversation?.messages?.length) return [];
-    return conversation.messages.filter((m) => m.mediaUri);
+    return conversation.messages
+      .filter((m) => m.mediaUri)
+      .map((m) => ({
+        id: m.id,
+        mediaUri: m.mediaUri!,
+        isVideo: m.mediaType === 'video' || isVideoUri(m.mediaUri!),
+        senderLabel: m.senderId === 'me' ? 'You' : 'Thryft user',
+        timestamp: m.timestamp,
+      }));
   }, [conversation]);
 
-  const handlePress = (msg: typeof mediaMessages[0]) => {
+  const handlePress = (item: MediaItem) => {
     haptic.light();
     navigation.navigate('ChatMediaPreview', {
-      mediaUri: msg.mediaUri!,
-      mediaType: msg.mediaType ?? 'image',
-      senderLabel: msg.senderId === 'me' ? 'You' : 'Thryft user',
-      timestamp: msg.timestamp,
-      messageId: msg.id,
+      mediaUri: item.mediaUri,
+      mediaType: item.isVideo ? 'video' : 'image',
+      senderLabel: item.senderLabel,
+      timestamp: item.timestamp,
     });
   };
 
+  const renderItem = ({ item }: { item: MediaItem }) => (
+    <AnimatedPressable
+      style={[styles.thumbWrap, { width: thumbSize, height: thumbSize }]}
+      onPress={() => handlePress(item)}
+      activeOpacity={0.85}
+      scaleValue={0.96}
+      hapticFeedback="light"
+      accessibilityLabel={item.isVideo ? 'View shared video' : 'View shared photo'}
+      accessibilityRole="button"
+    >
+      {item.isVideo ? (
+        <View style={[styles.thumb, styles.videoTile, { width: thumbSize, height: thumbSize }]}>
+          <Ionicons name="videocam" size={24} color={Colors.textSecondary} />
+        </View>
+      ) : (
+        <CachedImage
+          uri={item.mediaUri}
+          style={[styles.thumb, { width: thumbSize, height: thumbSize }]}
+          contentFit="cover"
+        />
+      )}
+      {item.isVideo && (
+        <View style={styles.videoBadge}>
+          <Ionicons name="play" size={12} color={Colors.textInverse} />
+        </View>
+      )}
+    </AnimatedPressable>
+  );
+
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title="Shared Media" onBack={() => navigation.goBack()} />}
+      header={(
+        <FlagshipHeader
+          title="Shared Media"
+          subtitle={mediaItems.length > 0 ? `${mediaItems.length} photo${mediaItems.length === 1 ? '' : 's'} & video${mediaItems.length === 1 ? '' : 's'}` : undefined}
+          onBack={() => navigation.goBack()}
+        />
+      )}
       scrollEnabled={false}
     >
-      {mediaMessages.length === 0 ? (
+      {mediaItems.length === 0 ? (
         <EmptyState
           icon="images-outline"
           title="No shared media"
@@ -64,54 +115,41 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
           onCtaPress={() => navigation.goBack()}
         />
       ) : (
-        <View style={styles.grid}>
-          {mediaMessages.map((msg, index) => (
-            <AnimatedPressable
-              key={msg.id + index}
-              style={styles.thumbWrap}
-              onPress={() => handlePress(msg)}
-              activeOpacity={0.85}
-              scaleValue={0.96}
-              hapticFeedback="light"
-              accessibilityLabel="View media"
-              accessibilityRole="button"
-            >
-              <CachedImage
-                uri={msg.mediaUri!}
-                style={styles.thumb}
-                contentFit="cover"
-              />
-              {msg.mediaType === 'video' && (
-                <View style={styles.videoBadge}>
-                  <Caption color={Colors.textInverse} style={styles.videoIcon}>▶</Caption>
-                </View>
-              )}
-            </AnimatedPressable>
-          ))}
-        </View>
+        <FlashList
+          data={mediaItems}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          numColumns={COLS}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={{ height: GAP }} />}
+          showsVerticalScrollIndicator={false}
+        />
       )}
     </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  listContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    gap: GAP,
+    paddingBottom: Space.xxl,
   },
   thumbWrap: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
     borderRadius: Radius.sm,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
+    marginRight: GAP,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   thumb: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
+    borderRadius: Radius.sm,
+  },
+  videoTile: {
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   videoBadge: {
     position: 'absolute',
@@ -125,9 +163,5 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  videoIcon: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
   },
 });

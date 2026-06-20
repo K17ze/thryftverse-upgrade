@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { fetchListingByIdFromApi, patchListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 import { uploadMedia } from '../services/mediaUpload';
+import { MediaUploadQueue } from '../services/mediaUploadQueue';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -68,6 +69,15 @@ export default function EditListingScreen() {
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
+
+  /* ── upload queue ── */
+  const uploadQueueRef = useRef(new MediaUploadQueue());
+  const [queueState, setQueueState] = useState(uploadQueueRef.current.getState());
+  useEffect(() => {
+    const unsub = uploadQueueRef.current.subscribe((s: import('../services/mediaUploadQueue').UploadQueueState) => setQueueState(s));
+    return () => { unsub(); };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -125,13 +135,23 @@ export default function EditListingScreen() {
         setPhotos((prev) => [...prev, ...result.assets.map((a) => a.uri)]);
       }
     } catch {
-      // silently ignore picker errors
+      showToast('Could not open photo library. Check permissions and try again.', 'error');
     }
-  }, []);
+  }, [showToast]);
 
   const handleRemovePhoto = useCallback((index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    setPhotos((prev) => {
+      const removed = prev[index];
+      if (removed) setRemovedPhotos((r) => [...r, removed]);
+      return prev.filter((_, i) => i !== index);
+    });
+  }, []);
+
+  const undoRemovePhoto = useCallback((uri: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPhotos((prev) => [...prev, uri]);
+    setRemovedPhotos((prev) => prev.filter((u) => u !== uri));
   }, []);
 
   const validate = useCallback(() => {
@@ -172,18 +192,28 @@ export default function EditListingScreen() {
         condition: condition || undefined,
       });
 
-      // 2. Upload any new local media and create listing image records
+      // 2. Upload any new local media via queue and create listing image records
       const newLocalPhotos = photos.filter((uri) => !uri.startsWith('http'));
       const existingRemotePhotos = photos.filter((uri) => uri.startsWith('http'));
       const removedOriginals = originalPhotos.filter((uri) => !existingRemotePhotos.includes(uri));
 
+      const queue = uploadQueueRef.current;
       if (newLocalPhotos.length > 0) {
-        for (let i = 0; i < newLocalPhotos.length; i++) {
-          const url = await uploadMedia(newLocalPhotos[i], 'listings');
+        const assets = newLocalPhotos.map((uri) => ({
+          id: `edit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          uri,
+          fileName: uri.split('/').pop() || 'photo.jpg',
+          mimeType: 'image/jpeg',
+          kind: 'image' as const,
+        }));
+        queue.addAssets(assets);
+        await queue.run();
+        const urls = queue.getUploadedUrls();
+        for (let i = 0; i < urls.length; i++) {
           await createListingImageOnApi({
             id: `${itemId}_img_new_${Date.now()}_${i}`,
             listingId: itemId,
-            imageUrl: url,
+            imageUrl: urls[i],
             sortOrder: existingRemotePhotos.length + i,
           });
         }
@@ -273,6 +303,27 @@ export default function EditListingScreen() {
                 <Text style={styles.heroTitle} numberOfLines={1}>{title || listing?.title || 'Untitled'}</Text>
                 <Text style={styles.heroSubtitle}>{photos.length} photo{photos.length !== 1 ? 's' : ''}</Text>
               </View>
+              <View style={styles.coverBadge}>
+                <Text style={styles.coverBadgeText}>Cover</Text>
+              </View>
+            </Reanimated.View>
+          )}
+
+          {/* Media trust banner */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
+            <View style={styles.mediaTrustBanner}>
+              <Ionicons name="cloud-upload-outline" size={16} color={Colors.brand} />
+              <Text style={styles.mediaTrustBannerText}>
+                New photos upload on save. Existing photos are preserved.
+              </Text>
+            </View>
+          </Reanimated.View>
+
+          {/* Unsaved changes indicator */}
+          {hasChanges && (
+            <Reanimated.View entering={FadeInDown.duration(200)} style={styles.unsavedBanner}>
+              <Ionicons name="information-circle-outline" size={16} color={Colors.brand} />
+              <Text style={styles.unsavedBannerText}>You have unsaved changes</Text>
             </Reanimated.View>
           )}
 
@@ -282,6 +333,11 @@ export default function EditListingScreen() {
               {photos.map((uri, idx) => (
                 <View key={`${uri}-${idx}`} style={styles.thumbWrap}>
                   <CachedImage uri={uri} style={[styles.thumb, idx === 0 && styles.thumbActive]} contentFit="cover" />
+                  {idx === 0 && (
+                    <View style={styles.thumbCoverLabel}>
+                      <Text style={styles.thumbCoverLabelText}>Cover</Text>
+                    </View>
+                  )}
                   <AnimatedPressable
                     style={styles.removeBadge}
                     onPress={() => handleRemovePhoto(idx)}
@@ -297,6 +353,53 @@ export default function EditListingScreen() {
               </AnimatedPressable>
             </ScrollView>
           </Reanimated.View>
+
+          {/* Undo removed photos */}
+          {removedPhotos.length > 0 && (
+            <Reanimated.View entering={FadeInDown.duration(200)} style={styles.removedSection}>
+              <Text style={styles.removedSectionTitle}>Removed</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {removedPhotos.map((uri) => (
+                  <View key={`removed-${uri}`} style={styles.removedThumbWrap}>
+                    <CachedImage uri={uri} style={styles.removedThumb} contentFit="cover" />
+                    <AnimatedPressable
+                      style={styles.undoBadge}
+                      onPress={() => undoRemovePhoto(uri)}
+                      activeOpacity={0.7}
+                      hapticFeedback="light"
+                    >
+                      <Ionicons name="arrow-undo" size={12} color="#fff" />
+                    </AnimatedPressable>
+                  </View>
+                ))}
+              </ScrollView>
+            </Reanimated.View>
+          )}
+
+          {/* Queue upload status */}
+          {queueState.items.length > 0 && (
+            <Reanimated.View entering={FadeInDown.duration(200)} style={styles.queueStatusRow}>
+              {queueState.items.map((item) => (
+                <View key={item.id} style={styles.queueStatusPill}>
+                  <Text
+                    style={[
+                      styles.queueStatusText,
+                      item.state === 'uploaded' && { color: Colors.success },
+                      item.state === 'failed' && { color: Colors.danger },
+                      (item.state === 'uploading' || item.state === 'preparing') && { color: Colors.brand },
+                    ]}
+                  >
+                    {item.state === 'pending' && 'Pending'}
+                    {item.state === 'preparing' && 'Preparing'}
+                    {item.state === 'uploading' && 'Uploading'}
+                    {item.state === 'uploaded' && 'Uploaded'}
+                    {item.state === 'failed' && 'Failed'}
+                    {item.state === 'cancelled' && 'Cancelled'}
+                  </Text>
+                </View>
+              ))}
+            </Reanimated.View>
+          )}
 
           {/* Basics */}
           <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
@@ -568,5 +671,127 @@ const styles = StyleSheet.create({
     marginTop: Space.lg,
     marginHorizontal: Space.md,
     lineHeight: Type.caption.lineHeight,
+  },
+  coverBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.md,
+  },
+  coverBadgeText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  mediaTrustBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    padding: Space.md,
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    backgroundColor: Colors.surface,
+  },
+  mediaTrustBannerText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
+  },
+  unsavedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+  },
+  unsavedBannerText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.brand,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  thumbCoverLabel: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  thumbCoverLabelText: {
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
+  },
+  removedSection: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    padding: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  removedSectionTitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    marginBottom: Space.sm,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  removedThumbWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    marginRight: Space.sm,
+    position: 'relative',
+    opacity: 0.5,
+  },
+  removedThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  undoBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  queueStatusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+  },
+  queueStatusPill: {
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  queueStatusText: {
+    fontSize: 10,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
   },
 });

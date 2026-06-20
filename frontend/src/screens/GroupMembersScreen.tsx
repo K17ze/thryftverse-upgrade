@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,12 +93,17 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         {/* Search */}
         <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
-          <Text
+          <TextInput
             style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search members..."
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
             accessibilityLabel="Search members"
-          >
-            {searchQuery || 'Search members...'}
-          </Text>
+          />
           {searchQuery.length > 0 && (
             <AnimatedPressable
               onPress={() => setSearchQuery('')}
@@ -112,42 +118,41 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
 
         {/* Member list */}
         {filteredMembers.length === 0 ? (
-          <View style={styles.emptyWrap}>
+          <View style={styles.emptyWrapV2}>
             <Ionicons name="people-outline" size={32} color={Colors.textMuted} />
-            <Caption color={Colors.textMuted} style={styles.emptyText}>No members match your search.</Caption>
+            <Caption color={Colors.textMuted} style={styles.emptyTextV2}>No members match your search.</Caption>
           </View>
         ) : (
-          <View style={styles.listCard}>
+          <View style={styles.memberList}>
             {filteredMembers.map((member, index) => (
               <View key={member.id}>
-                <View style={styles.memberRow}>
-                  <View style={[styles.memberAvatar, { backgroundColor: Colors.surfaceAlt }]}>
-                    <Text style={styles.memberAvatarText}>
+                <AnimatedPressable
+                  onPress={() => navigation.navigate('UserProfile', { userId: member.id })}
+                  activeOpacity={0.85}
+                  scaleValue={0.98}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${member.name} profile`}
+                  style={styles.memberRowV2}
+                >
+                  <View style={[styles.memberAvatarV2, { backgroundColor: Colors.surfaceAlt }]}>
+                    <Text style={styles.memberAvatarTextV2}>
                       {member.name.slice(0, 2).toUpperCase()}
                     </Text>
                   </View>
-                  <View style={styles.memberText}>
-                    <View style={styles.nameRow}>
+                  <View style={styles.memberTextV2}>
+                    <View style={styles.nameRowV2}>
                       <BodyEmphasis>{member.name}</BodyEmphasis>
                       {roleBadge(member.role)}
                     </View>
-                    {member.isMe && (
-                      <Caption color={Colors.textMuted}>Group creator</Caption>
+                    {member.role === 'owner' && (
+                      <Caption color={Colors.textMuted}>{member.isMe ? 'You · Group creator' : 'Group creator'}</Caption>
                     )}
                   </View>
-                  <AnimatedPressable
-                    onPress={() => navigation.navigate('UserProfile', { userId: member.id })}
-                    activeOpacity={0.7}
-                    scaleValue={0.92}
-                    hapticFeedback="light"
-                    accessibilityRole="button"
-                    accessibilityLabel={`View ${member.name} profile`}
-                  >
-                    <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-                  </AnimatedPressable>
-                </View>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+                </AnimatedPressable>
                 {index < filteredMembers.length - 1 && (
-                  <View style={styles.divider} />
+                  <View style={styles.memberDivider} />
                 )}
               </View>
             ))}
@@ -245,8 +250,58 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   emptyText: {
+    textAlign: 'center',
+  },
+  memberList: {
+    gap: 0,
+  },
+  memberRowV2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: 14,
+    gap: Space.sm + 4,
+  },
+  memberAvatarV2: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  memberAvatarTextV2: {
+    fontSize: 14,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  memberTextV2: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  nameRowV2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  memberDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginLeft: Space.md + 44 + Space.sm + 4,
+    marginRight: Space.md,
+  },
+  emptyWrapV2: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xl,
+    gap: Space.sm,
+  },
+  emptyTextV2: {
     textAlign: 'center',
   },
 });

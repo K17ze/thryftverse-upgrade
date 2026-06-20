@@ -32,6 +32,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 
   const conversations = useStore((state) => state.conversations);
   const upsertConversation = useStore((state) => state.upsertConversation);
+  const deleteConversation = useStore((state) => state.deleteConversation);
 
   const conversation = useMemo(
     () => conversations.find((c) => c.id === conversationId),
@@ -96,16 +97,17 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const handleLeaveGroup = () => {
     Alert.alert(
       'Leave group?',
-      'You will no longer receive messages from this group.',
+      'This removes the group from your inbox on this device. You can rejoin if you receive a new invite.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Leave',
+          text: 'Leave group',
           style: 'destructive',
           onPress: () => {
             haptic.heavy();
+            deleteConversation(conversationId);
             show('You left the group', 'info');
-            navigation.navigate('MainTabs');
+            navigation.navigate('MainTabs', { screen: 'Inbox' });
           },
         },
       ]
@@ -122,13 +124,14 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Edit Group" onBack={handleBack} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Avatar preview */}
+        {/* Group preview */}
         <View style={styles.identity}>
           <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
             <Text style={styles.avatarText}>{initials || 'G'}</Text>
           </View>
+          <BodyEmphasis numberOfLines={1}>{name.trim() || 'Untitled group'}</BodyEmphasis>
           <Caption color={Colors.textMuted}>
-            Avatar editing requires backend support.
+            {conversation.participantIds?.length ?? 0} member{(conversation.participantIds?.length ?? 0) === 1 ? '' : 's'}
           </Caption>
         </View>
 
@@ -219,6 +222,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    marginHorizontal: Space.xs,
+    backgroundColor: Colors.surface,
   },
   avatar: {
     width: 80,

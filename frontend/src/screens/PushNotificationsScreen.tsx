@@ -177,7 +177,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   );
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Push Notifications" onBack={() => navigation.goBack()} rightAction={rightAction} />}>
+    <FlagshipScreen header={<FlagshipHeader title="Push Notifications" subtitle="Manage your alert preferences" onBack={() => navigation.goBack()} rightAction={rightAction} />}>
       {pushPermissionStatus?.status === 'denied' && (
         <View style={styles.permissionBanner}>
           <Ionicons name="notifications-off-outline" size={18} color={Colors.danger} />
@@ -195,6 +195,15 @@ export default function PushNotificationsScreen({ navigation }: Props) {
           </AnimatedPressable>
         </View>
       )}
+
+      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+        <View style={[styles.notificationTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <Ionicons name="notifications-outline" size={18} color={Colors.brand} />
+          <Text style={[styles.notificationTrustText, { color: Colors.textSecondary }]}>
+            Choose which alerts you receive. You can change these at any time.
+          </Text>
+        </View>
+      </Reanimated.View>
 
       {/* Progress indicator */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
@@ -320,5 +329,22 @@ const styles = StyleSheet.create({
     color: Colors.brand,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+  },
+  notificationTrust: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+  },
+  notificationTrustText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
 });

@@ -14,18 +14,24 @@ export type EmojiReaction = {
 interface EmojiReactionsBarProps {
   reactions: EmojiReaction[];
   onReact: (emoji: string) => void;
-  onShowMore?: () => void;
   style?: ViewStyle;
 }
 
 const DEFAULT_EMOJIS = ['\u2764\uFE0F', '\uD83D\uDC4D', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE22', '\uD83D\uDD25'];
 
+const EXTENDED_EMOJIS = [
+  '\uD83D\uDE0D', '\uD83E\uDD70', '\uD83D\uDE0E', '\uD83E\uDD14', '\uD83D\uDE4C', '\uD83D\uDC4F',
+  '\uD83D\uDE4F', '\uD83D\uDCAF', '\uD83C\uDF89', '\uD83D\uDC40', '\uD83D\uDE0A', '\uD83D\uDE05',
+  '\uD83D\uDE21', '\uD83D\uDC94', '\uD83D\uDE4A', '\uD83E\uDD37', '\uD83D\uDCB8', '\uD83D\uDED2',
+];
+
 export function EmojiReactionsBar({
   reactions,
   onReact,
-  onShowMore,
   style,
 }: EmojiReactionsBarProps) {
+  const [expanded, setExpanded] = React.useState(false);
+
   const reactionMap = React.useMemo(() => {
     const map = new Map<string, EmojiReaction>();
     for (const r of reactions) {
@@ -34,48 +40,61 @@ export function EmojiReactionsBar({
     return map;
   }, [reactions]);
 
-  return (
-    <View style={[styles.container, style]}>
-      {DEFAULT_EMOJIS.map((emoji) => {
-        const existing = reactionMap.get(emoji);
-        const isActive = existing?.reactedByMe ?? false;
-
-        return (
-          <AnimatedPressable
-            key={emoji}
-            style={[styles.chip, isActive && styles.chipActive]}
-            onPress={() => onReact(emoji)}
-            accessibilityRole="button"
-            accessibilityLabel={`React with ${emoji}`}
-            activeOpacity={0.7}
-            scaleValue={0.9}
-            hapticFeedback="light"
+  const renderChip = (emoji: string) => {
+    const existing = reactionMap.get(emoji);
+    const isActive = existing?.reactedByMe ?? false;
+    return (
+      <AnimatedPressable
+        key={emoji}
+        style={[styles.chip, isActive && styles.chipActive]}
+        onPress={() => onReact(emoji)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isActive }}
+        accessibilityLabel={`React with ${emoji}`}
+        activeOpacity={0.7}
+        scaleValue={0.9}
+        hapticFeedback="light"
+      >
+        <Caption style={styles.emoji}>{emoji}</Caption>
+        {existing && existing.count > 0 ? (
+          <Caption
+            color={isActive ? Colors.brand : Colors.textMuted}
+            style={styles.count}
           >
-            <Caption style={styles.emoji}>{emoji}</Caption>
-            {existing && existing.count > 0 ? (
-              <Caption
-                color={isActive ? Colors.brand : Colors.textMuted}
-                style={styles.count}
-              >
-                {existing.count}
-              </Caption>
-            ) : null}
-          </AnimatedPressable>
-        );
-      })}
+            {existing.count}
+          </Caption>
+        ) : null}
+      </AnimatedPressable>
+    );
+  };
 
-      {onShowMore && (
+  return (
+    <View style={style}>
+      <View style={styles.container}>
+        {DEFAULT_EMOJIS.map(renderChip)}
         <AnimatedPressable
-          style={styles.chip}
-          onPress={onShowMore}
+          style={[styles.chip, expanded && styles.chipActive]}
+          onPress={() => setExpanded((v) => !v)}
           accessibilityRole="button"
-          accessibilityLabel="More reactions"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={expanded ? 'Fewer reactions' : 'More reactions'}
           activeOpacity={0.7}
           scaleValue={0.9}
           hapticFeedback="light"
         >
-          <Caption color={Colors.textMuted} style={styles.plus}>+</Caption>
+          <Caption color={expanded ? Colors.brand : Colors.textMuted} style={styles.plus}>
+            {expanded ? '\u00D7' : '+'}
+          </Caption>
         </AnimatedPressable>
+      </View>
+
+      {expanded && (
+        <>
+          <View style={styles.expandedDivider} />
+          <View style={styles.expandedGrid}>
+            {EXTENDED_EMOJIS.map(renderChip)}
+          </View>
+        </>
       )}
     </View>
   );
@@ -130,8 +149,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs + 2,
-    minHeight: 32,
+    paddingVertical: Space.xs + 3,
+    minHeight: 36,
   },
   chipActive: {
     borderColor: Colors.brand,
@@ -147,6 +166,19 @@ const styles = StyleSheet.create({
   plus: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
+  },
+  expandedDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginHorizontal: Space.xs,
+    marginTop: Space.xs,
+  },
+  expandedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.xs,
+    paddingTop: Space.sm,
   },
   summaryContainer: {
     flexDirection: 'row',

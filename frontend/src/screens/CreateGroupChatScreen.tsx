@@ -20,23 +20,19 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
-import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateGroupChat'>;
 
 export default function CreateGroupChatScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
-  const createGroupConversation = useStore((state) => state.createGroupConversation);
   const upsertConversation = useStore((state) => state.upsertConversation);
-  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -105,16 +101,9 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
       upsertConversation(conversation);
       show('Group chat created.', 'success');
       navigation.replace('Chat', { conversationId: conversation.id });
-      return;
-    } catch {
-      const conversationId = createGroupConversation({
-        title: groupTitle,
-        memberIds: selectedIds,
-        creatorId: currentUser?.id ?? 'me',
-      });
-
-      show('Backend sync unavailable. Created locally.', 'info');
-      navigation.replace('Chat', { conversationId });
+    } catch (err) {
+      setErrorMsg(parseApiError(err, 'Could not create the group. Check your connection and try again.').message);
+      show('Could not create group chat. Please try again.', 'error');
     } finally {
       setIsCreating(false);
     }
@@ -138,22 +127,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             accessibilityLabel="Group title input"
             accessibilityHint="Enter a name for the new group chat"
           />
-        </ChatCard>
-
-        {/* Description */}
-        <ChatCard variant="surface" style={styles.titleCard}>
-          <Meta color={Colors.textMuted} style={styles.label}>Description (optional)</Meta>
-          <AppInput
-            value={description}
-            onChangeText={setDescription}
-            placeholder="What is this group about?"
-            placeholderTextColor={Colors.textMuted}
-            maxLength={120}
-            inputContainerStyle={styles.inputWrap}
-            inputStyle={styles.input}
-            accessibilityLabel="Group description input"
-            accessibilityHint="Enter a short description for the group"
-          />
+          <Caption color={Colors.textMuted} style={styles.charCount}>{title.length}/40</Caption>
         </ChatCard>
 
         {/* Selected rail */}
@@ -292,7 +266,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           variant="primary"
           size="md"
           align="center"
-          title={isCreating ? 'Creating...' : 'Create Group'}
+          title={isCreating ? 'Creating...' : errorMsg ? 'Retry' : 'Create Group'}
           onPress={() => {
             void handleCreateGroup();
           }}
@@ -306,7 +280,6 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
   body: {
     flex: 1,
     paddingHorizontal: Space.md,
@@ -362,6 +335,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: Space.sm + 2,
+    ...Elevation.subtle,
   },
   memberRowSelected: {
     borderColor: Colors.brand,
@@ -412,9 +386,16 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: 10,
     paddingVertical: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    ...Elevation.subtle,
+  },
+  charCount: {
+    textAlign: 'right',
+    marginTop: 2,
   },
   selectedChipText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -425,9 +406,10 @@ const styles = StyleSheet.create({
     backgroundColor: `${Colors.danger}10`,
     borderRadius: Radius.md,
     marginBottom: Space.sm,
+    ...Elevation.subtle,
   },
   errorBannerText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   emptyWrap: {
     flex: 1,
