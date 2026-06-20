@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Reanimated, {
   useAnimatedStyle,
@@ -52,12 +52,6 @@ export function ListingMediaHero({
 }: ListingMediaHeroProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
-      setActiveIndex(viewableItems[0].index ?? 0);
-    }
-  }, []);
-
   const heroStyle = useAnimatedStyle(() => {
     const overscroll = Math.min(scrollY.value, 0);
     const pullDownTranslate = interpolate(overscroll, [-120, 0], [-56, 0], Extrapolation.CLAMP);
@@ -82,6 +76,7 @@ export function ListingMediaHero({
         height={heroHeight}
         onDoubleTap={onDoubleTap}
         itemId={itemId}
+        onIndexChange={setActiveIndex}
       />
 
       <View style={styles.topScrim} />

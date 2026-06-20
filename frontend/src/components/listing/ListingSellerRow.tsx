@@ -41,13 +41,20 @@ export function ListingSellerRow({
             <Text style={styles.name} numberOfLines={1}>
               @{seller.username || 'Seller'}
             </Text>
-            {(seller.rating || seller.reviewCount) ? (
+            {seller.rating != null && seller.reviewCount != null ? (
               <View style={styles.metaRow}>
                 <Ionicons name="star" size={11} color={Colors.brand} />
                 <Text style={styles.metaText}>
                   {seller.rating} · {seller.reviewCount} reviews
                 </Text>
               </View>
+            ) : seller.rating != null ? (
+              <View style={styles.metaRow}>
+                <Ionicons name="star" size={11} color={Colors.brand} />
+                <Text style={styles.metaText}>{seller.rating} rating</Text>
+              </View>
+            ) : seller.reviewCount != null ? (
+              <Text style={styles.metaText} numberOfLines={1}>{seller.reviewCount} reviews</Text>
             ) : seller.location ? (
               <Text style={styles.metaText} numberOfLines={1}>{seller.location}</Text>
             ) : null}

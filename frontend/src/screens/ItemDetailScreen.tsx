@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -56,7 +56,7 @@ export default function ItemDetailScreen() {
   const isFav = useStore((state) => state.isWishlisted(route.params?.itemId));
   const toggleFav = useStore((state) => state.toggleWishlist);
   const currentUser = useStore((state) => state.currentUser);
-  const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
+  const { listings, isSyncing, lastError, refreshListings } = useBackendData();
 
   const { itemId } = route.params || {};
   const item = listings.find((l) => l.id === itemId);
@@ -144,14 +144,6 @@ export default function ItemDetailScreen() {
       withTiming(0, { duration: 200 })
     );
   };
-
-  const onShare = useCallback(() => {
-    handleShare();
-  }, [handleShare]);
-
-  const onToggleSaved = useCallback(() => {
-    handleToggleFav();
-  }, [handleToggleFav]);
 
   const isOwner = currentUser?.id && item.sellerId === currentUser.id;
   const hasDiscount = item.originalPrice !== undefined && item.originalPrice > item.price;
