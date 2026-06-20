@@ -667,12 +667,12 @@ export default function SellScreen() {
         size: size || undefined,
         description: desc.trim() || undefined,
         photos,
-        tags,
         shippingMethod: shippingMethod || undefined,
         shippingPayer: shippingPayer || undefined,
       },
+      origin: 'sell',
     });
-  }, [title, price, originalPrice, brand, condition, category, size, desc, photos, tags, shippingMethod, shippingPayer, navigation]);
+  }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, navigation]);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>

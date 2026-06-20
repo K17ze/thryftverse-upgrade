@@ -418,6 +418,7 @@ export default function EditListingScreen() {
         shippingMethod: shippingMethod || undefined,
         shippingPayer: shippingPayer || undefined,
       },
+      origin: 'edit',
     });
   }, [title, price, originalPrice, brand, condition, category, size, description, shippingMethod, shippingPayer, mediaItems, navigation]);
 

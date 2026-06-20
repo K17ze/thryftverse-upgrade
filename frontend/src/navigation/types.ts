@@ -153,7 +153,7 @@ export type RootStackParamList = {
   // UI-19 — Sell / Co-own / Chat marketplace UX
   ListingPreview: {
     preview: {
-      title: string;
+      title?: string;
       price?: number;
       originalPrice?: number;
       brand?: string;
@@ -162,10 +162,10 @@ export type RootStackParamList = {
       size?: string;
       description?: string;
       photos: string[];
-      tags?: string[];
       shippingMethod?: string;
       shippingPayer?: string;
     };
+    origin?: 'sell' | 'edit';
   };
   TradeConfirm: {
     assetId: string;
