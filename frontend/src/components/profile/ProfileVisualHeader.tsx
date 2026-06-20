@@ -37,6 +37,7 @@ interface ProfileVisualHeaderProps {
   onEditProfile?: () => void;
   onShare?: () => void;
   onFollow?: () => void;
+  onMessage?: () => void;
   following?: boolean;
   verified?: boolean;
   hideCover?: boolean;
@@ -57,6 +58,7 @@ export function ProfileVisualHeader({
   onEditProfile,
   onShare,
   onFollow,
+  onMessage,
   following = false,
   verified = false,
   hideCover = false,
@@ -161,16 +163,17 @@ export function ProfileVisualHeader({
         ) : (
           <>
             <AnimatedPressable
-              style={[styles.actionBtn, following ? styles.actionBtnSecondary : styles.actionBtnPrimary]}
-              onPress={() => { haptic.medium(); onFollow?.(); }}
+              style={[styles.actionBtn, styles.actionBtnPrimary]}
+              onPress={() => { haptic.medium(); onMessage?.(); }}
               {...PressPresets.primaryButton}
             >
-              <Text style={following ? styles.actionBtnSecondaryText : styles.actionBtnPrimaryText}>
-                {following ? 'Following' : 'Follow'}
-              </Text>
+              <Text style={styles.actionBtnPrimaryText}>Message</Text>
             </AnimatedPressable>
             <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); onShare?.(); }} {...PressPresets.iconButton}>
               <Ionicons name="share-outline" size={16} color={Colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); /* more actions */ }} {...PressPresets.iconButton}>
+              <Ionicons name="ellipsis-horizontal" size={16} color={Colors.textPrimary} />
             </AnimatedPressable>
           </>
         )}

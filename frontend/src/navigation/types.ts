@@ -58,7 +58,7 @@ export type RootStackParamList = {
   MyOrders: undefined;
   Personalisation: undefined;
   Settings: undefined;
-  EditProfile: undefined;
+  EditProfile: { focus?: 'avatar' | 'cover' };
   AccountSettings: undefined;
   Payments: undefined;
   // Phase 16 new screens
@@ -162,9 +162,11 @@ export type RootStackParamList = {
       size?: string;
       description?: string;
       photos: string[];
+      mediaDraftItems?: import('../utils/mediaUploadAsset').ListingMediaDraftItem[];
       tags?: string[];
       shippingMethod?: string;
       shippingPayer?: string;
+      listingMode?: 'sell_now' | 'auction' | 'co_own';
     };
   };
   TradeConfirm: {

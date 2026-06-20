@@ -199,16 +199,19 @@ interface Props {
   height?: number;
   onDoubleTap?: () => void;
   itemId?: string;
+  onIndexChange?: (index: number) => void;
 }
 
-export function ImageViewer({ images, height = W, onDoubleTap, itemId }: Props) {
+export function ImageViewer({ images, height = W, onDoubleTap, itemId, onIndexChange }: Props) {
   const [activeIndex, setActiveIndex] = React.useState(0);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
-      setActiveIndex(viewableItems[0].index ?? 0);
+      const idx = viewableItems[0].index ?? 0;
+      setActiveIndex(idx);
+      onIndexChange?.(idx);
     }
-  }, []);
+  }, [onIndexChange]);
 
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 });
 

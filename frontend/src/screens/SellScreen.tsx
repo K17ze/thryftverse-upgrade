@@ -1800,9 +1800,11 @@ export default function SellScreen() {
                   size: size || undefined,
                   description: desc.trim() || undefined,
                   photos,
+                  mediaDraftItems,
                   tags,
                   shippingMethod: shippingMethod || undefined,
                   shippingPayer: shippingPayer || undefined,
+                  listingMode,
                 },
               });
             }}

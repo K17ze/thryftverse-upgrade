@@ -8,7 +8,8 @@ import {
 import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { RootStackParamList } from '../navigation/types';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
@@ -68,6 +69,18 @@ export default function EditProfileScreen() {
     updateUserAvatar,
     updateUserCover
   );
+
+  const route = useRoute<RouteProp<RootStackParamList, 'EditProfile'>>();
+  const focusParam = route.params?.focus;
+
+  // Auto-trigger media picker when navigated with focus param
+  React.useEffect(() => {
+    if (focusParam === 'avatar') {
+      pickAvatar();
+    } else if (focusParam === 'cover') {
+      pickCover();
+    }
+  }, [focusParam]);
 
   const hasChanges = hasTextChanges;
   const isMediaActive = avatarState.status === 'uploading' || coverState.status === 'uploading';

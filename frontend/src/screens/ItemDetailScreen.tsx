@@ -82,6 +82,7 @@ export default function ItemDetailScreen() {
 
   const [relatedListings, setRelatedListings] = React.useState<Listing[]>([]);
   const [relatedLoading, setRelatedLoading] = React.useState(false);
+  const [activeMediaIndex, setActiveMediaIndex] = React.useState(0);
 
   React.useEffect(() => {
     if (!itemId) return;
@@ -207,19 +208,19 @@ export default function ItemDetailScreen() {
 
         {/* ── Image Carousel ── */}
         <Reanimated.View style={[styles.heroContainer, heroStyle]}>
-          <ImageViewer images={item.images} height={height * 0.65} onDoubleTap={handleDoubleTap} itemId={item.id} />
+          <ImageViewer images={item.images} height={height * 0.65} onDoubleTap={handleDoubleTap} itemId={item.id} onIndexChange={setActiveMediaIndex} />
 
           <View style={styles.heroTopScrim} />
 
           {/* Media count badge */}
           {item.images.length > 1 && (
             <View style={styles.mediaCountBadge}>
-              <Text style={styles.mediaCountText}>{item.images.length} media</Text>
+              <Text style={styles.mediaCountText}>{activeMediaIndex + 1} / {item.images.length}</Text>
             </View>
           )}
 
-          {/* Video indicator */}
-          {item.images.length > 0 && isVideoUri(item.images[0]) && (
+          {/* Video indicator — reflects active media, not only first */}
+          {item.images.length > 0 && isVideoUri(item.images[activeMediaIndex]) && (
             <View style={styles.videoIndicator}>
               <Ionicons name="play-circle" size={20} color="#fff" />
               <Text style={styles.videoIndicatorText}>Video</Text>
@@ -285,10 +286,10 @@ export default function ItemDetailScreen() {
             )}
           </View>
 
-          {/* ── Trust surface ── */}
+          {/* ── Trust surface — neutral, no branded promise ── */}
           <View style={styles.trustBadge}>
-            <Ionicons name="shield-checkmark" size={16} color={Colors.success} />
-            <Text style={styles.trustText}>Thryft Buyer Protection</Text>
+            <Ionicons name="shield-checkmark-outline" size={16} color={Colors.textMuted} />
+            <Text style={styles.trustText}>Secure payment & tracked delivery</Text>
             <Text style={styles.trustSub}>
               Payment and delivery options are confirmed at checkout.
             </Text>
@@ -314,6 +315,18 @@ export default function ItemDetailScreen() {
                 <Text style={styles.attributeValue}>{item.condition}</Text>
               </View>
             ) : null}
+          </View>
+
+          {/* ── Delivery & Payment ── */}
+          <View style={styles.deliveryRow}>
+            <View style={styles.deliveryItem}>
+              <Ionicons name="card-outline" size={14} color={Colors.textMuted} />
+              <Text style={styles.deliveryText}>Secure checkout</Text>
+            </View>
+            <View style={styles.deliveryItem}>
+              <Ionicons name="cube-outline" size={14} color={Colors.textMuted} />
+              <Text style={styles.deliveryText}>Tracked delivery</Text>
+            </View>
           </View>
 
           {/* ── Description ── */}
@@ -666,13 +679,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 24,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
+    paddingVertical: 8,
     gap: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   sellerIdentityTap: {
     flex: 1,
@@ -695,6 +703,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   messageSellerBtnText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
+  deliveryRow: { flexDirection: 'row', gap: 16, marginTop: 16 },
+  deliveryItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  deliveryText: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted },
   sellerItemsSection: { marginTop: 28, paddingBottom: 8 },
   sectionHeader: {
     flexDirection: 'row',

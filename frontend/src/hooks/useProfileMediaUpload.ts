@@ -55,7 +55,8 @@ export function useProfileMediaUpload(
   });
 
   const pendingAssetRef = useRef<{ avatar?: MediaUploadAsset; cover?: MediaUploadAsset }>({});
-  const opIdRef = useRef(0);
+  const avatarOpIdRef = useRef(0);
+  const coverOpIdRef = useRef(0);
 
   // Sync external remote URLs when no local operation is active
   useEffect(() => {
@@ -86,6 +87,7 @@ export function useProfileMediaUpload(
   ): Promise<void> => {
     const updateState = type === 'avatar' ? updateAvatarState : updateCoverState;
     const onConfirmed = type === 'avatar' ? onAvatarConfirmed : onCoverConfirmed;
+    const opIdRef = type === 'avatar' ? avatarOpIdRef : coverOpIdRef;
     const persistForUser = type === 'avatar'
       ? (url: string) => userId ? setStoredUserAvatarForUser(userId, url) : Promise.resolve()
       : (url: string) => userId ? setStoredUserCoverForUser(userId, url) : Promise.resolve();
@@ -97,7 +99,7 @@ export function useProfileMediaUpload(
       const publicUrl = await uploadMedia(asset, type === 'avatar' ? 'avatars' : 'covers');
       await updateMyProfile(type === 'avatar' ? { avatar: publicUrl } : { coverPhoto: publicUrl });
 
-      // Guard against stale operation
+      // Guard against stale operation — avatar and cover are independent
       if (opId !== opIdRef.current) return;
 
       onConfirmed(publicUrl);
@@ -153,6 +155,7 @@ export function useProfileMediaUpload(
 
       const localUri = await persistProfileMediaUri(asset.uri, type);
       pendingAssetRef.current[type] = asset;
+      const opIdRef = type === 'avatar' ? avatarOpIdRef : coverOpIdRef;
       const opId = ++opIdRef.current;
 
       updateState({
@@ -177,6 +180,7 @@ export function useProfileMediaUpload(
       return;
     }
     const localUri = pending.uri; // retry with original picked URI
+    const opIdRef = type === 'avatar' ? avatarOpIdRef : coverOpIdRef;
     const opId = ++opIdRef.current;
     await performUpload(type, pending, localUri, opId);
   }, [performUpload, updateAvatarState, updateCoverState]);

@@ -258,6 +258,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           isSelf={isSelfProfile}
           onEditProfile={isSelfProfile ? () => navigation.navigate('EditProfile') : undefined}
           onShare={handleShare}
+          onMessage={!isSelfProfile ? handleMessageProfile : undefined}
           hideCover
           stats={[
             { label: 'Listings', value: profileListings.length },
