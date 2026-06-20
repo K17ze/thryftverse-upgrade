@@ -4,25 +4,29 @@ import {
   Text,
   StyleSheet,
   Alert,
+  TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Pressable,
 } from 'react-native';
-import { Colors } from '../constants/colors';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Colors } from '../constants/colors';
+import { Space, Typography } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
-import { PremiumTextField } from '../components/ui/PremiumTextField';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { FlagshipProfileMedia, FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship';
 import { updateMyProfile } from '../services/profileApi';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
-
+import { EditProfilePreview } from '../components/profile/EditProfilePreview';
+import { ProfileMediaEditor } from '../components/profile/ProfileMediaEditor';
 
 export default function EditProfileScreen() {
-  const { isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
@@ -34,14 +38,14 @@ export default function EditProfileScreen() {
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
 
   const user = currentUser;
-    const initialName = user?.displayName ?? user?.username ?? '';
+  const initialName = user?.displayName ?? user?.username ?? '';
   const initialUsername = user?.username ?? '';
 
   const [name, setName] = useState(initialName);
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(user?.bio ?? '');
   const [website, setWebsite] = useState(user?.website ?? '');
-  
+
   const [isSaving, setIsSaving] = useState(false);
   const [websiteError, setWebsiteError] = useState('');
 
@@ -132,6 +136,10 @@ export default function EditProfileScreen() {
   const displayAvatar = avatarState.pendingLocal || avatarState.confirmedRemote || userAvatar || '';
   const displayCover = coverState.pendingLocal || coverState.confirmedRemote || userCover || '';
 
+  const memberSince = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+    : undefined;
+
   const handleDiscard = () => {
     if (!hasChanges && !hasUnsavedMedia) {
       navigation.goBack();
@@ -152,9 +160,19 @@ export default function EditProfileScreen() {
 
   if (!user) {
     return (
-      <FlagshipScreen
-        header={<FlagshipHeader title="Edit Profile" onBack={() => navigation.goBack()} />}
-      >
+      <View style={styles.container}>
+        <View style={[styles.navHeader, { paddingTop: insets.top }]}>
+          <Pressable
+            style={styles.navCancelBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Text style={styles.navCancelText}>Cancel</Text>
+          </Pressable>
+          <Text style={styles.navTitle}>Edit profile</Text>
+          <View style={styles.navSpacer} />
+        </View>
         <EmptyState
           icon="person-outline"
           title="Not signed in"
@@ -162,158 +180,301 @@ export default function EditProfileScreen() {
           ctaLabel="Sign In"
           onCtaPress={() => (navigation as any).navigate('Login')}
         />
-      </FlagshipScreen>
+      </View>
     );
   }
 
+  const saveDisabled = !hasChanges || isSaving;
+
   return (
-    <FlagshipScreen
-      header={
-        <FlagshipHeader
-          title="Edit Profile"
-          onBack={handleDiscard}
-          backIcon="arrow-back"
-          rightAction={undefined}
-        />
-      }
-      keyboardAvoiding
-      stickyFooter={
-        <FlagshipStickyFooter
-          actions={[
-            {
-              label: isSaving ? 'Saving...' : 'Save Changes',
-              onPress: handleSave,
-              variant: 'primary',
-              disabled: !hasChanges || isSaving,
-              loading: isSaving,
-            },
-          ]}
-        />
-      }
-    >
-      {/* Hero Media Section */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
-        <FlagshipProfileMedia
-          coverUri={displayCover}
-          avatarUri={displayAvatar}
-          isSelf
-          onEditCover={pickCover}
-          onEditAvatar={pickAvatar}
-          isUploadingCover={coverState.status === 'uploading'}
-          isUploadingAvatar={avatarState.status === 'uploading'}
-          style={{ marginBottom: Space.lg }}
-        />
+    <View style={styles.container}>
+      {/* ── 1. COMPACT NAVIGATION HEADER ── */}
+      <View style={[styles.navHeader, { paddingTop: insets.top }]}>
+        <Pressable
+          style={styles.navCancelBtn}
+          onPress={handleDiscard}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel and go back"
+        >
+          <Text style={styles.navCancelText}>Cancel</Text>
+        </Pressable>
+        <Text style={styles.navTitle}>Edit profile</Text>
+        <View style={styles.navSpacer} />
+      </View>
 
-        {/* Avatar upload failure */}
-        {avatarState.status === 'failed' && (
-          <View style={styles.mediaErrorRow}>
-            <Ionicons name="warning-outline" size={16} color={Colors.danger} />
-            <Text style={styles.mediaErrorText}>{avatarState.error || 'Avatar upload failed'}</Text>
-            <AnimatedPressable onPress={retryAvatar} activeOpacity={0.8} scaleValue={0.96} accessibilityLabel="Retry avatar upload" accessibilityRole="button">
-              <Text style={styles.mediaActionText}>Retry</Text>
-            </AnimatedPressable>
-            <AnimatedPressable onPress={revertAvatar} activeOpacity={0.8} scaleValue={0.96} accessibilityLabel="Revert avatar to previous" accessibilityRole="button">
-              <Text style={styles.mediaActionText}>Revert</Text>
-            </AnimatedPressable>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 100 }}
+        >
+          {/* ── 2. LIVE PROFILE PREVIEW ── */}
+          <EditProfilePreview
+            coverUri={displayCover}
+            avatarUri={displayAvatar}
+            displayName={name}
+            username={username}
+            bio={bio}
+            location={user?.location}
+            memberSince={memberSince}
+            onEditCover={pickCover}
+            onEditAvatar={pickAvatar}
+            isUploadingCover={coverState.status === 'uploading'}
+            isUploadingAvatar={avatarState.status === 'uploading'}
+          />
+
+          {/* ── 3. COVER EDITING CONTROLS ── */}
+          <View style={styles.mediaEditorZone}>
+            <ProfileMediaEditor
+              label="Cover"
+              status={coverState.status}
+              error={coverState.error}
+              onChange={pickCover}
+              onRetry={retryCover}
+              onRevert={revertCover}
+            />
           </View>
-        )}
 
-        {/* Cover upload failure */}
-        {coverState.status === 'failed' && (
-          <View style={styles.mediaErrorRow}>
-            <Ionicons name="warning-outline" size={16} color={Colors.danger} />
-            <Text style={styles.mediaErrorText}>{coverState.error || 'Cover upload failed'}</Text>
-            <AnimatedPressable onPress={retryCover} activeOpacity={0.8} scaleValue={0.96} accessibilityLabel="Retry cover upload" accessibilityRole="button">
-              <Text style={styles.mediaActionText}>Retry</Text>
-            </AnimatedPressable>
-            <AnimatedPressable onPress={revertCover} activeOpacity={0.8} scaleValue={0.96} accessibilityLabel="Revert cover to previous" accessibilityRole="button">
-              <Text style={styles.mediaActionText}>Revert</Text>
-            </AnimatedPressable>
+          {/* ── 4. AVATAR EDITING CONTROLS ── */}
+          <View style={styles.mediaEditorZone}>
+            <ProfileMediaEditor
+              label="Avatar"
+              status={avatarState.status}
+              error={avatarState.error}
+              onChange={pickAvatar}
+              onRetry={retryAvatar}
+              onRevert={revertAvatar}
+            />
           </View>
-        )}
-      </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-        <FlagshipFormSection title="Identity">
-          <PremiumTextField
-            label="Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="Your name"
-            autoCapitalize="words"
-          />
-          <View style={styles.divider} />
-          <PremiumTextField
-            label="Username"
-            value={username}
-            onChangeText={setUsername}
-            placeholder="username"
-            autoCapitalize="none"
-            helperText="How people find you on Thryftverse."
-          />
-        </FlagshipFormSection>
-      </Reanimated.View>
+          {/* ── 5. CORE IDENTITY FIELDS ── */}
+          <View style={styles.sectionGroup}>
+            <Text style={styles.sectionHeading}>Identity</Text>
 
-      {/* About */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
-        <FlagshipFormSection title="About">
-          <PremiumTextField
-            label="Bio"
-            value={bio}
-            onChangeText={setBio}
-            placeholder="Tell people about yourself..."
-            multiline
-            minHeight={100}
-            maxLength={200}
-            helperText={`${bio.length}/200`}
-          />
-          <View style={styles.divider} />
-          <PremiumTextField
-            label="Website"
-            value={website}
-            onChangeText={setWebsite}
-            onBlur={() => validateWebsite(website)}
-            placeholder="https://"
-            autoCapitalize="none"
-            keyboardType="url"
-            errorText={websiteError || undefined}
-          />
-        </FlagshipFormSection>
-      </Reanimated.View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Display name</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={name}
+                onChangeText={setName}
+                placeholder="Your name"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+              <View style={styles.hairline} />
+            </View>
 
-          </FlagshipScreen>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Username</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={username}
+                onChangeText={setUsername}
+                placeholder="username"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="none"
+                returnKeyType="next"
+              />
+              <Text style={styles.fieldHelper}>How people find you on Thryftverse.</Text>
+              <View style={styles.hairline} />
+            </View>
+          </View>
+
+          {/* ── 6. BIO AND ADDITIONAL FIELDS ── */}
+          <View style={styles.sectionGroup}>
+            <Text style={styles.sectionHeading}>About</Text>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Bio</Text>
+              <TextInput
+                style={[styles.fieldInput, styles.fieldInputMultiline]}
+                value={bio}
+                onChangeText={setBio}
+                placeholder="Tell people about yourself…"
+                placeholderTextColor={Colors.textMuted}
+                multiline
+                maxLength={200}
+                textAlignVertical="top"
+              />
+              <Text style={styles.fieldHelper}>{bio.length}/200</Text>
+              <View style={styles.hairline} />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Website</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={website}
+                onChangeText={setWebsite}
+                onBlur={() => validateWebsite(website)}
+                placeholder="https://"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="none"
+                keyboardType="url"
+                returnKeyType="done"
+              />
+              {websiteError ? (
+                <Text style={styles.fieldError}>{websiteError}</Text>
+              ) : null}
+              <View style={styles.hairline} />
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* ── 8. STICKY SAVE ACTION ── */}
+      <View style={[styles.stickySave, { paddingBottom: Math.max(insets.bottom, Space.sm) }]}>
+        <AnimatedPressable
+          style={[styles.saveBtn, saveDisabled && styles.saveBtnDisabled]}
+          onPress={handleSave}
+          activeOpacity={0.85}
+          disabled={saveDisabled}
+          accessibilityRole="button"
+          accessibilityLabel="Save profile changes"
+          accessibilityState={{ disabled: saveDisabled }}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color={Colors.textInverse} />
+          ) : (
+            <Text style={[styles.saveBtnText, saveDisabled && styles.saveBtnTextDisabled]}>
+              Save
+            </Text>
+          )}
+        </AnimatedPressable>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginLeft: Space.md,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
-  mediaErrorRow: {
+
+  // Nav header
+  navHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    padding: Space.sm,
-    backgroundColor: 'rgba(255,77,77,0.06)',
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,77,77,0.15)',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.background,
+    zIndex: 10,
   },
-  mediaErrorText: {
-    flex: 1,
-    fontSize: Type.caption.size,
+  navCancelBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  navCancelText: {
+    fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.danger,
-    lineHeight: Type.caption.lineHeight,
+    color: Colors.textPrimary,
   },
-  mediaActionText: {
-    fontSize: Type.caption.size,
+  navTitle: {
+    fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-    lineHeight: Type.caption.lineHeight,
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  navSpacer: {
+    width: 60,
+  },
+
+  // Media editor zone
+  mediaEditorZone: {
+    paddingVertical: 2,
+  },
+
+  // Section groups
+  sectionGroup: {
+    paddingTop: Space.lg,
+    paddingHorizontal: Space.md,
+  },
+  sectionHeading: {
+    fontSize: 11,
+    fontFamily: Typography.family.bold,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: Space.sm,
+  },
+
+  // Fields
+  fieldGroup: {
+    paddingVertical: 10,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    marginBottom: 6,
+  },
+  fieldInput: {
+    fontSize: 15,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    minHeight: 40,
+  },
+  fieldInputMultiline: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+    paddingTop: 8,
+  },
+  fieldHelper: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  fieldError: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.danger,
+    marginTop: 4,
+  },
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginTop: 8,
+  },
+
+  // Sticky save
+  stickySave: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+  },
+  saveBtn: {
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnDisabled: {
+    backgroundColor: Colors.surfaceAlt,
+  },
+  saveBtnText: {
+    fontSize: 16,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
+  },
+  saveBtnTextDisabled: {
+    color: Colors.textMuted,
   },
 });
