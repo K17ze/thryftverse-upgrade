@@ -74,6 +74,12 @@ export type RootStackParamList = {
   OrderDetail: { orderId: string };
   // Phase 19 new screens
   Checkout: { itemId: string };
+  AddressForm:
+    | {
+        mode: 'add' | 'edit';
+        source?: 'postage' | 'checkout';
+      }
+    | undefined;
   Success: { orderId: string };
   ManageListing: { itemId: string };
   EditListing: { itemId: string };

@@ -67,6 +67,7 @@ import OrderDetailScreen from '../screens/OrderDetailScreen';
 
 // Phase 19 new screens
 import CheckoutScreen from '../screens/CheckoutScreen';
+import AddressFormScreen from '../screens/AddressFormScreen';
 import SuccessScreen from '../screens/SuccessScreen';
 import ManageListingScreen from '../screens/ManageListingScreen';
 import WithdrawScreen from '../screens/WithdrawScreen';
@@ -255,6 +256,7 @@ export default function AppNavigator() {
 
       {/* Phase 19 new screens */}
       <Stack.Screen name="Checkout" component={CheckoutScreen} />
+      <Stack.Screen name="AddressForm" component={AddressFormScreen} />
       <Stack.Screen name="Success" component={SuccessScreen} />
       <Stack.Screen name="ManageListing" component={ManageListingScreen} />
       <Stack.Screen name="Withdraw" component={WithdrawScreen} />
