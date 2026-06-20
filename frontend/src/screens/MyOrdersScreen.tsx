@@ -21,7 +21,7 @@ import { CommerceUserOrder, listUserOrders } from '../services/commerceApi';
 import { getListingCoverUri } from '../utils/media';
 import { EmptyState } from '../components/EmptyState';
 import { OrdersTabRail, OrdersTab } from '../components/orders/OrdersTabRail';
-import { OrderLedgerRow, OrderViewModel } from '../components/orders/OrderLedgerRow';
+import { OrderLedgerRow, OrderViewModel, normaliseOrderStatus } from '../components/orders/OrderLedgerRow';
 
 type StatusFilter = 'All' | 'Active' | 'Completed' | 'Cancelled';
 
@@ -37,12 +37,11 @@ const COMPLETED_STATUSES = new Set(['delivered', 'completed']);
 const CANCELLED_STATUSES = new Set(['cancelled', 'refunded']);
 
 function classifyStatus(status: string): 'active' | 'completed' | 'cancelled' | 'unknown' {
-  const key = status.toLowerCase();
+  const key = normaliseOrderStatus(status);
   if (CANCELLED_STATUSES.has(key)) return 'cancelled';
   if (COMPLETED_STATUSES.has(key)) return 'completed';
   if (ACTIVE_STATUSES.has(key)) return 'active';
-  // Unknown non-terminal statuses default to active
-  return 'active';
+  return 'unknown';
 }
 
 export default function MyOrdersScreen() {
@@ -100,15 +99,16 @@ export default function MyOrdersScreen() {
     return backendOrders.map((order) => {
       const existingListing = listingPool.find((entry) => entry.id === order.listingId);
       const role: 'buying' | 'selling' = order.buyerId === viewerId ? 'buying' : 'selling';
-      const image = getListingCoverUri(
-        existingListing?.images || [order.listingImageUrl ?? ''],
-        order.listingImageUrl ?? ''
-      );
       return {
         id: order.id,
         listingId: order.listingId,
-        title: existingListing?.title || order.listingTitle || 'Ordered item',
-        image,
+        title:
+          order.listingTitle
+          || existingListing?.title
+          || 'Ordered item',
+        image:
+          order.listingImageUrl
+          || getListingCoverUri(existingListing?.images ?? [], ''),
         totalGbp: order.totalGbp,
         status: order.status,
         createdAt: order.createdAt,
@@ -230,6 +230,31 @@ export default function MyOrdersScreen() {
     </View>
   ), []);
 
+  const renderStaleErrorBanner = useCallback(() => {
+    if (!loadError || backendOrders.length === 0) return null;
+    return (
+      <View
+        style={styles.staleBanner}
+        accessibilityRole="alert"
+        accessibilityLabel="Orders could not be refreshed. Showing the last loaded results."
+      >
+        <View style={styles.staleBannerText}>
+          <Text style={styles.staleBannerTitle}>Orders could not be refreshed</Text>
+          <Text style={styles.staleBannerSubtitle}>Showing the last loaded results.</Text>
+        </View>
+        <Pressable
+          style={styles.staleRetryBtn}
+          onPress={() => { setLoadError(null); void fetchOrders(); }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Retry refreshing orders"
+        >
+          <Text style={styles.staleRetryBtnText}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }, [loadError, backendOrders.length, fetchOrders]);
+
   const renderError = useCallback(() => (
     <View style={styles.errorContainer}>
       <Ionicons name="cloud-offline-outline" size={40} color={Colors.textMuted} />
@@ -305,7 +330,8 @@ export default function MyOrdersScreen() {
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ItemSeparatorComponent={renderSeparator}
-        ListEmptyComponent={loadError ? renderError : isInitialLoading ? renderLoading : renderEmpty}
+        ListHeaderComponent={renderStaleErrorBanner}
+        ListEmptyComponent={loadError && backendOrders.length === 0 ? renderError : isInitialLoading ? renderLoading : renderEmpty}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -440,6 +466,51 @@ const styles = StyleSheet.create({
   },
   retryBtnText: {
     fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+
+  // Stale error banner
+  staleBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    marginBottom: 4,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  staleBannerText: {
+    flex: 1,
+    gap: 2,
+  },
+  staleBannerTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  staleBannerSubtitle: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  staleRetryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  staleRetryBtnText: {
+    fontSize: 13,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },

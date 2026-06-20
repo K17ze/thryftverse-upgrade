@@ -41,33 +41,49 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const TERMINAL_STATUSES = new Set(['delivered', 'completed', 'cancelled', 'refunded']);
+const ACTIVE_PROGRESS_STATUSES = new Set(['paid', 'shipped', 'in transit']);
+
+export function normaliseOrderStatus(status: string): string {
+  return status
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
+export function humaniseStatus(status: string): string {
+  const normalised = normaliseOrderStatus(status);
+  if (!normalised) return 'Status unavailable';
+
+  return normalised
+    .split(' ')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 function getStatusLabel(status: string): string {
-  const key = status.toLowerCase();
-  return STATUS_LABELS[key] ?? key;
+  const key = normaliseOrderStatus(status);
+  return STATUS_LABELS[key] ?? humaniseStatus(status);
 }
 
 function getStatusColor(status: string): string {
-  const key = status.toLowerCase();
-  return STATUS_COLORS[key] ?? Colors.textSecondary;
+  const key = normaliseOrderStatus(status);
+  return STATUS_COLORS[key] ?? Colors.textMuted;
 }
 
 function isTerminal(status: string): boolean {
-  return TERMINAL_STATUSES.has(status.toLowerCase());
+  return TERMINAL_STATUSES.has(normaliseOrderStatus(status));
 }
 
 function isCancelled(status: string): boolean {
-  const key = status.toLowerCase();
+  const key = normaliseOrderStatus(status);
   return key === 'cancelled' || key === 'refunded';
 }
 
 function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  } catch {
-    return '';
-  }
+  const timestamp = Date.parse(iso);
+  if (!Number.isFinite(timestamp)) return '';
+  return new Date(timestamp).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
 interface OrderLedgerRowProps {
@@ -91,8 +107,8 @@ export function OrderLedgerRow({ order, formattedTotal, onPress }: OrderLedgerRo
     : null;
 
   // Progress cue: Paid → Shipped → Delivered
-  const statusKey = order.status.toLowerCase();
-  const showProgress = !terminal && statusKey !== 'created';
+  const statusKey = normaliseOrderStatus(order.status);
+  const showProgress = !terminal && statusKey !== 'created' && ACTIVE_PROGRESS_STATUSES.has(statusKey);
   const progressStages = ['paid', 'shipped', 'delivered'];
   const currentStageIndex = progressStages.indexOf(
     statusKey === 'in transit' ? 'shipped' : statusKey
@@ -130,7 +146,7 @@ export function OrderLedgerRow({ order, formattedTotal, onPress }: OrderLedgerRo
         <Text style={styles.total}>{formattedTotal}</Text>
 
         <Text style={styles.context} numberOfLines={1}>
-          {cancelled ? `Cancelled · ${dateLabel}` : contextLine}
+          {cancelled ? (dateLabel ? `Cancelled · ${dateLabel}` : 'Cancelled') : contextLine}
         </Text>
 
         {trackingLine && (
@@ -143,7 +159,6 @@ export function OrderLedgerRow({ order, formattedTotal, onPress }: OrderLedgerRo
           <View style={styles.progressRow}>
             {progressStages.map((stage, i) => {
               const isCompleted = i <= currentStageIndex;
-              const isCurrent = i === currentStageIndex;
               return (
                 <React.Fragment key={stage}>
                   <View
