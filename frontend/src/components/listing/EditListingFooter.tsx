@@ -8,8 +8,6 @@ type SaveStage =
   | 'idle'
   | 'uploading_media'
   | 'updating_listing'
-  | 'removing_media'
-  | 'saving_order'
   | 'completed'
   | 'failed_recoverable';
 
@@ -29,10 +27,6 @@ function getStageText(stage: SaveStage): string | null {
       return 'Uploading new media…';
     case 'updating_listing':
       return 'Updating listing…';
-    case 'removing_media':
-      return 'Removing selected media…';
-    case 'saving_order':
-      return 'Saving media order…';
     case 'completed':
       return 'Changes saved.';
     case 'failed_recoverable':

@@ -27,6 +27,7 @@ import { CURRENCIES } from '../constants/currencies';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import { haptics } from '../utils/haptics';
+import { useStore } from '../store/useStore';
 
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { fetchListingByIdFromApi, patchListingOnApi, createListingImageOnApi } from '../services/listingsApi';
@@ -43,7 +44,7 @@ const CATEGORY_OPTIONS = ['Women', 'Men', 'Designer', 'Kids', 'Home', 'Electroni
 
 type PickerMode = 'Category' | 'Brand' | 'Size' | 'Condition' | null;
 type RouteT = RouteProp<RootStackParamList, 'EditListing'>;
-type SaveStage = 'idle' | 'uploading_media' | 'updating_listing' | 'removing_media' | 'saving_order' | 'completed' | 'failed_recoverable';
+type SaveStage = 'idle' | 'uploading_media' | 'updating_listing' | 'completed' | 'failed_recoverable';
 
 export default function EditListingScreen() {
   const insets = useSafeAreaInsets();
@@ -67,8 +68,6 @@ export default function EditListingScreen() {
   const [brand, setBrand] = useState('');
   const [size, setSize] = useState('');
   const [condition, setCondition] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState('');
   const [shippingMethod, setShippingMethod] = useState<'standard' | 'express' | null>(null);
   const [shippingPayer, setShippingPayer] = useState<'buyer' | 'seller' | null>(null);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
@@ -78,8 +77,13 @@ export default function EditListingScreen() {
 
   // Media state — stable-ID based
   const [mediaItems, setMediaItems] = useState<ListingMediaDraftItem[]>([]);
-  const [originalMediaItems, setOriginalMediaItems] = useState<ListingMediaDraftItem[]>([]);
-  const [pendingRemovalIds, setPendingRemovalIds] = useState<Set<string>>(new Set());
+
+  // Ownership
+  const currentUser = useStore((s) => s.currentUser);
+  const isOwner = useMemo(() => {
+    if (!listing || !currentUser) return false;
+    return listing.sellerId === currentUser.id;
+  }, [listing, currentUser]);
 
   /* ── upload queue ── */
   const uploadQueueRef = useRef(new MediaUploadQueue());
@@ -120,7 +124,6 @@ export default function EditListingScreen() {
             publicUrl: uri,
           }));
           setMediaItems(items);
-          setOriginalMediaItems(items);
         } else {
           setLoadError(true);
           showToast('Could not load listing', 'error');
@@ -146,10 +149,6 @@ export default function EditListingScreen() {
     const originalShippingMethod = listing.shippingMethod ?? null;
     const originalShippingPayer = listing.shippingPayer ?? null;
 
-    const activeItems = mediaItems.filter((m) => !pendingRemovalIds.has(m.id));
-    const originalActiveUris = originalMediaItems.map((m) => m.publicUrl || m.uri);
-    const currentActiveUris = activeItems.map((m) => m.publicUrl || m.uri);
-
     return (
       title !== listing.title ||
       description !== (listing.description ?? '') ||
@@ -161,27 +160,9 @@ export default function EditListingScreen() {
       condition !== (listing.condition ?? '') ||
       shippingMethod !== originalShippingMethod ||
       shippingPayer !== originalShippingPayer ||
-      pendingRemovalIds.size > 0 ||
-      activeItems.length !== originalMediaItems.length ||
-      currentActiveUris.some((u: string, i: number) => u !== originalActiveUris[i]) ||
       mediaItems.some((m) => m.source === 'local')
     );
-  }, [listing, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, mediaItems, pendingRemovalIds, originalMediaItems]);
-
-  /* ── tag handling ── */
-  const handleTagSubmit = useCallback(() => {
-    const raw = tagInput.trim().toLowerCase();
-    if (!raw) return;
-    const parts = raw.split(/[,\s]+/).filter(Boolean);
-    const next = [...new Set([...tags, ...parts])].slice(0, 8);
-    setTags(next);
-    setTagInput('');
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [tagInput, tags]);
-
-  const removeTag = useCallback((t: string) => {
-    setTags((prev) => prev.filter((x) => x !== t));
-  }, []);
+  }, [listing, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, mediaItems]);
 
   /* ── media handling ── */
   const handlePickFromLibrary = useCallback(async () => {
@@ -269,23 +250,11 @@ export default function EditListingScreen() {
   const handleRemoveItem = useCallback((itemId: string) => {
     const item = mediaItems.find((m) => m.id === itemId);
     if (!item) return;
+    if (item.source === 'remote') return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (item.source === 'remote') {
-      setPendingRemovalIds((prev) => new Set([...prev, itemId]));
-    } else {
-      uploadQueueRef.current.removeItem(itemId);
-      setMediaItems((prev) => prev.filter((m) => m.id !== itemId));
-    }
+    uploadQueueRef.current.removeItem(itemId);
+    setMediaItems((prev) => prev.filter((m) => m.id !== itemId));
   }, [mediaItems]);
-
-  const handleUndoRemoveItem = useCallback((itemId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPendingRemovalIds((prev) => {
-      const next = new Set(prev);
-      next.delete(itemId);
-      return next;
-    });
-  }, []);
 
   const handleRetryItem = useCallback((itemId: string) => {
     const queue = uploadQueueRef.current;
@@ -310,7 +279,10 @@ export default function EditListingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
-  const isPendingRemoval = useCallback((itemId: string) => pendingRemovalIds.has(itemId), [pendingRemovalIds]);
+  const canRemoveItem = useCallback((itemId: string) => {
+    const item = mediaItems.find((m) => m.id === itemId);
+    return item ? item.source === 'local' : false;
+  }, [mediaItems]);
 
   /* ── validation ── */
   const validate = useCallback(() => {
@@ -325,10 +297,9 @@ export default function EditListingScreen() {
     if (!condition) return 'Please select a condition.';
     if (!trimmedDesc || trimmedDesc.length < 10) return 'Add a description with at least 10 characters.';
     if (!Number.isFinite(numericPrice) || numericPrice <= 0) return 'Enter a valid price greater than 0.';
-    const activeItems = mediaItems.filter((m) => !pendingRemovalIds.has(m.id));
-    if (activeItems.length === 0) return 'Add at least one photo.';
+    if (mediaItems.length === 0) return 'Add at least one photo.';
     return '';
-  }, [title, category, brand, size, condition, description, price, mediaItems, pendingRemovalIds]);
+  }, [title, category, brand, size, condition, description, price, mediaItems]);
 
   /* ── save handler ── */
   const handleSave = useCallback(async () => {
@@ -339,31 +310,19 @@ export default function EditListingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       return;
     }
+    if (!isOwner) {
+      setErrorMsg('You do not have permission to edit this listing.');
+      setSaveStage('failed_recoverable');
+      return;
+    }
     setErrorMsg('');
     setIsSaving(true);
-    setSaveStage('updating_listing');
 
     try {
-      const activeItems = mediaItems.filter((m) => !pendingRemovalIds.has(m.id));
-      const existingRemotePhotos = activeItems.filter((m) => m.source === 'remote').map((m) => m.publicUrl || m.uri);
-      const newLocalItems = activeItems.filter((m) => m.source === 'local');
-      const removedOriginals = originalMediaItems.filter((m) => pendingRemovalIds.has(m.id));
+      const existingRemotePhotos = mediaItems.filter((m) => m.source === 'remote').map((m) => m.publicUrl || m.uri);
+      const newLocalItems = mediaItems.filter((m) => m.source === 'local');
 
-      // 1. Patch text metadata
-      await patchListingOnApi(itemId, {
-        title: title.trim(),
-        description: description.trim(),
-        priceGbp: Number(sanitizeDecimalInput(price)),
-        category: category.toLowerCase(),
-        brand: brand || undefined,
-        size: size || undefined,
-        condition: condition || undefined,
-        originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-        shippingMethod: shippingMethod || undefined,
-        shippingPayer: shippingPayer || undefined,
-      });
-
-      // 2. Upload new local media via queue
+      // 1. Upload new local media via queue (if any)
       if (newLocalItems.length > 0) {
         setSaveStage('uploading_media');
         const queue = uploadQueueRef.current;
@@ -398,23 +357,36 @@ export default function EditListingScreen() {
           return;
         }
 
-        const urls = queue.getUploadedUrls();
-        setSaveStage('saving_order');
-        for (let i = 0; i < urls.length; i++) {
+        // 2. Attach uploaded images with deterministic IDs
+        const uploadedItems = queueItems.filter((q) => q.state === 'uploaded' && q.publicUrl);
+        for (let i = 0; i < uploadedItems.length; i++) {
+          const qi = uploadedItems[i];
+          const attachmentId = `${itemId}_media_${qi.id}`;
           await createListingImageOnApi({
-            id: `${itemId}_img_new_${Date.now()}_${i}`,
+            id: attachmentId,
             listingId: itemId,
-            imageUrl: urls[i],
+            imageUrl: qi.publicUrl!,
             sortOrder: existingRemotePhotos.length + i,
           });
         }
       }
 
-      // 3. Handle removed originals
-      if (removedOriginals.length > 0) {
-        setSaveStage('removing_media');
-        showToast('Note: removed original photos may still appear until backend deletion is supported.', 'info');
-      }
+      // 3. Patch listing metadata (text fields + cover image)
+      setSaveStage('updating_listing');
+      const coverUri = mediaItems[0]?.publicUrl || mediaItems[0]?.uri;
+      await patchListingOnApi(itemId, {
+        title: title.trim(),
+        description: description.trim(),
+        priceGbp: Number(sanitizeDecimalInput(price)),
+        category: category.toLowerCase(),
+        brand: brand || undefined,
+        size: size || undefined,
+        condition: condition || undefined,
+        originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
+        shippingMethod: shippingMethod || undefined,
+        shippingPayer: shippingPayer || undefined,
+        imageUrl: coverUri,
+      });
 
       setSaveStage('completed');
       showToast('Listing updated successfully.', 'success');
@@ -426,13 +398,12 @@ export default function EditListingScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [validate, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, pendingRemovalIds, originalMediaItems, showToast, navigation]);
+  }, [validate, isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, showToast, navigation]);
 
   /* ── preview handler ── */
   const handlePreview = useCallback(() => {
     haptics.press();
-    const activeItems = mediaItems.filter((m) => !pendingRemovalIds.has(m.id));
-    const photos = activeItems.map((m) => m.publicUrl || m.uri);
+    const photos = mediaItems.map((m) => m.publicUrl || m.uri);
     navigation.navigate('ListingPreview', {
       preview: {
         title: title.trim(),
@@ -444,12 +415,11 @@ export default function EditListingScreen() {
         size: size || undefined,
         description: description.trim() || undefined,
         photos,
-        tags,
         shippingMethod: shippingMethod || undefined,
         shippingPayer: shippingPayer || undefined,
       },
     });
-  }, [title, price, originalPrice, brand, condition, category, size, description, tags, shippingMethod, shippingPayer, mediaItems, pendingRemovalIds, navigation]);
+  }, [title, price, originalPrice, brand, condition, category, size, description, shippingMethod, shippingPayer, mediaItems, navigation]);
 
   /* ── discard confirmation ── */
   const handleCancel = useCallback(() => {
@@ -526,7 +496,7 @@ export default function EditListingScreen() {
     }
   }, [listing]);
 
-  const isEditingRestricted = listing?.status === 'sold' || listing?.status === 'deleted';
+  const isEditingRestricted = listing?.status === 'sold' || listing?.status === 'deleted' || !isOwner;
 
   /* ── loading state ── */
   if (isLoading) {
@@ -589,7 +559,6 @@ export default function EditListingScreen() {
                       publicUrl: uri,
                     }));
                     setMediaItems(items);
-                    setOriginalMediaItems(items);
                   } else {
                     setLoadError(true);
                   }
@@ -636,20 +605,36 @@ export default function EditListingScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* ── 2. LISTING MEDIA STUDIO ── */}
-          <ListingMediaStudio
-            items={mediaItems}
-            queueItems={queueState.items}
-            maxCount={10}
-            errorText={errorMsg && !isSaving ? undefined : undefined}
-            onPickFromLibrary={handlePickFromLibrary}
-            onPickFromCamera={handlePickFromCamera}
-            onReorder={handleReorder}
-            onRemoveItem={handleRemoveItem}
-            onRetryItem={handleRetryItem}
-            onUndoRemoveItem={handleUndoRemoveItem}
-            isPendingRemoval={isPendingRemoval}
-            removeLabel="Remove"
-          />
+          {isOwner ? (
+            <ListingMediaStudio
+              items={mediaItems}
+              queueItems={queueState.items}
+              maxCount={10}
+              onPickFromLibrary={handlePickFromLibrary}
+              onPickFromCamera={handlePickFromCamera}
+              onReorder={handleReorder}
+              onRemoveItem={handleRemoveItem}
+              onRetryItem={handleRetryItem}
+              canRemoveItem={canRemoveItem}
+              reorderEnabled={false}
+              lockedNote="Existing listing photos cannot be removed or reordered yet."
+              removeLabel="Remove"
+            />
+          ) : (
+            <ListingMediaStudio
+              items={mediaItems}
+              queueItems={queueState.items}
+              maxCount={10}
+              onReorder={handleReorder}
+              onRemoveItem={handleRemoveItem}
+              onRetryItem={handleRetryItem}
+              onPickFromLibrary={handlePickFromLibrary}
+              onPickFromCamera={handlePickFromCamera}
+              reorderEnabled={false}
+              canRemoveItem={() => false}
+              lockedNote="You do not have permission to edit this listing."
+            />
+          )}
 
           {/* ── 3. LISTING STATUS/CONTEXT ── */}
           {listingStatusLabel && (
@@ -789,7 +774,7 @@ export default function EditListingScreen() {
             </View>
           </View>
 
-          {/* ── 6. DESCRIPTION AND TAGS ── */}
+          {/* ── 6. DESCRIPTION ── */}
           <View style={styles.sectionGroup}>
             <Text style={styles.sectionHeading}>Description</Text>
             <View style={styles.fieldGroup}>
@@ -805,48 +790,6 @@ export default function EditListingScreen() {
                 editable={!isEditingRestricted}
               />
               <Text style={styles.charCount}>{description.trim().length} characters</Text>
-              <View style={styles.hairline} />
-            </View>
-
-            <Text style={styles.fieldLabel}>Tags</Text>
-            {tags.length > 0 && (
-              <View style={styles.tagsRow}>
-                {tags.map((tag) => (
-                  <View key={tag} style={styles.tagChip}>
-                    <Text style={styles.tagChipText}>{tag}</Text>
-                    <Pressable
-                      onPress={() => removeTag(tag)}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove tag ${tag}`}
-                    >
-                      <Ionicons name="close" size={12} color={Colors.textMuted} />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            )}
-            <View style={styles.tagInputRow}>
-              <TextInput
-                style={styles.tagInput}
-                value={tagInput}
-                onChangeText={setTagInput}
-                placeholder="Add tag…"
-                placeholderTextColor={Colors.textMuted}
-                returnKeyType="done"
-                onSubmitEditing={handleTagSubmit}
-              />
-              {tagInput.trim() && (
-                <Pressable
-                  style={styles.tagAddBtn}
-                  onPress={handleTagSubmit}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add tag"
-                >
-                  <Ionicons name="add" size={18} color={Colors.brand} />
-                </Pressable>
-              )}
             </View>
           </View>
 
@@ -899,15 +842,17 @@ export default function EditListingScreen() {
       </KeyboardAvoidingView>
 
       {/* ── 9. STICKY PREVIEW/SAVE FOOTER ── */}
-      <EditListingFooter
-        isSaving={isSaving}
-        saveDisabled={saveDisabled}
-        saveStage={saveStage}
-        errorMsg={errorMsg || null}
-        onPreview={handlePreview}
-        onSave={handleSave}
-        bottomInset={insets.bottom}
-      />
+      {isOwner && (
+        <EditListingFooter
+          isSaving={isSaving}
+          saveDisabled={saveDisabled}
+          saveStage={saveStage}
+          errorMsg={errorMsg || null}
+          onPreview={handlePreview}
+          onSave={handleSave}
+          bottomInset={insets.bottom}
+        />
+      )}
 
       <BottomSheetPicker
         visible={pickerMode !== null}
@@ -1123,51 +1068,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     textAlign: 'right',
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
-  },
-  tagChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  tagChipText: {
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-  },
-  tagInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  tagInput: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  tagAddBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   inlineErrorRow: {
     flexDirection: 'row',

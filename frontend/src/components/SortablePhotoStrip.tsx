@@ -33,12 +33,14 @@ interface Props {
   renderItem?: (index: number) => React.ReactNode;
   /** Whether to show the trailing add button — default true */
   showAddButton?: boolean;
+  /** Whether drag reorder is enabled — default true */
+  reorderEnabled?: boolean;
 }
 
 // Helper to get object values sorted by key (not needed strictly if we map properly)
 // We will just manage an array of IDs sorted.
 
-export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, renderItem, showAddButton = true }: Props) {
+export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, renderItem, showAddButton = true, reorderEnabled = true }: Props) {
   const ids = itemIds ?? photos;
   return (
     <View style={styles.container}>
@@ -59,6 +61,7 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, ren
               itemIds={ids}
               onReorder={onReorder}
               renderItem={renderItem}
+              reorderEnabled={reorderEnabled}
             />
           ))}
           {/* Add more button */}
@@ -78,7 +81,9 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, ren
           )}
         </View>
       </Reanimated.ScrollView>
-      <Text style={styles.hintText}>Drag to reorder. First media item is the cover.</Text>
+      {reorderEnabled && (
+        <Text style={styles.hintText}>Drag to reorder. First media item is the cover.</Text>
+      )}
     </View>
   );
 }
@@ -92,9 +97,10 @@ interface ItemProps {
   itemIds?: string[];
   onReorder: (newOrder: string[]) => void;
   renderItem?: (index: number) => React.ReactNode;
+  reorderEnabled?: boolean;
 }
 
-function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem }: ItemProps) {
+function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem, reorderEnabled = true }: ItemProps) {
   const isVideo = isVideoUri(id);
   const isDragging = useSharedValue(false);
   const position = useSharedValue(index * TOTAL_SIZE);
@@ -113,6 +119,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
   );
 
   const panGesture = Gesture.Pan()
+    .enabled(reorderEnabled)
     .onStart(() => {
       isDragging.value = true;
       zIndex.value = 100;
@@ -150,10 +157,10 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     };
   });
 
-  const accessibilityActions = [
+  const accessibilityActions = reorderEnabled ? [
     { name: 'moveEarlier', label: 'Move earlier' },
     { name: 'moveLater', label: 'Move later' },
-  ];
+  ] : undefined;
 
   const handleAccessibilityAction = useCallback((event: { nativeEvent: { actionName: string } }) => {
     const { actionName } = event.nativeEvent;
@@ -174,7 +181,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     <GestureDetector gesture={panGesture}>
       <Reanimated.View
         style={[styles.itemWrap, animatedStyle]}
-        accessibilityRole="adjustable"
+        accessibilityRole={reorderEnabled ? "adjustable" : "image"}
         accessibilityLabel={`Media item ${index + 1} of ${total}${index === 0 ? ', cover' : ''}${isVideo ? ', video' : ''}`}
         accessibilityActions={accessibilityActions}
         onAccessibilityAction={handleAccessibilityAction}

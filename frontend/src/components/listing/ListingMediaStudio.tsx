@@ -33,12 +33,14 @@ interface ListingMediaStudioProps {
   onReorder: (newOrderedIds: string[]) => void;
   onRemoveItem: (itemId: string) => void;
   onRetryItem: (itemId: string) => void;
-  /** Edit-Listing: undo a pending removal for a remote item */
-  onUndoRemoveItem?: (itemId: string) => void;
-  /** Edit-Listing: returns true if the item is marked for removal on save */
-  isPendingRemoval?: (itemId: string) => boolean;
   /** Edit-Listing: label for the remove action (default: 'Remove') */
   removeLabel?: string;
+  /** Edit-Listing: returns true if the item can be removed (default: true for all) */
+  canRemoveItem?: (itemId: string) => boolean;
+  /** Edit-Listing: whether drag reorder is enabled (default: true) */
+  reorderEnabled?: boolean;
+  /** Edit-Listing: optional note shown below the strip when reorder is disabled */
+  lockedNote?: string;
 }
 
 function getItemStatus(
@@ -85,9 +87,10 @@ export function ListingMediaStudio({
   onReorder,
   onRemoveItem,
   onRetryItem,
-  onUndoRemoveItem,
-  isPendingRemoval,
   removeLabel = 'Remove',
+  canRemoveItem,
+  reorderEnabled = true,
+  lockedNote,
 }: ListingMediaStudioProps) {
   if (items.length === 0) {
     return (
@@ -129,12 +132,11 @@ export function ListingMediaStudio({
     );
   }
 
-  const coverItem = items.find((m) => !(isPendingRemoval && isPendingRemoval(m.id))) ?? items[0];
+  const coverItem = items[0];
   const coverDisplayUri = getDisplayUri(coverItem);
   const coverStatus = getItemStatus(coverItem, queueItems);
   const isCoverVideo = isVideoUri(coverDisplayUri);
-  const coverPendingRemoval = isPendingRemoval ? isPendingRemoval(coverItem.id) : false;
-  const activeCount = items.filter((m) => !(isPendingRemoval && isPendingRemoval(m.id))).length;
+  const coverCanRemove = canRemoveItem ? canRemoveItem(coverItem.id) : true;
   const photoUris = items.map(getDisplayUri);
   const itemIds = items.map((m) => m.id);
 
@@ -145,10 +147,10 @@ export function ListingMediaStudio({
     const displayUri = getDisplayUri(item);
     const status = getItemStatus(item, queueItems);
     const isVideo = isVideoUri(displayUri);
-    const pendingRemoval = isPendingRemoval ? isPendingRemoval(item.id) : false;
+    const canRemove = canRemoveItem ? canRemoveItem(item.id) : true;
 
     return (
-      <View style={[styles.thumbContent, pendingRemoval && styles.thumbPendingRemoval]}>
+      <View style={styles.thumbContent}>
         {isVideo ? (
           <View style={styles.thumbVideoTile}>
             <Ionicons name="videocam" size={22} color={Colors.textMuted} />
@@ -163,33 +165,14 @@ export function ListingMediaStudio({
           </View>
         )}
 
-        {index === 0 && !pendingRemoval && (
+        {item.id === coverItem.id && (
           <View style={styles.thumbCoverBadge}>
             <Text style={styles.thumbCoverText}>COVER</Text>
           </View>
         )}
 
-        {/* Pending removal overlay with Undo */}
-        {pendingRemoval && (
-          <View style={styles.thumbPendingRemovalOverlay}>
-            <Text style={styles.thumbPendingRemovalText}>Removed</Text>
-            {onUndoRemoveItem && (
-              <Pressable
-                style={styles.thumbUndoBtn}
-                onPress={() => onUndoRemoveItem(item.id)}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                accessibilityRole="button"
-                accessibilityLabel={`Undo removal for ${isVideo ? 'video' : 'photo'} ${index + 1}`}
-              >
-                <Ionicons name="arrow-undo" size={12} color="#fff" />
-                <Text style={styles.thumbUndoText}>Undo</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
         {/* Per-item status overlays */}
-        {!pendingRemoval && (status === 'pending' || status === 'preparing' || status === 'uploading') && (
+        {(status === 'pending' || status === 'preparing' || status === 'uploading') && (
           <View style={styles.thumbStatusOverlay}>
             <ActivityIndicator size="small" color="#fff" />
             <View style={styles.thumbStatusLabel}>
@@ -198,13 +181,13 @@ export function ListingMediaStudio({
           </View>
         )}
 
-        {!pendingRemoval && status === 'uploaded' && (
+        {status === 'uploaded' && (
           <View style={styles.thumbUploadedBadge}>
             <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
           </View>
         )}
 
-        {!pendingRemoval && status === 'failed' && (
+        {status === 'failed' && (
           <View style={styles.thumbFailedOverlay}>
             <Ionicons name="warning" size={14} color="#fff" />
             <Pressable
@@ -220,15 +203,15 @@ export function ListingMediaStudio({
           </View>
         )}
 
-        {!pendingRemoval && status === 'cancelled' && (
+        {status === 'cancelled' && (
           <View style={styles.thumbCancelledOverlay}>
             <Ionicons name="ban" size={14} color="#fff" />
             <Text style={styles.thumbCancelledText}>Cancelled</Text>
           </View>
         )}
 
-        {/* Remove button — 44x44 effective target via hitSlop */}
-        {!pendingRemoval && (
+        {/* Remove button — only for removable items */}
+        {canRemove && (
           <Pressable
             style={styles.thumbRemoveBtn}
             onPress={() => onRemoveItem(item.id)}
@@ -265,11 +248,9 @@ export function ListingMediaStudio({
         )}
 
         {/* Cover badge */}
-        {!coverPendingRemoval && (
-          <View style={styles.coverBadge}>
-            <Text style={styles.coverBadgeText}>COVER</Text>
-          </View>
-        )}
+        <View style={styles.coverBadge}>
+          <Text style={styles.coverBadgeText}>COVER</Text>
+        </View>
 
         {/* Video indicator */}
         {isCoverVideo && (
@@ -281,11 +262,11 @@ export function ListingMediaStudio({
 
         {/* Media count */}
         <View style={styles.countBadge}>
-          <Text style={styles.countText}>{activeCount} / {maxCount}</Text>
+          <Text style={styles.countText}>{items.length} / {maxCount}</Text>
         </View>
 
-        {/* Remove cover — 44x44 effective target via hitSlop */}
-        {!coverPendingRemoval && (
+        {/* Remove cover — only for removable items */}
+        {coverCanRemove && (
           <Pressable
             style={styles.coverRemoveBtn}
             onPress={() => onRemoveItem(coverItem.id)}
@@ -295,26 +276,6 @@ export function ListingMediaStudio({
           >
             <Ionicons name="close-circle" size={22} color="#fff" />
           </Pressable>
-        )}
-
-        {/* Cover pending removal overlay with Undo */}
-        {coverPendingRemoval && (
-          <View style={styles.coverPendingRemovalOverlay}>
-            <Ionicons name="trash-outline" size={16} color="#fff" />
-            <Text style={styles.coverPendingRemovalText}>Removed on save</Text>
-            {onUndoRemoveItem && (
-              <Pressable
-                style={styles.coverUndoBtn}
-                onPress={() => onUndoRemoveItem(coverItem.id)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel={`Undo removal for cover ${isCoverVideo ? 'video' : 'photo'}`}
-              >
-                <Ionicons name="arrow-undo" size={14} color="#fff" />
-                <Text style={styles.coverUndoText}>Undo</Text>
-              </Pressable>
-            )}
-          </View>
         )}
 
         {/* Cover upload status overlay */}
@@ -361,7 +322,13 @@ export function ListingMediaStudio({
         onReorder={onReorder}
         renderItem={renderThumbItem}
         showAddButton={false}
+        reorderEnabled={reorderEnabled}
       />
+
+      {/* Locked note for immutable remote media */}
+      {lockedNote && (
+        <Text style={styles.lockedNote}>{lockedNote}</Text>
+      )}
 
       {/* ── Add more + Camera actions ── */}
       <View style={styles.studioActions}>
@@ -757,68 +724,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: 4,
   },
-  thumbPendingRemoval: {
-    opacity: 0.4,
-  },
-  thumbPendingRemovalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  thumbPendingRemovalText: {
-    fontSize: 9,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
-  },
-  thumbUndoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  thumbUndoText: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
-    color: '#fff',
-  },
-  coverPendingRemovalOverlay: {
-    position: 'absolute',
-    bottom: Space.sm,
-    right: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(220,38,38,0.85)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  coverPendingRemovalText: {
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
-  },
-  coverUndoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  coverUndoText: {
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
-    color: '#fff',
+  lockedNote: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    paddingHorizontal: Space.md,
+    paddingTop: 6,
+    textAlign: 'center',
   },
 });
