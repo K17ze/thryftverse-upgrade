@@ -1,4 +1,3 @@
-import { Typography } from '../theme/designTokens';
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -7,81 +6,66 @@ import {
   ScrollView,
   StatusBar,
   Dimensions,
+  Pressable,
 } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
-import { CachedImage } from '../components/CachedImage';
-import { AnimatedPressable } from '../components/AnimatedPressable';
+import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedScrollHandler,
   useSharedValue,
   useAnimatedStyle,
-  interpolate,
-  Extrapolation,
   withSpring,
   withTiming,
   withSequence,
   FadeInDown,
 } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
-
+import { Typography, Space, Radius } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
-
 import { Listing } from '../data/mockData';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
-import { ImageViewer } from '../components/ImageViewer';
-import { AnimatedHeart } from '../components/AnimatedHeart';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { PressPresets } from '../hooks/usePremiumPressFeedback';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { isVideoUri } from '../utils/media';
 import { Motion } from '../constants/motion';
-// Phase 3: Removed SyncStatusPill - no status indicators on detail screen
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
-import { getBackendSyncStatus } from '../utils/syncStatus';
 import { AppButton } from '../components/ui/AppButton';
-import { ActivityBadge, ActivityBadgeRow } from '../components/ui/ActivityBadge';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { SharedTransitionView } from '../components/SharedTransitionView';
-import { Space, Radius } from '../theme/designTokens';
-import { T } from '../components/ui/Text';
+import { CachedImage } from '../components/CachedImage';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { FlagshipEmptyGraphic } from '../components/flagship';
+import { ListingMediaHero } from '../components/listing/ListingMediaHero';
+import { ListingIdentityBlock } from '../components/listing/ListingIdentityBlock';
+import { ListingSellerRow } from '../components/listing/ListingSellerRow';
 
 const { width, height } = Dimensions.get('window');
-const PANEL_BG = Colors.surfaceAlt;
-const PANEL_ALT_BG = Colors.surfaceAlt;
-const PANEL_BORDER = Colors.border;
-const TOP_SCRIM_BG = 'rgba(0,0,0,0.2)';
 
 export default function ItemDetailScreen() {
   const { isDark } = useAppTheme();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  // Collection modal state
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
-
-  const isFav = useStore(state => state.isWishlisted(route.params?.itemId));
-  const toggleFav = useStore(state => state.toggleWishlist);
+  const isFav = useStore((state) => state.isWishlisted(route.params?.itemId));
+  const toggleFav = useStore((state) => state.toggleWishlist);
   const currentUser = useStore((state) => state.currentUser);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
 
   const { itemId } = route.params || {};
-  const item = listings.find(l => l.id === itemId);
+  const item = listings.find((l) => l.id === itemId);
   const resolvedSeller = item?.seller ?? undefined;
-  const sellerItems = item ? listings.filter(l => l.sellerId === item.sellerId && l.id !== item.id) : [];
-  const otherListings = listings.filter(l => l.id !== itemId).slice(0, 12);
+  const sellerItems = item ? listings.filter((l) => l.sellerId === item.sellerId && l.id !== item.id) : [];
 
   const [relatedListings, setRelatedListings] = React.useState<Listing[]>([]);
   const [relatedLoading, setRelatedLoading] = React.useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   React.useEffect(() => {
     if (!itemId) return;
@@ -93,9 +77,13 @@ export default function ItemDetailScreen() {
           if (!cancelled && res.ok && res.items) setRelatedListings(res.items);
         })
         .catch(() => {})
-        .finally(() => { if (!cancelled) setRelatedLoading(false); })
+        .finally(() => {
+          if (!cancelled) setRelatedLoading(false);
+        })
     );
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [itemId]);
 
   const { formatFromFiat } = useFormattedPrice();
@@ -120,21 +108,9 @@ export default function ItemDetailScreen() {
       </View>
     );
   }
+
   const { show } = useToast();
   const haptic = useHaptic();
-
-  const detailStatus = React.useMemo(
-    () =>
-      getBackendSyncStatus({
-        isSyncing,
-        source,
-        hasError: Boolean(lastError),
-        labels: {
-          live: 'Synced listing',
-        },
-      }),
-    [isSyncing, lastError, source],
-  );
 
   const handleToggleFav = () => {
     toggleFav(item.id);
@@ -152,17 +128,6 @@ export default function ItemDetailScreen() {
     scrollY.value = event.contentOffset.y;
   });
 
-  const heroStyle = useAnimatedStyle(() => {
-    const overscroll = Math.min(scrollY.value, 0);
-    const pullDownTranslate = interpolate(overscroll, [-120, 0], [-56, 0], Extrapolation.CLAMP);
-    const parallaxTranslate = interpolate(scrollY.value, [0, 360], [0, 90], Extrapolation.CLAMP);
-    const scale = interpolate(overscroll, [-120, 0], [1.16, 1], Extrapolation.CLAMP);
-    return {
-      transform: [{ translateY: pullDownTranslate + parallaxTranslate }, { scale }],
-    };
-  });
-
-  // Big heart for double tap animation
   const bigHeartScale = useSharedValue(0);
   const bigHeartOpacity = useSharedValue(0);
 
@@ -172,7 +137,6 @@ export default function ItemDetailScreen() {
       toggleFav(item.id);
       show('Added to wishlist ♥', 'success');
     }
-
     bigHeartOpacity.value = 1;
     bigHeartScale.value = withSequence(
       withSpring(1.5, Motion.spring.flagshipPop),
@@ -180,11 +144,6 @@ export default function ItemDetailScreen() {
       withTiming(0, { duration: 200 })
     );
   };
-
-  const bigHeartStyle = useAnimatedStyle(() => ({
-    opacity: bigHeartOpacity.value,
-    transform: [{ scale: bigHeartScale.value }],
-  }));
 
   const onShare = useCallback(() => {
     handleShare();
@@ -194,261 +153,214 @@ export default function ItemDetailScreen() {
     handleToggleFav();
   }, [handleToggleFav]);
 
+  const isOwner = currentUser?.id && item.sellerId === currentUser.id;
+  const hasDiscount = item.originalPrice !== undefined && item.originalPrice > item.price;
+  const formattedPrice = formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' });
+  const formattedOriginal = hasDiscount
+    ? formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })
+    : null;
+
+  const specs: { label: string; value: string }[] = [];
+  if (item.size) specs.push({ label: 'Size', value: item.size });
+  if (item.condition) specs.push({ label: 'Condition', value: item.condition });
+  if (item.category) specs.push({ label: 'Category', value: item.category });
+  if (item.brand) specs.push({ label: 'Brand', value: item.brand });
+
+  const descriptionIsLong = item.description && item.description.length > 180;
+  const displayDesc = descExpanded || !descriptionIsLong
+    ? item.description
+    : item.description.slice(0, 180) + '…';
+
   return (
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
 
+      {/* ── 1. EDGE-TO-EDGE MEDIA HERO ── */}
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 126 }}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 100 }}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
+        <ListingMediaHero
+          images={item.images}
+          itemId={item.id}
+          isFav={isFav}
+          isSaved={isItemSavedAnywhere(item.id)}
+          isSold={!!item.isSold}
+          topInset={insets.top}
+          onBack={() => navigation.goBack()}
+          onShare={() => { haptic.light(); handleShare(); }}
+          onSave={() => { haptic.medium(); setCollectionModalVisible(true); }}
+          onToggleFav={handleToggleFav}
+          onDoubleTap={handleDoubleTap}
+          bigHeartOpacity={bigHeartOpacity}
+          bigHeartScale={bigHeartScale}
+          scrollY={scrollY}
+        />
 
-        {/* ── Image Carousel ── */}
-        <Reanimated.View style={[styles.heroContainer, heroStyle]}>
-          <ImageViewer images={item.images} height={height * 0.65} onDoubleTap={handleDoubleTap} itemId={item.id} />
+        <Reanimated.View entering={FadeInDown.duration(350).delay(80)}>
+          {/* ── 2. PRODUCT IDENTITY AND PRICE ── */}
+          <ListingIdentityBlock
+            brand={item.brand}
+            title={item.title}
+            price={formattedPrice}
+            originalPrice={formattedOriginal}
+            hasDiscount={hasDiscount}
+          />
 
-          <View style={styles.heroTopScrim} />
-
-          {/* Media count badge */}
-          {item.images.length > 1 && (
-            <View style={styles.mediaCountBadge}>
-              <Text style={styles.mediaCountText}>{item.images.length} media</Text>
-            </View>
-          )}
-
-          {/* Video indicator */}
-          {item.images.length > 0 && isVideoUri(item.images[0]) && (
-            <View style={styles.videoIndicator}>
-              <Ionicons name="play-circle" size={20} color="#fff" />
-              <Text style={styles.videoIndicatorText}>Video</Text>
-            </View>
-          )}
-
-          <Reanimated.View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 5 }, bigHeartStyle]}>
-            <Ionicons name="heart" size={100} color="#fff" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 }} />
-          </Reanimated.View>
-
-          {item.isSold && (
-            <View style={styles.soldOverlay}>
-              <Text style={styles.soldText}>SOLD</Text>
-            </View>
-          )}
-
-          <View style={[styles.floatingHeader, { paddingTop: Math.max(insets.top, 20) }]}>
-            <AnimatedPressable style={styles.blurBtn} onPress={() => navigation.goBack()} {...PressPresets.iconButton} accessibilityLabel="Go back">
-              <Ionicons name="arrow-back" size={24} color="#fff" />
-            </AnimatedPressable>
-            <View style={styles.headerRight}>
-              <AnimatedPressable style={styles.blurBtn} onPress={() => { haptic.light(); handleShare(); }} {...PressPresets.iconButton} accessibilityLabel="Share this listing">
-                <Ionicons name="share-outline" size={24} color="#fff" />
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={styles.blurBtn}
-                onPress={() => { haptic.medium(); setCollectionModalVisible(true); }}
-                {...PressPresets.iconButton}
-                accessibilityLabel={isItemSavedAnywhere(item?.id) ? 'Saved to collection' : 'Save to collection'}
-                accessibilityHint="Opens collection picker"
-              >
-                <Ionicons
-                  name={isItemSavedAnywhere(item?.id) ? 'bookmark' : 'bookmark-outline'}
-                  size={24}
-                  color={isItemSavedAnywhere(item?.id) ? Colors.brand : '#fff'}
-                />
-              </AnimatedPressable>
-              <View style={styles.blurBtn}>
-                <AnimatedHeart
-                  isActive={isFav}
-                  onToggle={handleToggleFav}
-                  size={24}
-                  activeColor={Colors.danger}
-                  inactiveColor="#fff"
-                />
-              </View>
-            </View>
-          </View>
-        </Reanimated.View>
-
-        <Reanimated.View entering={FadeInDown.duration(350).delay(80)} style={styles.detailsContainer}>
-
-          {/* ── Title ── */}
-          <Text style={styles.title}>{item.title}</Text>
-
-          {/* ── Price ── */}
-          <View style={styles.priceRow}>
-            <Text style={styles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
-            {item.priceWithProtection > item.price && (
-              <Text style={styles.protectionText}>
-                + {formatFromFiat(item.priceWithProtection - item.price, 'GBP', { displayMode: 'fiat' })} protection
-              </Text>
-            )}
-          </View>
-
-          {/* ── Trust surface ── */}
-          <View style={styles.trustBadge}>
-            <Ionicons name="shield-checkmark" size={16} color={Colors.success} />
-            <Text style={styles.trustText}>Thryft Buyer Protection</Text>
-            <Text style={styles.trustSub}>
+          {/* ── 3. ONE-LINE PURCHASE CONTEXT ── */}
+          <View style={styles.purchaseContextRow}>
+            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.purchaseContextText}>
               Payment and delivery options are confirmed at checkout.
             </Text>
           </View>
 
-          {/* ── Product Attributes ── */}
-          <View style={styles.attributesRow}>
-            {item.brand ? (
-              <View style={styles.attributeChip}>
-                <Ionicons name="pricetag-outline" size={12} color={Colors.textMuted} />
-                <Text style={styles.attributeValue} numberOfLines={1}>{item.brand}</Text>
-              </View>
-            ) : null}
-            {item.size ? (
-              <View style={styles.attributeChip}>
-                <Ionicons name="resize-outline" size={12} color={Colors.textMuted} />
-                <Text style={styles.attributeValue}>{item.size}</Text>
-              </View>
-            ) : null}
-            {item.condition ? (
-              <View style={styles.attributeChip}>
-                <Ionicons name="checkbox-outline" size={12} color={Colors.textMuted} />
-                <Text style={styles.attributeValue}>{item.condition}</Text>
-              </View>
-            ) : null}
-          </View>
+          {/* ── 4. ESSENTIAL SPECIFICATIONS ── */}
+          {specs.length > 0 && (
+            <View style={styles.specsSection}>
+              {specs.map((spec, i) => (
+                <View
+                  key={spec.label}
+                  style={[styles.specRow, i < specs.length - 1 && styles.specRowBorder]}
+                >
+                  <Text style={styles.specLabel}>{spec.label}</Text>
+                  <Text style={styles.specValue}>{spec.value}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
-          {/* ── Description ── */}
-          <View style={styles.descriptionBox}>
-            <Text style={styles.description}>{item.description}</Text>
-            {item.createdAt ? (
-              <Text style={styles.timePosted}>Posted {item.createdAt}</Text>
-            ) : null}
-          </View>
-
-          {/* ── Social Proof — honest counts only ── */}
-          {item.likes > 0 ? (
-            <ActivityBadgeRow
-              badges={[
-                { variant: 'closeted', count: item.likes, label: 'likes' },
-              ]}
-              style={{ marginBottom: Space.md }}
-            />
+          {/* ── 5. DESCRIPTION AND CONDITION ── */}
+          {item.description ? (
+            <View style={styles.descriptionSection}>
+              <Text style={styles.sectionHeading}>Description</Text>
+              <Text style={styles.descriptionText}>
+                {displayDesc}
+              </Text>
+              {descriptionIsLong && (
+                <Pressable onPress={() => setDescExpanded((v) => !v)} hitSlop={8}>
+                  <Text style={styles.showMoreText}>
+                    {descExpanded ? 'Show less' : 'Show more'}
+                  </Text>
+                </Pressable>
+              )}
+              {item.createdAt ? (
+                <Text style={styles.postedDate}>Posted {item.createdAt}</Text>
+              ) : null}
+            </View>
           ) : null}
 
-          {/* Phase 3: Removed sync status card - cleaner detail view */}
+          {/* Sync retry */}
           {lastError ? (
             <SyncRetryBanner
               message="Pull latest listing changes now."
               onRetry={() => void refreshListings()}
               isRetrying={isSyncing}
               telemetryContext="item_detail_listing_sync"
-              containerStyle={styles.syncRetryBanner}
+              containerStyle={styles.syncRetry}
             />
           ) : null}
 
-          {/* ── Seller Card — honest, only if resolved ── */}
-          {resolvedSeller ? (
-            <View style={styles.sellerCard}>
-              <AnimatedPressable
-                style={styles.sellerIdentityTap}
-                onPress={() => navigation.navigate('UserProfile', { userId: resolvedSeller.id })}
-                activeOpacity={0.86}
-                accessibilityRole="button"
-                accessibilityLabel={`Open @${resolvedSeller.username || 'seller'} profile`}
-              >
-                <CachedImage uri={resolvedSeller.avatar || ''} style={styles.sellerAvatar} containerStyle={{ width: 52, height: 52, borderRadius: 26 }} contentFit="cover" />
-                <View style={styles.sellerInfo}>
-                  <Text style={styles.sellerName}>@{resolvedSeller.username || 'Seller'}</Text>
-                  {(resolvedSeller.rating || resolvedSeller.reviewCount) ? (
-                    <View style={styles.sellerMetaRow}>
-                      <Ionicons name="star" size={12} color={Colors.brand} />
-                      <Text style={styles.sellerStats}>{resolvedSeller.rating} · {resolvedSeller.reviewCount} reviews</Text>
-                    </View>
-                  ) : null}
-                  {resolvedSeller.location ? (
-                    <Text style={styles.sellerLastSeen}>{resolvedSeller.location}</Text>
-                  ) : null}
-                </View>
-              </AnimatedPressable>
+          {/* ── 6. SELLER IDENTITY ROW ── */}
+          <View style={styles.sellerSection}>
+            <ListingSellerRow
+              seller={resolvedSeller}
+              sellerId={item.sellerId}
+              onProfilePress={() => navigation.navigate('UserProfile', { userId: resolvedSeller!.id })}
+              onMessage={() => {
+                if (!resolvedSeller?.id) return;
+                navigation.navigate('NewMessage', {
+                  preselectedUserId: resolvedSeller.id,
+                  preselectedDisplayName: resolvedSeller.username,
+                });
+              }}
+            />
+          </View>
 
-              <AppButton
-                title="Message"
-                style={styles.messageSellerBtn}
-                titleStyle={styles.messageSellerBtnText}
-                variant="secondary"
-                size="sm"
-                onPress={() => {
-                  if (!resolvedSeller?.id) return;
-                  navigation.navigate('NewMessage', {
-                    preselectedUserId: resolvedSeller.id,
-                    preselectedDisplayName: resolvedSeller.username,
-                  });
-                }}
-              />
+          {/* ── 7. DELIVERY AND PAYMENT ROWS ── */}
+          <View style={styles.deliverySection}>
+            <View style={styles.deliveryRow}>
+              <Text style={styles.deliveryLabel}>Delivery</Text>
+              <Text style={styles.deliveryValue}>Confirmed at checkout</Text>
             </View>
-          ) : item.sellerId ? (
-            <View style={styles.sellerCard}>
-              <View style={styles.sellerIdentityTap}>
-                <View style={[styles.sellerAvatar, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons name="person" size={20} color={Colors.textMuted} />
-                </View>
-                <View style={styles.sellerInfo}>
-                  <Text style={styles.sellerName}>Seller</Text>
-                  <Text style={styles.sellerLastSeen}>Seller information unavailable</Text>
-                </View>
-              </View>
+            <View style={[styles.deliveryRow, styles.deliveryRowLast]}>
+              <Text style={styles.deliveryLabel}>Payment</Text>
+              <Text style={styles.deliveryValue}>Through ThryftVerse checkout</Text>
             </View>
-          ) : null}
+          </View>
 
-          {/* ── More from this seller ── */}
+          {/* ── 8. MORE FROM SELLER ── */}
           {sellerItems.length > 0 && resolvedSeller && (
-            <View style={styles.sellerItemsSection}>
+            <View style={styles.railSection}>
               <DiscoverySectionHeader
                 kicker="From the closet"
                 title={`More from @${resolvedSeller.username || 'Seller'}`}
                 actionLabel="See all"
                 onAction={() => navigation.navigate('UserProfile', { userId: resolvedSeller.id })}
               />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
-                {sellerItems.map(sItem => (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent}>
+                {sellerItems.map((sItem) => (
                   <AnimatedPressable
                     key={sItem.id}
-                    style={styles.sellerItemCard}
+                    style={styles.railCard}
                     onPress={() => navigation.push('ItemDetail', { itemId: sItem.id })}
                   >
                     <SharedTransitionView
-                      style={styles.sellerItemMediaWrap}
+                      style={styles.railImageWrap}
                       sharedTransitionTag={`image-${sItem.id}-0`}
                     >
-                      <CachedImage uri={sItem.images?.[0] ?? ''} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 14 }} contentFit="cover" />
+                      <CachedImage
+                        uri={sItem.images?.[0] ?? ''}
+                        style={styles.railImage}
+                        containerStyle={{ width: '100%', height: '100%', borderRadius: 8 }}
+                        contentFit="cover"
+                      />
                     </SharedTransitionView>
-                    <Text style={styles.sellerItemPrice}>{formatFromFiat(sItem.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                    {sItem.brand ? (
+                      <Text style={styles.railBrand} numberOfLines={1}>{sItem.brand}</Text>
+                    ) : null}
+                    <Text style={styles.railPrice}>
+                      {formatFromFiat(sItem.price, 'GBP', { displayMode: 'fiat' })}
+                    </Text>
                   </AnimatedPressable>
                 ))}
               </ScrollView>
             </View>
           )}
 
-          {/* ── Related listings ── */}
+          {/* ── 9. RELATED ITEMS ── */}
           {relatedListings.length > 0 && (
-            <View style={styles.sellerItemsSection}>
+            <View style={styles.railSection}>
               <DiscoverySectionHeader
                 kicker="You might like"
                 title="Related items"
               />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
-                {relatedListings.map(rItem => (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent}>
+                {relatedListings.map((rItem) => (
                   <AnimatedPressable
                     key={rItem.id}
-                    style={styles.sellerItemCard}
+                    style={styles.railCard}
                     onPress={() => navigation.push('ItemDetail', { itemId: rItem.id })}
                   >
                     <SharedTransitionView
-                      style={styles.sellerItemMediaWrap}
+                      style={styles.railImageWrap}
                       sharedTransitionTag={`image-${rItem.id}-0`}
                     >
-                      <CachedImage uri={rItem.images?.[0] ?? ''} style={styles.sellerItemImg} containerStyle={{ width: '100%', height: '100%', borderRadius: 14 }} contentFit="cover" />
+                      <CachedImage
+                        uri={rItem.images?.[0] ?? ''}
+                        style={styles.railImage}
+                        containerStyle={{ width: '100%', height: '100%', borderRadius: 8 }}
+                        contentFit="cover"
+                      />
                     </SharedTransitionView>
-                    <Text style={styles.sellerItemPrice}>{formatFromFiat(rItem.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                    {rItem.brand ? (
+                      <Text style={styles.railBrand} numberOfLines={1}>{rItem.brand}</Text>
+                    ) : null}
+                    <Text style={styles.railPrice}>
+                      {formatFromFiat(rItem.price, 'GBP', { displayMode: 'fiat' })}
+                    </Text>
                   </AnimatedPressable>
                 ))}
               </ScrollView>
@@ -457,20 +369,12 @@ export default function ItemDetailScreen() {
         </Reanimated.View>
       </Reanimated.ScrollView>
 
-      {/* ── Floating Action Bar ── */}
-      <Reanimated.View style={[styles.floatingBuyBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Colors.surfaceAlt }]} />
+      {/* ── 10. PERSISTENT COMMERCE ACTION BAR ── */}
+      <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {item.isSold ? (
-          <AppButton
-            style={[styles.actionBtn, { opacity: 0.6 }]}
-            variant="secondary"
-            size="lg"
-            title="Sold"
-            disabled
-            accessibilityLabel={`${item.title} is sold`}
-          />
-        ) : currentUser?.id && item.sellerId === currentUser.id ? (
-          <>
+          <Text style={styles.soldStatus}>This item has been sold</Text>
+        ) : isOwner ? (
+          <View style={styles.actionRow}>
             <AppButton
               style={styles.actionBtn}
               variant="secondary"
@@ -489,18 +393,9 @@ export default function ItemDetailScreen() {
               onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
               accessibilityLabel={`Manage ${item.title}`}
             />
-          </>
+          </View>
         ) : (
-          <>
-            <AppButton
-              style={styles.actionBtn}
-              variant="primary"
-              size="lg"
-              title="Buy now"
-              icon={<Ionicons name="flash-outline" size={15} color={Colors.background} />}
-              onPress={() => navigation.navigate('Checkout', { itemId: item.id })}
-              accessibilityLabel={`Buy ${item.title} for ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
-            />
+          <View style={styles.actionRow}>
             <AppButton
               style={styles.actionBtn}
               variant="secondary"
@@ -510,22 +405,31 @@ export default function ItemDetailScreen() {
               onPress={() => navigation.navigate('MakeOffer', { itemId: item.id, price: item.price, title: item.title })}
               accessibilityLabel={`Make an offer on ${item.title}`}
             />
-          </>
+            <AppButton
+              style={styles.actionBtn}
+              variant="primary"
+              size="lg"
+              title="Buy now"
+              icon={<Ionicons name="flash-outline" size={15} color={Colors.background} />}
+              onPress={() => navigation.navigate('Checkout', { itemId: item.id })}
+              accessibilityLabel={`Buy ${item.title} for ${formattedPrice}`}
+            />
+          </View>
         )}
-      </Reanimated.View>
+      </View>
 
       <SaveToCollectionModal
         visible={collectionModalVisible}
-        itemId={item?.id}
+        itemId={item.id}
         onClose={() => setCollectionModalVisible(false)}
       />
 
       <ShareSheet
         visible={shareVisible}
         onDismiss={() => setShareVisible(false)}
-        url={`https://thryftverse.com/item/${item?.id}`}
-        title={item?.title ?? 'Check out this listing'}
-        imageUri={item?.images?.[0]}
+        url={`https://thryftverse.com/item/${item.id}`}
+        title={item.title}
+        imageUri={item.images?.[0]}
       />
     </View>
   );
@@ -533,199 +437,184 @@ export default function ItemDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  heroContainer: {
-    width: width,
-    height: height * 0.62,
-    position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
-    overflow: 'hidden',
-  },
-  heroTopScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 120, backgroundColor: 'rgba(0,0,0,0.12)' },
-  heroImage: { width: width, height: '100%' },
-  soldOverlay: { position: 'absolute', bottom: 32, left: 20, backgroundColor: Colors.success, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  soldText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold, letterSpacing: 1 },
-  mediaCountBadge: { position: 'absolute', bottom: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.md },
-  mediaCountText: { color: Colors.background, fontSize: 12, fontFamily: Typography.family.medium },
-  videoIndicator: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.md },
-  videoIndicatorText: { color: Colors.background, fontSize: 12, fontFamily: Typography.family.medium },
-  floatingHeader: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, zIndex: 10 },
-  headerRight: { flexDirection: 'row', gap: 12 },
-  blurBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
-  detailsContainer: { paddingHorizontal: 20, paddingTop: 24 },
-  price: { fontSize: 34, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: -0.6, marginBottom: 4 },
-  brand: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, letterSpacing: 0.2, marginBottom: 10 },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 10,
-    marginBottom: 10,
-  },
-  protectionText: { fontSize: 13, color: Colors.textMuted, fontFamily: Typography.family.medium },
-  trustBadge: {
+
+  /* ── purchase context ── */
+  purchaseContextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 6,
-    marginBottom: Space.md,
-    paddingVertical: 4,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  trustText: {
+  purchaseContextText: {
+    flex: 1,
     fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: Colors.success,
-  },
-  trustSub: {
-    fontSize: 12,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    width: '100%',
-    marginTop: 2,
-    marginLeft: 22,
   },
-  title: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 8, lineHeight: 32 },
-  sizeCondition: { fontSize: 15, fontFamily: Typography.family.medium, color: Colors.textSecondary },
-  syncStatusCard: {
-    marginTop: 14,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: PANEL_ALT_BG,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm - Space.xs,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+
+  /* ── specifications ── */
+  specsSection: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
   },
-  syncStatusTopRow: {
+  specRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
+    paddingVertical: 10,
   },
-  syncStatusHint: {
-    marginTop: 8,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
+  specRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  syncRetryBanner: {
-    marginTop: Space.md - Space.xs,
-  },
-  syncFallbackHint: {
-    marginTop: 8,
-    flex: 1,
-    backgroundColor: PANEL_BG,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 0.5,
-    borderColor: PANEL_BORDER,
-  },
-  attributesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 16,
-    marginBottom: 8,
-    flexWrap: 'wrap',
-  },
-  attributeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.surface,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  attributeLabel: {
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
+  specLabel: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
   },
-  attributeValue: {
-    fontSize: 13,
+  specValue: {
+    fontSize: 14,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
-  descriptionBox: {
-    marginTop: 12,
-    paddingVertical: 4,
+
+  /* ── description ── */
+  descriptionSection: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
   },
-  description: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, lineHeight: 24 },
-  timePosted: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted, marginTop: 14 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-  statsText: { fontSize: 12, color: Colors.textSecondary, marginLeft: 6, fontFamily: Typography.family.medium },
-  sellerCard: {
+  sectionHeading: {
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  descriptionText: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    lineHeight: 22,
+  },
+  showMoreText: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+    marginTop: 6,
+  },
+  postedDate: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 10,
+  },
+
+  /* ── sync retry ── */
+  syncRetry: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+  },
+
+  /* ── seller section ── */
+  sellerSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    marginTop: Space.sm,
+    paddingVertical: Space.sm,
+  },
+
+  /* ── delivery & payment ── */
+  deliverySection: {
+    paddingHorizontal: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  deliveryRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 24,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
-    gap: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  sellerIdentityTap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  sellerAvatar: { width: 48, height: 48, borderRadius: 24 },
-  sellerInfo: { flex: 1 },
-  sellerName: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-  sellerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  sellerStats: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textSecondary },
-  sellerLastSeen: { fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: 2 },
-  messageSellerBtn: {
-    minHeight: 36,
-    paddingHorizontal: 14,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
-  },
-  messageSellerBtnText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.semibold },
-  sellerItemsSection: { marginTop: 28, paddingBottom: 8 },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
-    paddingRight: 4,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  sectionTitle: { fontSize: 16, fontFamily: Typography.family.bold, color: Colors.textPrimary },
-  sectionLink: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.brand },
-  sellerItemCard: { width: 160 },
-  sellerItemMediaWrap: { width: 160, height: 200, borderRadius: Radius.md, overflow: 'hidden', marginBottom: 10 },
-  sellerItemImg: { width: '100%', height: '100%' },
-  sellerItemPrice: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary },
-  floatingBuyBar: {
+  deliveryRowLast: {
+    borderBottomWidth: 0,
+  },
+  deliveryLabel: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  deliveryValue: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+
+  /* ── related rails ── */
+  railSection: {
+    marginTop: Space.lg,
+  },
+  railContent: {
+    gap: 10,
+    paddingRight: 20,
+    paddingHorizontal: Space.md,
+  },
+  railCard: {
+    width: 140,
+  },
+  railImageWrap: {
+    width: 140,
+    height: 175,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  railImage: {
+    width: '100%',
+    height: '100%',
+  },
+  railBrand: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  railPrice: {
+    fontSize: 14,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+
+  /* ── action bar ── */
+  actionBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 20,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
+    backgroundColor: Colors.background,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
   actionBtn: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: 12,
+  },
+  soldStatus: {
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    paddingVertical: Space.md,
   },
 });
