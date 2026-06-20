@@ -10,8 +10,6 @@ import {
   Pressable,
 } from 'react-native';
 import { EmptyState } from '../components/EmptyState';
-import { Video, ResizeMode } from '../components/compat/Video';
-import * as ImagePicker from 'expo-image-picker';
 import Reanimated, {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -43,16 +41,8 @@ import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHe
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import {
-  setStoredUserAvatar,
-  setStoredUserAvatarForUser,
-  setStoredUserCover,
-  setStoredUserCoverForUser,
-} from '../preferences/profileMediaPreferences';
-import { persistProfileMediaUri } from '../utils/profileMediaAsset';
+import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
-import { uploadMedia } from '../services/mediaUpload';
-import { updateMyProfile } from '../services/profileApi';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -73,6 +63,7 @@ export default function MyProfileScreen() {
 
   const { listings } = useBackendData();
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
+  const updateUserProfile = useStore((state) => state.updateUserProfile);
 
   const currentUser = useStore((state) => state.currentUser);
 
@@ -126,125 +117,65 @@ export default function MyProfileScreen() {
 
   const userAvatar = useStore((state) => state.userAvatar);
   const userCover = useStore((state) => state.userCover);
+  const updateUserAvatar = useStore((state) => state.updateUserAvatar);
+  const updateUserCover = useStore((state) => state.updateUserCover);
   const user = currentUser as any;
   const userLooks = useStore((state) => state.userLooks);
 
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
 
-  const updateUserAvatar = useStore((state) => state.updateUserAvatar);
-  const updateUserCover = useStore((state) => state.updateUserCover);
+  const confirmedAvatarRemote = user?.avatar ?? userAvatar ?? null;
+  const confirmedCoverRemote = user?.coverPhoto ?? userCover ?? null;
+
+  const {
+    avatar: avatarState,
+    cover: coverState,
+    pickAvatar,
+    pickCover,
+    retryAvatar,
+    retryCover,
+    revertAvatar,
+    revertCover,
+  } = useProfileMediaUpload(
+    user?.id,
+    confirmedAvatarRemote,
+    confirmedCoverRemote,
+    (url) => {
+      updateUserAvatar(url);
+      updateUserProfile({ avatar: url });
+    },
+    (url) => {
+      updateUserCover(url);
+      updateUserProfile({ coverPhoto: url, coverVideo: null });
+      fetchMyProfile().catch(() => {});
+    }
+  );
 
   React.useEffect(() => {
     fetchMyProfile().catch(() => {});
   }, [fetchMyProfile]);
 
+  // Show toast on cover upload status changes
+  const prevCoverStatus = React.useRef(coverState.status);
   React.useEffect(() => {
-    let canceled = false;
-
-    const migrateStoredProfileMediaUris = async () => {
-      if (userCover) {
-        const persistedCoverUri = await persistProfileMediaUri(userCover, 'cover');
-        if (!canceled && persistedCoverUri !== userCover) {
-          updateUserCover(persistedCoverUri);
-          if (currentUser?.id) {
-            Promise.all([
-              setStoredUserCover(persistedCoverUri),
-              setStoredUserCoverForUser(currentUser.id, persistedCoverUri),
-            ]).catch(() => {});
-          }
-        }
-      }
-
-      if (userAvatar) {
-        const persistedAvatarUri = await persistProfileMediaUri(userAvatar, 'avatar');
-        if (!canceled && persistedAvatarUri !== userAvatar) {
-          updateUserAvatar(persistedAvatarUri);
-          if (currentUser?.id) {
-            Promise.all([
-              setStoredUserAvatar(persistedAvatarUri),
-              setStoredUserAvatarForUser(currentUser.id, persistedAvatarUri),
-            ]).catch(() => {});
-          }
-        }
-      }
-    };
-
-    migrateStoredProfileMediaUris().catch(() => {});
-
-    return () => {
-      canceled = true;
-    };
-  }, [currentUser?.id, updateUserAvatar, updateUserCover, userAvatar, userCover]);
-
-  const pickCover = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      show('Allow photo library access to upload cover', 'error');
-      return;
+    if (coverState.status === 'confirmed' && prevCoverStatus.current !== 'confirmed') {
+      show('Cover updated', 'success');
+    } else if (coverState.status === 'failed' && prevCoverStatus.current !== 'failed') {
+      show('Cover upload failed', 'error');
     }
+    prevCoverStatus.current = coverState.status;
+  }, [coverState.status, show]);
 
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        allowsEditing: false,
-        quality: 1,
-      });
-
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        const nextCoverUri = await persistProfileMediaUri(result.assets[0].uri, 'cover');
-        updateUserCover(nextCoverUri);
-        if (currentUser?.id) {
-          Promise.all([
-            setStoredUserCover(nextCoverUri),
-            setStoredUserCoverForUser(currentUser.id, nextCoverUri),
-          ]).catch(() => {});
-        }
-        show('Cover updated', 'success');
-      }
-    } catch {
-      // Silently fail - user can try again
+  // Show toast on avatar upload status changes
+  const prevAvatarStatus = React.useRef(avatarState.status);
+  React.useEffect(() => {
+    if (avatarState.status === 'confirmed' && prevAvatarStatus.current !== 'confirmed') {
+      show('Avatar updated', 'success');
+    } else if (avatarState.status === 'failed' && prevAvatarStatus.current !== 'failed') {
+      show('Avatar upload failed', 'error');
     }
-  };
-
-  const pickAvatar = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      show('Allow photo library access to upload avatar', 'error');
-      return;
-    }
-
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.86,
-      });
-
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        const pickedUri = result.assets[0].uri;
-        const localUri = await persistProfileMediaUri(pickedUri, 'avatar');
-        updateUserAvatar(localUri);
-
-        try {
-          const publicUrl = await uploadMedia(pickedUri, 'avatars');
-          await updateMyProfile({ avatar: publicUrl });
-          updateUserAvatar(publicUrl);
-          if (currentUser?.id) {
-            Promise.all([
-              setStoredUserAvatar(publicUrl),
-              setStoredUserAvatarForUser(currentUser.id, publicUrl),
-            ]).catch(() => {});
-          }
-          show('Avatar updated', 'success');
-        } catch {
-          show('Avatar upload failed. Tap to try again.', 'error');
-        }
-      }
-    } catch {
-      // Silently fail - user can try again
-    }
-  };
+    prevAvatarStatus.current = avatarState.status;
+  }, [avatarState.status, show]);
 
   if (!user) {
     return (
@@ -263,8 +194,20 @@ export default function MyProfileScreen() {
 
   const profileUserId = user.id;
   const profileMediaOverride = profileMediaOverrides[profileUserId] ?? null;
-  const displayCover = user.coverPhoto || userCover || profileMediaOverride?.cover || '';
-  const displayAvatar = user.avatar || userAvatar || profileMediaOverride?.avatar || null;
+
+  // Display priority: pending local > confirmed remote > store > override
+  const displayCover = coverState.pendingLocal
+    || coverState.confirmedRemote
+    || user.coverPhoto
+    || userCover
+    || profileMediaOverride?.cover
+    || '';
+  const displayAvatar = avatarState.pendingLocal
+    || avatarState.confirmedRemote
+    || user.avatar
+    || userAvatar
+    || profileMediaOverride?.avatar
+    || null;
 
   const allOwnedListings = React.useMemo(() => listings.filter((item) => item.sellerId === profileUserId), [listings, profileUserId]);
 
@@ -371,6 +314,12 @@ export default function MyProfileScreen() {
           isSelf
           onEditCover={pickCover}
           coverOnly
+          coverHeight={COVER_HEIGHT}
+          isUploadingCover={coverState.status === 'uploading'}
+          isUploadingAvatar={avatarState.status === 'uploading'}
+          coverError={coverState.status === 'failed' ? coverState.error : null}
+          onRetryCover={retryCover}
+          onRevertCover={revertCover}
           style={{ width: '100%' }}
         />
       </Reanimated.View>
