@@ -298,6 +298,11 @@ export default function LookDetailScreen() {
         visible={commentsVisible}
         onClose={() => setCommentsVisible(false)}
         onCommentCountChange={setCommentCount}
+        isAuthenticated={!!currentUser?.id}
+        onSignInRequired={() => {
+          show('Sign in to comment', 'info');
+          navigation.navigate('Login');
+        }}
       />
     </SafeAreaView>
   );

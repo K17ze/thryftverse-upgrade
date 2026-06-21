@@ -46,6 +46,8 @@ export interface LookCommentsSheetProps {
   visible: boolean;
   onClose: () => void;
   onCommentCountChange?: (count: number) => void;
+  isAuthenticated: boolean;
+  onSignInRequired?: () => void;
 }
 
 export function LookCommentsSheet({
@@ -54,6 +56,8 @@ export function LookCommentsSheet({
   visible,
   onClose,
   onCommentCountChange,
+  isAuthenticated,
+  onSignInRequired,
 }: LookCommentsSheetProps) {
   const haptic = useHaptic();
   const { show } = useToast();
@@ -83,6 +87,10 @@ export function LookCommentsSheet({
   }, [visible, loadComments]);
 
   const handleSend = useCallback(async () => {
+    if (!isAuthenticated) {
+      onSignInRequired?.();
+      return;
+    }
     const body = commentText.trim();
     if (!body || isSending) return;
     haptic.light();
@@ -102,7 +110,7 @@ export function LookCommentsSheet({
     } finally {
       setIsSending(false);
     }
-  }, [commentText, isSending, lookId, haptic, show]);
+  }, [commentText, isSending, lookId, haptic, show, isAuthenticated, onSignInRequired]);
 
   const handleDelete = useCallback(
     async (commentId: string) => {
@@ -148,7 +156,7 @@ export function LookCommentsSheet({
           <Text style={styles.commentText}>{item.body}</Text>
           <Text style={styles.commentTime}>{formatRelativeTime(item.createdAt)}</Text>
         </View>
-        {isOwner && (
+        {isOwner && isAuthenticated && (
           <Pressable
             onPress={() => handleDelete(item.id)}
             hitSlop={12}
@@ -207,35 +215,49 @@ export function LookCommentsSheet({
           }}
         />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.inputBar}
-        >
-          <TextInput
-            style={styles.input}
-            value={commentText}
-            onChangeText={setCommentText}
-            placeholder="Add a comment..."
-            placeholderTextColor={Colors.textMuted}
-            maxLength={1000}
-            accessibilityLabel="Comment input"
-            multiline
-          />
-          <AnimatedPressable
-            style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]}
-            onPress={handleSend}
-            activeOpacity={0.85}
-            disabled={!commentText.trim() || isSending}
-            accessibilityRole="button"
-            accessibilityLabel="Send comment"
+        {isAuthenticated ? (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.inputBar}
           >
-            {isSending ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="send" size={18} color="#fff" />
-            )}
-          </AnimatedPressable>
-        </KeyboardAvoidingView>
+            <TextInput
+              style={styles.input}
+              value={commentText}
+              onChangeText={setCommentText}
+              placeholder="Add a comment..."
+              placeholderTextColor={Colors.textMuted}
+              maxLength={1000}
+              accessibilityLabel="Comment input"
+              multiline
+            />
+            <AnimatedPressable
+              style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]}
+              onPress={handleSend}
+              activeOpacity={0.85}
+              disabled={!commentText.trim() || isSending}
+              accessibilityRole="button"
+              accessibilityLabel="Send comment"
+            >
+              {isSending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="send" size={18} color="#fff" />
+              )}
+            </AnimatedPressable>
+          </KeyboardAvoidingView>
+        ) : (
+          <View style={styles.signInBar}>
+            <Pressable
+              style={styles.signInBtn}
+              onPress={() => onSignInRequired?.()}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in to comment"
+            >
+              <Ionicons name="log-in-outline" size={18} color={Colors.brand} />
+              <Text style={styles.signInBtnText}>Sign in to comment</Text>
+            </Pressable>
+          </View>
+        )}
       </SafeAreaView>
     </Reanimated.View>
   );
@@ -359,5 +381,30 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     opacity: 0.4,
+  },
+  signInBar: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+  },
+  signInBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 44,
+    paddingHorizontal: 24,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: Colors.brand,
+    backgroundColor: 'rgba(99,102,241,0.06)',
+  },
+  signInBtnText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
   },
 });

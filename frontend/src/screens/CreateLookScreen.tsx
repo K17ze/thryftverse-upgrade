@@ -25,6 +25,7 @@ import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { uploadMedia } from '../services/mediaUpload';
 import { createLookOnApi } from '../services/looksApi';
+import { useStore } from '../store/useStore';
 import { LookMediaComposer, OutfitTag } from '../components/look/LookMediaComposer';
 import { OutfitPieceEditor } from '../components/look/OutfitPieceEditor';
 
@@ -42,6 +43,7 @@ export default function CreateLookScreen() {
   const haptic = useHaptic();
   const { show } = useToast();
   const reducedMotion = useReducedMotion();
+  const currentUser = useStore((state) => state.currentUser);
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
@@ -99,6 +101,13 @@ export default function CreateLookScreen() {
         return;
       }
 
+      if (!currentUser?.id) {
+        haptic.light();
+        show('Sign in to create a Look', 'info');
+        navigation.navigate('Login');
+        return;
+      }
+
       setIsPublishing(true);
       haptic.medium();
       try {
@@ -110,7 +119,9 @@ export default function CreateLookScreen() {
             .split('\n')
             .find(Boolean)
             ?.slice(0, 120)
-          || 'Untitled Look';
+          || (currentUser.username
+            ? `Look by @${currentUser.username}`
+            : 'Untitled Look');
         await createLookOnApi({
           id: lookId,
           title: internalTitle,
@@ -138,7 +149,7 @@ export default function CreateLookScreen() {
         setIsPublishing(false);
       }
     },
-    [imageUri, caption, tags, visibility, haptic, show, navigation]
+    [imageUri, caption, tags, visibility, haptic, show, navigation, currentUser]
   );
 
   return (

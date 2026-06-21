@@ -116,8 +116,12 @@ export function LookSocialActions({
 
   const handleComment = useCallback(() => {
     haptic.light();
+    if (!isAuthenticated) {
+      onSignInRequired?.();
+      return;
+    }
     onCommentPress();
-  }, [haptic, onCommentPress]);
+  }, [haptic, isAuthenticated, onCommentPress, onSignInRequired]);
 
   const handleShare = useCallback(() => {
     haptic.light();
@@ -146,7 +150,7 @@ export function LookSocialActions({
         onPress={handleComment}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel="View comments"
+        accessibilityLabel={isAuthenticated ? 'View comments' : 'Sign in to comment'}
       >
         <Ionicons name="chatbubble-outline" size={22} color={Colors.textPrimary} />
         <Text style={styles.actionText}>{commentCount}</Text>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -27,8 +27,7 @@ import { ActiveTheme, Colors } from '../constants/colors';
 import { Listing } from '../data/mockData';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
-import { Space } from '../theme/designTokens';
-import { Typography } from '../theme/designTokens';
+import { Space, Typography } from '../theme/designTokens';
 import { FlagshipProfileMedia } from '../components/flagship';
 import { fetchPublicProfile, type PublicProfileUser } from '../services/profileApi';
 import { SharedTransitionView } from '../components/SharedTransitionView';
@@ -36,6 +35,8 @@ import { isVideoUri } from '../utils/media';
 import { PublicProfileIdentityHero } from '../components/profile/PublicProfileIdentityHero';
 import { PublicProfileActionRow } from '../components/profile/PublicProfileActionRow';
 import { PublicProfileTabRail } from '../components/profile/PublicProfileTabRail';
+import { ProfileLooksGrid } from '../components/profile/ProfileLooksGrid';
+import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
 
 type Props = StackScreenProps<RootStackParamList, 'UserProfile'>;
 
@@ -49,7 +50,7 @@ const COVER_HEIGHT = 180;
 const GRID_GAP = 8;
 const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP) / 2;
 
-type Tab = 'Listings' | 'About';
+type Tab = 'Listings' | 'Looks' | 'About';
 
 export default function UserProfileScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
@@ -63,6 +64,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [moreMenuVisible, setMoreMenuVisible] = useState(false);
+  const [profileLooks, setProfileLooks] = useState<LookApiItem[]>([]);
+  const [isLoadingLooks, setIsLoadingLooks] = useState(false);
+  const [looksError, setLooksError] = useState<string | null>(null);
   const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
 
@@ -71,10 +75,45 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   const isSelfProfile = isMe || userId === currentUser?.id;
 
+  const targetUserId = isSelfProfile ? currentUser?.id : userId;
+
   const profileListings = React.useMemo(() => {
     const targetId = isMe ? currentUser?.id : userId;
     return targetId ? listings.filter((l) => l.sellerId === targetId) : [];
   }, [listings, isMe, userId, currentUser?.id]);
+
+  const loadProfileLooks = useCallback(async () => {
+    if (!targetUserId) return;
+    setIsLoadingLooks(true);
+    setLooksError(null);
+    try {
+      const res = await fetchLooksFromApi({ creatorId: targetUserId, status: 'published' });
+      setProfileLooks(res.items ?? []);
+    } catch {
+      setLooksError('Looks could not be loaded.');
+    } finally {
+      setIsLoadingLooks(false);
+    }
+  }, [targetUserId]);
+
+  useEffect(() => {
+    let canceled = false;
+    if (targetUserId) {
+      setIsLoadingLooks(true);
+      setLooksError(null);
+      fetchLooksFromApi({ creatorId: targetUserId, status: 'published' })
+        .then((res) => {
+          if (!canceled) setProfileLooks(res.items ?? []);
+        })
+        .catch(() => {
+          if (!canceled) setLooksError('Looks could not be loaded.');
+        })
+        .finally(() => {
+          if (!canceled) setIsLoadingLooks(false);
+        });
+    }
+    return () => { canceled = true; };
+  }, [targetUserId]);
 
   React.useEffect(() => {
     if (isSelfProfile || !userId) return;
@@ -330,6 +369,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           <PublicProfileTabRail
             tabs={[
               { key: 'Listings', label: 'Listings', count: profileListings.length },
+              { key: 'Looks', label: 'Looks', count: isLoadingLooks ? undefined : profileLooks.length },
               { key: 'About', label: 'About' },
             ]}
             activeKey={activeTab}
@@ -390,6 +430,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
                 ))}
               </View>
             )}
+          </View>
+        )}
+
+        {/* LOOKS TAB — profile looks grid */}
+        {activeTab === 'Looks' && (
+          <View style={{ backgroundColor: BG, paddingBottom: 120, paddingTop: Space.md }}>
+            <ProfileLooksGrid
+              looks={profileLooks}
+              isLoading={isLoadingLooks}
+              error={looksError}
+              isSelfProfile={isSelfProfile}
+              onRetry={loadProfileLooks}
+              onCreateLook={() => navigation.navigate('CreateLook')}
+              navigation={navigation}
+            />
           </View>
         )}
 
