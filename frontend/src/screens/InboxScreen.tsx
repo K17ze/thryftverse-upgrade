@@ -45,13 +45,17 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 
 import { useHaptic } from '../hooks/useHaptic';
 
-import { Space, Radius, Type, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type } from '../theme/designTokens';
 
 import { Caption } from '../components/ui/Text';
 
 import { AvatarRing } from '../components/chat/AvatarRing';
 
 import { SkeletonLoader } from '../components/SkeletonLoader';
+
+import { InboxConversationRow } from '../components/chat/InboxConversationRow';
+
+import { MessagingSegmentRail, MessagingSegment } from '../components/chat/MessagingSegmentRail';
 
 
 
@@ -61,17 +65,7 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 type ConvoItem = Conversation;
 
-type InboxSegment = 'all' | 'unread' | 'requests' | 'archived' | 'groups';
-
-
-
-const SEGMENT_OPTIONS: Array<{ value: InboxSegment; label: string; accessibilityLabel: string }> = [
-  { value: 'all', label: 'All', accessibilityLabel: 'Show all conversations' },
-  { value: 'unread', label: 'Unread', accessibilityLabel: 'Filter unread conversations' },
-  { value: 'requests', label: 'Requests', accessibilityLabel: 'Filter message requests' },
-  { value: 'archived', label: 'Archived', accessibilityLabel: 'Filter archived conversations' },
-  { value: 'groups', label: 'Groups', accessibilityLabel: 'Filter group conversations' },
-];
+type InboxSegment = MessagingSegment | 'unread' | 'archived';
 
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
   const { listings } = useBackendData();
@@ -101,7 +95,7 @@ export default function InboxScreen() {
 
   const haptic = useHaptic();
 
-  const { refreshListings } = useBackendData();
+  const { refreshListings, listings } = useBackendData();
 
   const currentUser = useStore((state) => state.currentUser);
 
@@ -662,7 +656,22 @@ export default function InboxScreen() {
     );
 
     const conversationRow = (
-      <AnimatedPressable
+      <InboxConversationRow
+        displayTitle={safeDisplayTitle}
+        lastMessage={item.lastMessage ?? ''}
+        lastMessageTime={item.lastMessageTime}
+        unread={!!item.unread}
+        isPinned={!!item.isPinned}
+        isMuted={isMuted}
+        isGroup={isGroup}
+        memberCount={isGroup ? item.participantIds?.length : undefined}
+        draftText={item.draftText}
+        itemId={item.itemId}
+        itemThumbUri={item.itemId ? (() => {
+          const listing = listings.find((l) => l.id === item.itemId);
+          return listing?.images?.[0] ?? null;
+        })() : undefined}
+        avatarElement={avatarEl}
         onPress={() => {
           markConversationRead(item.id);
           navigation.navigate('Chat', {
@@ -670,62 +679,7 @@ export default function InboxScreen() {
             focusQuery: searchQuery.trim() || undefined,
           });
         }}
-        activeOpacity={0.85}
-        scaleValue={0.98}
-        hapticFeedback="light"
-        accessibilityLabel={`${displayTitle}${item.unread ? ', unread' : ''}, ${item.lastMessage}`}
-        accessibilityRole="button"
-        accessibilityHint="Opens the conversation thread"
-      >
-        <View style={[styles.rowInner, item.unread && styles.rowInnerUnread]}>
-          <View style={styles.avatarWrap}>{avatarEl}</View>
-          <View style={styles.messageBody}>
-            <View style={styles.messageTop}>
-              <View style={styles.titleRow}>
-                <Text style={[styles.nameText, item.unread && styles.nameUnread]} numberOfLines={1}>
-                  {displayTitle}
-                </Text>
-                {item.isPinned && <Ionicons name="pin" size={12} color={Colors.brand} style={styles.pinIcon} />}
-                {isMuted && <Ionicons name="volume-mute" size={12} color={Colors.textMuted} style={styles.pinIcon} />}
-              </View>
-              <View style={styles.rowMeta}>
-                <Caption color={item.unread ? Colors.textPrimary : Colors.textMuted} style={item.unread && styles.timeUnread}>
-                  {item.lastMessageTime}
-                </Caption>
-              </View>
-            </View>
-            <View style={styles.snippetRow}>
-              {isGroup && (
-                <Caption color={Colors.textMuted} style={styles.memberCount}>
-                  {item.participantIds?.length ?? 0} members
-                </Caption>
-              )}
-              {item.draftText ? (
-                <View style={styles.snippetWithBadge}>
-                  <View style={styles.draftBadge}>
-                    <Text style={styles.draftBadgeText}>Draft</Text>
-                  </View>
-                  <Text style={[styles.snippet, styles.snippetUnread]} numberOfLines={1}>
-                    {item.draftText}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={[styles.snippet, item.unread && styles.snippetUnread]} numberOfLines={1}>
-                  {item.lastMessage}
-                </Text>
-              )}
-              {item.unread && !item.draftText ? (
-                <View style={styles.unreadPill}>
-                  <Text style={styles.unreadPillText}>New</Text>
-                </View>
-              ) : null}
-              {item.itemId && !item.unread ? (
-                <ListingContextThumbnail itemId={item.itemId} />
-              ) : null}
-            </View>
-          </View>
-        </View>
-      </AnimatedPressable>
+      />
     );
 
     return (
@@ -816,26 +770,40 @@ export default function InboxScreen() {
 
 
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChips}>
-          {SEGMENT_OPTIONS.map((opt) => {
-            const isActive = segment === opt.value;
-            return (
-              <AnimatedPressable
-                key={opt.value}
-                style={[styles.filterChip, isActive && styles.filterChipActive]}
-                onPress={() => setSegment(opt.value)}
-                activeOpacity={0.85}
-                scaleValue={0.95}
-                hapticFeedback="light"
-                accessibilityLabel={opt.accessibilityLabel}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{opt.label}</Text>
-              </AnimatedPressable>
-            );
-          })}
-        </ScrollView>
+        {segment === 'all' || segment === 'requests' || segment === 'groups' ? (
+          <MessagingSegmentRail
+            active={segment}
+            onChange={(s) => setSegment(s)}
+            requestCount={messageRequests.length}
+          />
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChips}>
+            {[
+              { value: 'all' as InboxSegment, label: 'All', accessibilityLabel: 'Show all conversations' },
+              { value: 'unread' as InboxSegment, label: 'Unread', accessibilityLabel: 'Filter unread conversations' },
+              { value: 'requests' as InboxSegment, label: 'Requests', accessibilityLabel: 'Filter message requests' },
+              { value: 'archived' as InboxSegment, label: 'Archived', accessibilityLabel: 'Filter archived conversations' },
+              { value: 'groups' as InboxSegment, label: 'Groups', accessibilityLabel: 'Filter group conversations' },
+            ].map((opt) => {
+              const isActive = segment === opt.value;
+              return (
+                <AnimatedPressable
+                  key={opt.value}
+                  style={[styles.filterChip, isActive && styles.filterChipActive]}
+                  onPress={() => setSegment(opt.value)}
+                  activeOpacity={0.85}
+                  scaleValue={0.95}
+                  hapticFeedback="light"
+                  accessibilityLabel={opt.accessibilityLabel}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{opt.label}</Text>
+                </AnimatedPressable>
+              );
+            })}
+          </ScrollView>
+        )}
 
       </View>
 
@@ -1648,8 +1616,6 @@ const styles = StyleSheet.create({
 
     marginVertical: Space.xs,
 
-    ...Elevation.subtle,
-
   },
   requestRowAccent: {
     borderLeftWidth: 3,
@@ -1771,8 +1737,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
 
     borderRadius: Radius.lg,
-
-    ...Elevation.subtle,
 
   },
 

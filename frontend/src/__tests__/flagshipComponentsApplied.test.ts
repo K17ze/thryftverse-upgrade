@@ -168,7 +168,7 @@ describe('flagship components applied to production screens', () => {
 describe('UI-22B settings reconstruction architecture guardrails', () => {
   it('SettingsScreen uses FlagshipScreen and FlagshipHeader', () => {
     const src = readSrc('screens/SettingsScreen.tsx');
-    expect(src).toContain("import { FlagshipScreen, FlagshipHeader, FlagshipDangerZone } from '../components/flagship'");
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
     expect(src).toContain('<FlagshipScreen');
     expect(src).toContain('<FlagshipHeader');
   });
@@ -180,9 +180,9 @@ describe('UI-22B settings reconstruction architecture guardrails', () => {
     expect(src).toContain('showSection');
   });
 
-  it('SettingsScreen separates destructive sign-out into FlagshipDangerZone', () => {
+  it('SettingsScreen separates destructive sign-out into SettingsSignOutRow', () => {
     const src = readSrc('screens/SettingsScreen.tsx');
-    expect(src).toContain('<FlagshipDangerZone');
+    expect(src).toContain('<SettingsSignOutRow');
     expect(src).toContain('Sign Out');
   });
 

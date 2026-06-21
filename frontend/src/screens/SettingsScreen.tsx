@@ -29,7 +29,8 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { IdentityCard } from '../components/settings/IdentityCard';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
-import { FlagshipScreen, FlagshipHeader, FlagshipDangerZone } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 type Props = StackScreenProps<RootStackParamList, 'Settings'>;
@@ -434,15 +435,10 @@ export default function SettingsScreen({ navigation }: Props) {
         </Reanimated.View>
       )}
 
-      {/* Logout / Danger Zone */}
+      {/* Logout / Sign Out */}
       {matchesSearch('log out sign out') && (
         <Reanimated.View entering={FadeInDown.duration(300).delay(280)}>
-          <FlagshipDangerZone
-            title="Sign Out"
-            description="You will be signed out of your account on this device."
-            actionLabel="Sign Out"
-            onAction={handleLogout}
-          />
+          <SettingsSignOutRow onSignOut={handleLogout} />
         </Reanimated.View>
       )}
 

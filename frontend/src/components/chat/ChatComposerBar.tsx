@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type, TypeStyles, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface ChatComposerBarProps {
@@ -114,30 +114,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: Space.sm,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-    gap: Space.xs + 2,
+    paddingVertical: Platform.OS === 'ios' ? 8 : 6,
+    gap: Space.xs,
     backgroundColor: Colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
   },
   actionBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   inputWrap: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.md,
-    paddingVertical: Platform.OS === 'ios' ? 8 : 6,
-    minHeight: 44,
-    maxHeight: MAX_INPUT_HEIGHT + 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Platform.OS === 'ios' ? 6 : 4,
+    minHeight: 36,
+    maxHeight: MAX_INPUT_HEIGHT + 12,
   },
   input: {
     flex: 1,
@@ -153,18 +150,15 @@ const styles = StyleSheet.create({
     maxHeight: MAX_INPUT_HEIGHT,
   },
   sendBtn: {
-    width: 42,
-    height: 42,
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 2,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    marginBottom: 4,
   },
   sendBtnActive: {
     backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
   },
 });

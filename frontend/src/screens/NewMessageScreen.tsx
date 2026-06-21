@@ -26,7 +26,7 @@ import { useToast } from '../context/ToastContext';
 
 import { Colors } from '../constants/colors';
 
-import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 

@@ -13,7 +13,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -320,7 +320,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.lg,
     gap: Space.sm,
-    ...Elevation.subtle,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     borderRadius: Radius.xl,
@@ -342,7 +341,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Elevation.subtle,
   },
   avatarImage: {
     width: 76,
@@ -412,7 +410,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     overflow: 'hidden',
-    ...Elevation.subtle,
   },
   sectionCardDanger: {
     borderColor: `${Colors.danger}30`,

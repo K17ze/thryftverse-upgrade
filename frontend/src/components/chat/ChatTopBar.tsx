@@ -17,6 +17,7 @@ interface ChatTopBarProps {
   onInfo?: () => void;
   variant?: 'dm' | 'group';
   onTitlePress?: () => void;
+  isSearchActive?: boolean;
 }
 
 export function ChatTopBar({
@@ -29,6 +30,7 @@ export function ChatTopBar({
   onInfo,
   variant = 'dm',
   onTitlePress,
+  isSearchActive = false,
 }: ChatTopBarProps) {
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
@@ -36,7 +38,7 @@ export function ChatTopBar({
         <AnimatedPressable
           onPress={onBack}
           style={styles.backBtn}
-          activeOpacity={0.7}
+          activeOpacity={0.6}
           scaleValue={0.92}
           hapticFeedback="light"
           accessibilityLabel="Go back"
@@ -53,7 +55,7 @@ export function ChatTopBar({
           hapticFeedback="light"
           disabled={!onTitlePress}
           accessibilityRole={onTitlePress ? 'button' : undefined}
-          accessibilityLabel={onTitlePress ? 'Open group info' : undefined}
+          accessibilityLabel={onTitlePress ? (variant === 'group' ? 'Open group info' : 'Open profile') : undefined}
         >
           <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
             {avatarUrl ? (
@@ -78,23 +80,24 @@ export function ChatTopBar({
             <AnimatedPressable
               onPress={onSearch}
               style={styles.iconBtn}
-              activeOpacity={0.7}
+              activeOpacity={0.6}
               scaleValue={0.92}
               hapticFeedback="light"
-              accessibilityLabel="Search messages"
+              accessibilityLabel={isSearchActive ? 'Close search' : 'Search messages'}
               accessibilityRole="button"
+              accessibilityState={{ selected: isSearchActive }}
             >
-              <Ionicons name="search-outline" size={22} color={Colors.textPrimary} />
+              <Ionicons name={isSearchActive ? 'search' : 'search-outline'} size={22} color={isSearchActive ? Colors.brand : Colors.textPrimary} />
             </AnimatedPressable>
           ) : null}
           {onInfo ? (
             <AnimatedPressable
               onPress={onInfo}
               style={styles.iconBtn}
-              activeOpacity={0.7}
+              activeOpacity={0.6}
               scaleValue={0.92}
               hapticFeedback="light"
-              accessibilityLabel="Chat info"
+              accessibilityLabel={variant === 'group' ? 'Group info' : 'Chat info'}
               accessibilityRole="button"
             >
               <Ionicons name="information-circle-outline" size={22} color={Colors.textPrimary} />
@@ -120,12 +123,11 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: -4,
   },
   center: {
     flex: 1,
@@ -150,7 +152,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
-    textTransform: 'uppercase',
   },
   titleWrap: {
     flex: 1,
@@ -175,10 +176,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -14,7 +14,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -175,7 +175,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Space.md,
     marginBottom: Space.sm,
-    ...Elevation.subtle,
     gap: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
@@ -246,7 +245,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    ...Elevation.subtle,
   },
   declineText: {
     fontSize: Type.caption.size,
@@ -260,7 +258,6 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: Radius.md,
     backgroundColor: Colors.textPrimary,
-    ...Elevation.subtle,
   },
   acceptText: {
     fontSize: Type.caption.size,

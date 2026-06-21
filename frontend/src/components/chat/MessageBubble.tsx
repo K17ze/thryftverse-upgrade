@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type, TypeStyles, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 interface Reaction {
@@ -207,8 +207,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   avatarText: {
     fontSize: Type.meta.size,
@@ -219,7 +217,7 @@ const styles = StyleSheet.create({
     width: 28,
   },
   bubbleColumn: {
-    maxWidth: '78%',
+    maxWidth: '80%',
     gap: 4,
   },
   senderName: {
@@ -239,14 +237,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   bubbleThem: {
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     alignSelf: 'flex-start',
   },
   bubbleFailed: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.danger,
+    backgroundColor: `${Colors.danger}10`,
   },
   replyBlock: {
     borderLeftWidth: 3,
@@ -358,17 +353,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     minHeight: 28,
   },
   reactionChipActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}18`,
+    backgroundColor: `${Colors.brand}15`,
   },
   reactionEmoji: {
     fontSize: 13,

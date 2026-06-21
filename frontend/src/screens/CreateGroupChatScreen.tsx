@@ -20,7 +20,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
-import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 import { useHaptic } from '../hooks/useHaptic';
 
@@ -335,7 +335,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: Space.sm + 2,
-    ...Elevation.subtle,
   },
   memberRowSelected: {
     borderColor: Colors.brand,
@@ -388,7 +387,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    ...Elevation.subtle,
   },
   charCount: {
     textAlign: 'right',
@@ -406,7 +404,6 @@ const styles = StyleSheet.create({
     backgroundColor: `${Colors.danger}10`,
     borderRadius: Radius.md,
     marginBottom: Space.sm,
-    ...Elevation.subtle,
   },
   errorBannerText: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
