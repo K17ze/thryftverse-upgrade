@@ -440,7 +440,7 @@ export default function AuctionsScreen() {
               <AnimatedPressable
                 style={styles.posterCard}
                 activeOpacity={0.9}
-                onPress={() => navigation.navigate('PosterViewer', { posterId: item.id })}
+                onPress={() => navigation.navigate('PosterViewer', { storyId: item.id })}
                 accessibilityRole="button"
               >
                 <CachedImage uri={item.image} style={styles.posterImage} containerStyle={styles.posterImageContainer} contentFit="cover" />

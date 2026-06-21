@@ -44,6 +44,9 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
+import { fetchPosterHighlights } from '../services/postersApi';
+import type { PosterHighlight } from '../services/postersApi';
+import { ProfileHighlightsRow } from '../components/poster/ProfileHighlightsRow';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -123,6 +126,8 @@ export default function MyProfileScreen() {
   const user = currentUser as any;
   const [myLooks, setMyLooks] = React.useState<LookApiItem[]>([]);
   const [looksLoading, setLooksLoading] = React.useState(false);
+  const [highlights, setHighlights] = React.useState<PosterHighlight[]>([]);
+  const [isLoadingHighlights, setIsLoadingHighlights] = React.useState(false);
 
   React.useEffect(() => {
     if (!currentUser?.id) return;
@@ -131,6 +136,15 @@ export default function MyProfileScreen() {
       .then((res) => setMyLooks(res.items ?? []))
       .catch(() => setMyLooks([]))
       .finally(() => setLooksLoading(false));
+  }, [currentUser?.id]);
+
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+    setIsLoadingHighlights(true);
+    fetchPosterHighlights(currentUser.id)
+      .then((res) => setHighlights(res.items))
+      .catch(() => setHighlights([]))
+      .finally(() => setIsLoadingHighlights(false));
   }, [currentUser?.id]);
 
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
@@ -391,6 +405,16 @@ export default function MyProfileScreen() {
 
           {/* ── 8. COMPACT MARKETPLACE UTILITY RAIL ── */}
           <ProfileUtilityRail items={utilityItems} />
+
+          {/* ── HIGHLIGHTS ROW ── */}
+          <ProfileHighlightsRow
+            highlights={highlights}
+            isLoading={isLoadingHighlights}
+            isOwner
+            onHighlightPress={(h) => navigation.navigate('PosterViewer', { storyId: h.id })}
+            onAddHighlight={() => navigation.navigate('PosterHighlightEditor', {})}
+            onEditHighlight={(h) => navigation.navigate('PosterHighlightEditor', { highlightId: h.id })}
+          />
 
           {/* ── 9. STICKY FLAT TAB RAIL ── */}
           <MyProfileTabRail

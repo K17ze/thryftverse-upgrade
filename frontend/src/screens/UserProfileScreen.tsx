@@ -37,6 +37,9 @@ import { PublicProfileActionRow } from '../components/profile/PublicProfileActio
 import { PublicProfileTabRail } from '../components/profile/PublicProfileTabRail';
 import { ProfileLooksGrid } from '../components/profile/ProfileLooksGrid';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
+import { fetchPosterHighlights } from '../services/postersApi';
+import type { PosterHighlight } from '../services/postersApi';
+import { ProfileHighlightsRow } from '../components/poster/ProfileHighlightsRow';
 
 type Props = StackScreenProps<RootStackParamList, 'UserProfile'>;
 
@@ -67,6 +70,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [profileLooks, setProfileLooks] = useState<LookApiItem[]>([]);
   const [isLoadingLooks, setIsLoadingLooks] = useState(false);
   const [looksError, setLooksError] = useState<string | null>(null);
+  const [highlights, setHighlights] = useState<PosterHighlight[]>([]);
+  const [isLoadingHighlights, setIsLoadingHighlights] = useState(false);
   const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
 
@@ -110,6 +115,24 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         })
         .finally(() => {
           if (!canceled) setIsLoadingLooks(false);
+        });
+    }
+    return () => { canceled = true; };
+  }, [targetUserId]);
+
+  useEffect(() => {
+    let canceled = false;
+    if (targetUserId) {
+      setIsLoadingHighlights(true);
+      fetchPosterHighlights(targetUserId)
+        .then((res) => {
+          if (!canceled) setHighlights(res.items);
+        })
+        .catch(() => {
+          if (!canceled) setHighlights([]);
+        })
+        .finally(() => {
+          if (!canceled) setIsLoadingHighlights(false);
         });
     }
     return () => { canceled = true; };
@@ -363,6 +386,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             </View>
           )}
         </View>
+
+        {/* ── HIGHLIGHTS ROW ── */}
+        <ProfileHighlightsRow
+          highlights={highlights}
+          isLoading={isLoadingHighlights}
+          isOwner={isSelfProfile}
+          onHighlightPress={(h) => navigation.navigate('PosterViewer', { storyId: h.id })}
+          onAddHighlight={() => navigation.navigate('PosterHighlightEditor', {})}
+          onEditHighlight={(h) => navigation.navigate('PosterHighlightEditor', { highlightId: h.id })}
+        />
 
         {/* ── 9. FLAT TAB RAIL (sticky) ── */}
         <View style={styles.stickyTabWrapper}>

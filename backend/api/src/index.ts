@@ -678,6 +678,14 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && (path === '/poster-stories' || path.startsWith('/poster-stories/'))) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/users\/[^/]+\/poster-highlights$/.test(path)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -30321,6 +30329,1332 @@ app.delete('/collections/:collectionId', async (request, reply) => {
   await db.query('DELETE FROM collections WHERE id = $1 AND user_id = $2', [collectionId, userId]);
 
   return { ok: true, collectionId };
+});
+
+// ── Poster Stories Access Helpers ───────────────────────────────────
+
+type PosterStoryAccessRow = {
+  id: string;
+  creator_id: string;
+  audience: 'public' | 'private';
+  status: 'active' | 'archived' | 'deleted';
+  expires_at: string;
+};
+
+function canViewerAccessPosterStory(
+  story: PosterStoryAccessRow,
+  viewerUserId: string | null,
+  options?: { includeExpiredForOwner?: boolean }
+): boolean {
+  if (story.status === 'deleted') return false;
+
+  if (viewerUserId && story.creator_id === viewerUserId) {
+    if (options?.includeExpiredForOwner) return true;
+    return true;
+  }
+
+  if (story.status !== 'active') return false;
+  if (story.audience !== 'public') return false;
+
+  const now = Date.now();
+  const expiresAtMs = new Date(story.expires_at).getTime();
+  if (expiresAtMs <= now) return false;
+
+  return true;
+}
+
+async function getAccessiblePosterStory(
+  storyId: string,
+  viewerUserId: string | null,
+  options?: { includeExpiredForOwner?: boolean }
+): Promise<PosterStoryAccessRow | null> {
+  const result = await db.query<PosterStoryAccessRow>(
+    `SELECT id, creator_id, audience, status, expires_at FROM poster_stories WHERE id = $1 LIMIT 1`,
+    [storyId]
+  );
+  if (!result.rowCount) return null;
+  const story = result.rows[0];
+  if (!canViewerAccessPosterStory(story, viewerUserId, options)) return null;
+  return story;
+}
+
+async function getAccessiblePosterFrame(
+  frameId: string,
+  viewerUserId: string | null
+): Promise<{ frame: Record<string, unknown>; story: PosterStoryAccessRow } | null> {
+  const frameResult = await db.query<{
+    id: string;
+    story_id: string | null;
+    creator_id: string;
+    media_url: string;
+    caption: string;
+    poster_caption: string;
+    media_type: string;
+    sort_order: number;
+    duration_ms: number;
+    background_color: string | null;
+    text_overlay: string | null;
+  }>(
+    `SELECT id, story_id, creator_id, media_url, caption, poster_caption, media_type, sort_order, duration_ms, background_color, text_overlay
+     FROM posters WHERE id = $1 LIMIT 1`,
+    [frameId]
+  );
+  if (!frameResult.rowCount) return null;
+  const frame = frameResult.rows[0];
+  if (!frame.story_id) return null;
+
+  const story = await getAccessiblePosterStory(frame.story_id, viewerUserId);
+  if (!story) return null;
+
+  return { frame: frame as unknown as Record<string, unknown>, story };
+}
+
+async function enrichPosterFrames(
+  storyId: string,
+  viewerUserId: string | null
+): Promise<Array<Record<string, unknown>>> {
+  const framesResult = await db.query<{
+    id: string;
+    media_url: string;
+    caption: string;
+    poster_caption: string;
+    media_type: string;
+    sort_order: number;
+    duration_ms: number;
+    background_color: string | null;
+    text_overlay: string | null;
+  }>(
+    `SELECT id, media_url, caption, poster_caption, media_type, sort_order, duration_ms, background_color, text_overlay
+     FROM posters WHERE story_id = $1 ORDER BY sort_order ASC`,
+    [storyId]
+  );
+
+  const frameIds = framesResult.rows.map((r) => r.id);
+
+  const stickersResult = frameIds.length
+    ? await db.query<{
+        id: string;
+        frame_id: string;
+        type: string;
+        x: string;
+        y: string;
+        scale: string;
+        rotation: string;
+        payload: string;
+        sort_order: number;
+      }>(
+        `SELECT id, frame_id, type, x, y, scale, rotation, payload, sort_order
+         FROM poster_stickers WHERE frame_id = ANY($1) ORDER BY sort_order ASC`,
+        [frameIds]
+      )
+    : { rows: [] };
+
+  const stickersByFrame = new Map<string, Array<Record<string, unknown>>>();
+  for (const s of stickersResult.rows) {
+    const arr = stickersByFrame.get(s.frame_id) ?? [];
+    arr.push({
+      id: s.id,
+      type: s.type,
+      x: Number(s.x),
+      y: Number(s.y),
+      scale: Number(s.scale),
+      rotation: Number(s.rotation),
+      payload: typeof s.payload === 'string' ? JSON.parse(s.payload) : s.payload,
+      sortOrder: s.sort_order,
+    });
+    stickersByFrame.set(s.frame_id, arr);
+  }
+
+  const viewsResult = frameIds.length
+    ? await db.query<{ frame_id: string; count: string }>(
+        `SELECT frame_id, COUNT(*)::text AS count FROM poster_views WHERE frame_id = ANY($1) GROUP BY frame_id`,
+        [frameIds]
+      )
+    : { rows: [] };
+  const viewCountMap = new Map<string, number>();
+  for (const v of viewsResult.rows) {
+    viewCountMap.set(v.frame_id, Number(v.count));
+  }
+
+  const reactionsResult = frameIds.length
+    ? await db.query<{ frame_id: string; reaction: string; count: string }>(
+        `SELECT frame_id, reaction, COUNT(*)::text AS count FROM poster_reactions WHERE frame_id = ANY($1) GROUP BY frame_id, reaction`,
+        [frameIds]
+      )
+    : { rows: [] };
+  const reactionCountMap = new Map<string, Record<string, number>>();
+  for (const r of reactionsResult.rows) {
+    const m = reactionCountMap.get(r.frame_id) ?? {};
+    m[r.reaction] = Number(r.count);
+    reactionCountMap.set(r.frame_id, m);
+  }
+
+  const viewerReactionMap = new Map<string, string | null>();
+  if (viewerUserId && frameIds.length) {
+    const viewerReactions = await db.query<{ frame_id: string; reaction: string }>(
+      `SELECT frame_id, reaction FROM poster_reactions WHERE frame_id = ANY($1) AND user_id = $2`,
+      [frameIds, viewerUserId]
+    );
+    for (const r of viewerReactions.rows) {
+      viewerReactionMap.set(r.frame_id, r.reaction);
+    }
+  }
+
+  const viewerViewedSet = new Set<string>();
+  if (viewerUserId && frameIds.length) {
+    const viewerViews = await db.query<{ frame_id: string }>(
+      `SELECT frame_id FROM poster_views WHERE frame_id = ANY($1) AND viewer_id = $2`,
+      [frameIds, viewerUserId]
+    );
+    for (const v of viewerViews.rows) {
+      viewerViewedSet.add(v.frame_id);
+    }
+  }
+
+  return framesResult.rows.map((row) => ({
+    id: row.id,
+    mediaUrl: row.media_url,
+    caption: row.poster_caption || row.caption,
+    mediaType: row.media_type,
+    sortOrder: row.sort_order,
+    durationMs: row.duration_ms,
+    backgroundColor: row.background_color,
+    textOverlay: row.text_overlay
+      ? (typeof row.text_overlay === 'string' ? JSON.parse(row.text_overlay) : row.text_overlay)
+      : null,
+    stickers: stickersByFrame.get(row.id) ?? [],
+    viewCount: viewCountMap.get(row.id) ?? 0,
+    reactions: reactionCountMap.get(row.id) ?? {},
+    viewerReaction: viewerReactionMap.get(row.id) ?? null,
+    seenByViewer: viewerViewedSet.has(row.id),
+  }));
+}
+
+async function enrichPosterStory(
+  storyRow: PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+  viewerUserId: string | null
+): Promise<Record<string, unknown>> {
+  const frames = await enrichPosterFrames(storyRow.id, viewerUserId);
+  const viewedFrameCount = frames.filter((f) => f.seenByViewer).length;
+  const isCreator = viewerUserId === storyRow.creator_id;
+
+  let uniqueViewerCount: number | undefined;
+  if (isCreator) {
+    const totalViews = await db.query<{ count: string }>(
+      `SELECT COUNT(DISTINCT viewer_id)::text AS count FROM poster_views pv
+       JOIN posters p ON p.id = pv.frame_id
+       WHERE p.story_id = $1`,
+      [storyRow.id]
+    );
+    uniqueViewerCount = Number(totalViews.rows[0]?.count ?? 0);
+  }
+
+  return {
+    id: storyRow.id,
+    creatorId: storyRow.creator_id,
+    creator: {
+      id: storyRow.creator_id,
+      username: storyRow.creator_username,
+      avatar: storyRow.creator_avatar,
+    },
+    audience: storyRow.audience,
+    allowReplies: storyRow.allow_replies,
+    allowReactions: storyRow.allow_reactions,
+    status: storyRow.status,
+    expiresAt: storyRow.expires_at,
+    createdAt: storyRow.created_at,
+    frames,
+    seenByViewer: viewedFrameCount > 0,
+    viewedFrameCount,
+    totalFrameCount: frames.length,
+    uniqueViewerCount,
+  };
+}
+
+// ── Poster Stories API ──────────────────────────────────────────────
+
+// POST /poster-stories — create story with frames and stickers in one transaction
+app.post('/poster-stories', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+
+  const stickerPayloadSchema = z.object({
+    text: z.string().max(500).optional(),
+    textStyle: z.enum(['editorial', 'minimal', 'label', 'outline']).optional(),
+    textColor: z.string().max(30).optional(),
+    backgroundColor: z.string().max(30).optional(),
+    alignment: z.enum(['left', 'center', 'right']).optional(),
+    userId: z.string().min(2).max(120).optional(),
+    username: z.string().max(120).optional(),
+    listingId: z.string().min(2).max(120).optional(),
+    snapshotTitle: z.string().max(200).optional(),
+    snapshotImageUrl: z.string().url().optional(),
+    snapshotPriceGbp: z.number().optional(),
+    lookId: z.string().min(2).max(120).optional(),
+    snapshotCaption: z.string().max(500).optional(),
+    question: z.string().max(200).optional(),
+    options: z.array(z.object({ id: z.string().min(1).max(60), label: z.string().min(1).max(80) })).length(2).optional(),
+  });
+
+  const stickerSchema = z.object({
+    id: z.string().min(2).max(120),
+    type: z.enum(['text', 'mention', 'listing', 'look', 'style_vote']),
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    scale: z.number().min(0.4).max(3).default(1),
+    rotation: z.number().default(0),
+    payload: stickerPayloadSchema,
+    sortOrder: z.number().int().default(0),
+  });
+
+  const frameSchema = z.object({
+    id: z.string().min(2).max(120),
+    mediaType: z.enum(['image', 'video', 'text']),
+    mediaUrl: z.string().url().optional(),
+    backgroundColor: z.string().max(30).optional(),
+    caption: z.string().max(500).default(''),
+    durationMs: z.number().int().min(1000).max(30000).default(5000),
+    sortOrder: z.number().int().default(0),
+    stickers: z.array(stickerSchema).default([]),
+  });
+
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120),
+    audience: z.enum(['public', 'private']).default('public'),
+    allowReplies: z.boolean().default(true),
+    allowReactions: z.boolean().default(true),
+    expiresInHours: z.number().int().min(1).max(168).default(24),
+    frames: z.array(frameSchema).min(1).max(10),
+  });
+
+  const payload = bodySchema.parse(request.body);
+
+  // Validate frame IDs unique
+  const frameIds = payload.frames.map((f) => f.id);
+  if (new Set(frameIds).size !== frameIds.length) {
+    reply.code(409);
+    return { ok: false, error: 'Duplicate frame IDs' };
+  }
+
+  // Validate media requirements
+  for (const frame of payload.frames) {
+    if ((frame.mediaType === 'image' || frame.mediaType === 'video') && !frame.mediaUrl) {
+      reply.code(400);
+      return { ok: false, error: `Frame ${frame.id}: ${frame.mediaType} requires mediaUrl` };
+    }
+    // Validate sticker payloads per type
+    for (const sticker of frame.stickers) {
+      if (sticker.type === 'text' && !sticker.payload.text) {
+        reply.code(400);
+        return { ok: false, error: `Text sticker requires text payload` };
+      }
+      if (sticker.type === 'mention' && (!sticker.payload.userId || !sticker.payload.username)) {
+        reply.code(400);
+        return { ok: false, error: `Mention sticker requires userId and username` };
+      }
+      if (sticker.type === 'listing' && !sticker.payload.listingId) {
+        reply.code(400);
+        return { ok: false, error: `Listing sticker requires listingId` };
+      }
+      if (sticker.type === 'look' && (!sticker.payload.lookId || !sticker.payload.snapshotImageUrl)) {
+        reply.code(400);
+        return { ok: false, error: `Look sticker requires lookId and snapshotImageUrl` };
+      }
+      if (sticker.type === 'style_vote' && (!sticker.payload.question || !sticker.payload.options)) {
+        reply.code(400);
+        return { ok: false, error: `Style vote sticker requires question and two options` };
+      }
+    }
+  }
+
+  // Check for duplicate story ID
+  const existing = await db.query(`SELECT id FROM poster_stories WHERE id = $1`, [payload.id]);
+  if (existing.rowCount) {
+    reply.code(409);
+    return { ok: false, error: 'Story ID already exists' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const expiresAt = new Date(Date.now() + payload.expiresInHours * 60 * 60 * 1000);
+
+    await client.query(
+      `INSERT INTO poster_stories (id, creator_id, audience, allow_replies, allow_reactions, status, expires_at)
+       VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
+      [payload.id, actorUserId, payload.audience, payload.allowReplies, payload.allowReactions, expiresAt]
+    );
+
+    for (const frame of payload.frames) {
+      await client.query(
+        `INSERT INTO posters (id, creator_id, media_url, caption, poster_caption, background_color, layout, status, expiry_hours, story_id, media_type, sort_order, duration_ms)
+         VALUES ($1, $2, $3, $4, $4, $5, 'single', 'published', $6, $7, $8, $9, $10)`,
+        [
+          frame.id,
+          actorUserId,
+          frame.mediaUrl ?? '',
+          frame.caption,
+          frame.backgroundColor ?? null,
+          payload.expiresInHours,
+          payload.id,
+          frame.mediaType,
+          frame.sortOrder,
+          frame.durationMs,
+        ]
+      );
+
+      for (const sticker of frame.stickers) {
+        await client.query(
+          `INSERT INTO poster_stickers (id, frame_id, type, x, y, scale, rotation, payload, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            sticker.id,
+            frame.id,
+            sticker.type,
+            sticker.x,
+            sticker.y,
+            sticker.scale,
+            sticker.rotation,
+            JSON.stringify(sticker.payload),
+            sticker.sortOrder,
+          ]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    client.release();
+    throw error;
+  }
+  client.release();
+
+  reply.code(201);
+  return { ok: true, storyId: payload.id };
+});
+
+// GET /poster-stories — active story feed
+app.get('/poster-stories', async (request) => {
+  const querySchema = z.object({
+    creatorId: z.string().optional(),
+    active: z.coerce.boolean().default(true),
+    limit: z.coerce.number().int().min(1).max(120).default(40),
+  });
+  const params = querySchema.parse(request.query ?? {});
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const conditions: string[] = [`ps.status = 'active'`];
+  const args: unknown[] = [];
+
+  if (params.creatorId) {
+    conditions.push(`ps.creator_id = $${args.length + 1}`);
+    args.push(params.creatorId);
+  }
+
+  // Non-creator viewers only see public, non-expired
+  if (!params.creatorId || params.creatorId !== viewerUserId) {
+    conditions.push(`ps.audience = 'public'`);
+    conditions.push(`ps.expires_at > NOW()`);
+  }
+
+  const result = await db.query<{
+    id: string;
+    creator_id: string;
+    audience: string;
+    allow_replies: boolean;
+    allow_reactions: boolean;
+    status: string;
+    expires_at: string;
+    created_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
+  }>(
+    `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       u.username AS creator_username, u.avatar AS creator_avatar
+     FROM poster_stories ps
+     LEFT JOIN users u ON u.id = ps.creator_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY ps.created_at DESC
+     LIMIT $${args.length + 1}`,
+    [...args, params.limit]
+  );
+
+  const stories: Array<Record<string, unknown>> = [];
+  for (const row of result.rows) {
+    const storyRow: PosterStoryAccessRow = {
+      id: row.id,
+      creator_id: row.creator_id,
+      audience: row.audience as 'public' | 'private',
+      status: row.status as 'active' | 'archived' | 'deleted',
+      expires_at: row.expires_at,
+    };
+    if (!canViewerAccessPosterStory(storyRow, viewerUserId)) continue;
+    const enriched = await enrichPosterStory(
+      { ...row, allow_replies: row.allow_replies, allow_reactions: row.allow_reactions } as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+      viewerUserId
+    );
+    stories.push(enriched);
+  }
+
+  // Sort: unseen first, then newest
+  stories.sort((a, b) => {
+    const aSeen = a.seenByViewer as boolean;
+    const bSeen = b.seenByViewer as boolean;
+    if (aSeen !== bSeen) return aSeen ? 1 : -1;
+    return new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime();
+  });
+
+  return { items: stories };
+});
+
+// GET /poster-stories/:storyId — story detail
+app.get('/poster-stories/:storyId', async (request, reply) => {
+  const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
+  const { storyId } = paramsSchema.parse(request.params);
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const story = await getAccessiblePosterStory(storyId, viewerUserId);
+  if (!story) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+
+  const row = await db.query<{
+    id: string;
+    creator_id: string;
+    audience: string;
+    allow_replies: boolean;
+    allow_reactions: boolean;
+    status: string;
+    expires_at: string;
+    created_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
+  }>(
+    `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       u.username AS creator_username, u.avatar AS creator_avatar
+     FROM poster_stories ps
+     LEFT JOIN users u ON u.id = ps.creator_id
+     WHERE ps.id = $1 LIMIT 1`,
+    [storyId]
+  );
+
+  if (!row.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+
+  const enriched = await enrichPosterStory(
+    row.rows[0] as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+    viewerUserId
+  );
+  return enriched;
+});
+
+// POST /poster-frames/:frameId/view — record view
+app.post('/poster-frames/:frameId/view', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
+  const { frameId } = paramsSchema.parse(request.params);
+
+  const accessible = await getAccessiblePosterFrame(frameId, actorUserId);
+  if (!accessible) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+
+  // Don't count creator self-view
+  if (accessible.story.creator_id === actorUserId) {
+    return { ok: true };
+  }
+
+  await db.query(
+    `INSERT INTO poster_views (frame_id, viewer_id, viewed_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (frame_id, viewer_id) DO UPDATE SET viewed_at = NOW()`,
+    [frameId, actorUserId]
+  );
+
+  const countResult = await db.query<{ count: string }>(
+    `SELECT COUNT(DISTINCT viewer_id)::text AS count FROM poster_views WHERE frame_id = $1`,
+    [frameId]
+  );
+
+  const isCreator = accessible.story.creator_id === actorUserId;
+  return {
+    ok: true,
+    uniqueViewerCount: isCreator ? Number(countResult.rows[0]?.count ?? 0) : undefined,
+  };
+});
+
+// POST /poster-frames/:frameId/reaction — react
+app.post('/poster-frames/:frameId/reaction', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
+  const { frameId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({
+    reaction: z.enum(['love', 'fire', 'style', 'want', 'wow', 'laugh']),
+  });
+  const { reaction } = bodySchema.parse(request.body);
+
+  const accessible = await getAccessiblePosterFrame(frameId, actorUserId);
+  if (!accessible) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+
+  // Check story allows reactions
+  if (!accessible.story.audience) {
+    reply.code(400);
+    return { ok: false, error: 'Reactions not available' };
+  }
+
+  const storyRow = await db.query<{ allow_reactions: boolean }>(
+    `SELECT allow_reactions FROM poster_stories WHERE id = $1 LIMIT 1`,
+    [accessible.story.id]
+  );
+  if (!storyRow.rows[0]?.allow_reactions) {
+    reply.code(400);
+    return { ok: false, error: 'Reactions are disabled for this story' };
+  }
+
+  // Creator reacting to own story
+  if (accessible.story.creator_id === actorUserId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot react to your own story' };
+  }
+
+  await db.query(
+    `INSERT INTO poster_reactions (frame_id, user_id, reaction)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (frame_id, user_id) DO UPDATE SET reaction = EXCLUDED.reaction, updated_at = NOW()`,
+    [frameId, actorUserId, reaction]
+  );
+
+  const countsResult = await db.query<{ reaction: string; count: string }>(
+    `SELECT reaction, COUNT(*)::text AS count FROM poster_reactions WHERE frame_id = $1 GROUP BY reaction`,
+    [frameId]
+  );
+  const reactionCounts: Record<string, number> = {};
+  for (const r of countsResult.rows) {
+    reactionCounts[r.reaction] = Number(r.count);
+  }
+
+  return { ok: true, reactionCounts, viewerReaction: reaction };
+});
+
+// DELETE /poster-frames/:frameId/reaction — remove reaction
+app.delete('/poster-frames/:frameId/reaction', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
+  const { frameId } = paramsSchema.parse(request.params);
+
+  const accessible = await getAccessiblePosterFrame(frameId, actorUserId);
+  if (!accessible) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+
+  await db.query(
+    `DELETE FROM poster_reactions WHERE frame_id = $1 AND user_id = $2`,
+    [frameId, actorUserId]
+  );
+
+  return { ok: true };
+});
+
+// POST /poster-frames/:frameId/replies — private reply
+app.post('/poster-frames/:frameId/replies', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
+  const { frameId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120),
+    body: z.string().trim().min(1).max(1000),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  const accessible = await getAccessiblePosterFrame(frameId, actorUserId);
+  if (!accessible) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+
+  const storyRow = await db.query<{ allow_replies: boolean; creator_id: string }>(
+    `SELECT allow_replies, creator_id FROM poster_stories WHERE id = $1 LIMIT 1`,
+    [accessible.story.id]
+  );
+  if (!storyRow.rows[0]?.allow_replies) {
+    reply.code(400);
+    return { ok: false, error: 'Replies are disabled for this story' };
+  }
+
+  const creatorId = storyRow.rows[0].creator_id;
+  if (creatorId === actorUserId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot reply to your own story' };
+  }
+
+  await db.query(
+    `INSERT INTO poster_replies (id, frame_id, story_id, author_id, creator_id, body)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [payload.id, frameId, accessible.story.id, actorUserId, creatorId, payload.body]
+  );
+
+  reply.code(201);
+  return { ok: true, replyId: payload.id };
+});
+
+// GET /poster-stories/:storyId/replies — creator sees all replies
+app.get('/poster-stories/:storyId/replies', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
+  const { storyId } = paramsSchema.parse(request.params);
+
+  const story = await getAccessiblePosterStory(storyId, actorUserId, { includeExpiredForOwner: true });
+  if (!story) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+
+  if (story.creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const result = await db.query<{
+    id: string;
+    frame_id: string;
+    author_id: string;
+    body: string;
+    created_at: string;
+    author_username: string | null;
+    author_avatar: string | null;
+  }>(
+    `SELECT pr.id, pr.frame_id, pr.author_id, pr.body, pr.created_at,
+       u.username AS author_username, u.avatar AS author_avatar
+     FROM poster_replies pr
+     LEFT JOIN users u ON u.id = pr.author_id
+     WHERE pr.story_id = $1
+     ORDER BY pr.created_at DESC`,
+    [storyId]
+  );
+
+  return {
+    items: result.rows.map((r) => ({
+      id: r.id,
+      frameId: r.frame_id,
+      authorId: r.author_id,
+      authorUsername: r.author_username,
+      authorAvatar: r.author_avatar,
+      body: r.body,
+      createdAt: r.created_at,
+    })),
+  };
+});
+
+// POST /poster-stickers/:stickerId/vote — style vote
+app.post('/poster-stickers/:stickerId/vote', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ stickerId: z.string().min(2).max(120) });
+  const { stickerId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({ optionId: z.string().min(1).max(60) });
+  const { optionId } = bodySchema.parse(request.body);
+
+  const stickerResult = await db.query<{
+    id: string;
+    frame_id: string;
+    type: string;
+    payload: string;
+  }>(
+    `SELECT id, frame_id, type, payload FROM poster_stickers WHERE id = $1 LIMIT 1`,
+    [stickerId]
+  );
+  if (!stickerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Sticker not found' };
+  }
+  const sticker = stickerResult.rows[0];
+  if (sticker.type !== 'style_vote') {
+    reply.code(400);
+    return { ok: false, error: 'Sticker is not a style vote' };
+  }
+
+  const accessible = await getAccessiblePosterFrame(sticker.frame_id, actorUserId);
+  if (!accessible) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+
+  const payload = typeof sticker.payload === 'string' ? JSON.parse(sticker.payload) : sticker.payload;
+  const options = payload?.options as Array<{ id: string; label: string }> | undefined;
+  if (!options || !options.some((o) => o.id === optionId)) {
+    reply.code(400);
+    return { ok: false, error: 'Invalid option' };
+  }
+
+  await db.query(
+    `INSERT INTO poster_style_votes (sticker_id, user_id, option_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (sticker_id, user_id) DO UPDATE SET option_id = EXCLUDED.option_id`,
+    [stickerId, actorUserId, optionId]
+  );
+
+  const votesResult = await db.query<{ option_id: string; count: string }>(
+    `SELECT option_id, COUNT(*)::text AS count FROM poster_style_votes WHERE sticker_id = $1 GROUP BY option_id`,
+    [stickerId]
+  );
+  const voteCounts = new Map<string, number>();
+  let totalVotes = 0;
+  for (const v of votesResult.rows) {
+    voteCounts.set(v.option_id, Number(v.count));
+    totalVotes += Number(v.count);
+  }
+
+  const optionResults = (options ?? []).map((o) => ({
+    id: o.id,
+    label: o.label,
+    voteCount: voteCounts.get(o.id) ?? 0,
+    percentage: totalVotes > 0 ? Math.round(((voteCounts.get(o.id) ?? 0) / totalVotes) * 100) : 0,
+  }));
+
+  return {
+    selectedOptionId: optionId,
+    options: optionResults,
+    totalVotes,
+  };
+});
+
+// GET /poster-stories/:storyId/activity — creator activity
+app.get('/poster-stories/:storyId/activity', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
+  const { storyId } = paramsSchema.parse(request.params);
+
+  const story = await getAccessiblePosterStory(storyId, actorUserId, { includeExpiredForOwner: true });
+  if (!story) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+
+  if (story.creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const viewersResult = await db.query<{
+    viewer_id: string;
+    username: string | null;
+    avatar: string | null;
+    frame_count: string;
+    latest_viewed: string;
+  }>(
+    `SELECT pv.viewer_id, u.username, u.avatar,
+       COUNT(DISTINCT pv.frame_id)::text AS frame_count,
+       MAX(pv.viewed_at)::text AS latest_viewed
+     FROM poster_views pv
+     JOIN posters p ON p.id = pv.frame_id
+     LEFT JOIN users u ON u.id = pv.viewer_id
+     WHERE p.story_id = $1
+     GROUP BY pv.viewer_id, u.username, u.avatar
+     ORDER BY latest_viewed DESC`,
+    [storyId]
+  );
+
+  const reactionsResult = await db.query<{
+    user_id: string;
+    username: string | null;
+    avatar: string | null;
+    frame_id: string;
+    reaction: string;
+    created_at: string;
+  }>(
+    `SELECT pr.user_id, u.username, u.avatar, pr.frame_id, pr.reaction, pr.created_at
+     FROM poster_reactions pr
+     JOIN posters p ON p.id = pr.frame_id
+     LEFT JOIN users u ON u.id = pr.user_id
+     WHERE p.story_id = $1
+     ORDER BY pr.created_at DESC`,
+    [storyId]
+  );
+
+  const repliesResult = await db.query<{
+    id: string;
+    author_id: string;
+    author_username: string | null;
+    author_avatar: string | null;
+    frame_id: string;
+    body: string;
+    created_at: string;
+  }>(
+    `SELECT pr.id, pr.author_id, u.username AS author_username, u.avatar AS author_avatar,
+       pr.frame_id, pr.body, pr.created_at
+     FROM poster_replies pr
+     LEFT JOIN users u ON u.id = pr.author_id
+     WHERE pr.story_id = $1
+     ORDER BY pr.created_at DESC`,
+    [storyId]
+  );
+
+  const styleVotesResult = await db.query<{
+    sticker_id: string;
+    user_id: string;
+    username: string | null;
+    option_id: string;
+    created_at: string;
+  }>(
+    `SELECT psv.sticker_id, psv.user_id, u.username, psv.option_id, psv.created_at
+     FROM poster_style_votes psv
+     JOIN poster_stickers ps ON ps.id = psv.sticker_id
+     JOIN posters p ON p.id = ps.frame_id
+     LEFT JOIN users u ON u.id = psv.user_id
+     WHERE p.story_id = $1
+     ORDER BY psv.created_at DESC`,
+    [storyId]
+  );
+
+  return {
+    storyId,
+    viewers: viewersResult.rows.map((r) => ({
+      userId: r.viewer_id,
+      username: r.username,
+      avatar: r.avatar,
+      viewedFrameCount: Number(r.frame_count),
+      latestViewedAt: r.latest_viewed,
+    })),
+    reactions: reactionsResult.rows.map((r) => ({
+      userId: r.user_id,
+      username: r.username,
+      avatar: r.avatar,
+      frameId: r.frame_id,
+      reaction: r.reaction,
+      createdAt: r.created_at,
+    })),
+    replies: repliesResult.rows.map((r) => ({
+      id: r.id,
+      authorId: r.author_id,
+      authorUsername: r.author_username,
+      authorAvatar: r.author_avatar,
+      frameId: r.frame_id,
+      body: r.body,
+      createdAt: r.created_at,
+    })),
+    styleVotes: styleVotesResult.rows.map((r) => ({
+      stickerId: r.sticker_id,
+      userId: r.user_id,
+      username: r.username,
+      optionId: r.option_id,
+      createdAt: r.created_at,
+    })),
+  };
+});
+
+// GET /poster-stories/archive — owner archive
+app.get('/poster-stories/archive', async (request) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const querySchema = z.object({
+    includeActive: z.coerce.boolean().default(false),
+  });
+  const { includeActive } = querySchema.parse(request.query ?? {});
+
+  const conditions = [`ps.creator_id = $1`];
+  if (!includeActive) {
+    conditions.push(`(ps.status = 'archived' OR ps.expires_at <= NOW())`);
+  }
+
+  const result = await db.query<{
+    id: string;
+    creator_id: string;
+    audience: string;
+    allow_replies: boolean;
+    allow_reactions: boolean;
+    status: string;
+    expires_at: string;
+    created_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
+  }>(
+    `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       u.username AS creator_username, u.avatar AS creator_avatar
+     FROM poster_stories ps
+     LEFT JOIN users u ON u.id = ps.creator_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY ps.created_at DESC`,
+    [actorUserId]
+  );
+
+  const stories: Array<Record<string, unknown>> = [];
+  for (const row of result.rows) {
+    const enriched = await enrichPosterStory(
+      row as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+      actorUserId
+    );
+    stories.push(enriched);
+  }
+
+  return { items: stories };
+});
+
+// POST /poster-stories/:storyId/archive — manual archive
+app.post('/poster-stories/:storyId/archive', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
+  const { storyId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_stories WHERE id = $1 LIMIT 1`,
+    [storyId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(
+    `UPDATE poster_stories SET status = 'archived', archived_at = NOW() WHERE id = $1`,
+    [storyId]
+  );
+
+  return { ok: true };
+});
+
+// DELETE /poster-stories/:storyId — delete story
+app.delete('/poster-stories/:storyId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
+  const { storyId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_stories WHERE id = $1 LIMIT 1`,
+    [storyId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(`DELETE FROM poster_stories WHERE id = $1`, [storyId]);
+  return { ok: true };
+});
+
+// DELETE /poster-frames/:frameId — delete single frame
+app.delete('/poster-frames/:frameId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
+  const { frameId } = paramsSchema.parse(request.params);
+
+  const frameResult = await db.query<{ creator_id: string; story_id: string | null }>(
+    `SELECT creator_id, story_id FROM posters WHERE id = $1 LIMIT 1`,
+    [frameId]
+  );
+  if (!frameResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+  const frame = frameResult.rows[0];
+  if (frame.creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const storyId = frame.story_id;
+  await db.query(`DELETE FROM posters WHERE id = $1`, [frameId]);
+
+  // Check if any frames remain
+  if (storyId) {
+    const remaining = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM posters WHERE story_id = $1`,
+      [storyId]
+    );
+    if (Number(remaining.rows[0]?.count ?? 0) === 0) {
+      await db.query(`DELETE FROM poster_stories WHERE id = $1`, [storyId]);
+    } else {
+      // Reorder remaining frames
+      const remainingFrames = await db.query<{ id: string }>(
+        `SELECT id FROM posters WHERE story_id = $1 ORDER BY sort_order ASC`,
+        [storyId]
+      );
+      for (let i = 0; i < remainingFrames.rows.length; i++) {
+        await db.query(`UPDATE posters SET sort_order = $1 WHERE id = $2`, [i, remainingFrames.rows[i].id]);
+      }
+    }
+  }
+
+  return { ok: true };
+});
+
+// ── Poster Highlights API ───────────────────────────────────────────
+
+// GET /users/:userId/poster-highlights — public
+app.get('/users/:userId/poster-highlights', async (request) => {
+  const paramsSchema = z.object({ userId: z.string().min(2).max(120) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    id: string;
+    title: string;
+    cover_frame_id: string | null;
+    sort_order: number;
+    created_at: string;
+  }>(
+    `SELECT id, title, cover_frame_id, sort_order, created_at
+     FROM poster_highlights WHERE creator_id = $1
+     ORDER BY sort_order ASC`,
+    [userId]
+  );
+
+  const highlights: Array<Record<string, unknown>> = [];
+  for (const h of result.rows) {
+    const itemsResult = await db.query<{
+      frame_id: string;
+      sort_order: number;
+      media_url: string;
+      media_type: string;
+      poster_caption: string;
+      caption: string;
+      background_color: string | null;
+    }>(
+      `SELECT phi.frame_id, phi.sort_order, p.media_url, p.media_type, p.poster_caption, p.caption, p.background_color
+       FROM poster_highlight_items phi
+       JOIN posters p ON p.id = phi.frame_id
+       WHERE phi.highlight_id = $1
+       ORDER BY phi.sort_order ASC`,
+      [h.id]
+    );
+
+    let coverUrl: string | null = null;
+    if (h.cover_frame_id) {
+      const coverResult = await db.query<{ media_url: string }>(
+        `SELECT media_url FROM posters WHERE id = $1 LIMIT 1`,
+        [h.cover_frame_id]
+      );
+      coverUrl = coverResult.rows[0]?.media_url ?? null;
+    }
+
+    highlights.push({
+      id: h.id,
+      title: h.title,
+      coverFrameId: h.cover_frame_id,
+      coverUrl,
+      sortOrder: h.sort_order,
+      createdAt: h.created_at,
+      frames: itemsResult.rows.map((r) => ({
+        frameId: r.frame_id,
+        sortOrder: r.sort_order,
+        mediaUrl: r.media_url,
+        mediaType: r.media_type,
+        caption: r.poster_caption || r.caption,
+        backgroundColor: r.background_color,
+      })),
+    });
+  }
+
+  return { items: highlights };
+});
+
+// POST /poster-highlights — create highlight
+app.post('/poster-highlights', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120),
+    title: z.string().trim().min(1).max(40),
+    coverFrameId: z.string().min(2).max(120).optional(),
+    frameIds: z.array(z.string().min(2).max(120)).min(1),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  // Verify all frames belong to the creator
+  for (const fid of payload.frameIds) {
+    const ownerResult = await db.query<{ creator_id: string }>(
+      `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
+      [fid]
+    );
+    if (!ownerResult.rowCount || ownerResult.rows[0].creator_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: `Frame ${fid} not owned by creator` };
+    }
+  }
+
+  if (payload.coverFrameId) {
+    const coverOwner = await db.query<{ creator_id: string }>(
+      `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
+      [payload.coverFrameId]
+    );
+    if (!coverOwner.rowCount || coverOwner.rows[0].creator_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Cover frame not owned by creator' };
+    }
+  }
+
+  await db.query(
+    `INSERT INTO poster_highlights (id, creator_id, title, cover_frame_id, sort_order)
+     VALUES ($1, $2, $3, $4, 0)`,
+    [payload.id, actorUserId, payload.title, payload.coverFrameId ?? null]
+  );
+
+  for (let i = 0; i < payload.frameIds.length; i++) {
+    await db.query(
+      `INSERT INTO poster_highlight_items (highlight_id, frame_id, sort_order)
+       VALUES ($1, $2, $3)`,
+      [payload.id, payload.frameIds[i], i]
+    );
+  }
+
+  reply.code(201);
+  return { ok: true, highlightId: payload.id };
+});
+
+// PATCH /poster-highlights/:highlightId — update
+app.patch('/poster-highlights/:highlightId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ highlightId: z.string().min(2).max(120) });
+  const { highlightId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({
+    title: z.string().trim().min(1).max(40).optional(),
+    coverFrameId: z.string().min(2).max(120).optional(),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_highlights WHERE id = $1 LIMIT 1`,
+    [highlightId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Highlight not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const updates: string[] = [];
+  const values: unknown[] = [];
+  let idx = 1;
+  if (payload.title !== undefined) {
+    updates.push(`title = $${idx++}`);
+    values.push(payload.title);
+  }
+  if (payload.coverFrameId !== undefined) {
+    updates.push(`cover_frame_id = $${idx++}`);
+    values.push(payload.coverFrameId);
+  }
+  if (updates.length) {
+    values.push(highlightId);
+    await db.query(`UPDATE poster_highlights SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+  }
+
+  return { ok: true };
+});
+
+// DELETE /poster-highlights/:highlightId — delete
+app.delete('/poster-highlights/:highlightId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ highlightId: z.string().min(2).max(120) });
+  const { highlightId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_highlights WHERE id = $1 LIMIT 1`,
+    [highlightId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Highlight not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(`DELETE FROM poster_highlights WHERE id = $1`, [highlightId]);
+  return { ok: true };
+});
+
+// POST /poster-highlights/:highlightId/frames — add frame
+app.post('/poster-highlights/:highlightId/frames', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ highlightId: z.string().min(2).max(120) });
+  const { highlightId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({
+    frameId: z.string().min(2).max(120),
+  });
+  const { frameId } = bodySchema.parse(request.body);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_highlights WHERE id = $1 LIMIT 1`,
+    [highlightId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Highlight not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const frameOwner = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
+    [frameId]
+  );
+  if (!frameOwner.rowCount || frameOwner.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Frame not owned by creator' };
+  }
+
+  const maxOrder = await db.query<{ max_order: number | null }>(
+    `SELECT MAX(sort_order) AS max_order FROM poster_highlight_items WHERE highlight_id = $1`,
+    [highlightId]
+  );
+  const nextOrder = (maxOrder.rows[0]?.max_order ?? -1) + 1;
+
+  await db.query(
+    `INSERT INTO poster_highlight_items (highlight_id, frame_id, sort_order)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (highlight_id, frame_id) DO NOTHING`,
+    [highlightId, frameId, nextOrder]
+  );
+
+  return { ok: true };
+});
+
+// DELETE /poster-highlights/:highlightId/frames/:frameId — remove frame
+app.delete('/poster-highlights/:highlightId/frames/:frameId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({
+    highlightId: z.string().min(2).max(120),
+    frameId: z.string().min(2).max(120),
+  });
+  const { highlightId, frameId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_highlights WHERE id = $1 LIMIT 1`,
+    [highlightId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Highlight not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(
+    `DELETE FROM poster_highlight_items WHERE highlight_id = $1 AND frame_id = $2`,
+    [highlightId, frameId]
+  );
+
+  return { ok: true };
 });
 
 const shutdown = async () => {

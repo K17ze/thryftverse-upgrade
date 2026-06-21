@@ -14,8 +14,11 @@ export type RootStackParamList = {
   };
   ItemDetail: { itemId: string };
   Closet: undefined;
-  PosterViewer: { posterId: string };
+  PosterViewer: { storyId: string; startFrameIndex?: number };
   CreatePoster: undefined;
+  PosterStoryActivity: { storyId: string };
+  PosterArchive: undefined;
+  PosterHighlightEditor: { highlightId?: string };
   CreateAuction: { listingId?: string } | undefined;
   CreateCoOwn:
     | {

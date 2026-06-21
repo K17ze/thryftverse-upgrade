@@ -32,7 +32,8 @@ import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
-import { fetchPostersFromApi } from '../services/postersApi';
+import { fetchPosterStories } from '../services/postersApi';
+import type { PosterStory } from '../services/postersApi';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -393,7 +394,7 @@ export default function HomeScreen() {
     setRefreshing(true);
     await refreshListings();
     setPostersLoading(true);
-    fetchPostersFromApi({ status: 'published', limit: 12 })
+    fetchPosterStories({ active: true, limit: 20 })
       .then((res) => setRealPosters(res.items))
       .catch(() => {})
       .finally(() => setPostersLoading(false));
@@ -401,13 +402,13 @@ export default function HomeScreen() {
     setTimeout(() => setRefreshing(false), 380);
   };
 
-  const [realPosters, setRealPosters] = React.useState<Array<{ id: string; mediaUrl: string; caption: string; creatorId: string }>>([]);
+  const [realPosters, setRealPosters] = React.useState<PosterStory[]>([]);
   const [postersLoading, setPostersLoading] = React.useState(false);
 
   React.useEffect(() => {
     let mounted = true;
     setPostersLoading(true);
-    fetchPostersFromApi({ status: 'published', limit: 12 })
+    fetchPosterStories({ active: true, limit: 20 })
       .then((res) => {
         if (mounted) setRealPosters(res.items);
       })
@@ -535,47 +536,63 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {realPosters.map((poster) => (
+          {realPosters.map((story) => {
+            const firstFrame = story.frames[0];
+            const mediaUrl = firstFrame?.mediaUrl ?? '';
+            const caption = firstFrame?.caption ?? '';
+            return (
             <AnimatedPressable
-              key={poster.id}
+              key={story.id}
               style={styles.posterCard}
               activeOpacity={0.9}
-              onPress={() => { haptic.light(); navigation.navigate('PosterViewer', { posterId: poster.id }); }}
+              onPress={() => { haptic.light(); navigation.navigate('PosterViewer', { storyId: story.id }); }}
               accessibilityRole="button"
-              accessibilityLabel={`Open poster`}
-              accessibilityHint="Opens poster details"
+              accessibilityLabel={`Open poster story by @${story.creator.username ?? story.creatorId}`}
+              accessibilityHint="Opens poster story viewer"
             >
-              <View style={[styles.posterTile, hasSeenPoster(poster.id) ? styles.posterTileSeen : styles.posterTileUnseen]}>
-                {isVideoUri(poster.mediaUrl) ? (
+              <View style={[styles.posterTile, story.seenByViewer ? styles.posterTileSeen : styles.posterTileUnseen]}>
+                {isVideoUri(mediaUrl) ? (
                   <Video
-                    source={{ uri: poster.mediaUrl }}
+                    source={{ uri: mediaUrl }}
                     style={styles.posterImage}
                     resizeMode={ResizeMode.COVER}
                     shouldPlay
                     isLooping
                     isMuted
                   />
-                ) : (
+                ) : mediaUrl ? (
                   <CachedImage
-                    uri={poster.mediaUrl || ''}
+                    uri={mediaUrl}
                     style={styles.posterImage}
                     contentFit="cover"
                   />
+                ) : (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: firstFrame?.backgroundColor ?? Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontFamily: Typography.family.medium, textAlign: 'center', paddingHorizontal: 8 }} numberOfLines={2}>{caption || 'Text story'}</Text>
+                  </View>
                 )}
                 <View style={styles.posterShade} />
 
                 <View style={styles.posterBottomOverlay}>
-                  <Text style={styles.posterCaption} numberOfLines={2}>{poster.caption}</Text>
+                  <Text style={styles.posterCaption} numberOfLines={2}>{caption}</Text>
                 </View>
+
+                {story.totalFrameCount > 1 && (
+                  <View style={styles.frameCountBadge}>
+                    <Ionicons name="layers" size={10} color="#fff" />
+                    <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.posterCardMetaRow}>
-                <Text style={hasSeenPoster(poster.id) ? styles.posterSeenMeta : styles.posterFreshMeta}>
-                  {hasSeenPoster(poster.id) ? 'Seen' : 'New'}
+                <Text style={story.seenByViewer ? styles.posterSeenMeta : styles.posterFreshMeta}>
+                  {story.seenByViewer ? 'Seen' : 'New'}
                 </Text>
               </View>
             </AnimatedPressable>
-          ))}
+            );
+          })}
         </ScrollView>
 
         {lastError ? (
@@ -1307,6 +1324,23 @@ const styles = StyleSheet.create({
     fontSize: 9,
     lineHeight: 12,
     fontFamily: Typography.family.medium,
+  },
+  frameCountBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  frameCountBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontFamily: Typography.family.bold,
   },
   posterCardMetaRow: {
     flexDirection: 'row',

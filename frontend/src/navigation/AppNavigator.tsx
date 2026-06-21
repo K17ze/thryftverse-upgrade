@@ -15,6 +15,9 @@ import ClosetScreen from '../screens/ClosetScreen';
 import CollectionDetailScreen from '../screens/CollectionDetailScreen';
 import PosterViewerScreen from '../screens/PosterViewerScreen';
 import CreatePosterScreen from '../screens/CreatePosterScreen';
+import PosterStoryActivityScreen from '../screens/PosterStoryActivityScreen';
+import PosterArchiveScreen from '../screens/PosterArchiveScreen';
+import PosterHighlightEditorScreen from '../screens/PosterHighlightEditorScreen';
 
 import CreateAuctionScreen from '../screens/CreateAuctionScreen';
 import CreateCoOwnScreen from '../screens/CreateSyndicateScreen';
@@ -205,6 +208,9 @@ export default function AppNavigator() {
       <Stack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
       <Stack.Screen name="PosterViewer" component={PosterViewerScreen} options={modalScreenOptions} />
       <Stack.Screen name="CreatePoster" component={CreatePosterScreen} options={modalScreenOptions} />
+      <Stack.Screen name="PosterStoryActivity" component={PosterStoryActivityScreen} options={modalScreenOptions} />
+      <Stack.Screen name="PosterArchive" component={PosterArchiveScreen} options={modalScreenOptions} />
+      <Stack.Screen name="PosterHighlightEditor" component={PosterHighlightEditorScreen} options={modalScreenOptions} />
 
       <Stack.Screen name="CreateAuction" component={CreateAuctionScreen} options={modalScreenOptions} />
       <Stack.Screen name="CreateCoOwn" component={CreateCoOwnScreen} options={modalScreenOptions} />

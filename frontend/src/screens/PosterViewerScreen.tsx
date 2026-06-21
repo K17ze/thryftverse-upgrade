@@ -1,7 +1,5 @@
 import React from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
   View,
   Text,
   StyleSheet,
@@ -9,186 +7,293 @@ import {
   Pressable,
   Dimensions,
   AppState,
+  Image,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CachedImage } from '../components/CachedImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { fetchPostersFromApi, deletePosterOnApi } from '../services/postersApi';
+import {
+  fetchPosterStories,
+  fetchPosterStoryById,
+  recordPosterFrameView,
+  setPosterFrameReaction,
+  removePosterFrameReaction,
+  createPosterReply,
+  deletePosterStory,
+  archivePosterStory,
+} from '../services/postersApi';
+import type {
+  PosterStory,
+  PosterFrame,
+  PosterReactionType,
+} from '../services/postersApi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Type, Typography } from '../theme/designTokens';
+import { Type, Typography, Space } from '../theme/designTokens';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { PosterProgressSegments } from '../components/poster/PosterProgressSegments';
+import { PosterStickerLayer } from '../components/poster/PosterStickerLayer';
+import { PosterReactionReplyBar } from '../components/poster/PosterReactionReplyBar';
+import { CachedImage } from '../components/CachedImage';
+import { Video } from '../components/compat/Video';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const AUTO_ADVANCE_MS = 5000;
 const TICK_MS = 50;
 
 type NavT = StackNavigationProp<RootStackParamList>;
+type RouteT = RouteProp<RootStackParamList, 'PosterViewer'>;
 
-interface ViewerPoster {
-  id: string;
-  creatorId: string;
-  mediaUrl: string;
-  caption: string;
-  createdAtMs: number;
-  remainingHours: number;
-  textOverlay?: { text: string; color: string; position: string; alignment?: string } | null;
+function isVideoUrl(url: string): boolean {
+  return /\.(mp4|mov|m4v|quicktime)$/i.test(url);
 }
 
 export default function PosterViewerScreen() {
   const navigation = useNavigation<NavT>();
-  const route = useRoute<any>();
+  const route = useRoute<RouteT>();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
-  const [posters, setPosters] = React.useState<ViewerPoster[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [currentIndex, setCurrentIndex] = React.useState(0);
+
+  const [stories, setStories] = React.useState<PosterStory[]>([]);
+  const [storyIndex, setStoryIndex] = React.useState(0);
+  const [frameIndex, setFrameIndex] = React.useState(0);
   const [progress, setProgress] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [mediaError, setMediaError] = React.useState(false);
+  const [recordedFrames, setRecordedFrames] = React.useState<Set<string>>(new Set());
+
+  const storyId = route.params?.storyId;
+  const startFrameIndex = route.params?.startFrameIndex ?? 0;
 
   React.useEffect(() => {
     let mounted = true;
     setIsLoading(true);
-    fetchPostersFromApi({ status: 'published', limit: 40 })
-      .then((res) => {
-        if (!mounted) return;
-        const now = Date.now();
-        const mapped = res.items.map((p) => {
-          const createdAtMs = new Date(p.createdAt).getTime();
-          const expiresAtMs = createdAtMs + (p.expiryHours ?? 24) * 60 * 60 * 1000;
-          const remainingHours = Math.max(0, Math.ceil((expiresAtMs - now) / (60 * 60 * 1000)));
-          return {
-            id: p.id,
-            creatorId: p.creatorId,
-            mediaUrl: p.mediaUrl,
-            caption: p.caption,
-            createdAtMs,
-            remainingHours,
-            textOverlay: p.textOverlay ? {
-              text: String(p.textOverlay.text ?? ''),
-              color: String(p.textOverlay.color ?? '#ffffff'),
-              position: String(p.textOverlay.position ?? 'bottom'),
-              alignment: String(p.textOverlay.alignment ?? 'center'),
-            } : null,
-          };
-        }).filter((p) => p.remainingHours > 0);
-        setPosters(mapped);
-        const idx = mapped.findIndex((poster) => poster.id === route.params?.posterId);
-        setCurrentIndex(idx >= 0 ? idx : 0);
-      })
-      .catch(() => {
-        if (mounted) show('Could not load posters', 'error');
-      })
-      .finally(() => {
+
+    const loadStories = async () => {
+      try {
+        if (storyId) {
+          const story = await fetchPosterStoryById(storyId);
+          if (!mounted) return;
+          setStories([story]);
+          setStoryIndex(0);
+          setFrameIndex(Math.min(startFrameIndex, story.frames.length - 1));
+        } else {
+          const res = await fetchPosterStories({ active: true, limit: 50 });
+          if (!mounted) return;
+          setStories(res.items);
+          setStoryIndex(0);
+          setFrameIndex(0);
+        }
+      } catch {
+        if (mounted) show('Could not load poster stories', 'error');
+      } finally {
         if (mounted) setIsLoading(false);
-      });
+      }
+    };
+
+    loadStories();
     return () => { mounted = false; };
-  }, [route.params?.posterId, show]);
+  }, [storyId, startFrameIndex, show]);
 
-  const activePoster = posters[currentIndex];
-  const isOwnedPoster = !!activePoster && !!currentUser && activePoster.creatorId === currentUser.id;
+  const activeStory = stories[storyIndex];
+  const activeFrame: PosterFrame | undefined = activeStory?.frames[frameIndex];
+  const isOwner = !!activeStory && !!currentUser && activeStory.creatorId === currentUser.id;
 
-  const goNext = React.useCallback(() => {
+  const goNextFrame = React.useCallback(() => {
     setProgress(0);
-    if (currentIndex >= posters.length - 1) {
+    if (!activeStory) return;
+    if (frameIndex < activeStory.frames.length - 1) {
+      setFrameIndex(frameIndex + 1);
+    } else if (storyIndex < stories.length - 1) {
+      setStoryIndex(storyIndex + 1);
+      setFrameIndex(0);
+    } else {
       navigation.goBack();
-      return;
     }
-    setCurrentIndex((prev: number) => Math.min(prev + 1, posters.length - 1));
-  }, [currentIndex, navigation, posters.length]);
+  }, [activeStory, frameIndex, storyIndex, stories.length, navigation]);
 
-  const goPrevious = React.useCallback(() => {
+  const goPrevFrame = React.useCallback(() => {
     setProgress(0);
-    setCurrentIndex((prev: number) => Math.max(0, prev - 1));
-  }, []);
+    if (frameIndex > 0) {
+      setFrameIndex(frameIndex - 1);
+    } else if (storyIndex > 0) {
+      setStoryIndex(storyIndex - 1);
+      setFrameIndex(Math.max(0, (stories[storyIndex - 1]?.frames.length ?? 1) - 1));
+    }
+  }, [frameIndex, storyIndex, stories]);
 
-  const handleDeletePoster = async () => {
-    if (!activePoster || !isOwnedPoster) return;
+  const handleDelete = async () => {
+    if (!activeStory || !isOwner) return;
+    Alert.alert(
+      'Delete story?',
+      'This will permanently remove your poster story.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePosterStory(activeStory.id);
+              show('Story deleted', 'info');
+              navigation.goBack();
+            } catch {
+              show('Failed to delete story', 'error');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleArchive = async () => {
+    if (!activeStory || !isOwner) return;
     try {
-      await deletePosterOnApi(activePoster.id);
-      show('Poster deleted', 'info');
+      await archivePosterStory(activeStory.id);
+      show('Story archived', 'info');
       navigation.goBack();
     } catch {
-      show('Failed to delete poster', 'error');
+      show('Failed to archive story', 'error');
     }
   };
+
+  // Record view when frame changes
+  React.useEffect(() => {
+    if (!activeFrame || !activeStory || isOwner) return;
+    if (recordedFrames.has(activeFrame.id)) return;
+
+    setRecordedFrames((prev) => new Set(prev).add(activeFrame.id));
+    recordPosterFrameView(activeFrame.id).catch(() => {});
+  }, [activeFrame?.id, activeStory, isOwner, recordedFrames]);
 
   // Pause when app goes to background
   React.useEffect(() => {
     const sub = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState !== 'active') {
-        setIsPaused(true);
-      }
+      if (nextAppState !== 'active') setIsPaused(true);
     });
     return () => sub.remove();
   }, []);
 
+  // Auto-advance timer
   React.useEffect(() => {
-    if (!posters.length) {
-      if (!isLoading) navigation.goBack();
-      return;
-    }
-    if (currentIndex > posters.length - 1) {
-      setCurrentIndex(posters.length - 1);
-      setProgress(0);
-      return;
-    }
-    setProgress(0);
-  }, [activePoster?.id, currentIndex, navigation, posters.length, isLoading]);
+    if (!activeFrame || isPaused || isLoading) return;
 
-  React.useEffect(() => {
-    if (!activePoster || isPaused) {
-      return;
-    }
-
+    const duration = activeFrame.durationMs || 5000;
     const intervalId = setInterval(() => {
       setProgress((prev) => {
-        const next = prev + TICK_MS / AUTO_ADVANCE_MS;
+        const next = prev + TICK_MS / duration;
         if (next >= 1) {
           clearInterval(intervalId);
-          goNext();
-          return 1;
+          goNextFrame();
+          return 0;
         }
-
         return next;
       });
     }, TICK_MS);
 
     return () => clearInterval(intervalId);
-  }, [activePoster?.id, goNext, isPaused]);
+  }, [activeFrame?.id, isPaused, isLoading, goNextFrame]);
 
-  if (!activePoster) {
-    return null;
+  const handleReaction = async (reaction: PosterReactionType) => {
+    if (!activeFrame) return;
+    try {
+      await setPosterFrameReaction(activeFrame.id, reaction);
+    } catch {
+      show('Failed to set reaction', 'error');
+    }
+  };
+
+  const handleRemoveReaction = async () => {
+    if (!activeFrame) return;
+    try {
+      await removePosterFrameReaction(activeFrame.id);
+    } catch {
+      show('Failed to remove reaction', 'error');
+    }
+  };
+
+  const handleReply = async (text: string) => {
+    if (!activeFrame) return;
+    try {
+      const replyId = `reply_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      await createPosterReply(activeFrame.id, { id: replyId, body: text });
+      show('Reply sent', 'success');
+    } catch {
+      show('Failed to send reply', 'error');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" />
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
   }
 
-  const minutesSincePosted = Math.max(1, Math.floor((Date.now() - activePoster.createdAtMs) / (60 * 1000)));
+  if (!activeStory || !activeFrame) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" />
+        <Text style={styles.emptyText}>No stories available</Text>
+        <AnimatedPressable onPress={() => navigation.goBack()} style={styles.closeBtn}>
+          <Text style={styles.closeBtnText}>Close</Text>
+        </AnimatedPressable>
+      </View>
+    );
+  }
+
+  const creatorName = activeStory.creator.username ?? activeStory.creatorId;
+  const minutesSincePosted = Math.max(1, Math.floor((Date.now() - new Date(activeStory.createdAt).getTime()) / (60 * 1000)));
   const postedTimeLabel = minutesSincePosted < 60 ? `${minutesSincePosted}m` : `${Math.floor(minutesSincePosted / 60)}h`;
-  const uploaderHandle = activePoster.creatorId;
-  const textOverlayPositionStyle =
-    activePoster.textOverlay?.position === 'top'
-      ? styles.storyOverlayTop
-      : activePoster.textOverlay?.position === 'center'
-        ? styles.storyOverlayCenter
-        : styles.storyOverlayBottom;
+  const isVideo = activeFrame.mediaType === 'video' || (activeFrame.mediaUrl && isVideoUrl(activeFrame.mediaUrl));
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <CachedImage
-        uri={activePoster.mediaUrl}
-        style={styles.posterImage}
-        contentFit="cover"
-        priority="high"
-        containerStyle={StyleSheet.absoluteFillObject}
-        onError={() => setMediaError(true)}
-      />
+      {/* Background media */}
+      {isVideo && activeFrame.mediaUrl ? (
+        <Video
+          source={{ uri: activeFrame.mediaUrl }}
+          style={styles.mediaFull}
+          shouldPlay={!isPaused}
+          isMuted={false}
+          isLooping={false}
+          resizeMode="cover"
+          onError={() => setMediaError(true)}
+        />
+      ) : activeFrame.mediaUrl ? (
+        <CachedImage
+          uri={activeFrame.mediaUrl}
+          style={styles.mediaFull}
+          contentFit="cover"
+          priority="high"
+          containerStyle={StyleSheet.absoluteFillObject}
+          onError={() => setMediaError(true)}
+        />
+      ) : (
+        <View style={[styles.mediaFull, { backgroundColor: activeFrame.backgroundColor ?? '#1a1a1a' }]}>
+          <Text
+            style={[
+              styles.textFrameContent,
+              { color: activeFrame.backgroundColor === '#ffffff' ? '#000' : '#fff' },
+            ]}
+          >
+            {activeFrame.caption}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.backdropOverlay} />
+
       {mediaError && (
         <View style={styles.mediaErrorOverlay}>
           <Ionicons name="alert-circle-outline" size={48} color="#fff" />
@@ -197,92 +302,135 @@ export default function PosterViewerScreen() {
       )}
 
       <SafeAreaView style={styles.overlay} edges={['top', 'bottom']}>
-        <View style={styles.progressRow}>
-          {posters.map((poster: ViewerPoster, index: number) => {
-            const fillPercent = index < currentIndex ? 100 : index === currentIndex ? progress * 100 : 0;
-            return (
-              <View key={poster.id} style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${fillPercent}%` }]} />
-              </View>
-            );
-          })}
-        </View>
+        {/* Progress segments for frames in current story */}
+        <PosterProgressSegments
+          total={activeStory.frames.length}
+          currentIndex={frameIndex}
+          progress={progress}
+          isPaused={isPaused}
+        />
 
+        {/* Story navigation dots if multiple stories */}
+        {stories.length > 1 && (
+          <View style={styles.storyDots}>
+            {stories.map((s, i) => (
+              <View
+                key={s.id}
+                style={[styles.storyDot, i === storyIndex && styles.storyDotActive]}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Tap zones for frame navigation */}
         <View style={styles.tapLayer} pointerEvents="box-none">
           <Pressable
             style={styles.tapLeft}
-            onPress={goPrevious}
+            onPress={goPrevFrame}
             onPressIn={() => setIsPaused(true)}
             onPressOut={() => setIsPaused(false)}
+            accessibilityLabel="Previous frame"
+            accessibilityRole="button"
           />
           <Pressable
             style={styles.tapRight}
-            onPress={goNext}
+            onPress={goNextFrame}
             onPressIn={() => setIsPaused(true)}
             onPressOut={() => setIsPaused(false)}
+            accessibilityLabel="Next frame"
+            accessibilityRole="button"
           />
         </View>
 
+        {/* Top meta row */}
         <View style={styles.topMetaRow}>
           <AnimatedPressable
-            style={styles.authorIdentityBtn}
-            onPress={() => navigation.navigate('UserProfile', { userId: activePoster.creatorId })}
+            style={styles.authorBtn}
+            onPress={() => navigation.navigate('UserProfile', { userId: activeStory.creatorId })}
             activeOpacity={0.85}
+            accessibilityLabel={`Open @${creatorName} profile`}
             accessibilityRole="button"
-            accessibilityLabel={`Open @${uploaderHandle} profile`}
-            accessibilityHint="Shows poster creator profile"
           >
-            <CachedImage uri="" style={styles.authorAvatar} containerStyle={{ borderRadius: 14, overflow: 'hidden' }} contentFit="cover" />
-            <Text style={styles.authorName}>@{uploaderHandle}</Text>
+            {activeStory.creator.avatar ? (
+              <CachedImage
+                uri={activeStory.creator.avatar}
+                style={styles.authorAvatar}
+                containerStyle={{ borderRadius: 14, overflow: 'hidden' }}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={[styles.authorAvatar, styles.authorAvatarPlaceholder]}>
+                <Text style={styles.authorAvatarText}>{creatorName[0]?.toUpperCase()}</Text>
+              </View>
+            )}
+            <Text style={styles.authorName}>@{creatorName}</Text>
             <Text style={styles.postedTime}>| {postedTimeLabel}</Text>
           </AnimatedPressable>
 
           <View style={styles.topControlRow}>
-            <AnimatedPressable style={styles.closeBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+            {isOwner && (
+              <>
+                <AnimatedPressable
+                  style={styles.topIconBtn}
+                  onPress={handleArchive}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Archive story"
+                >
+                  <Ionicons name="archive-outline" size={20} color="#fff" />
+                </AnimatedPressable>
+                <AnimatedPressable
+                  style={styles.topIconBtn}
+                  onPress={handleDelete}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Delete story"
+                >
+                  <Ionicons name="trash-outline" size={20} color="#fff" />
+                </AnimatedPressable>
+              </>
+            )}
+            <AnimatedPressable
+              style={styles.closeBtnTop}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.8}
+              accessibilityLabel="Close viewer"
+            >
               <Ionicons name="close" size={22} color="#fff" />
             </AnimatedPressable>
           </View>
         </View>
 
-        {isOwnedPoster ? (
-          <View style={styles.ownerActionsRow}>
-            <AnimatedPressable style={styles.deleteBtn} onPress={handleDeletePoster} activeOpacity={0.85}>
-              <Ionicons name="trash-outline" size={14} color="#ffd4d4" />
-              <Text style={styles.deleteBtnText}>Delete Poster</Text>
-            </AnimatedPressable>
-          </View>
-        ) : null}
+        {/* Stickers overlay */}
+        {activeFrame.stickers.length > 0 && (
+          <PosterStickerLayer
+            stickers={activeFrame.stickers}
+            containerWidth={SCREEN_WIDTH}
+            containerHeight={SCREEN_HEIGHT}
+          />
+        )}
 
-        {activePoster.textOverlay?.text ? (
-          <View style={[styles.storyOverlayWrap, textOverlayPositionStyle]}>
+        {/* Caption */}
+        {activeFrame.caption && activeFrame.mediaType !== 'text' && (
+          <View style={styles.captionWrap}>
             <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.35)']}
-              style={styles.textOverlayGradient}
+              colors={['transparent', 'rgba(0,0,0,0.5)']}
+              style={styles.bottomGradient}
               pointerEvents="none"
             />
-            <Text style={[styles.storyOverlayText, { color: activePoster.textOverlay.color }]} numberOfLines={2}>
-              {activePoster.textOverlay.text}
-            </Text>
+            <Text style={styles.captionText}>{activeFrame.caption}</Text>
           </View>
-        ) : null}
+        )}
 
-        <View style={styles.bottomMetaWrap}>
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.55)']}
-            style={styles.bottomGradient}
-            pointerEvents="none"
-          />
-          <View style={styles.captionWrap}>
-            <Text style={styles.captionText}>{activePoster.caption}</Text>
-          </View>
-
-          <View style={styles.bottomActionRow}>
-            <View style={styles.expiryPill}>
-              <Ionicons name="time-outline" size={14} color="#fff" />
-              <Text style={styles.expiryText}>Expires in {activePoster.remainingHours}h</Text>
-            </View>
-          </View>
-        </View>
+        {/* Reaction / Reply bar */}
+        <PosterReactionReplyBar
+          allowReactions={activeStory.allowReactions}
+          allowReplies={activeStory.allowReplies}
+          viewerReaction={activeFrame.viewerReaction}
+          onReaction={handleReaction}
+          onRemoveReaction={handleRemoveReaction}
+          onReply={handleReply}
+          isOwner={isOwner}
+          onShowActivity={() => navigation.navigate('PosterStoryActivity', { storyId: activeStory.id })}
+        />
       </SafeAreaView>
     </View>
   );
@@ -291,36 +439,65 @@ export default function PosterViewerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#000',
   },
-  posterImage: {
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  emptyText: {
+    color: '#fff',
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
+  closeBtn: {
+    paddingHorizontal: Space.md + 4,
+    paddingVertical: Space.sm,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  closeBtnText: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+  },
+  mediaFull: {
     position: 'absolute',
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textFrameContent: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.title.size,
+    textAlign: 'center',
+    paddingHorizontal: Space.lg,
   },
   backdropOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.15)',
   },
   overlay: {
     flex: 1,
     paddingHorizontal: 12,
   },
-  progressRow: {
+  storyDots: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: 4,
-    marginTop: 8,
+    marginTop: 6,
   },
-  progressTrack: {
-    flex: 1,
-    height: 1.5,
-    borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    overflow: 'hidden',
+  storyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: 1,
+  storyDotActive: {
     backgroundColor: '#fff',
   },
   topMetaRow: {
@@ -330,7 +507,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
-  authorIdentityBtn: {
+  authorBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
@@ -344,6 +521,16 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  authorAvatarPlaceholder: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  authorAvatarText: {
+    color: '#fff',
+    fontFamily: Typography.family.bold,
+    fontSize: 13,
   },
   authorName: {
     color: '#fff',
@@ -359,159 +546,28 @@ const styles = StyleSheet.create({
   topControlRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   topIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  closeBtnTop: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  ownerActionsRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(64, 20, 20, 0.6)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 110, 110, 0.45)',
-  },
-  deleteBtnText: {
-    color: '#ffd4d4',
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-  bottomMetaWrap: {
-    marginTop: 'auto',
-    paddingBottom: 28,
-    gap: 10,
-    position: 'relative',
-  },
-  bottomGradient: {
-    position: 'absolute',
-    left: -12,
-    right: -12,
-    bottom: -28,
-    height: 160,
-  },
-  captionWrap: {
-    position: 'relative',
-    zIndex: 2,
-  },
-  storyOverlayWrap: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    alignItems: 'center',
-    zIndex: 2,
-  },
-  textOverlayGradient: {
-    position: 'absolute',
-    left: -20,
-    right: -20,
-    top: -40,
-    bottom: -40,
-  },
-  storyOverlayTop: {
-    top: 120,
-  },
-  storyOverlayCenter: {
-    top: '44%',
-  },
-  storyOverlayBottom: {
-    bottom: 180,
-  },
-  storyOverlayText: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.65)',
-    textShadowRadius: 8,
-    letterSpacing: 0.3,
-  },
-  sharedFromPill: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  sharedFromText: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-  captionText: {
-    color: '#fff',
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowRadius: 8,
-  },
-  bottomActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginTop: 4,
-    position: 'relative',
-    zIndex: 2,
-  },
-  expiryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  expiryText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: Typography.family.semibold,
-  },
-  viewListingBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: Colors.brand,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  viewListingText: {
-    color: '#fff',
-    fontSize: 13,
-    fontFamily: Typography.family.bold,
   },
   tapLayer: {
     position: 'absolute',
     top: 120,
-    bottom: 110,
+    bottom: 120,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -521,6 +577,27 @@ const styles = StyleSheet.create({
   },
   tapRight: {
     flex: 1,
+  },
+  captionWrap: {
+    marginTop: 'auto',
+    paddingBottom: 8,
+    position: 'relative',
+  },
+  bottomGradient: {
+    position: 'absolute',
+    left: -12,
+    right: -12,
+    bottom: -8,
+    height: 80,
+  },
+  captionText: {
+    color: '#fff',
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 8,
+    paddingHorizontal: 4,
   },
   mediaErrorOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -534,4 +611,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
   },
-});;
+});
