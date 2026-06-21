@@ -21,6 +21,11 @@ import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
+import {
+  createUserAddress,
+  deleteUserAddress,
+  CreateAddressInput,
+} from '../services/commerceApi';
 
 type Props = StackScreenProps<RootStackParamList, 'AddressForm'>;
 
@@ -166,6 +171,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const isDirty = !formsEqual(form, initialForm);
 
   const nameRef = useRef<TextInput>(null);
@@ -255,7 +261,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
     return unsubscribe;
   }, [navigation, isDirty, proceedWithNavigation]);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     Keyboard.dismiss();
     const allErrors = validateForm(form);
     setErrors(allErrors);
@@ -274,10 +280,16 @@ export default function AddressFormScreen({ navigation, route }: Props) {
     }
 
     const normalised = normaliseForm(form);
-    setIsSaving(true);
+    const userId = currentUser?.id;
+    if (!userId) {
+      setSaveError('You must be signed in to save an address.');
+      return;
+    }
 
-    saveAddress({
-      ...(savedAddress?.id !== undefined ? { id: savedAddress.id } : {}),
+    setIsSaving(true);
+    setSaveError(null);
+
+    const addressInput: CreateAddressInput = {
       name: normalised.name,
       streetAddress: normalised.streetAddress,
       apartment: normalised.apartment || undefined,
@@ -287,14 +299,70 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       countryCode: normalised.countryCode,
       country: normalised.country,
       isDefault: true,
-    });
+    };
 
-    haptic.medium();
-    show(isEditing ? 'Delivery address updated' : 'Delivery address added', 'success');
-    setIsSaving(false);
-    allowNavigationRef.current = true;
-    navigation.goBack();
-  }, [form, savedAddress, isEditing, saveAddress, show, haptic, navigation]);
+    try {
+      if (isEditing && savedAddress?.id !== undefined) {
+        // Edit: create replacement, then delete old (no PATCH available)
+        const created = await createUserAddress(userId, addressInput);
+
+        // Try to delete the old address
+        let oldDeleteFailed = false;
+        try {
+          await deleteUserAddress(userId, savedAddress.id);
+        } catch {
+          oldDeleteFailed = true;
+        }
+
+        saveAddress({
+          id: created.id,
+          name: created.name,
+          streetAddress: created.streetAddress,
+          apartment: created.apartment,
+          city: created.city,
+          region: created.region,
+          postalCode: created.postalCode,
+          countryCode: created.countryCode,
+          country: created.country,
+          isDefault: created.isDefault,
+        });
+
+        haptic.medium();
+        if (oldDeleteFailed) {
+          show('New address saved. The previous address could not be removed.', 'info');
+        } else {
+          show('Delivery address updated', 'success');
+        }
+      } else {
+        // Add: create new backend address
+        const created = await createUserAddress(userId, addressInput);
+
+        saveAddress({
+          id: created.id,
+          name: created.name,
+          streetAddress: created.streetAddress,
+          apartment: created.apartment,
+          city: created.city,
+          region: created.region,
+          postalCode: created.postalCode,
+          countryCode: created.countryCode,
+          country: created.country,
+          isDefault: created.isDefault,
+        });
+
+        haptic.medium();
+        show('Delivery address added', 'success');
+      }
+
+      setIsSaving(false);
+      allowNavigationRef.current = true;
+      navigation.goBack();
+    } catch {
+      setIsSaving(false);
+      setSaveError('Address could not be saved. Check your connection and try again.');
+      haptic.light();
+    }
+  }, [form, savedAddress, isEditing, saveAddress, show, haptic, navigation, currentUser?.id]);
 
   const handleRemove = useCallback(() => {
     Alert.alert(
@@ -305,7 +373,26 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            const userId = currentUser?.id;
+            if (!userId) {
+              clearSavedAddress();
+              show('Delivery address removed', 'success');
+              allowNavigationRef.current = true;
+              navigation.goBack();
+              return;
+            }
+
+            if (savedAddress?.id !== undefined) {
+              try {
+                await deleteUserAddress(userId, savedAddress.id);
+              } catch {
+                setSaveError('Address could not be removed. Check your connection and try again.');
+                haptic.light();
+                return;
+              }
+            }
+
             haptic.medium();
             clearSavedAddress();
             show('Delivery address removed', 'success');
@@ -315,7 +402,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         },
       ]
     );
-  }, [clearSavedAddress, show, haptic, navigation]);
+  }, [clearSavedAddress, show, haptic, navigation, currentUser?.id, savedAddress?.id]);
 
   if (!currentUser) {
     return (
@@ -582,6 +669,14 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Save error display */}
+      {saveError ? (
+        <View style={styles.saveErrorRow}>
+          <Ionicons name="alert-circle" size={14} color={Colors.danger} />
+          <Text style={styles.saveErrorText}>{saveError}</Text>
+        </View>
+      ) : null}
+
       {/* 7. Sticky Save footer */}
       <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + Space.sm }]}>
         <Pressable
@@ -592,9 +687,13 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           accessibilityLabel={isEditing ? 'Save changes' : 'Save address'}
           accessibilityState={{ disabled: isSaving }}
         >
-          <Text style={styles.saveBtnText}>
-            {isEditing ? 'Save changes' : 'Save address'}
-          </Text>
+          {isSaving ? (
+            <Text style={styles.saveBtnText}>Saving…</Text>
+          ) : (
+            <Text style={styles.saveBtnText}>
+              {isEditing ? 'Save changes' : 'Save address'}
+            </Text>
+          )}
         </Pressable>
       </View>
 
@@ -705,6 +804,19 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
+    color: Colors.danger,
+  },
+  saveErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  saveErrorText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
     color: Colors.danger,
   },
 
