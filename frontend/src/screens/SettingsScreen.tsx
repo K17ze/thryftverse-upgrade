@@ -438,7 +438,7 @@ export default function SettingsScreen({ navigation }: Props) {
       {/* Logout / Sign Out */}
       {matchesSearch('log out sign out') && (
         <Reanimated.View entering={FadeInDown.duration(300).delay(280)}>
-          <SettingsSignOutRow onSignOut={handleLogout} />
+          <SettingsSignOutRow username={currentUser?.username} onSignOut={handleLogout} />
         </Reanimated.View>
       )}
 

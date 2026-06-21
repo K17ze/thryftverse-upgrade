@@ -75,9 +75,7 @@ export function MessageBubble({
     ? { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.lg }
     : isBottom
     ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.sm }
-    : isMiddle
-    ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.lg }
-    : { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.lg };
+    : { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.sm };
 
   const themRadius = isStandalone
     ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg }
@@ -85,9 +83,7 @@ export function MessageBubble({
     ? { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.lg }
     : isBottom
     ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.sm }
-    : isMiddle
-    ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg }
-    : { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg };
+    : { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.sm };
 
   return (
     <View style={[styles.row, isMe && styles.rowRight]}>

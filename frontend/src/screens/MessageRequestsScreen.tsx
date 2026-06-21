@@ -6,7 +6,6 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -15,7 +14,6 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarRing } from '../components/chat/AvatarRing';
@@ -23,6 +21,7 @@ import { CachedImage } from '../components/CachedImage';
 import { Caption, BodyEmphasis } from '../components/ui/Text';
 import { EmptyState } from '../components/EmptyState';
 import { useBackendData } from '../context/BackendDataContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -77,7 +76,7 @@ export default function MessageRequestsScreen() {
     const listing = item.itemId ? listings.find((l) => l.id === item.itemId) : undefined;
 
     return (
-      <Reanimated.View entering={FadeInDown.duration(300).delay(index * 60)}>
+      <View>
         <View style={styles.requestRow}>
           <View style={styles.requestIdentity}>
             <AvatarRing
@@ -137,12 +136,27 @@ export default function MessageRequestsScreen() {
           </View>
         </View>
         <View style={styles.requestSeparator} />
-      </Reanimated.View>
+      </View>
     );
   };
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Message Requests" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
+    <SafeAreaView edges={['top']} style={styles.screenRoot}>
+      <View style={styles.compactHeader}>
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          scaleValue={0.92}
+          hapticFeedback="light"
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          style={styles.backBtn}
+        >
+          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+        </AnimatedPressable>
+        <Text style={styles.headerTitle}>Message Requests</Text>
+        <View style={styles.backBtn} />
+      </View>
       {requestConversations.length === 0 ? (
         <EmptyState
           icon="mail-outline"
@@ -160,11 +174,36 @@ export default function MessageRequestsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </FlagshipScreen>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  compactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: Type.title.size,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+    letterSpacing: Type.title.letterSpacing,
+  },
   listContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,

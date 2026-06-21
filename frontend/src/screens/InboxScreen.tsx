@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 
 import { AnimatedPressable } from '../components/AnimatedPressable';
 
-import { View, Text, StyleSheet, RefreshControl, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
 
 import { FlashList } from '@shopify/flash-list';
@@ -26,12 +26,11 @@ import { RootStackParamList } from '../navigation/types';
 
 import { Swipeable } from 'react-native-gesture-handler';
 
-import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 
 import { EmptyState } from '../components/EmptyState';
 
 import { useStore } from '../store/useStore';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 import { useToast } from '../context/ToastContext';
 
@@ -56,6 +55,8 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { InboxConversationRow } from '../components/chat/InboxConversationRow';
 
 import { MessagingSegmentRail, MessagingSegment } from '../components/chat/MessagingSegmentRail';
+
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 
 
@@ -704,47 +705,69 @@ export default function InboxScreen() {
 
   return (
 
-    <FlagshipScreen
-      header={
-        <FlagshipHeader
-          title="Inbox"
-          subtitle={unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-          rightAction={
-          <View style={styles.headerActions}>
-            <AnimatedPressable
-              style={styles.iconBtn}
-              onPress={() => navigation.navigate('CreateGroupChat')}
-              activeOpacity={0.7}
-              scaleValue={0.9}
-              hapticFeedback="light"
-              accessibilityLabel="Create new group chat"
-              accessibilityRole="button"
-            >
-              <Ionicons name="people-outline" size={20} color={Colors.textSecondary} />
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.newMessageBtn}
-              onPress={() => navigation.navigate('NewMessage')}
-              activeOpacity={0.7}
-              scaleValue={0.95}
-              hapticFeedback="light"
-              accessibilityLabel="New message"
-              accessibilityRole="button"
-            >
-              <Ionicons name="create-outline" size={18} color={Colors.textInverse} />
-              <Text style={styles.newMessageBtnText}>New</Text>
-            </AnimatedPressable>
-          </View>
-          }
-        />
-      }
-      scrollEnabled={false}
-    >
+    <SafeAreaView edges={['top']} style={styles.screenRoot}>
+
+
+
+      <View style={styles.compactHeader}>
+
+        <Text style={styles.headerTitle}>Inbox</Text>
+
+        <View style={styles.headerActions}>
+
+          <AnimatedPressable
+
+            style={styles.iconBtn}
+
+            onPress={() => navigation.navigate('CreateGroupChat')}
+
+            activeOpacity={0.7}
+
+            scaleValue={0.9}
+
+            hapticFeedback="light"
+
+            accessibilityLabel="Create new group chat"
+
+            accessibilityRole="button"
+
+          >
+
+            <Ionicons name="people-outline" size={20} color={Colors.textSecondary} />
+
+          </AnimatedPressable>
+
+          <AnimatedPressable
+
+            style={styles.newMessageBtn}
+
+            onPress={() => navigation.navigate('NewMessage')}
+
+            activeOpacity={0.7}
+
+            scaleValue={0.95}
+
+            hapticFeedback="light"
+
+            accessibilityLabel="New message"
+
+            accessibilityRole="button"
+
+          >
+
+            <Ionicons name="create-outline" size={18} color={Colors.textInverse} />
+
+            <Text style={styles.newMessageBtnText}>New</Text>
+
+          </AnimatedPressable>
+
+        </View>
+
+      </View>
 
 
 
       <View style={styles.header}>
-
 
         <AppSearchBar
 
@@ -768,42 +791,15 @@ export default function InboxScreen() {
 
         />
 
+        <MessagingSegmentRail
 
+          active={segment === 'unread' || segment === 'archived' ? 'all' : segment}
 
-        {segment === 'all' || segment === 'requests' || segment === 'groups' ? (
-          <MessagingSegmentRail
-            active={segment}
-            onChange={(s) => setSegment(s)}
-            requestCount={messageRequests.length}
-          />
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChips}>
-            {[
-              { value: 'all' as InboxSegment, label: 'All', accessibilityLabel: 'Show all conversations' },
-              { value: 'unread' as InboxSegment, label: 'Unread', accessibilityLabel: 'Filter unread conversations' },
-              { value: 'requests' as InboxSegment, label: 'Requests', accessibilityLabel: 'Filter message requests' },
-              { value: 'archived' as InboxSegment, label: 'Archived', accessibilityLabel: 'Filter archived conversations' },
-              { value: 'groups' as InboxSegment, label: 'Groups', accessibilityLabel: 'Filter group conversations' },
-            ].map((opt) => {
-              const isActive = segment === opt.value;
-              return (
-                <AnimatedPressable
-                  key={opt.value}
-                  style={[styles.filterChip, isActive && styles.filterChipActive]}
-                  onPress={() => setSegment(opt.value)}
-                  activeOpacity={0.85}
-                  scaleValue={0.95}
-                  hapticFeedback="light"
-                  accessibilityLabel={opt.accessibilityLabel}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                >
-                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{opt.label}</Text>
-                </AnimatedPressable>
-              );
-            })}
-          </ScrollView>
-        )}
+          onChange={(s) => setSegment(s)}
+
+          requestCount={messageRequests.length}
+
+        />
 
       </View>
 
@@ -891,7 +887,7 @@ export default function InboxScreen() {
 
             {segment === 'all' && messageRequests.length > 0 && (
 
-              <Reanimated.View entering={FadeInDown.duration(300)} style={styles.requestsBanner}>
+              <View style={styles.requestsBanner}>
                 <View style={styles.requestsBannerRule} />
                 <AnimatedPressable
                   onPress={() => navigation.navigate('MessageRequests')}
@@ -916,7 +912,7 @@ export default function InboxScreen() {
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
                 </AnimatedPressable>
-              </Reanimated.View>
+              </View>
 
             )}
 
@@ -1096,7 +1092,7 @@ export default function InboxScreen() {
 
       </View>
 
-    </FlagshipScreen>
+    </SafeAreaView>
 
   );
 
@@ -1105,6 +1101,20 @@ export default function InboxScreen() {
 
 
 const styles = StyleSheet.create({
+
+  screenRoot: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+
+  compactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+  },
 
   header: {
 

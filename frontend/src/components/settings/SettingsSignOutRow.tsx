@@ -6,17 +6,20 @@ import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designT
 import { AnimatedPressable } from '../AnimatedPressable';
 
 export interface SettingsSignOutRowProps {
+  username?: string | null;
   onSignOut: () => Promise<void> | void;
 }
 
-export function SettingsSignOutRow({ onSignOut }: SettingsSignOutRowProps) {
+export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowProps) {
   const [isBusy, setIsBusy] = useState(false);
 
   const handlePress = useCallback(() => {
     if (isBusy) return;
     Alert.alert(
       'Sign Out',
-      'You will be signed out of your account on this device.',
+      username
+        ? `You will be signed out of @${username} on this device.`
+        : 'You will be signed out of your account on this device.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

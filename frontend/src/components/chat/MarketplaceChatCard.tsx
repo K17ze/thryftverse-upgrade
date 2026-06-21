@@ -17,6 +17,8 @@ interface MarketplaceChatCardProps {
   senderLabel?: string;
   offer?: OfferData;
   text?: string;
+  formattedPrice?: string;
+  formattedOriginalPrice?: string;
   onAccept?: () => void;
   onDecline?: () => void;
   onViewListing?: () => void;
@@ -28,12 +30,16 @@ export function MarketplaceChatCard({
   senderLabel,
   offer,
   text,
+  formattedPrice,
+  formattedOriginalPrice,
   onAccept,
   onDecline,
   onViewListing,
 }: MarketplaceChatCardProps) {
   if (type === 'offer' && offer) {
     const status = offer.status;
+    const priceLabel = formattedPrice ?? `£${offer.price.toFixed(2)}`;
+    const origLabel = formattedOriginalPrice ?? `£${offer.originalPrice.toFixed(2)}`;
     return (
       <View style={[styles.offerBlock, isMe && styles.offerBlockMe]}>
         {senderLabel && !isMe ? (
@@ -41,8 +47,8 @@ export function MarketplaceChatCard({
         ) : null}
         <View style={styles.offerPriceRow}>
           <Ionicons name="pricetag-outline" size={14} color={Colors.textMuted} />
-          <Text style={styles.offerPrice}>£{offer.price.toFixed(2)}</Text>
-          <Text style={styles.offerStrike}>£{offer.originalPrice.toFixed(2)}</Text>
+          <Text style={styles.offerPrice}>{priceLabel}</Text>
+          <Text style={styles.offerStrike}>{origLabel}</Text>
         </View>
         {status === 'declined' && (
           <View style={styles.offerStatusRow}>

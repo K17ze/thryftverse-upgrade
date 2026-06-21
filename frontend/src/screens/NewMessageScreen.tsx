@@ -28,8 +28,6 @@ import { Colors } from '../constants/colors';
 
 import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-
 import { AnimatedPressable } from '../components/AnimatedPressable';
 
 import { useHaptic } from '../hooks/useHaptic';
@@ -41,6 +39,8 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { Caption, BodyEmphasis } from '../components/ui/Text';
 
 import { EmptyState } from '../components/EmptyState';
+
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 
 
@@ -219,13 +219,23 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
   return (
 
-    <FlagshipScreen
+    <SafeAreaView edges={['top']} style={styles.screenRoot}>
 
-      header={<FlagshipHeader title="New Message" onBack={() => navigation.goBack()} />}
-
-      scrollEnabled={false}
-
-    >
+      <View style={styles.compactHeader}>
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          scaleValue={0.92}
+          hapticFeedback="light"
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          style={styles.backBtn}
+        >
+          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+        </AnimatedPressable>
+        <Text style={styles.headerTitle}>New Message</Text>
+        <View style={styles.backBtn} />
+      </View>
 
       <View style={styles.searchWrap}>
 
@@ -295,7 +305,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
       )}
 
-    </FlagshipScreen>
+    </SafeAreaView>
 
   );
 
@@ -304,6 +314,35 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
 
 const styles = StyleSheet.create({
+
+  screenRoot: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+
+  compactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  headerTitle: {
+    fontSize: Type.title.size,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+    letterSpacing: Type.title.letterSpacing,
+  },
 
   searchWrap: {
 

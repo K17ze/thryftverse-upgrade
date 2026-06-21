@@ -8,17 +8,16 @@ import {
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { CachedImage } from '../components/CachedImage';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Props = StackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
@@ -50,11 +49,26 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
 
   if (!conversation) {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Conversation" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
+      <SafeAreaView edges={['top']} style={styles.screenRoot}>
+        <View style={styles.compactHeader}>
+          <AnimatedPressable
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+            scaleValue={0.92}
+            hapticFeedback="light"
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+            style={styles.backBtn}
+          >
+            <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+          </AnimatedPressable>
+          <Text style={styles.headerTitle}>Conversation</Text>
+          <View style={styles.backBtn} />
+        </View>
         <View style={styles.center}>
           <Caption color={Colors.textMuted}>Conversation not found</Caption>
         </View>
-      </FlagshipScreen>
+      </SafeAreaView>
     );
   }
 
@@ -114,11 +128,26 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const handle = counterpartyId ? `@${counterpartyId.slice(0, 12)}` : 'Direct message';
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Conversation Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
+    <SafeAreaView edges={['top']} style={styles.screenRoot}>
+      <View style={styles.compactHeader}>
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          scaleValue={0.92}
+          hapticFeedback="light"
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          style={styles.backBtn}
+        >
+          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+        </AnimatedPressable>
+        <Text style={styles.headerTitle}>Conversation Info</Text>
+        <View style={styles.backBtn} />
+      </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Partner Identity */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+        <View>
           <AnimatedPressable
             style={styles.identityCardV2}
             onPress={handleViewProfile}
@@ -141,10 +170,10 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             <BodyEmphasis style={styles.identityName} numberOfLines={1}>{displayName}</BodyEmphasis>
             <Caption color={Colors.textMuted}>{handle}</Caption>
           </AnimatedPressable>
-        </Reanimated.View>
+        </View>
 
         {/* Profile */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <View>
           <Section title="Profile">
             <RowItem
               icon="person-outline"
@@ -153,10 +182,10 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               showChevron
             />
           </Section>
-        </Reanimated.View>
+        </View>
 
         {/* Media & shared */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <View>
           <Section title="Media & shared">
             <RowItem
               icon="images-outline"
@@ -169,11 +198,11 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               })()}
             />
           </Section>
-        </Reanimated.View>
+        </View>
 
         {/* Marketplace context */}
         {conversation.itemId && (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
+          <View>
             <Section title="Context">
               <RowItem
                 icon="pricetag-outline"
@@ -186,11 +215,11 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
                 showChevron
               />
             </Section>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* Actions */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+        <View>
           <Section title="Actions">
             <RowItem
               icon={isMuted ? 'volume-mute-outline' : 'volume-high-outline'}
@@ -203,10 +232,10 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               onPress={handleArchive}
             />
           </Section>
-        </Reanimated.View>
+        </View>
 
         {/* Danger zone */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
+        <View>
           <Section title="Danger zone" danger>
             <RowItem
               icon={isBlocked ? 'person-add-outline' : 'person-remove-outline'}
@@ -221,9 +250,9 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               danger
             />
           </Section>
-        </Reanimated.View>
+        </View>
       </ScrollView>
-    </FlagshipScreen>
+    </SafeAreaView>
   );
 }
 
@@ -306,6 +335,31 @@ function RowItem({
 }
 
 const styles = StyleSheet.create({
+  screenRoot: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  compactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: Type.title.size,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+    letterSpacing: Type.title.letterSpacing,
+  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
