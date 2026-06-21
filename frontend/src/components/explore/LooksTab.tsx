@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   Dimensions,
-  ScrollView,
+  FlatList,
   Pressable,
   RefreshControl,
   ActivityIndicator,
@@ -121,26 +121,34 @@ export default function LooksTab() {
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const loadLooks = useCallback(async () => {
+  const loadLooks = useCallback(async (isRefresh: boolean = false) => {
+    if (isRefresh) {
+      setIsRefreshing(true);
+    }
+    setLoadError(null);
     try {
       const res = await fetchLooksFromApi({ status: 'published' });
       setLooks(res.items ?? []);
     } catch {
-      // silently fail — empty state will show
+      if (!isRefresh && looks.length === 0) {
+        setLoadError('Looks could not be loaded.\nCheck your connection and try again.');
+      } else if (isRefresh) {
+        setLoadError('Looks could not be refreshed.\nShowing the last loaded posts.');
+      }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [looks.length]);
 
   useEffect(() => {
     loadLooks();
   }, [loadLooks]);
 
   const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    loadLooks();
+    loadLooks(true);
   }, [loadLooks]);
 
   const handleCreateLook = useCallback(() => {
@@ -155,7 +163,29 @@ export default function LooksTab() {
     );
   }
 
-  if (looks.length === 0) {
+  if (loadError && looks.length === 0) {
+    return (
+      <Reanimated.View entering={FadeInDown.duration(400)} style={styles.errorWrap}>
+        <Ionicons name="cloud-offline-outline" size={40} color={Colors.textMuted} />
+        <Text style={styles.errorTitle}>Looks could not be loaded</Text>
+        <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
+        <AnimatedPressable
+          style={styles.retryBtn}
+          onPress={() => {
+            setIsLoading(true);
+            loadLooks();
+          }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading looks"
+        >
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </AnimatedPressable>
+      </Reanimated.View>
+    );
+  }
+
+  if (looks.length === 0 && !loadError) {
     return (
       <Reanimated.View entering={FadeInDown.duration(400)}>
         <EmptyState
@@ -175,23 +205,39 @@ export default function LooksTab() {
   }
 
   return (
-    <ScrollView
+    <FlatList
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.scrollContent}
       refreshControl={
         <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={Colors.brand} />
       }
-    >
-      <DiscoverySectionHeader kicker="Community" title="Looks" />
-      {looks.map((look, i) => (
+      ListHeaderComponent={
+        <View>
+          <DiscoverySectionHeader kicker="Community" title="Looks" />
+          {loadError && looks.length > 0 && (
+            <View style={styles.refreshErrorBanner}>
+              <Text style={styles.refreshErrorText}>Looks could not be refreshed. Showing the last loaded posts.</Text>
+              <Pressable
+                onPress={() => loadLooks(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Retry refresh"
+              >
+                <Text style={styles.retryLink}>Retry</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      }
+      data={looks}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item, index }) => (
         <LookCard
-          key={look.id}
-          look={look}
-          onPress={() => navigation.navigate('LookDetail', { lookId: look.id })}
-          index={i}
+          look={item}
+          onPress={() => navigation.navigate('LookDetail', { lookId: item.id })}
+          index={index}
         />
-      ))}
-    </ScrollView>
+      )}
+    />
   );
 }
 
@@ -205,6 +251,58 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
+  },
+  errorWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: Space.sm,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    backgroundColor: Colors.brand,
+    borderRadius: 20,
+  },
+  retryBtnText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
+  },
+  refreshErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 8,
+    paddingHorizontal: Space.md,
+    paddingVertical: 10,
+    marginBottom: Space.md,
+    gap: Space.sm,
+  },
+  refreshErrorText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+  },
+  retryLink: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
   },
   card: {
     backgroundColor: Colors.surface,

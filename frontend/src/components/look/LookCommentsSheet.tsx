@@ -26,11 +26,26 @@ import {
   type LookCommentApiItem,
 } from '../../services/looksApi';
 
+function formatRelativeTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diffSec = Math.floor((now - then) / 1000);
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export interface LookCommentsSheetProps {
   lookId: string;
   currentUserId?: string;
   visible: boolean;
   onClose: () => void;
+  onCommentCountChange?: (count: number) => void;
 }
 
 export function LookCommentsSheet({
@@ -38,6 +53,7 @@ export function LookCommentsSheet({
   currentUserId,
   visible,
   onClose,
+  onCommentCountChange,
 }: LookCommentsSheetProps) {
   const haptic = useHaptic();
   const { show } = useToast();
@@ -52,12 +68,13 @@ export function LookCommentsSheet({
     try {
       const res = await fetchLookCommentsFromApi(lookId);
       setComments(res.items);
+      onCommentCountChange?.(res.items.length);
     } catch {
       show('Failed to load comments', 'error');
     } finally {
       setIsLoading(false);
     }
-  }, [lookId, show]);
+  }, [lookId, show, onCommentCountChange]);
 
   useEffect(() => {
     if (visible) {
@@ -73,7 +90,11 @@ export function LookCommentsSheet({
     const tempId = `comment_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     try {
       const res = await createLookCommentOnApi(lookId, { id: tempId, body });
-      setComments((prev) => [...prev, res.comment]);
+      setComments((prev) => {
+        const next = [...prev, res.comment];
+        onCommentCountChange?.(next.length);
+        return next;
+      });
       setCommentText('');
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch {
@@ -88,15 +109,17 @@ export function LookCommentsSheet({
       haptic.medium();
       const prev = comments;
       setComments(comments.filter((c) => c.id !== commentId));
+      onCommentCountChange?.(Math.max(0, prev.length - 1));
       try {
         await deleteLookCommentOnApi(lookId, commentId);
         show('Comment deleted', 'info');
       } catch {
         setComments(prev);
+        onCommentCountChange?.(prev.length);
         show('Failed to delete comment', 'error');
       }
     },
-    [comments, lookId, haptic, show]
+    [comments, lookId, haptic, show, onCommentCountChange]
   );
 
   const renderItem = ({ item, index }: { item: LookCommentApiItem; index: number }) => {
@@ -123,6 +146,7 @@ export function LookCommentsSheet({
             @{item.author.username ?? 'unknown'}
           </Text>
           <Text style={styles.commentText}>{item.body}</Text>
+          <Text style={styles.commentTime}>{formatRelativeTime(item.createdAt)}</Text>
         </View>
         {isOwner && (
           <Pressable
@@ -281,6 +305,12 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     lineHeight: 20,
+  },
+  commentTime: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   emptyWrap: {
     alignItems: 'center',

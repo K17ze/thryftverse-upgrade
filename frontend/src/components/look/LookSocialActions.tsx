@@ -16,23 +16,27 @@ import {
 export interface LookSocialActionsProps {
   lookId: string;
   initialLikeCount: number;
-  initialCommentCount: number;
+  commentCount: number;
   initialSaveCount: number;
   initialLikedByViewer: boolean;
   initialSavedByViewer: boolean;
+  isAuthenticated: boolean;
   onCommentPress: () => void;
   onSharePress: () => void;
+  onSignInRequired?: () => void;
 }
 
 export function LookSocialActions({
   lookId,
   initialLikeCount,
-  initialCommentCount,
+  commentCount,
   initialSaveCount,
   initialLikedByViewer,
   initialSavedByViewer,
+  isAuthenticated,
   onCommentPress,
   onSharePress,
+  onSignInRequired,
 }: LookSocialActionsProps) {
   const haptic = useHaptic();
   const { show } = useToast();
@@ -46,6 +50,11 @@ export function LookSocialActions({
 
   const handleLike = useCallback(async () => {
     if (isLikeBusy) return;
+    if (!isAuthenticated) {
+      haptic.light();
+      onSignInRequired?.();
+      return;
+    }
     haptic.medium();
     const prevLiked = liked;
     const prevCount = likeCount;
@@ -69,10 +78,15 @@ export function LookSocialActions({
     } finally {
       setIsLikeBusy(false);
     }
-  }, [isLikeBusy, liked, likeCount, lookId, haptic, show]);
+  }, [isLikeBusy, liked, likeCount, lookId, haptic, show, isAuthenticated, onSignInRequired]);
 
   const handleSave = useCallback(async () => {
     if (isSaveBusy) return;
+    if (!isAuthenticated) {
+      haptic.light();
+      onSignInRequired?.();
+      return;
+    }
     haptic.medium();
     const prevSaved = saved;
     const prevCount = saveCount;
@@ -98,7 +112,7 @@ export function LookSocialActions({
     } finally {
       setIsSaveBusy(false);
     }
-  }, [isSaveBusy, saved, saveCount, lookId, haptic, show]);
+  }, [isSaveBusy, saved, saveCount, lookId, haptic, show, isAuthenticated, onSignInRequired]);
 
   const handleComment = useCallback(() => {
     haptic.light();
@@ -135,7 +149,7 @@ export function LookSocialActions({
         accessibilityLabel="View comments"
       >
         <Ionicons name="chatbubble-outline" size={22} color={Colors.textPrimary} />
-        <Text style={styles.actionText}>{initialCommentCount}</Text>
+        <Text style={styles.actionText}>{commentCount}</Text>
       </AnimatedPressable>
 
       <AnimatedPressable

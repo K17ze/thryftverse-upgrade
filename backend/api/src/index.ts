@@ -13998,6 +13998,41 @@ const LOOK_SELECT_COLUMNS = `
   u.avatar AS creator_avatar
 `;
 
+// ── Look access control ────────────────────────────────────────────
+
+type LookAccessRow = {
+  id: string;
+  creator_id: string;
+  status: 'draft' | 'published' | 'archived';
+  visibility: 'public' | 'followers' | 'private';
+};
+
+function canViewerAccessLook(
+  look: LookAccessRow,
+  viewerUserId: string | null
+): boolean {
+  if (viewerUserId && look.creator_id === viewerUserId) {
+    return true;
+  }
+  return look.status === 'published' && look.visibility === 'public';
+}
+
+async function getAccessibleLook(
+  lookId: string,
+  viewerUserId: string | null
+): Promise<LookAccessRow | null> {
+  const result = await db.query<LookAccessRow>(
+    `SELECT id, creator_id, status, visibility FROM looks WHERE id = $1 LIMIT 1`,
+    [lookId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  if (!canViewerAccessLook(row, viewerUserId)) return null;
+  return row;
+}
+
+// ── Looks routes ───────────────────────────────────────────────────
+
 app.post('/looks', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const bodySchema = z.object({
@@ -14023,35 +14058,34 @@ app.post('/looks', async (request, reply) => {
   try {
     await client.query('BEGIN');
 
-    await client.query(
-      `
-        INSERT INTO looks (id, creator_id, title, caption, media_url, status, visibility)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (id) DO UPDATE
-        SET title = EXCLUDED.title,
-            caption = EXCLUDED.caption,
-            media_url = EXCLUDED.media_url,
-            status = EXCLUDED.status,
-            visibility = EXCLUDED.visibility
-      `,
-      [payload.id, actorUserId, payload.title, payload.caption, payload.mediaUrl, payload.status, payload.visibility]
+    const existing = await client.query<{ creator_id: string }>(
+      `SELECT creator_id FROM looks WHERE id = $1 LIMIT 1`,
+      [payload.id]
     );
 
-    await client.query(`DELETE FROM look_tags WHERE look_id = $1`, [payload.id]);
+    if (existing.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Look ID already exists' };
+    }
+
+    await client.query(
+      `INSERT INTO looks (id, creator_id, title, caption, media_url, status, visibility)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [payload.id, actorUserId, payload.title, payload.caption, payload.mediaUrl, payload.status, payload.visibility]
+    );
 
     for (const tag of payload.tags) {
       const tagId = `${payload.id}_${tag.id}`;
       await client.query(
-        `
-          INSERT INTO look_tags (id, look_id, listing_id, label, x, y)
-          VALUES ($1, $2, $3, $4, $5, $6)
-          ON CONFLICT (id) DO UPDATE
-          SET look_id = EXCLUDED.look_id,
-              listing_id = EXCLUDED.listing_id,
-              label = EXCLUDED.label,
-              x = EXCLUDED.x,
-              y = EXCLUDED.y
-        `,
+        `INSERT INTO look_tags (id, look_id, listing_id, label, x, y)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE
+         SET look_id = EXCLUDED.look_id,
+             listing_id = EXCLUDED.listing_id,
+             label = EXCLUDED.label,
+             x = EXCLUDED.x,
+             y = EXCLUDED.y`,
         [tagId, payload.id, tag.listingId ?? null, tag.label, tag.x, tag.y]
       );
     }
@@ -14084,19 +14118,27 @@ app.get('/looks', async (request) => {
     conditions.push(`l.creator_id = $${args.length + 1}`);
     args.push(params.creatorId);
   }
-  if (params.status) {
+
+  if (params.status && params.status !== 'published') {
+    if (!viewerUserId) {
+      return { items: [] };
+    }
     conditions.push(`l.status = $${args.length + 1}`);
     args.push(params.status);
-  } else {
-    conditions.push(`l.status = 'published'`);
-  }
-
-  // Visibility filter: show public to everyone; show private/followers only to creator
-  if (viewerUserId) {
-    conditions.push(`(l.visibility = 'public' OR l.creator_id = $${args.length + 1})`);
+    conditions.push(`l.creator_id = $${args.length + 1}`);
     args.push(viewerUserId);
   } else {
-    conditions.push(`l.visibility = 'public'`);
+    conditions.push(`l.status = 'published'`);
+    if (viewerUserId) {
+      conditions.push(`(l.visibility = 'public' OR l.creator_id = $${args.length + 1})`);
+      args.push(viewerUserId);
+    } else {
+      conditions.push(`l.visibility = 'public'`);
+    }
+  }
+
+  if (params.creatorId && viewerUserId && params.creatorId !== viewerUserId && params.status && params.status !== 'published') {
+    return { items: [] };
   }
 
   const looksResult = await db.query<{
@@ -14133,6 +14175,12 @@ app.get('/looks/:lookId', async (request, reply) => {
   const { lookId } = paramsSchema.parse(request.params);
   const viewerUserId = request.authUser?.userId ?? null;
 
+  const accessRow = await getAccessibleLook(lookId, viewerUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
   const lookResult = await db.query<{
     id: string;
     creator_id: string;
@@ -14146,12 +14194,7 @@ app.get('/looks/:lookId', async (request, reply) => {
     creator_username: string | null;
     creator_avatar: string | null;
   }>(
-    `
-      SELECT ${LOOK_SELECT_COLUMNS}
-      FROM looks l
-      LEFT JOIN users u ON u.id = l.creator_id
-      WHERE l.id = $1 LIMIT 1
-    `,
+    `SELECT ${LOOK_SELECT_COLUMNS} FROM looks l LEFT JOIN users u ON u.id = l.creator_id WHERE l.id = $1 LIMIT 1`,
     [lookId]
   );
 
@@ -14160,20 +14203,9 @@ app.get('/looks/:lookId', async (request, reply) => {
     return { ok: false, error: 'Look not found' };
   }
 
-  const look = lookResult.rows[0];
+  const enriched = (await enrichLooks([lookResult.rows[0]], viewerUserId))[0];
 
-  // Visibility check
-  if (look.visibility !== 'public' && look.creator_id !== viewerUserId) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  const enriched = (await enrichLooks([look], viewerUserId))[0];
-
-  return {
-    ok: true,
-    look: enriched,
-  };
+  return { ok: true, look: enriched };
 });
 
 app.delete('/looks/:lookId', async (request, reply) => {
@@ -14208,12 +14240,8 @@ app.post('/looks/:lookId/like', async (request, reply) => {
   const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
   const { lookId } = paramsSchema.parse(request.params);
 
-  const lookResult = await db.query<{ id: string }>(
-    `SELECT id FROM looks WHERE id = $1 LIMIT 1`,
-    [lookId]
-  );
-
-  if (!lookResult.rowCount) {
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
     reply.code(404);
     return { ok: false, error: 'Look not found' };
   }
@@ -14236,6 +14264,12 @@ app.delete('/looks/:lookId/like', async (request, reply) => {
   const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
   const { lookId } = paramsSchema.parse(request.params);
 
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
   await db.query(
     `DELETE FROM look_likes WHERE look_id = $1 AND user_id = $2`,
     [lookId, actorUserId]
@@ -14256,12 +14290,8 @@ app.post('/looks/:lookId/save', async (request, reply) => {
   const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
   const { lookId } = paramsSchema.parse(request.params);
 
-  const lookResult = await db.query<{ id: string }>(
-    `SELECT id FROM looks WHERE id = $1 LIMIT 1`,
-    [lookId]
-  );
-
-  if (!lookResult.rowCount) {
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
     reply.code(404);
     return { ok: false, error: 'Look not found' };
   }
@@ -14284,6 +14314,12 @@ app.delete('/looks/:lookId/save', async (request, reply) => {
   const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
   const { lookId } = paramsSchema.parse(request.params);
 
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
   await db.query(
     `DELETE FROM look_saves WHERE look_id = $1 AND user_id = $2`,
     [lookId, actorUserId]
@@ -14302,13 +14338,10 @@ app.delete('/looks/:lookId/save', async (request, reply) => {
 app.get('/looks/:lookId/comments', async (request, reply) => {
   const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
   const { lookId } = paramsSchema.parse(request.params);
+  const viewerUserId = request.authUser?.userId ?? null;
 
-  const lookResult = await db.query<{ id: string }>(
-    `SELECT id FROM looks WHERE id = $1 LIMIT 1`,
-    [lookId]
-  );
-
-  if (!lookResult.rowCount) {
+  const accessRow = await getAccessibleLook(lookId, viewerUserId);
+  if (!accessRow) {
     reply.code(404);
     return { ok: false, error: 'Look not found' };
   }
@@ -14360,16 +14393,12 @@ app.post('/looks/:lookId/comments', async (request, reply) => {
 
   const bodySchema = z.object({
     id: z.string().min(2).max(120),
-    body: z.string().min(1).max(1000),
+    body: z.string().trim().min(1).max(1000),
   });
   const payload = bodySchema.parse(request.body);
 
-  const lookResult = await db.query<{ id: string }>(
-    `SELECT id FROM looks WHERE id = $1 LIMIT 1`,
-    [lookId]
-  );
-
-  if (!lookResult.rowCount) {
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
     reply.code(404);
     return { ok: false, error: 'Look not found' };
   }
@@ -14431,6 +14460,12 @@ app.delete('/looks/:lookId/comments/:commentId', async (request, reply) => {
     commentId: z.string().min(2).max(120),
   });
   const { lookId, commentId } = paramsSchema.parse(request.params);
+
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
 
   const commentResult = await db.query<{ author_id: string }>(
     `SELECT author_id FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,

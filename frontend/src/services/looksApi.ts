@@ -21,7 +21,7 @@ export interface LookApiItem {
   title: string;
   caption: string;
   mediaUrl: string;
-  visibility: 'public' | 'followers' | 'private';
+  visibility: 'public' | 'private';
   status: 'draft' | 'published' | 'archived';
   createdAt: string;
   updatedAt?: string;
@@ -56,7 +56,7 @@ export interface LookCreateBody {
   title: string;
   caption?: string;
   mediaUrl: string;
-  visibility?: 'public' | 'followers' | 'private';
+  visibility?: 'public' | 'private';
   tags?: LookCreateTag[];
   status?: 'draft' | 'published' | 'archived';
 }

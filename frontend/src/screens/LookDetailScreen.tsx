@@ -7,6 +7,7 @@ import {
   Dimensions,
   Pressable,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,6 +51,7 @@ export default function LookDetailScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
   const [commentsVisible, setCommentsVisible] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
 
   const loadLook = useCallback(async () => {
     setIsLoading(true);
@@ -58,6 +60,7 @@ export default function LookDetailScreen() {
       const res = await fetchLookByIdFromApi(lookId);
       if (res.ok && res.look) {
         setLook(res.look);
+        setCommentCount(res.look.commentCount);
       } else {
         setLoadError(res.error ?? 'Look not found');
       }
@@ -72,10 +75,19 @@ export default function LookDetailScreen() {
     loadLook();
   }, [loadLook]);
 
-  const handleShare = useCallback(() => {
+  const handleShare = useCallback(async () => {
     haptic.light();
-    show('Link copied to clipboard', 'success');
-  }, [haptic, show]);
+    try {
+      await Share.share({
+        title: 'Thryftverse Look',
+        message: look?.caption
+          ? `${look.caption}\n\nLook ID: ${look?.id}`
+          : `View this Look on Thryftverse.\n\nLook ID: ${look?.id}`,
+      });
+    } catch {
+      // Share failed or was dismissed — no feedback needed unless it's a real error
+    }
+  }, [haptic, look]);
 
   const resolveListing = useCallback(
     (listingId: string | null) => {
@@ -97,8 +109,6 @@ export default function LookDetailScreen() {
     },
     [haptic, resolveListing, navigation, show]
   );
-
-  const isOwner = currentUser?.id && look?.creatorId === currentUser.id;
 
   if (isLoading) {
     return (
@@ -142,17 +152,6 @@ export default function LookDetailScreen() {
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
-          {isOwner && (
-            <AnimatedPressable
-              style={styles.headerBtn}
-              onPress={() => navigation.navigate('CreateLook')}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Edit look"
-            >
-              <Ionicons name="create-outline" size={20} color={Colors.textPrimary} />
-            </AnimatedPressable>
-          )}
           <AnimatedPressable
             style={styles.headerBtn}
             onPress={handleShare}
@@ -241,12 +240,17 @@ export default function LookDetailScreen() {
           <LookSocialActions
             lookId={look.id}
             initialLikeCount={look.likeCount}
-            initialCommentCount={look.commentCount}
+            commentCount={commentCount}
             initialSaveCount={look.saveCount}
             initialLikedByViewer={look.likedByViewer}
             initialSavedByViewer={look.savedByViewer}
+            isAuthenticated={!!currentUser?.id}
             onCommentPress={() => setCommentsVisible(true)}
             onSharePress={handleShare}
+            onSignInRequired={() => {
+              show('Sign in to like, save, and comment', 'info');
+              navigation.navigate('Login');
+            }}
           />
         </Reanimated.View>
 
@@ -293,6 +297,7 @@ export default function LookDetailScreen() {
         currentUserId={currentUser?.id}
         visible={commentsVisible}
         onClose={() => setCommentsVisible(false)}
+        onCommentCountChange={setCommentCount}
       />
     </SafeAreaView>
   );

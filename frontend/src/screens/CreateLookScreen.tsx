@@ -30,11 +30,10 @@ import { OutfitPieceEditor } from '../components/look/OutfitPieceEditor';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
-type Visibility = 'public' | 'followers' | 'private';
+type Visibility = 'public' | 'private';
 
 const VISIBILITY_OPTIONS: { value: Visibility; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'public', label: 'Public', icon: 'globe-outline' },
-  { value: 'followers', label: 'Followers', icon: 'people-outline' },
   { value: 'private', label: 'Private', icon: 'lock-closed-outline' },
 ];
 
@@ -49,7 +48,6 @@ export default function CreateLookScreen() {
   const [tags, setTags] = useState<OutfitTag[]>([]);
   const [visibility, setVisibility] = useState<Visibility>('public');
   const [isPublishing, setIsPublishing] = useState(false);
-  const [isPreview, setIsPreview] = useState(false);
 
   const allowNavigationRef = useRef(false);
 
@@ -94,15 +92,10 @@ export default function CreateLookScreen() {
   }, []);
 
   const handlePublish = useCallback(
-    async (status: 'draft' | 'published') => {
+    async () => {
       if (!imageUri) {
         haptic.error();
         show('Add a photo first', 'error');
-        return;
-      }
-      if (status === 'published' && !caption.trim()) {
-        haptic.error();
-        show('Add a caption to publish', 'error');
         return;
       }
 
@@ -111,9 +104,16 @@ export default function CreateLookScreen() {
       try {
         const mediaUrl = await uploadMedia(imageUri, 'looks');
         const lookId = `look_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const internalTitle =
+          caption
+            .trim()
+            .split('\n')
+            .find(Boolean)
+            ?.slice(0, 120)
+          || 'Untitled Look';
         await createLookOnApi({
           id: lookId,
-          title: caption.trim().slice(0, 80) || 'Untitled Look',
+          title: internalTitle,
           caption: caption.trim(),
           mediaUrl,
           visibility,
@@ -124,15 +124,15 @@ export default function CreateLookScreen() {
             x: t.x,
             y: t.y,
           })),
-          status,
+          status: 'published',
         });
 
         allowNavigationRef.current = true;
-        show(status === 'draft' ? 'Draft saved' : 'Look published', 'success');
+        show('Look published', 'success');
         haptic.success();
         navigation.replace('LookDetail', { lookId });
       } catch {
-        show('Failed to save look', 'error');
+        show('Failed to publish look', 'error');
         haptic.error();
       } finally {
         setIsPublishing(false);
@@ -157,17 +157,7 @@ export default function CreateLookScreen() {
         <View style={styles.headerRight}>
           {isPublishing ? (
             <ActivityIndicator size="small" color={Colors.brand} />
-          ) : (
-            <AnimatedPressable
-              style={styles.draftBtn}
-              onPress={() => handlePublish('draft')}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Save as draft"
-            >
-              <Text style={styles.draftBtnText}>Draft</Text>
-            </AnimatedPressable>
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -187,7 +177,7 @@ export default function CreateLookScreen() {
               onImageChange={setImageUri}
               tags={tags}
               onTagsChange={handleTagsChange}
-              editable={!isPreview}
+              editable
             />
           </Reanimated.View>
 
@@ -269,7 +259,7 @@ export default function CreateLookScreen() {
           >
             <AnimatedPressable
               style={[styles.publishBtn, !imageUri && styles.publishBtnDisabled]}
-              onPress={() => handlePublish('published')}
+              onPress={handlePublish}
               activeOpacity={0.85}
               disabled={!imageUri || isPublishing}
               accessibilityRole="button"
@@ -319,17 +309,6 @@ const styles = StyleSheet.create({
   headerRight: {
     minWidth: 60,
     alignItems: 'flex-end',
-  },
-  draftBtn: {
-    paddingHorizontal: Space.md,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  draftBtnText: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   scrollContent: {
     paddingBottom: Space.xl,
