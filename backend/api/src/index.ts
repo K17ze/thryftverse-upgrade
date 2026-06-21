@@ -13873,12 +13873,139 @@ app.delete('/posters/:posterId', async (request, reply) => {
 
 // ── Looks API ──────────────────────────────────────────────────────
 
+async function enrichLooks(
+  lookRows: Array<{
+    id: string;
+    creator_id: string;
+    title: string;
+    caption: string;
+    media_url: string;
+    status: string;
+    visibility: string;
+    created_at: string;
+    updated_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
+  }>,
+  viewerUserId: string | null
+): Promise<Array<Record<string, unknown>>> {
+  const lookIds = lookRows.map((r) => r.id);
+
+  const tagsResult = lookIds.length
+    ? await db.query<{
+        look_id: string;
+        id: string;
+        listing_id: string | null;
+        label: string;
+        x: string;
+        y: string;
+      }>(
+        `SELECT look_id, id, listing_id, label, x, y FROM look_tags WHERE look_id = ANY($1)`,
+        [lookIds]
+      )
+    : { rows: [] };
+
+  const tagsByLook = new Map<string, Array<Record<string, unknown>>>();
+  for (const t of tagsResult.rows) {
+    const arr = tagsByLook.get(t.look_id) ?? [];
+    arr.push({
+      id: t.id,
+      listingId: t.listing_id,
+      label: t.label,
+      x: Number(t.x),
+      y: Number(t.y),
+    });
+    tagsByLook.set(t.look_id, arr);
+  }
+
+  const likeCountsResult = lookIds.length
+    ? await db.query<{ look_id: string; count: string }>(
+        `SELECT look_id, COUNT(*)::text AS count FROM look_likes WHERE look_id = ANY($1) GROUP BY look_id`,
+        [lookIds]
+      )
+    : { rows: [] };
+  const likeCountMap = new Map<string, number>();
+  for (const r of likeCountsResult.rows) {
+    likeCountMap.set(r.look_id, Number(r.count));
+  }
+
+  const commentCountsResult = lookIds.length
+    ? await db.query<{ look_id: string; count: string }>(
+        `SELECT look_id, COUNT(*)::text AS count FROM look_comments WHERE look_id = ANY($1) GROUP BY look_id`,
+        [lookIds]
+      )
+    : { rows: [] };
+  const commentCountMap = new Map<string, number>();
+  for (const r of commentCountsResult.rows) {
+    commentCountMap.set(r.look_id, Number(r.count));
+  }
+
+  const saveCountsResult = lookIds.length
+    ? await db.query<{ look_id: string; count: string }>(
+        `SELECT look_id, COUNT(*)::text AS count FROM look_saves WHERE look_id = ANY($1) GROUP BY look_id`,
+        [lookIds]
+      )
+    : { rows: [] };
+  const saveCountMap = new Map<string, number>();
+  for (const r of saveCountsResult.rows) {
+    saveCountMap.set(r.look_id, Number(r.count));
+  }
+
+  let viewerLikesSet = new Set<string>();
+  let viewerSavesSet = new Set<string>();
+  if (viewerUserId && lookIds.length) {
+    const viewerLikesResult = await db.query<{ look_id: string }>(
+      `SELECT look_id FROM look_likes WHERE user_id = $1 AND look_id = ANY($2)`,
+      [viewerUserId, lookIds]
+    );
+    viewerLikesSet = new Set(viewerLikesResult.rows.map((r) => r.look_id));
+
+    const viewerSavesResult = await db.query<{ look_id: string }>(
+      `SELECT look_id FROM look_saves WHERE user_id = $1 AND look_id = ANY($2)`,
+      [viewerUserId, lookIds]
+    );
+    viewerSavesSet = new Set(viewerSavesResult.rows.map((r) => r.look_id));
+  }
+
+  return lookRows.map((row) => ({
+    id: row.id,
+    creatorId: row.creator_id,
+    creator: {
+      id: row.creator_id,
+      username: row.creator_username,
+      avatar: row.creator_avatar,
+    },
+    title: row.title,
+    caption: row.caption,
+    mediaUrl: row.media_url,
+    visibility: row.visibility,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    tags: tagsByLook.get(row.id) ?? [],
+    likeCount: likeCountMap.get(row.id) ?? 0,
+    commentCount: commentCountMap.get(row.id) ?? 0,
+    saveCount: saveCountMap.get(row.id) ?? 0,
+    likedByViewer: viewerLikesSet.has(row.id),
+    savedByViewer: viewerSavesSet.has(row.id),
+  }));
+}
+
+const LOOK_SELECT_COLUMNS = `
+  l.id, l.creator_id, l.title, l.caption, l.media_url, l.status, l.visibility,
+  l.created_at, l.updated_at,
+  u.username AS creator_username,
+  u.avatar AS creator_avatar
+`;
+
 app.post('/looks', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const bodySchema = z.object({
     id: z.string().min(2).max(120),
-    title: z.string().min(1).max(120),
+    title: z.string().max(120).default(''),
+    caption: z.string().max(500).default(''),
     mediaUrl: z.string().url().min(3),
+    visibility: z.enum(['public', 'followers', 'private']).default('public'),
     tags: z.array(
       z.object({
         id: z.string().min(2).max(120),
@@ -13898,14 +14025,16 @@ app.post('/looks', async (request, reply) => {
 
     await client.query(
       `
-        INSERT INTO looks (id, creator_id, title, media_url, status)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO looks (id, creator_id, title, caption, media_url, status, visibility)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (id) DO UPDATE
         SET title = EXCLUDED.title,
+            caption = EXCLUDED.caption,
             media_url = EXCLUDED.media_url,
-            status = EXCLUDED.status
+            status = EXCLUDED.status,
+            visibility = EXCLUDED.visibility
       `,
-      [payload.id, actorUserId, payload.title, payload.mediaUrl, payload.status]
+      [payload.id, actorUserId, payload.title, payload.caption, payload.mediaUrl, payload.status, payload.visibility]
     );
 
     await client.query(`DELETE FROM look_tags WHERE look_id = $1`, [payload.id]);
@@ -13946,6 +14075,7 @@ app.get('/looks', async (request) => {
     limit: z.coerce.number().int().min(1).max(120).default(40),
   });
   const params = querySchema.parse(request.query ?? {});
+  const viewerUserId = request.authUser?.userId ?? null;
 
   const conditions: string[] = ['1 = 1'];
   const args: unknown[] = [];
@@ -13957,84 +14087,71 @@ app.get('/looks', async (request) => {
   if (params.status) {
     conditions.push(`l.status = $${args.length + 1}`);
     args.push(params.status);
+  } else {
+    conditions.push(`l.status = 'published'`);
+  }
+
+  // Visibility filter: show public to everyone; show private/followers only to creator
+  if (viewerUserId) {
+    conditions.push(`(l.visibility = 'public' OR l.creator_id = $${args.length + 1})`);
+    args.push(viewerUserId);
+  } else {
+    conditions.push(`l.visibility = 'public'`);
   }
 
   const looksResult = await db.query<{
     id: string;
     creator_id: string;
     title: string;
+    caption: string;
     media_url: string;
     status: string;
+    visibility: string;
     created_at: string;
+    updated_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
   }>(
     `
-      SELECT id, creator_id, title, media_url, status, created_at
+      SELECT ${LOOK_SELECT_COLUMNS}
       FROM looks l
+      LEFT JOIN users u ON u.id = l.creator_id
       WHERE ${conditions.join(' AND ')}
-      ORDER BY created_at DESC
+      ORDER BY l.created_at DESC
       LIMIT $${args.length + 1}
     `,
     [...args, params.limit]
   );
 
-  const lookIds = looksResult.rows.map((r) => r.id);
-  const tagsResult = lookIds.length
-    ? await db.query<{
-        look_id: string;
-        id: string;
-        listing_id: string | null;
-        label: string;
-        x: string;
-        y: string;
-      }>(
-        `
-          SELECT look_id, id, listing_id, label, x, y
-          FROM look_tags
-          WHERE look_id = ANY($1)
-        `,
-        [lookIds]
-      )
-    : { rows: [] };
+  const items = await enrichLooks(looksResult.rows, viewerUserId);
 
-  const tagsByLook = new Map<string, Array<Record<string, unknown>>>();
-  for (const t of tagsResult.rows) {
-    const arr = tagsByLook.get(t.look_id) ?? [];
-    arr.push({
-      id: t.id,
-      listingId: t.listing_id,
-      label: t.label,
-      x: Number(t.x),
-      y: Number(t.y),
-    });
-    tagsByLook.set(t.look_id, arr);
-  }
-
-  return {
-    items: looksResult.rows.map((row) => ({
-      id: row.id,
-      creatorId: row.creator_id,
-      title: row.title,
-      mediaUrl: row.media_url,
-      status: row.status,
-      createdAt: row.created_at,
-      tags: tagsByLook.get(row.id) ?? [],
-    })),
-  };
+  return { items };
 });
 
 app.get('/looks/:lookId', async (request, reply) => {
   const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
   const { lookId } = paramsSchema.parse(request.params);
+  const viewerUserId = request.authUser?.userId ?? null;
 
   const lookResult = await db.query<{
     id: string;
     creator_id: string;
     title: string;
+    caption: string;
     media_url: string;
     status: string;
+    visibility: string;
     created_at: string;
+    updated_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
   }>(
-    `SELECT id, creator_id, title, media_url, status, created_at FROM looks WHERE id = $1 LIMIT 1`,
+    `
+      SELECT ${LOOK_SELECT_COLUMNS}
+      FROM looks l
+      LEFT JOIN users u ON u.id = l.creator_id
+      WHERE l.id = $1 LIMIT 1
+    `,
     [lookId]
   );
 
@@ -14045,34 +14162,17 @@ app.get('/looks/:lookId', async (request, reply) => {
 
   const look = lookResult.rows[0];
 
-  const tagsResult = await db.query<{
-    id: string;
-    listing_id: string | null;
-    label: string;
-    x: string;
-    y: string;
-  }>(
-    `SELECT id, listing_id, label, x, y FROM look_tags WHERE look_id = $1`,
-    [lookId]
-  );
+  // Visibility check
+  if (look.visibility !== 'public' && look.creator_id !== viewerUserId) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  const enriched = (await enrichLooks([look], viewerUserId))[0];
 
   return {
     ok: true,
-    look: {
-      id: look.id,
-      creatorId: look.creator_id,
-      title: look.title,
-      mediaUrl: look.media_url,
-      status: look.status,
-      createdAt: look.created_at,
-      tags: tagsResult.rows.map((t) => ({
-        id: t.id,
-        listingId: t.listing_id,
-        label: t.label,
-        x: Number(t.x),
-        y: Number(t.y),
-      })),
-    },
+    look: enriched,
   };
 });
 
@@ -14098,6 +14198,257 @@ app.delete('/looks/:lookId', async (request, reply) => {
   }
 
   await db.query(`DELETE FROM looks WHERE id = $1`, [lookId]);
+  return { ok: true };
+});
+
+// ── Look likes ─────────────────────────────────────────────────────
+
+app.post('/looks/:lookId/like', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const lookResult = await db.query<{ id: string }>(
+    `SELECT id FROM looks WHERE id = $1 LIMIT 1`,
+    [lookId]
+  );
+
+  if (!lookResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  await db.query(
+    `INSERT INTO look_likes (look_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [lookId, actorUserId]
+  );
+
+  const countResult = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM look_likes WHERE look_id = $1`,
+    [lookId]
+  );
+
+  return { ok: true, likeCount: Number(countResult.rows[0]?.count ?? 0), likedByViewer: true };
+});
+
+app.delete('/looks/:lookId/like', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  await db.query(
+    `DELETE FROM look_likes WHERE look_id = $1 AND user_id = $2`,
+    [lookId, actorUserId]
+  );
+
+  const countResult = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM look_likes WHERE look_id = $1`,
+    [lookId]
+  );
+
+  return { ok: true, likeCount: Number(countResult.rows[0]?.count ?? 0), likedByViewer: false };
+});
+
+// ── Look saves ─────────────────────────────────────────────────────
+
+app.post('/looks/:lookId/save', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const lookResult = await db.query<{ id: string }>(
+    `SELECT id FROM looks WHERE id = $1 LIMIT 1`,
+    [lookId]
+  );
+
+  if (!lookResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  await db.query(
+    `INSERT INTO look_saves (look_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [lookId, actorUserId]
+  );
+
+  const countResult = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM look_saves WHERE look_id = $1`,
+    [lookId]
+  );
+
+  return { ok: true, saveCount: Number(countResult.rows[0]?.count ?? 0), savedByViewer: true };
+});
+
+app.delete('/looks/:lookId/save', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  await db.query(
+    `DELETE FROM look_saves WHERE look_id = $1 AND user_id = $2`,
+    [lookId, actorUserId]
+  );
+
+  const countResult = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM look_saves WHERE look_id = $1`,
+    [lookId]
+  );
+
+  return { ok: true, saveCount: Number(countResult.rows[0]?.count ?? 0), savedByViewer: false };
+});
+
+// ── Look comments ──────────────────────────────────────────────────
+
+app.get('/looks/:lookId/comments', async (request, reply) => {
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const lookResult = await db.query<{ id: string }>(
+    `SELECT id FROM looks WHERE id = $1 LIMIT 1`,
+    [lookId]
+  );
+
+  if (!lookResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  const commentsResult = await db.query<{
+    id: string;
+    look_id: string;
+    author_id: string;
+    body: string;
+    created_at: string;
+    updated_at: string;
+    author_username: string | null;
+    author_avatar: string | null;
+  }>(
+    `
+      SELECT c.id, c.look_id, c.author_id, c.body, c.created_at, c.updated_at,
+        u.username AS author_username,
+        u.avatar AS author_avatar
+      FROM look_comments c
+      LEFT JOIN users u ON u.id = c.author_id
+      WHERE c.look_id = $1
+      ORDER BY c.created_at ASC
+      LIMIT 200
+    `,
+    [lookId]
+  );
+
+  return {
+    items: commentsResult.rows.map((row) => ({
+      id: row.id,
+      lookId: row.look_id,
+      authorId: row.author_id,
+      author: {
+        id: row.author_id,
+        username: row.author_username,
+        avatar: row.author_avatar,
+      },
+      body: row.body,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  };
+});
+
+app.post('/looks/:lookId/comments', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120),
+    body: z.string().min(1).max(1000),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  const lookResult = await db.query<{ id: string }>(
+    `SELECT id FROM looks WHERE id = $1 LIMIT 1`,
+    [lookId]
+  );
+
+  if (!lookResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  await db.query(
+    `INSERT INTO look_comments (id, look_id, author_id, body) VALUES ($1, $2, $3, $4)`,
+    [payload.id, lookId, actorUserId, payload.body]
+  );
+
+  const commentResult = await db.query<{
+    id: string;
+    author_id: string;
+    body: string;
+    created_at: string;
+    updated_at: string;
+    author_username: string | null;
+    author_avatar: string | null;
+  }>(
+    `
+      SELECT c.id, c.author_id, c.body, c.created_at, c.updated_at,
+        u.username AS author_username,
+        u.avatar AS author_avatar
+      FROM look_comments c
+      LEFT JOIN users u ON u.id = c.author_id
+      WHERE c.id = $1 LIMIT 1
+    `,
+    [payload.id]
+  );
+
+  const row = commentResult.rows[0];
+  if (!row) {
+    reply.code(500);
+    return { ok: false, error: 'Failed to create comment' };
+  }
+
+  reply.code(201);
+  return {
+    ok: true,
+    comment: {
+      id: row.id,
+      lookId,
+      authorId: row.author_id,
+      author: {
+        id: row.author_id,
+        username: row.author_username,
+        avatar: row.author_avatar,
+      },
+      body: row.body,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    },
+  };
+});
+
+app.delete('/looks/:lookId/comments/:commentId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({
+    lookId: z.string().min(2).max(120),
+    commentId: z.string().min(2).max(120),
+  });
+  const { lookId, commentId } = paramsSchema.parse(request.params);
+
+  const commentResult = await db.query<{ author_id: string }>(
+    `SELECT author_id FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
+    [commentId, lookId]
+  );
+
+  const comment = commentResult.rows[0];
+  if (!comment) {
+    reply.code(404);
+    return { ok: false, error: 'Comment not found' };
+  }
+
+  if (comment.author_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(`DELETE FROM look_comments WHERE id = $1`, [commentId]);
   return { ok: true };
 });
 

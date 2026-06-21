@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Dimensions,
-  StatusBar,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
-import Reanimated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,24 +25,14 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
-import { SkeletonLoader } from '../components/SkeletonLoader';
+import { LookSocialActions } from '../components/look/LookSocialActions';
+import { LookCommentsSheet } from '../components/look/LookCommentsSheet';
+import { fetchLookByIdFromApi, type LookApiItem } from '../services/looksApi';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const { width: SCREEN_W } = Dimensions.get('window');
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'LookDetail'>;
-
-interface TaggedListing {
-  id: string;
-  label: string;
-  x: number;
-  y: number;
-  listingId?: string;
-  listingTitle?: string;
-  listingPrice?: number;
-  listingImage?: string;
-  listingBrand?: string;
-}
 
 export default function LookDetailScreen() {
   const route = useRoute<RouteT>();
@@ -51,58 +41,83 @@ export default function LookDetailScreen() {
   const { show } = useToast();
   const { listings } = useBackendData();
   const reducedMotion = useReducedMotion();
-
-  const { lookId } = route.params;
-  const userLooks = useStore((state) => state.userLooks);
-  const toggleUserLookLike = useStore((state) => state.toggleUserLookLike);
   const currentUser = useStore((state) => state.currentUser);
 
-  const look = userLooks.find((l) => l.id === lookId);
+  const { lookId } = route.params;
 
+  const [look, setLook] = useState<LookApiItem | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
-  const [isSaved, setIsSaved] = useState(false);
+  const [commentsVisible, setCommentsVisible] = useState(false);
 
-  const scale = useSharedValue(1);
+  const loadLook = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const res = await fetchLookByIdFromApi(lookId);
+      if (res.ok && res.look) {
+        setLook(res.look);
+      } else {
+        setLoadError(res.error ?? 'Look not found');
+      }
+    } catch {
+      setLoadError('Failed to load look');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [lookId]);
 
-  const handleLike = () => {
-    haptic.medium();
-    toggleUserLookLike(lookId);
-  };
+  useEffect(() => {
+    loadLook();
+  }, [loadLook]);
 
-  const handleSave = () => {
-    haptic.medium();
-    setIsSaved((s) => !s);
-    show(!isSaved ? 'Saved to closet' : 'Removed from closet', 'info');
-  };
-
-  const handleShare = () => {
+  const handleShare = useCallback(() => {
     haptic.light();
     show('Link copied to clipboard', 'success');
-  };
+  }, [haptic, show]);
 
-  const resolveListing = (tag: TaggedListing) => {
-    if (tag.listingId) {
-      return listings.find((l) => l.id === tag.listingId);
-    }
-    return undefined;
-  };
+  const resolveListing = useCallback(
+    (listingId: string | null) => {
+      if (!listingId) return undefined;
+      return listings.find((l) => l.id === listingId);
+    },
+    [listings]
+  );
 
-  const handleTagPress = (tag: TaggedListing) => {
-    haptic.light();
-    const listing = resolveListing(tag);
-    if (listing) {
-      navigation.push('ItemDetail', { itemId: listing.id });
-    } else {
-      show('This item is no longer available', 'info');
-    }
-  };
+  const handleTagPress = useCallback(
+    (tag: { listingId: string | null; label: string }) => {
+      haptic.light();
+      const listing = resolveListing(tag.listingId);
+      if (listing) {
+        navigation.push('ItemDetail', { itemId: listing.id });
+      } else if (tag.listingId) {
+        show('This item is no longer available', 'info');
+      }
+    },
+    [haptic, resolveListing, navigation, show]
+  );
 
-  const isOwner = currentUser?.id && look?.creator?.name === currentUser.username;
+  const isOwner = currentUser?.id && look?.creatorId === currentUser.id;
 
-  if (!look) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle="dark-content" />
+        <View style={styles.headerRow}>
+          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={Colors.brand} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!look || loadError) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
           <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
             <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
@@ -111,7 +126,7 @@ export default function LookDetailScreen() {
         <EmptyState
           icon="images-outline"
           title="Look not found"
-          subtitle="This look may have been removed or is unavailable."
+          subtitle={loadError ?? 'This look may have been removed or is unavailable.'}
           ctaLabel="Back to Explore"
           onCtaPress={() => navigation.goBack()}
         />
@@ -119,12 +134,8 @@ export default function LookDetailScreen() {
     );
   }
 
-  const likeCount = look.likes;
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" />
-
       {/* Floating Header */}
       <View style={styles.headerRow}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
@@ -132,11 +143,23 @@ export default function LookDetailScreen() {
         </AnimatedPressable>
         <View style={styles.headerActions}>
           {isOwner && (
-            <AnimatedPressable style={styles.headerBtn} onPress={() => show('Edit look coming soon', 'info')} activeOpacity={0.85}>
+            <AnimatedPressable
+              style={styles.headerBtn}
+              onPress={() => navigation.navigate('CreateLook')}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Edit look"
+            >
               <Ionicons name="create-outline" size={20} color={Colors.textPrimary} />
             </AnimatedPressable>
           )}
-          <AnimatedPressable style={styles.headerBtn} onPress={handleShare} activeOpacity={0.85}>
+          <AnimatedPressable
+            style={styles.headerBtn}
+            onPress={handleShare}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Share look"
+          >
             <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
           </AnimatedPressable>
         </View>
@@ -147,26 +170,28 @@ export default function LookDetailScreen() {
         <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
           <View style={styles.heroWrap}>
             <CachedImage
-              uri={look.coverImage}
+              uri={look.mediaUrl}
               style={styles.heroImage}
               contentFit="cover"
-              emptyLabel={look.title}
+              emptyLabel={look.title || look.caption}
               emptyIcon="image-outline"
             />
 
             {/* Hotspots */}
-            {look.items.map((item) => {
-              const isActive = activeTagId === item.id;
-              const listing = resolveListing(item as TaggedListing);
+            {look.tags.map((tag) => {
+              const isActive = activeTagId === tag.id;
+              const listing = resolveListing(tag.listingId);
               return (
                 <Pressable
-                  key={item.id}
-                  style={[styles.hotspotWrap, { left: `${(item.x * 100)}%`, top: `${(item.y * 100)}%` }]}
+                  key={tag.id}
+                  style={[styles.hotspotWrap, { left: `${tag.x * 100}%`, top: `${tag.y * 100}%` }]}
                   onPress={() => {
-                    setActiveTagId(isActive ? null : item.id);
-                    if (!isActive && listing) handleTagPress(item as TaggedListing);
+                    setActiveTagId(isActive ? null : tag.id);
+                    if (!isActive && listing) handleTagPress(tag);
                   }}
                   hitSlop={20}
+                  accessibilityRole="button"
+                  accessibilityLabel={tag.label || 'Tagged item'}
                 >
                   <View style={[styles.hotspotDot, isActive && styles.hotspotDotActive]} />
                   {isActive && listing && (
@@ -191,7 +216,11 @@ export default function LookDetailScreen() {
 
         {/* Info */}
         <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(80)} style={styles.infoSection}>
-          <Text style={styles.title}>{look.title}</Text>
+          {look.caption ? (
+            <Text style={styles.caption}>{look.caption}</Text>
+          ) : look.title ? (
+            <Text style={styles.caption}>{look.title}</Text>
+          ) : null}
           <View style={styles.creatorRow}>
             <View style={styles.creatorAvatar}>
               {look.creator.avatar ? (
@@ -201,43 +230,41 @@ export default function LookDetailScreen() {
               )}
             </View>
             <View style={styles.creatorInfo}>
-              <Text style={styles.creatorName}>@{look.creator.name}</Text>
-              <Text style={styles.creatorMeta}>{look.items.length} items tagged</Text>
+              <Text style={styles.creatorName}>@{look.creator.username ?? 'unknown'}</Text>
+              <Text style={styles.creatorMeta}>{look.tags.length} pieces tagged</Text>
             </View>
           </View>
         </Reanimated.View>
 
-        {/* Action Bar */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(120)} style={styles.actionBar}>
-          <AnimatedPressable style={styles.actionBtn} onPress={handleLike} activeOpacity={0.85}>
-            <Ionicons name={likeCount > 0 ? 'heart' : 'heart-outline'} size={22} color={likeCount > 0 ? Colors.danger : Colors.textPrimary} />
-            <Text style={styles.actionText}>{likeCount}</Text>
-          </AnimatedPressable>
-          <AnimatedPressable style={styles.actionBtn} onPress={handleSave} activeOpacity={0.85}>
-            <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={22} color={isSaved ? Colors.textPrimary : Colors.textPrimary} />
-            <Text style={styles.actionText}>{isSaved ? 'Saved' : 'Save'}</Text>
-          </AnimatedPressable>
-          <AnimatedPressable style={styles.actionBtn} onPress={handleShare} activeOpacity={0.85}>
-            <Ionicons name="share-outline" size={22} color={Colors.textPrimary} />
-            <Text style={styles.actionText}>Share</Text>
-          </AnimatedPressable>
+        {/* Social Actions */}
+        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(120)}>
+          <LookSocialActions
+            lookId={look.id}
+            initialLikeCount={look.likeCount}
+            initialCommentCount={look.commentCount}
+            initialSaveCount={look.saveCount}
+            initialLikedByViewer={look.likedByViewer}
+            initialSavedByViewer={look.savedByViewer}
+            onCommentPress={() => setCommentsVisible(true)}
+            onSharePress={handleShare}
+          />
         </Reanimated.View>
 
         {/* Tagged Products Tray */}
-        {look.items.length > 0 && (
+        {look.tags.length > 0 && (
           <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(160)} style={styles.traySection}>
-            <Text style={styles.trayTitle}>Tagged Products</Text>
+            <Text style={styles.trayTitle}>Outfit Pieces</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trayScroll}>
-              {look.items.map((item) => {
-                const listing = resolveListing(item as TaggedListing);
+              {look.tags.map((tag) => {
+                const listing = resolveListing(tag.listingId);
                 return (
                   <AnimatedPressable
-                    key={item.id}
+                    key={tag.id}
                     style={styles.trayCard}
-                    onPress={() => listing ? handleTagPress(item as TaggedListing) : show('Item unavailable', 'info')}
+                    onPress={() => handleTagPress(tag)}
                     activeOpacity={0.9}
                     accessibilityRole="button"
-                    accessibilityLabel={listing ? `${listing.title} by ${listing.brand}` : 'Unavailable item'}
+                    accessibilityLabel={listing ? `${listing.title}` : tag.label || 'Tagged item'}
                   >
                     <View style={styles.trayImgWrap}>
                       {listing?.images?.[0] ? (
@@ -247,13 +274,8 @@ export default function LookDetailScreen() {
                           <Ionicons name="pricetag" size={20} color={Colors.textMuted} />
                         </View>
                       )}
-                      {!listing && (
-                        <View style={styles.unavailableOverlay}>
-                          <Text style={styles.unavailableText}>Unavailable</Text>
-                        </View>
-                      )}
                     </View>
-                    <Text style={styles.trayCardTitle} numberOfLines={1}>{listing?.title ?? item.label}</Text>
+                    <Text style={styles.trayCardTitle} numberOfLines={1}>{listing?.title ?? tag.label ?? 'Untitled'}</Text>
                     {listing && <Text style={styles.trayCardPrice}>£{listing.price}</Text>}
                   </AnimatedPressable>
                 );
@@ -264,12 +286,21 @@ export default function LookDetailScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Comments Sheet */}
+      <LookCommentsSheet
+        lookId={look.id}
+        currentUserId={currentUser?.id}
+        visible={commentsVisible}
+        onClose={() => setCommentsVisible(false)}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerRow: {
     position: 'absolute',
     top: 0,
@@ -358,11 +389,12 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
     gap: Space.sm,
   },
-  title: {
+  caption: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
+    lineHeight: 24,
   },
   creatorRow: {
     flexDirection: 'row',
@@ -389,33 +421,6 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: Colors.textMuted,
-  },
-
-  actionBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginTop: Space.md,
-    marginHorizontal: Space.md,
-    padding: Space.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  actionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
-  },
-  actionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
 
   traySection: {
@@ -461,16 +466,5 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
     color: Colors.brand,
-  },
-  unavailableOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unavailableText: {
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
   },
 });

@@ -43,6 +43,7 @@ import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
+import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -120,7 +121,17 @@ export default function MyProfileScreen() {
   const updateUserAvatar = useStore((state) => state.updateUserAvatar);
   const updateUserCover = useStore((state) => state.updateUserCover);
   const user = currentUser as any;
-  const userLooks = useStore((state) => state.userLooks);
+  const [myLooks, setMyLooks] = React.useState<LookApiItem[]>([]);
+  const [looksLoading, setLooksLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+    setLooksLoading(true);
+    fetchLooksFromApi({ creatorId: currentUser.id })
+      .then((res) => setMyLooks(res.items ?? []))
+      .catch(() => setMyLooks([]))
+      .finally(() => setLooksLoading(false));
+  }, [currentUser?.id]);
 
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
 
@@ -385,7 +396,7 @@ export default function MyProfileScreen() {
           <MyProfileTabRail
             tabs={[
               { key: 'listings', label: 'Listings', count: allOwnedListings.length },
-              { key: 'looks', label: 'Looks', count: userLooks.length },
+              { key: 'looks', label: 'Looks', count: myLooks.length },
               { key: 'about', label: 'About' },
             ]}
             activeKey={activeTab}
@@ -472,10 +483,14 @@ export default function MyProfileScreen() {
           </View>
         )}
 
-        {/* LOOKS TAB — preserved as-is */}
+        {/* LOOKS TAB — fetched from backend */}
         {activeTab === 'looks' && (
           <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
-            {userLooks.length === 0 ? (
+            {looksLoading ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Text style={{ color: Colors.textMuted, fontSize: 14 }}>Loading looks...</Text>
+              </View>
+            ) : myLooks.length === 0 ? (
               <EmptyState
                 icon="sparkles-outline"
                 title="No Looks yet"
@@ -485,17 +500,17 @@ export default function MyProfileScreen() {
               />
             ) : (
               <View style={{ paddingHorizontal: Space.md }}>
-                {userLooks.map((look, index) => (
+                {myLooks.map((look, index) => (
                   <LookPreviewCard
                     key={look.id}
                     id={look.id}
-                    title={look.title}
-                    coverImage={look.coverImage}
-                    items={look.items}
-                    creatorName={user.username}
-                    creatorAvatar={displayAvatar ?? undefined}
-                    likes={look.likes}
-                    saved={false}
+                    title={look.caption || look.title}
+                    coverImage={look.mediaUrl}
+                    items={look.tags.map((t) => ({ id: t.id, label: t.label, x: t.x, y: t.y }))}
+                    creatorName={look.creator.username ?? user.username}
+                    creatorAvatar={look.creator.avatar ?? undefined}
+                    likes={look.likeCount}
+                    saved={look.savedByViewer}
                     onPress={() => navigation.navigate('LookDetail', { lookId: look.id })}
                     index={index}
                   />
