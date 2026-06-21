@@ -221,7 +221,7 @@ export default function PosterViewerScreen() {
   const handleReply = async (text: string) => {
     if (!activeFrame) return;
     try {
-      const replyId = `reply_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const replyId = `reply_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`;
       await createPosterReply(activeFrame.id, { id: replyId, body: text });
       show('Reply sent', 'success');
     } catch {

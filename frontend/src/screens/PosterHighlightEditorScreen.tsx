@@ -140,7 +140,7 @@ export default function PosterHighlightEditorScreen({ navigation, route }: Props
 
         show('Highlight updated', 'success');
       } else {
-        const newHighlightId = `highlight_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        const newHighlightId = `highlight_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`;
         await createPosterHighlight({
           id: newHighlightId,
           title: title.trim(),

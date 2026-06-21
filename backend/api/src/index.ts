@@ -674,6 +674,10 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && path === '/users/search') {
+    return true;
+  }
+
   if (method === 'GET' && /^\/users\/[^/]+\/profile$/.test(path)) {
     return true;
   }
@@ -11608,6 +11612,35 @@ app.get('/users/:userId/profile', async (request, reply) => {
   return {
     ok: true,
     user: toPublicProfilePayload(user),
+  };
+});
+
+app.get('/users/search', async (request, reply) => {
+  const querySchema = z.object({
+    q: z.string().trim().min(1).max(100),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+  });
+  const { q, limit } = querySchema.parse(request.query ?? {});
+
+  const result = await db.query<{ id: string; username: string; display_name: string | null; avatar: string | null }>(
+    `
+      SELECT id, username, display_name, avatar
+      FROM users
+      WHERE username ILIKE $1
+      ORDER BY username ASC
+      LIMIT $2
+    `,
+    [`%${q}%`, limit]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      avatar: row.avatar,
+    })),
   };
 });
 

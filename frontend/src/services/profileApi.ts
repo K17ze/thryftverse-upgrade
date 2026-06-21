@@ -75,3 +75,20 @@ export async function fetchPublicProfile(userId: string): Promise<PublicProfileU
   });
   return response.user;
 }
+
+export interface UserSearchResult {
+  id: string;
+  username: string;
+  displayName: string | null;
+  avatar: string | null;
+}
+
+export async function searchUsers(query: string, limit?: number): Promise<UserSearchResult[]> {
+  const params = new URLSearchParams();
+  params.set('q', query);
+  if (limit) params.set('limit', String(limit));
+  const response = await fetchJson<{ ok: boolean; items: UserSearchResult[] }>(
+    `/users/search?${params.toString()}`
+  );
+  return response.items;
+}

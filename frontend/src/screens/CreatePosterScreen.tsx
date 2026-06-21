@@ -34,9 +34,20 @@ type Props = StackScreenProps<RootStackParamList, 'CreatePoster'>;
 const MAX_FRAMES = 10;
 const DEFAULT_DURATION_MS = 5000;
 
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 function createBlankFrame(): ComposerFrame {
   return {
-    id: `frame_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+    id: `frame_${generateUUID()}`,
     mediaType: 'text',
     mediaUri: null,
     backgroundColor: '#1a1a1a',
@@ -152,7 +163,7 @@ export default function CreatePosterScreen({ navigation }: Props) {
 
     setIsPublishing(true);
     try {
-      const storyId = `story_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const storyId = `story_${generateUUID()}`;
 
       const uploadedFrames = await Promise.all(
         frames.map(async (frame, index) => {

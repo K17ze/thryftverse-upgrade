@@ -204,7 +204,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
 
       <FlatList
         data={currentData as any[]}
-        keyExtractor={(item: any) => item.id ?? item.userId ?? Math.random().toString()}
+        keyExtractor={(item: any) => item.id ?? item.userId ?? item.authorId ?? `row_${item.createdAt ?? ''}`}
         renderItem={activeTab === 'viewers' ? renderViewer as any : activeTab === 'reactions' ? renderReaction as any : renderReply as any}
         contentContainerStyle={styles.listContent}
         refreshControl={
