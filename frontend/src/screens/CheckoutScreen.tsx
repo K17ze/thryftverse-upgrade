@@ -96,7 +96,7 @@ function toEtaLabel(carrier: CapabilityCarrier): string {
 const PAYMENT_INTENT_POLL_ATTEMPTS = 12;
 const PAYMENT_INTENT_POLL_INTERVAL_MS = 1_500;
 
-type CheckoutPaymentSettlementStatus = 'succeeded' | 'failed' | 'pending';
+type CheckoutPaymentSettlementStatus = 'succeeded' | 'failed' | 'pending' | 'aborted';
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -105,9 +105,14 @@ function wait(ms: number): Promise<void> {
 }
 
 async function waitForPaymentIntentSettlement(
-  intentId: string
+  intentId: string,
+  shouldContinue: () => boolean
 ): Promise<CheckoutPaymentSettlementStatus> {
   for (let attempt = 0; attempt < PAYMENT_INTENT_POLL_ATTEMPTS; attempt += 1) {
+    if (!shouldContinue()) {
+      return 'aborted';
+    }
+
     try {
       const latestIntent = await getPaymentIntentStatus(intentId);
       const normalizedStatus = latestIntent.status.trim().toLowerCase();
@@ -121,6 +126,10 @@ async function waitForPaymentIntentSettlement(
       }
     } catch {
       // Continue polling until timeout to absorb transient API/network failures.
+    }
+
+    if (!shouldContinue()) {
+      return 'aborted';
     }
 
     if (attempt < PAYMENT_INTENT_POLL_ATTEMPTS - 1) {
@@ -169,10 +178,14 @@ export default function CheckoutScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const savedAddress = useStore((state) => state.savedAddress);
   const saveAddress = useStore((state) => state.saveAddress);
+  const clearSavedAddress = useStore((state) => state.clearSavedAddress);
   const savedPaymentMethod = useStore((state) => state.savedPaymentMethod);
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
+  const clearSavedPaymentMethod = useStore((state) => state.clearSavedPaymentMethod);
 
   const [isHydrating, setIsHydrating] = useState(false);
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
+  const [isSelectingPayment, setIsSelectingPayment] = useState(false);
   const [stage, setStage] = useState<CheckoutStage>('idle');
   const [addCardSheetVisible, setAddCardSheetVisible] = useState(false);
   const [paymentSelectorVisible, setPaymentSelectorVisible] = useState(false);
@@ -193,21 +206,68 @@ export default function CheckoutScreen() {
   const pendingIntentIdRef = useRef<string | null>(null);
   const isSubmittingRef = useRef(false);
   const appStateRef = useRef(AppState.currentState);
+  const isMountedRef = useRef(true);
+  const paymentAttemptRef = useRef(0);
+  const navigationHandledRef = useRef(false);
 
   const item = listings.find((l) => l.id === itemId);
 
   const isSubmitting = stage === 'creating_order' || stage === 'opening_payment' || stage === 'awaiting_payment';
+  const isInteractionLocked = isSubmitting || isCancellingOrder;
 
   // --- Eligibility ---
   const checkoutEligible = useMemo(() => {
     if (!currentUser?.id || !item) return false;
-    if (isHydrating || isSubmitting) return false;
+    if (isHydrating || isInteractionLocked) return false;
     if (!savedAddress?.id) return false;
     if (!savedPaymentMethod?.id) return false;
     if (!postageOption.carrierId) return false;
     if (!isPaymentMethodAllowed(checkoutCapabilities, savedPaymentMethod.type)) return false;
     return true;
-  }, [currentUser?.id, item, isHydrating, isSubmitting, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, checkoutCapabilities, savedPaymentMethod?.type]);
+  }, [currentUser?.id, item, isHydrating, isInteractionLocked, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, checkoutCapabilities, savedPaymentMethod?.type]);
+
+  // --- Mount / unmount ---
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      paymentAttemptRef.current += 1;
+    };
+  }, []);
+
+  // --- Single settlement navigation helper ---
+  const handleSettlementNavigation = useCallback(
+    (
+      result: 'succeeded' | 'pending',
+      orderId: string,
+      attemptId?: number
+    ) => {
+      if (navigationHandledRef.current) {
+        return;
+      }
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      if (
+        attemptId !== undefined &&
+        paymentAttemptRef.current !== attemptId
+      ) {
+        return;
+      }
+
+      navigationHandledRef.current = true;
+
+      if (result === 'succeeded') {
+        navigation.replace('Success', { orderId });
+      } else {
+        navigation.replace('OrderDetail', { orderId });
+      }
+    },
+    [navigation]
+  );
 
   // --- Hydration ---
   const hydrateCheckout = useCallback(async () => {
@@ -221,62 +281,94 @@ export default function CheckoutScreen() {
     setShippingError(null);
 
     try {
-      const [addresses, paymentMethods, capabilities] = await Promise.all([
-        listUserAddresses(userId).catch(() => [] as CommerceAddress[]),
-        listUserPaymentMethods(userId).catch(() => [] as CommercePaymentMethod[]),
-        getUserCountryCapabilities(userId).catch(() => null as UserCountryCapabilities | null),
+      const [
+        addressResult,
+        paymentResult,
+        capabilityResult,
+      ] = await Promise.allSettled([
+        listUserAddresses(userId),
+        listUserPaymentMethods(userId),
+        getUserCountryCapabilities(userId),
       ]);
 
-      setBackendAddresses(addresses);
-      setBackendPaymentMethods(paymentMethods);
+      // --- Address result ---
+      let addresses: CommerceAddress[] = [];
+      if (addressResult.status === 'fulfilled') {
+        addresses = addressResult.value;
+        setBackendAddresses(addresses);
 
-      if (capabilities) {
-        setCheckoutCapabilities(capabilities);
+        if (addresses.length > 0) {
+          const matchingAddr = savedAddress?.id
+            ? addresses.find((a) => a.id === savedAddress.id)
+            : null;
+          const preferred = matchingAddr ?? addresses.find((a) => a.isDefault) ?? addresses[0];
+          saveAddress({
+            id: preferred.id,
+            name: preferred.name,
+            streetAddress: preferred.streetAddress,
+            apartment: preferred.apartment,
+            city: preferred.city,
+            region: preferred.region,
+            postalCode: preferred.postalCode,
+            countryCode: preferred.countryCode,
+            country: preferred.country,
+            isDefault: preferred.isDefault,
+          });
+        } else {
+          // Backend has no addresses
+          if (savedAddress?.id) {
+            clearSavedAddress();
+          }
+          // Local-only address without ID is retained; Pay stays disabled
+        }
+      } else {
+        // Address request failed — preserve existing local address
+        setAddressError('Delivery addresses could not be refreshed.');
+      }
+
+      // --- Payment result ---
+      let paymentMethods: CommercePaymentMethod[] = [];
+      if (paymentResult.status === 'fulfilled') {
+        paymentMethods = paymentResult.value;
+        setBackendPaymentMethods(paymentMethods);
+
+        if (paymentMethods.length > 0) {
+          const matchingPm = savedPaymentMethod?.id
+            ? paymentMethods.find((pm) => pm.id === savedPaymentMethod.id)
+            : null;
+          const preferredPm = matchingPm ?? paymentMethods.find((pm) => pm.isDefault) ?? paymentMethods[0];
+          savePaymentMethod({
+            id: preferredPm.id,
+            type: preferredPm.type,
+            label: preferredPm.label,
+            details: preferredPm.details ?? undefined,
+            isDefault: preferredPm.isDefault,
+          });
+        } else {
+          // Backend has no payment methods
+          if (savedPaymentMethod?.id) {
+            clearSavedPaymentMethod();
+          }
+        }
+      } else {
+        // Payment request failed — preserve existing selected payment method
+        setPaymentError('Payment methods could not be refreshed.');
+      }
+
+      // --- Capability result ---
+      let capabilities: UserCountryCapabilities | null = null;
+      if (capabilityResult.status === 'fulfilled') {
+        capabilities = capabilityResult.value;
+        if (capabilities) {
+          setCheckoutCapabilities(capabilities);
+        } else {
+          setCapabilityError('Could not verify payment capabilities for your region.');
+        }
       } else {
         setCapabilityError('Could not verify payment capabilities for your region.');
       }
 
-      // Address hydration priority
-      if (addresses.length > 0) {
-        const matchingAddr = savedAddress?.id
-          ? addresses.find((a) => a.id === savedAddress.id)
-          : null;
-        const preferred = matchingAddr ?? addresses.find((a) => a.isDefault) ?? addresses[0];
-        saveAddress({
-          id: preferred.id,
-          name: preferred.name,
-          streetAddress: preferred.streetAddress,
-          apartment: preferred.apartment,
-          city: preferred.city,
-          region: preferred.region,
-          postalCode: preferred.postalCode,
-          countryCode: preferred.countryCode,
-          country: preferred.country,
-          isDefault: preferred.isDefault,
-        });
-      }
-
-      // Payment hydration priority
-      if (paymentMethods.length > 0) {
-        const matchingPm = savedPaymentMethod?.id
-          ? paymentMethods.find((pm) => pm.id === savedPaymentMethod.id)
-          : null;
-        const preferredPm = matchingPm ?? paymentMethods.find((pm) => pm.isDefault) ?? paymentMethods[0];
-        savePaymentMethod({
-          id: preferredPm.id,
-          type: preferredPm.type,
-          label: preferredPm.label,
-          details: preferredPm.details ?? undefined,
-          isDefault: preferredPm.isDefault,
-        });
-      } else if (savedPaymentMethod?.id) {
-        const stillExists = paymentMethods.find((pm) => pm.id === savedPaymentMethod.id);
-        if (!stillExists) {
-          savePaymentMethod(null as any);
-        }
-      }
-
-      // Shipping quote
+      // --- Shipping quote ---
       if (capabilities) {
         const primaryCarrier = capabilities.postage.carriers[0];
         if (!primaryCarrier) {
@@ -329,67 +421,51 @@ export default function CheckoutScreen() {
     } finally {
       setIsHydrating(false);
     }
-  }, [currentUser?.id, item, savedAddress?.id, savedAddress?.postalCode, saveAddress, savePaymentMethod, savedPaymentMethod?.id]);
+  }, [currentUser?.id, item, savedAddress?.id, savedAddress?.postalCode, saveAddress, clearSavedAddress, savePaymentMethod, clearSavedPaymentMethod, savedPaymentMethod?.id]);
 
-  useEffect(() => {
-    void hydrateCheckout();
-  }, [hydrateCheckout]);
-
-  // Re-fetch on focus (returning from AddressForm)
+  // Single focus-based hydration — no duplicate mount effect
   useFocusEffect(
     useCallback(() => {
-      if (currentUser?.id && item) {
-        void hydrateCheckout();
-      }
-    }, [currentUser?.id, item, hydrateCheckout])
+      void hydrateCheckout();
+    }, [hydrateCheckout])
   );
 
-  // --- App resume handling ---
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (
-        appStateRef.current.match(/inactive|background/) &&
-        nextAppState === 'active' &&
-        pendingIntentIdRef.current
-      ) {
-        void (async () => {
-          try {
-            const intentId = pendingIntentIdRef.current;
-            if (!intentId) return;
-            const latest = await getPaymentIntentStatus(intentId);
-            const status = latest.status.trim().toLowerCase();
-            if (status === 'succeeded' && createdOrderIdRef.current) {
-              setStage('idle');
-              pendingIntentIdRef.current = null;
-              navigation.replace('Success', { orderId: createdOrderIdRef.current });
-            } else if (status === 'failed' || status === 'cancelled') {
-              setStage('payment_failed');
-              pendingIntentIdRef.current = null;
-            }
-          } catch {
-            // Keep pending state
-          }
-        })();
-      }
-      appStateRef.current = nextAppState;
-    });
-
-    return () => subscription.remove();
-  }, [navigation]);
-
-  // --- Cancel stale order on selection change ---
-  const cancelStaleOrder = useCallback(async () => {
-    if (!createdOrderIdRef.current) return;
-    if (stage === 'awaiting_payment' || stage === 'opening_payment') return;
-
+  // --- Cancel stale order (result-bearing) ---
+  const cancelStaleOrder = useCallback(async (): Promise<boolean> => {
     const orderId = createdOrderIdRef.current;
-    createdOrderIdRef.current = null;
-    createdOrderSignatureRef.current = null;
+
+    if (!orderId) {
+      return true;
+    }
+
+    if (
+      stage === 'opening_payment'
+      || stage === 'awaiting_payment'
+    ) {
+      setOrderError(
+        'Payment is already in progress. Wait for confirmation before changing checkout details.'
+      );
+      return false;
+    }
+
+    setIsCancellingOrder(true);
+    setOrderError(null);
 
     try {
       await cancelOrder(orderId);
+
+      createdOrderIdRef.current = null;
+      createdOrderSignatureRef.current = null;
+      pendingIntentIdRef.current = null;
+
+      return true;
     } catch {
-      // Non-critical: order may already be cancelled or paid
+      setOrderError(
+        'Your existing order could not be cancelled. Checkout details have not been changed.'
+      );
+      return false;
+    } finally {
+      setIsCancellingOrder(false);
     }
   }, [stage]);
 
@@ -417,6 +493,9 @@ export default function CheckoutScreen() {
       postageFee: POSTAGE_FEE,
     });
 
+    const attemptId = ++paymentAttemptRef.current;
+    navigationHandledRef.current = false;
+
     isSubmittingRef.current = true;
     setOrderError(null);
 
@@ -425,14 +504,30 @@ export default function CheckoutScreen() {
 
       // Reuse existing order if signature matches
       if (
-        createdOrderIdRef.current &&
-        createdOrderSignatureRef.current === signature
+        createdOrderIdRef.current
+        && createdOrderSignatureRef.current === signature
       ) {
         orderId = createdOrderIdRef.current;
       } else {
         // Cancel any stale order first
-        if (createdOrderIdRef.current) {
-          await cancelStaleOrder();
+        if (
+          createdOrderIdRef.current
+          && createdOrderSignatureRef.current !== signature
+        ) {
+          const cancelled = await cancelStaleOrder();
+
+          if (!cancelled) {
+            setStage('payment_failed');
+            isSubmittingRef.current = false;
+            return;
+          }
+        }
+
+        if (
+          !isMountedRef.current
+          || paymentAttemptRef.current !== attemptId
+        ) {
+          return;
         }
 
         setStage('creating_order');
@@ -446,6 +541,13 @@ export default function CheckoutScreen() {
           shippingCarrierId: postageOption.carrierId ?? undefined,
         });
 
+        if (
+          !isMountedRef.current
+          || paymentAttemptRef.current !== attemptId
+        ) {
+          return;
+        }
+
         orderId = order.id;
         createdOrderIdRef.current = orderId;
         createdOrderSignatureRef.current = signature;
@@ -454,6 +556,14 @@ export default function CheckoutScreen() {
       // Create payment intent
       setStage('opening_payment');
       const intent = await createCommercePaymentIntent({ orderId });
+
+      if (
+        !isMountedRef.current
+        || paymentAttemptRef.current !== attemptId
+      ) {
+        return;
+      }
+
       pendingIntentIdRef.current = intent.intentId;
 
       if (intent.nextActionUrl) {
@@ -477,15 +587,36 @@ export default function CheckoutScreen() {
         }
       }
 
+      if (
+        !isMountedRef.current
+        || paymentAttemptRef.current !== attemptId
+      ) {
+        return;
+      }
+
       // Poll for settlement
       setStage('awaiting_payment');
-      const settlementStatus = await waitForPaymentIntentSettlement(intent.intentId);
+      const settlementStatus = await waitForPaymentIntentSettlement(
+        intent.intentId,
+        () => isMountedRef.current && paymentAttemptRef.current === attemptId
+      );
+
+      if (settlementStatus === 'aborted') {
+        return;
+      }
+
+      if (
+        !isMountedRef.current
+        || paymentAttemptRef.current !== attemptId
+      ) {
+        return;
+      }
 
       if (settlementStatus === 'succeeded') {
         show('Payment completed', 'success');
         pendingIntentIdRef.current = null;
         isSubmittingRef.current = false;
-        navigation.replace('Success', { orderId });
+        handleSettlementNavigation('succeeded', orderId, attemptId);
         return;
       }
 
@@ -493,15 +624,23 @@ export default function CheckoutScreen() {
         setStage('payment_pending');
         show('Payment is processing. We will update your order shortly.', 'info');
         isSubmittingRef.current = false;
-        navigation.replace('OrderDetail', { orderId });
+        handleSettlementNavigation('pending', orderId, attemptId);
         return;
       }
 
       // Failed
       setStage('payment_failed');
+      pendingIntentIdRef.current = null;
       setOrderError('Payment could not be completed. Please try again.');
       show('Payment could not be completed. Please try again.', 'error');
     } catch (error: any) {
+      if (
+        !isMountedRef.current
+        || paymentAttemptRef.current !== attemptId
+      ) {
+        return;
+      }
+
       setStage('payment_failed');
       const message = error?.message ?? 'Payment could not be completed. Please try again.';
       setOrderError(message);
@@ -518,25 +657,175 @@ export default function CheckoutScreen() {
     savedAddress?.id,
     savedPaymentMethod?.id,
     show,
-    navigation,
+    handleSettlementNavigation,
     cancelStaleOrder,
   ]);
+
+  // --- Address selection change ---
+  const handleAddressPress = useCallback(async () => {
+    haptics.tap();
+
+    if (createdOrderIdRef.current) {
+      const cancelled = await cancelStaleOrder();
+      if (!cancelled) {
+        return;
+      }
+    }
+
+    navigation.navigate('AddressForm', {
+      mode: savedAddress ? 'edit' : 'add',
+      source: 'checkout',
+    });
+  }, [cancelStaleOrder, navigation, savedAddress]);
+
+  // --- Payment selection change ---
+  const handleSelectPaymentMethod = useCallback(async (
+    method: CommercePaymentMethod
+  ) => {
+    if (method.id === savedPaymentMethod?.id) {
+      setPaymentSelectorVisible(false);
+      return;
+    }
+
+    if (createdOrderIdRef.current) {
+      setIsSelectingPayment(true);
+      const cancelled = await cancelStaleOrder();
+      setIsSelectingPayment(false);
+
+      if (!cancelled) {
+        return;
+      }
+    }
+
+    savePaymentMethod({
+      id: method.id,
+      type: method.type,
+      label: method.label,
+      details: method.details ?? undefined,
+      isDefault: method.isDefault,
+    });
+
+    setPaymentSelectorVisible(false);
+  }, [savedPaymentMethod?.id, cancelStaleOrder, savePaymentMethod]);
+
+  // --- Add-card success handler ---
+  const handleAddCardSuccess = useCallback(async () => {
+    if (!currentUser?.id) return;
+
+    try {
+      const methods = await listUserPaymentMethods(currentUser.id);
+      setBackendPaymentMethods(methods);
+
+      const preferred = methods.find((pm) => pm.isDefault) ?? methods[0];
+
+      if (preferred) {
+        if (preferred.id !== savedPaymentMethod?.id) {
+          if (createdOrderIdRef.current) {
+            const cancelled = await cancelStaleOrder();
+            if (!cancelled) {
+              show('Checkout selection could not be changed. The existing order is still active.', 'info');
+              return;
+            }
+          }
+
+          savePaymentMethod({
+            id: preferred.id,
+            type: preferred.type,
+            label: preferred.label,
+            details: preferred.details ?? undefined,
+            isDefault: preferred.isDefault,
+          });
+        }
+      }
+    } catch {
+      setPaymentError('Payment methods could not be refreshed after adding card.');
+    }
+  }, [currentUser?.id, savedPaymentMethod?.id, cancelStaleOrder, savePaymentMethod, show]);
+
+  // --- Delivery selection change ---
+  const canChangePostage = (checkoutCapabilities?.postage.carriers.length ?? 0) > 1;
+
+  const handleDeliveryPress = useCallback(async () => {
+    if (!canChangePostage) return;
+
+    haptics.tap();
+
+    if (createdOrderIdRef.current) {
+      const cancelled = await cancelStaleOrder();
+      if (!cancelled) {
+        return;
+      }
+    }
+
+    navigation.navigate('Postage');
+  }, [canChangePostage, cancelStaleOrder, navigation]);
 
   // --- Close handler ---
   const handleClose = useCallback(() => {
     if (isSubmitting) {
       Alert.alert(
         'Payment in progress',
-        'A payment is currently being processed. Are you sure you want to leave?',
+        'Payment confirmation may still complete after you leave. Check your Orders before trying again.',
         [
           { text: 'Stay', style: 'cancel' },
-          { text: 'Leave', style: 'destructive', onPress: () => navigation.goBack() },
+          {
+            text: 'Leave',
+            style: 'destructive',
+            onPress: () => {
+              paymentAttemptRef.current += 1;
+              pendingIntentIdRef.current = null;
+              navigation.goBack();
+            },
+          },
         ]
       );
       return;
     }
     navigation.goBack();
   }, [isSubmitting, navigation]);
+
+  // --- AppState resume handling ---
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === 'active' &&
+        pendingIntentIdRef.current
+      ) {
+        const intentId = pendingIntentIdRef.current;
+        const orderId = createdOrderIdRef.current;
+        const attemptId = paymentAttemptRef.current;
+
+        void (async () => {
+          try {
+            const latest = await getPaymentIntentStatus(intentId);
+            const status = latest.status.trim().toLowerCase();
+
+            if (
+              !isMountedRef.current
+              || paymentAttemptRef.current !== attemptId
+            ) {
+              return;
+            }
+
+            if (status === 'succeeded' && orderId) {
+              pendingIntentIdRef.current = null;
+              handleSettlementNavigation('succeeded', orderId, attemptId);
+            } else if (status === 'failed' || status === 'cancelled') {
+              pendingIntentIdRef.current = null;
+              setStage('payment_failed');
+            }
+            // Pending: keep pending feedback, do not navigate twice
+          } catch {
+            // Keep pending state
+          }
+        })();
+      }
+      appStateRef.current = nextAppState;
+    });
+
+    return () => subscription.remove();
+  }, [handleSettlementNavigation]);
 
   // --- Message seller ---
   const handleMessageSeller = useCallback(() => {
@@ -737,13 +1026,7 @@ export default function CheckoutScreen() {
           title={savedAddress ? savedAddress.name : 'No address'}
           subtitle={addressSubtitle}
           actionLabel={savedAddress ? 'Change' : 'Add'}
-          onPress={() => {
-            haptics.tap();
-            navigation.navigate('AddressForm', {
-              mode: savedAddress ? 'edit' : 'add',
-              source: 'checkout',
-            });
-          }}
+          onPress={handleAddressPress}
           warningText={addressNeedsSave ? 'Needs saving before payment' : undefined}
           errorText={addressError ?? undefined}
           accessibilityLabel={
@@ -760,12 +1043,7 @@ export default function CheckoutScreen() {
           title={postageOption.label}
           subtitle={`${postageOption.etaLabel}${postageOption.liveQuote ? '' : ' (Estimated)'}${postageOption.tracking ? ' · Tracking' : ''}`}
           actionLabel={formatFromFiat(POSTAGE_FEE, 'GBP')}
-          onPress={() => {
-            if ((checkoutCapabilities?.postage.carriers.length ?? 0) > 1) {
-              haptics.tap();
-              navigation.navigate('Postage');
-            }
-          }}
+          onPress={canChangePostage ? handleDeliveryPress : undefined}
           errorText={
             !postageOption.carrierId
               ? 'Shipping not available for your region'
@@ -873,14 +1151,14 @@ export default function CheckoutScreen() {
         <Pressable
           style={[
             styles.payBtn,
-            (!checkoutEligible || isSubmitting) && styles.payBtnDisabled,
+            (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
           ]}
           onPress={() => { haptics.press(); handlePay(); }}
-          disabled={!checkoutEligible || isSubmitting}
+          disabled={!checkoutEligible || isInteractionLocked}
           accessibilityRole="button"
           accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} securely`}
           accessibilityState={{
-            disabled: !checkoutEligible || isSubmitting,
+            disabled: !checkoutEligible || isInteractionLocked,
             busy: isSubmitting,
           }}
         >
@@ -895,45 +1173,15 @@ export default function CheckoutScreen() {
       <AddCardSheet
         visible={addCardSheetVisible}
         onDismiss={() => setAddCardSheetVisible(false)}
-        onSuccess={() => {
-          if (currentUser?.id) {
-            void (async () => {
-              try {
-                const methods = await listUserPaymentMethods(currentUser.id);
-                setBackendPaymentMethods(methods);
-                const preferred = methods.find((pm) => pm.isDefault) ?? methods[0];
-                if (preferred) {
-                  savePaymentMethod({
-                    id: preferred.id,
-                    type: preferred.type,
-                    label: preferred.label,
-                    details: preferred.details ?? undefined,
-                    isDefault: preferred.isDefault,
-                  });
-                }
-              } catch {
-                // Keep current state
-              }
-            })();
-          }
-        }}
+        onSuccess={handleAddCardSuccess}
       />
       <CheckoutPaymentSelector
         visible={paymentSelectorVisible}
         onDismiss={() => setPaymentSelectorVisible(false)}
         methods={backendPaymentMethods}
         selectedId={savedPaymentMethod?.id}
-        onSelect={(method) => {
-          haptics.tap();
-          savePaymentMethod({
-            id: method.id,
-            type: method.type,
-            label: method.label,
-            details: method.details ?? undefined,
-            isDefault: method.isDefault,
-          });
-          void cancelStaleOrder();
-        }}
+        onSelect={handleSelectPaymentMethod}
+        isSelecting={isSelectingPayment}
       />
     </SafeAreaView>
   );

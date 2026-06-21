@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
 import { Colors } from '../../constants/colors';
@@ -11,7 +11,8 @@ interface Props {
   onDismiss: () => void;
   methods: CommercePaymentMethod[];
   selectedId?: number;
-  onSelect: (method: CommercePaymentMethod) => void;
+  onSelect: (method: CommercePaymentMethod) => void | Promise<void>;
+  isSelecting?: boolean;
 }
 
 export function CheckoutPaymentSelector({
@@ -20,6 +21,7 @@ export function CheckoutPaymentSelector({
   methods,
   selectedId,
   onSelect,
+  isSelecting,
 }: Props) {
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.55}>
@@ -34,9 +36,10 @@ export function CheckoutPaymentSelector({
             <Pressable
               key={method.id}
               onPress={() => {
+                if (isSelecting) return;
                 onSelect(method);
-                onDismiss();
               }}
+              disabled={isSelecting}
               style={[styles.row, isSelected && styles.rowSelected]}
               accessibilityRole="radio"
               accessibilityState={{ selected: isSelected }}
@@ -60,7 +63,9 @@ export function CheckoutPaymentSelector({
                   ) : null}
                 </View>
               </View>
-              {isSelected ? (
+              {isSelecting && isSelected ? (
+                <ActivityIndicator size="small" color={Colors.brand} />
+              ) : isSelected ? (
                 <Ionicons name="checkmark-circle" size={22} color={Colors.brand} />
               ) : (
                 <Ionicons name="radio-button-off" size={22} color={Colors.textMuted} />

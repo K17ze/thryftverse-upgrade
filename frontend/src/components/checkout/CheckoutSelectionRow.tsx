@@ -9,7 +9,7 @@ interface Props {
   title: string;
   subtitle?: string;
   actionLabel: string;
-  onPress: () => void;
+  onPress?: () => void;
   errorText?: string;
   warningText?: string;
   accessibilityLabel?: string;
@@ -34,9 +34,10 @@ export function CheckoutSelectionRow({
   return (
     <View style={styles.wrapper}>
       <Pressable
-        onPress={onPress}
+        onPress={onPress ?? (() => {})}
+        disabled={!onPress}
         style={styles.row}
-        accessibilityRole="button"
+        accessibilityRole={onPress ? 'button' : undefined}
         accessibilityLabel={accessibilityLabel ?? `${label}: ${title}`}
         accessibilityHint={accessibilityHint}
         testID={testID}
