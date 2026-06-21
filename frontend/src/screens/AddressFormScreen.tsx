@@ -174,6 +174,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
   const cityRef = useRef<TextInput>(null);
   const regionRef = useRef<TextInput>(null);
   const postalRef = useRef<TextInput>(null);
+  const allowNavigationRef = useRef(false);
 
   const updateField = useCallback(
     <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -208,34 +209,51 @@ export default function AddressFormScreen({ navigation, route }: Props) {
     [updateField]
   );
 
-  const confirmDiscard = useCallback(() => {
-    Alert.alert(
-      'Discard changes?',
-      'Your address changes have not been saved.',
-      [
-        { text: 'Keep editing', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-      ]
-    );
-  }, [navigation]);
+  const proceedWithNavigation = useCallback(
+    (action?: Parameters<typeof navigation.dispatch>[0]) => {
+      allowNavigationRef.current = true;
+
+      if (action) {
+        navigation.dispatch(action);
+      } else {
+        navigation.goBack();
+      }
+    },
+    [navigation]
+  );
 
   const handleCancel = useCallback(() => {
     Keyboard.dismiss();
-    if (isDirty) {
-      confirmDiscard();
-    } else {
-      navigation.goBack();
-    }
-  }, [isDirty, confirmDiscard, navigation]);
+    navigation.goBack();
+  }, [navigation]);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (!isDirty) return;
-      e.preventDefault();
-      confirmDiscard();
+    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      if (allowNavigationRef.current || !isDirty) {
+        return;
+      }
+
+      event.preventDefault();
+
+      Alert.alert(
+        'Discard changes?',
+        'Your address changes have not been saved.',
+        [
+          {
+            text: 'Keep editing',
+            style: 'cancel',
+          },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => proceedWithNavigation(event.data.action),
+          },
+        ]
+      );
     });
+
     return unsubscribe;
-  }, [navigation, isDirty, confirmDiscard]);
+  }, [navigation, isDirty, proceedWithNavigation]);
 
   const handleSave = useCallback(() => {
     Keyboard.dismiss();
@@ -274,6 +292,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
     haptic.medium();
     show(isEditing ? 'Delivery address updated' : 'Delivery address added', 'success');
     setIsSaving(false);
+    allowNavigationRef.current = true;
     navigation.goBack();
   }, [form, savedAddress, isEditing, saveAddress, show, haptic, navigation]);
 
@@ -290,6 +309,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             haptic.medium();
             clearSavedAddress();
             show('Delivery address removed', 'success');
+            allowNavigationRef.current = true;
             navigation.goBack();
           },
         },
