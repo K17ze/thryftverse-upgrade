@@ -74,6 +74,10 @@ function isKnownStatus(normalised: string): boolean {
 }
 
 function humaniseStatus(normalised: string): string {
+  if (!normalised) {
+    return 'Status unavailable';
+  }
+
   const map: Record<string, string> = {
     'created': 'Awaiting payment',
     'paid': 'Paid',
@@ -102,6 +106,10 @@ function humaniseStatus(normalised: string): string {
 }
 
 function getStatusExplanation(normalised: string): string {
+  if (!normalised) {
+    return 'The current status of this order is unavailable.';
+  }
+
   const map: Record<string, string> = {
     'created': 'Payment has not been confirmed yet.',
     'paid': 'Payment has been confirmed. The seller has been notified.',
@@ -184,6 +192,67 @@ function getParcelEventDisplay(
   }
 }
 
+// --- Timeline semantic keys ---
+
+type TimelineSemanticKey =
+  | 'created'
+  | 'paid'
+  | 'shipped'
+  | 'picked_up'
+  | 'in_transit'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'collection_confirmed'
+  | 'delivery_failed'
+  | 'returned'
+  | 'cancelled'
+  | 'refunded'
+  | 'completed'
+  | 'processing'
+  | 'preparing'
+  | 'unknown';
+
+const PARCEL_EVENT_SEMANTIC_KEY: Record<OrderParcelEvent['eventType'], TimelineSemanticKey> = {
+  picked_up: 'picked_up',
+  in_transit: 'in_transit',
+  out_for_delivery: 'out_for_delivery',
+  delivered: 'delivered',
+  collection_confirmed: 'collection_confirmed',
+  delivery_failed: 'delivery_failed',
+  returned: 'returned',
+};
+
+function getStatusSemanticKey(normalisedStatus: string): TimelineSemanticKey {
+  const map: Record<string, TimelineSemanticKey> = {
+    'created': 'created',
+    'paid': 'paid',
+    'processing': 'processing',
+    'preparing': 'preparing',
+    'shipped': 'shipped',
+    'in transit': 'in_transit',
+    'out for delivery': 'out_for_delivery',
+    'delivered': 'delivered',
+    'completed': 'completed',
+    'cancelled': 'cancelled',
+    'refunded': 'refunded',
+    'delivery failed': 'delivery_failed',
+    'returned': 'returned',
+  };
+
+  return map[normalisedStatus] ?? 'unknown';
+}
+
+// --- Parcel event timestamp ---
+
+function parcelEventTimestamp(event: OrderParcelEvent): number {
+  const value = event.occurredAt ?? event.receivedAt;
+  const timestamp = Date.parse(value);
+
+  return Number.isFinite(timestamp)
+    ? timestamp
+    : Number.MAX_SAFE_INTEGER;
+}
+
 // --- Timeline builder ---
 
 function buildTimelineEntries(
@@ -192,14 +261,9 @@ function buildTimelineEntries(
   parcelEvents: OrderParcelEvent[]
 ): TimelineEntry[] {
   const entries: TimelineEntry[] = [];
-  const hasShippedParcelEvent = parcelEvents.some(
-    (e) => e.eventType === 'picked_up' || e.eventType === 'in_transit'
-  );
-  const hasDeliveredParcelEvent = parcelEvents.some(
-    (e) => e.eventType === 'delivered' || e.eventType === 'collection_confirmed'
-  );
+  const represented = new Set<TimelineSemanticKey>();
 
-  // 1. Order created
+  // 1. Order created — always
   entries.push({
     id: 'created',
     label: 'Order created',
@@ -207,22 +271,30 @@ function buildTimelineEntries(
     date: formatTimelineDate(order?.createdAt),
     state: 'completed',
   });
+  represented.add('created');
 
-  // 2. Payment confirmed (when status is paid or later, but not cancelled)
-  const statusOrder = ['created', 'paid', 'processing', 'preparing', 'shipped', 'in transit', 'out for delivery', 'delivered', 'completed'];
-  const statusIndex = statusOrder.indexOf(normalisedStatus);
-  const isCancelledOrTerminal = normalisedStatus === 'cancelled' || normalisedStatus === 'refunded' || normalisedStatus === 'returned' || normalisedStatus === 'delivery failed';
+  // 2. Payment confirmed — when status proves payment occurred
+  const paymentProvenStatuses: TimelineSemanticKey[] = [
+    'paid', 'processing', 'preparing', 'shipped', 'in_transit',
+    'out_for_delivery', 'delivered', 'completed', 'refunded',
+    'returned', 'delivery_failed',
+  ];
+  const currentSemanticKey = getStatusSemanticKey(normalisedStatus);
 
-  if (statusIndex > 0 && !isCancelledOrTerminal) {
+  if (paymentProvenStatuses.includes(currentSemanticKey)) {
     entries.push({
       id: 'paid',
       label: 'Payment confirmed',
       subtitle: 'Payment has been confirmed.',
       state: 'completed',
     });
+    represented.add('paid');
   }
 
-  // 3. Shipped
+  // 3. Shipped — when shippedAt exists and no equivalent carrier event
+  const hasShippedParcelEvent = parcelEvents.some(
+    (e) => e.eventType === 'picked_up' || e.eventType === 'in_transit'
+  );
   if (order?.shippedAt && !hasShippedParcelEvent) {
     entries.push({
       id: 'shipped',
@@ -231,18 +303,18 @@ function buildTimelineEntries(
       date: formatTimelineDate(order.shippedAt),
       state: 'completed',
     });
+    represented.add('shipped');
   }
 
-  // 4. Parcel events (sorted chronologically)
-  const sortedEvents = [...parcelEvents].sort((a, b) => {
-    const aTime = a.occurredAt ?? a.receivedAt;
-    const bTime = b.occurredAt ?? b.receivedAt;
-    return new Date(aTime).getTime() - new Date(bTime).getTime();
-  });
+  // 4. Parcel events — sorted chronologically
+  const sortedEvents = [...parcelEvents].sort(
+    (a, b) => parcelEventTimestamp(a) - parcelEventTimestamp(b)
+  );
 
   for (const event of sortedEvents) {
     const display = getParcelEventDisplay(event.eventType);
     const isFailure = event.eventType === 'delivery_failed' || event.eventType === 'returned';
+    const semanticKey = PARCEL_EVENT_SEMANTIC_KEY[event.eventType];
     entries.push({
       id: `parcel_${event.id}`,
       label: display.label,
@@ -250,9 +322,13 @@ function buildTimelineEntries(
       date: formatTimelineDate(event.occurredAt ?? event.receivedAt),
       state: isFailure ? 'failure' : 'completed',
     });
+    represented.add(semanticKey);
   }
 
-  // 5. Delivered
+  // 5. Delivered — when deliveredAt exists and no equivalent carrier event
+  const hasDeliveredParcelEvent = parcelEvents.some(
+    (e) => e.eventType === 'delivered' || e.eventType === 'collection_confirmed'
+  );
   if (order?.deliveredAt && !hasDeliveredParcelEvent) {
     entries.push({
       id: 'delivered',
@@ -261,43 +337,24 @@ function buildTimelineEntries(
       date: formatTimelineDate(order.deliveredAt),
       state: 'completed',
     });
+    represented.add('delivered');
   }
 
-  // 6. Current active state for non-terminal statuses
-  if (!isTerminalStatus(normalisedStatus) && normalisedStatus !== 'created') {
-    const isFailure = normalisedStatus === 'delivery failed' || normalisedStatus === 'returned';
+  // 6. Current status entry — only when not already represented
+  if (normalisedStatus !== 'created' && !represented.has(currentSemanticKey)) {
+    const isFailure =
+      currentSemanticKey === 'delivery_failed' ||
+      currentSemanticKey === 'returned' ||
+      currentSemanticKey === 'cancelled' ||
+      currentSemanticKey === 'refunded';
+    const isTerminal = isTerminalStatus(normalisedStatus);
     entries.push({
       id: 'current_status',
       label: humaniseStatus(normalisedStatus),
       subtitle: getStatusExplanation(normalisedStatus),
-      state: isFailure ? 'failure' : 'active',
+      state: isFailure ? 'failure' : isTerminal ? 'completed' : 'active',
     });
-  }
-
-  // 7. Terminal status without a specific date
-  if (isTerminalStatus(normalisedStatus)) {
-    const isFailure = normalisedStatus === 'cancelled' || normalisedStatus === 'refunded' || normalisedStatus === 'returned' || normalisedStatus === 'delivery failed';
-    const hasExistingEntry = entries.some(
-      (e) => e.label === humaniseStatus(normalisedStatus)
-    );
-    if (!hasExistingEntry) {
-      entries.push({
-        id: 'terminal_status',
-        label: humaniseStatus(normalisedStatus),
-        subtitle: getStatusExplanation(normalisedStatus),
-        state: isFailure ? 'failure' : 'completed',
-      });
-    }
-  }
-
-  // 8. Unknown status
-  if (!isKnownStatus(normalisedStatus)) {
-    entries.push({
-      id: 'unknown_status',
-      label: humaniseStatus(normalisedStatus),
-      subtitle: getStatusExplanation(normalisedStatus),
-      state: 'active',
-    });
+    represented.add(currentSemanticKey);
   }
 
   return entries;
@@ -530,14 +587,14 @@ export default function OrderDetailScreen() {
     : null;
 
   const shipmentLastUpdated = formatTimelineDate(
-    latestParcelEvent?.occurredAt ?? latestParcelEvent?.receivedAt ?? backendOrder?.updatedAt
+    latestParcelEvent?.occurredAt ?? latestParcelEvent?.receivedAt
   );
 
   const showShipmentDetails = Boolean(
     backendOrder?.shippingProvider
     || backendOrder?.trackingNumber
     || backendOrder?.shippingLabelUrl
-    || shipmentLastUpdated
+    || latestParcelEvent
   );
 
   // --- Order short ID ---
