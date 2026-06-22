@@ -114,7 +114,9 @@ export default function CreatePosterScreen({ navigation }: Props) {
   const uploadCacheRef = useRef<UploadedMediaCache>({});
   const publishInFlightRef = useRef(false);
   const allowNavigationRef = useRef(false);
-  const initialFramesRef = useRef<string>(JSON.stringify(frames));
+  const initialCreatorStateRef = useRef(
+    JSON.stringify({ frames, audience, allowReplies, allowReactions })
+  );
 
   const activeFrame = frames[activeFrameIndex];
   const hasContent = useMemo(() =>
@@ -123,17 +125,43 @@ export default function CreatePosterScreen({ navigation }: Props) {
   );
 
   const isDirty = useMemo(() => {
-    return JSON.stringify(frames) !== initialFramesRef.current;
-  }, [frames]);
+    return JSON.stringify({ frames, audience, allowReplies, allowReactions }) !== initialCreatorStateRef.current;
+  }, [frames, audience, allowReplies, allowReactions]);
 
   // ── Frame operations ──
 
   const updateFrame = useCallback((updates: Partial<ComposerFrame>) => {
-    setFrames((prev) => {
-      const next = [...prev];
-      next[activeFrameIndex] = { ...next[activeFrameIndex], ...updates };
-      return next;
-    });
+    // When media URI changes, reset publish state for that frame and clean up cache
+    if (updates.mediaUri !== undefined) {
+      setFrames((prev) => {
+        const oldFrame = prev[activeFrameIndex];
+        const oldUri = oldFrame?.mediaUri;
+        const newUri = updates.mediaUri;
+
+        // Reset publish state for this frame
+        if (oldUri !== newUri) {
+          setPublishStates((ps) => ({ ...ps, [oldFrame.id]: 'idle' }));
+
+          // Clean up upload cache for old URI if no other frame uses it
+          if (oldUri) {
+            const stillUsed = prev.some((f, i) => i !== activeFrameIndex && f.mediaUri === oldUri);
+            if (!stillUsed) {
+              delete uploadCacheRef.current[oldUri];
+            }
+          }
+        }
+
+        const next = [...prev];
+        next[activeFrameIndex] = { ...next[activeFrameIndex], ...updates };
+        return next;
+      });
+    } else {
+      setFrames((prev) => {
+        const next = [...prev];
+        next[activeFrameIndex] = { ...next[activeFrameIndex], ...updates };
+        return next;
+      });
+    }
   }, [activeFrameIndex]);
 
   const addSticker = useCallback((sticker: ComposerFrame['stickers'][0]) => {
@@ -281,6 +309,29 @@ export default function CreatePosterScreen({ navigation }: Props) {
     return unsubscribe;
   }, [navigation, isDirty, proceedWithNavigation]);
 
+  // ── URI-wide publish state helper ──
+
+  const setPublishStateForUri = useCallback(
+    (uri: string, state: FramePublishState) => {
+      setFrames((prevFrames) => {
+        const matchingIds = prevFrames
+          .filter((f) => f.mediaUri === uri)
+          .map((f) => f.id);
+        if (matchingIds.length > 0) {
+          setPublishStates((ps) => {
+            const updated = { ...ps };
+            for (const id of matchingIds) {
+              updated[id] = state;
+            }
+            return updated;
+          });
+        }
+        return prevFrames;
+      });
+    },
+    []
+  );
+
   // ── Publishing ──
 
   const handlePublish = async () => {
@@ -310,32 +361,47 @@ export default function CreatePosterScreen({ navigation }: Props) {
 
     setIsPublishing(true);
 
+    let failedFrameIdx = -1;
+
     try {
       const cache = uploadCacheRef.current;
       const framesToUpload = frames.filter((f) => f.mediaUri);
       const uniqueUris = [...new Set(framesToUpload.map((f) => f.mediaUri!))];
+
+      // Mark already-cached media frames as uploaded
+      for (const uri of uniqueUris) {
+        if (cache[uri]) {
+          setPublishStateForUri(uri, 'uploaded');
+        }
+      }
+
+      // Mark text frames (no media) as uploaded/ready
+      for (const f of frames) {
+        if (!f.mediaUri) {
+          setPublishStates((prev) => ({ ...prev, [f.id]: 'uploaded' }));
+        }
+      }
+
       const uncachedUris = uniqueUris.filter((uri) => !cache[uri]);
 
       // Upload uncached media one by one
       for (let i = 0; i < uncachedUris.length; i++) {
         const uri = uncachedUris[i];
-        const owningFrame = framesToUpload.find((f) => f.mediaUri === uri)!;
-        setPublishStates((prev) => ({ ...prev, [owningFrame.id]: 'uploading' }));
+        setPublishStateForUri(uri, 'uploading');
         setPublishProgress(`Uploading ${i + 1} of ${uncachedUris.length}`);
         try {
           const url = await uploadMedia(uri, 'posters');
           cache[uri] = url;
-          setPublishStates((prev) => ({ ...prev, [owningFrame.id]: 'uploaded' }));
+          setPublishStateForUri(uri, 'uploaded');
         } catch {
-          setPublishStates((prev) => ({ ...prev, [owningFrame.id]: 'failed' }));
-          throw new Error(`Failed to upload media for frame ${owningFrame.id}`);
-        }
-      }
-
-      // Mark frames without media as uploaded
-      for (const f of frames) {
-        if (!f.mediaUri) {
-          setPublishStates((prev) => ({ ...prev, [f.id]: 'uploaded' }));
+          setPublishStateForUri(uri, 'failed');
+          failedFrameIdx = frames.findIndex((f) => f.mediaUri === uri);
+          const failedFrameNumber = failedFrameIdx >= 0 ? failedFrameIdx + 1 : 0;
+          throw new Error(
+            failedFrameNumber > 0
+              ? `Frame ${failedFrameNumber} could not be uploaded.`
+              : 'Could not upload media.'
+          );
         }
       }
 
@@ -393,6 +459,11 @@ export default function CreatePosterScreen({ navigation }: Props) {
     } catch (e) {
       const msg = typeof e === 'object' && e && 'message' in e ? String((e as Error).message) : 'Failed to publish story';
       show(msg, 'error');
+      // Focus the failed frame and return to editing mode
+      if (failedFrameIdx >= 0) {
+        setActiveFrameIndex(failedFrameIdx);
+      }
+      setPhase('editing');
       // Retain cache for retry — don't clear on failure
     } finally {
       setIsPublishing(false);

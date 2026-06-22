@@ -24,9 +24,22 @@ interface PosterStickerLayerProps {
 }
 
 const CLAMP_MARGIN = 0.05;
+const STICKER_BASE_HALF_W = 22; // half of minWidth 44
+const STICKER_BASE_HALF_H = 22; // half of minHeight 44
 
-function clampNormalized(value: number): number {
-  return Math.max(CLAMP_MARGIN, Math.min(1 - CLAMP_MARGIN, value));
+function clampNormalizedScaled(
+  value: number,
+  scale: number,
+  containerSize: number,
+  stickerHalfSize: number,
+): number {
+  // Compute the sticker's half-size in pixels accounting for scale
+  const halfPx = stickerHalfSize * scale;
+  // Convert to normalized fraction of container
+  const halfNorm = halfPx / containerSize;
+  // Ensure at least CLAMP_MARGIN of the sticker remains visible on each side
+  const minVisible = Math.max(CLAMP_MARGIN, halfNorm);
+  return Math.max(minVisible, Math.min(1 - minVisible, value));
 }
 
 export function PosterStickerLayer({
@@ -83,8 +96,8 @@ function DraggableSticker({
 
   const handlePositionCommit = useCallback(
     (finalX: number, finalY: number) => {
-      const normX = clampNormalized(finalX / containerWidth);
-      const normY = clampNormalized(finalY / containerHeight);
+      const normX = clampNormalizedScaled(finalX / containerWidth, sticker.scale, containerWidth, STICKER_BASE_HALF_W);
+      const normY = clampNormalizedScaled(finalY / containerHeight, sticker.scale, containerHeight, STICKER_BASE_HALF_H);
       translateX.value = withTiming(normX * containerWidth, { duration: 0 });
       translateY.value = withTiming(normY * containerHeight, { duration: 0 });
       onPositionChange?.(sticker.id, normX, normY);

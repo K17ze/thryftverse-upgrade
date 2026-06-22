@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -51,6 +51,13 @@ export function PosterFrameCanvas({
   const [videoError, setVideoError] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
+
+  // Reset video state when frame or media changes
+  useEffect(() => {
+    setVideoError(false);
+    setVideoReady(false);
+    setVideoPlaying(false);
+  }, [frame.id, frame.mediaUri]);
 
   const handleVideoLoad = useCallback(() => {
     setVideoReady(true);
@@ -109,7 +116,11 @@ export function PosterFrameCanvas({
 
       {isVideo && !videoError && (
         <>
+          {frame.thumbnailUri && (
+            <Image source={{ uri: frame.thumbnailUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          )}
           <Video
+            key={`${frame.id}-${frame.mediaUri}`}
             source={{ uri: frame.mediaUri! }}
             style={StyleSheet.absoluteFill}
             resizeMode={ResizeMode.COVER}
@@ -161,6 +172,14 @@ export function PosterFrameCanvas({
         </View>
       )}
 
+      {/* Background press layer for deselection — above media, below stickers */}
+      {mode === 'edit' && (
+        <Pressable
+          style={styles.backgroundPressLayer}
+          onPress={handleCanvasPress}
+        />
+      )}
+
       <PosterStickerLayer
         stickers={apiStickers}
         onStickerPress={handleStickerPress}
@@ -170,13 +189,6 @@ export function PosterFrameCanvas({
         containerWidth={width}
         containerHeight={height}
       />
-
-      {mode === 'edit' && (
-        <Pressable
-          style={styles.canvasPressTarget}
-          onPress={handleCanvasPress}
-        />
-      )}
     </GestureHandlerRootView>
   );
 }
@@ -243,8 +255,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textMuted,
   },
-  canvasPressTarget: {
+  backgroundPressLayer: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: -1,
+    zIndex: 1,
   },
 });

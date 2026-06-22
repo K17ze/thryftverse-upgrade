@@ -76,7 +76,7 @@ export function PosterFrameComposer({
     if (!action) return;
 
     if (action === 'text_canvas') {
-      onUpdateFrame({ mediaType: 'text', mediaUri: null, backgroundColor: '#1a1a1a' });
+      onUpdateFrame({ mediaType: 'text', mediaUri: null, backgroundColor: '#1a1a1a', videoDurationMs: null, thumbnailUri: null });
       return;
     }
 
@@ -87,13 +87,6 @@ export function PosterFrameComposer({
           show('Camera access required', 'error');
           return;
         }
-        if (action === 'record_video') {
-          const micPerm = await ImagePicker.requestCameraPermissionsAsync();
-          if (micPerm.status !== 'granted') {
-            show('Microphone access required for video', 'error');
-            return;
-          }
-        }
         const isVideo = action === 'record_video';
         const result = await ImagePicker.launchCameraAsync({
           mediaTypes: isVideo ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
@@ -102,10 +95,16 @@ export function PosterFrameComposer({
         });
         if (!result.canceled && result.assets?.[0]?.uri) {
           const asset = result.assets[0];
+          if (isVideo && asset.duration && asset.duration > 30) {
+            show('Videos can be up to 30 seconds.', 'error');
+            return;
+          }
           onUpdateFrame({
             mediaUri: asset.uri,
             mediaType: isVideo ? 'video' : 'image',
             backgroundColor: null,
+            videoDurationMs: isVideo && asset.duration ? Math.round(asset.duration * 1000) : null,
+            thumbnailUri: null,
           });
         }
       } else if (action === 'choose_photo' || action === 'choose_video') {
@@ -124,10 +123,16 @@ export function PosterFrameComposer({
         });
         if (!result.canceled && result.assets?.[0]?.uri) {
           const asset = result.assets[0];
+          if (isVideo && asset.duration && asset.duration > 30) {
+            show('Videos can be up to 30 seconds.', 'error');
+            return;
+          }
           onUpdateFrame({
             mediaUri: asset.uri,
             mediaType: isVideo ? 'video' : 'image',
             backgroundColor: null,
+            videoDurationMs: isVideo && asset.duration ? Math.round(asset.duration * 1000) : null,
+            thumbnailUri: null,
           });
         }
       }

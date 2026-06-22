@@ -13,6 +13,8 @@ export interface ComposerFrame {
   backgroundColor: string | null;
   caption: string;
   durationMs: number;
+  videoDurationMs?: number | null;
+  thumbnailUri?: string | null;
   stickers: Array<{
     id: string;
     type: 'text' | 'mention' | 'listing' | 'look' | 'style_vote';
@@ -33,7 +35,6 @@ interface PosterFrameStripProps {
   onRemoveFrame?: (index: number) => void;
   onMoveFrame?: (fromIndex: number, toIndex: number) => void;
   onDuplicateFrame?: (index: number) => void;
-  onReorder?: (from: number, to: number) => void;
   maxFrames?: number;
   publishStates?: Record<string, FramePublishState>;
 }
@@ -90,13 +91,20 @@ export function PosterFrameStrip({
                   <View style={styles.mediaFramePreview}>
                     {frame.mediaType === 'video' ? (
                       <>
-                        <Image
-                          source={{ uri: frame.mediaUri }}
-                          style={StyleSheet.absoluteFill}
-                          resizeMode="cover"
-                        />
-                        <View style={styles.videoIconOverlay}>
-                          <Ionicons name="videocam" size={12} color="#fff" />
+                        {frame.thumbnailUri ? (
+                          <Image
+                            source={{ uri: frame.thumbnailUri }}
+                            style={StyleSheet.absoluteFill}
+                            resizeMode="cover"
+                          />
+                        ) : null}
+                        <View style={[styles.videoDarkOverlay, !frame.thumbnailUri && StyleSheet.absoluteFill]}>
+                          <Ionicons name="videocam" size={16} color="rgba(255,255,255,0.8)" />
+                          {frame.videoDurationMs != null && frame.videoDurationMs > 0 && (
+                            <Text style={styles.videoDurationLabel}>
+                              {Math.round(frame.videoDurationMs / 1000)}s
+                            </Text>
+                          )}
                         </View>
                       </>
                     ) : (
@@ -240,14 +248,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  videoIconOverlay: {
+  videoDarkOverlay: {
     position: 'absolute',
-    bottom: 3,
-    right: 3,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 4,
-    paddingHorizontal: 3,
-    paddingVertical: 1,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    top: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 2,
+  },
+  videoDurationLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 8,
+    fontFamily: Typography.family.semibold,
   },
   textFramePreview: {
     flex: 1,
