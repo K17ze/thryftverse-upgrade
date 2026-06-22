@@ -22,6 +22,7 @@ interface AuctionCardProps {
   isLive?: boolean;
   isWatching?: boolean;
   buyNowPrice?: string;
+  viewerState?: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
   onPress?: () => void;
   onBid?: () => void;
   onBuyNow?: () => void;
@@ -44,6 +45,7 @@ export function AuctionCard({
   isLive = true,
   isWatching = false,
   buyNowPrice,
+  viewerState,
   onPress,
   onBid,
   onBuyNow,
@@ -75,6 +77,24 @@ export function AuctionCard({
           <View style={styles.livePill}>
             <View style={styles.liveDot} />
             <Meta style={styles.liveText}>LIVE</Meta>
+          </View>
+        )}
+        {viewerState === 'outbid' && (
+          <View style={styles.outbidBadge}>
+            <Ionicons name="trending-down-outline" size={10} color="#fff" />
+            <Meta style={styles.viewerBadgeText}>OUTBID</Meta>
+          </View>
+        )}
+        {viewerState === 'leading' && (
+          <View style={styles.leadingBadge}>
+            <Ionicons name="trophy-outline" size={10} color="#fff" />
+            <Meta style={styles.viewerBadgeText}>LEADING</Meta>
+          </View>
+        )}
+        {viewerState === 'won' && (
+          <View style={styles.wonBadge}>
+            <Ionicons name="ribbon-outline" size={10} color="#fff" />
+            <Meta style={styles.viewerBadgeText}>WON</Meta>
           </View>
         )}
       </View>
@@ -223,6 +243,47 @@ const styles = StyleSheet.create({
   liveText: {
     color: '#fff',
     fontSize: 10,
+  },
+  outbidBadge: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255,68,68,0.9)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  leadingBadge: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0,180,80,0.9)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  wonBadge: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255,170,0,0.9)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  viewerBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
   },
   body: {
     padding: Space.md,

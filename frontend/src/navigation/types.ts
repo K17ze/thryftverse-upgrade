@@ -20,6 +20,7 @@ export type RootStackParamList = {
   PosterArchive: undefined;
   PosterHighlightEditor: { highlightId?: string };
   CreateAuction: { listingId?: string } | undefined;
+  AuctionDetail: { auctionId: string };
   CreateCoOwn:
     | {
         listingId?: string;

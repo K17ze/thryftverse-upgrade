@@ -11,6 +11,8 @@ import { Headline, Meta, Body } from '../ui/Text';
 interface BidComposerProps {
   visible: boolean;
   auctionTitle: string;
+  currentBid?: string;
+  minimumNextBid?: string;
   bidInput: string;
   currencyCode: string;
   isSubmitting: boolean;
@@ -23,6 +25,8 @@ interface BidComposerProps {
 export function BidComposer({
   visible,
   auctionTitle,
+  currentBid,
+  minimumNextBid,
   bidInput,
   currencyCode,
   isSubmitting,
@@ -50,6 +54,23 @@ export function BidComposer({
         <Headline style={styles.title} numberOfLines={1}>
           {auctionTitle}
         </Headline>
+
+        {(currentBid || minimumNextBid) && (
+          <View style={styles.bidInfoRow}>
+            {currentBid && (
+              <View style={styles.bidInfoItem}>
+                <Meta style={styles.bidInfoLabel}>Current bid</Meta>
+                <Body style={styles.bidInfoValue}>{currentBid}</Body>
+              </View>
+            )}
+            {minimumNextBid && (
+              <View style={styles.bidInfoItem}>
+                <Meta style={styles.bidInfoLabel}>Minimum</Meta>
+                <Body style={[styles.bidInfoValue, styles.bidInfoMin]}>{minimumNextBid}</Body>
+              </View>
+            )}
+          </View>
+        )}
 
         <AppInput
           value={bidInput}
@@ -129,6 +150,25 @@ const styles = StyleSheet.create({
   title: {
     marginBottom: Space.md,
     textAlign: 'center',
+  },
+  bidInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: Space.md,
+    paddingHorizontal: Space.md,
+  },
+  bidInfoItem: {
+    alignItems: 'center',
+  },
+  bidInfoLabel: {
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  bidInfoValue: {
+    fontSize: 15,
+  },
+  bidInfoMin: {
+    color: Colors.brand,
   },
   input: {
     marginBottom: Space.sm,

@@ -27781,25 +27781,126 @@ app.get('/users/:userId/market-history', async (request, reply) => {
   };
 });
 
-app.get('/auctions', async (request) => {
+app.get('/auctions', async (request, reply) => {
   const querySchema = z.object({
-    status: z.enum(['upcoming', 'live', 'ended']).optional(),
-    sellerId: z.string().min(2).max(128).optional(),
-    limit: z.coerce.number().int().min(1).max(200).default(60),
+    status: z.enum(['live', 'scheduled', 'ended', 'all']).default('all'),
+    query: z.string().min(1).max(200).optional(),
+    category: z.string().min(1).max(80).optional(),
+    sort: z.enum(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh']).default('endingSoon'),
+    watchedOnly: z.coerce.boolean().default(false),
+    seller: z.enum(['me']).optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(60).default(30),
   });
-  const { status, sellerId, limit } = querySchema.parse(request.query);
 
-  const whereConditions: string[] = [];
-  const whereParams: Array<string | number> = [];
+  const { status, query: searchQuery, category, sort, watchedOnly, seller, cursor, limit } = querySchema.parse(request.query);
 
-  if (sellerId) {
-    whereParams.push(sellerId);
-    whereConditions.push(`a.seller_id = $${whereParams.length}`);
+  const viewerUserId = request.authUser?.userId ?? null;
+  const sellerMe = seller === 'me' && viewerUserId;
+
+  if ((watchedOnly || sellerMe) && !viewerUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
   }
 
-  whereParams.push(limit);
-  const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-  const limitPlaceholder = `$${whereParams.length}`;
+  const whereConditions: string[] = ['a.cancelled_at IS NULL'];
+  const whereParams: Array<string | number | boolean> = [];
+  let paramIdx = 0;
+
+  if (sellerMe) {
+    whereParams.push(viewerUserId!);
+    paramIdx++;
+    whereConditions.push(`a.seller_id = $${paramIdx}`);
+  }
+
+  if (watchedOnly && viewerUserId) {
+    whereParams.push(viewerUserId);
+    paramIdx++;
+    whereConditions.push(`EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $${paramIdx})`);
+  }
+
+  if (searchQuery) {
+    paramIdx++;
+    whereParams.push(`%${searchQuery}%`);
+    whereConditions.push(`(COALESCE(l.title, '') ILIKE $${paramIdx} OR COALESCE(l.brand, '') ILIKE $${paramIdx})`);
+  }
+
+  if (category) {
+    paramIdx++;
+    whereParams.push(category);
+    whereConditions.push(`COALESCE(l.category, '') = $${paramIdx}`);
+  }
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  if (status === 'live') {
+    whereConditions.push(`a.starts_at <= NOW() AND a.ends_at > NOW()`);
+  } else if (status === 'scheduled') {
+    whereConditions.push(`a.starts_at > NOW()`);
+  } else if (status === 'ended') {
+    whereConditions.push(`a.ends_at <= NOW()`);
+  }
+
+  let orderBy: string;
+  let cursorColumn: string;
+  switch (sort) {
+    case 'newest':
+      orderBy = 'a.created_at DESC, a.id DESC';
+      cursorColumn = 'created_at';
+      break;
+    case 'mostBids':
+      orderBy = 'a.bid_count DESC, a.id DESC';
+      cursorColumn = 'bid_count';
+      break;
+    case 'priceLow':
+      orderBy = 'a.current_bid_gbp ASC, a.id ASC';
+      cursorColumn = 'current_bid_gbp';
+      break;
+    case 'priceHigh':
+      orderBy = 'a.current_bid_gbp DESC, a.id DESC';
+      cursorColumn = 'current_bid_gbp';
+      break;
+    case 'endingSoon':
+    default:
+      orderBy = 'a.ends_at ASC, a.id ASC';
+      cursorColumn = 'ends_at';
+      break;
+  }
+
+  let cursorCondition = '';
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+      if (decoded.ts && decoded.id) {
+        paramIdx++;
+        const cursorTsParam = paramIdx;
+        paramIdx++;
+        const cursorIdParam = paramIdx;
+        whereParams.push(decoded.ts, decoded.id);
+        const direction = sort === 'priceLow' ? '>' : '<';
+        if (sort === 'mostBids') {
+          cursorCondition = ` AND (a.bid_count ${direction} $${cursorTsParam} OR (a.bid_count = $${cursorTsParam} AND a.id < $${cursorIdParam}))`;
+        } else if (sort === 'priceHigh') {
+          cursorCondition = ` AND (a.current_bid_gbp ${direction} $${cursorTsParam} OR (a.current_bid_gbp = $${cursorTsParam} AND a.id < $${cursorIdParam}))`;
+        } else if (sort === 'priceLow') {
+          cursorCondition = ` AND (a.current_bid_gbp ${direction} $${cursorTsParam} OR (a.current_bid_gbp = $${cursorTsParam} AND a.id > $${cursorIdParam}))`;
+        } else if (sort === 'newest') {
+          cursorCondition = ` AND (a.created_at < $${cursorTsParam} OR (a.created_at = $${cursorTsParam} AND a.id < $${cursorIdParam}))`;
+        } else {
+          cursorCondition = ` AND (a.ends_at > $${cursorTsParam} OR (a.ends_at = $${cursorTsParam} AND a.id > $${cursorIdParam}))`;
+        }
+      }
+    } catch {
+      // Invalid cursor — ignore
+    }
+  }
+
+  paramIdx++;
+  const limitParam = paramIdx;
+  whereParams.push(limit + 1);
+
+  const whereClause = `WHERE ${whereConditions.join(' AND ')}${cursorCondition}`;
 
   const result = await db.query<{
     id: string;
@@ -27810,10 +27911,21 @@ app.get('/auctions', async (request) => {
     starting_bid_gbp: number | string;
     current_bid_gbp: number | string;
     buy_now_price_gbp: number | string | null;
+    min_increment_gbp: number | string;
     bid_count: number;
-    status: 'upcoming' | 'live' | 'ended';
-    title: string;
+    status: string;
+    title: string | null;
     image_url: string | null;
+    brand: string | null;
+    category: string | null;
+    condition_label: string | null;
+    seller_username: string | null;
+    seller_avatar: string | null;
+    seller_display_name: string | null;
+    is_watched: boolean | null;
+    viewer_highest_bid: string | null;
+    auction_winner_id: string | null;
+    created_at: string;
   }>(
     `
       SELECT
@@ -27825,60 +27937,182 @@ app.get('/auctions', async (request) => {
         a.starting_bid_gbp,
         a.current_bid_gbp,
         a.buy_now_price_gbp,
+        a.min_increment_gbp,
         a.bid_count,
         a.status,
+        a.winner_bidder_id AS auction_winner_id,
+        a.created_at,
         l.title,
-        l.image_url
+        l.image_url,
+        l.brand,
+        l.category,
+        l.condition_label,
+        u.username AS seller_username,
+        u.avatar_url AS seller_avatar,
+        u.display_name AS seller_display_name,
+        ${viewerUserId ? `(SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}' LIMIT 1)::boolean` : 'false::boolean'} AS is_watched,
+        ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = '${viewerUserId.replace(/'/g, "''")}')` : 'NULL::text'} AS viewer_highest_bid
       FROM auctions a
-      INNER JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN users u ON u.id = a.seller_id
       ${whereClause}
-      ORDER BY a.starts_at DESC
-      LIMIT ${limitPlaceholder}
+      ORDER BY ${orderBy}
+      LIMIT $${limitParam}
     `,
     whereParams
   );
 
-  const now = Date.now();
-  const items = result.rows
-    .map((row) => {
-      const startsAt = new Date(row.starts_at);
-      const endsAt = new Date(row.ends_at);
-      const computedStatus = resolveAuctionStatus(startsAt, endsAt);
+  const hasMore = result.rows.length > limit;
+  const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
-      return {
-        id: row.id,
-        listingId: row.listing_id,
-        sellerId: row.seller_id,
-        title: row.title,
-        imageUrl: row.image_url,
-        startsAt: row.starts_at,
-        endsAt: row.ends_at,
-        msToStart: startsAt.getTime() - now,
-        msToEnd: endsAt.getTime() - now,
-        startingBidGbp: Number(row.starting_bid_gbp),
-        currentBidGbp: Number(row.current_bid_gbp),
-        buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
-        bidCount: row.bid_count,
-        status: computedStatus,
-      };
-    })
-    .filter((item) => (status ? item.status === status : true));
+  const items = pageRows.map((row) => {
+    const startsAt = new Date(row.starts_at);
+    const endsAt = new Date(row.ends_at);
+    const computedStatus = resolveAuctionStatus(startsAt, endsAt);
+    const currentBid = Number(row.current_bid_gbp);
+    const minIncrement = Number(row.min_increment_gbp) || 0.01;
+    const minimumNextBid = roundTo(currentBid + minIncrement, 2);
 
-  return { ok: true, items };
+    let viewerState: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller' = 'not_participating';
+    const isWatched = !!row.is_watched;
+    const viewerHighestBid = row.viewer_highest_bid ? Number(row.viewer_highest_bid) : null;
+
+    if (viewerUserId && row.seller_id === viewerUserId) {
+      viewerState = 'seller';
+    } else if (computedStatus === 'ended') {
+      if (row.auction_winner_id && row.auction_winner_id === viewerUserId) {
+        viewerState = 'won';
+      } else if (viewerHighestBid !== null) {
+        viewerState = 'lost';
+      } else if (isWatched) {
+        viewerState = 'watching';
+      }
+    } else if (viewerHighestBid !== null) {
+      viewerState = viewerHighestBid >= currentBid ? 'leading' : 'outbid';
+    } else if (isWatched) {
+      viewerState = 'watching';
+    }
+
+    return {
+      id: row.id,
+      listingId: row.listing_id,
+      seller: {
+        id: row.seller_id,
+        username: row.seller_username ?? 'unknown',
+        displayName: row.seller_display_name ?? null,
+        avatarUrl: row.seller_avatar ?? null,
+      },
+      title: row.title ?? 'Untitled',
+      imageUrl: row.image_url ?? null,
+      brand: row.brand ?? null,
+      category: row.category ?? null,
+      conditionLabel: row.condition_label ?? null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      startingBidGbp: Number(row.starting_bid_gbp),
+      currentBidGbp: currentBid,
+      minimumNextBidGbp: minimumNextBid,
+      buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      bidCount: row.bid_count,
+      lifecycle: computedStatus,
+      viewerState,
+      isWatched,
+      createdAt: row.created_at,
+    };
+  });
+
+  let nextCursor: string | null = null;
+  if (hasMore && pageRows.length > 0) {
+    const last = pageRows[pageRows.length - 1];
+    let cursorTs: string;
+    switch (sort) {
+      case 'newest':
+        cursorTs = last.created_at;
+        break;
+      case 'mostBids':
+        cursorTs = String(last.bid_count);
+        break;
+      case 'priceLow':
+      case 'priceHigh':
+        cursorTs = String(last.current_bid_gbp);
+        break;
+      case 'endingSoon':
+      default:
+        cursorTs = last.ends_at;
+        break;
+    }
+    nextCursor = Buffer.from(JSON.stringify({ ts: cursorTs, id: last.id }), 'utf-8').toString('base64url');
+  }
+
+  return {
+    ok: true,
+    items,
+    nextCursor,
+    serverNow: nowIso,
+  };
 });
 
 app.post('/auctions', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
   const bodySchema = z.object({
-    id: z.string().min(4).max(64).optional(),
     listingId: z.string().min(2),
-    sellerId: z.string().min(2).optional(),
     startsAt: z.string().datetime(),
     endsAt: z.string().datetime(),
     startingBidGbp: z.number().min(0),
     buyNowPriceGbp: z.number().min(0).optional(),
+    minIncrementGbp: z.number().min(0).max(1000).optional(),
+    idempotencyKey: z.string().min(4).max(140).optional(),
   });
 
   const payload = bodySchema.parse(request.body);
+  const sellerId = request.authUser.userId;
+
+  const idempotencyKey = payload.idempotencyKey;
+
+  if (idempotencyKey) {
+    const existing = await db.query<{ id: string }>(
+      `SELECT id FROM auctions WHERE seller_id = $1 AND idempotency_key = $2 LIMIT 1`,
+      [sellerId, idempotencyKey]
+    );
+    if (existing.rows[0]) {
+      const existingAuction = await db.query<{
+        id: string;
+        listing_id: string;
+        seller_id: string;
+        starts_at: string;
+        ends_at: string;
+        starting_bid_gbp: number | string;
+        current_bid_gbp: number | string;
+        buy_now_price_gbp: number | string | null;
+        bid_count: number;
+        status: string;
+      }>(
+        `SELECT id, listing_id, seller_id, starts_at, ends_at, starting_bid_gbp, current_bid_gbp, buy_now_price_gbp, bid_count, status FROM auctions WHERE id = $1 LIMIT 1`,
+        [existing.rows[0].id]
+      );
+      const row = existingAuction.rows[0];
+      return {
+        ok: true,
+        idempotent: true,
+        auction: {
+          id: row.id,
+          listingId: row.listing_id,
+          sellerId: row.seller_id,
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          startingBidGbp: Number(row.starting_bid_gbp),
+          currentBidGbp: Number(row.current_bid_gbp),
+          buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+          bidCount: row.bid_count,
+          status: row.status,
+        },
+      };
+    }
+  }
 
   const listingResult = await db.query<{
     id: string;
@@ -27892,8 +28126,10 @@ app.post('/auctions', async (request, reply) => {
     return { ok: false, error: 'Listing not found' };
   }
 
-  const sellerId = payload.sellerId ?? listing.seller_id;
-  await ensureUserExists(sellerId);
+  if (listing.seller_id !== sellerId && request.authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: you can only create auctions for your own listings' };
+  }
 
   const startsAt = new Date(payload.startsAt);
   const endsAt = new Date(payload.endsAt);
@@ -27903,10 +28139,16 @@ app.post('/auctions', async (request, reply) => {
   }
 
   const status = resolveAuctionStatus(startsAt, endsAt);
-  const auctionId = payload.id ?? `a_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+  const auctionId = `a_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
   const startingBidGbp = roundTo(payload.startingBidGbp, 2);
   const buyNowPriceGbp =
     payload.buyNowPriceGbp === undefined ? null : roundTo(payload.buyNowPriceGbp, 2);
+  const minIncrementGbp = payload.minIncrementGbp !== undefined ? roundTo(payload.minIncrementGbp, 2) : 0.01;
+
+  if (buyNowPriceGbp !== null && buyNowPriceGbp <= startingBidGbp) {
+    reply.code(400);
+    return { ok: false, error: 'Buy now price must be greater than starting bid' };
+  }
 
   const result = await db.query<{
     id: string;
@@ -27930,10 +28172,12 @@ app.post('/auctions', async (request, reply) => {
         starting_bid_gbp,
         current_bid_gbp,
         buy_now_price_gbp,
+        min_increment_gbp,
         bid_count,
-        status
+        status,
+        idempotency_key
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $6, $7, 0, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, 0, $9, $10)
       RETURNING
         id,
         listing_id,
@@ -27954,13 +28198,27 @@ app.post('/auctions', async (request, reply) => {
       endsAt.toISOString(),
       startingBidGbp,
       buyNowPriceGbp,
+      minIncrementGbp,
       status,
+      idempotencyKey ?? null,
     ]
   );
+
+  publishRealtimeEvent({
+    topic: 'auctions.market',
+    type: 'auction.created',
+    payload: {
+      auctionId: result.rows[0].id,
+      listingId: result.rows[0].listing_id,
+      sellerId: result.rows[0].seller_id,
+      status: result.rows[0].status,
+    },
+  });
 
   reply.code(201);
   return {
     ok: true,
+    idempotent: false,
     auction: {
       id: result.rows[0].id,
       listingId: result.rows[0].listing_id,
@@ -28021,15 +28279,53 @@ app.get('/auctions/:auctionId/bids', async (request, reply) => {
 });
 
 app.post('/auctions/:auctionId/bids', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
   const paramsSchema = z.object({ auctionId: z.string().min(2) });
   const bodySchema = z.object({
-    bidderId: z.string().min(2),
     amountGbp: z.number().positive(),
+    idempotencyKey: z.string().min(4).max(140).optional(),
   });
 
   const { auctionId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body);
-  await ensureUserExists(payload.bidderId);
+  const bidderId = request.authUser.userId;
+
+  const idempotencyKey = payload.idempotencyKey;
+
+  if (idempotencyKey) {
+    const existingBid = await db.query<{ id: number; amount_gbp: number | string; created_at: string }>(
+      `SELECT id, amount_gbp, created_at FROM auction_bids WHERE auction_id = $1 AND bidder_id = $2 AND idempotency_key = $3 LIMIT 1`,
+      [auctionId, bidderId, idempotencyKey]
+    );
+    if (existingBid.rows[0]) {
+      const auctionState = await db.query<{ current_bid_gbp: number | string; bid_count: number }>(
+        'SELECT current_bid_gbp, bid_count FROM auctions WHERE id = $1 LIMIT 1',
+        [auctionId]
+      );
+      const aRow = auctionState.rows[0];
+      return {
+        ok: true,
+        idempotent: true,
+        bid: {
+          id: existingBid.rows[0].id,
+          auctionId,
+          bidderId,
+          amountGbp: Number(existingBid.rows[0].amount_gbp),
+          createdAt: existingBid.rows[0].created_at,
+        },
+        auction: {
+          id: auctionId,
+          currentBidGbp: aRow ? Number(aRow.current_bid_gbp) : Number(existingBid.rows[0].amount_gbp),
+          bidCount: aRow?.bid_count ?? 1,
+        },
+        aml: null,
+      };
+    }
+  }
 
   const client = await db.connect();
   let amlAlert: { alertId: string; status: string } | null = null;
@@ -28042,10 +28338,12 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       starts_at: string;
       ends_at: string;
       current_bid_gbp: number | string;
+      min_increment_gbp: number | string;
       bid_count: number;
+      buy_now_price_gbp: number | string | null;
     }>(
       `
-        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, bid_count
+        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp
         FROM auctions
         WHERE id = $1
         FOR UPDATE
@@ -28060,7 +28358,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       return { ok: false, error: 'Auction not found' };
     }
 
-    if (auction.seller_id === payload.bidderId) {
+    if (auction.seller_id === bidderId) {
       await client.query('ROLLBACK');
       reply.code(400);
       return { ok: false, error: 'Seller cannot bid on their own auction' };
@@ -28076,15 +28374,21 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
     }
 
     const currentBid = Number(auction.current_bid_gbp);
+    const minIncrement = Number(auction.min_increment_gbp) || 0.01;
     const amountGbp = roundTo(payload.amountGbp, 2);
-    if (amountGbp <= currentBid) {
+    const minimumNextBid = roundTo(currentBid + minIncrement, 2);
+
+    if (amountGbp < minimumNextBid) {
       await client.query('ROLLBACK');
       reply.code(400);
-      return { ok: false, error: `Bid must be greater than current bid (${currentBid.toFixed(2)} GBP)` };
+      return {
+        ok: false,
+        error: `Bid must be at least ${minimumNextBid.toFixed(2)} GBP (current bid ${currentBid.toFixed(2)} GBP + min increment ${minIncrement.toFixed(2)} GBP)`,
+      };
     }
 
     const eligibility = await evaluateMarketEligibility(client, {
-      userId: payload.bidderId,
+      userId: bidderId,
       market: 'auctions',
       orderNotionalGbp: amountGbp,
     });
@@ -28094,7 +28398,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
 
       await appendComplianceAuditSafe(request, {
         eventType: 'auction.bid.blocked.eligibility',
-        subjectUserId: payload.bidderId,
+        subjectUserId: bidderId,
         payload: {
           auctionId,
           amountGbp,
@@ -28112,7 +28416,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
     }
 
     const amlAssessment = await evaluateAmlRisk(client, {
-      userId: payload.bidderId,
+      userId: bidderId,
       market: 'auctions',
       amountGbp,
       counterpartyUserId: auction.seller_id,
@@ -28123,7 +28427,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
 
       if (amlAssessment.shouldCreateAlert) {
         amlAlert = await createAmlAlert(db, {
-          userId: payload.bidderId,
+          userId: bidderId,
           relatedUserId: auction.seller_id,
           market: 'auctions',
           eventType: 'bid',
@@ -28133,7 +28437,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
           notes: 'Auction bid blocked by AML pre-trade evaluation',
           context: {
             auctionId,
-            bidderId: payload.bidderId,
+            bidderId,
             sellerId: auction.seller_id,
           },
           assessment: amlAssessment,
@@ -28142,7 +28446,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
 
       await appendComplianceAuditSafe(request, {
         eventType: 'auction.bid.blocked.aml',
-        subjectUserId: payload.bidderId,
+        subjectUserId: bidderId,
         payload: {
           auctionId,
           amountGbp,
@@ -28162,33 +28466,52 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       };
     }
 
+    const isBuyNow = auction.buy_now_price_gbp !== null && amountGbp >= Number(auction.buy_now_price_gbp);
+
     const bidResult = await client.query<{
       id: number;
       created_at: string;
     }>(
       `
-        INSERT INTO auction_bids (auction_id, bidder_id, amount_gbp)
-        VALUES ($1, $2, $3)
+        INSERT INTO auction_bids (auction_id, bidder_id, amount_gbp, idempotency_key)
+        VALUES ($1, $2, $3, $4)
         RETURNING id, created_at
       `,
-      [auctionId, payload.bidderId, amountGbp]
+      [auctionId, bidderId, amountGbp, idempotencyKey ?? null]
     );
 
     const nextBidCount = auction.bid_count + 1;
-    await client.query(
-      `
-        UPDATE auctions
-        SET current_bid_gbp = $2,
-            bid_count = $3,
-            updated_at = NOW()
-        WHERE id = $1
-      `,
-      [auctionId, amountGbp, nextBidCount]
-    );
+
+    if (isBuyNow) {
+      await client.query(
+        `
+          UPDATE auctions
+          SET current_bid_gbp = $2,
+              bid_count = $3,
+              winner_bidder_id = $4,
+              winner_bid_id = $5,
+              status = 'ended',
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [auctionId, amountGbp, nextBidCount, bidderId, bidResult.rows[0].id]
+      );
+    } else {
+      await client.query(
+        `
+          UPDATE auctions
+          SET current_bid_gbp = $2,
+              bid_count = $3,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [auctionId, amountGbp, nextBidCount]
+      );
+    }
 
     if (amlAssessment.shouldCreateAlert) {
       amlAlert = await createAmlAlert(client, {
-        userId: payload.bidderId,
+        userId: bidderId,
         relatedUserId: auction.seller_id,
         market: 'auctions',
         eventType: 'bid',
@@ -28198,7 +28521,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         notes: 'Auction bid generated elevated AML risk score',
         context: {
           auctionId,
-          bidderId: payload.bidderId,
+          bidderId,
           sellerId: auction.seller_id,
         },
         assessment: amlAssessment,
@@ -28212,9 +28535,10 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       type: 'auction.bid.created',
       payload: {
         auctionId,
-        bidderId: payload.bidderId,
+        bidderId,
         amountGbp,
         bidCount: nextBidCount,
+        isBuyNow,
       },
     });
 
@@ -28225,33 +28549,34 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         auctionId,
         currentBidGbp: amountGbp,
         bidCount: nextBidCount,
+        isBuyNow,
       },
     });
 
-    if (auction.seller_id !== payload.bidderId) {
-      try {
-        await queueUserNotification({
-          userId: auction.seller_id,
-          title: 'New auction bid',
-          body: `A new bid was placed on auction ${auctionId}.`,
-          payload: {
-            auctionId,
-            bidderId: payload.bidderId,
-            amountGbp,
-            event: 'auction_bid',
-          },
-          metadata: {
-            source: 'auction_bid_route',
-          },
-        });
-      } catch (error) {
-        request.log.error({ err: error, auctionId }, 'Failed to queue seller bid notification');
-      }
+    try {
+      await queueUserNotification({
+        userId: auction.seller_id,
+        title: isBuyNow ? 'Auction won via Buy Now' : 'New auction bid',
+        body: isBuyNow
+          ? `Your auction was won via Buy Now for ${amountGbp.toFixed(2)} GBP.`
+          : `A new bid of ${amountGbp.toFixed(2)} GBP was placed on auction ${auctionId}.`,
+        payload: {
+          auctionId,
+          bidderId,
+          amountGbp,
+          event: isBuyNow ? 'auction_buy_now' : 'auction_bid',
+        },
+        metadata: {
+          source: 'auction_bid_route',
+        },
+      });
+    } catch (error) {
+      request.log.error({ err: error, auctionId }, 'Failed to queue seller bid notification');
     }
 
     await appendComplianceAuditSafe(request, {
       eventType: 'auction.bid.created',
-      subjectUserId: payload.bidderId,
+      subjectUserId: bidderId,
       payload: {
         auctionId,
         amountGbp,
@@ -28266,7 +28591,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       bid: {
         id: bidResult.rows[0].id,
         auctionId,
-        bidderId: payload.bidderId,
+        bidderId,
         amountGbp,
         createdAt: bidResult.rows[0].created_at,
       },
@@ -28274,6 +28599,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         id: auctionId,
         currentBidGbp: amountGbp,
         bidCount: nextBidCount,
+        isBuyNow,
       },
       aml: amlAlert
         ? {
@@ -28292,6 +28618,511 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
   } finally {
     client.release();
   }
+});
+
+app.get('/auctions/:auctionId', async (request, reply) => {
+  const paramsSchema = z.object({ auctionId: z.string().min(2) });
+  const { auctionId } = paramsSchema.parse(request.params);
+
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const result = await db.query<{
+    id: string;
+    listing_id: string;
+    seller_id: string;
+    starts_at: string;
+    ends_at: string;
+    starting_bid_gbp: number | string;
+    current_bid_gbp: number | string;
+    buy_now_price_gbp: number | string | null;
+    min_increment_gbp: number | string;
+    bid_count: number;
+    status: string;
+    winner_bidder_id: string | null;
+    settled_at: string | null;
+    cancelled_at: string | null;
+    created_at: string;
+    title: string | null;
+    image_url: string | null;
+    brand: string | null;
+    category: string | null;
+    condition_label: string | null;
+    description: string | null;
+    price_gbp: number | string | null;
+    seller_username: string | null;
+    seller_avatar: string | null;
+    seller_display_name: string | null;
+    is_watched: boolean | null;
+    viewer_highest_bid: string | null;
+  }>(
+    `
+      SELECT
+        a.id,
+        a.listing_id,
+        a.seller_id,
+        a.starts_at,
+        a.ends_at,
+        a.starting_bid_gbp,
+        a.current_bid_gbp,
+        a.buy_now_price_gbp,
+        a.min_increment_gbp,
+        a.bid_count,
+        a.status,
+        a.winner_bidder_id,
+        a.settled_at,
+        a.cancelled_at,
+        a.created_at,
+        l.title,
+        l.image_url,
+        l.brand,
+        l.category,
+        l.condition_label,
+        l.description,
+        l.price_gbp,
+        u.username AS seller_username,
+        u.avatar_url AS seller_avatar,
+        u.display_name AS seller_display_name,
+        ${viewerUserId ? `(SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}' LIMIT 1)::boolean` : 'false::boolean'} AS is_watched,
+        ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = '${viewerUserId.replace(/'/g, "''")}')` : 'NULL::text'} AS viewer_highest_bid
+      FROM auctions a
+      LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN users u ON u.id = a.seller_id
+      WHERE a.id = $1
+      LIMIT 1
+    `,
+    [auctionId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'Auction not found' };
+  }
+
+  const startsAt = new Date(row.starts_at);
+  const endsAt = new Date(row.ends_at);
+  const computedStatus = resolveAuctionStatus(startsAt, endsAt);
+  const currentBid = Number(row.current_bid_gbp);
+  const minIncrement = Number(row.min_increment_gbp) || 0.01;
+  const minimumNextBid = roundTo(currentBid + minIncrement, 2);
+
+  let viewerState: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller' = 'not_participating';
+  const isWatched = !!row.is_watched;
+  const viewerHighestBid = row.viewer_highest_bid ? Number(row.viewer_highest_bid) : null;
+
+  if (viewerUserId && row.seller_id === viewerUserId) {
+    viewerState = 'seller';
+  } else if (computedStatus === 'ended') {
+    if (row.winner_bidder_id && row.winner_bidder_id === viewerUserId) {
+      viewerState = 'won';
+    } else if (viewerHighestBid !== null) {
+      viewerState = 'lost';
+    } else if (isWatched) {
+      viewerState = 'watching';
+    }
+  } else if (viewerHighestBid !== null) {
+    viewerState = viewerHighestBid >= currentBid ? 'leading' : 'outbid';
+  } else if (isWatched) {
+    viewerState = 'watching';
+  }
+
+  const bidsResult = await db.query<{
+    id: number;
+    bidder_id: string;
+    amount_gbp: number | string;
+    created_at: string;
+    bidder_username: string | null;
+  }>(
+    `
+      SELECT ab.id, ab.bidder_id, ab.amount_gbp, ab.created_at, u.username AS bidder_username
+      FROM auction_bids ab
+      LEFT JOIN users u ON u.id = ab.bidder_id
+      WHERE ab.auction_id = $1
+      ORDER BY ab.amount_gbp DESC, ab.created_at ASC
+      LIMIT 20
+    `,
+    [auctionId]
+  );
+
+  return {
+    ok: true,
+    auction: {
+      id: row.id,
+      listingId: row.listing_id,
+      seller: {
+        id: row.seller_id,
+        username: row.seller_username ?? 'unknown',
+        displayName: row.seller_display_name ?? null,
+        avatarUrl: row.seller_avatar ?? null,
+      },
+      title: row.title ?? 'Untitled',
+      imageUrl: row.image_url ?? null,
+      brand: row.brand ?? null,
+      category: row.category ?? null,
+      conditionLabel: row.condition_label ?? null,
+      description: row.description ?? null,
+      listingPriceGbp: row.price_gbp !== null ? Number(row.price_gbp) : null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      startingBidGbp: Number(row.starting_bid_gbp),
+      currentBidGbp: currentBid,
+      minimumNextBidGbp: minimumNextBid,
+      buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      bidCount: row.bid_count,
+      lifecycle: computedStatus,
+      viewerState,
+      isWatched,
+      winnerBidderId: row.winner_bidder_id,
+      settledAt: row.settled_at,
+      cancelledAt: row.cancelled_at,
+      createdAt: row.created_at,
+    },
+    bidActivity: bidsResult.rows.map((b) => ({
+      id: b.id,
+      bidderId: b.bidder_id,
+      bidderUsername: b.bidder_username ?? 'unknown',
+      amountGbp: Number(b.amount_gbp),
+      createdAt: b.created_at,
+      isViewer: viewerUserId === b.bidder_id,
+    })),
+    serverNow: new Date().toISOString(),
+  };
+});
+
+app.get('/auctions/watchlist', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const viewerUserId = request.authUser.userId;
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(60).default(30),
+    cursor: z.string().optional(),
+  });
+  const { limit, cursor } = querySchema.parse(request.query);
+
+  let cursorCondition = '';
+  const params: Array<string | number> = [viewerUserId];
+  let paramIdx = 1;
+
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+      if (decoded.ts && decoded.id) {
+        paramIdx++;
+        const cursorTsParam = paramIdx;
+        paramIdx++;
+        const cursorIdParam = paramIdx;
+        params.push(decoded.ts, decoded.id);
+        cursorCondition = ` AND (aw.created_at < $${cursorTsParam} OR (aw.created_at = $${cursorTsParam} AND aw.id < $${cursorIdParam}))`;
+      }
+    } catch {
+      // Invalid cursor
+    }
+  }
+
+  paramIdx++;
+  const limitParam = paramIdx;
+  params.push(limit + 1);
+
+  const result = await db.query<{
+    id: string;
+    listing_id: string;
+    seller_id: string;
+    starts_at: string;
+    ends_at: string;
+    starting_bid_gbp: number | string;
+    current_bid_gbp: number | string;
+    buy_now_price_gbp: number | string | null;
+    min_increment_gbp: number | string;
+    bid_count: number;
+    status: string;
+    winner_bidder_id: string | null;
+    created_at: string;
+    title: string | null;
+    image_url: string | null;
+    brand: string | null;
+    category: string | null;
+    seller_username: string | null;
+    seller_display_name: string | null;
+    seller_avatar: string | null;
+    watched_at: string;
+    aw_id: number;
+  }>(
+    `
+      SELECT
+        a.id,
+        a.listing_id,
+        a.seller_id,
+        a.starts_at,
+        a.ends_at,
+        a.starting_bid_gbp,
+        a.current_bid_gbp,
+        a.buy_now_price_gbp,
+        a.min_increment_gbp,
+        a.bid_count,
+        a.status,
+        a.winner_bidder_id,
+        a.created_at,
+        l.title,
+        l.image_url,
+        l.brand,
+        l.category,
+        u.username AS seller_username,
+        u.display_name AS seller_display_name,
+        u.avatar_url AS seller_avatar,
+        aw.created_at AS watched_at,
+        aw.id AS aw_id
+      FROM auction_watchlist aw
+      INNER JOIN auctions a ON a.id = aw.auction_id
+      LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN users u ON u.id = a.seller_id
+      WHERE aw.user_id = $1 AND a.cancelled_at IS NULL${cursorCondition}
+      ORDER BY aw.created_at DESC, aw.id DESC
+      LIMIT $${limitParam}
+    `,
+    params
+  );
+
+  const hasMore = result.rows.length > limit;
+  const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
+
+  const items = pageRows.map((row) => {
+    const startsAt = new Date(row.starts_at);
+    const endsAt = new Date(row.ends_at);
+    const computedStatus = resolveAuctionStatus(startsAt, endsAt);
+    const currentBid = Number(row.current_bid_gbp);
+    const minIncrement = Number(row.min_increment_gbp) || 0.01;
+
+    let viewerState: 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller' = 'watching';
+    const viewerHighestBid = row.winner_bidder_id === viewerUserId ? currentBid : null;
+
+    if (viewerUserId && row.seller_id === viewerUserId) {
+      viewerState = 'seller';
+    } else if (computedStatus === 'ended') {
+      if (row.winner_bidder_id === viewerUserId) {
+        viewerState = 'won';
+      } else if (viewerHighestBid !== null) {
+        viewerState = 'lost';
+      }
+    }
+
+    return {
+      id: row.id,
+      listingId: row.listing_id,
+      seller: {
+        id: row.seller_id,
+        username: row.seller_username ?? 'unknown',
+        displayName: row.seller_display_name ?? null,
+        avatarUrl: row.seller_avatar ?? null,
+      },
+      title: row.title ?? 'Untitled',
+      imageUrl: row.image_url ?? null,
+      brand: row.brand ?? null,
+      category: row.category ?? null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      startingBidGbp: Number(row.starting_bid_gbp),
+      currentBidGbp: currentBid,
+      minimumNextBidGbp: roundTo(currentBid + minIncrement, 2),
+      buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      bidCount: row.bid_count,
+      lifecycle: computedStatus,
+      viewerState,
+      isWatched: true,
+      watchedAt: row.watched_at,
+      createdAt: row.created_at,
+    };
+  });
+
+  let nextCursor: string | null = null;
+  if (hasMore && pageRows.length > 0) {
+    const last = pageRows[pageRows.length - 1];
+    nextCursor = Buffer.from(JSON.stringify({ ts: last.watched_at, id: String(last.aw_id) }), 'utf-8').toString('base64url');
+  }
+
+  return { ok: true, items, nextCursor };
+});
+
+app.post('/auctions/:auctionId/watch', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ auctionId: z.string().min(2) });
+  const { auctionId } = paramsSchema.parse(request.params);
+  const userId = request.authUser.userId;
+
+  const auctionExists = await db.query('SELECT id FROM auctions WHERE id = $1 AND cancelled_at IS NULL LIMIT 1', [auctionId]);
+  if (!auctionExists.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Auction not found' };
+  }
+
+  try {
+    await db.query(
+      `INSERT INTO auction_watchlist (user_id, auction_id) VALUES ($1, $2) ON CONFLICT (user_id, auction_id) DO NOTHING`,
+      [userId, auctionId]
+    );
+  } catch {
+    // Auction may have been deleted — safe ignore
+  }
+
+  return { ok: true, isWatched: true };
+});
+
+app.delete('/auctions/:auctionId/watch', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ auctionId: z.string().min(2) });
+  const { auctionId } = paramsSchema.parse(request.params);
+  const userId = request.authUser.userId;
+
+  await db.query(
+    `DELETE FROM auction_watchlist WHERE user_id = $1 AND auction_id = $2`,
+    [userId, auctionId]
+  );
+
+  return { ok: true, isWatched: false };
+});
+
+app.get('/users/me/auction-bids', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bidderId = request.authUser.userId;
+  const querySchema = z.object({
+    status: z.enum(['active', 'won', 'lost', 'all']).default('all'),
+    limit: z.coerce.number().int().min(1).max(60).default(30),
+    cursor: z.string().optional(),
+  });
+  const { status, limit, cursor } = querySchema.parse(request.query);
+
+  let cursorCondition = '';
+  const params: Array<string | number> = [bidderId];
+  let paramIdx = 1;
+
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+      if (decoded.ts && decoded.id) {
+        paramIdx++;
+        const cursorTsParam = paramIdx;
+        paramIdx++;
+        const cursorIdParam = paramIdx;
+        params.push(decoded.ts, decoded.id);
+        cursorCondition = ` AND (ab.created_at < $${cursorTsParam} OR (ab.created_at = $${cursorTsParam} AND ab.id < $${cursorIdParam}))`;
+      }
+    } catch {
+      // Invalid cursor
+    }
+  }
+
+  paramIdx++;
+  const limitParam = paramIdx;
+  params.push(limit + 1);
+
+  const result = await db.query<{
+    id: number;
+    auction_id: string;
+    amount_gbp: number | string;
+    created_at: string;
+    starts_at: string;
+    ends_at: string;
+    current_bid_gbp: number | string;
+    bid_count: number;
+    winner_bidder_id: string | null;
+    title: string | null;
+    image_url: string | null;
+    seller_id: string;
+    seller_username: string | null;
+  }>(
+    `
+      SELECT
+        ab.id,
+        ab.auction_id,
+        ab.amount_gbp,
+        ab.created_at,
+        a.starts_at,
+        a.ends_at,
+        a.current_bid_gbp,
+        a.bid_count,
+        a.winner_bidder_id,
+        l.title,
+        l.image_url,
+        a.seller_id,
+        u.username AS seller_username
+      FROM auction_bids ab
+      INNER JOIN auctions a ON a.id = ab.auction_id
+      LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN users u ON u.id = a.seller_id
+      WHERE ab.bidder_id = $1${cursorCondition}
+      ORDER BY ab.created_at DESC, ab.id DESC
+      LIMIT $${limitParam}
+    `,
+    params
+  );
+
+  const hasMore = result.rows.length > limit;
+  const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
+
+  const items = pageRows.map((row) => {
+    const computedStatus = resolveAuctionStatus(new Date(row.starts_at), new Date(row.ends_at));
+    const currentBid = Number(row.current_bid_gbp);
+    const myBid = Number(row.amount_gbp);
+
+    let bidState: 'active' | 'leading' | 'outbid' | 'won' | 'lost' = 'active';
+    if (computedStatus === 'ended') {
+      if (row.winner_bidder_id === bidderId) {
+        bidState = 'won';
+      } else {
+        bidState = 'lost';
+      }
+    } else if (myBid >= currentBid) {
+      bidState = 'leading';
+    } else {
+      bidState = 'outbid';
+    }
+
+    return {
+      id: row.id,
+      auctionId: row.auction_id,
+      amountGbp: myBid,
+      createdAt: row.created_at,
+      bidState,
+      auction: {
+        id: row.auction_id,
+        title: row.title ?? 'Untitled',
+        imageUrl: row.image_url ?? null,
+        currentBidGbp: currentBid,
+        bidCount: row.bid_count,
+        lifecycle: computedStatus,
+        sellerId: row.seller_id,
+        sellerUsername: row.seller_username ?? 'unknown',
+        endsAt: row.ends_at,
+      },
+    };
+  });
+
+  const filtered = status === 'all' ? items : items.filter((item) => {
+    if (status === 'active') return item.bidState === 'active' || item.bidState === 'leading' || item.bidState === 'outbid';
+    return item.bidState === status;
+  });
+
+  let nextCursor: string | null = null;
+  if (hasMore && pageRows.length > 0) {
+    const last = pageRows[pageRows.length - 1];
+    nextCursor = Buffer.from(JSON.stringify({ ts: last.created_at, id: String(last.id) }), 'utf-8').toString('base64url');
+  }
+
+  return { ok: true, items: filtered, nextCursor };
 });
 
 app.get('/co-own/assets', async (request) => {

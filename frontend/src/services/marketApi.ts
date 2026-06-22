@@ -1,22 +1,99 @@
 import { fetchJson } from '../lib/apiClient';
 
-export type AuctionStatus = 'upcoming' | 'live' | 'ended';
+export type AuctionLifecycle = 'upcoming' | 'live' | 'ended';
+export type AuctionStatus = AuctionLifecycle;
+export type AuctionViewerState = 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
+export type AuctionSortMode = 'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh';
+
+export interface AuctionSeller {
+  id: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
 
 export interface MarketAuction {
   id: string;
   listingId: string;
-  sellerId: string;
+  seller: AuctionSeller;
   title: string;
   imageUrl: string | null;
+  brand: string | null;
+  category: string | null;
+  conditionLabel: string | null;
   startsAt: string;
   endsAt: string;
-  msToStart: number;
-  msToEnd: number;
   startingBidGbp: number;
   currentBidGbp: number;
+  minimumNextBidGbp: number;
   buyNowPriceGbp: number | null;
   bidCount: number;
-  status: AuctionStatus;
+  lifecycle: AuctionLifecycle;
+  viewerState: AuctionViewerState;
+  isWatched: boolean;
+  createdAt: string;
+}
+
+export interface AuctionBidActivity {
+  id: number;
+  bidderId: string;
+  bidderUsername: string;
+  amountGbp: number;
+  createdAt: string;
+  isViewer: boolean;
+}
+
+export interface AuctionDetail {
+  id: string;
+  listingId: string;
+  seller: AuctionSeller;
+  title: string;
+  imageUrl: string | null;
+  brand: string | null;
+  category: string | null;
+  conditionLabel: string | null;
+  description: string | null;
+  listingPriceGbp: number | null;
+  startsAt: string;
+  endsAt: string;
+  startingBidGbp: number;
+  currentBidGbp: number;
+  minimumNextBidGbp: number;
+  buyNowPriceGbp: number | null;
+  bidCount: number;
+  lifecycle: AuctionLifecycle;
+  viewerState: AuctionViewerState;
+  isWatched: boolean;
+  winnerBidderId: string | null;
+  settledAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+}
+
+export interface AuctionDetailResponse {
+  ok: true;
+  auction: AuctionDetail;
+  bidActivity: AuctionBidActivity[];
+  serverNow: string;
+}
+
+export interface MyAuctionBid {
+  id: number;
+  auctionId: string;
+  amountGbp: number;
+  createdAt: string;
+  bidState: 'active' | 'leading' | 'outbid' | 'won' | 'lost';
+  auction: {
+    id: string;
+    title: string;
+    imageUrl: string | null;
+    currentBidGbp: number;
+    bidCount: number;
+    lifecycle: AuctionLifecycle;
+    sellerId: string;
+    sellerUsername: string;
+    endsAt: string;
+  };
 }
 
 export interface MarketAuctionBid {
@@ -33,6 +110,7 @@ export interface MarketAuctionBidResult {
     id: string;
     currentBidGbp: number;
     bidCount: number;
+    isBuyNow?: boolean;
   };
   aml?: {
     alertId: string;
@@ -128,6 +206,27 @@ export interface MarketHistoryPage {
 interface ListAuctionsResponse {
   ok: true;
   items: MarketAuction[];
+  nextCursor: string | null;
+  serverNow: string;
+}
+
+interface GetAuctionDetailResponse extends AuctionDetailResponse {}
+
+interface GetWatchlistResponse {
+  ok: true;
+  items: MarketAuction[];
+  nextCursor: string | null;
+}
+
+interface WatchToggleResponse {
+  ok: true;
+  isWatched: boolean;
+}
+
+interface GetMyAuctionBidsResponse {
+  ok: true;
+  items: MyAuctionBid[];
+  nextCursor: string | null;
 }
 
 interface PlaceAuctionBidResponse {
@@ -190,8 +289,13 @@ interface ListUserMarketHistoryResponse {
 }
 
 interface ListAuctionsOptions {
-  status?: AuctionStatus;
-  sellerId?: string;
+  status?: 'live' | 'scheduled' | 'ended' | 'all';
+  query?: string;
+  category?: string;
+  sort?: AuctionSortMode;
+  watchedOnly?: boolean;
+  seller?: 'me';
+  cursor?: string;
   limit?: number;
 }
 
@@ -216,9 +320,9 @@ interface ListUserMarketHistoryOptions {
   cursorId?: string;
 }
 
-interface PlaceAuctionBidInput {
-  bidderId: string;
+export interface PlaceAuctionBidInput {
   amountGbp: number;
+  idempotencyKey?: string;
 }
 
 interface PlaceCoOwnOrderInput {
@@ -253,18 +357,19 @@ function toQuery(params: Record<string, string | number | boolean | undefined>) 
 }
 
 export interface CreateAuctionInput {
-  id?: string;
   listingId: string;
-  sellerId?: string;
   startsAt: string;
   endsAt: string;
   startingBidGbp: number;
   buyNowPriceGbp?: number;
+  minIncrementGbp?: number;
+  idempotencyKey?: string;
 }
 
 export interface CreateAuctionResponse {
   ok: true;
   auction: MarketAuction;
+  idempotent?: boolean;
 }
 
 export async function createAuction(input: CreateAuctionInput): Promise<MarketAuction> {
@@ -276,14 +381,57 @@ export async function createAuction(input: CreateAuctionInput): Promise<MarketAu
   return payload.auction;
 }
 
-export async function listAuctions(options: ListAuctionsOptions = {}): Promise<MarketAuction[]> {
+export async function listAuctions(options: ListAuctionsOptions = {}): Promise<{ items: MarketAuction[]; nextCursor: string | null; serverNow: string }> {
   const query = toQuery({
     status: options.status,
-    sellerId: options.sellerId,
+    query: options.query,
+    category: options.category,
+    sort: options.sort,
+    watchedOnly: options.watchedOnly,
+    seller: options.seller,
+    cursor: options.cursor,
     limit: options.limit,
   });
   const payload = await fetchJson<ListAuctionsResponse>(`/auctions${query}`);
-  return payload.items;
+  return { items: payload.items, nextCursor: payload.nextCursor, serverNow: payload.serverNow };
+}
+
+export async function getAuctionDetail(auctionId: string): Promise<AuctionDetailResponse> {
+  const payload = await fetchJson<GetAuctionDetailResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}`
+  );
+  return payload;
+}
+
+export async function getWatchlist(cursor?: string): Promise<{ items: MarketAuction[]; nextCursor: string | null }> {
+  const query = toQuery({ cursor });
+  const payload = await fetchJson<GetWatchlistResponse>(`/auctions/watchlist${query}`);
+  return { items: payload.items, nextCursor: payload.nextCursor };
+}
+
+export async function addToWatchlist(auctionId: string): Promise<boolean> {
+  const payload = await fetchJson<WatchToggleResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/watch`,
+    { method: 'POST' }
+  );
+  return payload.isWatched;
+}
+
+export async function removeFromWatchlist(auctionId: string): Promise<boolean> {
+  const payload = await fetchJson<WatchToggleResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/watch`,
+    { method: 'DELETE' }
+  );
+  return payload.isWatched;
+}
+
+export async function getMyAuctionBids(
+  status?: 'active' | 'won' | 'lost' | 'all',
+  cursor?: string
+): Promise<{ items: MyAuctionBid[]; nextCursor: string | null }> {
+  const query = toQuery({ status, cursor });
+  const payload = await fetchJson<GetMyAuctionBidsResponse>(`/users/me/auction-bids${query}`);
+  return { items: payload.items, nextCursor: payload.nextCursor };
 }
 
 export async function placeAuctionBid(

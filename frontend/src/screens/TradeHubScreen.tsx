@@ -16,18 +16,17 @@ import CoOwnScreen from './SyndicateScreen';
 import { RootStackParamList } from '../navigation/types';
 import { AppButton } from '../components/ui/AppButton';
 import { t } from '../i18n';
-import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
+import { Meta, BodyEmphasis } from '../components/ui/Text';
 
 type TradeHubTab = 'AUCTIONS' | 'CO-OWN';
 type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function TradeHubScreen() {
   const navigation = useNavigation<NavT>();
-  const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
   const [activeTab, setActiveTab] = React.useState<TradeHubTab>('AUCTIONS');
 
@@ -61,15 +60,15 @@ export default function TradeHubScreen() {
     if (activeTab === 'AUCTIONS') {
       return [
         { key: 'create-auction', label: 'Create Auction', icon: 'hammer-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreateAuction'); } },
-        { key: 'auction-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreatePoster'); } },
+        { key: 'my-bids', label: 'My Bids', icon: 'list-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('MyBids'); } },
+        { key: 'my-listings', label: 'My Listings', icon: 'pricetags-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('MyListings'); } },
       ];
     }
     return [
       { key: 'create-coown', label: 'Create Co-Own', icon: 'people-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
-      { key: 'coown-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreatePoster'); } },
       { key: 'open-portfolio', label: 'Portfolio', icon: 'wallet-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('Portfolio'); } },
     ];
-  }, [activeTab, navigation, show]);
+  }, [activeTab, navigation]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -99,6 +98,19 @@ export default function TradeHubScreen() {
             </AnimatedPressable>
           ))}
         </View>
+      </Reanimated.View>
+
+      {/* Header label */}
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)}
+        style={styles.headerLabelWrap}
+      >
+        <BodyEmphasis style={styles.headerLabel}>
+          {activeTab === 'AUCTIONS' ? 'Live Auctions' : 'Co-Own Market'}
+        </BodyEmphasis>
+        <Meta style={styles.headerSublabel}>
+          {activeTab === 'AUCTIONS' ? 'Bid on curated drops' : 'Trade fractional shares'}
+        </Meta>
       </Reanimated.View>
 
       {/* Tab-specific quick actions */}
@@ -176,6 +188,17 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: Colors.textInverse,
+  },
+  headerLabelWrap: {
+    paddingHorizontal: Space.md,
+    marginBottom: Space.xs,
+  },
+  headerLabel: {
+    fontSize: 22,
+  },
+  headerSublabel: {
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   quickActionsWrap: {
     flexDirection: 'row',

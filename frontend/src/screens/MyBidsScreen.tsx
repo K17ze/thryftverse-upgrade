@@ -8,14 +8,15 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
 import { TradeHeader, OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Space } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { getMyAuctionBids, type MyAuctionBid } from '../services/marketApi';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -28,70 +29,50 @@ const FILTER_OPTIONS: Array<{ value: BidFilter; label: string; accessibilityLabe
   { value: 'lost', label: 'LOST', accessibilityLabel: 'Show lost bids' },
 ];
 
-interface BidEntry {
-  id: string;
-  auctionId: string;
-  title: string;
-  amount: number;
-  timestamp: string;
-  status: 'active' | 'won' | 'lost';
-}
-
 export default function MyBidsScreen() {
   const navigation = useNavigation<NavT>();
   const { formatFromFiat } = useFormattedPrice();
-  const currentUser = useStore((state) => state.currentUser);
-  const marketLedger = useStore((state) => state.marketLedger);
-  const customAuctions = useStore((state) => state.customAuctions);
-  const auctionRuntime = useStore((state) => state.auctionRuntime);
   const reducedMotionEnabled = useReducedMotion();
 
-  const viewerId = currentUser?.id ?? 'u1';
   const [filter, setFilter] = React.useState<BidFilter>('all');
   const [refreshing, setRefreshing] = React.useState(false);
+  const [bids, setBids] = React.useState<MyAuctionBid[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const bids = React.useMemo(() => {
-    const entries: BidEntry[] = [];
-    const auctionMap = new Map(customAuctions.map((a) => [a.id, a]));
-
-    for (const entry of marketLedger) {
-      if (entry.channel !== 'auction') continue;
-      if (entry.action !== 'bid' && entry.action !== 'win') continue;
-
-      const auction = auctionMap.get(entry.referenceId);
-      const runtime = auctionRuntime[entry.referenceId];
-      const isClosed = runtime?.closedAtMs || (auction?.endsAt ? new Date(auction.endsAt).getTime() < Date.now() : false);
-
-      let status: BidEntry['status'] = 'active';
-      if (entry.action === 'win') {
-        status = 'won';
-      } else if (isClosed) {
-        const isWinner = runtime?.lastBidderId === viewerId;
-        status = isWinner ? 'won' : 'lost';
-      }
-
-      entries.push({
-        id: entry.id,
-        auctionId: entry.referenceId,
-        title: auction?.title ?? `Auction ${entry.referenceId.slice(0, 8)}`,
-        amount: entry.amountGBP,
-        timestamp: entry.timestamp,
-        status,
-      });
+  const fetchBids = React.useCallback(async () => {
+    try {
+      const result = await getMyAuctionBids('all');
+      setBids(result.items);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load bids');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
+  }, []);
 
-    return entries;
-  }, [marketLedger, customAuctions, auctionRuntime, viewerId]);
-
-  const filteredBids = React.useMemo(() => {
-    if (filter === 'all') return bids;
-    return bids.filter((b) => b.status === filter);
-  }, [bids, filter]);
+  React.useEffect(() => {
+    void fetchBids();
+  }, [fetchBids]);
 
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
-  }, []);
+    void fetchBids();
+  }, [fetchBids]);
+
+  const filteredBids = React.useMemo(() => {
+    if (filter === 'all') return bids;
+    if (filter === 'active') return bids.filter((b) => b.bidState === 'active' || b.bidState === 'leading' || b.bidState === 'outbid');
+    return bids.filter((b) => b.bidState === filter);
+  }, [bids, filter]);
+
+  const statusLabel = (bidState: MyAuctionBid['bidState']): 'pending' | 'filled' | 'cancelled' => {
+    if (bidState === 'won') return 'filled';
+    if (bidState === 'lost') return 'cancelled';
+    return 'pending';
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -114,7 +95,7 @@ export default function MyBidsScreen() {
 
       <FlashList
         data={filteredBids}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item, index }) => (
@@ -128,25 +109,33 @@ export default function MyBidsScreen() {
             }
           >
             <OrderHistoryRow
-              id={item.id}
-              side={item.status === 'won' ? 'buy' : 'buy'}
+              id={String(item.id)}
+              side="buy"
               type="market"
-              assetTitle={item.title}
+              assetTitle={item.auction.title}
               quantity={1}
-              pricePerShare={formatFromFiat(item.amount, 'GBP')}
-              totalAmount={formatFromFiat(item.amount, 'GBP')}
-              status={item.status === 'active' ? 'pending' : item.status === 'won' ? 'filled' : 'cancelled'}
-              timestamp={item.timestamp}
-              onPress={() => navigation.navigate('ItemDetail', { itemId: item.auctionId })}
+              pricePerShare={formatFromFiat(item.amountGbp, 'GBP')}
+              totalAmount={formatFromFiat(item.amountGbp, 'GBP')}
+              status={statusLabel(item.bidState)}
+              timestamp={item.createdAt}
+              onPress={() => navigation.navigate('AuctionDetail', { auctionId: item.auctionId })}
             />
           </Reanimated.View>
         )}
         ListEmptyComponent={
-          <EmptyState
-            icon="hammer-outline"
-            title="No bids yet"
-            subtitle="Bids you place on auctions will appear here."
-          />
+          loading ? (
+            <View style={styles.loadingWrap}>
+              {[0, 1, 2].map((i) => (
+                <SkeletonLoader key={i} width="100%" height={72} borderRadius={12} style={{ marginBottom: Space.sm }} />
+              ))}
+            </View>
+          ) : (
+            <EmptyState
+              icon="hammer-outline"
+              title="No bids yet"
+              subtitle="Bids you place on auctions will appear here."
+            />
+          )
         }
         refreshControl={
           <RefreshControl
@@ -173,5 +162,9 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: Space.xl,
+  },
+  loadingWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
   },
 });
