@@ -674,10 +674,6 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
-  if (method === 'GET' && path === '/users/search') {
-    return true;
-  }
-
   if (method === 'GET' && /^\/users\/[^/]+\/profile$/.test(path)) {
     return true;
   }
@@ -11616,9 +11612,14 @@ app.get('/users/:userId/profile', async (request, reply) => {
 });
 
 app.get('/users/search', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
   const querySchema = z.object({
-    q: z.string().trim().min(1).max(100),
-    limit: z.coerce.number().int().min(1).max(50).default(20),
+    q: z.string().trim().min(2).max(50),
+    limit: z.coerce.number().int().min(1).max(20).default(20),
   });
   const { q, limit } = querySchema.parse(request.query ?? {});
 

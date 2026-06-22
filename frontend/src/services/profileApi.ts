@@ -84,9 +84,11 @@ export interface UserSearchResult {
 }
 
 export async function searchUsers(query: string, limit?: number): Promise<UserSearchResult[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
   const params = new URLSearchParams();
-  params.set('q', query);
-  if (limit) params.set('limit', String(limit));
+  params.set('q', trimmed);
+  if (limit) params.set('limit', String(Math.min(limit, 20)));
   const response = await fetchJson<{ ok: boolean; items: UserSearchResult[] }>(
     `/users/search?${params.toString()}`
   );

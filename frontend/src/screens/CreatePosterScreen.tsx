@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,8 +22,10 @@ import { useToast } from '../context/ToastContext';
 import { uploadMedia } from '../services/mediaUpload';
 import { createPosterStory } from '../services/postersApi';
 import { useStore } from '../store/useStore';
-import { PosterFrameStrip, ComposerFrame } from '../components/poster/PosterFrameStrip';
+import { PosterFrameStrip, ComposerFrame, FramePublishState } from '../components/poster/PosterFrameStrip';
 import { PosterFrameComposer } from '../components/poster/PosterFrameComposer';
+import { PosterFrameCanvas } from '../components/poster/PosterFrameCanvas';
+import { createStableId } from '../utils/createStableId';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CANVAS_W = Math.min(SCREEN_W - 40, 360);
@@ -34,20 +36,11 @@ type Props = StackScreenProps<RootStackParamList, 'CreatePoster'>;
 const MAX_FRAMES = 10;
 const DEFAULT_DURATION_MS = 5000;
 
-function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
+type UploadedMediaCache = Record<string, string>;
 
 function createBlankFrame(): ComposerFrame {
   return {
-    id: `frame_${generateUUID()}`,
+    id: createStableId('frame'),
     mediaType: 'text',
     mediaUri: null,
     backgroundColor: '#1a1a1a',
@@ -55,6 +48,49 @@ function createBlankFrame(): ComposerFrame {
     durationMs: DEFAULT_DURATION_MS,
     stickers: [],
   };
+}
+
+function validateFrames(frames: ComposerFrame[]): string | null {
+  if (frames.length < 1) return 'A story needs at least one frame';
+  if (frames.length > MAX_FRAMES) return `Maximum ${MAX_FRAMES} frames per story`;
+
+  for (let i = 0; i < frames.length; i++) {
+    const f = frames[i];
+    if (f.mediaType === 'text' && !f.mediaUri) {
+      if (!f.caption.trim() && f.stickers.length === 0) {
+        return `Frame ${i + 1} needs text or a sticker`;
+      }
+    }
+    if ((f.mediaType === 'image' || f.mediaType === 'video') && !f.mediaUri) {
+      return `Frame ${i + 1} is missing media`;
+    }
+    for (const s of f.stickers) {
+      if (s.x < 0 || s.x > 1 || s.y < 0 || s.y > 1) {
+        return `Frame ${i + 1} has a sticker with invalid position`;
+      }
+      if (s.scale < 0.4 || s.scale > 3) {
+        return `Frame ${i + 1} has a sticker with invalid scale`;
+      }
+      if (s.type === 'style_vote') {
+        const payload = s.payload as Record<string, unknown>;
+        const question = payload.question as string | undefined;
+        const options = payload.options as Array<{ id: string; label: string }> | undefined;
+        if (!question?.trim()) {
+          return `Frame ${i + 1} has a style vote with no question`;
+        }
+        if (!options || options.length !== 2) {
+          return `Frame ${i + 1} has a style vote needing exactly 2 options`;
+        }
+        if (!options[0].label.trim() || !options[1].label.trim()) {
+          return `Frame ${i + 1} has a style vote with empty options`;
+        }
+        if (options[0].id === options[1].id) {
+          return `Frame ${i + 1} has a style vote with duplicate option IDs`;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 export default function CreatePosterScreen({ navigation }: Props) {
@@ -65,17 +101,32 @@ export default function CreatePosterScreen({ navigation }: Props) {
   const [phase, setPhase] = useState<'editing' | 'preview'>('editing');
   const [frames, setFrames] = useState<ComposerFrame[]>([createBlankFrame()]);
   const [activeFrameIndex, setActiveFrameIndex] = useState(0);
+  const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
   const [audience, setAudience] = useState<'public' | 'private'>('public');
   const [allowReplies, setAllowReplies] = useState(true);
   const [allowReactions, setAllowReactions] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [publishStates, setPublishStates] = useState<Record<string, FramePublishState>>({});
+  const [publishProgress, setPublishProgress] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
+
+  const uploadCacheRef = useRef<UploadedMediaCache>({});
+  const publishInFlightRef = useRef(false);
+  const allowNavigationRef = useRef(false);
+  const initialFramesRef = useRef<string>(JSON.stringify(frames));
 
   const activeFrame = frames[activeFrameIndex];
   const hasContent = useMemo(() =>
     frames.some((f) => f.mediaUri || f.caption.trim() || f.stickers.length > 0),
     [frames]
   );
+
+  const isDirty = useMemo(() => {
+    return JSON.stringify(frames) !== initialFramesRef.current;
+  }, [frames]);
+
+  // ── Frame operations ──
 
   const updateFrame = useCallback((updates: Partial<ComposerFrame>) => {
     setFrames((prev) => {
@@ -118,6 +169,7 @@ export default function CreatePosterScreen({ navigation }: Props) {
       };
       return next;
     });
+    setSelectedStickerId(null);
   }, [activeFrameIndex]);
 
   const addFrame = useCallback(() => {
@@ -128,6 +180,7 @@ export default function CreatePosterScreen({ navigation }: Props) {
     const newFrame = createBlankFrame();
     setFrames((prev) => [...prev, newFrame]);
     setActiveFrameIndex(frames.length);
+    setSelectedStickerId(null);
   }, [frames.length, show]);
 
   const removeFrame = useCallback((index: number) => {
@@ -135,65 +188,188 @@ export default function CreatePosterScreen({ navigation }: Props) {
       show('A story needs at least one frame', 'info');
       return;
     }
+    const removedFrame = frames[index];
+    const mediaUri = removedFrame.mediaUri;
     setFrames((prev) => prev.filter((_, i) => i !== index));
-    setActiveFrameIndex((prev) => Math.max(0, prev >= index ? prev - 1 : prev));
-  }, [frames.length, show]);
+    setActiveFrameIndex((prev) => {
+      if (prev === index) {
+        return Math.max(0, index < frames.length - 1 ? index : index - 1);
+      }
+      return prev > index ? prev - 1 : prev;
+    });
+    setSelectedStickerId(null);
 
-  const handleClose = () => {
-    if (hasContent) {
-      Alert.alert('Discard story?', 'Your poster story will not be saved.', [
-        { text: 'Keep editing', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-      ]);
-    } else {
-      navigation.goBack();
+    if (mediaUri) {
+      const stillUsed = frames.some((f, i) => i !== index && f.mediaUri === mediaUri);
+      if (!stillUsed) {
+        delete uploadCacheRef.current[mediaUri];
+      }
     }
-  };
+  }, [frames, show]);
 
-  const handlePublish = async () => {
-    if (!hasContent) {
-      show('Add content to at least one frame', 'error');
+  const moveFrame = useCallback((fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= frames.length) return;
+    setFrames((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+    setActiveFrameIndex(toIndex);
+  }, [frames.length]);
+
+  const duplicateFrame = useCallback((index: number) => {
+    if (frames.length >= MAX_FRAMES) {
+      show(`Maximum ${MAX_FRAMES} frames per story`, 'info');
       return;
     }
+    const source = frames[index];
+    const newFrame: ComposerFrame = {
+      ...source,
+      id: createStableId('frame'),
+      stickers: source.stickers.map((s) => ({
+        ...s,
+        id: createStableId('sticker'),
+      })),
+    };
+    setFrames((prev) => {
+      const next = [...prev];
+      next.splice(index + 1, 0, newFrame);
+      return next;
+    });
+    setActiveFrameIndex(index + 1);
+    setSelectedStickerId(null);
+  }, [frames, show]);
+
+  // ── Selection management ──
+
+  const handleSelectSticker = useCallback((id: string | null) => {
+    setSelectedStickerId(id);
+  }, []);
+
+  // Clear selection when switching frames
+  useEffect(() => {
+    setSelectedStickerId(null);
+  }, [activeFrameIndex]);
+
+  // ── Unsaved-change guard ──
+
+  const proceedWithNavigation = useCallback((action: Parameters<typeof navigation.dispatch>[0]) => {
+    allowNavigationRef.current = true;
+    navigation.dispatch(action);
+  }, [navigation]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event: { preventDefault: () => void; data: { action: Parameters<typeof navigation.dispatch>[0] } }) => {
+      if (allowNavigationRef.current || !isDirty) {
+        return;
+      }
+      event.preventDefault();
+      Alert.alert(
+        'Discard this Poster?',
+        'Your Story has not been shared.',
+        [
+          { text: 'Keep editing', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => proceedWithNavigation(event.data.action),
+          },
+        ]
+      );
+    });
+    return unsubscribe;
+  }, [navigation, isDirty, proceedWithNavigation]);
+
+  // ── Publishing ──
+
+  const handlePublish = async () => {
+    if (publishInFlightRef.current) return;
+    publishInFlightRef.current = true;
+
+    const validationError = validateFrames(frames);
+    if (validationError) {
+      show(validationError, 'error');
+      const errorFrameIndex = frames.findIndex((f, i) => {
+        if (f.mediaType === 'text' && !f.mediaUri && (!f.caption.trim() && f.stickers.length === 0)) return true;
+        if ((f.mediaType === 'image' || f.mediaType === 'video') && !f.mediaUri) return true;
+        return false;
+      });
+      if (errorFrameIndex >= 0) setActiveFrameIndex(errorFrameIndex);
+      setPhase('editing');
+      publishInFlightRef.current = false;
+      return;
+    }
+
     if (!currentUser) {
       show('Sign in to publish your story', 'error');
       navigation.navigate('Login');
+      publishInFlightRef.current = false;
       return;
     }
 
     setIsPublishing(true);
+
     try {
-      const storyId = `story_${generateUUID()}`;
+      const cache = uploadCacheRef.current;
+      const framesToUpload = frames.filter((f) => f.mediaUri);
+      const uniqueUris = [...new Set(framesToUpload.map((f) => f.mediaUri!))];
+      const uncachedUris = uniqueUris.filter((uri) => !cache[uri]);
 
-      const uploadedFrames = await Promise.all(
-        frames.map(async (frame, index) => {
-          let mediaUrl: string | undefined;
-          if (frame.mediaUri) {
-            mediaUrl = await uploadMedia(frame.mediaUri, 'posters');
-          }
-          return {
-            id: frame.id,
-            mediaType: frame.mediaType,
-            mediaUrl,
-            backgroundColor: frame.backgroundColor ?? undefined,
-            caption: frame.caption.trim() || undefined,
-            durationMs: frame.durationMs,
-            sortOrder: index,
-            stickers: frame.stickers.map((s, sIdx) => ({
-              id: s.id,
-              type: s.type,
-              x: s.x,
-              y: s.y,
-              scale: s.scale,
-              rotation: s.rotation,
-              payload: s.payload as Record<string, unknown>,
-              sortOrder: sIdx,
-            })),
-          };
-        })
-      );
+      // Upload uncached media one by one
+      for (let i = 0; i < uncachedUris.length; i++) {
+        const uri = uncachedUris[i];
+        const owningFrame = framesToUpload.find((f) => f.mediaUri === uri)!;
+        setPublishStates((prev) => ({ ...prev, [owningFrame.id]: 'uploading' }));
+        setPublishProgress(`Uploading ${i + 1} of ${uncachedUris.length}`);
+        try {
+          const url = await uploadMedia(uri, 'posters');
+          cache[uri] = url;
+          setPublishStates((prev) => ({ ...prev, [owningFrame.id]: 'uploaded' }));
+        } catch {
+          setPublishStates((prev) => ({ ...prev, [owningFrame.id]: 'failed' }));
+          throw new Error(`Failed to upload media for frame ${owningFrame.id}`);
+        }
+      }
 
-      await createPosterStory({
+      // Mark frames without media as uploaded
+      for (const f of frames) {
+        if (!f.mediaUri) {
+          setPublishStates((prev) => ({ ...prev, [f.id]: 'uploaded' }));
+        }
+      }
+
+      setPublishProgress('Publishing Poster…');
+
+      const storyId = createStableId('story');
+
+      const uploadedFrames = frames.map((frame, index) => {
+        let mediaUrl: string | undefined;
+        if (frame.mediaUri) {
+          mediaUrl = cache[frame.mediaUri];
+        }
+        return {
+          id: frame.id,
+          mediaType: frame.mediaType,
+          mediaUrl,
+          backgroundColor: frame.backgroundColor ?? undefined,
+          caption: frame.caption.trim() || undefined,
+          durationMs: frame.durationMs,
+          sortOrder: index,
+          stickers: frame.stickers.map((s, sIdx) => ({
+            id: s.id,
+            type: s.type,
+            x: s.x,
+            y: s.y,
+            scale: s.scale,
+            rotation: s.rotation,
+            payload: s.payload as Record<string, unknown>,
+            sortOrder: sIdx,
+          })),
+        };
+      });
+
+      const result = await createPosterStory({
         id: storyId,
         audience,
         allowReplies,
@@ -202,17 +378,54 @@ export default function CreatePosterScreen({ navigation }: Props) {
         frames: uploadedFrames,
       });
 
+      const confirmedStoryId = result.storyId;
+
+      // Clear upload cache on success
+      uploadCacheRef.current = {};
+
       show('Poster story published', 'success');
-      navigation.goBack();
+
+      // Set one-use navigation bypass
+      allowNavigationRef.current = true;
+      navigation.replace('PosterViewer', {
+        storyId: confirmedStoryId,
+      });
     } catch (e) {
-      show(
-        typeof e === 'object' && e && 'message' in e ? String((e as Error).message) : 'Failed to publish story',
-        'error'
-      );
+      const msg = typeof e === 'object' && e && 'message' in e ? String((e as Error).message) : 'Failed to publish story';
+      show(msg, 'error');
+      // Retain cache for retry — don't clear on failure
     } finally {
       setIsPublishing(false);
+      setPublishProgress(null);
+      publishInFlightRef.current = false;
     }
   };
+
+  const handleClose = () => {
+    if (isDirty) {
+      Alert.alert('Discard this Poster?', 'Your Story has not been shared.', [
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: () => {
+          allowNavigationRef.current = true;
+          navigation.goBack();
+        }},
+      ]);
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  // ── Preview navigation ──
+
+  const handlePreviewNext = useCallback(() => {
+    setPreviewIndex((prev) => Math.min(prev + 1, frames.length - 1));
+  }, [frames.length]);
+
+  const handlePreviewPrev = useCallback(() => {
+    setPreviewIndex((prev) => Math.max(prev - 1, 0));
+  }, []);
+
+  const previewFrame = frames[previewIndex];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -245,7 +458,10 @@ export default function CreatePosterScreen({ navigation }: Props) {
           </AnimatedPressable>
         ) : (
           <AnimatedPressable
-            onPress={() => setPhase('editing')}
+            onPress={() => {
+              setPhase('editing');
+              setActiveFrameIndex(previewIndex);
+            }}
             style={styles.iconBtn}
             activeOpacity={0.7}
             scaleValue={0.9}
@@ -265,6 +481,8 @@ export default function CreatePosterScreen({ navigation }: Props) {
               onAddSticker={addSticker}
               onUpdateSticker={updateSticker}
               onRemoveSticker={removeSticker}
+              selectedStickerId={selectedStickerId}
+              onSelectSticker={handleSelectSticker}
               canvasWidth={CANVAS_W}
               canvasHeight={CANVAS_H}
             />
@@ -298,48 +516,73 @@ export default function CreatePosterScreen({ navigation }: Props) {
         </View>
       ) : (
         <View style={styles.previewBody}>
-          {frames.map((frame, i) => (
-            <View
-              key={frame.id}
-              style={[
-                styles.previewFrame,
-                i === activeFrameIndex && styles.previewFrameActive,
-              ]}
-            >
-              <View
-                style={[
-                  styles.previewCanvas,
-                  {
-                    width: CANVAS_W * 0.7,
-                    height: CANVAS_H * 0.7,
-                    backgroundColor: frame.backgroundColor ?? Colors.surfaceAlt,
-                  },
-                ]}
-              >
-                {frame.mediaUri ? null : (
-                  <Text
-                    style={[
-                      styles.previewText,
-                      { color: frame.backgroundColor === '#ffffff' ? '#000' : '#fff' },
-                    ]}
-                    numberOfLines={3}
+          {previewFrame && (
+            <View style={styles.previewCanvasWrap}>
+              <PosterFrameCanvas
+                frame={previewFrame}
+                mode="preview"
+                width={CANVAS_W}
+                height={CANVAS_H}
+              />
+
+              {/* Progress segments */}
+              {frames.length > 1 && (
+                <View style={styles.progressSegments}>
+                  {frames.map((_, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.segment,
+                        i === previewIndex && styles.segmentActive,
+                      ]}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {/* Prev/next controls */}
+              {frames.length > 1 && (
+                <View style={styles.previewNav}>
+                  <Pressable
+                    onPress={handlePreviewPrev}
+                    disabled={previewIndex === 0}
+                    style={[styles.navBtn, previewIndex === 0 && styles.navBtnDisabled]}
+                    accessibilityLabel="Previous frame"
+                    accessibilityRole="button"
                   >
-                    {frame.caption || 'Empty frame'}
-                  </Text>
-                )}
-              </View>
-              <Text style={styles.previewFrameLabel}>Frame {i + 1}</Text>
+                    <Ionicons name="chevron-back" size={24} color="#fff" />
+                  </Pressable>
+                  <Pressable
+                    onPress={handlePreviewNext}
+                    disabled={previewIndex === frames.length - 1}
+                    style={[styles.navBtn, previewIndex === frames.length - 1 && styles.navBtnDisabled]}
+                    accessibilityLabel="Next frame"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="chevron-forward" size={24} color="#fff" />
+                  </Pressable>
+                </View>
+              )}
+
+              {/* Frame position */}
+              <Text style={styles.framePosition}>
+                {previewIndex + 1} / {frames.length}
+              </Text>
             </View>
-          ))}
+          )}
         </View>
       )}
 
       <PosterFrameStrip
         frames={frames}
-        activeIndex={activeFrameIndex}
-        onSelectIndex={setActiveFrameIndex}
+        activeIndex={phase === 'editing' ? activeFrameIndex : previewIndex}
+        onSelectIndex={phase === 'editing' ? setActiveFrameIndex : setPreviewIndex}
         onAddFrame={addFrame}
+        onRemoveFrame={removeFrame}
+        onMoveFrame={moveFrame}
+        onDuplicateFrame={duplicateFrame}
         maxFrames={MAX_FRAMES}
+        publishStates={publishStates}
       />
 
       {showSettings && phase === 'editing' && (
@@ -388,24 +631,20 @@ export default function CreatePosterScreen({ navigation }: Props) {
               <View style={[styles.switchThumb, allowReactions && styles.switchThumbOn]} />
             </Pressable>
           </View>
-
-          {frames.length > 1 && (
-            <Pressable
-              onPress={() => removeFrame(activeFrameIndex)}
-              style={styles.removeFrameBtn}
-            >
-              <Ionicons name="trash-outline" size={16} color="#ff6b6b" />
-              <Text style={styles.removeFrameText}>Remove frame {activeFrameIndex + 1}</Text>
-            </Pressable>
-          )}
         </View>
       )}
 
       <View style={styles.publishBar}>
+        {publishProgress && (
+          <Text style={styles.publishProgress}>{publishProgress}</Text>
+        )}
         {phase === 'editing' ? (
           <AnimatedPressable
             style={styles.publishBtn}
-            onPress={() => setPhase('preview')}
+            onPress={() => {
+              setPreviewIndex(activeFrameIndex);
+              setPhase('preview');
+            }}
             activeOpacity={0.85}
             disabled={!hasContent}
           >
@@ -480,28 +719,43 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.md,
   },
-  previewFrame: {
+  previewCanvasWrap: {
     alignItems: 'center',
-    gap: Space.xs,
-    opacity: 0.4,
+    gap: Space.sm,
   },
-  previewFrameActive: {
-    opacity: 1,
+  progressSegments: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: Space.sm,
   },
-  previewCanvas: {
-    borderRadius: Radius.lg,
+  segment: {
+    width: 24,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: Colors.border,
+  },
+  segmentActive: {
+    backgroundColor: Colors.brand,
+  },
+  previewNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: CANVAS_W,
+    marginTop: Space.sm,
+  },
+  navBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.md,
   },
-  previewText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    textAlign: 'center',
+  navBtnDisabled: {
+    opacity: 0.3,
   },
-  previewFrameLabel: {
+  framePosition: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
@@ -581,28 +835,26 @@ const styles = StyleSheet.create({
   switchThumbOn: {
     transform: [{ translateX: 18 }],
   },
-  removeFrameBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
-  removeFrameText: {
-    color: '#ff6b6b',
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-  },
   publishBar: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
   },
+  publishProgress: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: Space.xs,
+  },
   publishBtn: {
     backgroundColor: Colors.brand,
     borderRadius: Radius.lg,
     paddingVertical: 14,
     alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
   },
   publishBtnDisabled: {
     opacity: 0.5,

@@ -1,6 +1,13 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, ViewStyle } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { Colors } from '../../constants/colors';
 import type { PosterSticker as ApiPosterSticker } from '../../services/postersApi';
@@ -8,57 +15,159 @@ import type { PosterSticker as ApiPosterSticker } from '../../services/postersAp
 interface PosterStickerLayerProps {
   stickers: ApiPosterSticker[];
   onStickerPress?: (sticker: ApiPosterSticker) => void;
-  onStickerLongPress?: (sticker: ApiPosterSticker) => void;
   editable?: boolean;
-  onStickerUpdate?: (id: string, x: number, y: number) => void;
+  selectedStickerId?: string | null;
+  onStickerPositionChange?: (id: string, x: number, y: number) => void;
   containerWidth: number;
   containerHeight: number;
   style?: ViewStyle;
 }
 
+const CLAMP_MARGIN = 0.05;
+
+function clampNormalized(value: number): number {
+  return Math.max(CLAMP_MARGIN, Math.min(1 - CLAMP_MARGIN, value));
+}
+
 export function PosterStickerLayer({
   stickers,
   onStickerPress,
-  onStickerLongPress,
-  editable,
-  onStickerUpdate,
+  editable = false,
+  selectedStickerId,
+  onStickerPositionChange,
   containerWidth,
   containerHeight,
   style,
 }: PosterStickerLayerProps) {
   return (
     <View style={[StyleSheet.absoluteFill, style]} pointerEvents="box-none">
-      {stickers.map((sticker) => {
-        const left = sticker.x * containerWidth;
-        const top = sticker.y * containerHeight;
-        const transform = [{ scale: sticker.scale }, { rotate: `${sticker.rotation}deg` }];
-
-        return (
-          <View
-            key={sticker.id}
-            style={[
-              styles.stickerBase,
-              { left, top, transform },
-            ]}
-            pointerEvents="auto"
-          >
-            <Pressable
-              onPress={() => onStickerPress?.(sticker)}
-              onLongPress={() => onStickerLongPress?.(sticker)}
-              delayLongPress={300}
-              disabled={!onStickerPress && !onStickerLongPress}
-            >
-              <StickerContent sticker={sticker} />
-            </Pressable>
-            {editable && (
-              <View style={styles.editHandle}>
-                <Ionicons name="move" size={14} color="#fff" />
-              </View>
-            )}
-          </View>
-        );
-      })}
+      {stickers.map((sticker) => (
+        <DraggableSticker
+          key={sticker.id}
+          sticker={sticker}
+          editable={editable}
+          isSelected={selectedStickerId === sticker.id}
+          containerWidth={containerWidth}
+          containerHeight={containerHeight}
+          onPress={onStickerPress}
+          onPositionChange={onStickerPositionChange}
+        />
+      ))}
     </View>
+  );
+}
+
+interface DraggableStickerProps {
+  sticker: ApiPosterSticker;
+  editable: boolean;
+  isSelected: boolean;
+  containerWidth: number;
+  containerHeight: number;
+  onPress?: (sticker: ApiPosterSticker) => void;
+  onPositionChange?: (id: string, x: number, y: number) => void;
+}
+
+function DraggableSticker({
+  sticker,
+  editable,
+  isSelected,
+  containerWidth,
+  containerHeight,
+  onPress,
+  onPositionChange,
+}: DraggableStickerProps) {
+  const translateX = useSharedValue(sticker.x * containerWidth);
+  const translateY = useSharedValue(sticker.y * containerHeight);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+
+  const handlePositionCommit = useCallback(
+    (finalX: number, finalY: number) => {
+      const normX = clampNormalized(finalX / containerWidth);
+      const normY = clampNormalized(finalY / containerHeight);
+      translateX.value = withTiming(normX * containerWidth, { duration: 0 });
+      translateY.value = withTiming(normY * containerHeight, { duration: 0 });
+      onPositionChange?.(sticker.id, normX, normY);
+    },
+    [containerWidth, containerHeight, onPositionChange, sticker.id, translateX, translateY]
+  );
+
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(editable)
+        .minDistance(3)
+        .onStart(() => {
+          startX.value = translateX.value;
+          startY.value = translateY.value;
+        })
+        .onUpdate((e) => {
+          translateX.value = startX.value + e.translationX;
+          translateY.value = startY.value + e.translationY;
+        })
+        .onEnd((e) => {
+          const finalX = startX.value + e.translationX;
+          const finalY = startY.value + e.translationY;
+          runOnJS(handlePositionCommit)(finalX, finalY);
+        }),
+    [editable, translateX, translateY, startX, startY, handlePositionCommit]
+  );
+
+  const tapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .enabled(editable && !!onPress)
+        .onEnd(() => {
+          if (onPress) {
+            runOnJS(onPress)(sticker);
+          }
+        }),
+    [editable, onPress, sticker]
+  );
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: sticker.scale },
+      { rotate: `${sticker.rotation}deg` },
+    ],
+  }));
+
+  const composedGesture = useMemo(
+    () => Gesture.Race(panGesture, tapGesture),
+    [panGesture, tapGesture]
+  );
+
+  if (editable) {
+    return (
+      <GestureDetector gesture={composedGesture}>
+        <Reanimated.View
+          style={[styles.stickerBase, { left: 0, top: 0 }, animatedStyle]}
+          pointerEvents="auto"
+        >
+          <View style={[styles.stickerInner, isSelected && styles.selectedWrap]}>
+            <StickerContent sticker={sticker} />
+          </View>
+          {isSelected && (
+            <View style={styles.selectionHandle} pointerEvents="none">
+              <View style={styles.handleDot} />
+            </View>
+          )}
+        </Reanimated.View>
+      </GestureDetector>
+    );
+  }
+
+  return (
+    <Reanimated.View
+      style={[styles.stickerBase, { left: 0, top: 0 }, animatedStyle]}
+      pointerEvents="none"
+    >
+      <View style={styles.stickerInner}>
+        <StickerContent sticker={sticker} />
+      </View>
+    </Reanimated.View>
   );
 }
 
@@ -142,16 +251,32 @@ const styles = StyleSheet.create({
   stickerBase: {
     position: 'absolute',
   },
-  editHandle: {
+  stickerInner: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  selectedWrap: {
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.7)',
+    borderRadius: Radius.sm,
+  },
+  selectionHandle: {
     position: 'absolute',
-    top: -20,
-    right: -20,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    top: -8,
+    right: -8,
+    width: 16,
+    height: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  handleDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.brand,
+    borderWidth: 1.5,
+    borderColor: '#fff',
   },
   textWrap: {
     alignItems: 'center',
