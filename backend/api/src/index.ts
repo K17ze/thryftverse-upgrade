@@ -17914,6 +17914,7 @@ app.post('/wallets/:userId/snapshot', async (request, reply) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
   await ensureUserExists(userId);
 
@@ -17951,6 +17952,7 @@ app.post('/wallets/:userId/snapshot', async (request, reply) => {
 app.get('/wallets/:userId/snapshot', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   const result = await db.query<{
     id: number;
@@ -21597,6 +21599,7 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const { fiatCurrency } = querySchema.parse(request.query);
 
   if (!(await onezeTablesAvailable(db))) {
@@ -21960,6 +21963,7 @@ app.get('/recommendations/:userId', async (request, reply) => {
 app.get('/users/:userId/addresses', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   const result = await db.query<{
     id: number;
@@ -22008,6 +22012,7 @@ app.post('/users/:userId/addresses', async (request, reply) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
 
   await ensureUserExists(userId);
@@ -22065,6 +22070,7 @@ app.delete('/users/:userId/addresses/:addressId', async (request, reply) => {
   });
 
   const { userId, addressId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   const deleted = await db.query(
     `
@@ -22112,6 +22118,7 @@ app.delete('/users/:userId/addresses/:addressId', async (request, reply) => {
 app.get('/users/:userId/payment-methods', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   const result = await db.query<{
     id: number;
@@ -22157,6 +22164,7 @@ app.post('/users/:userId/payment-methods', async (request, reply) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
 
   await ensureUserExists(userId);
@@ -22228,6 +22236,7 @@ app.delete('/users/:userId/payment-methods/:paymentMethodId', async (request, re
   });
 
   const { userId, paymentMethodId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   const deleted = await db.query(
     `
@@ -22374,7 +22383,12 @@ app.get('/payments/gateways', async (request) => {
   };
 });
 
-app.get('/payments/platform/summary', async () => {
+app.get('/payments/platform/summary', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
   if (!(await ledgerTablesAvailable(db))) {
     return {
       ok: true,
@@ -22405,6 +22419,7 @@ app.get('/payments/platform/summary', async () => {
 app.get('/users/:userId/ledger/balances', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   if (!(await ledgerTablesAvailable(db))) {
     return {
@@ -22451,6 +22466,7 @@ app.get('/users/:userId/ledger/balances', async (request) => {
 app.get('/users/:userId/payout-accounts', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   if (!(await paymentTablesAvailable(db))) {
     reply.code(503);
@@ -22515,11 +22531,12 @@ app.post('/users/:userId/payout-accounts', async (request, reply) => {
     providerAccountRef: z.string().min(3).max(140).optional(),
     countryCode: z.string().min(2).max(3).optional(),
     currency: z.string().length(3).optional(),
-    status: z.enum(['pending', 'active', 'disabled']).default('active'),
+    status: z.enum(['pending', 'active', 'disabled']).default('pending'),
     metadata: z.record(z.unknown()).optional(),
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
 
   if (!(await paymentTablesAvailable(db))) {
@@ -22872,6 +22889,7 @@ app.get('/users/:userId/payout-requests', async (request, reply) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const { limit } = querySchema.parse(request.query);
 
   if (!(await paymentTablesAvailable(db))) {
@@ -22917,6 +22935,7 @@ app.get('/users/:userId/payout-requests/:requestId', async (request, reply) => {
   });
 
   const { userId, requestId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   if (!(await paymentTablesAvailable(db))) {
     reply.code(503);
@@ -22970,10 +22989,12 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
     amountGbp: z.number().positive().optional(),
     amount: z.number().positive().optional(),
     amountCurrency: z.string().length(3).optional(),
+    idempotencyKey: z.string().min(8).max(140).optional(),
     metadata: z.record(z.unknown()).optional(),
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
 
   if (!(await paymentTablesAvailable(db))) {
@@ -23004,6 +23025,40 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
   try {
     await client.query('BEGIN');
     await ensureUserExists(userId);
+
+    if (payload.idempotencyKey) {
+      const existing = await client.query<PayoutRequestRow>(
+        `
+          SELECT
+            id,
+            user_id,
+            payout_account_id,
+            amount_gbp,
+            amount_currency,
+            status,
+            provider_payout_ref,
+            failure_reason,
+            metadata,
+            created_at,
+            updated_at
+          FROM payout_requests
+          WHERE user_id = $1
+            AND idempotency_key = $2
+          LIMIT 1
+        `,
+        [userId, payload.idempotencyKey]
+      );
+
+      if (existing.rows[0]) {
+        await client.query('ROLLBACK');
+        reply.code(200);
+        return {
+          ok: true,
+          idempotent: true,
+          payoutRequest: toPayoutRequestPayload(existing.rows[0]),
+        };
+      }
+    }
 
     const payoutAccount = await client.query<{
       id: number;
@@ -23213,9 +23268,10 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
           amount_gbp,
           amount_currency,
           status,
+          idempotency_key,
           metadata
         )
-        VALUES ($1, $2, $3, $4, $5, 'requested', $6::jsonb)
+        VALUES ($1, $2, $3, $4, $5, 'requested', $6, $7::jsonb)
         RETURNING
           id,
           user_id,
@@ -23235,6 +23291,7 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
         payload.payoutAccountId,
         amountGbp,
         payoutCurrency,
+        payload.idempotencyKey ?? null,
         toJsonString(payoutRequestMetadata),
       ]
     );
@@ -25067,6 +25124,11 @@ app.get('/payments/intents/:intentId/refunds', async (request, reply) => {
 });
 
 app.get('/payments/disputes', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
   const querySchema = z.object({
     status: z.enum(['open', 'warning', 'needs_response', 'won', 'lost', 'closed']).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(80),
@@ -27094,6 +27156,7 @@ app.get('/users/:userId/orders', async (request) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const {
     role,
     status: statusFilter,

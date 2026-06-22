@@ -334,6 +334,7 @@ export default function WithdrawScreen() {
               payoutAccountId: payoutProfile.id,
               amountGbp,
               amountCurrency: 'GBP',
+              idempotencyKey: `payout_${currentUser.id}_${Date.now()}`,
               metadata: {
                 source: 'withdraw_screen_request',
                 enteredDisplayAmount: numericAmountDisplay,
@@ -345,6 +346,7 @@ export default function WithdrawScreen() {
               payoutAccountId: payoutProfile.id,
               amount: payoutAmount,
               amountCurrency: payoutCurrency,
+              idempotencyKey: `payout_${currentUser.id}_${Date.now()}`,
               metadata: {
                 source: 'withdraw_screen_request',
                 enteredDisplayAmount: numericAmountDisplay,

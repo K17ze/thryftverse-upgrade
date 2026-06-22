@@ -368,6 +368,7 @@ export async function createPayoutRequest(
     amountGbp?: number;
     amount?: number;
     amountCurrency?: string;
+    idempotencyKey?: string;
     metadata?: Record<string, unknown>;
   }
 ) {
@@ -381,6 +382,7 @@ export async function createPayoutRequest(
         amountGbp: input.amountGbp,
         amount: input.amount,
         amountCurrency: input.amountCurrency ?? 'GBP',
+        idempotencyKey: input.idempotencyKey,
         metadata: input.metadata,
       }),
     }
