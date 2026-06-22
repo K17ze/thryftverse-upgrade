@@ -716,7 +716,13 @@ export default function HomeScreen() {
               accessibilityHint="Opens notifications center"
             >
               <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
-              {/* Phase 3: Removed notification badge - less visual clutter */}
+              {notificationCount > 0 && (
+                <View style={styles.notificationBadge} pointerEvents="none">
+                  <Text style={styles.notificationBadgeText}>
+                    {notificationCount > 99 ? '99+' : notificationCount}
+                  </Text>
+                </View>
+              )}
             </AnimatedPressable>
           </View>
         </View>
@@ -916,6 +922,26 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     ...Elevation.subtle, // ELEVATED: Subtle shadow
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: Colors.background,
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    lineHeight: 12,
   },
   feedContent: {
     paddingBottom: 120,

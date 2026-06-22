@@ -41,6 +41,8 @@ import { getStoredProfileMedia } from './src/preferences/profileMediaPreferences
 import { getStoredAuthSnapshot } from './src/preferences/authSnapshot';
 import type { RootStackParamList } from './src/navigation/types';
 import { extractGroupInviteToken } from './src/utils/groupInviteLink';
+import { usePushNotificationTap } from './src/hooks/usePushNotificationTap';
+import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCount';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Keep app startup resilient even if splash API rejects.
@@ -89,6 +91,9 @@ export default function App() {
   const [, setThemeTick] = React.useState(0);
   const isAuthenticated = useStore((state) => state.isAuthenticated);
   const upsertConversation = useStore((state) => state.upsertConversation);
+
+  usePushNotificationTap();
+  useUnreadNotificationCount();
 
   const [fontsLoaded, fontLoadError] = useFonts({
     Inter_300Light,

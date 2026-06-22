@@ -13,7 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
-import { deactivateNotificationDevice, registerNotificationDevice } from '../services/notificationsApi';
+import { deactivateNotificationDevice, registerNotificationDevice, getNotificationPreferences, updateNotificationPreferences, listNotificationDevices } from '../services/notificationsApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Typography } from '../theme/designTokens';
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -46,6 +46,32 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       .catch(() => setPushPermissionStatus(null));
   }, []);
 
+  React.useEffect(() => {
+    void (async () => {
+      try {
+        const serverPrefs = await getNotificationPreferences();
+        for (const [key, enabled] of Object.entries(serverPrefs)) {
+          if (toggles[key] !== undefined && toggles[key] !== enabled) {
+            setPushNotificationToggle(key, enabled);
+          }
+        }
+      } catch {
+        // best-effort
+      }
+      try {
+        const devices = await listNotificationDevices();
+        const activeDevice = devices.find((d) => d.isActive);
+        if (activeDevice) {
+          setRegisteredToken(activeDevice.token);
+          setIsDeviceRegistered(true);
+        }
+      } catch {
+        // best-effort
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const resolvePushPlatform = React.useCallback((): 'ios' | 'android' | 'web' => {
     if (Platform.OS === 'ios') return 'ios';
     if (Platform.OS === 'android') return 'android';
@@ -60,10 +86,6 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   }, []);
 
   const ensureDeviceRegistration = React.useCallback(async () => {
-    if (!currentUser?.id) {
-      show('Please sign in to enable push notifications.', 'error');
-      return;
-    }
     setIsSyncingDevice(true);
     try {
       const permission = await Notifications.getPermissionsAsync();
@@ -82,7 +104,6 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         : await Notifications.getExpoPushTokenAsync();
       const token = tokenResponse.data;
       await registerNotificationDevice({
-        userId: currentUser.id,
         token,
         platform: resolvePushPlatform(),
         appVersion: (Constants.expoConfig as { version?: string } | null)?.version,
@@ -97,7 +118,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     } finally {
       setIsSyncingDevice(false);
     }
-  }, [currentUser?.id, enabledCount, resolveProjectId, resolvePushPlatform, show]);
+  }, [enabledCount, resolveProjectId, resolvePushPlatform, show]);
 
   const disableDeviceRegistration = React.useCallback(async () => {
     if (!registeredToken) {
@@ -122,6 +143,11 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const toggle = async (key: string) => {
     const nextEnabled = !toggles[key];
     setPushNotificationToggle(key, nextEnabled);
+    try {
+      await updateNotificationPreferences({ [key]: nextEnabled });
+    } catch {
+      // best-effort server sync
+    }
     const nextCount = nextEnabled ? enabledCount + 1 : enabledCount - 1;
     if (nextCount === 1 && nextEnabled && !isDeviceRegistered) {
       await ensureDeviceRegistration();
@@ -134,6 +160,15 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const handleToggleAll = React.useCallback(async () => {
     const shouldEnableAll = enabledCount !== pushTotalCount;
     setAllPushNotificationToggles(shouldEnableAll);
+    try {
+      const allPrefs: Record<string, boolean> = {};
+      for (const item of NOTIFICATIONS) {
+        allPrefs[item.key] = shouldEnableAll;
+      }
+      await updateNotificationPreferences(allPrefs);
+    } catch {
+      // best-effort server sync
+    }
     if (shouldEnableAll && !isDeviceRegistered) {
       await ensureDeviceRegistration();
     }

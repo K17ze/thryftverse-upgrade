@@ -783,6 +783,18 @@ function statusCodeForApiError(code: string): number {
     return 409;
   }
 
+  if (code === 'NOTIFICATION_ACCESS_DENIED') {
+    return 403;
+  }
+
+  if (code === 'NOTIFICATION_NOT_FOUND') {
+    return 404;
+  }
+
+  if (code === 'INVALID_NOTIFICATION_CURSOR' || code === 'INVALID_PREFERENCE_CATEGORY') {
+    return 400;
+  }
+
   if (code.endsWith('_NOT_FOUND') || code === 'USER_NOT_FOUND') {
     return 404;
   }
@@ -6505,28 +6517,64 @@ const recommendationPayloadSchema = z.object({
   ),
 });
 
+const NOTIFICATION_EVENT_TYPES = [
+  'order_created', 'order_paid', 'order_cancelled', 'order_dispatched',
+  'order_in_transit', 'order_out_for_delivery', 'order_delivered',
+  'order_refunded', 'resolution_opened', 'resolution_status_changed',
+  'review_received', 'chat_message', 'payout_processed', 'refund_completed',
+  'generic',
+] as const;
+type NotificationEventType = typeof NOTIFICATION_EVENT_TYPES[number];
+
+const NOTIFICATION_PUSH_CATEGORIES = [
+  'messages', 'offers', 'wishlist', 'followers', 'orderUpdates', 'priceDrops', 'news',
+] as const;
+type NotificationPushCategory = typeof NOTIFICATION_PUSH_CATEGORIES[number];
+
+function mapEventToPushCategory(eventType: string): NotificationPushCategory | null {
+  if (eventType === 'chat_message') return 'messages';
+  if (eventType.startsWith('order_')) return 'orderUpdates';
+  if (eventType === 'review_received') return 'orderUpdates';
+  if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orderUpdates';
+  if (eventType === 'payout_processed' || eventType === 'refund_completed') return 'orderUpdates';
+  return null;
+}
+
 async function queueUserNotification(input: {
   userId: string;
   title: string;
   body: string;
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
-}): Promise<string> {
+  eventType?: string;
+  actorUserId?: string;
+  imageUrl?: string;
+  route?: Record<string, unknown>;
+  idempotencyKey?: string;
+}): Promise<string | null> {
+  const eventType = input.eventType ?? 'generic';
+  const idempotencyKey = input.idempotencyKey ?? null;
+
+  if (idempotencyKey) {
+    const existing = await db.query<{ id: string }>(
+      `SELECT id FROM notification_events WHERE user_id = $1 AND idempotency_key = $2 LIMIT 1`,
+      [input.userId, idempotencyKey]
+    );
+    if (existing.rowCount) {
+      return existing.rows[0].id;
+    }
+  }
+
   const eventId = createRuntimeId('notif');
 
   await db.query(
     `
       INSERT INTO notification_events (
-        id,
-        user_id,
-        channel,
-        title,
-        body,
-        payload,
-        status,
-        metadata
+        id, user_id, channel, title, body, payload, status, metadata,
+        event_type, actor_user_id, image_url, route, idempotency_key
       )
-      VALUES ($1, $2, 'push', $3, $4, $5::jsonb, 'queued', $6::jsonb)
+      VALUES ($1, $2, 'push', $3, $4, $5::jsonb, 'queued', $6::jsonb, $7, $8, $9, $10::jsonb, $11)
+      ON CONFLICT DO NOTHING
     `,
     [
       eventId,
@@ -6535,16 +6583,35 @@ async function queueUserNotification(input: {
       input.body,
       toJsonString(input.payload ?? {}),
       toJsonString(input.metadata ?? {}),
+      eventType,
+      input.actorUserId ?? null,
+      input.imageUrl ?? null,
+      toJsonString(input.route ?? {}),
+      idempotencyKey,
     ]
   );
 
-  await enqueuePushNotificationJob({
-    eventId,
-    userId: input.userId,
-    title: input.title,
-    body: input.body,
-    payload: input.payload,
-  });
+  const pushCategory = mapEventToPushCategory(eventType);
+  let shouldPush = true;
+  if (pushCategory) {
+    const prefResult = await db.query<{ enabled: boolean }>(
+      `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+      [input.userId, pushCategory]
+    );
+    if (prefResult.rowCount && !prefResult.rows[0].enabled) {
+      shouldPush = false;
+    }
+  }
+
+  if (shouldPush) {
+    await enqueuePushNotificationJob({
+      eventId,
+      userId: input.userId,
+      title: input.title,
+      body: input.body,
+      payload: input.payload,
+    });
+  }
 
   recordPushDelivery({
     provider: 'expo',
@@ -6559,6 +6626,10 @@ async function queueUserNotification(input: {
       id: eventId,
       title: input.title,
       body: input.body,
+      eventType,
+      actorUserId: input.actorUserId ?? null,
+      imageUrl: input.imageUrl ?? null,
+      route: input.route ?? null,
       ...input.payload,
     },
   });
@@ -6610,10 +6681,13 @@ async function queueCommercePaymentNotifications(input: {
       userId: order.buyer_id,
       title: 'Payment confirmed',
       body: `Payment confirmed for ${listingTitle}`,
+      eventType: 'order_paid',
       payload: {
         event: 'order_payment_succeeded',
         orderId: order.id,
       },
+      route: { screen: 'OrderDetail', params: { orderId: order.id } },
+      idempotencyKey: `order_paid_buyer_${order.id}`,
       metadata: {
         source: input.source,
       },
@@ -6627,11 +6701,15 @@ async function queueCommercePaymentNotifications(input: {
       userId: order.seller_id,
       title: 'New order',
       body: 'New order! Print the shipping label',
+      eventType: 'order_created',
+      actorUserId: order.buyer_id,
       payload: {
         event: 'order_payment_succeeded_seller',
         orderId: order.id,
         shippingLabelUrl: order.shipping_label_url,
       },
+      route: { screen: 'OrderDetail', params: { orderId: order.id } },
+      idempotencyKey: `order_created_seller_${order.id}`,
       metadata: {
         source: input.source,
       },
@@ -6646,11 +6724,15 @@ async function queueCommercePaymentNotifications(input: {
         userId: order.buyer_id,
         title: 'Shipment created',
         body: 'Your order is on its way!',
+        eventType: 'order_dispatched',
+        actorUserId: order.seller_id,
         payload: {
           event: 'order_shipment_created',
           orderId: order.id,
           trackingNumber: order.tracking_number,
         },
+        route: { screen: 'OrderDetail', params: { orderId: order.id } },
+        idempotencyKey: `order_dispatched_buyer_${order.id}`,
         metadata: {
           source: input.source,
         },
@@ -6677,12 +6759,15 @@ async function queueCommerceParcelSettlementNotifications(input: {
         userId: input.buyerId,
         title: 'Order delivered',
         body: 'Your order has been delivered',
+        eventType: 'order_delivered',
         payload: {
           event: 'order_delivered',
           orderId: input.orderId,
           provider: input.provider,
           eventType: input.eventType,
         },
+        route: { screen: 'OrderDetail', params: { orderId: input.orderId } },
+        idempotencyKey: `order_delivered_buyer_${input.orderId}`,
         metadata: {
           source: input.source,
         },
@@ -6698,6 +6783,7 @@ async function queueCommerceParcelSettlementNotifications(input: {
         userId: input.sellerId,
         title: 'Escrow released',
         body: `${formatGbpAmount(input.sellerPayableReleasedGbp)} released to your balance`,
+        eventType: 'payout_processed',
         payload: {
           event: 'order_escrow_released',
           orderId: input.orderId,
@@ -6705,6 +6791,8 @@ async function queueCommerceParcelSettlementNotifications(input: {
           provider: input.provider,
           eventType: input.eventType,
         },
+        route: { screen: 'Wallet' },
+        idempotencyKey: `escrow_released_seller_${input.orderId}`,
         metadata: {
           source: input.source,
         },
@@ -6728,11 +6816,14 @@ async function queuePayoutProcessedNotification(input: {
       userId: input.payoutRequest.userId,
       title: 'Payout processed',
       body: `${formatGbpAmount(input.payoutRequest.amountGbp)} sent to your bank`,
+      eventType: 'payout_processed',
       payload: {
         event: 'payout_processed',
         payoutRequestId: input.payoutRequest.id,
         amountGbp: input.payoutRequest.amountGbp,
       },
+      route: { screen: 'BalanceHistory' },
+      idempotencyKey: `payout_processed_${input.payoutRequest.id}`,
       metadata: {
         source: input.source,
       },
@@ -6756,11 +6847,14 @@ async function queueRefundCompletedNotification(input: {
       userId: input.userId,
       title: 'Refund completed',
       body: `${formatGbpAmount(input.amountGbp)} refunded`,
+      eventType: 'refund_completed',
       payload: {
         event: 'refund_completed',
         amountGbp: roundTo(input.amountGbp, 2),
         orderId: input.orderId ?? null,
       },
+      route: input.orderId ? { screen: 'OrderDetail', params: { orderId: input.orderId } } : undefined,
+      idempotencyKey: input.orderId ? `refund_completed_${input.userId}_${input.orderId}` : undefined,
       metadata: {
         source: input.source,
       },
@@ -15138,8 +15232,13 @@ app.get('/realtime/stream', async (request, reply) => {
 });
 
 app.post('/notifications/devices/register', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
   const bodySchema = z.object({
-    userId: z.string().min(2),
     token: z.string().min(16).max(4096),
     provider: z.enum(['expo']).default('expo'),
     platform: z.enum(['ios', 'android', 'web']),
@@ -15148,7 +15247,6 @@ app.post('/notifications/devices/register', async (request, reply) => {
   });
 
   const payload = bodySchema.parse(request.body ?? {});
-  await ensureUserExists(payload.userId);
 
   const result = await db.query<{
     id: number;
@@ -15186,7 +15284,7 @@ app.post('/notifications/devices/register', async (request, reply) => {
       RETURNING id, user_id, provider, platform, token, is_active, app_version, created_at, last_seen_at
     `,
     [
-      payload.userId,
+      authUserId,
       payload.provider,
       payload.platform,
       payload.token,
@@ -15209,6 +15307,43 @@ app.post('/notifications/devices/register', async (request, reply) => {
       createdAt: result.rows[0].created_at,
       lastSeenAt: result.rows[0].last_seen_at,
     },
+  };
+});
+
+app.get('/notifications/devices', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const result = await db.query<{
+    id: number;
+    provider: string;
+    platform: string;
+    token: string;
+    is_active: boolean;
+    app_version: string | null;
+    created_at: string;
+    last_seen_at: string;
+  }>(
+    `SELECT id, provider, platform, token, is_active, app_version, created_at, last_seen_at
+     FROM notification_devices WHERE user_id = $1 ORDER BY last_seen_at DESC`,
+    [authUserId]
+  );
+
+  return {
+    ok: true,
+    devices: result.rows.map((row) => ({
+      id: row.id,
+      provider: row.provider,
+      platform: row.platform,
+      token: row.token,
+      isActive: row.is_active,
+      appVersion: row.app_version,
+      createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at,
+    })),
   };
 });
 
@@ -15249,13 +15384,32 @@ app.delete('/notifications/devices/:token', async (request, reply) => {
   };
 });
 
-app.get('/notifications/events', async (request) => {
+app.get('/notifications/events', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
   const querySchema = z.object({
-    userId: z.string().min(2),
     limit: z.coerce.number().int().min(1).max(120).default(30),
+    cursor: z.string().optional(),
   });
 
-  const { userId, limit } = querySchema.parse(request.query);
+  const { limit, cursor } = querySchema.parse(request.query);
+
+  let cursorCondition = '';
+  const params: (string | number)[] = [authUserId, limit];
+  if (cursor) {
+    const decoded = Buffer.from(cursor, 'base64').toString('utf-8');
+    const [cursorTs, cursorId] = decoded.split('|');
+    if (!cursorTs || !cursorId) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid cursor format', code: 'INVALID_NOTIFICATION_CURSOR' };
+    }
+    cursorCondition = `AND (created_at, id) < ($3::timestamptz, $4)`;
+    params.push(cursorTs, cursorId);
+  }
 
   const result = await db.query<{
     id: string;
@@ -15269,6 +15423,11 @@ app.get('/notifications/events', async (request) => {
     provider_error: string | null;
     created_at: string;
     sent_at: string | null;
+    event_type: string;
+    actor_user_id: string | null;
+    read_at: string | null;
+    image_url: string | null;
+    route: Record<string, unknown> | null;
   }>(
     `
       SELECT
@@ -15282,46 +15441,180 @@ app.get('/notifications/events', async (request) => {
         provider_message_id,
         provider_error,
         created_at::text,
-        sent_at::text
+        sent_at::text,
+        event_type,
+        actor_user_id,
+        read_at::text,
+        image_url,
+        route
       FROM notification_events
       WHERE user_id = $1
-      ORDER BY created_at DESC
+      ${cursorCondition}
+      ORDER BY created_at DESC, id DESC
       LIMIT $2
     `,
-    [userId, limit]
+    params
+  );
+
+  const items = result.rows.map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    channel: row.channel,
+    title: row.title,
+    body: row.body,
+    payload: row.payload,
+    status: row.status,
+    providerMessageId: row.provider_message_id,
+    providerError: row.provider_error,
+    createdAt: row.created_at,
+    sentAt: row.sent_at,
+    eventType: row.event_type,
+    actorUserId: row.actor_user_id,
+    readAt: row.read_at,
+    imageUrl: row.image_url,
+    route: row.route,
+  }));
+
+  let nextCursor: string | null = null;
+  if (items.length === limit && items.length > 0) {
+    const last = items[items.length - 1];
+    nextCursor = Buffer.from(`${last.createdAt}|${last.id}`).toString('base64');
+  }
+
+  return {
+    ok: true,
+    items,
+    nextCursor,
+  };
+});
+
+app.get('/notifications/unread-count', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const result = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM notification_events WHERE user_id = $1 AND read_at IS NULL`,
+    [authUserId]
   );
 
   return {
     ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      userId: row.user_id,
-      channel: row.channel,
-      title: row.title,
-      body: row.body,
-      payload: row.payload,
-      status: row.status,
-      providerMessageId: row.provider_message_id,
-      providerError: row.provider_error,
-      createdAt: row.created_at,
-      sentAt: row.sent_at,
-    })),
+    unreadCount: parseInt(result.rows[0].count, 10) || 0,
   };
 });
 
-app.post('/notifications/push/test', async (request, reply) => {
+app.post('/notifications/events/:eventId/read', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const paramsSchema = z.object({ eventId: z.string().min(4).max(128) });
+  const { eventId } = paramsSchema.parse(request.params);
+
+  const updated = await db.query(
+    `UPDATE notification_events SET read_at = NOW() WHERE id = $1 AND user_id = $2 AND read_at IS NULL RETURNING id`,
+    [eventId, authUserId]
+  );
+
+  if (!updated.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Notification not found or already read', code: 'NOTIFICATION_NOT_FOUND' };
+  }
+
+  return { ok: true };
+});
+
+app.post('/notifications/read-all', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  await db.query(
+    `UPDATE notification_events SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL`,
+    [authUserId]
+  );
+
+  return { ok: true };
+});
+
+app.get('/notifications/preferences', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const result = await db.query<{ category: string; enabled: boolean }>(
+    `SELECT category, enabled FROM notification_preferences WHERE user_id = $1 ORDER BY category`,
+    [authUserId]
+  );
+
+  const preferences: Record<string, boolean> = {};
+  for (const cat of NOTIFICATION_PUSH_CATEGORIES) {
+    const row = result.rows.find((r) => r.category === cat);
+    preferences[cat] = row ? row.enabled : true;
+  }
+
+  return { ok: true, preferences };
+});
+
+app.put('/notifications/preferences', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
   const bodySchema = z.object({
-    userId: z.string().min(2),
+    preferences: z.record(z.boolean()),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  for (const [category, enabled] of Object.entries(payload.preferences)) {
+    if (!NOTIFICATION_PUSH_CATEGORIES.includes(category as NotificationPushCategory)) {
+      reply.code(400);
+      return { ok: false, error: `Invalid category: ${category}`, code: 'INVALID_PREFERENCE_CATEGORY' };
+    }
+
+    await db.query(
+      `
+        INSERT INTO notification_preferences (user_id, category, enabled, updated_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (user_id, category)
+        DO UPDATE SET enabled = $3, updated_at = NOW()
+      `,
+      [authUserId, category, enabled]
+    );
+  }
+
+  return { ok: true };
+});
+
+app.post('/notifications/push/test', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const bodySchema = z.object({
     title: z.string().min(2).max(160),
     body: z.string().min(2).max(500),
     payload: z.record(z.unknown()).optional(),
   });
 
   const payload = bodySchema.parse(request.body ?? {});
-  await ensureUserExists(payload.userId);
 
   const eventId = await queueUserNotification({
-    userId: payload.userId,
+    userId: authUserId,
     title: payload.title,
     body: payload.body,
     payload: payload.payload,
@@ -30069,6 +30362,31 @@ app.post('/support/tickets', async (request, reply) => {
     [ticketId, userId, payload.orderId, payload.topicId, payload.topicLabel, payload.details, evidenceUrls]
   );
 
+  const orderParties = await db.query<{ buyer_id: string; seller_id: string }>(
+    'SELECT buyer_id, seller_id FROM orders WHERE id = $1 LIMIT 1',
+    [payload.orderId]
+  );
+  if (orderParties.rows[0]) {
+    const otherPartyId = orderParties.rows[0].buyer_id === userId
+      ? orderParties.rows[0].seller_id
+      : orderParties.rows[0].buyer_id;
+    try {
+      await queueUserNotification({
+        userId: otherPartyId,
+        title: 'Support request opened',
+        body: `A support request was opened for order: ${payload.topicLabel}`,
+        eventType: 'resolution_opened',
+        actorUserId: userId,
+        payload: { ticketId, orderId: payload.orderId, topicLabel: payload.topicLabel },
+        route: { screen: 'SupportTicketDetail', params: { ticketId } },
+        idempotencyKey: `resolution_opened_${ticketId}`,
+        metadata: { source: 'support_ticket' },
+      });
+    } catch (notifErr) {
+      app.log.error({ err: notifErr, ticketId }, 'Failed to queue resolution_opened notification');
+    }
+  }
+
   reply.code(201);
   return {
     ok: true,
@@ -30202,6 +30520,28 @@ app.patch('/support/tickets/:ticketId/status', async (request, reply) => {
     return { ok: false, error: 'Ticket not found' };
   }
 
+  const ticketInfo = await db.query<{ user_id: string; order_id: string }>(
+    'SELECT user_id, order_id FROM support_tickets WHERE id = $1 LIMIT 1',
+    [ticketId]
+  );
+  if (ticketInfo.rows[0] && ticketInfo.rows[0].user_id !== userId) {
+    try {
+      await queueUserNotification({
+        userId: ticketInfo.rows[0].user_id,
+        title: 'Support request updated',
+        body: `Your support request status changed to: ${body.status}`,
+        eventType: 'resolution_status_changed',
+        actorUserId: userId,
+        payload: { ticketId, orderId: ticketInfo.rows[0].order_id, status: body.status },
+        route: { screen: 'SupportTicketDetail', params: { ticketId } },
+        idempotencyKey: `resolution_status_${ticketId}_${body.status}`,
+        metadata: { source: 'support_ticket' },
+      });
+    } catch (notifErr) {
+      app.log.error({ err: notifErr, ticketId }, 'Failed to queue resolution_status_changed notification');
+    }
+  }
+
   return { ok: true, ticketId, status: body.status };
 });
 
@@ -30317,6 +30657,24 @@ app.post('/orders/:orderId/review', async (request, reply) => {
      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
     [reviewId, orderId, userId, order.seller_id, body.rating, body.comment ?? null]
   );
+
+  try {
+    await queueUserNotification({
+      userId: order.seller_id,
+      title: 'New review received',
+      body: body.comment
+        ? `You received a ${body.rating}-star review: "${body.comment.slice(0, 80)}"`
+        : `You received a ${body.rating}-star review`,
+      eventType: 'review_received',
+      actorUserId: userId,
+      payload: { reviewId, orderId, rating: body.rating },
+      route: { screen: 'OrderDetail', params: { orderId } },
+      idempotencyKey: `review_received_${orderId}`,
+      metadata: { source: 'order_review' },
+    });
+  } catch (notifErr) {
+    app.log.error({ err: notifErr, reviewId }, 'Failed to queue review_received notification');
+  }
 
   reply.code(201);
   return {
