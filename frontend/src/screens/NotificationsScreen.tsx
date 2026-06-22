@@ -7,6 +7,7 @@ import {
   StyleSheet,
   StatusBar,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,8 +29,8 @@ import {
   listNotificationEvents,
   markNotificationRead,
   markAllNotificationsRead,
-  getUnreadCount,
 } from '../services/notificationsApi';
+import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { Space, Radius, Type } from '../theme/designTokens';
@@ -50,6 +51,9 @@ type NotificationCard = {
   payload: Record<string, unknown>;
   eventType: NotificationEventType;
   actorUserId: string | null;
+  actorUsername: string | null;
+  actorDisplayName: string | null;
+  actorAvatar: string | null;
   route: { screen: string; params?: Record<string, unknown> } | null;
 };
 
@@ -63,15 +67,15 @@ function getNotifIcon(type: NotificationCardType): { name: string; color: string
     case 'new_item':
       return { name: 'shirt-outline', color: Colors.textSecondary, bg: Colors.surfaceAlt };
     case 'like':
-      return { name: 'heart', color: '#e74c3c', bg: Colors.surfaceAlt };
+      return { name: 'heart', color: Colors.danger, bg: Colors.surfaceAlt };
     case 'review':
-      return { name: 'star', color: '#f1c40f', bg: Colors.surfaceAlt };
+      return { name: 'star', color: Colors.success, bg: Colors.surfaceAlt };
     case 'order':
       return { name: 'cube-outline', color: Colors.success, bg: Colors.surfaceAlt };
     case 'price':
       return { name: 'pricetag-outline', color: BRAND, bg: Colors.surfaceAlt };
     case 'resolution':
-      return { name: 'headset-outline', color: '#3498db', bg: Colors.surfaceAlt };
+      return { name: 'headset-outline', color: Colors.textSecondary, bg: Colors.surfaceAlt };
     default:
       return { name: 'notifications-outline', color: Colors.textMuted, bg: PANEL_ALT };
   }
@@ -157,6 +161,9 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     payload: event.payload,
     eventType: event.eventType,
     actorUserId: event.actorUserId,
+    actorUsername: event.actorUsername,
+    actorDisplayName: event.actorDisplayName,
+    actorAvatar: event.actorAvatar,
     route: event.route,
   };
 }
@@ -243,7 +250,11 @@ export default function NotificationsScreen() {
       setIsLoadingMore(true);
       try {
         const { items, nextCursor } = await listNotificationEvents({ limit: 30, cursor });
-        setNotifications((prev) => [...prev, ...items.map(mapEventToCard)]);
+        setNotifications((prev) => {
+          const existingIds = new Set(prev.map((n) => n.id));
+          const newItems = items.map(mapEventToCard).filter((n) => !existingIds.has(n.id));
+          return [...prev, ...newItems];
+        });
         setCursor(nextCursor);
         setHasMore(!!nextCursor);
       } catch {
@@ -258,16 +269,25 @@ export default function NotificationsScreen() {
   useFocusEffect(
     React.useCallback(() => {
       void syncNotifications();
-
-      const refreshInterval = setInterval(() => {
-        void syncNotifications({ silent: true });
-      }, 30_000);
-
-      return () => {
-        clearInterval(refreshInterval);
-      };
     }, [syncNotifications])
   );
+
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const { items, nextCursor } = await listNotificationEvents({ limit: 30 });
+      setNotifications(items.map(mapEventToCard));
+      setCursor(nextCursor);
+      setHasMore(!!nextCursor);
+      hasShownSyncErrorRef.current = false;
+    } catch {
+      hasShownSyncErrorRef.current = true;
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
 
   const sections = React.useMemo(() => groupNotifications(notifications), [notifications]);
   const hasUnread = React.useMemo(() => notifications.some((item) => !item.read), [notifications]);
@@ -278,57 +298,41 @@ export default function NotificationsScreen() {
       return;
     }
 
+    const previousNotifications = notifications;
     setNotifications((previous) => previous.map((item) => ({ ...item, read: true })));
     try {
       await markAllNotificationsRead();
       show('Marked all notifications as read', 'success');
     } catch {
+      setNotifications(previousNotifications);
       show('Failed to mark all as read', 'error');
     }
-  }, [hasUnread, show]);
+  }, [hasUnread, notifications, show]);
 
   const handleOpenNotification = React.useCallback(
     async (notification: NotificationCard) => {
       if (!notification.read) {
+        const previousRead = notification.read;
         setNotifications((previous) =>
           previous.map((item) => (item.id === notification.id ? { ...item, read: true } : item))
         );
         try {
           await markNotificationRead(notification.id);
         } catch {
-          // best-effort
+          setNotifications((previous) =>
+            previous.map((item) => (item.id === notification.id ? { ...item, read: previousRead } : item))
+          );
         }
       }
 
-      if (notification.route) {
-        const { screen, params } = notification.route;
-        if (screen === 'OrderDetail' && params?.orderId) {
-          navigation.navigate('OrderDetail', { orderId: String(params.orderId) });
-          return;
+      const route = resolveNotificationRoute(notification.route, notification.payload);
+      if (route) {
+        const params = 'params' in route ? route.params : undefined;
+        if (params) {
+          (navigation as any).navigate(route.screen, params);
+        } else {
+          (navigation as any).navigate(route.screen);
         }
-        if (screen === 'SupportTicketDetail' && params?.ticketId) {
-          (navigation as any).navigate('SupportTicketDetail', { ticketId: String(params.ticketId) });
-          return;
-        }
-        if (screen === 'Wallet') {
-          (navigation as any).navigate('Wallet');
-          return;
-        }
-        if (screen === 'BalanceHistory') {
-          (navigation as any).navigate('BalanceHistory');
-          return;
-        }
-      }
-
-      const orderId = typeof notification.payload.orderId === 'string' ? notification.payload.orderId : null;
-      if (orderId) {
-        navigation.navigate('OrderDetail', { orderId });
-        return;
-      }
-
-      const listingId = typeof notification.payload.listingId === 'string' ? notification.payload.listingId : null;
-      if (listingId) {
-        navigation.push('ItemDetail', { itemId: listingId });
         return;
       }
 
@@ -357,6 +361,14 @@ export default function NotificationsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         stickySectionHeadersEnabled={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.brand}
+            colors={[Colors.brand]}
+          />
+        }
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
         renderSectionHeader={({ section: { title } }) => (
@@ -366,8 +378,7 @@ export default function NotificationsScreen() {
           const icon = getNotifIcon(item.type);
           const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
           const actorUserId = item.actorUserId ?? getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
-          const actorUser = null as any;
-          const actorHandle = actorUser?.username ?? actorUserId;
+          const actorHandle = item.actorUsername ?? actorUserId ?? null;
 
           return (
             <Reanimated.View
@@ -422,7 +433,7 @@ export default function NotificationsScreen() {
                       accessibilityHint="Shows sender profile details"
                     >
                       <AvatarRing
-                        uri={actorUser?.avatar}
+                        uri={item.actorAvatar ?? undefined}
                         size={28}
                         isUnread={!item.read}
                       />

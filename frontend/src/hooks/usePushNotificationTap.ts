@@ -1,95 +1,98 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import * as Notifications from 'expo-notifications';
 import { createNavigationContainerRef } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
+import { extractRouteFromPushData, resolveNotificationRoute, type ResolvedRoute } from '../utils/notificationRouting';
+import { useStore } from '../store/useStore';
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 export { navigationRef as pushNavigationRef };
 
-interface NotificationRouteData {
-  screen?: string;
-  params?: Record<string, unknown>;
-}
+let pendingRoute: ResolvedRoute = null;
+let navigationReady = false;
 
-function extractRouteFromNotification(notification: Notifications.Notification): NotificationRouteData | null {
-  const data = notification.request.content.data as Record<string, unknown> | undefined;
-  if (!data) return null;
-
-  const route = data.route as Record<string, unknown> | undefined;
-  if (route && typeof route.screen === 'string') {
-    return { screen: route.screen, params: route.params as Record<string, unknown> | undefined };
-  }
-
-  const orderId = typeof data.orderId === 'string' ? data.orderId : null;
-  if (orderId) {
-    return { screen: 'OrderDetail', params: { orderId } };
-  }
-
-  const listingId = typeof data.listingId === 'string' ? data.listingId : null;
-  if (listingId) {
-    return { screen: 'ItemDetail', params: { itemId: listingId } };
-  }
-
-  const ticketId = typeof data.ticketId === 'string' ? data.ticketId : null;
-  if (ticketId) {
-    return { screen: 'SupportTicketDetail', params: { ticketId } };
-  }
-
-  return null;
-}
-
-function navigateToRoute(route: NotificationRouteData) {
+function flushPendingRoute() {
+  if (pendingRoute === null) return;
   if (!navigationRef.isReady()) return;
 
-  const { screen, params } = route;
+  const route = pendingRoute;
+  pendingRoute = null;
 
-  if (screen === 'OrderDetail' && params?.orderId) {
-    navigationRef.navigate('OrderDetail', { orderId: String(params.orderId) });
-  } else if (screen === 'ItemDetail' && params?.itemId) {
-    navigationRef.navigate('ItemDetail', { itemId: String(params.itemId) });
-  } else if (screen === 'SupportTicketDetail' && params?.ticketId) {
-    (navigationRef as any).navigate('SupportTicketDetail', { ticketId: String(params.ticketId) });
-  } else if (screen === 'Wallet') {
-    (navigationRef as any).navigate('Wallet');
-  } else if (screen === 'BalanceHistory') {
-    (navigationRef as any).navigate('BalanceHistory');
-  } else if (screen === 'NotificationsList') {
+  if (route === null) {
     navigationRef.navigate('NotificationsList');
-  } else {
-    (navigationRef as any).navigate(screen, params);
+    return;
   }
+
+  const screen = route.screen;
+  const params = 'params' in route ? route.params : undefined;
+  if (params) {
+    (navigationRef as any).navigate(screen, params);
+  } else {
+    (navigationRef as any).navigate(screen);
+  }
+}
+
+export function setNavigationReady(ready: boolean) {
+  navigationReady = ready;
+  if (ready) {
+    flushPendingRoute();
+  }
+}
+
+export function getNavigationReady(): boolean {
+  return navigationReady;
+}
+
+function queueRoute(route: ResolvedRoute) {
+  pendingRoute = route;
+  if (navigationRef.isReady()) {
+    flushPendingRoute();
+  }
+}
+
+function handleNotificationResponse(response: Notifications.NotificationResponse) {
+  const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+  const route = extractRouteFromPushData(data);
+  queueRoute(route);
 }
 
 export function usePushNotificationTap() {
   const responseListenerRef = useRef<Notifications.EventSubscription | null>(null);
   const receivedListenerRef = useRef<Notifications.EventSubscription | null>(null);
+  const setNotificationCount = useStore((state) => state.setNotificationCount);
+  const notificationCount = useStore((state) => state.notificationCount);
+  const isAuthenticated = useStore((state) => state.isAuthenticated);
+
+  const handleForegroundNotification = useCallback(() => {
+    if (isAuthenticated) {
+      setNotificationCount(notificationCount + 1);
+    }
+  }, [isAuthenticated, notificationCount, setNotificationCount]);
 
   useEffect(() => {
-    // Handle notification received while app is foregrounded
     receivedListenerRef.current = Notifications.addNotificationReceivedListener(() => {
-      // Could trigger a refetch of unread count or show an in-app banner
+      handleForegroundNotification();
     });
 
-    // Handle notification tap (user taps notification to open app)
     responseListenerRef.current = Notifications.addNotificationResponseReceivedListener((response) => {
-      const route = extractRouteFromNotification(response.notification);
-      if (route) {
-        // Small delay to allow navigation container to be ready
-        setTimeout(() => navigateToRoute(route), 100);
-      } else {
-        // Default to notifications list
-        setTimeout(() => {
-          if (navigationRef.isReady()) {
-            navigationRef.navigate('NotificationsList');
-          }
-        }, 100);
-      }
+      handleNotificationResponse(response);
     });
+
+    Notifications.getLastNotificationResponseAsync()
+      .then((lastResponse) => {
+        if (lastResponse) {
+          handleNotificationResponse(lastResponse);
+        }
+      })
+      .catch(() => {});
 
     return () => {
       receivedListenerRef.current?.remove();
       responseListenerRef.current?.remove();
     };
-  }, []);
+  }, [handleForegroundNotification]);
 }
+
+export { resolveNotificationRoute, extractRouteFromPushData };
+export type { ResolvedRoute };

@@ -146,7 +146,9 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     try {
       await updateNotificationPreferences({ [key]: nextEnabled });
     } catch {
-      // best-effort server sync
+      setPushNotificationToggle(key, !nextEnabled);
+      show('Failed to update push preference. Please try again.', 'error');
+      return;
     }
     const nextCount = nextEnabled ? enabledCount + 1 : enabledCount - 1;
     if (nextCount === 1 && nextEnabled && !isDeviceRegistered) {
@@ -159,6 +161,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
 
   const handleToggleAll = React.useCallback(async () => {
     const shouldEnableAll = enabledCount !== pushTotalCount;
+    const previousToggles = { ...toggles };
     setAllPushNotificationToggles(shouldEnableAll);
     try {
       const allPrefs: Record<string, boolean> = {};
@@ -167,7 +170,11 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       }
       await updateNotificationPreferences(allPrefs);
     } catch {
-      // best-effort server sync
+      for (const [key, value] of Object.entries(previousToggles)) {
+        setPushNotificationToggle(key, value);
+      }
+      show('Failed to update push preferences. Please try again.', 'error');
+      return;
     }
     if (shouldEnableAll && !isDeviceRegistered) {
       await ensureDeviceRegistration();

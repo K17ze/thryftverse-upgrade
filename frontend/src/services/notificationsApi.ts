@@ -77,6 +77,9 @@ export interface NotificationEvent {
   sentAt: string | null;
   eventType: NotificationEventType;
   actorUserId: string | null;
+  actorUsername: string | null;
+  actorDisplayName: string | null;
+  actorAvatar: string | null;
   readAt: string | null;
   imageUrl: string | null;
   route: NotificationRoute | null;

@@ -9,6 +9,9 @@ export interface PushJobData {
   title: string;
   body: string;
   payload?: Record<string, unknown>;
+  eventType?: string;
+  actorUserId?: string | null;
+  route?: Record<string, unknown> | null;
 }
 
 export interface AuctionSweepJobData {

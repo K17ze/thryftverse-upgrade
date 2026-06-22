@@ -41,7 +41,7 @@ import { getStoredProfileMedia } from './src/preferences/profileMediaPreferences
 import { getStoredAuthSnapshot } from './src/preferences/authSnapshot';
 import type { RootStackParamList } from './src/navigation/types';
 import { extractGroupInviteToken } from './src/utils/groupInviteLink';
-import { usePushNotificationTap } from './src/hooks/usePushNotificationTap';
+import { usePushNotificationTap, setNavigationReady } from './src/hooks/usePushNotificationTap';
 import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCount';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -388,6 +388,8 @@ export default function App() {
                         ref={navigationRef}
                         theme={premiumNavigationTheme}
                         onReady={() => {
+                          setNavigationReady(true);
+
                           if (!queuedConversationId) {
                             return;
                           }

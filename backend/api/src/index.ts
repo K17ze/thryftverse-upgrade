@@ -6554,27 +6554,21 @@ async function queueUserNotification(input: {
 }): Promise<string | null> {
   const eventType = input.eventType ?? 'generic';
   const idempotencyKey = input.idempotencyKey ?? null;
-
-  if (idempotencyKey) {
-    const existing = await db.query<{ id: string }>(
-      `SELECT id FROM notification_events WHERE user_id = $1 AND idempotency_key = $2 LIMIT 1`,
-      [input.userId, idempotencyKey]
-    );
-    if (existing.rowCount) {
-      return existing.rows[0].id;
-    }
-  }
-
   const eventId = createRuntimeId('notif');
 
-  await db.query(
+  // Atomic idempotent insertion: INSERT ... ON CONFLICT ... RETURNING
+  // Determines whether this invocation actually inserted a new event.
+  const insertResult = await db.query<{ id: string }>(
     `
       INSERT INTO notification_events (
         id, user_id, channel, title, body, payload, status, metadata,
         event_type, actor_user_id, image_url, route, idempotency_key
       )
       VALUES ($1, $2, 'push', $3, $4, $5::jsonb, 'queued', $6::jsonb, $7, $8, $9, $10::jsonb, $11)
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (user_id, idempotency_key)
+      WHERE idempotency_key IS NOT NULL
+      DO NOTHING
+      RETURNING id
     `,
     [
       eventId,
@@ -6591,6 +6585,22 @@ async function queueUserNotification(input: {
     ]
   );
 
+  // If no row was returned, a concurrent insert won the race.
+  // Return the existing event ID without enqueuing push or publishing realtime.
+  if (!insertResult.rowCount) {
+    if (idempotencyKey) {
+      const existing = await db.query<{ id: string }>(
+        `SELECT id FROM notification_events WHERE user_id = $1 AND idempotency_key = $2 LIMIT 1`,
+        [input.userId, idempotencyKey]
+      );
+      return existing.rows[0]?.id ?? null;
+    }
+    return null;
+  }
+
+  const insertedEventId = insertResult.rows[0].id;
+
+  // Push preference check
   const pushCategory = mapEventToPushCategory(eventType);
   let shouldPush = true;
   if (pushCategory) {
@@ -6605,11 +6615,14 @@ async function queueUserNotification(input: {
 
   if (shouldPush) {
     await enqueuePushNotificationJob({
-      eventId,
+      eventId: insertedEventId,
       userId: input.userId,
       title: input.title,
       body: input.body,
       payload: input.payload,
+      eventType,
+      actorUserId: input.actorUserId ?? null,
+      route: input.route ?? null,
     });
   }
 
@@ -6623,7 +6636,7 @@ async function queueUserNotification(input: {
     type: 'notification.queued',
     userId: input.userId,
     payload: {
-      id: eventId,
+      id: insertedEventId,
       title: input.title,
       body: input.body,
       eventType,
@@ -6634,7 +6647,7 @@ async function queueUserNotification(input: {
     },
   });
 
-  return eventId;
+  return insertedEventId;
 }
 
 function formatGbpAmount(amountGbp: number): string {
@@ -6870,6 +6883,9 @@ async function processPushQueueJob(job: {
   title: string;
   body: string;
   payload?: Record<string, unknown>;
+  eventType?: string;
+  actorUserId?: string | null;
+  route?: Record<string, unknown> | null;
 }): Promise<void> {
   const devicesResult = await db.query<{
     token: string;
@@ -6922,6 +6938,9 @@ async function processPushQueueJob(job: {
           data: {
             ...(job.payload ?? {}),
             eventId: job.eventId,
+            eventType: job.eventType ?? 'generic',
+            actorUserId: job.actorUserId ?? null,
+            route: job.route ?? null,
           },
         }),
       });
@@ -15428,29 +15447,36 @@ app.get('/notifications/events', async (request, reply) => {
     read_at: string | null;
     image_url: string | null;
     route: Record<string, unknown> | null;
+    actor_username: string | null;
+    actor_display_name: string | null;
+    actor_avatar: string | null;
   }>(
     `
       SELECT
-        id,
-        user_id,
-        channel,
-        title,
-        body,
-        payload,
-        status,
-        provider_message_id,
-        provider_error,
-        created_at::text,
-        sent_at::text,
-        event_type,
-        actor_user_id,
-        read_at::text,
-        image_url,
-        route
-      FROM notification_events
-      WHERE user_id = $1
+        ne.id,
+        ne.user_id,
+        ne.channel,
+        ne.title,
+        ne.body,
+        ne.payload,
+        ne.status,
+        ne.provider_message_id,
+        ne.provider_error,
+        ne.created_at::text,
+        ne.sent_at::text,
+        ne.event_type,
+        ne.actor_user_id,
+        ne.read_at::text,
+        ne.image_url,
+        ne.route,
+        u.username AS actor_username,
+        u.display_name AS actor_display_name,
+        u.avatar AS actor_avatar
+      FROM notification_events ne
+      LEFT JOIN users u ON u.id = ne.actor_user_id
+      WHERE ne.user_id = $1
       ${cursorCondition}
-      ORDER BY created_at DESC, id DESC
+      ORDER BY ne.created_at DESC, ne.id DESC
       LIMIT $2
     `,
     params
@@ -15470,6 +15496,9 @@ app.get('/notifications/events', async (request, reply) => {
     sentAt: row.sent_at,
     eventType: row.event_type,
     actorUserId: row.actor_user_id,
+    actorUsername: row.actor_username,
+    actorDisplayName: row.actor_display_name,
+    actorAvatar: row.actor_avatar,
     readAt: row.read_at,
     imageUrl: row.image_url,
     route: row.route,
