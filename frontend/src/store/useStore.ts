@@ -118,6 +118,7 @@ interface SupportTicket {
   topicLabel: string;
   details: string;
   status: 'open' | 'resolved' | 'closed';
+  evidenceMediaUrls?: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -1332,7 +1333,8 @@ export const useStore = create<StoreState>()(
       ticket.orderId,
       ticket.topicId,
       ticket.topicLabel,
-      ticket.details
+      ticket.details,
+      ticket.evidenceMediaUrls
     );
     set((state) => ({
       supportTickets: [
@@ -1341,6 +1343,7 @@ export const useStore = create<StoreState>()(
           ...ticket,
           id: apiTicket.id,
           status: apiTicket.status as SupportTicket['status'],
+          evidenceMediaUrls: apiTicket.evidenceMediaUrls,
           createdAt: new Date(apiTicket.createdAt).getTime(),
           updatedAt: new Date(apiTicket.updatedAt).getTime(),
         },
@@ -1358,6 +1361,7 @@ export const useStore = create<StoreState>()(
         topicLabel: t.topicLabel,
         details: t.details,
         status: t.status as SupportTicket['status'],
+        evidenceMediaUrls: t.evidenceMediaUrls,
         createdAt: new Date(t.createdAt).getTime(),
         updatedAt: new Date(t.updatedAt).getTime(),
       })),
@@ -1374,6 +1378,7 @@ export const useStore = create<StoreState>()(
         topicLabel: t.topicLabel,
         details: t.details,
         status: t.status as SupportTicket['status'],
+        evidenceMediaUrls: t.evidenceMediaUrls,
         createdAt: new Date(t.createdAt).getTime(),
         updatedAt: new Date(t.updatedAt).getTime(),
       }));

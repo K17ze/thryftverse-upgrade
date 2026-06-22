@@ -7,7 +7,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +31,9 @@ import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
+import * as ImagePicker from 'expo-image-picker';
+import { uploadMedia } from '../services/mediaUpload';
+import { parseApiError } from '../lib/apiClient';
 
 type Props = StackScreenProps<RootStackParamList, 'OrderSupport'>;
 
@@ -56,6 +60,8 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
   const [order, setOrder] = React.useState<CommerceOrder | null>(null);
+  const [evidenceUris, setEvidenceUris] = useState<string[]>([]);
+  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
 
   const createSupportTicketOnApi = useStore((state) => state.createSupportTicketOnApi);
   const getSupportTicketsForOrder = useStore((state) => state.getSupportTicketsForOrder);
@@ -85,7 +91,46 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
     return t.requiresStatus.includes(orderStatus);
   });
 
-  const canSubmit = selectedTopic && details.trim().length > 10 && !isSubmitting && !isSubmitted;
+  const canSubmit = selectedTopic && details.trim().length > 10 && !isSubmitting && !isSubmitted && !isUploadingEvidence;
+
+  const handlePickEvidence = useCallback(async () => {
+    if (evidenceUris.length >= 3) {
+      show('You can attach up to 3 photos.', 'info');
+      return;
+    }
+    haptic.light();
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        show('Allow gallery access to upload evidence.', 'error');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.85,
+        selectionLimit: 3 - evidenceUris.length,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      setIsUploadingEvidence(true);
+      const uploaded: string[] = [];
+      for (const asset of result.assets) {
+        const publicUrl = await uploadMedia(asset.uri, 'evidence');
+        uploaded.push(publicUrl);
+      }
+      setEvidenceUris((prev) => [...prev, ...uploaded]);
+      show(`${uploaded.length} photo${uploaded.length > 1 ? 's' : ''} attached.`, 'success');
+    } catch {
+      show('Unable to upload photo(s). Please try again.', 'error');
+    } finally {
+      setIsUploadingEvidence(false);
+    }
+  }, [evidenceUris.length, haptic, show]);
+
+  const handleRemoveEvidence = useCallback((index: number) => {
+    haptic.light();
+    setEvidenceUris((prev) => prev.filter((_, i) => i !== index));
+  }, [haptic]);
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit) return;
@@ -99,17 +144,19 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
         topicId: topic.id,
         topicLabel: topic.label,
         details: details.trim(),
+        evidenceMediaUrls: evidenceUris.length > 0 ? evidenceUris : undefined,
       });
 
       setIsSubmitting(false);
       setIsSubmitted(true);
       setSubmittedTicketId(ticketId);
       show('Support request submitted. We will review and respond as soon as possible.', 'success');
-    } catch {
+    } catch (err) {
       setIsSubmitting(false);
-      show('Unable to submit support request. Please check your connection and try again.', 'error');
+      const parsed = parseApiError(err);
+      show(parsed.message, 'error');
     }
-  }, [canSubmit, haptic, createSupportTicketOnApi, orderId, selectedTopic, details, show]);
+  }, [canSubmit, haptic, createSupportTicketOnApi, orderId, selectedTopic, details, evidenceUris, show]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -229,6 +276,51 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
               <Text style={styles.charCount}>{details.length}/800</Text>
             </View>
           </Reanimated.View>
+
+          {/* Evidence upload */}
+          {!isSubmitted && (
+            <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+              <Meta color={Colors.textMuted} style={styles.sectionLabel}>EVIDENCE (OPTIONAL)</Meta>
+              <View style={styles.evidenceCard}>
+                {evidenceUris.length > 0 && (
+                  <View style={styles.evidenceThumbs}>
+                    {evidenceUris.map((uri, index) => (
+                      <View key={uri} style={styles.evidenceThumbWrap}>
+                        <CachedImage uri={uri} style={styles.evidenceThumb} contentFit="cover" />
+                        <Pressable
+                          style={styles.evidenceRemoveBtn}
+                          onPress={() => handleRemoveEvidence(index)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Remove evidence photo"
+                        >
+                          <Ionicons name="close-circle" size={20} color={Colors.textInverse} />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {evidenceUris.length < 3 && (
+                  <Pressable
+                    style={styles.evidenceAddBtn}
+                    onPress={handlePickEvidence}
+                    disabled={isUploadingEvidence}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add evidence photo"
+                  >
+                    {isUploadingEvidence ? (
+                      <ActivityIndicator size="small" color={Colors.brand} />
+                    ) : (
+                      <>
+                        <Ionicons name="camera-outline" size={22} color={Colors.brand} />
+                        <Text style={styles.evidenceAddText}>Add photo ({evidenceUris.length}/3)</Text>
+                      </>
+                    )}
+                  </Pressable>
+                )}
+              </View>
+            </Reanimated.View>
+          )}
 
           {isSubmitted && submittedTicketId && (
             <Reanimated.View entering={FadeInDown.duration(300)} style={styles.successCard}>
@@ -454,5 +546,48 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
+  },
+  evidenceCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    ...Elevation.subtle,
+  },
+  evidenceThumbs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+    marginBottom: Space.sm,
+  },
+  evidenceThumbWrap: {
+    position: 'relative',
+  },
+  evidenceThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.md,
+  },
+  evidenceRemoveBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: Colors.textPrimary,
+    borderRadius: Radius.full,
+  },
+  evidenceAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: Colors.border,
+  },
+  evidenceAddText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.brand,
   },
 });

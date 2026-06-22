@@ -29,7 +29,6 @@ import {
   cancelOrder,
   shipOrder,
   deliverOrder,
-  refundOrder,
 } from '../services/commerceApi';
 import { parseApiError } from '../lib/apiClient';
 import { getListingCoverUri } from '../utils/media';
@@ -42,7 +41,7 @@ import { OrderActionsSheet, OrderActionItem } from '../components/orders/OrderAc
 
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
 
-type OrderMutation = 'cancel' | 'ship' | 'deliver' | 'refund' | null;
+type OrderMutation = 'cancel' | 'ship' | 'deliver' | null;
 
 // --- Status normalisation ---
 
@@ -646,35 +645,12 @@ export default function OrderDetailScreen() {
     }
   }, [orderMutation, orderId, show, refreshOrder]);
 
-  const handleRefund = useCallback(async () => {
-    if (orderMutation) return;
-    setOrderMutation('refund');
-    try {
-      const result = await refundOrder(orderId);
-      if (result.refunded === true) {
-        show('Order refunded', 'info');
-      } else {
-        show(
-          result.reason
-            ? `Refund was not completed: ${result.reason}`
-            : 'Refund was not completed.',
-          'info'
-        );
-      }
-      await refreshOrder(false);
-    } catch (error) {
-      show(parseApiError(error).message, 'error');
-    } finally {
-      if (isMountedRef.current) setOrderMutation(null);
-    }
-  }, [orderMutation, orderId, show, refreshOrder]);
-
   // --- Action availability ---
 
   const canCancel = isBuyer && (normalisedStatus === 'created' || normalisedStatus === 'paid');
   const canShip = isSeller && (normalisedStatus === 'paid' || normalisedStatus === 'processing' || normalisedStatus === 'preparing');
   const canDeliver = isBuyer && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery');
-  const canRefund = isBuyer && !isTerminal && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery');
+  const canReportIssue = !isTerminal && normalisedStatus !== 'created' && normalisedStatus !== 'cancelled' && normalisedStatus !== 'refunded';
 
   const mutationLocked = orderMutation !== null;
 
@@ -749,47 +725,6 @@ export default function OrderDetailScreen() {
       };
     }
 
-    if (canCancel && canRefund) {
-      return {
-        primary: {
-          label: 'Refund order',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Refund this order?',
-              'This will attempt to refund the order immediately.',
-              [
-                { text: 'Keep order', style: 'cancel' },
-                { text: 'Refund order', style: 'destructive', onPress: handleRefund },
-              ]
-            );
-          },
-          variant: 'destructive',
-          loading: orderMutation === 'refund',
-          disabled: mutationLocked && orderMutation !== 'refund',
-          accessibilityLabel: 'Refund order',
-        },
-        secondary: {
-          label: 'Cancel order',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Cancel this order?',
-              'This will cancel the order and notify the seller. This action cannot be undone.',
-              [
-                { text: 'Keep order', style: 'cancel' },
-                { text: 'Cancel order', style: 'destructive', onPress: handleCancel },
-              ]
-            );
-          },
-          variant: 'destructive',
-          loading: orderMutation === 'cancel',
-          disabled: mutationLocked && orderMutation !== 'cancel',
-          accessibilityLabel: 'Cancel order',
-        },
-      };
-    }
-
     if (canCancel) {
       return {
         primary: {
@@ -813,31 +748,30 @@ export default function OrderDetailScreen() {
       };
     }
 
-    if (canRefund) {
+    if (canReportIssue) {
       return {
         primary: {
-          label: 'Refund order',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Refund this order?',
-              'This will attempt to refund the order immediately.',
-              [
-                { text: 'Keep order', style: 'cancel' },
-                { text: 'Refund order', style: 'destructive', onPress: handleRefund },
-              ]
-            );
-          },
-          variant: 'destructive',
-          loading: orderMutation === 'refund',
-          disabled: mutationLocked && orderMutation !== 'refund',
-          accessibilityLabel: 'Refund order',
+          label: 'Report an issue',
+          onPress: () => { haptics.tap(); navigation.navigate('OrderSupport', { orderId }); },
+          variant: 'secondary',
+          accessibilityLabel: 'Report an issue with this order',
+        },
+      };
+    }
+
+    if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
+      return {
+        primary: {
+          label: 'Leave a review',
+          onPress: () => { haptics.tap(); navigation.navigate('WriteReview', { orderId }); },
+          variant: 'primary',
+          accessibilityLabel: 'Write a review for this order',
         },
       };
     }
 
     return {};
-  }, [backendOrder, isKnown, canShip, canCancel, canDeliver, canRefund, orderMutation, mutationLocked, handleShip, handleCancel, handleDeliver, handleRefund]);
+  }, [backendOrder, isKnown, canShip, canCancel, canDeliver, canReportIssue, orderMutation, mutationLocked, handleShip, handleCancel, handleDeliver, navigation, orderId, isBuyer, normalisedStatus]);
 
   // --- Copy tracking number ---
   const handleCopyTracking = useCallback(async (trackingNumber: string) => {
@@ -912,8 +846,28 @@ export default function OrderDetailScreen() {
       onPress: () => navigation.navigate('OrderSupport', { orderId }),
     });
 
+    if (openTicket) {
+      actions.push({
+        key: 'view_resolution',
+        label: 'View open request',
+        icon: 'folder-open-outline',
+        onPress: () => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id }),
+        variant: 'primary',
+      });
+    }
+
+    if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
+      actions.push({
+        key: 'review',
+        label: 'Write a review',
+        icon: 'star-outline',
+        onPress: () => navigation.navigate('WriteReview', { orderId }),
+        variant: 'primary',
+      });
+    }
+
     return actions;
-  }, [navigation, orderId, canShip, counterparty, backendOrder]);
+  }, [navigation, orderId, canShip, counterparty, backendOrder, openTicket, isBuyer, normalisedStatus]);
 
   // --- Render ---
 

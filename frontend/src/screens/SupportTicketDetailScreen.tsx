@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StatusBar,
   ScrollView,
   Alert,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,11 @@ import { AppButton } from '../components/ui/AppButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
+import { CommerceOrder, getOrder } from '../services/commerceApi';
+import { CachedImage } from '../components/CachedImage';
+import { getListingCoverUri } from '../utils/media';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = StackScreenProps<RootStackParamList, 'SupportTicketDetail'>;
 
@@ -37,14 +43,31 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
   const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
+  const { formatFromFiat } = useFormattedPrice();
 
   const supportTickets = useStore((state) => state.supportTickets);
   const updateSupportTicketStatus = useStore((state) => state.updateSupportTicketStatus);
+  const [order, setOrder] = useState<CommerceOrder | null>(null);
 
   const ticket = useMemo(
     () => supportTickets.find((t) => t.id === ticketId),
     [supportTickets, ticketId]
   );
+
+  useEffect(() => {
+    if (!ticket?.orderId) return;
+    let cancelled = false;
+    const fetchOrder = async () => {
+      try {
+        const fetched = await getOrder(ticket.orderId);
+        if (!cancelled) setOrder(fetched);
+      } catch {
+        // Order context unavailable
+      }
+    };
+    void fetchOrder();
+    return () => { cancelled = true; };
+  }, [ticket?.orderId]);
 
   const config = ticket ? STATUS_CONFIG[ticket.status] : null;
 
@@ -95,12 +118,42 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
     year: 'numeric',
   });
 
+  const updatedDate = new Date(ticket.updatedAt).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  const evidenceUrls = ticket.evidenceMediaUrls ?? [];
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScreenHeader title="Support Request" onBack={() => navigation.goBack()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        {/* Order context card */}
+        {order && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(20)}>
+            <ElevatedSurface variant="surface" style={styles.orderContextCard}>
+              <View style={styles.orderContextRow}>
+                {order.listingImageUrl && (
+                  <CachedImage
+                    uri={getListingCoverUri([order.listingImageUrl], '')}
+                    style={styles.orderContextThumb}
+                    contentFit="cover"
+                  />
+                )}
+                <View style={styles.orderContextInfo}>
+                  <Text style={styles.orderContextTitle} numberOfLines={2}>{order.listingTitle}</Text>
+                  <Text style={styles.orderContextMeta}>Order #{ticket.orderId.slice(-8).toUpperCase()}</Text>
+                  <Text style={styles.orderContextStatus}>{order.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</Text>
+                </View>
+              </View>
+            </ElevatedSurface>
+          </Reanimated.View>
+        )}
+
         {/* Status header */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
           <View style={styles.statusCard}>
@@ -150,8 +203,48 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
           </View>
         </Reanimated.View>
 
-        {/* Timeline hint */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.timelineCard}>
+        {/* Evidence */}
+        {evidenceUrls.length > 0 && (
+          <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+            <Meta color={Colors.textMuted} style={styles.sectionLabel}>EVIDENCE</Meta>
+            <View style={styles.evidenceCard}>
+              <View style={styles.evidenceThumbs}>
+                {evidenceUrls.map((uri) => (
+                  <CachedImage key={uri} uri={uri} style={styles.evidenceThumb} contentFit="cover" />
+                ))}
+              </View>
+            </View>
+          </Reanimated.View>
+        )}
+
+        {/* Timeline */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+          <Meta color={Colors.textMuted} style={styles.sectionLabel}>TIMELINE</Meta>
+          <View style={styles.timelineListCard}>
+            <View style={styles.timelineItem}>
+              <View style={[styles.timelineDot, styles.timelineDotActive]} />
+              <View style={styles.timelineContent}>
+                <Text style={styles.timelineItemTitle}>Request submitted</Text>
+                <Text style={styles.timelineItemDate}>{createdDate}</Text>
+              </View>
+            </View>
+            <View style={styles.timelineLine} />
+            <View style={styles.timelineItem}>
+              <View style={[styles.timelineDot, ticket.status !== 'open' ? styles.timelineDotActive : styles.timelineDotPending]} />
+              <View style={styles.timelineContent}>
+                <Text style={styles.timelineItemTitle}>
+                  {ticket.status === 'open' ? 'Awaiting review' : ticket.status === 'resolved' ? 'Resolved' : 'Closed'}
+                </Text>
+                <Text style={styles.timelineItemDate}>
+                  {ticket.status === 'open' ? 'In progress' : updatedDate}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
+
+        {/* Support note */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(140)} style={styles.timelineCard}>
           <Ionicons name="time-outline" size={20} color={Colors.textMuted} />
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.timelineTitle}>Typical response time</Text>
@@ -336,5 +429,101 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
+  },
+  orderContextCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    ...Elevation.subtle,
+  },
+  orderContextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  orderContextThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+  },
+  orderContextInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  orderContextTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  orderContextMeta: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+  },
+  orderContextStatus: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+    textTransform: 'capitalize',
+  },
+  evidenceCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    ...Elevation.subtle,
+  },
+  evidenceThumbs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+  },
+  evidenceThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: Radius.md,
+  },
+  timelineListCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.lg,
+    ...Elevation.subtle,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: Radius.full,
+  },
+  timelineDotActive: {
+    backgroundColor: Colors.brand,
+  },
+  timelineDotPending: {
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  timelineLine: {
+    width: 2,
+    height: 24,
+    backgroundColor: Colors.border,
+    marginLeft: 5,
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineItemTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  timelineItemDate: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
 });
