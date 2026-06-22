@@ -67,6 +67,8 @@ import HelpSupportScreen from '../screens/HelpSupportScreen';
 
 // Phase 18 new screens
 import OrderDetailScreen from '../screens/OrderDetailScreen';
+import SellerFulfilmentScreen from '../screens/SellerFulfilmentScreen';
+import OrderReceiptScreen from '../screens/OrderReceiptScreen';
 
 // Phase 19 new screens
 import CheckoutScreen from '../screens/CheckoutScreen';
@@ -259,6 +261,8 @@ export default function AppNavigator() {
 
       {/* Phase 18 new screens */}
       <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+      <Stack.Screen name="SellerFulfilment" component={SellerFulfilmentScreen} />
+      <Stack.Screen name="OrderReceipt" component={OrderReceiptScreen} />
 
       {/* Phase 19 new screens */}
       <Stack.Screen name="Checkout" component={CheckoutScreen} />

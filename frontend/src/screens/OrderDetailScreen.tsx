@@ -38,6 +38,7 @@ import { CachedImage } from '../components/CachedImage';
 import { OrderDetailSummary } from '../components/orders/OrderDetailSummary';
 import { OrderTrackingTimeline, TimelineEntry } from '../components/orders/OrderTrackingTimeline';
 import { OrderActionFooter, OrderActionConfig } from '../components/orders/OrderActionFooter';
+import { OrderActionsSheet, OrderActionItem } from '../components/orders/OrderActionsSheet';
 
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
 
@@ -382,6 +383,7 @@ export default function OrderDetailScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [parcelError, setParcelError] = useState<string | null>(null);
   const [orderMutation, setOrderMutation] = useState<OrderMutation>(null);
+  const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
 
   const isMountedRef = useRef(true);
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -869,6 +871,50 @@ export default function OrderDetailScreen() {
     void refreshOrder(true);
   }, [refreshOrder]);
 
+  // --- Build overflow actions ---
+  const overflowActions = useMemo((): OrderActionItem[] => {
+    const actions: OrderActionItem[] = [];
+
+    actions.push({
+      key: 'receipt',
+      label: 'View receipt',
+      icon: 'receipt-outline',
+      onPress: () => navigation.navigate('OrderReceipt', { orderId }),
+    });
+
+    if (canShip) {
+      actions.push({
+        key: 'dispatch',
+        label: 'Dispatch item',
+        icon: 'cube-outline',
+        onPress: () => navigation.navigate('SellerFulfilment', { orderId }),
+        variant: 'primary',
+      });
+    }
+
+    if (counterparty) {
+      actions.push({
+        key: 'contact',
+        label: `Message ${counterparty.role.toLowerCase()}`,
+        icon: 'chatbubble-outline',
+        onPress: () => navigation.navigate('Chat', {
+          conversationId: `${counterparty.id}_${backendOrder?.listingId}`,
+          focusQuery: counterparty.username,
+          partnerUserId: counterparty.id,
+        }),
+      });
+    }
+
+    actions.push({
+      key: 'support',
+      label: 'Get help with this order',
+      icon: 'help-circle-outline',
+      onPress: () => navigation.navigate('OrderSupport', { orderId }),
+    });
+
+    return actions;
+  }, [navigation, orderId, canShip, counterparty, backendOrder]);
+
   // --- Render ---
 
   if (isInitialLoading) {
@@ -990,12 +1036,12 @@ export default function OrderDetailScreen() {
           </Pressable>
           <Pressable
             style={styles.headerBtn}
-            onPress={() => { haptics.tap(); navigation.navigate('OrderSupport', { orderId }); }}
+            onPress={() => { haptics.tap(); setActionsSheetVisible(true); }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
-            accessibilityLabel="Order support"
+            accessibilityLabel="More options"
           >
-            <Ionicons name="headset-outline" size={22} color={Colors.textPrimary} />
+            <Ionicons name="ellipsis-horizontal" size={22} color={Colors.textPrimary} />
           </Pressable>
         </View>
       </View>
@@ -1213,6 +1259,17 @@ export default function OrderDetailScreen() {
         primaryAction={footerActions.primary}
         secondaryAction={footerActions.secondary}
         bottomInset={insets.bottom}
+      />
+
+      {/* 10. Overflow actions sheet */}
+      <OrderActionsSheet
+        visible={actionsSheetVisible}
+        orderStatus={normalisedStatus}
+        role={isBuyer ? 'buyer' : 'seller'}
+        orderId={orderId}
+        listingAvailable={listingExists}
+        actions={overflowActions}
+        onClose={() => setActionsSheetVisible(false)}
       />
     </SafeAreaView>
   );

@@ -23,9 +23,9 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain("from '../components/flagship'");
   });
 
-  it('MyOrdersScreen imports FlagshipOrderCard', () => {
+  it('MyOrdersScreen imports OrderLedgerRow', () => {
     const src = readSrc('screens/MyOrdersScreen.tsx');
-    expect(src).toContain("import { FlagshipOrderCard");
+    expect(src).toContain("import { OrderLedgerRow");
   });
 
   it('SyndicateHubScreen imports FlagshipAssetCard', () => {
@@ -54,9 +54,9 @@ describe('flagship components applied to production screens', () => {
     expect(src).not.toContain('...Elevation.card');
   });
 
-  it('MyOrdersScreen renders FlagshipOrderCard in list', () => {
+  it('MyOrdersScreen renders OrderLedgerRow in list', () => {
     const src = readSrc('screens/MyOrdersScreen.tsx');
-    expect(src).toContain('<FlagshipOrderCard');
+    expect(src).toContain('<OrderLedgerRow');
   });
 
   it('SyndicateHubScreen renders FlagshipAssetCard in list', () => {

@@ -75,6 +75,8 @@ export type RootStackParamList = {
   HelpSupport: undefined;
   // Phase 18 new screens
   OrderDetail: { orderId: string };
+  SellerFulfilment: { orderId: string };
+  OrderReceipt: { orderId: string };
   // Phase 19 new screens
   Checkout: { itemId: string };
   AddressForm:

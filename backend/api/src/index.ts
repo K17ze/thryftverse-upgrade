@@ -26638,6 +26638,14 @@ app.get('/orders/:orderId', async (request, reply) => {
   const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
   const { orderId } = paramsSchema.parse(request.params);
 
+  const authUserId = (request as any).authUser?.userId as string | undefined;
+  const authRole = (request as any).authUser?.role as string | undefined;
+
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
   const result = await db.query<{
     id: string;
     buyer_id: string;
@@ -26705,6 +26713,12 @@ app.get('/orders/:orderId', async (request, reply) => {
   }
 
   const row = result.rows[0];
+
+  if (authRole !== 'admin' && row.buyer_id !== authUserId && row.seller_id !== authUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: you do not have access to this order' };
+  }
+
   const platformChargeGbp = Number(row.buyer_protection_fee_gbp);
   return {
     ok: true,
@@ -26740,25 +26754,114 @@ app.get('/users/:userId/orders', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const querySchema = z.object({
     role: z.enum(['buyer', 'seller', 'all']).default('all'),
-    limit: z.coerce.number().int().min(1).max(200).default(50),
+    status: z.string().optional(),
+    classification: z.enum(['needs_action', 'active', 'completed', 'cancelled']).optional(),
+    query: z.string().min(1).max(100).optional(),
+    year: z.coerce.number().int().min(2000).max(2100).optional(),
+    createdBefore: z.string().datetime().optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
   });
 
   const { userId } = paramsSchema.parse(request.params);
-  const { role, limit } = querySchema.parse(request.query);
+  const {
+    role,
+    status: statusFilter,
+    classification,
+    query: searchQuery,
+    year,
+    createdBefore,
+    cursor,
+    limit,
+  } = querySchema.parse(request.query);
 
-  const whereClause =
-    role === 'buyer'
-      ? 'o.buyer_id = $1'
-      : role === 'seller'
-        ? 'o.seller_id = $1'
-        : '(o.buyer_id = $1 OR o.seller_id = $1)';
+  // Build WHERE conditions dynamically
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  let paramIdx = 1;
 
+  // Role filter
+  if (role === 'buyer') {
+    conditions.push(`o.buyer_id = $${paramIdx++}`);
+    params.push(userId);
+  } else if (role === 'seller') {
+    conditions.push(`o.seller_id = $${paramIdx++}`);
+    params.push(userId);
+  } else {
+    conditions.push(`(o.buyer_id = $${paramIdx++} OR o.seller_id = $${paramIdx++})`);
+    params.push(userId);
+    params.push(userId);
+  }
+
+  // Status filter (comma-separated list)
+  if (statusFilter) {
+    const statusList = statusFilter.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+    if (statusList.length > 0) {
+      const placeholders = statusList.map((_s: string, i: number) => `$${paramIdx + i}`).join(', ');
+      paramIdx += statusList.length;
+      conditions.push(`LOWER(o.status) IN (${placeholders})`);
+      for (const s of statusList) {
+        params.push(s);
+      }
+    }
+  }
+
+  // Classification filter
+  if (classification) {
+    const classificationSets: Record<string, string[]> = {
+      needs_action: ['created', 'paid'],
+      active: ['created', 'paid', 'shipped'],
+      completed: ['delivered', 'completed'],
+      cancelled: ['cancelled', 'refunded'],
+    };
+    const set = classificationSets[classification];
+    if (set && set.length > 0) {
+      const placeholders = set.map((_s: string, i: number) => `$${paramIdx + i}`).join(', ');
+      paramIdx += set.length;
+      conditions.push(`LOWER(o.status) IN (${placeholders})`);
+      for (const s of set) {
+        params.push(s);
+      }
+    }
+  }
+
+  // Year filter
+  if (year) {
+    conditions.push(`EXTRACT(YEAR FROM o.created_at) = $${paramIdx++}`);
+    params.push(year);
+  }
+
+  // Search query — match order ID, listing title, buyer/seller username, tracking number
+  if (searchQuery) {
+    const searchPattern = `%${searchQuery}%`;
+    conditions.push(`(
+      o.id ILIKE $${paramIdx}
+      OR l.title ILIKE $${paramIdx}
+      OR bu.username ILIKE $${paramIdx}
+      OR su.username ILIKE $${paramIdx}
+      OR o.tracking_number ILIKE $${paramIdx}
+    )`);
+    paramIdx++;
+    params.push(searchPattern);
+  }
+
+  // Cursor pagination — createdBefore or cursor (ISO timestamp)
+  const cursorDate = cursor ?? createdBefore;
+  if (cursorDate) {
+    conditions.push(`o.created_at < $${paramIdx++}`);
+    params.push(cursorDate);
+  }
+
+  const whereClause = conditions.join(' AND ');
+
+  // Use LEFT JOIN on listings so deleted listings don't break history
   const result = await db.query<{
     id: string;
     buyer_id: string;
     seller_id: string;
     listing_id: string;
     status: string;
+    subtotal_gbp: number | string;
     postage_fee_gbp: number | string;
     total_gbp: number | string;
     tracking_number: string | null;
@@ -26766,8 +26869,10 @@ app.get('/users/:userId/orders', async (request) => {
     shipped_at: string | null;
     delivered_at: string | null;
     created_at: string;
-    listing_title: string;
+    listing_title: string | null;
     listing_image_url: string | null;
+    buyer_username: string | null;
+    seller_username: string | null;
   }>(
     `
       SELECT
@@ -26776,6 +26881,7 @@ app.get('/users/:userId/orders', async (request) => {
         o.seller_id,
         o.listing_id,
         o.status,
+        o.subtotal_gbp,
         o.postage_fee_gbp,
         o.total_gbp,
         o.tracking_number,
@@ -26784,19 +26890,29 @@ app.get('/users/:userId/orders', async (request) => {
         o.delivered_at::text,
         o.created_at,
         l.title AS listing_title,
-        l.image_url AS listing_image_url
+        l.image_url AS listing_image_url,
+        bu.username AS buyer_username,
+        su.username AS seller_username
       FROM orders o
-      INNER JOIN listings l ON l.id = o.listing_id
+      LEFT JOIN listings l ON l.id = o.listing_id
+      LEFT JOIN users bu ON bu.id = o.buyer_id
+      LEFT JOIN users su ON su.id = o.seller_id
       WHERE ${whereClause}
       ORDER BY o.created_at DESC
-      LIMIT $2
+      LIMIT $${paramIdx}
     `,
-    [userId, limit]
+    [...params, limit + 1]
   );
+
+  const hasMore = result.rows.length > limit;
+  const items = hasMore ? result.rows.slice(0, limit) : result.rows;
+  const nextCursor = hasMore && items.length > 0
+    ? items[items.length - 1].created_at
+    : null;
 
   return {
     ok: true,
-    items: result.rows.map((row) => ({
+    items: items.map((row) => ({
       id: row.id,
       buyerId: row.buyer_id,
       sellerId: row.seller_id,
@@ -26804,6 +26920,7 @@ app.get('/users/:userId/orders', async (request) => {
       listingTitle: row.listing_title,
       listingImageUrl: row.listing_image_url,
       status: row.status,
+      subtotalGbp: Number(row.subtotal_gbp),
       postageFeeGbp: Number(row.postage_fee_gbp),
       totalGbp: Number(row.total_gbp),
       trackingNumber: row.tracking_number,
@@ -26811,7 +26928,10 @@ app.get('/users/:userId/orders', async (request) => {
       shippedAt: row.shipped_at,
       deliveredAt: row.delivered_at,
       createdAt: row.created_at,
+      buyerUsername: row.buyer_username,
+      sellerUsername: row.seller_username,
     })),
+    nextCursor,
   };
 });
 

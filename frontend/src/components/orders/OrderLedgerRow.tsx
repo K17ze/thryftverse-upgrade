@@ -1,9 +1,18 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
+import {
+  normaliseOrderStatus,
+  humaniseStatus,
+  getStatusColor,
+  isTerminalStatus,
+  isCancelledStatus,
+  getNextActionHint,
+  type OrderRole,
+} from './orderCapabilities';
 
 export interface OrderViewModel {
   id: string;
@@ -15,69 +24,8 @@ export interface OrderViewModel {
   createdAt: string;
   trackingNumber: string | null;
   shippingProvider: string | null;
-  role: 'buying' | 'selling';
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  created: 'Awaiting payment',
-  paid: 'Preparing',
-  shipped: 'Shipped',
-  'in transit': 'In transit',
-  delivered: 'Delivered',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-  refunded: 'Refunded',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  created: Colors.textMuted,
-  paid: Colors.textSecondary,
-  shipped: Colors.textSecondary,
-  'in transit': Colors.textSecondary,
-  delivered: Colors.success,
-  completed: Colors.success,
-  cancelled: Colors.danger,
-  refunded: Colors.danger,
-};
-
-const TERMINAL_STATUSES = new Set(['delivered', 'completed', 'cancelled', 'refunded']);
-const ACTIVE_PROGRESS_STATUSES = new Set(['paid', 'shipped', 'in transit']);
-
-export function normaliseOrderStatus(status: string): string {
-  return status
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ');
-}
-
-export function humaniseStatus(status: string): string {
-  const normalised = normaliseOrderStatus(status);
-  if (!normalised) return 'Status unavailable';
-
-  return normalised
-    .split(' ')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function getStatusLabel(status: string): string {
-  const key = normaliseOrderStatus(status);
-  return STATUS_LABELS[key] ?? humaniseStatus(status);
-}
-
-function getStatusColor(status: string): string {
-  const key = normaliseOrderStatus(status);
-  return STATUS_COLORS[key] ?? Colors.textMuted;
-}
-
-function isTerminal(status: string): boolean {
-  return TERMINAL_STATUSES.has(normaliseOrderStatus(status));
-}
-
-function isCancelled(status: string): boolean {
-  const key = normaliseOrderStatus(status);
-  return key === 'cancelled' || key === 'refunded';
+  role: OrderRole;
+  counterpartyUsername: string | null;
 }
 
 function formatDate(iso: string): string {
@@ -92,29 +40,36 @@ interface OrderLedgerRowProps {
   onPress: () => void;
 }
 
-export function OrderLedgerRow({ order, formattedTotal, onPress }: OrderLedgerRowProps) {
-  const statusLabel = getStatusLabel(order.status);
-  const statusColor = getStatusColor(order.status);
-  const cancelled = isCancelled(order.status);
-  const terminal = isTerminal(order.status);
+function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowProps) {
+  const statusLabel = humaniseStatus(order.status);
+  const statusColor = getStatusColor(order.status, Colors.textMuted);
+  const cancelled = isCancelledStatus(order.status);
+  const terminal = isTerminalStatus(order.status);
   const dateLabel = formatDate(order.createdAt);
+  const nextAction = getNextActionHint(order.status, order.role);
 
-  const contextVerb = order.role === 'buying' ? 'Bought' : 'Sold';
-  const contextLine = dateLabel ? `${contextVerb} · ${dateLabel}` : contextVerb;
+  const contextVerb = order.role === 'buyer' ? 'Bought' : 'Sold';
+  const counterpartyLabel = order.counterpartyUsername
+    ? `@${order.counterpartyUsername}`
+    : null;
+  const contextParts = [contextVerb];
+  if (counterpartyLabel) contextParts.push(counterpartyLabel);
+  if (dateLabel) contextParts.push(dateLabel);
+  const contextLine = contextParts.join(' · ');
 
   const trackingLine = order.trackingNumber
     ? `${order.shippingProvider ? order.shippingProvider.toUpperCase() + ' · ' : ''}${order.trackingNumber}`
     : null;
 
-  // Progress cue: Paid → Shipped → Delivered
   const statusKey = normaliseOrderStatus(order.status);
+  const ACTIVE_PROGRESS_STATUSES = new Set(['paid', 'shipped', 'in transit']);
   const showProgress = !terminal && statusKey !== 'created' && ACTIVE_PROGRESS_STATUSES.has(statusKey);
   const progressStages = ['paid', 'shipped', 'delivered'];
   const currentStageIndex = progressStages.indexOf(
     statusKey === 'in transit' ? 'shipped' : statusKey
   );
 
-  const accessibilityLabel = `${order.title}, ${statusLabel}, ${formattedTotal}, ${contextLine}${trackingLine ? `, ${trackingLine}` : ''}`;
+  const accessibilityLabel = `${order.title}, ${statusLabel}, ${formattedTotal}, ${contextLine}${trackingLine ? `, ${trackingLine}` : ''}${nextAction ? `, Next: ${nextAction}` : ''}`;
 
   return (
     <Pressable
@@ -124,7 +79,6 @@ export function OrderLedgerRow({ order, formattedTotal, onPress }: OrderLedgerRo
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >
-      {/* Thumbnail */}
       <CachedImage
         uri={order.image}
         style={styles.thumb}
@@ -132,7 +86,6 @@ export function OrderLedgerRow({ order, formattedTotal, onPress }: OrderLedgerRo
         contentFit="cover"
       />
 
-      {/* Content */}
       <View style={styles.content}>
         <View style={styles.statusRow}>
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -153,6 +106,13 @@ export function OrderLedgerRow({ order, formattedTotal, onPress }: OrderLedgerRo
           <Text style={styles.tracking} numberOfLines={1}>
             <Ionicons name="cube-outline" size={11} color={Colors.textMuted} /> {trackingLine}
           </Text>
+        )}
+
+        {nextAction && (
+          <View style={styles.nextActionRow}>
+            <Ionicons name="arrow-forward-circle-outline" size={12} color={Colors.brand} />
+            <Text style={styles.nextActionText}>{nextAction}</Text>
+          </View>
         )}
 
         {showProgress && currentStageIndex >= 0 && (
@@ -185,11 +145,12 @@ export function OrderLedgerRow({ order, formattedTotal, onPress }: OrderLedgerRo
         )}
       </View>
 
-      {/* Chevron */}
       <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} style={styles.chevron} />
     </Pressable>
   );
 }
+
+export const OrderLedgerRow = memo(OrderLedgerRowImpl);
 
 const THUMB_SIZE = 88;
 
@@ -281,5 +242,16 @@ const styles = StyleSheet.create({
   },
   chevron: {
     marginTop: 2,
+  },
+  nextActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  nextActionText: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.brand,
   },
 });

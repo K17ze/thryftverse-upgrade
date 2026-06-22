@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,143 +16,256 @@ import { useNavigation } from '@react-navigation/native';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useBackendData } from '../context/BackendDataContext';
 import { useStore } from '../store/useStore';
-import { CommerceUserOrder, listUserOrders } from '../services/commerceApi';
-import { getListingCoverUri } from '../utils/media';
+import {
+  CommerceUserOrder,
+  listUserOrders,
+  type ListUserOrdersParams,
+} from '../services/commerceApi';
 import { EmptyState } from '../components/EmptyState';
+import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { OrdersTabRail, OrdersTab } from '../components/orders/OrdersTabRail';
-import { OrderLedgerRow, OrderViewModel, normaliseOrderStatus } from '../components/orders/OrderLedgerRow';
+import { OrderLedgerRow, OrderViewModel } from '../components/orders/OrderLedgerRow';
+import {
+  OrdersFilterSheet,
+  FilterClassification,
+  OrdersFilterState,
+} from '../components/orders/OrdersFilterSheet';
+import {
+  needsAction,
+  type OrderRole,
+} from '../components/orders/orderCapabilities';
 
-type StatusFilter = 'All' | 'Active' | 'Completed' | 'Cancelled';
+interface DateGroup {
+  key: string;
+  label: string;
+  data: OrderViewModel[];
+}
 
-const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
-  { key: 'All', label: 'All' },
-  { key: 'Active', label: 'Active' },
-  { key: 'Completed', label: 'Completed' },
-  { key: 'Cancelled', label: 'Cancelled' },
-];
+const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 400;
 
-const ACTIVE_STATUSES = new Set(['created', 'paid', 'shipped', 'in transit']);
-const COMPLETED_STATUSES = new Set(['delivered', 'completed']);
-const CANCELLED_STATUSES = new Set(['cancelled', 'refunded']);
+function formatGroupLabel(date: Date): string {
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const sameMonth = sameYear && date.getMonth() === now.getMonth();
 
-function classifyStatus(status: string): 'active' | 'completed' | 'cancelled' | 'unknown' {
-  const key = normaliseOrderStatus(status);
-  if (CANCELLED_STATUSES.has(key)) return 'cancelled';
-  if (COMPLETED_STATUSES.has(key)) return 'completed';
-  if (ACTIVE_STATUSES.has(key)) return 'active';
-  return 'unknown';
+  if (sameMonth) return 'This month';
+  if (sameYear) return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  return String(date.getFullYear());
+}
+
+function groupOrdersByDate(orders: OrderViewModel[]): DateGroup[] {
+  const groups: Map<string, DateGroup> = new Map();
+
+  for (const order of orders) {
+    const date = new Date(order.createdAt);
+    if (!Number.isFinite(date.getTime())) continue;
+
+    const groupKey = `${date.getFullYear()}-${date.getMonth()}`;
+    const label = formatGroupLabel(date);
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, { key: groupKey, label, data: [] });
+    }
+    groups.get(groupKey)!.data.push(order);
+  }
+
+  return Array.from(groups.values());
 }
 
 export default function MyOrdersScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { formatFromFiat } = useFormattedPrice();
-  const { listings, refreshListings } = useBackendData();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
 
   const [activeTab, setActiveTab] = useState<OrdersTab>('buying');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
-  const [backendOrders, setBackendOrders] = useState<CommerceUserOrder[]>([]);
+  const [orders, setOrders] = useState<CommerceUserOrder[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [paginationError, setPaginationError] = useState<string | null>(null);
 
-  const listingPool = useMemo(() => listings, [listings]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [filter, setFilter] = useState<OrdersFilterState>({
+    classification: 'all',
+    year: null,
+  });
+  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
 
-  const fetchOrders = useCallback(async () => {
-    if (!viewerId) {
-      setIsInitialLoading(false);
-      return;
-    }
-    try {
-      const items = await listUserOrders(viewerId, 'all', 80);
-      setBackendOrders(items);
-      setLoadError(null);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Orders could not be loaded';
-      setLoadError(message);
-    } finally {
-      setIsInitialLoading(false);
-    }
-  }, [viewerId]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFetchingRef = useRef(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, SEARCH_DEBOUNCE_MS);
+  }, [searchQuery]);
+
+  const buildParams = useCallback(
+    (cursor?: string): ListUserOrdersParams => {
+      const params: ListUserOrdersParams = {
+        role: activeTab === 'buying' ? 'buyer' : 'seller',
+        limit: PAGE_SIZE,
+      };
+
+      if (filter.classification !== 'all') {
+        params.classification = filter.classification;
+      }
+      if (filter.year) {
+        params.year = filter.year;
+      }
+      if (debouncedQuery.trim()) {
+        params.query = debouncedQuery.trim();
+      }
+      if (cursor) {
+        params.cursor = cursor;
+      }
+
+      return params;
+    },
+    [activeTab, filter, debouncedQuery]
+  );
+
+  const fetchOrders = useCallback(
+    async (cursor?: string) => {
+      if (!viewerId) {
+        setIsInitialLoading(false);
+        return;
+      }
+
+      if (cursor) {
+        if (isLoadingMore || !nextCursor) return;
+        setIsLoadingMore(true);
+        setPaginationError(null);
+      } else {
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
+      }
+
+      try {
+        const result = await listUserOrders(viewerId, buildParams(cursor));
+        if (cursor) {
+          setOrders((prev) => [...prev, ...result.items]);
+        } else {
+          setOrders(result.items);
+        }
+        setNextCursor(result.nextCursor);
+        setLoadError(null);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Orders could not be loaded';
+        if (cursor) {
+          setPaginationError(message);
+        } else {
+          setLoadError(message);
+          setOrders([]);
+        }
+      } finally {
+        if (cursor) {
+          setIsLoadingMore(false);
+        } else {
+          setIsInitialLoading(false);
+          isFetchingRef.current = false;
+        }
+      }
+    },
+    [viewerId, buildParams, isLoadingMore, nextCursor]
+  );
+
+  useEffect(() => {
+    setIsInitialLoading(true);
+    setOrders([]);
+    setNextCursor(null);
+    setLoadError(null);
+    setPaginationError(null);
     void fetchOrders();
   }, [fetchOrders]);
 
   const handleRefresh = useCallback(async () => {
     if (!viewerId) return;
     setIsRefreshing(true);
+    setNextCursor(null);
+    setPaginationError(null);
     try {
-      await Promise.all([refreshListings(), fetchOrders()]);
-    } catch {
-      // fetchOrders already handles errors internally
+      const result = await listUserOrders(viewerId, buildParams());
+      setOrders(result.items);
+      setNextCursor(result.nextCursor);
+      setLoadError(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Orders could not be refreshed';
+      setLoadError(message);
     } finally {
       setIsRefreshing(false);
     }
-  }, [viewerId, refreshListings, fetchOrders]);
+  }, [viewerId, buildParams]);
 
-  // Build order view models
-  const allOrderViewModels: OrderViewModel[] = useMemo(() => {
-    return backendOrders.map((order) => {
-      const existingListing = listingPool.find((entry) => entry.id === order.listingId);
-      const role: 'buying' | 'selling' = order.buyerId === viewerId ? 'buying' : 'selling';
+  const handleLoadMore = useCallback(() => {
+    if (nextCursor && !isLoadingMore) {
+      void fetchOrders(nextCursor);
+    }
+  }, [nextCursor, isLoadingMore, fetchOrders]);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+    setDebouncedQuery('');
+  }, []);
+
+  const orderViewModels: OrderViewModel[] = useMemo(() => {
+    return orders.map((order) => {
+      const role: OrderRole = order.buyerId === viewerId ? 'buyer' : 'seller';
+      const counterpartyUsername =
+        role === 'buyer' ? order.sellerUsername : order.buyerUsername;
+
       return {
         id: order.id,
         listingId: order.listingId,
-        title:
-          order.listingTitle
-          || existingListing?.title
-          || 'Ordered item',
-        image:
-          order.listingImageUrl
-          || getListingCoverUri(existingListing?.images ?? [], ''),
+        title: order.listingTitle || 'Ordered item',
+        image: order.listingImageUrl || '',
         totalGbp: order.totalGbp,
         status: order.status,
         createdAt: order.createdAt,
         trackingNumber: order.trackingNumber,
         shippingProvider: order.shippingProvider,
         role,
+        counterpartyUsername,
       };
     });
-  }, [backendOrders, listingPool, viewerId]);
+  }, [orders, viewerId]);
 
-  // Split by role
-  const buyingOrders = useMemo(
-    () => allOrderViewModels.filter((o) => o.role === 'buying'),
-    [allOrderViewModels]
-  );
-  const sellingOrders = useMemo(
-    () => allOrderViewModels.filter((o) => o.role === 'selling'),
-    [allOrderViewModels]
+  const needsActionCount = useMemo(
+    () => orderViewModels.filter((o) => needsAction(o.status, o.role)).length,
+    [orderViewModels]
   );
 
-  const currentTabOrders = activeTab === 'buying' ? buyingOrders : sellingOrders;
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+    const now = new Date();
+    years.add(now.getFullYear());
+    for (const order of orderViewModels) {
+      const date = new Date(order.createdAt);
+      if (Number.isFinite(date.getTime())) {
+        years.add(date.getFullYear());
+      }
+    }
+    return Array.from(years).sort((a, b) => b - a);
+  }, [orderViewModels]);
 
-  // Filter by status
-  const filteredOrders = useMemo(() => {
-    if (statusFilter === 'All') return currentTabOrders;
+  const groupedOrders = useMemo(() => groupOrdersByDate(orderViewModels), [orderViewModels]);
 
-    return currentTabOrders.filter((order) => {
-      const classification = classifyStatus(order.status);
-      if (statusFilter === 'Active') return classification === 'active';
-      if (statusFilter === 'Completed') return classification === 'completed';
-      if (statusFilter === 'Cancelled') return classification === 'cancelled';
-      return true;
-    });
-  }, [currentTabOrders, statusFilter]);
-
-  // Sort newest first
-  const sortedOrders = useMemo(() => {
-    return [...filteredOrders].sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return dateB - dateA;
-    });
-  }, [filteredOrders]);
+  const hasActiveFilter =
+    filter.classification !== 'all' || filter.year !== null || debouncedQuery.trim() !== '';
 
   const handleOrderPress = useCallback(
     (orderId: string) => {
@@ -171,6 +285,15 @@ export default function MyOrdersScreen() {
     [formatFromFiat, handleOrderPress]
   );
 
+  const renderGroupHeader = useCallback(
+    (label: string) => (
+      <View style={styles.groupHeader}>
+        <Text style={styles.groupHeaderText}>{label}</Text>
+      </View>
+    ),
+    []
+  );
+
   const keyExtractor = useCallback((item: OrderViewModel) => item.id, []);
 
   const renderSeparator = useCallback(() => <View style={styles.separator} />, []);
@@ -188,14 +311,30 @@ export default function MyOrdersScreen() {
       );
     }
 
-    if (statusFilter !== 'All') {
+    if (debouncedQuery.trim()) {
+      return (
+        <EmptyState
+          icon="search-outline"
+          title="No results found"
+          subtitle={`No orders matching "${debouncedQuery.trim()}". Try a different search term.`}
+          ctaLabel="Clear search"
+          onCtaPress={handleClearSearch}
+        />
+      );
+    }
+
+    if (hasActiveFilter) {
       return (
         <EmptyState
           icon="document-text-outline"
-          title={`No ${statusFilter.toLowerCase()} orders`}
-          subtitle="Try another status."
-          ctaLabel="Clear filter"
-          onCtaPress={() => setStatusFilter('All')}
+          title="No orders match these filters"
+          subtitle="Try adjusting your filters to see more orders."
+          ctaLabel="Clear filters"
+          onCtaPress={() => {
+            setFilter({ classification: 'all', year: null });
+            setSearchQuery('');
+            setDebouncedQuery('');
+          }}
         />
       );
     }
@@ -221,7 +360,7 @@ export default function MyOrdersScreen() {
         onCtaPress={() => navigation.navigate('Sell')}
       />
     );
-  }, [viewerId, statusFilter, activeTab, navigation]);
+  }, [viewerId, debouncedQuery, hasActiveFilter, activeTab, navigation, handleClearSearch]);
 
   const renderLoading = useCallback(() => (
     <View style={styles.loadingContainer}>
@@ -230,31 +369,6 @@ export default function MyOrdersScreen() {
     </View>
   ), []);
 
-  const renderStaleErrorBanner = useCallback(() => {
-    if (!loadError || backendOrders.length === 0) return null;
-    return (
-      <View
-        style={styles.staleBanner}
-        accessibilityRole="alert"
-        accessibilityLabel="Orders could not be refreshed. Showing the last loaded results."
-      >
-        <View style={styles.staleBannerText}>
-          <Text style={styles.staleBannerTitle}>Orders could not be refreshed</Text>
-          <Text style={styles.staleBannerSubtitle}>Showing the last loaded results.</Text>
-        </View>
-        <Pressable
-          style={styles.staleRetryBtn}
-          onPress={() => { setLoadError(null); void fetchOrders(); }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel="Retry refreshing orders"
-        >
-          <Text style={styles.staleRetryBtnText}>Retry</Text>
-        </Pressable>
-      </View>
-    );
-  }, [loadError, backendOrders.length, fetchOrders]);
-
   const renderError = useCallback(() => (
     <View style={styles.errorContainer}>
       <Ionicons name="cloud-offline-outline" size={40} color={Colors.textMuted} />
@@ -262,7 +376,11 @@ export default function MyOrdersScreen() {
       <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
       <Pressable
         style={styles.retryBtn}
-        onPress={() => { setLoadError(null); setIsInitialLoading(true); void fetchOrders(); }}
+        onPress={() => {
+          setLoadError(null);
+          setIsInitialLoading(true);
+          void fetchOrders();
+        }}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         accessibilityRole="button"
         accessibilityLabel="Retry loading orders"
@@ -272,11 +390,63 @@ export default function MyOrdersScreen() {
     </View>
   ), [fetchOrders]);
 
+  const renderListFooter = useCallback(() => {
+    if (isLoadingMore) {
+      return (
+        <View style={styles.footerLoading}>
+          <ActivityIndicator size="small" color={Colors.textSecondary} />
+          <Text style={styles.footerLoadingText}>Loading more…</Text>
+        </View>
+      );
+    }
+    if (paginationError) {
+      return (
+        <View style={styles.footerError}>
+          <Text style={styles.footerErrorText}>{paginationError}</Text>
+          <Pressable
+            onPress={() => {
+              setPaginationError(null);
+              if (nextCursor) void fetchOrders(nextCursor);
+            }}
+            hitSlop={{ top: 8, bottom: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading more orders"
+          >
+            <Text style={styles.retryLink}>Retry</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (!nextCursor && orders.length > 0) {
+      return (
+        <View style={styles.footerEnd}>
+          <Text style={styles.footerEndText}>No more orders</Text>
+        </View>
+      );
+    }
+    return null;
+  }, [isLoadingMore, paginationError, nextCursor, orders.length, fetchOrders]);
+
+  const filterSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (filter.classification !== 'all') {
+      const labels: Record<FilterClassification, string> = {
+        all: 'All',
+        needs_action: 'Needs action',
+        active: 'Active',
+        completed: 'Completed',
+        cancelled: 'Cancelled',
+      };
+      parts.push(labels[filter.classification]);
+    }
+    if (filter.year) parts.push(String(filter.year));
+    return parts.join(' · ');
+  }, [filter]);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      {/* ── 1. COMPACT NAVIGATION HEADER ── */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <Pressable
           style={styles.headerBack}
@@ -288,50 +458,109 @@ export default function MyOrdersScreen() {
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Orders</Text>
-        <Text style={styles.headerCount}>
-          {viewerId ? `${sortedOrders.length} visible` : ''}
-        </Text>
+        <Pressable
+          style={styles.headerFilterBtn}
+          onPress={() => setFilterSheetVisible(true)}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Filter orders${filterSummary ? `, current filter: ${filterSummary}` : ''}`}
+        >
+          <Ionicons
+            name={hasActiveFilter ? 'filter' : 'filter-outline'}
+            size={22}
+            color={hasActiveFilter ? Colors.brand : Colors.textPrimary}
+          />
+        </Pressable>
       </View>
 
-      {/* ── 2. BUYING / SELLING TAB RAIL ── */}
       <OrdersTabRail
         activeTab={activeTab}
-        buyingCount={buyingOrders.length}
-        sellingCount={sellingOrders.length}
+        buyingCount={0}
+        sellingCount={0}
         onChange={setActiveTab}
       />
 
-      {/* ── 3. STATUS FILTER RAIL ── */}
-      <View style={styles.filterRail}>
-        {STATUS_FILTERS.map((filter) => {
-          const isActive = statusFilter === filter.key;
-          return (
+      {needsActionCount > 0 && !debouncedQuery.trim() && filter.classification === 'all' && (
+        <Pressable
+          style={styles.needsActionBanner}
+          onPress={() => setFilter({ classification: 'needs_action', year: null })}
+          accessibilityRole="button"
+          accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}
+        >
+          <Ionicons name="alert-circle-outline" size={16} color={Colors.brand} />
+          <Text style={styles.needsActionText}>
+            {needsActionCount} {needsActionCount === 1 ? 'order' : 'orders'} need{needsActionCount === 1 ? 's' : ''} your attention
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+        </Pressable>
+      )}
+
+      <View style={styles.searchRow}>
+        <ElevatedSurface variant="surface" style={styles.searchInputWrap}>
+          <Ionicons name="search-outline" size={16} color={Colors.textMuted} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by item, order number, member, or tracking"
+            placeholderTextColor={Colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            accessibilityLabel="Search orders"
+          />
+          {searchQuery.length > 0 && (
             <Pressable
-              key={filter.key}
-              style={styles.filterTab}
-              onPress={() => setStatusFilter(filter.key)}
-              hitSlop={{ top: 6, bottom: 6 }}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              accessibilityLabel={`Filter by ${filter.label}`}
+              onPress={handleClearSearch}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
             >
-              <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
-                {filter.label}
-              </Text>
-              {isActive && <View style={styles.filterUnderline} />}
+              <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
             </Pressable>
-          );
-        })}
+          )}
+        </ElevatedSurface>
       </View>
 
-      {/* ── 4. ORDER LIST ── */}
+      {filterSummary ? (
+        <View style={styles.filterSummaryRow}>
+          <Text style={styles.filterSummaryText}>{filterSummary}</Text>
+          <Pressable
+            onPress={() => setFilter({ classification: 'all', year: null })}
+            hitSlop={{ top: 6, bottom: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear filters"
+          >
+            <Text style={styles.clearFilterText}>Clear</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <FlatList
-        data={isInitialLoading ? [] : sortedOrders}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        ItemSeparatorComponent={renderSeparator}
-        ListHeaderComponent={renderStaleErrorBanner}
-        ListEmptyComponent={loadError && backendOrders.length === 0 ? renderError : isInitialLoading ? renderLoading : renderEmpty}
+        data={groupedOrders}
+        keyExtractor={(group) => group.key}
+        renderItem={({ item: group }) => (
+          <View>
+            {renderGroupHeader(group.label)}
+            <FlatList
+              data={group.data}
+              keyExtractor={keyExtractor}
+              renderItem={renderItem}
+              ItemSeparatorComponent={renderSeparator}
+              scrollEnabled={false}
+            />
+          </View>
+        )}
+        ListEmptyComponent={
+          loadError && orders.length === 0
+            ? renderError
+            : isInitialLoading
+              ? renderLoading
+              : renderEmpty
+        }
+        ListFooterComponent={renderListFooter}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.3}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -343,6 +572,14 @@ export default function MyOrdersScreen() {
           />
         }
       />
+
+      <OrdersFilterSheet
+        visible={filterSheetVisible}
+        currentFilter={filter}
+        availableYears={availableYears}
+        onApply={setFilter}
+        onClose={() => setFilterSheetVisible(false)}
+      />
     </View>
   );
 }
@@ -352,80 +589,107 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-
-  // Compact header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    gap: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   headerBack: {
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -Space.xs,
   },
   headerTitle: {
-    flex: 1,
-    fontSize: 26,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  headerCount: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-  },
-
-  // Status filter rail
-  filterRail: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    paddingVertical: 6,
-    gap: Space.md,
-  },
-  filterTab: {
-    paddingVertical: 4,
-    alignItems: 'flex-start',
-  },
-  filterText: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-  },
-  filterTextActive: {
-    fontSize: 14,
+    fontSize: 17,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
-  filterUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 1.5,
-    backgroundColor: Colors.textPrimary,
-    borderRadius: 1,
+  headerFilterBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  // List
+  needsActionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    backgroundColor: Colors.surface,
+  },
+  needsActionText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.brand,
+  },
+  searchRow: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  searchInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: Space.md,
+    height: 40,
+  },
+  searchIcon: {
+    marginLeft: 0,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+  },
+  filterSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xs,
+  },
+  filterSummaryText: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+  },
+  clearFilterText: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  groupHeader: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    paddingBottom: Space.xs,
+  },
+  groupHeaderText: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
   listContent: {
-    paddingBottom: 120,
+    paddingBottom: Space.xl,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginHorizontal: Space.md,
+    backgroundColor: Colors.borderLight,
+    marginLeft: 104,
   },
-
-  // Loading
   loadingContainer: {
-    paddingVertical: 80,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xl * 2,
     gap: Space.md,
   },
   loadingText: {
@@ -433,19 +697,16 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
   },
-
-  // Error
   errorContainer: {
-    paddingVertical: 80,
     alignItems: 'center',
-    paddingHorizontal: Space.xl,
-    gap: Space.sm,
+    justifyContent: 'center',
+    paddingVertical: Space.xl * 2,
+    gap: Space.md,
   },
   errorTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
-    textAlign: 'center',
   },
   errorSubtitle: {
     fontSize: 14,
@@ -454,64 +715,55 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   retryBtn: {
-    marginTop: Space.sm,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    minHeight: 44,
+    paddingVertical: 14,
+    paddingHorizontal: Space.xl,
+    borderRadius: 10,
+    backgroundColor: Colors.brand,
+    minHeight: 48,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   retryBtnText: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: Colors.textInverse,
   },
-
-  // Stale error banner
-  staleBanner: {
+  footerLoading: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    marginBottom: 4,
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: Space.md,
   },
-  staleBannerText: {
-    flex: 1,
-    gap: 2,
-  },
-  staleBannerTitle: {
+  footerLoadingText: {
     fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  staleBannerSubtitle: {
-    fontSize: 12,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
   },
-  staleRetryBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    minHeight: 44,
+  footerError: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    paddingVertical: Space.md,
   },
-  staleRetryBtnText: {
+  footerErrorText: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  retryLink: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: Colors.brand,
+  },
+  footerEnd: {
+    alignItems: 'center',
+    paddingVertical: Space.md,
+  },
+  footerEndText: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
 });
