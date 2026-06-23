@@ -88,7 +88,7 @@ export function ChatComposerBar({
           {isSending ? (
             <ActivityIndicator size="small" color={Colors.textSecondary} />
           ) : (
-            <Ionicons name="arrow-up" size={20} color={canSend ? Colors.background : Colors.textMuted} />
+            <Ionicons name="arrow-up" size={20} color={canSend ? Colors.textInverse : Colors.textMuted} />
           )}
         </AnimatedPressable>
       ) : (
@@ -121,21 +121,20 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
   },
   actionBtn: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 3,
     borderRadius: Radius.full,
   },
   inputWrap: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     paddingHorizontal: Space.md - 2,
-    paddingVertical: Platform.OS === 'ios' ? 7 : 5,
-    minHeight: 38,
-    maxHeight: MAX_INPUT_HEIGHT + 14,
+    paddingVertical: Platform.OS === 'ios' ? 6 : 4,
+    minHeight: 44,
+    maxHeight: MAX_INPUT_HEIGHT + 12,
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
@@ -155,15 +154,14 @@ const styles = StyleSheet.create({
     maxHeight: MAX_INPUT_HEIGHT,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 3,
   },
   sendBtnActive: {
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: Colors.brand,
   },
 });

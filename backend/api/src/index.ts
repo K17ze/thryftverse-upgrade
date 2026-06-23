@@ -15810,6 +15810,8 @@ app.post('/chat/groups', async (request, reply) => {
     title: z.string().trim().min(2).max(80),
     memberIds: z.array(z.string().trim().min(2)).max(48).default([]),
     itemId: z.string().trim().min(2).max(120).optional(),
+    description: z.string().trim().max(280).optional(),
+    avatar: z.string().trim().max(512).optional(),
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
@@ -15865,6 +15867,8 @@ app.post('/chat/groups', async (request, reply) => {
         payload.itemId ?? null,
         toJsonString({
           createdVia: 'chat_groups_api',
+          ...(payload.description ? { description: payload.description } : {}),
+          ...(payload.avatar ? { avatar: payload.avatar } : {}),
         }),
       ]
     );
@@ -17849,6 +17853,8 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
   });
   const bodySchema = z.object({
     title: z.string().trim().min(2).max(80).optional(),
+    description: z.string().trim().max(280).optional(),
+    avatar: z.string().trim().max(512).optional(),
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
@@ -17863,10 +17869,31 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
     );
   }
 
+  if (payload.description !== undefined || payload.avatar !== undefined) {
+    const currentMeta = await db.query<{ metadata: unknown }>(
+      `SELECT metadata FROM chat_conversations WHERE id = $1 LIMIT 1`,
+      [conversationId]
+    );
+    const existingMeta = (currentMeta.rows[0]?.metadata ?? {}) as Record<string, unknown>;
+    const updatedMeta = {
+      ...existingMeta,
+      ...(payload.description !== undefined ? { description: payload.description } : {}),
+      ...(payload.avatar !== undefined ? { avatar: payload.avatar } : {}),
+    };
+    await db.query(
+      `UPDATE chat_conversations SET metadata = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(updatedMeta), conversationId]
+    );
+  }
+
   return {
     ok: true,
     conversationId,
-    updated: payload.title !== undefined ? { title: payload.title } : {},
+    updated: {
+      ...(payload.title !== undefined ? { title: payload.title } : {}),
+      ...(payload.description !== undefined ? { description: payload.description } : {}),
+      ...(payload.avatar !== undefined ? { avatar: payload.avatar } : {}),
+    },
   };
 });
 

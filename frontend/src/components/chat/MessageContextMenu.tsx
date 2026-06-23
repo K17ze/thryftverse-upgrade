@@ -12,7 +12,7 @@ import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'select';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'retry' | 'report';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -20,6 +20,7 @@ interface MessageContextMenuProps {
   onAction: (action: MessageAction) => void;
   messageText?: string;
   isOwnMessage?: boolean;
+  isFailed?: boolean;
 }
 
 type ActionDef = {
@@ -38,25 +39,38 @@ export function MessageContextMenu({
   onAction,
   messageText,
   isOwnMessage,
+  isFailed,
 }: MessageContextMenuProps) {
   const actions = React.useMemo<ActionDef[]>(() => {
-    const list: ActionDef[] = [
-      { id: 'select', label: 'Select', icon: 'checkbox-outline' },
-      { id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' },
-      { id: 'react', label: 'React', icon: 'happy-outline' },
-    ];
-    if (messageText && messageText.trim().length > 0) {
-      list.push({ id: 'copy', label: 'Copy', icon: 'copy-outline' });
+    const list: ActionDef[] = [];
+
+    if (isOwnMessage && isFailed) {
+      list.push({ id: 'retry', label: 'Retry', icon: 'refresh-outline' });
     }
-    list.push({
-      id: 'delete',
-      label: isOwnMessage ? 'Delete message' : 'Delete for me',
-      icon: 'trash-outline',
-      color: Colors.danger,
-      destructive: true,
-    });
+
+    list.push({ id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' });
+    list.push({ id: 'react', label: 'React', icon: 'happy-outline' });
+
+    if (messageText && messageText.trim().length > 0) {
+      list.push({ id: 'copy', label: 'Copy text', icon: 'copy-outline' });
+    }
+
+    if (!isOwnMessage) {
+      list.push({ id: 'report', label: 'Report', icon: 'flag-outline', color: Colors.danger });
+    }
+
+    if (isOwnMessage) {
+      list.push({
+        id: 'delete',
+        label: 'Delete message',
+        icon: 'trash-outline',
+        color: Colors.danger,
+        destructive: true,
+      });
+    }
+
     return list;
-  }, [messageText, isOwnMessage]);
+  }, [messageText, isOwnMessage, isFailed]);
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 

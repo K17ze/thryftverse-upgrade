@@ -33,17 +33,17 @@ describe('VISUAL-14 Reference-Match Final Polish', () => {
     expect(src).toContain('borderTopLeftRadius: Radius.sm');
   });
 
-  it('MessageBubble uses surface/text colors for them/me', () => {
+  it('MessageBubble uses brand/surfaceAlt colors for them/me', () => {
     const src = read(resolve(COMPONENTS, 'chat/MessageBubble.tsx'));
     expect(src).toContain('bubbleBg');
-    expect(src).toContain('isMe ? Colors.textPrimary : Colors.surface');
+    expect(src).toContain('isMe ? Colors.brand : Colors.surfaceAlt');
   });
 
-  it('MessageBubble has subtle border and shadow', () => {
+  it('MessageBubble uses colour-based separation without shadow', () => {
     const src = read(resolve(COMPONENTS, 'chat/MessageBubble.tsx'));
-    expect(src).toContain('borderWidth: StyleSheet.hairlineWidth');
-    expect(src).toContain('borderColor: Colors.border');
-    expect(src).toContain('...Elevation.subtle');
+    expect(src).toContain('backgroundColor: Colors.brand');
+    expect(src).toContain('backgroundColor: Colors.surfaceAlt');
+    expect(src).not.toContain('...Elevation.subtle');
   });
 
   // ── 3. ChatComposerBar has refined styling ──
@@ -53,11 +53,10 @@ describe('VISUAL-14 Reference-Match Final Polish', () => {
     expect(src).toContain('borderColor: Colors.border');
   });
 
-  it('ChatComposerBar send button has border when inactive', () => {
+  it('ChatComposerBar send button uses brand colour when active', () => {
     const src = read(resolve(COMPONENTS, 'chat/ChatComposerBar.tsx'));
-    expect(src).toContain('borderWidth: StyleSheet.hairlineWidth');
-    expect(src).toContain('borderColor: Colors.border');
-    expect(src).toContain("borderColor: Colors.textPrimary");
+    expect(src).toContain('backgroundColor: Colors.brand');
+    expect(src).toContain("color={canSend ? Colors.textInverse");
   });
 
   // ── 4. WithdrawScreen has entrance animations ──

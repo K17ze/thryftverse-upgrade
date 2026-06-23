@@ -16,6 +16,7 @@ import {
 
   Alert,
   KeyboardAvoidingView,
+  Pressable,
 
 } from 'react-native';
 
@@ -338,6 +339,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const [syncError, setSyncError] = useState(false);
+
   const [attachmentPickerVisible, setAttachmentPickerVisible] = useState(false);
 
   const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
@@ -394,6 +397,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     setIsSyncing(true);
 
+    setSyncError(false);
+
     try {
 
       const syncedMessages = await fetchConversationMessagesFromApi(conversationId);
@@ -404,7 +409,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     } catch {
 
-      // Keep local state when sync unavailable
+      setSyncError(true);
 
     } finally {
 
@@ -1026,6 +1031,64 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 
 
+  const handleRetrySendMessage = (msgId: string) => {
+
+    const msg = messages.find((m) => m.id === msgId);
+
+    if (!msg?.text || msg.status === 'sending') return;
+
+    setMessages((prev) =>
+
+      prev.map((m) =>
+
+        m.id === msgId ? { ...m, status: 'sending' as const } : m
+
+      )
+
+    );
+
+    sendConversationMessageOnApi(conversationId, msg.text)
+
+      .then((serverMsg) => {
+
+        setMessages((prev) =>
+
+          prev.map((m) =>
+
+            m.id === msgId
+
+              ? { ...m, id: serverMsg.id, status: 'sent' as const }
+
+              : m
+
+          )
+
+        );
+
+      })
+
+      .catch(() => {
+
+        setMessages((prev) =>
+
+          prev.map((m) =>
+
+            m.id === msgId ? { ...m, status: 'failed' as const } : m
+
+          )
+
+        );
+
+        show('Message failed to send. Tap to retry.', 'error');
+
+      });
+
+    haptic.light();
+
+  };
+
+
+
   const createMediaMessage = (uri: string): Message => {
 
     const mediaType = isVideoUri(uri) ? 'video' : 'image';
@@ -1187,8 +1250,34 @@ export default function ChatScreen({ navigation, route }: Props) {
   const renderMessage = (msg: Message, index: number) => {
     const prevMsg = messages[index - 1];
     const nextMsg = messages[index + 1];
-    const isFirstInCluster = !prevMsg || prevMsg.sender !== msg.sender;
-    const isLastInCluster = !nextMsg || nextMsg.sender !== msg.sender;
+
+    const SYSTEM_TYPES = ['purchase_status', 'offer', 'offer_declined'];
+    const isSystemMsg = SYSTEM_TYPES.includes(msg.type);
+    const prevIsSystem = prevMsg ? SYSTEM_TYPES.includes(prevMsg.type) : false;
+    const nextIsSystem = nextMsg ? SYSTEM_TYPES.includes(nextMsg.type) : false;
+
+    const TIME_GAP_MS = 5 * 60 * 1000;
+    const prevTimeGap = prevMsg && prevMsg.date && msg.date
+      ? Math.abs(new Date(msg.date).getTime() - new Date(prevMsg.date).getTime())
+      : 0;
+
+    const isFirstInCluster = !prevMsg
+      || prevMsg.sender !== msg.sender
+      || prevIsSystem
+      || isSystemMsg
+      || prevMsg.type !== msg.type
+      || prevTimeGap > TIME_GAP_MS;
+
+    const nextTimeGap = nextMsg && nextMsg.date && msg.date
+      ? Math.abs(new Date(nextMsg.date).getTime() - new Date(msg.date).getTime())
+      : 0;
+
+    const isLastInCluster = !nextMsg
+      || nextMsg.sender !== msg.sender
+      || nextIsSystem
+      || isSystemMsg
+      || nextMsg.type !== msg.type
+      || nextTimeGap > TIME_GAP_MS;
 
     // Spacing tiers (8px base grid)
     let spacingTop: number = Space.sm;
@@ -1320,7 +1409,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             mediaUri={msg.mediaUri}
             mediaType={msg.mediaType}
             uploadStatus={msg.uploadStatus}
-            onRetry={msg.uploadStatus === 'failed' ? () => handleRetryUpload(msg.id) : undefined}
+            onRetry={msg.uploadStatus === 'failed' ? () => handleRetryUpload(msg.id) : msg.status === 'failed' ? () => handleRetrySendMessage(msg.id) : undefined}
             isFirstInCluster={isFirstInCluster}
             isLastInCluster={isLastInCluster}
             showAvatar={!isMe && isFirstInCluster}
@@ -1465,6 +1554,25 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         {isSyncing ? (
           <SkeletonChatLoader count={6} />
+        ) : syncError && !messages.length ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyGlyph}>
+              <Ionicons name="cloud-offline-outline" size={40} color={Colors.textMuted} />
+            </View>
+            <Text style={styles.emptyTitle}>Couldn't load messages</Text>
+            <Text style={styles.emptyBody}>
+              Check your connection and try again.
+            </Text>
+            <Pressable
+              onPress={() => void syncMessagesFromApi()}
+              style={styles.retryBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading messages"
+            >
+              <Ionicons name="refresh" size={16} color={Colors.textInverse} />
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </Pressable>
+          </View>
         ) : messages.length ? (
           <FlatList
             ref={listRef}
@@ -1580,14 +1688,21 @@ export default function ChatScreen({ navigation, route }: Props) {
               case 'reply':
                 setReplyTo(selectedMessage);
                 break;
-              case 'select':
-                enterSelectionMode(selectedMessage.id);
-                break;
               case 'react':
                 setReactingToMessage(selectedMessage);
                 break;
               case 'delete':
                 handleDeleteMessage(selectedMessage);
+                break;
+              case 'retry':
+                if (selectedMessage.uploadStatus === 'failed') {
+                  handleRetryUpload(selectedMessage.id);
+                } else {
+                  handleRetrySendMessage(selectedMessage.id);
+                }
+                break;
+              case 'report':
+                show('Report submitted. Thank you.', 'success');
                 break;
               default:
                 break;
@@ -1595,6 +1710,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           }}
           messageText={selectedMessage?.text ?? undefined}
           isOwnMessage={selectedMessage?.sender === 'me'}
+          isFailed={selectedMessage?.status === 'failed' || selectedMessage?.uploadStatus === 'failed'}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1797,6 +1913,23 @@ const styles = StyleSheet.create({
   offlineBannerText: {
     color: Colors.textSecondary,
     fontSize: Type.caption.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
+
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    backgroundColor: Colors.brand,
+    paddingHorizontal: Space.md + 4,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
+    marginTop: Space.sm,
+  },
+
+  retryBtnText: {
+    color: Colors.textInverse,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 

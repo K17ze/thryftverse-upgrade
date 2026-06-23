@@ -141,9 +141,6 @@ export function ChatTopBar({
                 <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
               ) : null}
             </View>
-            {onTitlePress && (
-              <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} style={{ marginLeft: 2 }} />
-            )}
           </AnimatedPressable>
 
           <View style={styles.actions}>
@@ -186,11 +183,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 2,
   },
   searchRoot: {
     flexDirection: 'row',
@@ -229,8 +221,8 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: -4,
@@ -282,8 +274,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   iconBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },

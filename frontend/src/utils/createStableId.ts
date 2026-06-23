@@ -41,10 +41,15 @@ function secureUUID(): string {
     return bytesToUuid(bytes);
   }
 
-  // Last-resort fallback — still no Math.random for persistent IDs.
-  // This branch should never execute in React Native, but if it does
-  // we throw so the caller knows the environment is unsupported.
-  throw new Error('No secure random source available for createStableId');
+  // Last-resort fallback for environments without crypto (e.g. older Hermes).
+  // Uses Math.random — less ideal than crypto, but far better than crashing.
+  const bytes = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) {
+    bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  return bytesToUuid(bytes);
 }
 
 export function createStableId(prefix?: string): string {

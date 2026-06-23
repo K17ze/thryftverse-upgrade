@@ -133,6 +133,8 @@ export async function createGroupConversationOnApi(input: {
   memberIds: string[];
   itemId?: string;
   idempotencyKey?: string;
+  description?: string;
+  avatar?: string;
 }): Promise<Conversation> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -151,6 +153,8 @@ export async function createGroupConversationOnApi(input: {
       title: input.title.trim(),
       memberIds: input.memberIds,
       itemId: input.itemId,
+      description: input.description,
+      avatar: input.avatar,
     }),
   });
 
@@ -328,7 +332,7 @@ export async function fetchConversationFromApi(conversationId: string): Promise<
 
 export async function updateConversationOnApi(
   conversationId: string,
-  updates: { title?: string }
+  updates: { title?: string; description?: string; avatar?: string }
 ): Promise<void> {
   await fetchJson<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
     method: 'PATCH',

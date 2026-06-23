@@ -1,7 +1,8 @@
 import React from 'react';
-import { Listing } from '../data/mockData';
+import { Listing, MOCK_LISTINGS } from '../data/mockData';
 import { getApiBaseUrl } from '../lib/apiClient';
 import { fetchListingsFromApi } from '../services/listingsApi';
+import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
 interface BackendDataContextValue {
   listings: Listing[];
@@ -26,8 +27,16 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
   const refreshListings = React.useCallback(async () => {
     setIsSyncing(true);
     const result = await fetchListingsFromApi();
-    setListings(result.listings);
-    setLastError(result.error ?? null);
+    if (result.listings.length > 0) {
+      setListings(result.listings);
+      setLastError(result.error ?? null);
+    } else if (ENABLE_RUNTIME_MOCKS) {
+      setListings(MOCK_LISTINGS);
+      setLastError(null);
+    } else {
+      setListings([]);
+      setLastError(result.error ?? null);
+    }
     setIsSyncing(false);
   }, []);
 

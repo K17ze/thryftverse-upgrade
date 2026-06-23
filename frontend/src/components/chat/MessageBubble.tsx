@@ -60,9 +60,9 @@ export function MessageBubble({
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
 
-  const bubbleBg = isMe ? Colors.textPrimary : Colors.surface;
-  const bubbleText = isMe ? Colors.background : Colors.textPrimary;
-  const metaColor = isMe ? `${Colors.background}99` : Colors.textMuted;
+  const bubbleBg = isMe ? Colors.brand : Colors.surfaceAlt;
+  const bubbleText = isMe ? Colors.textInverse : Colors.textPrimary;
+  const metaColor = isMe ? `${Colors.textInverse}99` : Colors.textMuted;
 
   const isStandalone = isFirstInCluster && isLastInCluster;
   const isTop = isFirstInCluster && !isLastInCluster;
@@ -112,7 +112,7 @@ export function MessageBubble({
           ]}
         >
           {replyTo ? (
-            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${Colors.background}40` : Colors.border }]}>
+            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${Colors.textInverse}40` : Colors.border }]}>
               <Text style={[styles.replyName, { color: metaColor }]}>
                 {replyTo.senderName}
               </Text>
@@ -154,7 +154,7 @@ export function MessageBubble({
                 {isUploading ? (
                   <Ionicons name="time-outline" size={10} color={metaColor} />
                 ) : hasFailed ? (
-                  <Ionicons name="alert-circle" size={10} color={isMe ? Colors.background : Colors.danger} />
+                  <Ionicons name="alert-circle" size={10} color={isMe ? Colors.textInverse : Colors.danger} />
                 ) : (
                   <Ionicons name="checkmark" size={10} color={metaColor} />
                 )}
@@ -227,26 +227,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md - 2,
     paddingVertical: Space.sm + 2,
     gap: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
   },
   bubbleMe: {
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: Colors.brand,
     alignSelf: 'flex-end',
   },
   bubbleThem: {
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceAlt,
     alignSelf: 'flex-start',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   bubbleFailed: {
-    backgroundColor: `${Colors.danger}10`,
-    borderWidth: 1,
-    borderColor: `${Colors.danger}30`,
+    backgroundColor: `${Colors.danger}15`,
   },
   replyBlock: {
     borderLeftWidth: 3,
