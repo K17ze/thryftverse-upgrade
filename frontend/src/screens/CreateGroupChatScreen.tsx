@@ -29,6 +29,19 @@ import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 import { useHaptic } from '../hooks/useHaptic';
+import {
+  MAX_MEMBERS,
+  MIN_MEMBERS,
+  SEARCH_DEBOUNCE_MS,
+  canContinueToDetails,
+  canCreateGroup,
+  filterBlockedUsers,
+  filterSelfFromResults,
+  isSearchQueryValid,
+  toggleMemberId,
+  validateGroupTitle,
+} from '../utils/chatGroupHelpers';
+import type { SelectableUser as HelperSelectableUser, Stage } from '../utils/chatGroupHelpers';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateGroupChat'>;
 
@@ -36,12 +49,6 @@ interface SelectableUser extends UserSearchResult {
   displayName: string | null;
   avatar: string | null;
 }
-
-type Stage = 'select' | 'details';
-
-const MAX_MEMBERS = 50;
-const MIN_MEMBERS = 1;
-const SEARCH_DEBOUNCE_MS = 350;
 
 export default function CreateGroupChatScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);

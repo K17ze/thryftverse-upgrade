@@ -10,6 +10,7 @@ import Razorpay from 'razorpay';
 import Stripe from 'stripe';
 import { z } from 'zod';
 import { config } from './config.js';
+import { hashGroupCreatePayload as chatGroupHashPayload } from './lib/chatGroupIdempotency.js';
 
 // Shared Stripe instance for Connect operations
 const stripe = config.stripeSecretKey
@@ -780,6 +781,10 @@ function statusCodeForApiError(code: string): number {
   }
 
   if (code === 'ORDER_ACTION_NOT_ALLOWED' || code === 'RESOLUTION_ALREADY_OPEN' || code === 'REVIEW_ALREADY_EXISTS') {
+    return 409;
+  }
+
+  if (code === 'IDEMPOTENCY_KEY_REUSED') {
     return 409;
   }
 
@@ -2131,6 +2136,80 @@ async function saveWalletIdempotentResponse(
       input.operation,
       input.idempotencyKey,
       input.requestHash,
+      toJsonString(input.responsePayload),
+    ]
+  );
+}
+
+export function hashGroupCreatePayload(payload: unknown): string {
+  return chatGroupHashPayload(payload);
+}
+
+async function getChatGroupIdempotentResponse(
+  client: DbQueryable,
+  input: {
+    creatorId: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }
+): Promise<Record<string, unknown> | null> {
+  const result = await client.query<{
+    request_hash: string;
+    response_payload: Record<string, unknown>;
+  }>(
+    `
+      SELECT request_hash, response_payload
+      FROM chat_group_idempotency_keys
+      WHERE creator_id = $1
+        AND idempotency_key = $2
+      LIMIT 1
+    `,
+    [input.creatorId, input.idempotencyKey]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  if (row.request_hash !== input.requestHash) {
+    throw createApiError(
+      'IDEMPOTENCY_KEY_REUSED',
+      'Idempotency key was already used with a different request payload'
+    );
+  }
+
+  return row.response_payload;
+}
+
+async function saveChatGroupIdempotentResponse(
+  client: DbQueryable,
+  input: {
+    creatorId: string;
+    idempotencyKey: string;
+    requestHash: string;
+    conversationId: string;
+    responsePayload: Record<string, unknown>;
+  }
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO chat_group_idempotency_keys (
+        creator_id,
+        idempotency_key,
+        request_hash,
+        conversation_id,
+        response_payload
+      )
+      VALUES ($1, $2, $3, $4, $5::jsonb)
+      ON CONFLICT (creator_id, idempotency_key)
+      DO NOTHING
+    `,
+    [
+      input.creatorId,
+      input.idempotencyKey,
+      input.requestHash,
+      input.conversationId,
       toJsonString(input.responsePayload),
     ]
   );
@@ -15818,6 +15897,9 @@ app.post('/chat/groups', async (request, reply) => {
   const payload = bodySchema.parse(request.body ?? {});
   const title = payload.title.trim();
 
+  const idempotencyKey = resolveHeaderString(request.headers['x-idempotency-key']);
+  const requestHash = hashGroupCreatePayload(payload);
+
   const normalizedMemberIds = [...new Set([actorUserId, ...payload.memberIds.map((value) => value.trim())])]
     .filter((value) => value.length > 0);
 
@@ -15844,9 +15926,24 @@ app.post('/chat/groups', async (request, reply) => {
   const conversationId = createRuntimeId('chatgrp');
   const client = await db.connect();
   let createdMessage: { id: string; createdAt: string } | null = null;
+  let cachedResponse: Record<string, unknown> | null = null;
 
   try {
     await client.query('BEGIN');
+
+    if (idempotencyKey) {
+      cachedResponse = await getChatGroupIdempotentResponse(client, {
+        creatorId: actorUserId,
+        idempotencyKey,
+        requestHash,
+      });
+
+      if (cachedResponse) {
+        await client.query('COMMIT');
+        reply.code(201);
+        return cachedResponse;
+      }
+    }
 
     await client.query(
       `
@@ -15901,6 +15998,46 @@ app.post('/chat/groups', async (request, reply) => {
       `,
       [conversationId]
     );
+
+    const responsePayload = {
+      ok: true,
+      conversation: {
+        id: conversationId,
+        type: 'group' as const,
+        title,
+        itemId: payload.itemId ?? null,
+        ownerId: actorUserId,
+        participantIds: normalizedMemberIds,
+        botIds: [] as string[],
+        lastMessage: createdMessage?.createdAt ? `${title} was created.` : 'Group created',
+        lastMessageTime: createdMessage?.createdAt ?? new Date().toISOString(),
+        unread: false,
+      },
+      initialMessage: createdMessage
+        ? {
+            id: createdMessage.id,
+            senderType: 'system' as const,
+            senderUserId: null,
+            senderBotId: null,
+            body: `${title} was created.`,
+            metadata: {
+              event: 'group_created',
+              actorUserId,
+            },
+            createdAt: createdMessage.createdAt,
+          }
+        : null,
+    };
+
+    if (idempotencyKey) {
+      await saveChatGroupIdempotentResponse(client, {
+        creatorId: actorUserId,
+        idempotencyKey,
+        requestHash,
+        conversationId,
+        responsePayload,
+      });
+    }
 
     await client.query('COMMIT');
   } catch (error) {

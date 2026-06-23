@@ -1,0 +1,31 @@
+feat: server-side chat group idempotency, real behavioural tests, helper extraction
+
+Backend: add chat_group_idempotency_keys table with unique constraint on
+(creator_id, idempotency_key). POST /chat/groups now reads X-Idempotency-Key,
+computes payload hash, checks for existing response inside transaction, returns
+cached response on retry, rejects key reuse with different payload (409 conflict).
+ON CONFLICT DO NOTHING handles concurrent identical requests safely.
+
+Migration 046_chat_group_idempotency.sql creates the table and index.
+
+Backend tests: 10 new tests in chatGroupIdempotency.test.ts covering payload
+hashing, first request (miss), sequential retry (hit), same key/different payload
+(conflict), concurrent retry safety, cross-user key independence.
+
+Frontend: extracted pure helpers from production code for real testing:
+- chatGroupHelpers.ts: member filtering, validation, toggle, search query checks
+- messageGrouping.ts: cluster first/last detection, system message, day change
+- messageContextMenuCapabilities.ts: action derivation from capabilities
+
+CreateGroupChatScreen, ChatScreen, MessageContextMenu now import and use these
+extracted helpers instead of inline logic.
+
+Removed synthetic chatGroupVisualCompletion.test.ts (60 tests asserting
+locally created constants and static source strings).
+
+Added chatRuntimeBehaviour.test.ts: 49 real behavioural tests importing and
+exercising production helper functions, mocking searchUsers, testing idempotency
+key lifecycle, duplicate submit blocking, search error/retry, message grouping,
+and context menu capability derivation.
+
+No device available for visual sign-off (adb not found on system).

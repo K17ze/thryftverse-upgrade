@@ -90,6 +90,11 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { Caption } from '../components/ui/Text';
 
+import {
+  isFirstInCluster as isFirstInClusterHelper,
+  isLastInCluster as isLastInClusterHelper,
+} from '../utils/messageGrouping';
+
 
 
 type Props = StackScreenProps<RootStackParamList, 'Chat'>;
@@ -1251,33 +1256,18 @@ export default function ChatScreen({ navigation, route }: Props) {
     const prevMsg = messages[index - 1];
     const nextMsg = messages[index + 1];
 
-    const SYSTEM_TYPES = ['purchase_status', 'offer', 'offer_declined'];
-    const isSystemMsg = SYSTEM_TYPES.includes(msg.type);
-    const prevIsSystem = prevMsg ? SYSTEM_TYPES.includes(prevMsg.type) : false;
-    const nextIsSystem = nextMsg ? SYSTEM_TYPES.includes(nextMsg.type) : false;
+    const clusterFirst = isFirstInClusterHelper(
+      { sender: msg.sender, type: msg.type, date: msg.date },
+      prevMsg ? { sender: prevMsg.sender, type: prevMsg.type, date: prevMsg.date } : undefined
+    );
 
-    const TIME_GAP_MS = 5 * 60 * 1000;
-    const prevTimeGap = prevMsg && prevMsg.date && msg.date
-      ? Math.abs(new Date(msg.date).getTime() - new Date(prevMsg.date).getTime())
-      : 0;
+    const clusterLast = isLastInClusterHelper(
+      { sender: msg.sender, type: msg.type, date: msg.date },
+      nextMsg ? { sender: nextMsg.sender, type: nextMsg.type, date: nextMsg.date } : undefined
+    );
 
-    const isFirstInCluster = !prevMsg
-      || prevMsg.sender !== msg.sender
-      || prevIsSystem
-      || isSystemMsg
-      || prevMsg.type !== msg.type
-      || prevTimeGap > TIME_GAP_MS;
-
-    const nextTimeGap = nextMsg && nextMsg.date && msg.date
-      ? Math.abs(new Date(nextMsg.date).getTime() - new Date(msg.date).getTime())
-      : 0;
-
-    const isLastInCluster = !nextMsg
-      || nextMsg.sender !== msg.sender
-      || nextIsSystem
-      || isSystemMsg
-      || nextMsg.type !== msg.type
-      || nextTimeGap > TIME_GAP_MS;
+    const isFirstInCluster = clusterFirst;
+    const isLastInCluster = clusterLast;
 
     // Spacing tiers (8px base grid)
     let spacingTop: number = Space.sm;

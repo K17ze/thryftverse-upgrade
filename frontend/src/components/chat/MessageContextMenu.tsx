@@ -11,6 +11,8 @@ import { Colors } from '../../constants/colors';
 import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
+import { deriveMessageActions } from '../../utils/messageContextMenuCapabilities';
+import type { ActionDef } from '../../utils/messageContextMenuCapabilities';
 
 export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'retry' | 'report';
 
@@ -23,14 +25,6 @@ interface MessageContextMenuProps {
   isFailed?: boolean;
 }
 
-type ActionDef = {
-  id: MessageAction;
-  label: string;
-  icon: string;
-  color?: string;
-  destructive?: boolean;
-};
-
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export function MessageContextMenu({
@@ -42,34 +36,11 @@ export function MessageContextMenu({
   isFailed,
 }: MessageContextMenuProps) {
   const actions = React.useMemo<ActionDef[]>(() => {
-    const list: ActionDef[] = [];
-
-    if (isOwnMessage && isFailed) {
-      list.push({ id: 'retry', label: 'Retry', icon: 'refresh-outline' });
-    }
-
-    list.push({ id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' });
-    list.push({ id: 'react', label: 'React', icon: 'happy-outline' });
-
-    if (messageText && messageText.trim().length > 0) {
-      list.push({ id: 'copy', label: 'Copy text', icon: 'copy-outline' });
-    }
-
-    if (!isOwnMessage) {
-      list.push({ id: 'report', label: 'Report', icon: 'flag-outline', color: Colors.danger });
-    }
-
-    if (isOwnMessage) {
-      list.push({
-        id: 'delete',
-        label: 'Delete message',
-        icon: 'trash-outline',
-        color: Colors.danger,
-        destructive: true,
-      });
-    }
-
-    return list;
+    return deriveMessageActions({
+      isOwnMessage: Boolean(isOwnMessage),
+      isFailed: Boolean(isFailed),
+      messageText,
+    });
   }, [messageText, isOwnMessage, isFailed]);
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
