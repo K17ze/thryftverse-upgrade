@@ -66,13 +66,22 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-updates",
+      "@sentry/react-native"
     ],
     "extra": {
       "eas": {
         "projectId": "e94afae8-2794-4230-a184-785eb8d7ad36"
       }
     },
-    "owner": "kha1ze"
+    "owner": "kha1ze",
+    "updates": {
+      "url": "https://u.expo.dev/e94afae8-2794-4230-a184-785eb8d7ad36",
+      "checkAutomatically": "ON_LOAD"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    }
   }
 }
