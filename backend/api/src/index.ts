@@ -29276,7 +29276,7 @@ app.get('/users/me/auction-bids', async (request, reply) => {
   });
 
   const filtered = status === 'all' ? items : items.filter((item) => {
-    if (status === 'active') return item.bidState === 'active' || item.bidState === 'leading' || item.bidState === 'outbid';
+    if (status === 'active') return item.bidState === 'leading' || item.bidState === 'outbid';
     return item.bidState === status;
   });
 
