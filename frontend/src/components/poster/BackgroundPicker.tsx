@@ -31,7 +31,7 @@ export default function BackgroundPicker({ visible, currentColor, onSelect, onCl
   if (!visible) return null;
 
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="auto">
+    <View style={StyleSheet.absoluteFill} pointerEvents="auto">
       <Pressable style={styles.backdrop} onPress={onClose} />
 
       <View style={styles.panel}>
@@ -93,7 +93,7 @@ export default function BackgroundPicker({ visible, currentColor, onSelect, onCl
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   panel: {

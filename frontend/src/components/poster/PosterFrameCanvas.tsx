@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
   },
   textFrameContent: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Space.md,
@@ -239,12 +239,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   videoLoading: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
   },
   videoErrorState: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     gap: Space.xs,
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   backgroundPressLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1,
   },
 });

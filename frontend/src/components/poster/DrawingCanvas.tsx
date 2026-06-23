@@ -118,7 +118,7 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
 
     if (SvgComp && PathComp) {
       renderSvg = (
-        <SvgComp width={canvasSize.width} height={canvasSize.height} style={StyleSheet.absoluteFillObject}>
+        <SvgComp width={canvasSize.width} height={canvasSize.height} style={StyleSheet.absoluteFill}>
           {allStrokes.map((stroke) => (
             <PathComp
               key={stroke.id}
@@ -144,19 +144,19 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
 
   if (!isActive) {
     return (
-      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {renderSvg}
       </View>
     );
   }
 
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* Drawing surface */}
-      <View style={StyleSheet.absoluteFillObject} {...panResponder.panHandlers} pointerEvents="auto" />
+      <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} pointerEvents="auto" />
 
       {/* Rendered strokes */}
-      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {renderSvg}
       </View>
 

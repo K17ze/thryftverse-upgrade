@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     borderColor: PANEL_BORDER,
   },
   notifImageShared: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   notifImage: { width: '100%', height: '100%' },
 

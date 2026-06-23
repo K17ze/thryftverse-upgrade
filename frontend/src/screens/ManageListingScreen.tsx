@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     height: SCREEN_W,
   },
   heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.06)',
   },
   statusPill: {

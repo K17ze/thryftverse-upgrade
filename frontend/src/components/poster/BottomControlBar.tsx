@@ -12,7 +12,7 @@ import * as MediaLibrary from 'expo-media-library';
 interface BottomControlBarProps {
   onGalleryPress: () => void;
   onFlipCamera: () => void;
-  recentPhotos: MediaLibrary.Asset[];
+  recentPhotos: (MediaLibrary.Asset & { uri?: string })[];
   onRecentPhotoPress: (uri: string) => void;
   showCameraControls: boolean;
   onRotateCamera?: () => void;
@@ -33,8 +33,8 @@ export default function BottomControlBar({
         <Pressable style={styles.galleryThumb} onPress={onGalleryPress} hitSlop={12}>
           {recentPhotos[0] ? (
             <Image
-              source={{ uri: recentPhotos[0].uri }}
-              style={StyleSheet.absoluteFillObject}
+              source={{ uri: recentPhotos[0].uri ?? '' }}
+              style={StyleSheet.absoluteFill}
               resizeMode="cover"
             />
           ) : (
@@ -63,9 +63,9 @@ export default function BottomControlBar({
             <Pressable
               key={photo.id}
               style={styles.photoThumb}
-              onPress={() => onRecentPhotoPress(photo.uri)}
+              onPress={() => onRecentPhotoPress(photo.uri ?? '')}
             >
-              <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+              <Image source={{ uri: photo.uri ?? '' }} style={StyleSheet.absoluteFill} resizeMode="cover" />
             </Pressable>
           ))}
         </ScrollView>

@@ -116,12 +116,12 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
   }
 
   return (
-    <View style={StyleSheet.absoluteFillObject}>
+    <View style={StyleSheet.absoluteFill}>
       {/* Camera preview with tap-to-focus */}
-      <Pressable style={StyleSheet.absoluteFillObject} onPress={handleTapFocus}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={handleTapFocus}>
         <CameraView
           ref={cameraRef}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           facing={facing}
           flash={flash}
           mode="picture"
@@ -190,7 +190,7 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
 
 const styles = StyleSheet.create({
   permissionOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',

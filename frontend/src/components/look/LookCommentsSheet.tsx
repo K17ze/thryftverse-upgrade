@@ -175,7 +175,7 @@ export function LookCommentsSheet({
   return (
     <Reanimated.View
       entering={SlideInDown.duration(300)}
-      style={StyleSheet.absoluteFillObject}
+      style={StyleSheet.absoluteFill}
     >
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>

@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   texture: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     overflow: 'hidden',
   },
   stripe: {

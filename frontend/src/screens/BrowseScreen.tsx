@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   },
   gridImage: { width: '100%', height: '100%' },
   sharedImageLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   likeBtn: {
     position: 'absolute',

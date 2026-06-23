@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   soldOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -757,7 +757,7 @@ const styles = StyleSheet.create({
 
   // More menu
   moreOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.3)',
     zIndex: 20,
     justifyContent: 'center',

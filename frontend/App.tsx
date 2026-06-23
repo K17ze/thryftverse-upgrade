@@ -400,7 +400,7 @@ export default function App() {
                           setQueuedConversationId(null);
                         }}
                       >
-                        <StatusBar style={ActiveTheme === 'light' ? 'dark' : 'light'} backgroundColor={Colors.background} />
+                        <StatusBar style={ActiveTheme === 'light' ? 'dark' : 'light'} />
                         {ThemeReadyNavigator ? <ThemeReadyNavigator /> : null}
                       </NavigationContainer>
                     </TabScrollProvider>

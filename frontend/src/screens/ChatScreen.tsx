@@ -1671,7 +1671,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             if (!selectedMessage) return;
             switch (action) {
               case 'copy': {
-                Clipboard.setString(selectedMessage.text ?? '');
+                Clipboard.setStringAsync(selectedMessage.text ?? '');
                 show('Copied', 'success');
                 break;
               }

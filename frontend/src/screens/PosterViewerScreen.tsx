@@ -276,7 +276,7 @@ export default function PosterViewerScreen() {
           style={styles.mediaFull}
           contentFit="cover"
           priority="high"
-          containerStyle={StyleSheet.absoluteFillObject}
+          containerStyle={StyleSheet.absoluteFill}
           onError={() => setMediaError(true)}
         />
       ) : (
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
   },
   backdropOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.15)',
   },
   overlay: {
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   mediaErrorOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.7)',

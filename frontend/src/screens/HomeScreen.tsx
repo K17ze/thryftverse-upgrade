@@ -1231,7 +1231,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   posterShade: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.2)',
   },
   posterAvatarOverlay: {
@@ -1413,7 +1413,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   exploreSharedMedia: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   exploreImage: {
     width: '100%',

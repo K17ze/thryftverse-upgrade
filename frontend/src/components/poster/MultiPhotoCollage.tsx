@@ -49,7 +49,7 @@ export default function MultiPhotoCollage({ layout, photos, onPhotosChange, canv
     return (
       <View key={slotIndex} style={[styles.slot, slotStyle]}>
         {uri ? (
-          <Image source={{ uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+          <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         ) : (
           <Pressable style={styles.addBtn} onPress={() => handlePickPhoto(slotIndex)}>
             <Ionicons name="add" size={28} color="rgba(255,255,255,0.7)" />
@@ -66,21 +66,21 @@ export default function MultiPhotoCollage({ layout, photos, onPhotosChange, canv
   switch (layout) {
     case 'split-h':
       return (
-        <View style={[StyleSheet.absoluteFillObject, { flexDirection: 'row', gap: slotGap }]}>
+        <View style={[StyleSheet.absoluteFill, { flexDirection: 'row', gap: slotGap }]}>
           {renderSlot(0, { flex: 1 })}
           {renderSlot(1, { flex: 1 })}
         </View>
       );
     case 'split-v':
       return (
-        <View style={[StyleSheet.absoluteFillObject, { flexDirection: 'column', gap: slotGap }]}>
+        <View style={[StyleSheet.absoluteFill, { flexDirection: 'column', gap: slotGap }]}>
           {renderSlot(0, { flex: 1 })}
           {renderSlot(1, { flex: 1 })}
         </View>
       );
     case 'triple-h':
       return (
-        <View style={[StyleSheet.absoluteFillObject, { flexDirection: 'row', gap: slotGap }]}>
+        <View style={[StyleSheet.absoluteFill, { flexDirection: 'row', gap: slotGap }]}>
           {renderSlot(0, { flex: 1 })}
           {renderSlot(1, { flex: 1 })}
           {renderSlot(2, { flex: 1 })}
@@ -88,7 +88,7 @@ export default function MultiPhotoCollage({ layout, photos, onPhotosChange, canv
       );
     case 'grid-2x2':
       return (
-        <View style={[StyleSheet.absoluteFillObject, { gap: slotGap }]}>
+        <View style={[StyleSheet.absoluteFill, { gap: slotGap }]}>
           <View style={{ flex: 1, flexDirection: 'row', gap: slotGap }}>
             {renderSlot(0, { flex: 1 })}
             {renderSlot(1, { flex: 1 })}
@@ -101,7 +101,7 @@ export default function MultiPhotoCollage({ layout, photos, onPhotosChange, canv
       );
     case 'photo-booth':
       return (
-        <View style={[StyleSheet.absoluteFillObject, { gap: slotGap, padding: 20, backgroundColor: '#fff' }]}>
+        <View style={[StyleSheet.absoluteFill, { gap: slotGap, padding: 20, backgroundColor: '#fff' }]}>
           <View style={{ flex: 1, flexDirection: 'row', gap: slotGap }}>
             {renderSlot(0, { flex: 1, borderRadius: 4 })}
             {renderSlot(1, { flex: 1, borderRadius: 4 })}

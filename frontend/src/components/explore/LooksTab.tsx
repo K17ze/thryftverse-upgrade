@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   imageShared: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   gradient: {
     position: 'absolute',

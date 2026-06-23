@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   dots: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   dot: {
     position: 'absolute',

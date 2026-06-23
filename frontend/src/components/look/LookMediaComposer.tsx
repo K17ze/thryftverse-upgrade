@@ -187,7 +187,7 @@ export function LookMediaComposer({
       }}
       {...panResponder.panHandlers}
     >
-      <Pressable onPress={handlePhotoPress} style={StyleSheet.absoluteFillObject}>
+      <Pressable onPress={handlePhotoPress} style={StyleSheet.absoluteFill}>
         <CachedImage uri={imageUri} style={styles.image} contentFit="cover" />
       </Pressable>
 

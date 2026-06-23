@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   coverGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   coverInfo: {

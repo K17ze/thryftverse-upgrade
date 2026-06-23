@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cardOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
     padding: Space.xs,
   },

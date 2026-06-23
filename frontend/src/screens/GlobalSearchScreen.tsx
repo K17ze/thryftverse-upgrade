@@ -976,11 +976,11 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   topSearchCardImage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.35,
   },
   topSearchCardOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'flex-end',
     padding: 14,
   },

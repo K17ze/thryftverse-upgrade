@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   heartOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
