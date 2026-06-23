@@ -38,6 +38,7 @@
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo/ui": "~56.0.18",
     "@expo/vector-icons": "^15.1.1",
+    "@hookform/resolvers": "^5.4.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
     "@react-navigation/bottom-tabs": "^7.15.6",
@@ -46,6 +47,7 @@
     "@react-navigation/stack": "^7.8.6",
     "@shopify/flash-list": "2.0.2",
     "@shopify/react-native-skia": "2.6.2",
+    "@tanstack/react-query": "^5.101.1",
     "expo": "~56.0.0",
     "expo-apple-authentication": "~56.0.4",
     "expo-asset": "~56.0.17",
@@ -71,6 +73,7 @@
     "qrcode": "^1.5.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-hook-form": "^7.80.0",
     "react-native": "0.85.3",
     "react-native-gesture-handler": "~2.31.1",
     "react-native-keyboard-controller": "1.21.6",
@@ -81,6 +84,7 @@
     "react-native-web": "^0.21.0",
     "react-native-worklets": "0.8.3",
     "tslib": "^2.8.1",
+    "zod": "^4.4.3",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
