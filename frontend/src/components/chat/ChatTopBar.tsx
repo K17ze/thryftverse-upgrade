@@ -129,6 +129,8 @@ export function ChatTopBar({
             <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
               {avatarUrl ? (
                 <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
+              ) : variant === 'group' ? (
+                <Ionicons name="people" size={18} color={Colors.textSecondary} />
               ) : (
                 <Text style={styles.avatarText}>{initials ?? '?'}</Text>
               )}
@@ -184,6 +186,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 2,
   },
   searchRoot: {
     flexDirection: 'row',
@@ -257,10 +264,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   subtitle: {
     fontSize: Type.caption.size,

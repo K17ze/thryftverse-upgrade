@@ -224,20 +224,29 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   bubble: {
-    paddingHorizontal: Space.md,
+    paddingHorizontal: Space.md - 2,
     paddingVertical: Space.sm + 2,
     gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   bubbleMe: {
     backgroundColor: Colors.textPrimary,
     alignSelf: 'flex-end',
   },
   bubbleThem: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
     alignSelf: 'flex-start',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   bubbleFailed: {
     backgroundColor: `${Colors.danger}10`,
+    borderWidth: 1,
+    borderColor: `${Colors.danger}30`,
   },
   replyBlock: {
     borderLeftWidth: 3,

@@ -1628,13 +1628,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.xl,
+    paddingBottom: Space.xxl,
   },
 
   emptyGlyph: {
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
-    opacity: 0.5,
+    width: 80,
+    height: 80,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
   },
 
   emptyTitle: {
@@ -1780,14 +1784,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: `${Colors.textMuted}10`,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
     marginHorizontal: -Space.md,
     marginTop: -Space.xs,
     marginBottom: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
   },
 
   offlineBannerText: {

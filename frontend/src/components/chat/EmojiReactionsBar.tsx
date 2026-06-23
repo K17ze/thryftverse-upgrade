@@ -144,8 +144,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 0.5,
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   chipActive: {
     borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}15`,
+    backgroundColor: `${Colors.brand}10`,
   },
   emoji: {
     fontSize: 16,

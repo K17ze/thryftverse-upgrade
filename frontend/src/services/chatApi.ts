@@ -132,16 +132,21 @@ export async function createGroupConversationOnApi(input: {
   title: string;
   memberIds: string[];
   itemId?: string;
+  idempotencyKey?: string;
 }): Promise<Conversation> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (input.idempotencyKey) {
+    headers['X-Idempotency-Key'] = input.idempotencyKey;
+  }
   const payload = await fetchJson<{
     ok: true;
     conversation: ApiConversationPayload;
     initialMessage: ApiMessagePayload | null;
   }>('/chat/groups', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       title: input.title.trim(),
       memberIds: input.memberIds,

@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   StyleSheet,
   Text,
   View,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +16,9 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { createGroupConversationOnApi } from '../services/chatApi';
+import { searchUsers, UserSearchResult } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
+import { createStableId } from '../utils/createStableId';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
@@ -26,57 +29,100 @@ import { useHaptic } from '../hooks/useHaptic';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateGroupChat'>;
 
+interface SelectableUser extends UserSearchResult {
+  displayName: string | null;
+  avatar: string | null;
+}
+
 export default function CreateGroupChatScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
+  const isBlockedUser = useStore((state) => state.isBlockedUser);
   const { show } = useToast();
   const haptic = useHaptic();
 
   const [title, setTitle] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<Map<string, SelectableUser>>(new Map());
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [searchResults, setSearchResults] = useState<SelectableUser[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const MAX_MEMBERS = 50;
   const MIN_MEMBERS = 1;
 
-  const conversations = useStore((state) => state.conversations);
+  const filteredResults = useMemo(() => {
+    return searchResults.filter((user) => !isBlockedUser(user.id));
+  }, [searchResults, isBlockedUser]);
 
-  const members = useMemo(() => {
-    const participantIds = new Set<string>();
-    for (const convo of conversations) {
-      for (const pid of convo.participantIds ?? []) {
-        if (pid !== 'me' && pid !== (currentUser?.id ?? 'me')) {
-          participantIds.add(pid);
-        }
-      }
-    }
-    return Array.from(participantIds).map((id) => ({ id, username: id.slice(0, 8) }));
-  }, [conversations, currentUser?.id]);
-
-  const filteredMembers = useMemo(() => {
-    if (!searchQuery.trim()) return members;
-    const query = String(searchQuery).toLowerCase();
-    return members.filter(
-      (user) => String(user.username).toLowerCase().includes(query)
-    );
-  }, [members, searchQuery]);
-
-  const toggleMember = (userId: string) => {
+  const toggleMember = (user: SelectableUser) => {
     haptic.light();
     setErrorMsg('');
     setSelectedIds((current) => {
-      if (current.includes(userId)) {
-        return current.filter((id) => id !== userId);
+      if (current.includes(user.id)) {
+        setSelectedUsers((prev) => {
+          const next = new Map(prev);
+          next.delete(user.id);
+          return next;
+        });
+        return current.filter((id) => id !== user.id);
       }
       if (current.length >= MAX_MEMBERS) {
         show(`Groups are limited to ${MAX_MEMBERS} members`, 'error');
         return current;
       }
-      return [...current, userId];
+      setSelectedUsers((prev) => {
+        const next = new Map(prev);
+        next.set(user.id, user);
+        return next;
+      });
+      return [...current, user.id];
     });
   };
+
+  const performSearch = useCallback(async (query: string) => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setSearchResults([]);
+      setHasSearched(false);
+      return;
+    }
+    setIsSearching(true);
+    setHasSearched(false);
+    try {
+      const results = await searchUsers(trimmed, 20);
+      const filtered = results
+        .filter((r) => r.id !== currentUser?.id)
+        .map((r) => ({ ...r, displayName: r.displayName, avatar: r.avatar }));
+      setSearchResults(filtered);
+      setHasSearched(true);
+    } catch {
+      setSearchResults([]);
+      setHasSearched(true);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setHasSearched(false);
+      setIsSearching(false);
+      return;
+    }
+    searchTimerRef.current = setTimeout(() => {
+      void performSearch(searchQuery);
+    }, 350);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery, performSearch]);
 
   const handleCreateGroup = async () => {
     const groupTitle = title.trim();
@@ -93,9 +139,11 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
     setErrorMsg('');
 
     try {
+      const idempotencyKey = createStableId();
       const conversation = await createGroupConversationOnApi({
         title: groupTitle,
         memberIds: selectedIds,
+        idempotencyKey,
       });
 
       upsertConversation(conversation);
@@ -135,12 +183,20 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           <View style={styles.selectedRail}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectedRailContent}>
               {selectedIds.map((id) => {
-                const user = members.find((m) => m.id === id);
+                const user = selectedUsers.get(id);
+                const displayName = user?.displayName ?? user?.username ?? 'User';
                 return (
                   <View key={id} style={styles.selectedChip}>
-                    <Caption color={Colors.textPrimary} style={styles.selectedChipText}>@{user?.username ?? id.slice(0, 8)}</Caption>
+                    {user?.avatar ? (
+                      <CachedImage uri={user.avatar} style={styles.selectedChipAvatar} contentFit="cover" />
+                    ) : (
+                      <View style={styles.selectedChipAvatarPlaceholder}>
+                        <Text style={styles.selectedChipAvatarText}>{displayName[0]?.toUpperCase() ?? '?'}</Text>
+                      </View>
+                    )}
+                    <Caption color={Colors.textPrimary} style={styles.selectedChipText}>@{user?.username ?? displayName}</Caption>
                     <AnimatedPressable
-                      onPress={() => toggleMember(id)}
+                      onPress={() => user && toggleMember(user)}
                       activeOpacity={0.7}
                       scaleValue={0.9}
                       hapticFeedback="light"
@@ -192,21 +248,32 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           </View>
         ) : null}
 
-        {filteredMembers.length === 0 ? (
+        {!searchQuery.trim() ? (
+          <View style={styles.emptyWrap}>
+            <Ionicons name="search-outline" size={36} color={Colors.textMuted} />
+            <Caption color={Colors.textMuted} style={styles.emptyText}>
+              Search by username to add members to your group.
+            </Caption>
+          </View>
+        ) : isSearching ? (
+          <View style={styles.emptyWrap}>
+            <ActivityIndicator size="small" color={Colors.textMuted} />
+            <Caption color={Colors.textMuted} style={styles.emptyText}>Searching...</Caption>
+          </View>
+        ) : filteredResults.length === 0 ? (
           <View style={styles.emptyWrap}>
             <Ionicons name="people-outline" size={36} color={Colors.textMuted} />
             <Caption color={Colors.textMuted} style={styles.emptyText}>
-              {searchQuery.trim()
-                ? 'No users match your search.'
-                : 'Start conversations to see contacts here.'}
+              {hasSearched ? 'No users match your search.' : 'Type at least 2 characters to search.'}
             </Caption>
           </View>
         ) : (
           <FlashList
-            data={filteredMembers}
+            data={filteredResults}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => {
               const selected = selectedIds.includes(item.id);
+              const displayName = item.displayName ?? item.username;
               return (
                 <View>
                   <ChatCard
@@ -216,20 +283,26 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
                     <AnimatedPressable
                       style={styles.memberSelectTap}
                       activeOpacity={0.85}
-                      onPress={() => toggleMember(item.id)}
+                      onPress={() => toggleMember(item)}
                       accessibilityRole="button"
                       accessibilityLabel={`${selected ? 'Deselect' : 'Select'} @${item.username}`}
                       accessibilityHint="Toggles this member for the new group"
                       scaleValue={0.98}
                       hapticFeedback="light"
                     >
-                      <View style={styles.memberAvatar}>
-                        <Ionicons name="person" size={18} color={Colors.textMuted} />
-                      </View>
+                      {item.avatar ? (
+                        <CachedImage uri={item.avatar} style={styles.memberAvatar} contentFit="cover" />
+                      ) : (
+                        <View style={styles.memberAvatarPlaceholder}>
+                          <Text style={styles.memberAvatarText}>{displayName[0]?.toUpperCase() ?? '?'}</Text>
+                        </View>
+                      )}
 
                       <View style={styles.memberTextWrap}>
                         <BodyEmphasis>@{item.username}</BodyEmphasis>
-                        <Caption color={Colors.textSecondary}>Conversation contact</Caption>
+                        {item.displayName ? (
+                          <Caption color={Colors.textSecondary}>{item.displayName}</Caption>
+                        ) : null}
                       </View>
 
                       <Ionicons
@@ -350,6 +423,19 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: Radius.full,
   },
+  memberAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  memberAvatarText: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+  },
   memberTextWrap: {
     flex: 1,
   },
@@ -387,6 +473,24 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
+  },
+  selectedChipAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+  },
+  selectedChipAvatarPlaceholder: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedChipAvatarText: {
+    fontSize: 10,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textPrimary,
   },
   charCount: {
     textAlign: 'right',

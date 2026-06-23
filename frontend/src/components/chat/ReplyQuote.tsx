@@ -80,11 +80,13 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.sm,
     marginBottom: Space.xs,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   bar: {
     width: 3,
