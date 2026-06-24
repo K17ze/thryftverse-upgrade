@@ -290,8 +290,8 @@ describe('ItemDetailScreen static smoke', () => {
     expect(src).toContain('item.seller');
   });
 
-  it('fetches related listings from backend', () => {
-    expect(src).toContain('fetchRelatedListings');
+  it('fetches recommendations from backend', () => {
+    expect(src).toContain('useRecommendations');
   });
 });
 
