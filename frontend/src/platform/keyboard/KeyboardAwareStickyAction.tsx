@@ -5,6 +5,7 @@ import {
   type KeyboardAwareScrollViewProps,
 } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Space } from '../../theme/designTokens';
 
 export interface KeyboardAwareStickyActionProps {
   children: React.ReactNode;
@@ -63,7 +64,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   actionContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(0,0,0,0.06)',

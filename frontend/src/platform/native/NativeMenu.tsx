@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, BackHandler } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
 
 export interface NativeMenuOption {
   label: string;
@@ -77,7 +78,7 @@ const styles = StyleSheet.create({
   },
   option: {
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
   },
   optionText: {
     fontSize: 15,
