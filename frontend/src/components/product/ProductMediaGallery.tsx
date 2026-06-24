@@ -44,8 +44,6 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
   return v;
 };
 
-const MEDIA_LABELS = ['Front', 'Back', 'Label', 'Detail', 'Defect', 'Fit'];
-
 interface MediaPageProps {
   uri: string;
   width: number;
@@ -237,7 +235,7 @@ export function ProductMediaGallery({
 
   const announceMedia = (index: number) => {
     AccessibilityInfo.announceForAccessibility(
-      `Image ${index + 1} of ${images.length}${MEDIA_LABELS[index] ? `, ${MEDIA_LABELS[index]}` : ''}`
+      `Image ${index + 1} of ${images.length}`
     );
   };
 
@@ -354,13 +352,6 @@ export function ProductMediaGallery({
         </View>
       )}
 
-      {/* Media label */}
-      {MEDIA_LABELS[activeIndex] && images.length > 1 && (
-        <View style={styles.mediaLabelBadge}>
-          <Text style={styles.mediaLabelText}>{MEDIA_LABELS[activeIndex]}</Text>
-        </View>
-      )}
-
       {/* Thumbnail strip */}
       {images.length > 1 && (
         <View style={styles.thumbnailStrip}>
@@ -379,7 +370,7 @@ export function ProductMediaGallery({
                     scrollToIndex(index);
                     announceMedia(index);
                   }}
-                  accessibilityLabel={`View ${MEDIA_LABELS[index] ?? `image ${index + 1}`}`}
+                  accessibilityLabel={`View image ${index + 1}`}
                   style={[styles.thumbnail, isActive && styles.thumbnailActive]}
                 >
                   <CachedImage
@@ -499,21 +490,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   videoBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
-  },
-  mediaLabelBadge: {
-    position: 'absolute',
-    bottom: Space.sm,
-    left: '50%',
-    transform: [{ translateX: -30 }],
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
-  mediaLabelText: {
     color: '#fff',
     fontSize: 12,
     fontFamily: Typography.family.medium,
