@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   ScrollView,
   TextInput,
   Switch,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,12 +15,16 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
-import { createStableId } from '../utils/createStableId';
 import { createLookOnApi } from '../services/looksApi';
 import { createPosterStory } from '../services/postersApi';
-import type { CreatorStoryCreateFrame } from './publishTypes';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { uploadAllLocalMedia, hasLocalUris } from './mediaUploadPipeline';
+import {
+  validateForPublish,
+  serialiseToLookPayload,
+  serialiseToPosterPayload,
+  PublishGuard,
+} from './compositionContract';
 
 export interface CreatorPublishSheetProps {
   visible: boolean;
@@ -35,20 +38,34 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
   const [errorMessage, setErrorMessage] = useState('');
   const [publishedId, setPublishedId] = useState('');
   const [uploadProgress, setUploadProgress] = useState('');
+  const publishGuardRef = useRef(new PublishGuard());
 
   const handleClose = useCallback(() => {
     if (stage === 'publishing' || stage === 'uploading') return;
     setStage('review');
     setErrorMessage('');
+    setUploadProgress('');
+    publishGuardRef.current.reset();
     onClose();
   }, [stage, onClose]);
 
   const handlePublish = useCallback(async () => {
+    // Prevent duplicate submissions
+    if (!publishGuardRef.current.begin(document.id)) {
+      return;
+    }
+
     CreatorAnalytics.publishStart(document.type);
     try {
+      // 1. Validate the document before any upload
+      const validation = validateForPublish(document);
+      if (!validation.valid) {
+        throw new Error(validation.errors.join('; '));
+      }
+
       let workingDoc = document;
 
-      // Upload all local media URIs before publishing
+      // 2. Upload all local media URIs before publishing
       if (hasLocalUris(document)) {
         setStage('uploading');
         workingDoc = await uploadAllLocalMedia(document, (progress) => {
@@ -58,77 +75,42 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
         });
       }
 
+      // 3. Re-validate after upload to ensure no local URIs remain
+      const postUploadValidation = validateForPublish(workingDoc);
+      if (!postUploadValidation.valid) {
+        throw new Error(postUploadValidation.errors.join('; '));
+      }
+
       setStage('publishing');
       setUploadProgress('');
 
       if (workingDoc.type === 'look') {
-        const mediaLayer = workingDoc.pages[0].layers.find((l) => l.type === 'media');
-        if (!mediaLayer || mediaLayer.type !== 'media') {
-          throw new Error('No media found in document');
-        }
-        const tags = workingDoc.pages[0].layers
-          .filter((l) => l.type === 'product')
-          .map((l) => ({
-            id: l.id,
-            listingId: l.type === 'product' ? l.payload.listingId : undefined,
-            label: l.type === 'product' ? l.payload.snapshotTitle : '',
-            x: l.x,
-            y: l.y,
-          }));
+        // 4. Serialise to canonical look payload
+        const { payload } = serialiseToLookPayload(workingDoc);
 
-        const result = await createLookOnApi({
-          id: createStableId('look'),
-          title: workingDoc.metadata.title || 'Untitled Look',
-          caption: workingDoc.metadata.caption,
-          mediaUrl: mediaLayer.payload.mediaUri,
-          visibility: workingDoc.metadata.visibility,
-          tags,
-          status: 'published',
-        });
+        // 5. Send real publish request
+        const result = await createLookOnApi(payload);
+
+        // 6. Confirm server success
+        publishGuardRef.current.complete(workingDoc.id);
         setPublishedId(result.lookId);
         setStage('success');
         CreatorAnalytics.publishSuccess('look', result.lookId);
       } else {
-        const frames: CreatorStoryCreateFrame[] = workingDoc.pages.map((page, i) => ({
-          id: page.id,
-          mediaType: page.layers.find((l) => l.type === 'media')?.type === 'media'
-            ? (page.layers.find((l) => l.type === 'media') as any).payload.mediaType
-            : 'text',
-          mediaUrl: page.layers.find((l) => l.type === 'media')?.type === 'media'
-            ? (page.layers.find((l) => l.type === 'media') as any).payload.mediaUri
-            : undefined,
-          caption: page.layers.find((l) => l.type === 'text')?.type === 'text'
-            ? (page.layers.find((l) => l.type === 'text') as any).payload.text
-            : '',
-          durationMs: page.durationMs ?? 5000,
-          sortOrder: i,
-          stickers: page.layers
-            .filter((l) => l.type !== 'media' && !(l.type === 'text' && l.id.startsWith('caption_')))
-            .map((l, si) => ({
-              id: l.id,
-              type: mapLayerTypeToStickerType(l.type),
-              x: l.x,
-              y: l.y,
-              scale: l.scale,
-              rotation: l.rotation,
-              payload: extractPayload(l),
-              sortOrder: si,
-            })),
-        }));
+        // 4. Serialise to canonical poster payload
+        const { payload } = serialiseToPosterPayload(workingDoc);
 
-        const result = await createPosterStory({
-          id: createStableId('story'),
-          audience: workingDoc.metadata.visibility,
-          allowReplies: workingDoc.metadata.allowReplies,
-          allowReactions: workingDoc.metadata.allowReactions,
-          expiresInHours: workingDoc.metadata.expiresInHours ?? 24,
-          frames,
-        });
+        // 5. Send real publish request
+        const result = await createPosterStory(payload);
+
+        // 6. Confirm server success
+        publishGuardRef.current.complete(workingDoc.id);
         setPublishedId(result.storyId);
         setStage('success');
         CreatorAnalytics.publishSuccess('poster', result.storyId);
       }
     } catch (err: any) {
+      publishGuardRef.current.fail();
       setErrorMessage(err?.message ?? 'Publishing failed');
       setStage('error');
       CreatorAnalytics.publishError(document.type, err?.message ?? 'Unknown error');
@@ -305,21 +287,6 @@ function PublishReview({
       </View>
     </ScrollView>
   );
-}
-
-function mapLayerTypeToStickerType(type: string): 'text' | 'mention' | 'listing' | 'look' | 'style_vote' {
-  switch (type) {
-    case 'text': return 'text';
-    case 'mention': return 'mention';
-    case 'product': return 'listing';
-    case 'look': return 'look';
-    case 'vote': return 'style_vote';
-    default: return 'text';
-  }
-}
-
-function extractPayload(layer: any): Record<string, unknown> {
-  return layer.payload as Record<string, unknown>;
 }
 
 const styles = StyleSheet.create({
