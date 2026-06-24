@@ -15434,24 +15434,78 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
 
   // 9. Continue exploring
   if (shouldInclude('continue_exploring')) {
-    const offset = cursor ? parseInt(cursor, 10) || 0 : 0;
-    const candidates = await fetchCandidates(
-      `l.id != $1 AND l.status = 'active'`,
-      [listingId],
-      limit + 1
+    let cursorCreatedAt: string | null = null;
+    let cursorId: string | null = null;
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
+        cursorCreatedAt = decoded.createdAt ?? null;
+        cursorId = decoded.id ?? null;
+      } catch {
+        reply.code(400);
+        return { ok: false, error: 'Invalid cursor' };
+      }
+    }
+
+    const candidates = await readDb.query<CandidateRow>(
+      `
+        SELECT
+          l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+          l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
+          u.username AS seller_username
+        FROM listings l
+        LEFT JOIN users u ON u.id = l.seller_id
+        WHERE l.id != $1 AND l.status = 'active'
+          ${cursorCreatedAt && cursorId ? 'AND (l.created_at, l.id) < ($2, $3)' : ''}
+        ORDER BY l.created_at DESC, l.id DESC
+        LIMIT $${cursorCreatedAt && cursorId ? 4 : 2}
+      `,
+      cursorCreatedAt && cursorId
+        ? [listingId, cursorCreatedAt, cursorId, limit + 1]
+        : [listingId, limit + 1]
     );
-    const remaining = candidates.filter((c) => !usedListingIds.has(c.row.id));
-    const sliced = remaining.slice(offset, offset + limit);
-    const hasMore = offset + limit < remaining.length;
-    if (sliced.length > 0) {
+
+    const listingIds = candidates.rows.map((r) => r.id);
+    const imagesResult = listingIds.length
+      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
+          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
+          [listingIds]
+        )
+      : { rows: [] };
+
+    const imagesByListing = new Map<string, string[]>();
+    for (const img of imagesResult.rows) {
+      const arr = imagesByListing.get(img.listing_id) ?? [];
+      arr.push(img.image_url);
+      imagesByListing.set(img.listing_id, arr);
+    }
+
+    const mapped = candidates.rows
+      .filter((row) => !usedListingIds.has(row.id))
+      .map((row) => ({
+        row,
+        images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      }))
+      .slice(0, limit);
+
+    const hasMore = candidates.rows.length > limit;
+    const lastItem = mapped[mapped.length - 1];
+    const nextCursor = hasMore && lastItem
+      ? Buffer.from(JSON.stringify({
+          createdAt: lastItem.row.created_at,
+          id: lastItem.row.id,
+        })).toString('base64')
+      : undefined;
+
+    if (mapped.length > 0) {
       sections.push({
         key: 'continue_exploring',
         title: 'Explore more',
         subtitle: 'Keep discovering',
         reason: 'Recently viewed and trending',
         personalised: false,
-        items: sliced.map(mapToListingItem),
-        nextCursor: hasMore ? String(offset + limit) : undefined,
+        items: mapped.map(mapToListingItem),
+        nextCursor,
       });
     }
   }
