@@ -9,33 +9,43 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export interface KeyboardAwareStickyActionProps {
   children: React.ReactNode;
   action?: React.ReactNode;
+  stickyAction?: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
+  contentContainerStyle?: StyleProp<ViewStyle>;
   actionStyle?: StyleProp<ViewStyle>;
   scrollProps?: Partial<KeyboardAwareScrollViewProps>;
+  keyboardShouldPersistTaps?: 'always' | 'never' | 'handled';
 }
 
 export function KeyboardAwareStickyAction({
   children,
   action,
+  stickyAction,
+  style,
   contentStyle,
+  contentContainerStyle,
   actionStyle,
   scrollProps,
+  keyboardShouldPersistTaps,
 }: KeyboardAwareStickyActionProps) {
   const insets = useSafeAreaInsets();
+  const sticky = stickyAction ?? action;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       <KeyboardAwareScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, contentStyle]}
+        contentContainerStyle={[styles.content, contentContainerStyle, contentStyle]}
         bottomOffset={insets.bottom}
+        keyboardShouldPersistTaps={keyboardShouldPersistTaps}
         {...scrollProps}
       >
         {children}
       </KeyboardAwareScrollView>
-      {action ? (
+      {sticky ? (
         <View style={[styles.actionContainer, { paddingBottom: insets.bottom + 12 }, actionStyle]}>
-          {action}
+          {sticky}
         </View>
       ) : null}
     </View>
@@ -51,8 +61,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
   },
   actionContainer: {
     paddingHorizontal: 16,

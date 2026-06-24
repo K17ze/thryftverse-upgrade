@@ -7,8 +7,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Pressable,
-  Platform,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +27,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 import { useHaptic } from '../hooks/useHaptic';
+import { KeyboardAwareStickyAction } from '../platform/keyboard';
 import {
   MAX_MEMBERS,
   MIN_MEMBERS,
@@ -251,106 +250,101 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   if (stage === 'details') {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Group Details" onBack={handleBackToSelect} />} scrollEnabled={false}>
-        <KeyboardAvoidingView
+        <KeyboardAwareStickyAction
           style={styles.detailsRoot}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={0}
+          contentContainerStyle={styles.detailsContent}
+          keyboardShouldPersistTaps="always"
+          stickyAction={
+            <>
+              {createError ? (
+                <View style={styles.createErrorBanner}>
+                  <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+                  <Text style={styles.createErrorText}>{createError}</Text>
+                  <Pressable onPress={handleRetryCreate} hitSlop={8}>
+                    <Text style={styles.retryText}>Retry</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              <View style={[styles.stickyAction, { paddingBottom: Math.max(insets.bottom, Space.sm) + 8 }]}>
+                <AppButton
+                  style={[styles.createBtn, (!title.trim() || isCreating) && styles.createBtnDisabled]}
+                  variant="primary"
+                  size="md"
+                  align="center"
+                  title={isCreating ? 'Creating...' : 'Create Group'}
+                  onPress={() => void handleCreateGroup()}
+                  disabled={!title.trim() || isCreating}
+                  accessibilityLabel={isCreating ? 'Creating group chat' : 'Create group chat'}
+                  accessibilityRole="button"
+                />
+              </View>
+            </>
+          }
         >
-          <ScrollView
-            style={styles.detailsScroll}
-            contentContainerStyle={[styles.detailsContent, { paddingBottom: insets.bottom + 80 }]}
-            keyboardShouldPersistTaps="always"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.avatarSelectorWrap}>
-              <View style={styles.avatarSelector}>
-                <Ionicons name="camera-outline" size={28} color={Colors.textMuted} />
-              </View>
-              <Caption color={Colors.textMuted} style={styles.avatarHint}>Group photo</Caption>
+          <View style={styles.avatarSelectorWrap}>
+            <View style={styles.avatarSelector}>
+              <Ionicons name="camera-outline" size={28} color={Colors.textMuted} />
             </View>
+            <Caption color={Colors.textMuted} style={styles.avatarHint}>Group photo</Caption>
+          </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Group name</Text>
-              <AppInput
-                value={title}
-                onChangeText={(t) => { setTitle(t); setCreateError(''); }}
-                placeholder="Group name"
-                placeholderTextColor={Colors.textMuted}
-                maxLength={80}
-                inputContainerStyle={styles.fieldInputWrap}
-                inputStyle={styles.fieldInput}
-                accessibilityLabel="Group name input"
-                accessibilityHint="Enter a name for the new group chat"
-              />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Description (optional)</Text>
-              <AppInput
-                value={description}
-                onChangeText={(t) => { setDescription(t); setCreateError(''); }}
-                placeholder="What's this group about?"
-                placeholderTextColor={Colors.textMuted}
-                maxLength={280}
-                multiline
-                inputContainerStyle={styles.fieldInputWrapMultiline}
-                inputStyle={styles.fieldInputMultiline}
-                accessibilityLabel="Group description input"
-                accessibilityHint="Enter an optional description for the group"
-              />
-              <Text style={styles.charCount}>{description.length}/280</Text>
-            </View>
-
-            <View style={styles.participantSection}>
-              <View style={styles.participantHeader}>
-                <Text style={styles.fieldLabel}>{selectedIds.length} member{selectedIds.length === 1 ? '' : 's'}</Text>
-              </View>
-              {selectedIds.map((id) => {
-                const user = selectedUsers.get(id);
-                const displayName = user?.displayName ?? user?.username ?? 'User';
-                return (
-                  <View key={id} style={styles.participantRow}>
-                    {user?.avatar ? (
-                      <CachedImage uri={user.avatar} style={styles.participantAvatar} contentFit="cover" />
-                    ) : (
-                      <View style={styles.participantAvatarPlaceholder}>
-                        <Text style={styles.participantAvatarText}>{displayName[0]?.toUpperCase() ?? '?'}</Text>
-                      </View>
-                    )}
-                    <View style={styles.participantTextWrap}>
-                      <Text style={styles.participantName} numberOfLines={1}>{displayName}</Text>
-                      <Text style={styles.participantHandle} numberOfLines={1}>@{user?.username}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
-
-          {createError ? (
-            <View style={styles.createErrorBanner}>
-              <Ionicons name="alert-circle" size={16} color={Colors.danger} />
-              <Text style={styles.createErrorText}>{createError}</Text>
-              <Pressable onPress={handleRetryCreate} hitSlop={8}>
-                <Text style={styles.retryText}>Retry</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          <View style={[styles.stickyAction, { paddingBottom: Math.max(insets.bottom, Space.sm) + 8 }]}>
-            <AppButton
-              style={[styles.createBtn, (!title.trim() || isCreating) && styles.createBtnDisabled]}
-              variant="primary"
-              size="md"
-              align="center"
-              title={isCreating ? 'Creating...' : 'Create Group'}
-              onPress={() => void handleCreateGroup()}
-              disabled={!title.trim() || isCreating}
-              accessibilityLabel={isCreating ? 'Creating group chat' : 'Create group chat'}
-              accessibilityRole="button"
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Group name</Text>
+            <AppInput
+              value={title}
+              onChangeText={(t) => { setTitle(t); setCreateError(''); }}
+              placeholder="Group name"
+              placeholderTextColor={Colors.textMuted}
+              maxLength={80}
+              inputContainerStyle={styles.fieldInputWrap}
+              inputStyle={styles.fieldInput}
+              accessibilityLabel="Group name input"
+              accessibilityHint="Enter a name for the new group chat"
             />
           </View>
-        </KeyboardAvoidingView>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Description (optional)</Text>
+            <AppInput
+              value={description}
+              onChangeText={(t) => { setDescription(t); setCreateError(''); }}
+              placeholder="What's this group about?"
+              placeholderTextColor={Colors.textMuted}
+              maxLength={280}
+              multiline
+              inputContainerStyle={styles.fieldInputWrapMultiline}
+              inputStyle={styles.fieldInputMultiline}
+              accessibilityLabel="Group description input"
+              accessibilityHint="Enter an optional description for the group"
+            />
+            <Text style={styles.charCount}>{description.length}/280</Text>
+          </View>
+
+          <View style={styles.participantSection}>
+            <View style={styles.participantHeader}>
+              <Text style={styles.fieldLabel}>{selectedIds.length} member{selectedIds.length === 1 ? '' : 's'}</Text>
+            </View>
+            {selectedIds.map((id) => {
+              const user = selectedUsers.get(id);
+              const displayName = user?.displayName ?? user?.username ?? 'User';
+              return (
+                <View key={id} style={styles.participantRow}>
+                  {user?.avatar ? (
+                    <CachedImage uri={user.avatar} style={styles.participantAvatar} contentFit="cover" />
+                  ) : (
+                    <View style={styles.participantAvatarPlaceholder}>
+                      <Text style={styles.participantAvatarText}>{displayName[0]?.toUpperCase() ?? '?'}</Text>
+                    </View>
+                  )}
+                  <View style={styles.participantTextWrap}>
+                    <Text style={styles.participantName} numberOfLines={1}>{displayName}</Text>
+                    <Text style={styles.participantHandle} numberOfLines={1}>@{user?.username}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </KeyboardAwareStickyAction>
       </FlagshipScreen>
     );
   }
