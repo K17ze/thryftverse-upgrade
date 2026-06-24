@@ -36,6 +36,8 @@ function CreatorStudioInner() {
   const [editingLayer, setEditingLayer] = useState<CreatorLayer | null>(null);
 
   const page = document.pages[activePageIndex];
+  const isLook = document.type === 'look';
+  const accentColor = isLook ? '#8b7355' : Colors.brand;
 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
@@ -127,7 +129,7 @@ function CreatorStudioInner() {
         </Pressable>
 
         <View style={styles.topCenter}>
-          <Text style={styles.titleText}>
+          <Text style={[styles.titleText, { color: accentColor }]}>
             {document.type === 'look' ? 'Look Studio' : 'Poster Studio'}
           </Text>
           {isLoadingDraft ? (
@@ -137,7 +139,7 @@ function CreatorStudioInner() {
           ) : autosaveStatus === 'failed' ? (
             <Text style={[styles.autosaveText, { color: '#ff6b6b' }]}>Save failed</Text>
           ) : isDirty ? (
-            <View style={styles.dirtyDot} />
+            <View style={[styles.dirtyDot, { backgroundColor: accentColor }]} />
           ) : null}
         </View>
 
@@ -202,7 +204,7 @@ function CreatorStudioInner() {
                   );
                 }
               }}
-              style={[styles.pageThumb, i === activePageIndex && styles.pageThumbActive]}
+              style={[styles.pageThumb, i === activePageIndex && { borderColor: accentColor }]}
               accessibilityLabel={`Page ${i + 1}`}
               accessibilityRole="button"
             >
