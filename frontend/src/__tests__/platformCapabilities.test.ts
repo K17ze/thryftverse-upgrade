@@ -322,4 +322,16 @@ describe('Platform: SDK 56 configuration', () => {
     expect(config.build.preview.channel).toBe('preview');
     expect(config.build.production.channel).toBe('production');
   });
+
+  it('app.json Android permissions are minimal and scoped', () => {
+    const appJson = fs.readFileSync(path.resolve(__dirname, '../../app.json'), 'utf-8');
+    const config = JSON.parse(appJson);
+    const perms = config.expo.android.permissions;
+    expect(perms).toContain('android.permission.CAMERA');
+    expect(perms).toContain('android.permission.READ_MEDIA_IMAGES');
+    expect(perms).not.toContain('android.permission.READ_EXTERNAL_STORAGE');
+    expect(perms).not.toContain('android.permission.WRITE_EXTERNAL_STORAGE');
+    expect(perms).not.toContain('android.permission.RECORD_AUDIO');
+    expect(perms).not.toContain('android.permission.READ_MEDIA_AUDIO');
+  });
 });
