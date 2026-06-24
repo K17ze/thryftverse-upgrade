@@ -22558,6 +22558,35 @@ app.post('/interactions', async (request, reply) => {
   return { ok: true };
 });
 
+app.post('/analytics/events', async (request, reply) => {
+  const bodySchema = z.object({
+    event: z.string().min(1).max(100),
+    listingId: z.string().optional(),
+    sectionKey: z.string().optional(),
+    position: z.number().int().optional(),
+    reasonCode: z.string().optional(),
+    personalised: z.boolean().optional(),
+    sessionId: z.string().optional(),
+  });
+
+  const payload = bodySchema.parse(request.body);
+  const userId = request.authUser?.userId ?? null;
+
+  const eventKey = `analytics:${payload.event}`;
+  await redis.lpush(
+    eventKey,
+    JSON.stringify({
+      ...payload,
+      userId,
+      ts: new Date().toISOString(),
+    })
+  );
+  await redis.ltrim(eventKey, 0, 999);
+
+  reply.code(202);
+  return { ok: true };
+});
+
 app.get('/recommendations/:userId', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);

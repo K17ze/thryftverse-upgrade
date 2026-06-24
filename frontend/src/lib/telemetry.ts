@@ -1,3 +1,5 @@
+import { fetchJson } from './apiClient';
+
 export type TelemetryPayload = Record<string, unknown>;
 export type TelemetryHandler = (eventName: string, payload: TelemetryPayload) => void;
 
@@ -21,4 +23,11 @@ export function trackTelemetryEvent(eventName: string, payload: TelemetryPayload
   if (__DEV__) {
     console.info(`[telemetry] ${eventName}`, payload);
   }
+
+  fetchJson('/analytics/events', {
+    method: 'POST',
+    body: JSON.stringify({ event: eventName, ...payload }),
+  }).catch(() => {
+    // Best-effort — analytics must not crash the app
+  });
 }

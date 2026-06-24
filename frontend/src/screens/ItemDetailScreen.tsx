@@ -62,6 +62,7 @@ import {
   isRecommendationLook,
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
+import { trackTelemetryEvent } from '../lib/telemetry';
 
 import { useWindowDimensions } from 'react-native';
 
@@ -109,10 +110,20 @@ export default function ItemDetailScreen() {
 
   useEffect(() => {
     setProductAnalyticsHandler((event) => {
-      // Analytics dispatched via existing infrastructure
+      trackTelemetryEvent(event.event, {
+        listingId: event.listingId,
+        sectionKey: event.sectionKey,
+        position: event.position,
+        reasonCode: event.reasonCode,
+        personalised: event.personalised,
+        sessionId: event.sessionId,
+      });
     });
     const session = `item_${itemId}_${Date.now()}`;
     setProductSessionId(session);
+    return () => {
+      setProductAnalyticsHandler(() => {});
+    };
   }, [itemId]);
 
   useEffect(() => {
