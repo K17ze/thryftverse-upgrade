@@ -131,6 +131,7 @@ export type RootStackParamList = {
     templateId?: string;
     sourceDocumentId?: string;
   };
+  CreatorDraftList: undefined;
   CoOwnIssue: { assetId?: string };
   OutfitBuilder: undefined;
   // UI-22R.6B — Experience elevation

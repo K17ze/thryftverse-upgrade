@@ -103,6 +103,7 @@ import CreateLookScreen from '../screens/CreateLookScreen';
 import { CreateLookRedirect } from '../screens/CreateLookRedirect';
 import { CreatePosterRedirect } from '../screens/CreatePosterRedirect';
 import { CreatorStudioScreen } from '../creator';
+import { CreatorDraftListScreen } from '../creator/CreatorDraftListScreen';
 import OutfitBuilderScreen from '../screens/OutfitBuilderScreen';
 import CoOwnIssueScreen from '../screens/CoOwnIssueScreen';
 // UI-22R.6B — Experience elevation
@@ -300,6 +301,7 @@ export default function AppNavigator() {
       {/* Explore / Creator screens */}
       <Stack.Screen name="CreateLook" component={CreateLookRedirect} options={modalScreenOptions} />
       <Stack.Screen name="CreatorStudio" component={CreatorStudioScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreatorDraftList" component={CreatorDraftListScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" component={OutfitBuilderScreen} options={modalScreenOptions} />
       <Stack.Screen name="CoOwnIssue" component={CoOwnIssueScreen} options={modalScreenOptions} />
       {/* UI-22R.6B — Experience elevation */}

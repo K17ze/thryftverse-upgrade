@@ -126,6 +126,14 @@ function CreatorStudioInner() {
           >
             <Ionicons name="layers-outline" size={22} color={Colors.textPrimary} />
           </Pressable>
+          <Pressable
+            onPress={() => navigation.navigate('CreatorDraftList')}
+            style={styles.topBtn}
+            accessibilityLabel="Drafts"
+            accessibilityRole="button"
+          >
+            <Ionicons name="document-text-outline" size={20} color={Colors.textPrimary} />
+          </Pressable>
         </View>
       </View>
 
