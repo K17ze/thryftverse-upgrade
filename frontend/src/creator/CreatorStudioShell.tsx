@@ -24,7 +24,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 function CreatorStudioInner() {
   const navigation = useNavigation<any>();
-  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer } = useCreator();
+  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
@@ -118,7 +118,7 @@ function CreatorStudioInner() {
       </View>
 
       {/* Page strip (for poster) */}
-      {document.type === 'poster' && document.pages.length > 1 && (
+      {document.type === 'poster' && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pageStrip} contentContainerStyle={styles.pageStripContent}>
           {document.pages.map((p, i) => (
             <Pressable
@@ -127,6 +127,19 @@ function CreatorStudioInner() {
                 selectLayer(null);
                 setActivePageIndex(i);
               }}
+              onLongPress={() => {
+                if (document.pages.length > 1) {
+                  Alert.alert(
+                    `Page ${i + 1}`,
+                    undefined,
+                    [
+                      { text: 'Duplicate', onPress: () => { setActivePageIndex(i); addPage(); } },
+                      { text: 'Delete', style: 'destructive', onPress: () => removePage(i) },
+                      { text: 'Cancel', style: 'cancel' },
+                    ],
+                  );
+                }
+              }}
               style={[styles.pageThumb, i === activePageIndex && styles.pageThumbActive]}
               accessibilityLabel={`Page ${i + 1}`}
               accessibilityRole="button"
@@ -134,6 +147,19 @@ function CreatorStudioInner() {
               <Text style={styles.pageThumbText}>{i + 1}</Text>
             </Pressable>
           ))}
+          {document.pages.length < 10 && (
+            <Pressable
+              onPress={() => {
+                selectLayer(null);
+                addPage();
+              }}
+              style={styles.addPageBtn}
+              accessibilityLabel="Add page"
+              accessibilityRole="button"
+            >
+              <Ionicons name="add" size={18} color={Colors.textSecondary} />
+            </Pressable>
+          )}
         </ScrollView>
       )}
 
@@ -283,6 +309,17 @@ const styles = StyleSheet.create({
   },
   pageThumbActive: {
     borderColor: Colors.brand,
+  },
+  addPageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceAlt,
   },
   pageThumbText: {
     fontFamily: Typography.family.semibold,

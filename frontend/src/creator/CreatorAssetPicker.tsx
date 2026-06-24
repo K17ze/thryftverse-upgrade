@@ -22,7 +22,7 @@ import { fetchLooksFromApi } from '../services/looksApi';
 import { createStableId } from '../utils/createStableId';
 import type { CreatorLayer } from './composition';
 
-export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape';
+export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote';
 
 export interface CreatorAssetPickerProps {
   visible: boolean;
@@ -53,6 +53,8 @@ function AssetPickerContent({ mode, onClose, onAddLayer }: { mode: AssetPickerMo
       return <TextPicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'shape':
       return <ShapePicker onClose={onClose} onAddLayer={onAddLayer} />;
+    case 'vote':
+      return <VotePicker onClose={onClose} onAddLayer={onAddLayer} />;
     default:
       return null;
   }
@@ -501,6 +503,75 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   );
 }
 
+// ── Vote Picker ────────────────────────────────────────────────────
+
+function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const [question, setQuestion] = useState('');
+  const [option1, setOption1] = useState('');
+  const [option2, setOption2] = useState('');
+
+  const canSave = question.trim().length > 0 && option1.trim().length > 0 && option2.trim().length > 0 && option1.trim() !== option2.trim();
+
+  const handleAdd = useCallback(() => {
+    if (!canSave) return;
+    onAddLayer({
+      ...baseLayer(createStableId('vote'), 10),
+      type: 'vote',
+      width: 0.5,
+      height: 0.2,
+      payload: {
+        question: question.trim(),
+        options: [
+          { id: createStableId('opt'), label: option1.trim() },
+          { id: createStableId('opt'), label: option2.trim() },
+        ],
+      },
+    });
+    onClose();
+  }, [question, option1, option2, canSave, onAddLayer, onClose]);
+
+  return (
+    <PickerShell title="Add Style Vote" onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <Text style={styles.sectionLabel}>Question</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="e.g. Which outfit is better?"
+          placeholderTextColor={Colors.textMuted}
+          value={question}
+          onChangeText={setQuestion}
+          maxLength={100}
+          autoFocus
+          accessibilityLabel="Vote question"
+        />
+        <Text style={styles.sectionLabel}>Option 1</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="First option"
+          placeholderTextColor={Colors.textMuted}
+          value={option1}
+          onChangeText={setOption1}
+          maxLength={50}
+          accessibilityLabel="Vote option 1"
+        />
+        <Text style={styles.sectionLabel}>Option 2</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Second option"
+          placeholderTextColor={Colors.textMuted}
+          value={option2}
+          onChangeText={setOption2}
+          maxLength={50}
+          accessibilityLabel="Vote option 2"
+        />
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button">
+          <Text style={styles.saveBtnText}>Add Vote</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
 // ── Styles ─────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -536,7 +607,8 @@ const styles = StyleSheet.create({
   loadingBody: { paddingVertical: Space.xl, alignItems: 'center' },
   emptyState: { paddingVertical: Space.xl, alignItems: 'center' },
   emptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textMuted },
-  textPickerBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.md },
+  textPickerBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.sm },
+  sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   textInput: {
     borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
     paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: Colors.textPrimary, minHeight: 80,

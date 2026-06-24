@@ -34,7 +34,7 @@ const POSTER_TOOLS: ToolDef[] = [
   { icon: 'pricetag-outline', label: 'Product', color: '#ff9500', mode: 'product' },
   { icon: 'at-outline', label: 'Mention', color: '#ff2d55', mode: 'mention' },
   { icon: 'shirt-outline', label: 'Look', color: '#5856d6', mode: 'look' },
-  { icon: 'stats-chart-outline', label: 'Vote', color: '#34c759', mode: 'text' },
+  { icon: 'stats-chart-outline', label: 'Vote', color: '#34c759', mode: 'vote' },
   { icon: 'happy-outline', label: 'Shape', color: '#4cd964', mode: 'shape' },
 ];
 
