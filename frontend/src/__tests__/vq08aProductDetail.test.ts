@@ -187,4 +187,119 @@ describe('VQ-08A Product Detail Page Revamp', () => {
       expect(queryKeys).toContain('recommendations');
     });
   });
+
+  describe('Cursor pagination (PASS 6)', () => {
+    const backend = readFileSync(resolve(BACKEND, 'index.ts'), 'utf-8');
+
+    it('uses composite (created_at, id) cursor instead of offset', () => {
+      expect(backend).toContain('cursorCreatedAt');
+      expect(backend).toContain('cursorId');
+    });
+
+    it('encodes cursor as base64 JSON', () => {
+      expect(backend).toContain('Buffer.from(JSON.stringify');
+      expect(backend).toContain('toString(\'base64\')');
+    });
+
+    it('decodes cursor from base64', () => {
+      expect(backend).toContain('Buffer.from(cursor, \'base64\')');
+    });
+
+    it('uses tuple comparison for pagination', () => {
+      expect(backend).toContain('(l.created_at, l.id) <');
+    });
+  });
+
+  describe('Analytics forwarding (PASS 7)', () => {
+    const screen = read('screens/ItemDetailScreen.tsx');
+
+    it('imports trackTelemetryEvent', () => {
+      expect(screen).toContain('trackTelemetryEvent');
+    });
+
+    it('forwards product analytics events to telemetry', () => {
+      expect(screen).toContain('trackTelemetryEvent(event.event');
+    });
+
+    it('cleans up analytics handler on unmount', () => {
+      expect(screen).toContain('setProductAnalyticsHandler(() => {})');
+    });
+
+    const telemetry = read('lib/telemetry.ts');
+    it('telemetry posts events to backend', () => {
+      expect(telemetry).toContain('/analytics/events');
+    });
+  });
+
+  describe('Media truth (PASS 8)', () => {
+    const gallery = read('components/product/ProductMediaGallery.tsx');
+
+    it('does not fabricate MEDIA_LABELS', () => {
+      expect(gallery).not.toContain('MEDIA_LABELS');
+      expect(gallery).not.toContain("'Front'");
+      expect(gallery).not.toContain("'Back'");
+      expect(gallery).not.toContain("'Label'");
+    });
+  });
+
+  describe('Seller trust endpoint (PASS 9)', () => {
+    const backend = readFileSync(resolve(BACKEND, 'index.ts'), 'utf-8');
+
+    it('has GET /sellers/:sellerId endpoint', () => {
+      expect(backend).toContain('app.get(\'/sellers/:sellerId\'');
+    });
+
+    it('computes rating from order_reviews', () => {
+      expect(backend).toContain('AVG(rating)');
+      expect(backend).toContain('order_reviews');
+    });
+
+    it('computes completed sales from orders', () => {
+      expect(backend).toContain('completed_sales');
+      expect(backend).toContain("status = 'completed'");
+    });
+
+    it('has follow toggle endpoint', () => {
+      expect(backend).toContain('app.post(\'/sellers/:sellerId/follow\'');
+    });
+
+    it('uses user_follows table', () => {
+      expect(backend).toContain('user_follows');
+    });
+
+    const queries = read('platform/product/useListingQueries.ts');
+    it('frontend has useSellerTrust hook', () => {
+      expect(queries).toContain('useSellerTrust');
+    });
+
+    it('frontend has useSellerFollow hook', () => {
+      expect(queries).toContain('useSellerFollow');
+    });
+  });
+
+  describe('Action bar guards (PASS 12)', () => {
+    const actionBar = read('components/product/ProductActionBar.tsx');
+
+    it('shows message button for all non-owners (not just when canBuy is false)', () => {
+      expect(actionBar).toContain('capabilities.canMessage && (');
+      expect(actionBar).not.toContain('!capabilities.canBuy');
+    });
+  });
+
+  describe('Section-specific visual compositions (PASS 10)', () => {
+    const rail = read('components/product/RecommendationRail.tsx');
+
+    it('has cardAccent style for personalised sections', () => {
+      expect(rail).toContain('cardAccent');
+    });
+
+    it('uses wider cards for complete_the_look', () => {
+      expect(rail).toContain('complete_the_look');
+    });
+
+    it('passes cardWidth and cardHeight to RailCard', () => {
+      expect(rail).toContain('cardWidth');
+      expect(rail).toContain('cardHeight');
+    });
+  });
 });
