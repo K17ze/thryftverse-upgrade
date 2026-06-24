@@ -224,7 +224,7 @@ function LayerRenderer({
         .onStart(() => {
           startX.value = translateX.value;
           startY.value = translateY.value;
-          runOnJS(onPress)?.(layer.id);
+          runOnJS(handlePress)();
           runOnJS(setShowGuides)(true);
         })
         .onUpdate((e) => {
@@ -593,7 +593,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     overflow: 'hidden',
-    borderRadius: Radius.xs,
+    borderRadius: Radius.sm,
   },
   layerSelected: {
     borderWidth: 1.5,

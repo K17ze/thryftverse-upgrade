@@ -85,6 +85,31 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
   const lastSavedDocRef = useRef(JSON.stringify(initialDoc));
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const syncHistoryButtons = useCallback(() => {
+    const h = historyRef.current;
+    setCanUndo(h.canUndo());
+    setCanRedo(h.canRedo());
+    setUndoLabel(h.getUndoLabel());
+    setRedoLabel(h.getRedoLabel());
+  }, []);
+
+  const commit = useCallback((doc: CreatorDocument, label: string) => {
+    historyRef.current.push(doc, label);
+    setDocumentState(doc);
+    setIsDirty(true);
+    syncHistoryButtons();
+  }, [syncHistoryButtons]);
+
+  const setDocument = useCallback((doc: CreatorDocument) => {
+    historyRef.current.reset(doc);
+    setDocumentState(doc);
+    setSelectedLayerId(null);
+    setActivePageIndex(0);
+    setIsDirty(false);
+    lastSavedDocRef.current = JSON.stringify(doc);
+    syncHistoryButtons();
+  }, [syncHistoryButtons]);
+
   useEffect(() => {
     CreatorAnalytics.sessionStart(initialType);
   }, [initialType]);
@@ -123,12 +148,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     setIsLoadingDraft(true);
     CreatorDraftService.loadDraft(sourceDocumentId).then((sourceDoc) => {
       if (cancelled || !sourceDoc) return;
-      // Check if source allows remix
-      if (!sourceDoc.metadata.allowRemix) {
-        // Source doesn't allow remix — start with empty doc
-        return;
-      }
-      // Create remixed document with attribution
+      if (!sourceDoc.metadata.allowRemix) return;
       const remixedDoc: CreatorDocument = {
         ...sourceDoc,
         id: createStableId('doc'),
@@ -139,7 +159,6 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
           allowRemix: false,
           title: `Remix of ${sourceDoc.metadata.title || 'Untitled'}`,
         },
-        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
       setDocument(remixedDoc);
@@ -150,31 +169,6 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     });
     return () => { cancelled = true; };
   }, [sourceDocumentId, draftId, templateId, setDocument]);
-
-  const syncHistoryButtons = useCallback(() => {
-    const h = historyRef.current;
-    setCanUndo(h.canUndo());
-    setCanRedo(h.canRedo());
-    setUndoLabel(h.getUndoLabel());
-    setRedoLabel(h.getRedoLabel());
-  }, []);
-
-  const commit = useCallback((doc: CreatorDocument, label: string) => {
-    historyRef.current.push(doc, label);
-    setDocumentState(doc);
-    setIsDirty(true);
-    syncHistoryButtons();
-  }, [syncHistoryButtons]);
-
-  const setDocument = useCallback((doc: CreatorDocument) => {
-    historyRef.current.reset(doc);
-    setDocumentState(doc);
-    setSelectedLayerId(null);
-    setActivePageIndex(0);
-    setIsDirty(false);
-    lastSavedDocRef.current = JSON.stringify(doc);
-    syncHistoryButtons();
-  }, [syncHistoryButtons]);
 
   const selectLayer = useCallback((id: string | null) => {
     setSelectedLayerId(id);
