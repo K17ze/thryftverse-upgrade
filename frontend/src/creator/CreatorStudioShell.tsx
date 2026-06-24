@@ -18,16 +18,18 @@ import { CreatorCanvas } from './CreatorCanvas';
 import { CreatorLayersSheet } from './CreatorLayersSheet';
 import { CreatorToolDock } from './CreatorToolDock';
 import { CreatorPublishSheet } from './CreatorPublishSheet';
+import { CreatorAssetPicker, type AssetPickerMode } from './CreatorAssetPicker';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 function CreatorStudioInner() {
   const navigation = useNavigation<any>();
-  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer } = useCreator();
+  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [pickerMode, setPickerMode] = useState<AssetPickerMode | null>(null);
 
   const page = document.pages[activePageIndex];
 
@@ -189,11 +191,17 @@ function CreatorStudioInner() {
       )}
 
       {/* Bottom dock */}
-      <CreatorToolDock onPublish={() => setShowPublish(true)} onSettings={() => setShowSettings(true)} />
+      <CreatorToolDock onPublish={() => setShowPublish(true)} onSettings={() => setShowSettings(true)} onToolPress={(tool) => setPickerMode(tool)} />
 
       {/* Sheets */}
       <CreatorLayersSheet visible={showLayers} onClose={() => setShowLayers(false)} />
       <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} />
+      <CreatorAssetPicker
+        visible={pickerMode !== null}
+        mode={pickerMode ?? 'media'}
+        onClose={() => setPickerMode(null)}
+        onAddLayer={(layer) => addLayer(layer)}
+      />
     </SafeAreaView>
   );
 }

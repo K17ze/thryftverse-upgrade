@@ -4,38 +4,41 @@ import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
 import { useCreator } from './CreatorContext';
+import type { AssetPickerMode } from './CreatorAssetPicker';
 
 export interface CreatorToolDockProps {
   onPublish: () => void;
   onSettings: () => void;
+  onToolPress: (mode: AssetPickerMode) => void;
 }
 
 interface ToolDef {
   icon: string;
   label: string;
   color: string;
+  mode: AssetPickerMode;
 }
 
 const LOOK_TOOLS: ToolDef[] = [
-  { icon: 'images-outline', label: 'Photo', color: '#5ac8fa' },
-  { icon: 'pricetag-outline', label: 'Tag', color: '#ff9500' },
-  { icon: 'text-outline', label: 'Text', color: '#ffcc00' },
-  { icon: 'shirt-outline', label: 'Look', color: '#5856d6' },
-  { icon: 'at-outline', label: 'Mention', color: '#ff2d55' },
-  { icon: 'happy-outline', label: 'Shape', color: '#4cd964' },
+  { icon: 'images-outline', label: 'Photo', color: '#5ac8fa', mode: 'media' },
+  { icon: 'pricetag-outline', label: 'Tag', color: '#ff9500', mode: 'product' },
+  { icon: 'text-outline', label: 'Text', color: '#ffcc00', mode: 'text' },
+  { icon: 'shirt-outline', label: 'Look', color: '#5856d6', mode: 'look' },
+  { icon: 'at-outline', label: 'Mention', color: '#ff2d55', mode: 'mention' },
+  { icon: 'happy-outline', label: 'Shape', color: '#4cd964', mode: 'shape' },
 ];
 
 const POSTER_TOOLS: ToolDef[] = [
-  { icon: 'images-outline', label: 'Media', color: '#5ac8fa' },
-  { icon: 'text-outline', label: 'Text', color: '#ffcc00' },
-  { icon: 'pricetag-outline', label: 'Product', color: '#ff9500' },
-  { icon: 'at-outline', label: 'Mention', color: '#ff2d55' },
-  { icon: 'shirt-outline', label: 'Look', color: '#5856d6' },
-  { icon: 'stats-chart-outline', label: 'Vote', color: '#34c759' },
-  { icon: 'happy-outline', label: 'Shape', color: '#4cd964' },
+  { icon: 'images-outline', label: 'Media', color: '#5ac8fa', mode: 'media' },
+  { icon: 'text-outline', label: 'Text', color: '#ffcc00', mode: 'text' },
+  { icon: 'pricetag-outline', label: 'Product', color: '#ff9500', mode: 'product' },
+  { icon: 'at-outline', label: 'Mention', color: '#ff2d55', mode: 'mention' },
+  { icon: 'shirt-outline', label: 'Look', color: '#5856d6', mode: 'look' },
+  { icon: 'stats-chart-outline', label: 'Vote', color: '#34c759', mode: 'text' },
+  { icon: 'happy-outline', label: 'Shape', color: '#4cd964', mode: 'shape' },
 ];
 
-export function CreatorToolDock({ onPublish, onSettings }: CreatorToolDockProps) {
+export function CreatorToolDock({ onPublish, onSettings, onToolPress }: CreatorToolDockProps) {
   const { document } = useCreator();
   const tools = document.type === 'poster' ? POSTER_TOOLS : LOOK_TOOLS;
 
@@ -49,6 +52,7 @@ export function CreatorToolDock({ onPublish, onSettings }: CreatorToolDockProps)
         {tools.map((tool) => (
           <Pressable
             key={tool.label}
+            onPress={() => onToolPress(tool.mode)}
             style={styles.toolBtn}
             accessibilityLabel={`Add ${tool.label}`}
             accessibilityRole="button"
