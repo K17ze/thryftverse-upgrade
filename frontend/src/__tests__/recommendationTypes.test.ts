@@ -3,8 +3,12 @@ import {
   RECOMMENDATION_REASON_CODES,
   COMPLEMENTARY_CATEGORY_MAP,
   getComplementaryCategories,
+  isRecommendationLook,
   type RecommendationSectionKey,
+  type RecommendationLook,
+  type RecommendationItem,
 } from '../platform/product/recommendationTypes';
+import type { Listing } from '../data/mockData';
 
 describe('recommendationTypes', () => {
   describe('RECOMMENDATION_REASON_CODES', () => {
@@ -73,6 +77,51 @@ describe('recommendationTypes', () => {
 
     it('returns empty array for unknown category', () => {
       expect(getComplementaryCategories('unknown_category')).toEqual([]);
+    });
+  });
+
+  describe('isRecommendationLook', () => {
+    const look: RecommendationLook = {
+      id: 'look-1',
+      type: 'look',
+      title: 'Summer Fit',
+      coverImage: 'https://example.com/cover.jpg',
+      creatorId: 'user-1',
+      creatorUsername: 'stylist',
+    };
+
+    const listing: Listing = {
+      id: 'l1',
+      title: 'Test Item',
+      brand: 'Brand',
+      size: 'M',
+      condition: 'Very good',
+      price: 50,
+      images: ['https://example.com/img.jpg'],
+      likes: 0,
+      sellerId: 's1',
+      category: 'tops',
+      subcategory: 'Clothing',
+      description: 'Test',
+    };
+
+    it('returns true for RecommendationLook items', () => {
+      expect(isRecommendationLook(look)).toBe(true);
+    });
+
+    it('returns false for Listing items', () => {
+      expect(isRecommendationLook(listing)).toBe(false);
+    });
+
+    it('narrows type correctly for union items', () => {
+      const items: RecommendationItem[] = [look, listing];
+      const looks = items.filter(isRecommendationLook);
+      expect(looks).toHaveLength(1);
+      expect(looks[0].coverImage).toBe('https://example.com/cover.jpg');
+
+      const listings = items.filter((item): item is Listing => !isRecommendationLook(item));
+      expect(listings).toHaveLength(1);
+      expect(listings[0].price).toBe(50);
     });
   });
 });

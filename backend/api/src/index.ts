@@ -15340,22 +15340,11 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     if (looksResult.rows.length > 0) {
       const lookItems = looksResult.rows.map((row) => ({
         id: row.look_id,
-        sellerId: row.creator_id,
+        type: 'look' as const,
         title: row.look_title,
-        description: '',
-        priceGbp: 0,
-        imageUrl: row.media_url,
-        images: [row.media_url],
-        status: 'active',
-        category: null,
-        brand: null,
-        size: null,
-        condition: null,
-        originalPriceGbp: null,
-        createdAt: '',
-        seller: row.creator_username
-          ? { id: row.creator_id, username: row.creator_username, avatar: null, rating: null, reviewCount: null, location: null }
-          : null,
+        coverImage: row.media_url,
+        creatorId: row.creator_id,
+        creatorUsername: row.creator_username,
       }));
       sections.push({
         key: 'seen_in_looks',

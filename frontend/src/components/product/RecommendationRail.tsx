@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import type { RecommendationSection } from '../../platform/product';
+import { isRecommendationLook } from '../../platform/product';
 import { ProductAnalytics } from '../../platform/product';
 import { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
@@ -105,6 +106,9 @@ export function RecommendationRail({
 
   if (section.items.length === 0) return null;
 
+  const listingItems = section.items.filter((item): item is Listing => !isRecommendationLook(item));
+  if (listingItems.length === 0) return null;
+
   return (
     <Reanimated.View
       entering={FadeInDown.duration(300).springify().damping(18)}
@@ -149,14 +153,14 @@ export function RecommendationRail({
       ) : null}
 
       <FlashList
-        data={section.items}
+        data={listingItems}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
           <RailCard
-            item={item}
+            item={item as Listing}
             index={index}
             sectionKey={section.key}
             reasonCode={section.reason}

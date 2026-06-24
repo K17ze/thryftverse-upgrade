@@ -4,14 +4,14 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
-import { Listing } from '../../data/mockData';
+import type { RecommendationLook } from '../../platform/product';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
 export interface SeenInLooksRailProps {
-  items: Listing[];
-  onPressItem: (item: Listing) => void;
+  items: RecommendationLook[];
+  onPressItem: (item: RecommendationLook) => void;
 }
 
 export function SeenInLooksRail({ items, onPressItem }: SeenInLooksRailProps) {
@@ -40,9 +40,9 @@ export function SeenInLooksRail({ items, onPressItem }: SeenInLooksRailProps) {
             accessibilityRole="button"
           >
             <View style={styles.lookImageWrap}>
-              {item.images?.[0] ? (
+              {item.coverImage ? (
                 <CachedImage
-                  uri={item.images[0]}
+                  uri={item.coverImage}
                   style={styles.lookImage}
                   containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.md }}
                   contentFit="cover"
@@ -54,9 +54,9 @@ export function SeenInLooksRail({ items, onPressItem }: SeenInLooksRailProps) {
             <Text style={styles.lookTitle} numberOfLines={1}>
               {item.title}
             </Text>
-            {item.seller?.username ? (
+            {item.creatorUsername ? (
               <Text style={styles.lookCreator} numberOfLines={1}>
-                @{item.seller.username}
+                @{item.creatorUsername}
               </Text>
             ) : null}
           </AnimatedPressable>

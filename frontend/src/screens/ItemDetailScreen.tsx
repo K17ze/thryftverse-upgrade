@@ -59,7 +59,9 @@ import {
   buildCommerceContext,
   buildSellerTrustSummary,
   buildCapabilities,
+  isRecommendationLook,
 } from '../platform/product';
+import type { RecommendationLook } from '../platform/product';
 
 import { useWindowDimensions } from 'react-native';
 
@@ -237,7 +239,11 @@ export default function ItemDetailScreen() {
     const items: Listing[] = [];
     for (const page of allPages) {
       const section = page.sections.find((s) => s.key === 'continue_exploring');
-      if (section) items.push(...section.items);
+      if (section) {
+        for (const item of section.items) {
+          if (!isRecommendationLook(item)) items.push(item);
+        }
+      }
     }
     return items;
   }, [exploreData]);
@@ -248,12 +254,8 @@ export default function ItemDetailScreen() {
     navigation.push('ItemDetail', { itemId: recItem.id });
   };
 
-  const handlePressLook = (lookItem: Listing) => {
-    if (lookItem.price === 0) {
-      navigation.navigate('LookDetail', { lookId: lookItem.id });
-    } else {
-      navigation.push('ItemDetail', { itemId: lookItem.id });
-    }
+  const handlePressLook = (lookItem: RecommendationLook) => {
+    navigation.navigate('LookDetail', { lookId: lookItem.id });
   };
 
   return (
@@ -354,7 +356,7 @@ export default function ItemDetailScreen() {
 
           {seenInLooksSection && seenInLooksSection.items.length > 0 && (
             <SeenInLooksRail
-              items={seenInLooksSection.items}
+              items={seenInLooksSection.items.filter(isRecommendationLook) as RecommendationLook[]}
               onPressItem={handlePressLook}
             />
           )}

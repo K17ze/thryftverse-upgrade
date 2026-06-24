@@ -11,13 +11,28 @@ export type RecommendationSectionKey =
   | 'inspired_by_saves'
   | 'continue_exploring';
 
+export interface RecommendationLook {
+  id: string;
+  type: 'look';
+  title: string;
+  coverImage: string;
+  creatorId: string;
+  creatorUsername: string | null;
+}
+
+export type RecommendationItem = Listing | RecommendationLook;
+
+export function isRecommendationLook(item: RecommendationItem): item is RecommendationLook {
+  return (item as RecommendationLook).type === 'look';
+}
+
 export interface RecommendationSection {
   key: RecommendationSectionKey;
   title: string;
   subtitle?: string;
   reason?: string;
   personalised: boolean;
-  items: Listing[];
+  items: RecommendationItem[];
   nextCursor?: string;
 }
 

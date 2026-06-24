@@ -4,6 +4,8 @@ import type {
   RecommendationResponse,
   RecommendationRequest,
   RecommendationSection,
+  RecommendationItem,
+  RecommendationLook,
 } from './recommendationTypes';
 
 interface ApiListingRow {
@@ -31,6 +33,15 @@ interface ApiListingRow {
   } | null;
 }
 
+interface ApiLookRow {
+  id: string;
+  type: 'look';
+  title: string;
+  coverImage: string;
+  creatorId: string;
+  creatorUsername: string | null;
+}
+
 function mapApiListingToListing(row: ApiListingRow): Listing {
   const price = Number(row.priceGbp ?? 0);
   return {
@@ -53,6 +64,24 @@ function mapApiListingToListing(row: ApiListingRow): Listing {
   };
 }
 
+function mapApiLookToRecommendationLook(row: ApiLookRow): RecommendationLook {
+  return {
+    id: row.id,
+    type: 'look',
+    title: row.title,
+    coverImage: row.coverImage,
+    creatorId: row.creatorId,
+    creatorUsername: row.creatorUsername,
+  };
+}
+
+function mapApiItemToRecommendationItem(item: ApiListingRow | ApiLookRow): RecommendationItem {
+  if ((item as ApiLookRow).type === 'look') {
+    return mapApiLookToRecommendationLook(item as ApiLookRow);
+  }
+  return mapApiListingToListing(item as ApiListingRow);
+}
+
 export async function fetchRecommendations(
   request: RecommendationRequest
 ): Promise<RecommendationResponse> {
@@ -71,7 +100,7 @@ export async function fetchRecommendations(
       subtitle?: string;
       reason?: string;
       personalised: boolean;
-      items: ApiListingRow[];
+      items: Array<ApiListingRow | ApiLookRow>;
       nextCursor?: string;
     }>;
   }>(`/listings/${request.listingId}/recommendations${qs ? `?${qs}` : ''}`);
@@ -84,7 +113,7 @@ export async function fetchRecommendations(
       subtitle: s.subtitle,
       reason: s.reason,
       personalised: s.personalised,
-      items: (s.items ?? []).map(mapApiListingToListing),
+      items: (s.items ?? []).map(mapApiItemToRecommendationItem),
       nextCursor: s.nextCursor,
     })),
   };
