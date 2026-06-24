@@ -29,6 +29,9 @@ interface RailCardProps {
   personalised?: boolean;
   listingId: string;
   onPress: (item: Listing) => void;
+  cardWidth: number;
+  cardHeight: number;
+  showAccent: boolean;
 }
 
 function RailCard({
@@ -39,6 +42,9 @@ function RailCard({
   personalised,
   listingId,
   onPress,
+  cardWidth,
+  cardHeight,
+  showAccent,
 }: RailCardProps) {
   const { formatFromFiat } = useFormattedPrice();
   const formattedPrice = formatFromFiat(item.price, 'GBP');
@@ -51,7 +57,7 @@ function RailCard({
 
   return (
     <AnimatedPressable
-      style={styles.card}
+      style={[styles.card, { width: cardWidth }, showAccent && styles.cardAccent]}
       onPress={handlePress}
       {...PressPresets.card}
       accessibilityLabel={`${item.title}, ${formattedPrice}`}
@@ -60,7 +66,7 @@ function RailCard({
         ProductAnalytics.recommendationImpression(listingId, sectionKey, index, reasonCode, personalised);
       }}
     >
-      <View style={styles.cardImageWrap}>
+      <View style={[styles.cardImageWrap, { width: cardWidth, height: cardHeight }]}>
         {imageUri ? (
           <CachedImage
             uri={imageUri}
@@ -102,12 +108,19 @@ export function RecommendationRail({
   onSeeAll,
 }: RecommendationRailProps) {
   const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = (screenWidth - Space.md * 2 - Space.sm * 2) / 2.5;
 
   if (section.items.length === 0) return null;
 
   const listingItems = section.items.filter((item): item is Listing => !isRecommendationLook(item));
   if (listingItems.length === 0) return null;
+
+  const isComplementary = section.key === 'complete_the_look';
+  const isPersonalised = section.personalised;
+  const cardWidth = isComplementary
+    ? (screenWidth - Space.md * 2 - Space.sm * 2) / 2.1
+    : (screenWidth - Space.md * 2 - Space.sm * 2) / 2.5;
+  const cardHeight = isComplementary ? 200 : 175;
+  const showAccent = isPersonalised;
 
   return (
     <Reanimated.View
@@ -167,6 +180,9 @@ export function RecommendationRail({
             personalised={section.personalised}
             listingId={listingId}
             onPress={onPressItem}
+            cardWidth={cardWidth}
+            cardHeight={cardHeight}
+            showAccent={showAccent}
           />
         )}
         ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
@@ -227,6 +243,12 @@ const styles = StyleSheet.create({
   },
   card: {
     width: 140,
+  },
+  cardAccent: {
+    borderWidth: 1.5,
+    borderColor: Colors.brand,
+    borderRadius: Radius.md + 2,
+    padding: 2,
   },
   cardImageWrap: {
     width: 140,
