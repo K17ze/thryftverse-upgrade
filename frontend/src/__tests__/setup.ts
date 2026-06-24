@@ -137,3 +137,44 @@ vi.mock('expo-constants', () => ({
     },
   },
 }));
+
+vi.mock('expo-image-picker', () => ({
+  launchImageLibraryAsync: vi.fn(),
+  launchCameraAsync: vi.fn(),
+  requestMediaLibraryPermissionsAsync: vi.fn(() => Promise.resolve({ status: 'granted' })),
+  requestCameraPermissionsAsync: vi.fn(() => Promise.resolve({ status: 'granted' })),
+  MediaTypeOptions: { Images: 'Images', Videos: 'Videos', All: 'All' },
+  cameraType: { back: 'back', front: 'front' },
+}));
+
+vi.mock('expo-haptics', () => ({
+  impactAsync: vi.fn(),
+  notificationAsync: vi.fn(),
+  selectionAsync: vi.fn(),
+  ImpactFeedbackStyle: { Light: 'Light', Medium: 'Medium', Heavy: 'Heavy' },
+  NotificationFeedbackType: { Success: 'Success', Warning: 'Warning', Error: 'Error' },
+}));
+
+vi.mock('expo-modules-core', () => ({
+  EventEmitter: class {
+    addListener() { return { remove: () => {} }; }
+    emit() {}
+    removeAllListeners() {}
+  },
+  requireNativeModule: () => ({
+    addListener: () => ({ remove: () => {} }),
+    removeListener: () => {},
+  }),
+  NativeModule: class {},
+}));
+
+vi.mock('expo-network', () => ({
+  getNetworkStateAsync: vi.fn(() => Promise.resolve({ isConnected: true, type: 'wifi' })),
+  addEventListener: () => () => {},
+}));
+
+vi.mock('expo-secure-store', () => ({
+  getItemAsync: vi.fn(() => Promise.resolve(null)),
+  setItemAsync: vi.fn(() => Promise.resolve()),
+  deleteItemAsync: vi.fn(() => Promise.resolve()),
+}));

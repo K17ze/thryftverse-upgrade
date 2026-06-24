@@ -155,7 +155,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         metadata: {
           ...sourceDoc.metadata,
           sourceDocumentId: sourceDoc.id,
-          sourceCreatorId: undefined,
+          sourceCreatorId: sourceDoc.metadata.sourceCreatorId,
           allowRemix: false,
           title: `Remix of ${sourceDoc.metadata.title || 'Untitled'}`,
         },

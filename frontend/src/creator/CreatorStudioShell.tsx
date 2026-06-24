@@ -8,6 +8,9 @@ import {
   Dimensions,
   SafeAreaView,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,18 +25,21 @@ import { CreatorToolDock } from './CreatorToolDock';
 import { CreatorPublishSheet } from './CreatorPublishSheet';
 import { CreatorSettingsSheet } from './CreatorSettingsSheet';
 import { CreatorAssetPicker, type AssetPickerMode } from './CreatorAssetPicker';
+import { CreatorTemplateBrowser } from './CreatorTemplateBrowser';
+import type { CreatorTemplate } from './templates';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 function CreatorStudioInner() {
   const navigation = useNavigation<any>();
-  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, commitLayerTransform, autosaveStatus, isLoadingDraft } = useCreator();
+  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, commitLayerTransform, autosaveStatus, isLoadingDraft, setDocument } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [pickerMode, setPickerMode] = useState<AssetPickerMode | null>(null);
   const [editingLayer, setEditingLayer] = useState<CreatorLayer | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const page = document.pages[activePageIndex];
   const isLook = document.type === 'look';
@@ -82,6 +88,7 @@ function CreatorStudioInner() {
         if (canRedo) redo();
       } else if (e.key === 'Escape') {
         if (showPublish) setShowPublish(false);
+        else if (showTemplates) setShowTemplates(false);
         else if (showLayers) setShowLayers(false);
         else if (showSettings) setShowSettings(false);
         else if (selectedLayerId) selectLayer(null);
@@ -93,13 +100,14 @@ function CreatorStudioInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, showPublish, showLayers, showSettings, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, showPublish, showTemplates, showLayers, showSettings, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // Hardware back button — intercept to close sheets first
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
         if (showPublish) { setShowPublish(false); return true; }
+        if (showTemplates) { setShowTemplates(false); return true; }
         if (showLayers) { setShowLayers(false); return true; }
         if (showSettings) { setShowSettings(false); return true; }
         if (pickerMode) { setPickerMode(null); return true; }
@@ -107,10 +115,11 @@ function CreatorStudioInner() {
         return false;
       };
       return onBackPress;
-    }, [showPublish, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
+    }, [showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
+    Keyboard.dismiss();
     selectLayer(null);
   }, [selectLayer]);
 
@@ -122,6 +131,11 @@ function CreatorStudioInner() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
       {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable onPress={handleBack} style={styles.topBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityLabel="Back" accessibilityRole="button">
@@ -172,6 +186,15 @@ function CreatorStudioInner() {
             accessibilityRole="button"
           >
             <Ionicons name="layers-outline" size={22} color={Colors.textPrimary} />
+          </Pressable>
+          <Pressable
+            onPress={() => setShowTemplates(true)}
+            style={styles.topBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
+            accessibilityLabel="Templates"
+            accessibilityRole="button"
+          >
+            <Ionicons name="grid-outline" size={20} color={Colors.textPrimary} />
           </Pressable>
           <Pressable
             onPress={() => navigation.navigate('CreatorDraftList')}
@@ -302,6 +325,16 @@ function CreatorStudioInner() {
       <CreatorLayersSheet visible={showLayers} onClose={() => setShowLayers(false)} />
       <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} />
       <CreatorSettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
+      <CreatorTemplateBrowser
+        visible={showTemplates}
+        documentType={document.type}
+        hasExistingWork={document.pages.some((p) => p.layers.length > 0)}
+        onClose={() => setShowTemplates(false)}
+        onApply={(template: CreatorTemplate) => {
+          const doc = template.build();
+          setDocument(doc);
+        }}
+      />
       <CreatorAssetPicker
         visible={pickerMode !== null}
         mode={pickerMode ?? 'media'}
@@ -315,6 +348,7 @@ function CreatorStudioInner() {
           }
         }}
       />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

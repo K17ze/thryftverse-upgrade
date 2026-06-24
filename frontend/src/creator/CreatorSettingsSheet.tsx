@@ -97,9 +97,19 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
               <Text style={styles.sectionLabel}>Remix Attribution</Text>
               <View style={styles.attributionBox}>
                 <Ionicons name="git-branch-outline" size={16} color={Colors.textSecondary} />
-                <Text style={styles.attributionText}>
-                  Remixed from another {document.type}
-                </Text>
+                <View style={styles.attributionContent}>
+                  <Text style={styles.attributionText}>
+                    Remixed from another {document.type}
+                  </Text>
+                  <Text style={styles.attributionDetail}>
+                    Source: {document.metadata.sourceDocumentId}
+                  </Text>
+                  {document.metadata.sourceCreatorId && (
+                    <Text style={styles.attributionDetail}>
+                      Original creator: {document.metadata.sourceCreatorId}
+                    </Text>
+                  )}
+                </View>
               </View>
             </>
           )}
@@ -403,7 +413,7 @@ const styles = StyleSheet.create({
   },
   attributionBox: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Space.sm,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
@@ -412,9 +422,18 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
   },
+  attributionContent: {
+    flex: 1,
+    gap: 2,
+  },
   attributionText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
     color: Colors.textSecondary,
+  },
+  attributionDetail: {
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size - 2,
+    color: Colors.textMuted,
   },
 });

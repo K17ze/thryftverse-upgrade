@@ -15,7 +15,7 @@ export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
 export const MAX_SUPPORTED_SCHEMA_VERSION = 1;
 
 // ── Local URI detection ───────────────────────────────────────────
-const LOCAL_URI_PREFIXES = ['file://', 'ph://', 'asset://', 'data:'];
+const LOCAL_URI_PREFIXES = ['file://', 'ph://', 'asset://', 'data:', 'content://', 'assets-library://'];
 
 function isLocalUri(uri: string): boolean {
   return LOCAL_URI_PREFIXES.some((prefix) => uri.startsWith(prefix));
@@ -149,11 +149,18 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
   }
 
   const page = doc.pages[0];
-  const mediaLayer = page.layers.find((l) => l.type === 'media');
+  const mediaLayers = page.layers.filter((l) => l.type === 'media');
 
-  if (!mediaLayer || mediaLayer.type !== 'media') {
+  if (mediaLayers.length === 0) {
     throw new Error('Look document must have a media layer');
   }
+
+  // For collage looks with multiple media layers, use the largest as primary
+  const mediaLayer = mediaLayers.reduce((largest, current) => {
+    const currentArea = (current as any).width * (current as any).height;
+    const largestArea = (largest as any).width * (largest as any).height;
+    return currentArea > largestArea ? current : largest;
+  });
 
   const tags: LookCreateTag[] = page.layers
     .filter((l) => l.type === 'product')
@@ -165,15 +172,19 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
       y: l.y,
     }));
 
+  // Include full composition document for collage looks so backend can persist editable layers
+  const hasMultipleMedia = mediaLayers.length > 1;
+
   return {
     payload: {
       id: doc.id,
       title: doc.metadata.title || 'Untitled Look',
       caption: doc.metadata.caption,
-      mediaUrl: mediaLayer.payload.mediaUri,
+      mediaUrl: mediaLayer.type === 'media' ? mediaLayer.payload.mediaUri : '',
       visibility: doc.metadata.visibility,
       tags,
       status: 'published',
+      ...(hasMultipleMedia ? { compositionDocument: doc } : {}),
     },
     remixAttribution: {
       sourceDocumentId: doc.metadata.sourceDocumentId,

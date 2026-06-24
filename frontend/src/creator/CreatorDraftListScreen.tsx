@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
 import { CreatorDraftService, type DraftMeta } from './drafts';
+import { createStableId } from '../utils/createStableId';
 
 export function CreatorDraftListScreen() {
   const navigation = useNavigation<any>();
@@ -57,6 +58,32 @@ export function CreatorDraftListScreen() {
     );
   }, []);
 
+  const handleDuplicateDraft = useCallback(async (draft: DraftMeta) => {
+    const doc = await CreatorDraftService.loadDraft(draft.id);
+    if (!doc) return;
+    const newId = createStableId('doc');
+    const duplicatedDoc = {
+      ...doc,
+      id: newId,
+      metadata: {
+        ...doc.metadata,
+        title: `${draft.title} (copy)`,
+      },
+      pages: doc.pages.map((p) => ({
+        ...p,
+        id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        layers: p.layers.map((l) => ({
+          ...l,
+          id: `${l.id}_dup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        })),
+      })),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await CreatorDraftService.saveDraft(duplicatedDoc);
+    loadDrafts();
+  }, [loadDrafts]);
+
   const renderItem = useCallback(({ item }: { item: DraftMeta }) => (
     <Pressable
       onPress={() => handleOpenDraft(item)}
@@ -76,17 +103,35 @@ export function CreatorDraftListScreen() {
         <Text style={styles.draftMeta}>
           {item.type === 'look' ? 'Look' : 'Poster'} · {new Date(item.updatedAt).toLocaleDateString()}
         </Text>
+        <View style={styles.statusRow}>
+          <View style={styles.statusBadge}>
+            <Ionicons name="phone-portrait-outline" size={10} color={Colors.textMuted} />
+            <Text style={styles.statusText}>Local</Text>
+          </View>
+        </View>
       </View>
-      <Pressable
-        onPress={() => handleDeleteDraft(item)}
-        style={styles.deleteBtn}
-        accessibilityLabel={`Delete draft ${item.title}`}
-        accessibilityRole="button"
-      >
-        <Ionicons name="trash-outline" size={18} color="#ff6b6b" />
-      </Pressable>
+      <View style={styles.actions}>
+        <Pressable
+          onPress={() => handleDuplicateDraft(item)}
+          style={styles.actionBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel={`Duplicate draft ${item.title}`}
+          accessibilityRole="button"
+        >
+          <Ionicons name="copy-outline" size={16} color={Colors.textSecondary} />
+        </Pressable>
+        <Pressable
+          onPress={() => handleDeleteDraft(item)}
+          style={styles.actionBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel={`Delete draft ${item.title}`}
+          accessibilityRole="button"
+        >
+          <Ionicons name="trash-outline" size={16} color="#ff6b6b" />
+        </Pressable>
+      </View>
     </Pressable>
-  ), [handleOpenDraft, handleDeleteDraft]);
+  ), [handleOpenDraft, handleDeleteDraft, handleDuplicateDraft]);
 
   if (loading) {
     return (
@@ -188,6 +233,35 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  statusRow: {
+    flexDirection: 'row',
+    marginTop: 2,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  statusText: {
+    fontFamily: Typography.family.regular,
+    fontSize: 10,
+    color: Colors.textMuted,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: Space.xs,
+  },
+  actionBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm,
+  },
   draftTitle: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
@@ -197,13 +271,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     color: Colors.textMuted,
-  },
-  deleteBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm,
   },
   emptyState: {
     alignItems: 'center',

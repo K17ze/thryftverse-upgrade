@@ -5,6 +5,7 @@ export { CreatorCanvas } from './CreatorCanvas';
 export { CreatorAssetPicker } from './CreatorAssetPicker';
 export type { AssetPickerMode } from './CreatorAssetPicker';
 export { CreatorSettingsSheet } from './CreatorSettingsSheet';
+export { CreatorTemplateBrowser } from './CreatorTemplateBrowser';
 export { lookToDocument, posterStoryToDocument } from './viewerAdapters';
 export type { LookViewData, PosterStoryViewData, PosterFrameViewData } from './viewerAdapters';
 export { CreatorAnalytics, setCreatorAnalyticsHandler, trackCreatorEvent } from './creatorAnalytics';

@@ -59,6 +59,7 @@ export interface LookCreateBody {
   visibility?: 'public' | 'private';
   tags?: LookCreateTag[];
   status?: 'draft' | 'published' | 'archived';
+  compositionDocument?: unknown;
 }
 
 export async function createLookOnApi(body: LookCreateBody): Promise<{ ok: boolean; lookId: string }> {
