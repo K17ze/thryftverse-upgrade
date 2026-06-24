@@ -336,7 +336,9 @@ export default function ItemDetailScreen() {
           <ProductDescription description={item.description} />
 
           {item.createdAt ? (
-            <Text style={styles.postedDate}>Posted {item.createdAt}</Text>
+            <Text style={styles.postedDate}>
+              Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </Text>
           ) : null}
 
           <ProductCommerceSummary
@@ -374,10 +376,13 @@ export default function ItemDetailScreen() {
           )}
 
           {seenInLooksSection && seenInLooksSection.items.length > 0 && (
-            <SeenInLooksRail
-              items={seenInLooksSection.items.filter(isRecommendationLook) as RecommendationLook[]}
-              onPressItem={handlePressLook}
-            />
+            <>
+              <View style={styles.sectionDivider} />
+              <SeenInLooksRail
+                items={seenInLooksSection.items.filter(isRecommendationLook) as RecommendationLook[]}
+                onPressItem={handlePressLook}
+              />
+            </>
           )}
 
           {recsLoading && recommendationSections.length === 0 ? (
@@ -397,13 +402,16 @@ export default function ItemDetailScreen() {
           )}
 
           {exploreItems.length > 0 && (
-            <DiscoveryGrid
-              items={exploreItems}
-              listingId={item.id}
-              onPressItem={handlePressRecommendation}
-              onEndReached={() => exploreNextPage()}
-              hasMore={!!exploreHasNextPage && !exploreFetching}
-            />
+            <>
+              <View style={styles.sectionDivider} />
+              <DiscoveryGrid
+                items={exploreItems}
+                listingId={item.id}
+                onPressItem={handlePressRecommendation}
+                onEndReached={() => exploreNextPage()}
+                hasMore={!!exploreHasNextPage && !exploreFetching}
+              />
+            </>
           )}
 
           {recsError && recommendationSections.length === 0 && (
@@ -465,6 +473,12 @@ export default function ItemDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  sectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginHorizontal: Space.md,
+    marginVertical: Space.lg,
+  },
   postedDate: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
