@@ -19,6 +19,7 @@ import { CreatorCanvas } from './CreatorCanvas';
 import { CreatorLayersSheet } from './CreatorLayersSheet';
 import { CreatorToolDock } from './CreatorToolDock';
 import { CreatorPublishSheet } from './CreatorPublishSheet';
+import { CreatorSettingsSheet } from './CreatorSettingsSheet';
 import { CreatorAssetPicker, type AssetPickerMode } from './CreatorAssetPicker';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -243,6 +244,7 @@ function CreatorStudioInner() {
       {/* Sheets */}
       <CreatorLayersSheet visible={showLayers} onClose={() => setShowLayers(false)} />
       <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} />
+      <CreatorSettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
       <CreatorAssetPicker
         visible={pickerMode !== null}
         mode={pickerMode ?? 'media'}

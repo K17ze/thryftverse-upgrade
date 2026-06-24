@@ -23,7 +23,7 @@ const LAYER_ICONS: Record<CreatorLayer['type'], string> = {
 };
 
 export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps) {
-  const { document, activePageIndex, selectedLayerId, selectLayer, removeLayer, duplicateLayer, reorderLayer } = useCreator();
+  const { document, activePageIndex, selectedLayerId, selectLayer, removeLayer, duplicateLayer, reorderLayer, toggleLayerLock, toggleLayerVisibility } = useCreator();
 
   if (!visible) return null;
 
@@ -61,21 +61,30 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                   key={layer.id}
                   onPress={() => selectLayer(layer.id)}
                   style={[styles.layerRow, isSelected && styles.layerRowSelected]}
-                  accessibilityLabel={`Layer ${getLayerDisplayName(layer)}`}
+                  accessibilityLabel={`Layer ${getLayerDisplayName(layer)}${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
                   accessibilityRole="button"
+                  accessibilityHint="Double tap to select layer"
                 >
-                  <View style={[styles.layerIcon, { backgroundColor: `${getLayerColor(layer.type)}20` }]}>
-                    <Ionicons name={LAYER_ICONS[layer.type] as any} size={16} color={getLayerColor(layer.type)} />
+                  <View style={[styles.layerIcon, { backgroundColor: `${getLayerColor(layer.type)}20` }, layer.hidden && styles.layerIconHidden]}>
+                    <Ionicons name={LAYER_ICONS[layer.type] as any} size={16} color={layer.hidden ? Colors.textMuted : getLayerColor(layer.type)} />
                   </View>
                   <View style={styles.layerInfo}>
-                    <Text style={styles.layerName} numberOfLines={1}>{getLayerDisplayName(layer)}</Text>
-                    <Text style={styles.layerType}>{layer.type}</Text>
+                    <Text style={[styles.layerName, layer.hidden && styles.layerNameHidden]} numberOfLines={1}>{getLayerDisplayName(layer)}</Text>
+                    <Text style={styles.layerType}>{layer.type}{layer.locked ? ' · locked' : ''}{layer.hidden ? ' · hidden' : ''}</Text>
                   </View>
                   <View style={styles.layerActions}>
                     <Pressable
+                      onPress={() => reorderLayer(layer.id, 'front')}
+                      style={styles.layerActionBtn}
+                      accessibilityLabel="Bring to front"
+                      accessibilityRole="button"
+                    >
+                      <Ionicons name="arrow-up-circle-outline" size={16} color={Colors.textSecondary} />
+                    </Pressable>
+                    <Pressable
                       onPress={() => reorderLayer(layer.id, 'forward')}
                       style={styles.layerActionBtn}
-                      accessibilityLabel="Move up"
+                      accessibilityLabel="Move forward"
                       accessibilityRole="button"
                     >
                       <Ionicons name="chevron-up" size={16} color={Colors.textSecondary} />
@@ -83,10 +92,34 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                     <Pressable
                       onPress={() => reorderLayer(layer.id, 'backward')}
                       style={styles.layerActionBtn}
-                      accessibilityLabel="Move down"
+                      accessibilityLabel="Move backward"
                       accessibilityRole="button"
                     >
                       <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => reorderLayer(layer.id, 'back')}
+                      style={styles.layerActionBtn}
+                      accessibilityLabel="Send to back"
+                      accessibilityRole="button"
+                    >
+                      <Ionicons name="arrow-down-circle-outline" size={16} color={Colors.textSecondary} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => toggleLayerLock(layer.id)}
+                      style={styles.layerActionBtn}
+                      accessibilityLabel={layer.locked ? 'Unlock layer' : 'Lock layer'}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons name={layer.locked ? 'lock-closed' : 'lock-open-outline'} size={16} color={layer.locked ? '#ffc107' : Colors.textSecondary} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => toggleLayerVisibility(layer.id)}
+                      style={styles.layerActionBtn}
+                      accessibilityLabel={layer.hidden ? 'Show layer' : 'Hide layer'}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={16} color={Colors.textSecondary} />
                     </Pressable>
                     <Pressable
                       onPress={() => duplicateLayer(layer.id)}
@@ -257,12 +290,21 @@ const styles = StyleSheet.create({
   layerActions: {
     flexDirection: 'row',
     gap: 2,
+    flexWrap: 'wrap',
+    maxWidth: 180,
   },
   layerActionBtn: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
+  },
+  layerIconHidden: {
+    opacity: 0.4,
+  },
+  layerNameHidden: {
+    textDecorationLine: 'line-through' as const,
+    color: Colors.textMuted,
   },
 });
