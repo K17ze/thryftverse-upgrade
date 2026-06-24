@@ -55,7 +55,7 @@ export interface Listing {
   condition: 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
   price: number;
   originalPrice?: number;
-  priceWithProtection: number;
+  priceWithProtection?: number;
   images: string[];
   likes: number;
   views?: number;
@@ -67,6 +67,8 @@ export interface Listing {
   subcategory: string;
   description: string;
   createdAt?: string;
+  shippingMethod?: string | null;
+  shippingPayer?: string | null;
 }
 
 export interface User {

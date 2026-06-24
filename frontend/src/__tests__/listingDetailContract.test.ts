@@ -86,25 +86,41 @@ describe('listingDetailContract', () => {
   });
 
   describe('buildCommerceContext', () => {
-    it('calculates buyer protection fee from priceWithProtection', () => {
+    it('returns itemPrice and currency from listing, no client-side fee derivation', () => {
       const listing = makeListing({ price: 50, priceWithProtection: 53.2 });
       const commerce = buildCommerceContext(listing);
       expect(commerce.itemPrice).toBe(50);
-      expect(commerce.buyerProtectionFee).toBe(3.2);
-      expect(commerce.estimatedTotal).toBe(53.2);
+      expect(commerce.buyerProtectionFee).toBeUndefined();
+      expect(commerce.estimatedTotal).toBeUndefined();
       expect(commerce.currency).toBe('GBP');
     });
 
-    it('provides default buyer protection policy', () => {
+    it('does not provide a default protection policy (server-owned)', () => {
       const listing = makeListing();
       const commerce = buildCommerceContext(listing);
+      expect(commerce.protectionPolicy).toBeNull();
+    });
+
+    it('accepts server-provided buyerProtectionFee and estimatedTotal via extras', () => {
+      const listing = makeListing({ price: 50 });
+      const commerce = buildCommerceContext(listing, {
+        buyerProtectionFee: 3.2,
+        estimatedTotal: 53.2,
+        protectionPolicy: {
+          available: true,
+          label: 'Buyer Protection',
+          summary: 'Covered by Thryftverse Buyer Protection.',
+        },
+      });
+      expect(commerce.buyerProtectionFee).toBe(3.2);
+      expect(commerce.estimatedTotal).toBe(53.2);
       expect(commerce.protectionPolicy).not.toBeNull();
       expect(commerce.protectionPolicy!.available).toBe(true);
       expect(commerce.protectionPolicy!.label).toBe('Buyer Protection');
     });
 
-    it('handles missing priceWithProtection', () => {
-      const listing = makeListing({ price: 30, priceWithProtection: undefined as any });
+    it('handles listing without priceWithProtection', () => {
+      const listing = makeListing({ price: 30, priceWithProtection: undefined });
       const commerce = buildCommerceContext(listing);
       expect(commerce.itemPrice).toBe(30);
       expect(commerce.buyerProtectionFee).toBeUndefined();
@@ -191,6 +207,7 @@ describe('listingDetailContract', () => {
       expect(detail.seller).not.toBeNull();
       expect(detail.seller!.id).toBe('seller-1');
       expect(detail.commerce.itemPrice).toBe(50);
+      expect(detail.commerce.buyerProtectionFee).toBeUndefined();
       expect(detail.capabilities.isOwner).toBe(false);
       expect(detail.capabilities.canBuy).toBe(true);
       expect(detail.engagement.likes).toBe(10);

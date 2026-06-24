@@ -78,7 +78,7 @@ export default function ItemDetailScreen() {
   const isFav = useStore((state) => state.isWishlisted(route.params?.itemId));
   const toggleFav = useStore((state) => state.toggleWishlist);
   const currentUser = useStore((state) => state.currentUser);
-  const { listings, isSyncing, lastError, refreshListings } = useBackendData();
+  const { isSyncing, lastError, refreshListings } = useBackendData();
 
   const { itemId } = route.params || {};
 
@@ -102,7 +102,7 @@ export default function ItemDetailScreen() {
     isFetchingNextPage: exploreFetching,
   } = useContinueExploring(itemId);
 
-  const item = queryListing ?? listings.find((l) => l.id === itemId) ?? null;
+  const item = queryListing ?? null;
 
   useEffect(() => {
     setProductAnalyticsHandler((event) => {
@@ -209,10 +209,15 @@ export default function ItemDetailScreen() {
   const formattedOriginal = hasDiscount
     ? formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })
     : null;
-  const formattedProtectionTotal = formatFromFiat(item.priceWithProtection, 'GBP', { displayMode: 'fiat' });
+  const formattedProtectionTotal = item.priceWithProtection != null
+    ? formatFromFiat(item.priceWithProtection, 'GBP', { displayMode: 'fiat' })
+    : null;
 
   const capabilities = buildCapabilities(item, currentUser?.id);
-  const commerce = buildCommerceContext(item);
+  const commerce = buildCommerceContext(item, {
+    shippingMethod: item.shippingMethod ?? null,
+    shippingPayer: (item.shippingPayer as 'buyer' | 'seller' | null) ?? null,
+  });
   const seller = buildSellerTrustSummary(item.seller);
 
   const recommendationSections = recommendationsData?.sections ?? [];

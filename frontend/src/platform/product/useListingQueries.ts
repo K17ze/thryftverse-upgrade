@@ -3,12 +3,10 @@ import { queryKeys } from '../server/queryKeys';
 import { fetchRecommendations } from './recommendationService';
 import type { RecommendationSectionKey } from './recommendationTypes';
 import { fetchListingByIdFromApi } from '../../services/listingsApi';
-import { Listing, MOCK_LISTINGS } from '../../data/mockData';
-import { ENABLE_RUNTIME_MOCKS } from '../../constants/runtimeFlags';
+import type { Listing } from '../../data/mockData';
 
 function mapApiListingToListing(row: any): Listing {
   const price = Number(row.priceGbp ?? 0);
-  const protectionFee = Number((price * 0.05 + 0.7).toFixed(2));
   return {
     id: row.id,
     title: row.title || 'Untitled listing',
@@ -16,7 +14,6 @@ function mapApiListingToListing(row: any): Listing {
     size: row.size || 'One size',
     condition: (row.condition as Listing['condition']) || 'Very good',
     price,
-    priceWithProtection: Number((price + protectionFee).toFixed(2)),
     images: row.images?.length ? row.images : row.imageUrl ? [row.imageUrl] : [],
     likes: 0,
     isSold: row.status === 'sold',
@@ -26,6 +23,9 @@ function mapApiListingToListing(row: any): Listing {
     subcategory: 'Clothing',
     description: row.description || '',
     createdAt: row.createdAt,
+    originalPrice: row.originalPriceGbp != null ? Number(row.originalPriceGbp) : undefined,
+    shippingMethod: row.shippingMethod ?? null,
+    shippingPayer: row.shippingPayer ?? null,
   };
 }
 
@@ -34,15 +34,11 @@ export function useListingDetail(listingId: string | undefined) {
     queryKey: listingId ? queryKeys.listing.detail(listingId) : ['listing', 'detail', 'none'],
     queryFn: async () => {
       if (!listingId) return null;
-      try {
-        const res = await fetchListingByIdFromApi(listingId);
-        if (res.ok && res.listing) {
-          return mapApiListingToListing(res.listing);
-        }
-      } catch {
-        // fall through to context data
+      const res = await fetchListingByIdFromApi(listingId);
+      if (!res.ok || !res.listing) {
+        throw new Error(res.error || 'Listing not found');
       }
-      return null;
+      return mapApiListingToListing(res.listing);
     },
     enabled: !!listingId,
     staleTime: 5 * 60 * 1000,

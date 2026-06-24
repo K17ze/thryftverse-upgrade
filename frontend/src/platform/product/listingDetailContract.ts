@@ -91,26 +91,18 @@ export function buildCommerceContext(
   extras?: Partial<ListingCommerceContext>
 ): ListingCommerceContext {
   const itemPrice = listing.price;
-  const buyerProtectionFee = listing.priceWithProtection
-    ? Number((listing.priceWithProtection - listing.price).toFixed(2))
-    : undefined;
 
   return {
     itemPrice,
-    buyerProtectionFee,
-    estimatedTotal: listing.priceWithProtection,
+    buyerProtectionFee: extras?.buyerProtectionFee,
+    estimatedTotal: extras?.estimatedTotal,
     currency: 'GBP',
     shippingMethod: extras?.shippingMethod ?? null,
     shippingPayer: extras?.shippingPayer ?? null,
     estimatedDeliveryStart: extras?.estimatedDeliveryStart ?? null,
     estimatedDeliveryEnd: extras?.estimatedDeliveryEnd ?? null,
     returnPolicy: extras?.returnPolicy ?? null,
-    protectionPolicy: extras?.protectionPolicy ?? {
-      available: true,
-      label: 'Buyer Protection',
-      summary:
-        'Items covered by Thryftverse Buyer Protection. If your item doesn\u2019t arrive or doesn\u2019t match the description, you may be eligible for a refund.',
-    },
+    protectionPolicy: extras?.protectionPolicy ?? null,
     authenticity: extras?.authenticity ?? null,
   };
 }

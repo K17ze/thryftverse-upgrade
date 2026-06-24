@@ -33,7 +33,6 @@ interface ApiListingRow {
 
 function mapApiListingToListing(row: ApiListingRow): Listing {
   const price = Number(row.priceGbp ?? 0);
-  const protectionFee = Number((price * 0.05 + 0.7).toFixed(2));
   return {
     id: row.id,
     title: row.title || 'Untitled listing',
@@ -41,7 +40,6 @@ function mapApiListingToListing(row: ApiListingRow): Listing {
     size: row.size || 'One size',
     condition: (row.condition as Listing['condition']) || 'Very good',
     price,
-    priceWithProtection: Number((price + protectionFee).toFixed(2)),
     images: row.images?.length ? row.images : row.imageUrl ? [row.imageUrl] : [],
     likes: 0,
     isSold: row.status === 'sold',
@@ -51,6 +49,7 @@ function mapApiListingToListing(row: ApiListingRow): Listing {
     subcategory: 'Clothing',
     description: row.description || '',
     createdAt: row.createdAt,
+    originalPrice: row.originalPriceGbp != null ? Number(row.originalPriceGbp) : undefined,
   };
 }
 
