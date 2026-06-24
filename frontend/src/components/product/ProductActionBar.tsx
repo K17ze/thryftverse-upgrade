@@ -92,7 +92,7 @@ export function ProductActionBar({
           </AnimatedPressable>
         )}
 
-        {capabilities.canMessage && !capabilities.canBuy && (
+        {capabilities.canMessage && (
           <AnimatedPressable
             style={styles.messageBtn}
             onPress={onMessage}
@@ -101,7 +101,6 @@ export function ProductActionBar({
             accessibilityRole="button"
           >
             <Ionicons name="chatbubble-outline" size={18} color={Colors.textPrimary} />
-            <Text style={styles.messageBtnText}>Message</Text>
           </AnimatedPressable>
         )}
       </View>
@@ -165,14 +164,12 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
   },
   messageBtn: {
-    flexDirection: 'row',
     paddingVertical: 12,
-    paddingHorizontal: Space.lg,
+    paddingHorizontal: Space.md,
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
   },
   messageBtnText: {
     fontSize: 15,
