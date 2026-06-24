@@ -29,7 +29,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { Space, Typography } from '../theme/designTokens';
 import { FlagshipProfileMedia } from '../components/flagship';
-import { fetchPublicProfile, type PublicProfileUser } from '../services/profileApi';
+import { type PublicProfileUser } from '../services/profileApi';
+import { usePublicProfileQuery } from '../platform/server';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { isVideoUri } from '../utils/media';
 import { PublicProfileIdentityHero } from '../components/profile/PublicProfileIdentityHero';
@@ -63,9 +64,15 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const profileMediaOverrides = useStore(state => state.profileMediaOverrides);
   const [activeTab, setActiveTab] = useState<Tab>('Listings');
 
-  const [publicProfile, setPublicProfile] = useState<PublicProfileUser | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
+  const isMe = route.params?.isMe ?? false;
+  const userId = route.params?.userId;
+
+  const isSelfProfile = isMe || userId === currentUser?.id;
+
+  const publicProfileQuery = usePublicProfileQuery(isSelfProfile ? null : userId);
+  const publicProfile = publicProfileQuery.data ?? null;
+  const isLoadingProfile = publicProfileQuery.isLoading;
+  const profileError = publicProfileQuery.error ? 'Unable to load profile. Tap to retry.' : null;
   const [moreMenuVisible, setMoreMenuVisible] = useState(false);
   const [profileLooks, setProfileLooks] = useState<LookApiItem[]>([]);
   const [isLoadingLooks, setIsLoadingLooks] = useState(false);
@@ -74,11 +81,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [isLoadingHighlights, setIsLoadingHighlights] = useState(false);
   const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
-
-  const isMe = route.params?.isMe ?? false;
-  const userId = route.params?.userId;
-
-  const isSelfProfile = isMe || userId === currentUser?.id;
 
   const targetUserId = isSelfProfile ? currentUser?.id : userId;
 
@@ -138,26 +140,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return () => { canceled = true; };
   }, [targetUserId]);
 
-  React.useEffect(() => {
-    if (isSelfProfile || !userId) return;
-    let canceled = false;
-    setIsLoadingProfile(true);
-    setProfileError(null);
-    fetchPublicProfile(userId)
-      .then((profile) => {
-        if (!canceled) setPublicProfile(profile);
-      })
-      .catch(() => {
-        if (!canceled) {
-          setPublicProfile(null);
-          setProfileError('Unable to load profile. Tap to retry.');
-        }
-      })
-      .finally(() => {
-        if (!canceled) setIsLoadingProfile(false);
-      });
-    return () => { canceled = true; };
-  }, [userId, isSelfProfile]);
 
   const mediaOverride =
     (userId ? profileMediaOverrides[userId] : undefined)
@@ -246,16 +228,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         <View style={[styles.coverPlaceholder, { height: COVER_HEIGHT }]} />
         <Pressable
           style={styles.stateContainer}
-          onPress={() => {
-            if (userId) {
-              setProfileError(null);
-              setIsLoadingProfile(true);
-              fetchPublicProfile(userId)
-                .then(setPublicProfile)
-                .catch(() => setProfileError('Unable to load profile. Tap to retry.'))
-                .finally(() => setIsLoadingProfile(false));
-            }
-          }}
+          onPress={() => publicProfileQuery.refetch()}
           accessibilityRole="button"
           accessibilityLabel="Retry loading profile"
         >

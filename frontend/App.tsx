@@ -25,7 +25,7 @@ import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesCo
 import { ToastContainer } from './src/components/Toast';
 import { AppErrorBoundary, initSentry } from './src/platform/monitoring';
 import { KeyboardProvider } from './src/platform/keyboard';
-import { ServerStateProvider } from './src/platform/server';
+import { ServerStateProvider, useMobileQueryLifecycle } from './src/platform/server';
 import { BrandedSplash } from './src/components/BrandedSplash';
 import { Typography } from './src/theme/designTokens';
 import { ThemeProvider } from './src/theme/ThemeContext';
@@ -85,6 +85,7 @@ function applyGlobalTypographyDefaults(useInterFonts: boolean) {
 }
 
 export default function App() {
+  useMobileQueryLifecycle();
   const [showBrandedSplash, setShowBrandedSplash] = React.useState(true);
   const [bootTimedOut, setBootTimedOut] = React.useState(false);
   const [themeInitialized, setThemeInitialized] = React.useState(false);

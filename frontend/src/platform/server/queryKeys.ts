@@ -22,4 +22,7 @@ export const queryKeys = {
     feed: ['discover', 'feed'] as const,
     editorial: ['discover', 'editorial'] as const,
   },
+  notifications: {
+    unreadCount: ['notifications', 'unread-count'] as const,
+  },
 } as const;
