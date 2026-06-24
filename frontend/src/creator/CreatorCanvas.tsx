@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -8,11 +8,20 @@ import Reanimated, {
   runOnJS,
   withTiming,
 } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
 import { getVisibleLayersSorted } from './composition';
+
+const RAD_TO_DEG = 180 / Math.PI;
+
+function normaliseDegrees(deg: number): number {
+  let result = deg % 360;
+  if (result < 0) result += 360;
+  return result;
+}
 
 export interface CreatorCanvasProps {
   document: CreatorDocument;
@@ -25,6 +34,8 @@ export interface CreatorCanvasProps {
   onCanvasPress?: () => void;
   onLayerPositionChange?: (layerId: string, x: number, y: number) => void;
   onLayerTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
+  onLayerDoubleTap?: (layerId: string) => void;
+  onLayerLongPress?: (layerId: string) => void;
 }
 
 export function CreatorCanvas({
@@ -37,6 +48,8 @@ export function CreatorCanvas({
   onLayerPress,
   onCanvasPress,
   onLayerTransformChange,
+  onLayerDoubleTap,
+  onLayerLongPress,
 }: CreatorCanvasProps) {
   const { canvas } = document;
   const visibleLayers = getVisibleLayersSorted(page);
@@ -82,6 +95,8 @@ export function CreatorCanvas({
           isSelected={selectedLayerId === layer.id}
           onPress={onLayerPress}
           onTransformChange={onLayerTransformChange}
+          onDoubleTap={onLayerDoubleTap}
+          onLongPress={onLayerLongPress}
         />
       ))}
     </GestureHandlerRootView>
@@ -96,10 +111,17 @@ interface LayerRendererProps {
   isSelected: boolean;
   onPress?: (layerId: string) => void;
   onTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
+  onDoubleTap?: (layerId: string) => void;
+  onLongPress?: (layerId: string) => void;
 }
 
 const SNAP_THRESHOLD = 0.02;
 const SAFE_MARGIN = 0.05;
+const ROTATION_SNAP_DEG = 15;
+
+function triggerHaptic() {
+  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+}
 
 function LayerRenderer({
   layer,
@@ -109,6 +131,8 @@ function LayerRenderer({
   isSelected,
   onPress,
   onTransformChange,
+  onDoubleTap,
+  onLongPress,
 }: LayerRendererProps) {
   const translateX = useSharedValue(layer.x * canvasWidth);
   const translateY = useSharedValue(layer.y * canvasHeight);
@@ -118,43 +142,90 @@ function LayerRenderer({
   const startY = useSharedValue(0);
   const startScale = useSharedValue(1);
   const startRotation = useSharedValue(0);
+  const [showGuides, setShowGuides] = useState(false);
+
+  // Sync shared values when document state changes (undo/redo/draft load/page change)
+  useEffect(() => {
+    translateX.value = withTiming(layer.x * canvasWidth, { duration: 150 });
+    translateY.value = withTiming(layer.y * canvasHeight, { duration: 150 });
+    scaleSV.value = withTiming(layer.scale, { duration: 150 });
+    rotationSV.value = withTiming(normaliseDegrees(layer.rotation), { duration: 150 });
+  }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight]);
 
   const handlePress = useCallback(() => {
-    if (mode === 'edit' && onPress && !layer.locked) {
+    if (mode === 'edit' && onPress) {
       onPress(layer.id);
     }
-  }, [mode, onPress, layer.id, layer.locked]);
+  }, [mode, onPress, layer.id]);
+
+  const handleDoubleTap = useCallback(() => {
+    if (mode === 'edit' && onDoubleTap) {
+      onDoubleTap(layer.id);
+    }
+  }, [mode, onDoubleTap, layer.id]);
+
+  const handleLongPress = useCallback(() => {
+    if (mode === 'edit' && onLongPress) {
+      onLongPress(layer.id);
+    }
+  }, [mode, onLongPress, layer.id]);
 
   const handlePositionCommit = useCallback((finalX: number, finalY: number) => {
     let normX = finalX / canvasWidth;
     let normY = finalY / canvasHeight;
+    let snappedX = false;
+    let snappedY = false;
+
     // Snapping to center
-    if (Math.abs(normX - 0.5) < SNAP_THRESHOLD) normX = 0.5;
-    if (Math.abs(normY - 0.5) < SNAP_THRESHOLD) normY = 0.5;
-    // Clamp to safe area
-    normX = Math.max(SAFE_MARGIN, Math.min(1 - SAFE_MARGIN, normX));
-    normY = Math.max(SAFE_MARGIN, Math.min(1 - SAFE_MARGIN, normY));
-    translateX.value = withTiming(normX * canvasWidth, { duration: 0 });
-    translateY.value = withTiming(normY * canvasHeight, { duration: 0 });
+    if (Math.abs(normX - 0.5) < SNAP_THRESHOLD) { normX = 0.5; snappedX = true; }
+    if (Math.abs(normY - 0.5) < SNAP_THRESHOLD) { normY = 0.5; snappedY = true; }
+
+    // Safe-zone clamping accounting for layer width, height and scale
+    const halfW = (layer.width * layer.scale) / 2;
+    const halfH = (layer.height * layer.scale) / 2;
+    const minX = Math.max(SAFE_MARGIN, halfW);
+    const maxX = Math.min(1 - SAFE_MARGIN, 1 - halfW);
+    const minY = Math.max(SAFE_MARGIN, halfH);
+    const maxY = Math.min(1 - SAFE_MARGIN, 1 - halfH);
+    normX = Math.max(minX, Math.min(maxX, normX));
+    normY = Math.max(minY, Math.min(maxY, normY));
+
+    translateX.value = withTiming(normX * canvasWidth, { duration: 100 });
+    translateY.value = withTiming(normY * canvasHeight, { duration: 100 });
+
+    if (snappedX || snappedY) triggerHaptic();
+    setShowGuides(false);
+
     onTransformChange?.(layer.id, { x: normX, y: normY });
-  }, [canvasWidth, canvasHeight, layer.id, onTransformChange, translateX, translateY]);
+  }, [canvasWidth, canvasHeight, layer.id, layer.width, layer.height, layer.scale, onTransformChange, translateX, translateY]);
 
   const handleTransformCommit = useCallback((finalScale: number, finalRotation: number) => {
     const clampedScale = Math.max(0.2, Math.min(5, finalScale));
-    scaleSV.value = withTiming(clampedScale, { duration: 0 });
-    rotationSV.value = withTiming(finalRotation, { duration: 0 });
-    onTransformChange?.(layer.id, { scale: clampedScale, rotation: finalRotation });
+    const normalisedRotation = normaliseDegrees(finalRotation);
+
+    // Snap rotation to 15-degree increments if close
+    let snappedRotation = normalisedRotation;
+    const nearestSnap = Math.round(normalisedRotation / ROTATION_SNAP_DEG) * ROTATION_SNAP_DEG;
+    if (Math.abs(normalisedRotation - nearestSnap) < 5) {
+      snappedRotation = nearestSnap % 360;
+      triggerHaptic();
+    }
+
+    scaleSV.value = withTiming(clampedScale, { duration: 100 });
+    rotationSV.value = withTiming(snappedRotation, { duration: 100 });
+    onTransformChange?.(layer.id, { scale: clampedScale, rotation: snappedRotation });
   }, [layer.id, onTransformChange, scaleSV, rotationSV]);
 
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
         .enabled(mode === 'edit' && !layer.locked)
-        .minDistance(3)
+        .minDistance(5)
         .onStart(() => {
           startX.value = translateX.value;
           startY.value = translateY.value;
           runOnJS(onPress)?.(layer.id);
+          runOnJS(setShowGuides)(true);
         })
         .onUpdate((e) => {
           translateX.value = startX.value + e.translationX;
@@ -192,7 +263,8 @@ function LayerRenderer({
           startRotation.value = rotationSV.value;
         })
         .onUpdate((e) => {
-          rotationSV.value = startRotation.value + e.rotation;
+          // Convert gesture radians to degrees at the boundary
+          rotationSV.value = startRotation.value + e.rotation * RAD_TO_DEG;
         })
         .onEnd(() => {
           runOnJS(handleTransformCommit)(scaleSV.value, rotationSV.value);
@@ -203,16 +275,44 @@ function LayerRenderer({
   const tapGesture = useMemo(
     () =>
       Gesture.Tap()
-        .enabled(mode === 'edit' && !layer.locked)
+        .enabled(mode === 'edit')
         .onEnd(() => {
           runOnJS(handlePress)();
         }),
-    [mode, layer.locked, handlePress]
+    [mode, handlePress]
+  );
+
+  const doubleTapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .enabled(mode === 'edit' && !layer.locked)
+        .numberOfTaps(2)
+        .onEnd(() => {
+          runOnJS(handleDoubleTap)();
+        }),
+    [mode, layer.locked, handleDoubleTap]
+  );
+
+  const longPressGesture = useMemo(
+    () =>
+      Gesture.LongPress()
+        .enabled(mode === 'edit')
+        .minDuration(400)
+        .onEnd(() => {
+          runOnJS(handleLongPress)();
+        }),
+    [mode, handleLongPress]
   );
 
   const composedGesture = useMemo(
-    () => Gesture.Race(Gesture.Simultaneous(pinchGesture, rotationGesture), panGesture, tapGesture),
-    [panGesture, pinchGesture, rotationGesture, tapGesture]
+    () => Gesture.Race(
+      Gesture.Simultaneous(pinchGesture, rotationGesture),
+      panGesture,
+      doubleTapGesture,
+      longPressGesture,
+      tapGesture,
+    ),
+    [panGesture, pinchGesture, rotationGesture, tapGesture, doubleTapGesture, longPressGesture]
   );
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -236,14 +336,15 @@ function LayerRenderer({
 
   const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight);
 
-  if (mode === 'edit' && !layer.locked) {
+  if (mode === 'edit') {
     return (
       <GestureDetector gesture={composedGesture}>
-        <Reanimated.View style={animatedStyle}>
-          <View style={[styles.layerInner, isSelected && styles.layerSelected]}>
+        <Reanimated.View style={animatedStyle} accessibilityLabel={`${layer.type} layer${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`} accessibilityRole="image">
+          <View style={[styles.layerInner, isSelected && styles.layerSelected, layer.locked && styles.layerLocked]}>
             {content}
           </View>
           {isSelected && <SelectionHandles />}
+          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} />}
         </Reanimated.View>
       </GestureDetector>
     );
@@ -448,6 +549,36 @@ function SelectionHandles() {
   );
 }
 
+function AlignmentGuides({ canvasWidth, canvasHeight }: { canvasWidth: number; canvasHeight: number }) {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {/* Horizontal centre line */}
+      <View style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: canvasHeight / 2 - 0.5,
+        height: 1,
+        backgroundColor: 'rgba(99,102,241,0.5)',
+      }} />
+      {/* Vertical centre line */}
+      <View style={{
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        left: canvasWidth / 2 - 0.5,
+        width: 1,
+        backgroundColor: 'rgba(99,102,241,0.5)',
+      }} />
+      {/* Safe-zone edges */}
+      <View style={{ position: 'absolute', left: 0, right: 0, top: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+      <View style={{ position: 'absolute', top: 0, bottom: 0, left: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+      <View style={{ position: 'absolute', top: 0, bottom: 0, right: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   canvas: {
     borderRadius: Radius.lg,
@@ -468,6 +599,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.8)',
     borderRadius: Radius.sm,
+  },
+  layerLocked: {
+    borderColor: 'rgba(255,193,7,0.6)',
+    borderWidth: 1,
+    borderStyle: 'dashed' as const,
   },
   selectionOverlay: {
     ...StyleSheet.absoluteFill,

@@ -186,6 +186,16 @@ function CreatorStudioInner() {
           onLayerPress={handleLayerPress}
           onCanvasPress={handleCanvasPress}
           onLayerTransformChange={(layerId, updates) => commitLayerTransform(layerId, updates, 'Transform layer')}
+          onLayerDoubleTap={(layerId) => {
+            const l = page.layers.find((x) => x.id === layerId);
+            if (l?.type === 'text') {
+              setPickerMode('text');
+            }
+          }}
+          onLayerLongPress={(layerId) => {
+            selectLayer(layerId);
+            setShowLayers(true);
+          }}
         />
       </View>
 
