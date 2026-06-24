@@ -13622,6 +13622,7 @@ app.get('/listings', async (request) => {
     maxPrice: z.coerce.number().nonnegative().optional(),
     sort: z.enum(['newest', 'price_asc', 'price_desc']).optional().default('newest'),
     limit: z.coerce.number().int().min(1).max(200).optional().default(100),
+    cursor: z.string().optional(),
   });
   const params = querySchema.parse(request.query ?? {});
 
@@ -13653,12 +13654,37 @@ app.get('/listings', async (request) => {
     args.push(params.maxPrice);
   }
 
+  let cursorData: { sortValue: string | number; id: string } | null = null;
+  if (params.cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(params.cursor, 'base64').toString('utf-8'));
+      cursorData = { sortValue: decoded.sortValue, id: decoded.id };
+    } catch {
+      // Invalid cursor — ignore it, start from beginning
+    }
+  }
+
   const orderBy =
     params.sort === 'price_asc'
-      ? 'price_gbp ASC'
+      ? 'price_gbp ASC, l.id ASC'
       : params.sort === 'price_desc'
-        ? 'price_gbp DESC'
-        : 'created_at DESC';
+        ? 'price_gbp DESC, l.id DESC'
+        : 'l.created_at DESC, l.id DESC';
+
+  if (cursorData) {
+    if (params.sort === 'price_asc') {
+      conditions.push(`(price_gbp, l.id) > ($${args.length + 1}, $${args.length + 2})`);
+      args.push(cursorData.sortValue, cursorData.id);
+    } else if (params.sort === 'price_desc') {
+      conditions.push(`(price_gbp, l.id) < ($${args.length + 1}, $${args.length + 2})`);
+      args.push(cursorData.sortValue, cursorData.id);
+    } else {
+      conditions.push(`(l.created_at, l.id) < ($${args.length + 1}, $${args.length + 2})`);
+      args.push(cursorData.sortValue, cursorData.id);
+    }
+  }
+
+  const fetchLimit = params.limit + 1;
 
   const result = await readDb.query<{
     id: string;
@@ -13687,10 +13713,13 @@ app.get('/listings', async (request) => {
       ORDER BY ${orderBy}
       LIMIT $${args.length + 1}
     `,
-    [...args, params.limit]
+    [...args, fetchLimit]
   );
 
-  const listingIds = result.rows.map((r) => r.id);
+  const hasMore = result.rows.length > params.limit;
+  const pageRows = hasMore ? result.rows.slice(0, params.limit) : result.rows;
+
+  const listingIds = pageRows.map((r) => r.id);
   const imagesResult = listingIds.length
     ? await readDb.query<{
         listing_id: string;
@@ -13709,8 +13738,18 @@ app.get('/listings', async (request) => {
     imagesByListing.set(img.listing_id, arr);
   }
 
+  const lastRow = pageRows[pageRows.length - 1];
+  const nextCursor = hasMore && lastRow
+    ? Buffer.from(JSON.stringify({
+        sortValue: params.sort === 'price_asc' || params.sort === 'price_desc'
+          ? Number(lastRow.price_gbp)
+          : lastRow.created_at,
+        id: lastRow.id,
+      })).toString('base64')
+    : undefined;
+
   return {
-    items: result.rows.map((row) => ({
+    items: pageRows.map((row) => ({
       id: row.id,
       sellerId: row.seller_id,
       title: row.title,
@@ -13736,6 +13775,7 @@ app.get('/listings', async (request) => {
           }
         : null,
     })),
+    nextCursor,
   };
 });
 

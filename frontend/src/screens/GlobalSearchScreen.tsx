@@ -34,6 +34,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { searchListingsFromApi } from '../services/feedApi';
+import { ProductAnalytics } from '../platform/product/productAnalytics';
 
 /* ── New Discover Components ── */
 import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
@@ -236,6 +238,55 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     [normalizedQuery],
   );
 
+  const [backendSearchResults, setBackendSearchResults] = useState<RankedListing[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!normalizedQuery || normalizedQuery.length < 2) {
+      setBackendSearchResults([]);
+      setSearchError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearching(true);
+    setSearchError(null);
+
+    searchListingsFromApi(normalizedQuery, 50)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.error) {
+          setSearchError(result.error);
+          setBackendSearchResults([]);
+        } else {
+          setBackendSearchResults(
+            result.items.map((item) => ({
+              id: item.id,
+              title: item.title,
+              brand: '',
+              size: '',
+              condition: 'Very good' as const,
+              image: item.imageUrl ?? '',
+              price: Number(item.priceGbp ?? 0),
+              likes: 0,
+              sellerId: item.sellerId,
+              createdAt: item.createdAt,
+              score: item.rank,
+              reason: result.fallback ? 'Fuzzy match' : 'Search match',
+            })),
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsSearching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [normalizedQuery]);
+
   const wishlistListings = useMemo(
     () => listings.filter((listing) => wishlistIds?.includes(listing.id) ?? false),
     [listings, wishlistIds],
@@ -251,6 +302,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   );
 
   const rankedListings = useMemo<RankedListing[]>(() => {
+    if (normalizedQuery && backendSearchResults.length > 0) {
+      return backendSearchResults;
+    }
     return listings
       .filter((listing) => !(wishlistIds?.includes(listing.id) ?? false))
       .map((listing) => {
@@ -314,7 +368,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, 20);
-  }, [affinityProfile.brandSet, affinityProfile.categorySet, affinityProfile.subcategorySet, listings, queryTokens, wishlistIds]);
+  }, [affinityProfile.brandSet, affinityProfile.categorySet, affinityProfile.subcategorySet, listings, queryTokens, wishlistIds, normalizedQuery, backendSearchResults]);
 
   const trendingTags = useMemo(() => {
     const affinityBrands = [...affinityProfile.brandSet];
@@ -480,6 +534,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   };
 
   const handleOpenRecommendation = (listingId: string) => {
+    ProductAnalytics.itemView(listingId);
     navigation.push('ItemDetail', { itemId: listingId });
   };
 
@@ -751,15 +806,21 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             {/* ═══════ SEARCH RESULTS (query entered) ═══════ */}
             {!isDiscoverLanding && (
               <>
-                {lastError ? (
+                {(lastError || searchError) ? (
                   <SyncRetryBanner
-                    message="Search index is delayed. Showing cached results."
+                    message={searchError ? `Search error: ${searchError}` : 'Search index is delayed. Showing cached results.'}
                     onRetry={() => void refreshListings()}
-                    isRetrying={isSyncing}
+                    isRetrying={isSyncing || isSearching}
                     telemetryContext="global_search_sync"
                     containerStyle={{ marginHorizontal: 20, marginBottom: 12 }}
                   />
                 ) : null}
+
+                {isSearching && (
+                  <View style={{ paddingHorizontal: 20, marginBottom: 8 }}>
+                    <SkeletonLoader width="40%" height={14} borderRadius={7} />
+                  </View>
+                )}
 
                 {/* Sort + Filter bar */}
                 <View style={styles.filterBar}>
@@ -856,7 +917,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       <Text style={styles.recoEmptyText}>
                         {hasActiveDiscoverFilters
                           ? 'No picks match your current filters. Adjust or clear them.'
-                          : 'No ranked results yet. Try a shorter keyword.'}
+                          : isSearching ? 'Searching...' : 'No results found. Try a different keyword.'}
                       </Text>
                     </View>
                   )}

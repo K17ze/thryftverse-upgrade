@@ -23,12 +23,14 @@ interface ApiListingRow {
 
 interface ApiListingsResponse {
   items: ApiListingRow[];
+  nextCursor?: string;
 }
 
 export interface ListingsSyncResult {
   listings: Listing[];
   source: 'api' | 'mock';
   error?: string;
+  nextCursor?: string;
 }
 
 function deriveBrand(title: string) {
@@ -71,15 +73,17 @@ function mapApiListingToApp(row: ApiListingRow): Listing {
   };
 }
 
-export async function fetchListingsFromApi(): Promise<ListingsSyncResult> {
+export async function fetchListingsFromApi(cursor?: string): Promise<ListingsSyncResult> {
   try {
-    const payload = await fetchJson<ApiListingsResponse>('/listings');
+    const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    const payload = await fetchJson<ApiListingsResponse>(`/listings${qs}`);
     const rows = Array.isArray(payload.items) ? payload.items : [];
 
     return {
       listings: rows.map((row) => mapApiListingToApp(row)),
       source: 'api',
       error: rows.length === 0 ? 'API returned zero listings.' : undefined,
+      nextCursor: payload.nextCursor,
     };
   } catch (error) {
     return {
@@ -99,6 +103,7 @@ export async function fetchFilteredListings(options?: {
   maxPrice?: number;
   sort?: 'newest' | 'price_asc' | 'price_desc';
   limit?: number;
+  cursor?: string;
 }): Promise<ListingsSyncResult> {
   const params = new URLSearchParams();
   if (options?.category) params.set('category', options.category);
@@ -109,6 +114,7 @@ export async function fetchFilteredListings(options?: {
   if (options?.maxPrice !== undefined) params.set('maxPrice', String(options.maxPrice));
   if (options?.sort) params.set('sort', options.sort);
   if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.cursor) params.set('cursor', options.cursor);
   const qs = params.toString();
 
   try {
@@ -119,6 +125,7 @@ export async function fetchFilteredListings(options?: {
       listings: rows.map((row) => mapApiListingToApp(row)),
       source: 'api',
       error: rows.length === 0 ? 'No listings match your filters.' : undefined,
+      nextCursor: payload.nextCursor,
     };
   } catch (error) {
     return {

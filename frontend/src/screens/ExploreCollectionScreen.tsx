@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,9 @@ import { EmptyState } from '../components/EmptyState';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useToast } from '../context/ToastContext';
+import { fetchFilteredListings } from '../services/listingsApi';
+import { Listing } from '../data/mockData';
+import { ProductAnalytics } from '../platform/product/productAnalytics';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -39,14 +42,50 @@ export default function ExploreCollectionScreen() {
 
   const { title, subtitle, source } = route.params;
 
+  const [backendListings, setBackendListings] = useState<Listing[] | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
+
+  useEffect(() => {
+    if (source.type === 'category' && source.categoryId && source.categoryId !== 'all') {
+      let cancelled = false;
+      setIsFetching(true);
+      fetchFilteredListings({ category: source.categoryId, sort: 'newest', limit: 100 })
+        .then((result) => {
+          if (!cancelled) setBackendListings(result.listings);
+        })
+        .finally(() => { if (!cancelled) setIsFetching(false); });
+      return () => { cancelled = true; };
+    }
+    if (source.type === 'brand' && source.brand) {
+      let cancelled = false;
+      setIsFetching(true);
+      fetchFilteredListings({ brand: source.brand, sort: 'newest', limit: 100 })
+        .then((result) => {
+          if (!cancelled) setBackendListings(result.listings);
+        })
+        .finally(() => { if (!cancelled) setIsFetching(false); });
+      return () => { cancelled = true; };
+    }
+    setBackendListings(null);
+  }, [source.type, source.categoryId, source.brand]);
+
   const filteredListings = useMemo(() => {
-    let result = [...listings];
+    const baseList = backendListings ?? listings;
+    let result = [...baseList];
     switch (source.type) {
       case 'category':
-        result = result.filter((l) => l.category === source.categoryId || l.subcategory === source.categoryId);
+        if (backendListings) {
+          // Already filtered by backend
+        } else {
+          result = result.filter((l) => l.category === source.categoryId || l.subcategory === source.categoryId);
+        }
         break;
       case 'brand':
-        result = result.filter((l) => l.brand?.toLowerCase().includes(source.brand.toLowerCase()));
+        if (backendListings) {
+          // Already filtered by backend
+        } else {
+          result = result.filter((l) => l.brand?.toLowerCase().includes(source.brand.toLowerCase()));
+        }
         break;
       case 'price_drop':
         result = result.filter((l) => l.originalPrice && l.originalPrice > l.price);
@@ -69,7 +108,7 @@ export default function ExploreCollectionScreen() {
         break;
     }
     return result;
-  }, [listings, source, savedProducts]);
+  }, [backendListings, listings, source, savedProducts]);
 
   const handleRefresh = async () => {
     await refreshListings();
@@ -84,7 +123,7 @@ export default function ExploreCollectionScreen() {
     </Reanimated.View>
   );
 
-  if (isSyncing && filteredListings.length === 0) {
+  if ((isSyncing || isFetching) && filteredListings.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader title={title} onBack={() => navigation.goBack()} />
@@ -127,6 +166,7 @@ export default function ExploreCollectionScreen() {
         items={filteredListings}
         onPressItem={(item) => {
           haptic.light();
+          ProductAnalytics.itemView(item.id);
           navigation.push('ItemDetail', { itemId: item.id });
         }}
         showSaveButton

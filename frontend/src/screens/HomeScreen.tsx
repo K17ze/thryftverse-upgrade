@@ -62,6 +62,7 @@ import { Typography } from '../theme/designTokens';
 import { EditorialDiscoveryHero } from '../components/discover/EditorialDiscoveryHero';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
+import { ProductAnalytics } from '../platform/product/productAnalytics';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -186,6 +187,8 @@ interface ExploreGridItemProps {
   onLongPress: (item: ExploreTile) => void;
   onPressSellerProfile: (sellerId: string) => void;
   onPressSellerMessage: (sellerId: string, listingId: string) => void;
+  sellerUsername?: string | null;
+  sellerAvatar?: string | null;
 }
 
 const ExploreGridItem = React.memo(function ExploreGridItem({
@@ -196,11 +199,23 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
   onLongPress,
   onPressSellerProfile,
   onPressSellerMessage,
+  sellerUsername,
+  sellerAvatar,
 }: ExploreGridItemProps) {
   const sharedTag = item.mediaType === 'image' && item.routeId
     ? `image-${item.routeId}-0`
     : undefined;
   const mediaHeight = Math.round(tileWidth * item.aspectRatio);
+  const toggleWishlist = useStore((state) => state.toggleWishlist);
+  const haptic = useHaptic();
+
+  const handleDoubleTapLike = React.useCallback(() => {
+    if (item.routeId) {
+      toggleWishlist(item.routeId);
+      ProductAnalytics.itemSave(item.routeId);
+      haptic.success();
+    }
+  }, [item.routeId, toggleWishlist, haptic]);
 
   return (
     <View style={[styles.exploreItemBox, { width: tileWidth }]}>
@@ -215,7 +230,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
       >
         <DoubleTapHeart
           isLiked={item.isSaved || false}
-          onLike={() => { }}
+          onLike={handleDoubleTapLike}
         >
           <SharedTransitionView
             style={styles.exploreSharedMedia}
@@ -241,6 +256,42 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
           </View>
         </View>
       </AnimatedPressable>
+
+      {(sellerUsername || item.sellerId) && (
+        <View style={styles.exploreSellerRow}>
+          <AnimatedPressable
+            style={styles.exploreSellerChip}
+            onPress={() => item.sellerId && onPressSellerProfile(item.sellerId)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Seller: ${sellerUsername ?? item.sellerId}`}
+          >
+            {sellerAvatar ? (
+              <CachedImage
+                uri={sellerAvatar}
+                style={styles.exploreSellerAvatar}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.exploreSellerAvatarFallback}>
+                <Ionicons name="person" size={10} color={Colors.textMuted} />
+              </View>
+            )}
+            <Text style={styles.exploreSellerText} numberOfLines={1}>
+              {sellerUsername ?? item.sellerId}
+            </Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={styles.exploreMessageBtn}
+            onPress={() => item.sellerId && item.routeId && onPressSellerMessage(item.sellerId, item.routeId)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Message seller"
+          >
+            <Ionicons name="chatbubble-outline" size={13} color={Colors.textSecondary} />
+          </AnimatedPressable>
+        </View>
+      )}
     </View>
   );
 });
@@ -255,7 +306,7 @@ export default function HomeScreen() {
   const customPosters = useStore((state) => state.customPosters);
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
-  const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
+  const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<ExploreTile | null>(null);
@@ -434,7 +485,9 @@ export default function HomeScreen() {
     [windowWidth],
   );
 
-  // Editorial hero items — honest, no fake imagery
+  const wishlist = useStore((state) => state.wishlist);
+
+  // Editorial hero items — UI placeholder for future curated content
   const heroItems = React.useMemo(() => [
     { id: 'hero1', uri: '', title: 'The Archive Drop', subtitle: 'Curated vintage essentials', ctaLabel: 'Explore', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'The Archive Drop' }) },
     { id: 'hero2', uri: '', title: 'Summer Layers', subtitle: 'Lightweight fits for the season', ctaLabel: 'Shop', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Summer Layers' }) },
@@ -458,9 +511,10 @@ export default function HomeScreen() {
         sellerId: item.sellerId,
         caption: item.title,
         aspectRatio: resolveTileAspectRatio(item.id),
+        isSaved: wishlist.includes(item.id),
       };
     });
-  }, [listings]);
+  }, [listings, wishlist]);
 
   const feedGridData = showFeedLoadingSkeleton ? [] : exploreData;
 
@@ -663,7 +717,8 @@ export default function HomeScreen() {
 
   const handleTilePress = React.useCallback((routeId: string | undefined) => {
     if (!routeId) return;
-    haptic.selection(); // ELEVATED: Selection haptic on press
+    haptic.selection();
+    ProductAnalytics.itemView(routeId);
     navigation.push('ItemDetail', { itemId: routeId });
   }, [navigation, haptic]);
 
@@ -734,6 +789,8 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.feedContent, { paddingTop: headerCollapsedHeight + 2 }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
+        onEndReached={() => { if (hasMore && !isLoadingMore) void loadMoreListings(); }}
+        onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -746,7 +803,7 @@ export default function HomeScreen() {
       >
         {renderPosters()}
 
-        {/* Editorial Hero — only renders when real imagery is configured */}
+        {/* Editorial Hero — renders when real imagery is configured */}
         {heroItems.some((h) => h.uri.trim().length > 0) && (
           <View style={{ marginBottom: Space.md }}>
             <EditorialDiscoveryHero items={heroItems.filter((h) => h.uri.trim().length > 0)} autoPlayInterval={6000} />
@@ -766,7 +823,9 @@ export default function HomeScreen() {
         ) : (
           <View style={styles.masonryGrid}>
             <View style={styles.masonryColumn}>
-              {masonryColumns[0].map(({ tile: item, originalIndex }) => (
+              {masonryColumns[0].map(({ tile: item, originalIndex }) => {
+                const listing = listings.find((l) => l.id === item.routeId);
+                return (
                 <View key={item.id}>
                   <ExploreGridItem
                     item={item}
@@ -776,12 +835,17 @@ export default function HomeScreen() {
                     onLongPress={handleTileLongPress}
                     onPressSellerProfile={handleSellerProfilePress}
                     onPressSellerMessage={handleSellerMessagePress}
+                    sellerUsername={listing?.seller?.username}
+                    sellerAvatar={listing?.seller?.avatar}
                   />
                 </View>
-              ))}
+                );
+              })}
             </View>
             <View style={styles.masonryColumn}>
-              {masonryColumns[1].map(({ tile: item, originalIndex }) => (
+              {masonryColumns[1].map(({ tile: item, originalIndex }) => {
+                const listing = listings.find((l) => l.id === item.routeId);
+                return (
                 <View key={item.id}>
                   <ExploreGridItem
                     item={item}
@@ -791,10 +855,19 @@ export default function HomeScreen() {
                     onLongPress={handleTileLongPress}
                     onPressSellerProfile={handleSellerProfilePress}
                     onPressSellerMessage={handleSellerMessagePress}
+                    sellerUsername={listing?.seller?.username}
+                    sellerAvatar={listing?.seller?.avatar}
                   />
                 </View>
-              ))}
+                );
+              })}
             </View>
+          </View>
+        )}
+
+        {isLoadingMore && (
+          <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
+            <Text style={{ color: Colors.textMuted, fontSize: 13 }}>Loading more...</Text>
           </View>
         )}
       </Reanimated.ScrollView>
