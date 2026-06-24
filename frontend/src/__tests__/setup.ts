@@ -111,3 +111,29 @@ vi.mock('@expo/vector-icons/Ionicons', () => {
     ),
   };
 });
+
+vi.mock('@sentry/react-native', () => ({
+  init: vi.fn(),
+  setTag: vi.fn(),
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+  addBreadcrumb: vi.fn(),
+  setUser: vi.fn(),
+  setContext: vi.fn(),
+  withScope: vi.fn(),
+}));
+
+vi.mock('@react-native-community/netinfo', () => ({
+  default: {
+    addEventListener: () => () => {},
+  },
+}));
+
+vi.mock('expo-constants', () => ({
+  default: {
+    expoConfig: {
+      extra: {},
+      version: '1.0.0',
+    },
+  },
+}));

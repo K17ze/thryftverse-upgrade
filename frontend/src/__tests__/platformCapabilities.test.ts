@@ -20,6 +20,11 @@ describe('Platform: Native UI adapters', () => {
     expect(src).toContain('export function NativeSheet');
   });
 
+  it('NativeSheet wraps children in ExpoUIHost', () => {
+    const src = readFile('native/NativeSheet.tsx');
+    expect(src).toContain('ExpoUIHost');
+  });
+
   it('NativePicker wraps @expo/ui Picker', () => {
     const src = readFile('native/NativePicker.tsx');
     expect(src).toContain('Picker');
@@ -45,13 +50,24 @@ describe('Platform: Native UI adapters', () => {
     expect(src).toContain('NativePagerPage');
   });
 
-  it('native barrel exports all adapters', () => {
+  it('ExpoUIHost wraps @expo/ui Host and RNHostView', () => {
+    const src = readFile('native/ExpoUIHost.tsx');
+    expect(src).toContain('Host');
+    expect(src).toContain('RNHostView');
+    expect(src).toContain('export function ExpoUIHost');
+  });
+
+  it('native barrel exports all adapters including ExpoUIHost and Platform aliases', () => {
     const src = readFile('native/index.ts');
     expect(src).toContain('NativeSheet');
     expect(src).toContain('NativeMenu');
     expect(src).toContain('NativeSegmentedControl');
     expect(src).toContain('NativePager');
     expect(src).toContain('NativePicker');
+    expect(src).toContain('ExpoUIHost');
+    expect(src).toContain('PlatformMenu');
+    expect(src).toContain('PlatformSegmentedControl');
+    expect(src).toContain('PlatformPager');
   });
 });
 
@@ -89,14 +105,16 @@ describe('Platform: Server state adapters', () => {
     expect(src).toContain('ServerStateProvider');
   });
 
-  it('queryClient has default options', () => {
+  it('queryClient has retry function and default options', () => {
     const src = readFile('server/queryClient.ts');
     expect(src).toContain('QueryClient');
     expect(src).toContain('staleTime');
     expect(src).toContain('retry');
+    expect(src).toContain('shouldRetry');
+    expect(src).toContain('NON_RETRYABLE_STATUS_CODES');
   });
 
-  it('queryKeys provides typed key factory', () => {
+  it('queryKeys provides typed key factory with notifications', () => {
     const src = readFile('server/queryKeys.ts');
     expect(src).toContain('queryKeys');
     expect(src).toContain('user');
@@ -104,6 +122,40 @@ describe('Platform: Server state adapters', () => {
     expect(src).toContain('auction');
     expect(src).toContain('chat');
     expect(src).toContain('discover');
+    expect(src).toContain('notifications');
+  });
+
+  it('useMobileQueryLifecycle wires NetInfo and AppState', () => {
+    const src = readFile('server/useMobileQueryLifecycle.ts');
+    expect(src).toContain('NetInfo');
+    expect(src).toContain('onlineManager');
+    expect(src).toContain('AppState');
+    expect(src).toContain('focusManager');
+  });
+
+  it('clearUserScopedQueryCache cancels and removes user queries', () => {
+    const src = readFile('server/clearUserCache.ts');
+    expect(src).toContain('cancelQueries');
+    expect(src).toContain('removeQueries');
+    expect(src).toContain('user');
+    expect(src).toContain('chat');
+  });
+
+  it('usePublicProfileQuery provides pilot query hook', () => {
+    const src = readFile('server/usePublicProfileQuery.ts');
+    expect(src).toContain('useQuery');
+    expect(src).toContain('fetchPublicProfile');
+    expect(src).toContain('queryKeys');
+  });
+
+  it('server barrel exports all adapters', () => {
+    const src = readFile('server/index.ts');
+    expect(src).toContain('ServerStateProvider');
+    expect(src).toContain('queryClient');
+    expect(src).toContain('queryKeys');
+    expect(src).toContain('useMobileQueryLifecycle');
+    expect(src).toContain('clearUserScopedQueryCache');
+    expect(src).toContain('usePublicProfileQuery');
   });
 });
 
@@ -150,7 +202,7 @@ describe('Platform: Form adapters', () => {
 });
 
 describe('Platform: Media transforms', () => {
-  it('mediaTransforms wraps expo-image-manipulator', () => {
+  it('mediaTransforms wraps expo-image-manipulator with all 10 operations', () => {
     const src = readFile('media/mediaTransforms.ts');
     expect(src).toContain('manipulateAsync');
     expect(src).toContain('expo-image-manipulator');
@@ -159,20 +211,47 @@ describe('Platform: Media transforms', () => {
     expect(src).toContain('cropImage');
     expect(src).toContain('rotateImage');
     expect(src).toContain('flipImage');
+    expect(src).toContain('normalizeImage');
+    expect(src).toContain('resizeForUpload');
+    expect(src).toContain('cropToAspectRatio');
+    expect(src).toContain('createThumbnail');
+    expect(src).toContain('exportImage');
   });
 
-  it('media barrel exports mediaTransforms', () => {
+  it('mediaTransforms exports MediaTransformResult type', () => {
+    const src = readFile('media/mediaTransforms.ts');
+    expect(src).toContain('MediaTransformResult');
+    expect(src).toContain('mimeType');
+    expect(src).toContain('fileExtension');
+  });
+
+  it('media barrel exports all transform functions', () => {
     const src = readFile('media/index.ts');
     expect(src).toContain('mediaTransforms');
+    expect(src).toContain('normalizeImage');
+    expect(src).toContain('resizeForUpload');
+    expect(src).toContain('cropToAspectRatio');
+    expect(src).toContain('createThumbnail');
+    expect(src).toContain('exportImage');
   });
 });
 
 describe('Platform: Monitoring adapters', () => {
-  it('sentry.ts provides initSentry and Sentry proxy', () => {
+  it('sentry.ts provides initSentry, isSentryInitialised, and Sentry proxy', () => {
     const src = readFile('monitoring/sentry.ts');
     expect(src).toContain('initSentry');
     expect(src).toContain('Sentry');
     expect(src).toContain('@sentry/react-native');
+    expect(src).toContain('isSentryInitialised');
+    expect(src).toContain('resetSentryForTesting');
+    expect(src).toContain('SentryInitOptions');
+  });
+
+  it('sentry.ts has beforeSend that strips sensitive data', () => {
+    const src = readFile('monitoring/sentry.ts');
+    expect(src).toContain('beforeSend');
+    expect(src).toContain('headers');
+    expect(src).toContain('cookies');
   });
 
   it('AppErrorBoundary extends React.Component', () => {
@@ -187,6 +266,7 @@ describe('Platform: Monitoring adapters', () => {
     expect(src).toContain('AppErrorBoundary');
     expect(src).toContain('Sentry');
     expect(src).toContain('initSentry');
+    expect(src).toContain('isSentryInitialised');
   });
 });
 
