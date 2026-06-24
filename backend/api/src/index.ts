@@ -15193,6 +15193,20 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
 
   const shouldInclude = (key: string) => !requestedSections || requestedSections.includes(key);
 
+  const usedListingIds = new Set<string>();
+
+  const dedupeAndMap = (
+    candidates: Array<{ row: CandidateRow; images: string[] }>,
+    opts?: { scoreBy?: (c: { row: CandidateRow; images: string[] }) => number }
+  ) => {
+    const filtered = candidates.filter((c) => !usedListingIds.has(c.row.id));
+    if (opts?.scoreBy) {
+      filtered.sort((a, b) => (opts.scoreBy!(b) ?? 0) - (opts.scoreBy!(a) ?? 0));
+    }
+    for (const c of filtered) usedListingIds.add(c.row.id);
+    return filtered.map(mapToListingItem);
+  };
+
   // 1. Similar style
   if (shouldInclude('similar_style')) {
     const candidates = await fetchCandidates(
@@ -15206,14 +15220,17 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       .slice(0, limit)
       .map((x) => x.c);
     if (scored.length > 0) {
-      sections.push({
-        key: 'similar_style',
-        title: 'Similar in style',
-        subtitle: source.category ? `More in ${source.category}` : undefined,
-        reason: 'Same category and visual style',
-        personalised: false,
-        items: scored.map(mapToListingItem),
-      });
+      const items = dedupeAndMap(scored);
+      if (items.length > 0) {
+        sections.push({
+          key: 'similar_style',
+          title: 'Similar in style',
+          subtitle: source.category ? `More in ${source.category}` : undefined,
+          reason: 'Same category and visual style',
+          personalised: false,
+          items,
+        });
+      }
     }
   }
 
@@ -15224,13 +15241,16 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       [listingId, `%${source.brand}%`],
       limit
     );
-    if (candidates.length > 0) {
+    const items = dedupeAndMap(candidates, {
+      scoreBy: (c) => scoreListing(c.row, source),
+    });
+    if (items.length > 0) {
       sections.push({
         key: 'same_brand',
         title: `More from ${source.brand}`,
         reason: 'Same brand',
         personalised: false,
-        items: candidates.map(mapToListingItem),
+        items,
       });
     }
   }
@@ -15242,14 +15262,17 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       [listingId, `%${source.size}%`, `%${source.condition}%`],
       limit
     );
-    if (candidates.length > 0) {
+    const items = dedupeAndMap(candidates, {
+      scoreBy: (c) => scoreListing(c.row, source),
+    });
+    if (items.length > 0) {
       sections.push({
         key: 'same_size_condition',
         title: 'Your size and condition',
         subtitle: `Size ${source.size} · ${source.condition}`,
         reason: 'Same size and condition',
         personalised: false,
-        items: candidates.map(mapToListingItem),
+        items,
       });
     }
   }
@@ -15263,14 +15286,20 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
         [listingId, source.category ?? '', sourcePrice],
         limit
       );
-      if (candidates.length > 0) {
+      const items = dedupeAndMap(candidates, {
+        scoreBy: (c) => {
+          const priceDiff = sourcePrice - Number(c.row.price_gbp);
+          return -priceDiff;
+        },
+      });
+      if (items.length > 0) {
         sections.push({
           key: 'better_price',
           title: 'Better price alternatives',
           subtitle: 'Similar items for less',
           reason: 'Lower price alternatives',
           personalised: false,
-          items: candidates.map(mapToListingItem),
+          items,
         });
       }
     }
@@ -15283,14 +15312,17 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       [listingId, source.seller_id],
       limit
     );
-    if (candidates.length > 0) {
+    const items = dedupeAndMap(candidates, {
+      scoreBy: (c) => scoreListing(c.row, source),
+    });
+    if (items.length > 0) {
       sections.push({
         key: 'more_from_seller',
         title: 'More from this seller',
         subtitle: 'Bundle and save on shipping',
         reason: 'From the same seller',
         personalised: false,
-        items: candidates.map(mapToListingItem),
+        items,
       });
     }
   }
@@ -15305,14 +15337,17 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
         [listingId, ...complementaryCats],
         limit
       );
-      if (candidates.length > 0) {
+      const items = dedupeAndMap(candidates, {
+        scoreBy: (c) => scoreListing(c.row, source),
+      });
+      if (items.length > 0) {
         sections.push({
           key: 'complete_the_look',
           title: 'Complete the look',
           subtitle: 'Pieces that go well together',
           reason: 'Complementary categories',
           personalised: false,
-          items: candidates.map(mapToListingItem),
+          items,
         });
       }
     }
@@ -15380,14 +15415,17 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
           catArgs,
           limit
         );
-        if (candidates.length > 0) {
+        const items = dedupeAndMap(candidates, {
+          scoreBy: (c) => scoreListing(c.row, source),
+        });
+        if (items.length > 0) {
           sections.push({
             key: 'inspired_by_saves',
             title: 'Inspired by your saves',
             subtitle: 'Based on items you\u2019ve saved',
             reason: 'Based on your saves',
             personalised: true,
-            items: candidates.map(mapToListingItem),
+            items,
           });
         }
       }
@@ -15402,8 +15440,9 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       [listingId],
       limit + 1
     );
-    const sliced = candidates.slice(offset, offset + limit);
-    const hasMore = offset + limit < candidates.length;
+    const remaining = candidates.filter((c) => !usedListingIds.has(c.row.id));
+    const sliced = remaining.slice(offset, offset + limit);
+    const hasMore = offset + limit < remaining.length;
     if (sliced.length > 0) {
       sections.push({
         key: 'continue_exploring',
