@@ -94,6 +94,33 @@ export async function fetchListingsFromApi(cursor?: string): Promise<ListingsSyn
   }
 }
 
+export interface ListingSearchResult {
+  id: string;
+  sellerId: string;
+  title: string;
+  description: string;
+  priceGbp: number;
+  imageUrl: string | null;
+  rank: number;
+  createdAt: string;
+  seller: ListingSeller | null;
+}
+
+export async function searchListingsFromApi(query: string, limit?: number): Promise<{ items: ListingSearchResult[]; fallback: boolean }> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return { items: [], fallback: false };
+  const params = new URLSearchParams();
+  params.set('q', trimmed);
+  if (limit) params.set('limit', String(Math.min(limit, 100)));
+  const payload = await fetchJson<{ ok: boolean; query: string; items: ListingSearchResult[]; fallback?: boolean }>(
+    `/search/listings?${params.toString()}`
+  );
+  return {
+    items: Array.isArray(payload.items) ? payload.items : [],
+    fallback: payload.fallback === true,
+  };
+}
+
 export async function fetchFilteredListings(options?: {
   category?: string;
   brand?: string;

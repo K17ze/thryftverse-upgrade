@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
-import { fetchListingsFromApi } from '../services/listingsApi';
+import { searchListingsFromApi, type ListingSearchResult } from '../services/listingsApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
+import { useStore } from '../store/useStore';
 import { fetchLooksFromApi } from '../services/looksApi';
 import { createStableId } from '../utils/createStableId';
 import type { CreatorLayer } from './composition';
@@ -190,38 +191,55 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
 // ── Product Picker ─────────────────────────────────────────────────
 
-interface ListingSearchItem {
-  id: string;
-  title: string;
-  priceGbp: number;
-  imageUrl: string | null;
-}
-
 function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const [query, setQuery] = useState('');
-  const [allListings, setAllListings] = useState<ListingSearchItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [results, setResults] = useState<ListingSearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  const reqIdRef = useRef(0);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    fetchListingsFromApi()
-      .then((res) => {
-        setAllListings(res.listings.filter((l) => l.isSold !== true).map((l) => ({
-          id: l.id, title: l.title, priceGbp: l.price, imageUrl: l.images?.[0] ?? null,
-        })));
-        setLoadFailed(false);
-      })
-      .catch(() => setLoadFailed(true))
-      .finally(() => setIsLoading(false));
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return allListings;
-    const q = query.trim().toLowerCase();
-    return allListings.filter((l) => l.title.toLowerCase().includes(q));
-  }, [allListings, query]);
+  const doSearch = useCallback(async (q: string) => {
+    const trimmed = q.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setHasSearched(false);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+    const reqId = ++reqIdRef.current;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await searchListingsFromApi(trimmed, 50);
+      if (reqId !== reqIdRef.current || !mountedRef.current) return;
+      setResults(res.items);
+      setHasSearched(true);
+    } catch (err) {
+      if (reqId !== reqIdRef.current || !mountedRef.current) return;
+      setError((err as Error).message || 'Search failed');
+      setResults([]);
+      setHasSearched(true);
+    } finally {
+      if (reqId === reqIdRef.current && mountedRef.current) setIsLoading(false);
+    }
+  }, []);
 
-  const handleSelect = useCallback((item: ListingSearchItem) => {
+  useEffect(() => {
+    const timer = setTimeout(() => doSearch(query), 350);
+    return () => clearTimeout(timer);
+  }, [query, doSearch]);
+
+  const handleRetry = useCallback(() => doSearch(query), [doSearch, query]);
+
+  const handleSelect = useCallback((item: ListingSearchResult) => {
     onAddLayer({
       ...baseLayer(createStableId('product'), 10),
       type: 'product',
@@ -253,12 +271,18 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           autoFocus
           accessibilityLabel="Search listings"
         />
+        {isLoading && <ActivityIndicator size="small" color={Colors.brand} />}
       </View>
-      {isLoading ? (
-        <View style={styles.loadingBody}><ActivityIndicator size="large" color={Colors.brand} /></View>
+      {error ? (
+        <View style={styles.errorBody}>
+          <Text style={styles.errorText}>Couldn't search listings</Text>
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button">
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </View>
       ) : (
         <FlatList
-          data={filtered}
+          data={results}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button">
@@ -273,7 +297,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           )}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyText}>No listings found</Text></View>}
+          ListEmptyComponent={hasSearched && !isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No listings found</Text></View> : null}
         />
       )}
     </PickerShell>
@@ -283,22 +307,54 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
 // ── Mention Picker ─────────────────────────────────────────────────
 
 function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const currentUserId = useStore((state) => state.currentUser?.id);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  const reqIdRef = useRef(0);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    if (query.trim().length < 1) { setResults([]); return; }
-    const timer = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const res = await searchUsers(query, 20);
-        setResults(res);
-      } catch { setResults([]); }
-      finally { setIsSearching(false); }
-    }, 300);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const doSearch = useCallback(async (q: string) => {
+    const trimmed = q.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setHasSearched(false);
+      setError(null);
+      setIsSearching(false);
+      return;
+    }
+    const reqId = ++reqIdRef.current;
+    setIsSearching(true);
+    setError(null);
+    try {
+      const res = await searchUsers(trimmed, 20);
+      if (reqId !== reqIdRef.current || !mountedRef.current) return;
+      const filtered = currentUserId ? res.filter((u) => u.id !== currentUserId) : res;
+      setResults(filtered);
+      setHasSearched(true);
+    } catch (err) {
+      if (reqId !== reqIdRef.current || !mountedRef.current) return;
+      setError((err as Error).message || 'Search failed');
+      setResults([]);
+      setHasSearched(true);
+    } finally {
+      if (reqId === reqIdRef.current && mountedRef.current) setIsSearching(false);
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => doSearch(query), 300);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, doSearch]);
+
+  const handleRetry = useCallback(() => doSearch(query), [doSearch, query]);
 
   const handleSelect = useCallback((user: UserSearchResult) => {
     onAddLayer({
@@ -328,22 +384,33 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
         />
         {isSearching && <ActivityIndicator size="small" color={Colors.brand} />}
       </View>
-      <FlatList
-        data={results}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button">
-            <View style={styles.resultAvatar}><Text style={styles.resultAvatarText}>{item.username[0]?.toUpperCase()}</Text></View>
-            <View style={styles.resultInfo}>
-              <Text style={styles.resultName}>@{item.username}</Text>
-              {item.displayName && <Text style={styles.resultSubtext}>{item.displayName}</Text>}
-            </View>
+      {error ? (
+        <View style={styles.errorBody}>
+          <Text style={styles.errorText}>Couldn't search users</Text>
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button">
+            <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
-        )}
-        style={styles.resultList}
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={query.trim().length > 0 && !isSearching ? <View style={styles.emptyState}><Text style={styles.emptyText}>No users found</Text></View> : null}
-      />
+        </View>
+      ) : (
+        <FlatList
+          data={results}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button">
+              <View style={styles.resultAvatar}>
+                {item.avatar ? <Image source={{ uri: item.avatar }} style={styles.resultThumbImg} /> : <Text style={styles.resultAvatarText}>{item.username[0]?.toUpperCase()}</Text>}
+              </View>
+              <View style={styles.resultInfo}>
+                <Text style={styles.resultName}>@{item.username}</Text>
+                {item.displayName && <Text style={styles.resultSubtext}>{item.displayName}</Text>}
+              </View>
+            </Pressable>
+          )}
+          style={styles.resultList}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={hasSearched && !isSearching ? <View style={styles.emptyState}><Text style={styles.emptyText}>No users found</Text></View> : null}
+        />
+      )}
     </PickerShell>
   );
 }
@@ -352,19 +419,41 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
 
 function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const [query, setQuery] = useState('');
-  const [allLooks, setAllLooks] = useState<Array<{ id: string; caption: string; mediaUrl: string }>>([]);
+  const [allLooks, setAllLooks] = useState<Array<{ id: string; caption: string; mediaUrl: string; creatorId: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    fetchLooksFromApi({ status: 'published', limit: 50 })
-      .then((res) => {
-        setAllLooks(res.items.filter((l) => l.visibility === 'public').map((l) => ({
-          id: l.id, caption: l.caption || l.title, mediaUrl: l.mediaUrl,
-        })));
-      })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
+
+  const loadLooks = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetchLooksFromApi({ status: 'published', limit: 120 });
+      if (!mountedRef.current) return;
+      setAllLooks(res.items
+        .filter((l) => l.visibility === 'public' && l.status === 'published')
+        .map((l) => ({
+          id: l.id,
+          caption: l.caption || l.title,
+          mediaUrl: l.mediaUrl,
+          creatorId: l.creatorId,
+        })));
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setError((err as Error).message || 'Failed to load looks');
+    } finally {
+      if (mountedRef.current) setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLooks();
+  }, [loadLooks]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return allLooks;
@@ -398,9 +487,15 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           autoFocus
           accessibilityLabel="Search looks"
         />
+        {isLoading && <ActivityIndicator size="small" color={Colors.brand} />}
       </View>
-      {isLoading ? (
-        <View style={styles.loadingBody}><ActivityIndicator size="large" color={Colors.brand} /></View>
+      {error ? (
+        <View style={styles.errorBody}>
+          <Text style={styles.errorText}>Couldn't load looks</Text>
+          <Pressable onPress={loadLooks} style={styles.retryBtn} accessibilityLabel="Retry loading looks" accessibilityRole="button">
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </View>
       ) : (
         <FlatList
           data={filtered}
@@ -415,7 +510,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           )}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyText}>No looks found</Text></View>}
+          ListEmptyComponent={!isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No looks found</Text></View> : null}
         />
       )}
     </PickerShell>
@@ -689,6 +784,10 @@ const styles = StyleSheet.create({
   loadingBody: { paddingVertical: Space.xl, alignItems: 'center' },
   emptyState: { paddingVertical: Space.xl, alignItems: 'center' },
   emptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textMuted },
+  errorBody: { paddingVertical: Space.xl, alignItems: 'center', gap: Space.sm },
+  errorText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textMuted },
+  retryBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, backgroundColor: Colors.surfaceAlt, borderWidth: 1, borderColor: Colors.border },
+  retryBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: Colors.brand },
   textPickerBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.sm },
   sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   textInput: {
