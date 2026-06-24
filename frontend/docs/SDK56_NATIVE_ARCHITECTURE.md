@@ -2,19 +2,19 @@
 
 ## Overview
 
-Thryftverse has been upgraded from Expo SDK 54 → 55 → 56 with a comprehensive native platform foundation. This document describes the architecture, breaking changes, and platform adapters.
+Thryftverse has been upgraded from Expo SDK 54 → 55 → 56 with a platform adapter foundation. This document describes the architecture, breaking changes, platform adapters, and their runtime activation status.
 
 ## SDK 56 Upgrade Summary
 
 ### Core Dependencies
 
-| Package | SDK 54 | SDK 56 |
-|---------|--------|--------|
-| expo | ~54.0.0 | ~56.0.0 |
-| react | 18.3.1 | 19.2.3 |
-| react-native | 0.79.5 | 0.85.3 |
-| typescript | ~5.9.0 | ~6.0.3 |
-| @expo/vector-icons | (deprecated) | replaced by @expo/ui icons |
+| Package | SDK 54 | SDK 55 | SDK 56 |
+|---------|--------|--------|--------|
+| expo | ~54.0.0 | ~55.0.0 | ~56.0.0 |
+| react | 18.3.1 | 19.2.0 | 19.2.3 |
+| react-native | 0.79.5 | 0.83.6 | 0.85.3 |
+| typescript | ~5.9.0 | ~5.9.2 | ~6.0.3 |
+| @expo/vector-icons | installed | installed | installed (retained, not replaced) |
 
 ### Breaking Changes Fixed
 
@@ -36,78 +36,102 @@ Thryftverse has been upgraded from Expo SDK 54 → 55 → 56 with a comprehensiv
 
 All platform adapters live in `src/platform/` with barrel exports from `src/platform/index.ts`.
 
+### Adapter Status Notation
+
+Each adapter is classified as:
+- **Created** — Adapter file exists with correct imports and exports
+- **Mounted** — Adapter is wired into the application root or a real screen
+- **Runtime-validated** — Adapter has been exercised in a running development build
+- **Device-validated** — Adapter has been verified on a physical device or emulator
+
 ### Native UI (`src/platform/native/`)
 
-| Adapter | Wraps | Purpose |
-|---------|-------|---------|
-| `NativeSheet` | `@expo/ui` BottomSheet | Modal bottom sheet with snap points |
-| `NativePicker` | `@expo/ui` Picker | Native dropdown/wheel picker |
-| `NativeMenu` | Custom overlay | Context menu with destructive/disabled options |
-| `NativeSegmentedControl` | Custom | Segmented tab selector |
-| `NativePager` | ScrollView-based | Paged content with tab bar |
+| Adapter | Wraps | Implementation Type | Created | Mounted | Runtime | Device |
+|---------|-------|---------------------|---------|---------|---------|--------|
+| `NativeSheet` | `@expo/ui` BottomSheet | Real production — wraps native BottomSheet | Yes | No | No | No |
+| `NativePicker` | `@expo/ui` Picker | Real production — wraps native Picker | Yes | No | No | No |
+| `NativeMenu` | React Native Pressable/View | Custom fallback — no `@expo/ui` equivalent | Yes | No | No | No |
+| `NativeSegmentedControl` | React Native Pressable/View | Custom fallback — no `@expo/ui` equivalent | Yes | No | No | No |
+| `NativePager` | React Native ScrollView | Custom fallback — no `@expo/ui` equivalent | Yes | No | No | No |
 
 ### Keyboard (`src/platform/keyboard/`)
 
-| Adapter | Wraps | Purpose |
-|---------|-------|---------|
-| `KeyboardProvider` | `react-native-keyboard-controller` | Root keyboard context provider |
-| `KeyboardDock` | `KeyboardStickyView` | Dock content above keyboard |
-| `KeyboardAwareStickyAction` | `KeyboardAwareScrollView` | Scrollable content with sticky action bar |
+| Adapter | Wraps | Created | Mounted | Runtime | Device |
+|---------|-------|---------|---------|---------|--------|
+| `KeyboardProvider` | `react-native-keyboard-controller` | Yes | No | No | No |
+| `KeyboardDock` | `KeyboardStickyView` | Yes | No | No | No |
+| `KeyboardAwareStickyAction` | `KeyboardAwareScrollView` | Yes | No | No | No |
 
 ### Server State (`src/platform/server/`)
 
-| Adapter | Wraps | Purpose |
-|---------|-------|---------|
-| `ServerStateProvider` | `@tanstack/react-query` QueryClientProvider | Root server state provider |
-| `queryClient` | `QueryClient` | Default config (5min staleTime, 2 retries) |
-| `queryKeys` | — | Typed query key factory (user, listing, auction, chat, discover) |
+| Adapter | Wraps | Created | Mounted | Runtime | Device |
+|---------|-------|---------|---------|---------|--------|
+| `ServerStateProvider` | `@tanstack/react-query` QueryClientProvider | Yes | No | No | No |
+| `queryClient` | `QueryClient` | Yes | No | No | No |
+| `queryKeys` | — | Yes | No | No | No |
 
 ### Forms (`src/platform/forms/`)
 
-| Adapter | Wraps | Purpose |
-|---------|-------|---------|
-| `ControlledAppInput` | `react-hook-form` Controller + TextInput | Text input with validation |
-| `ControlledSelect` | Controller + NativePicker | Select with native picker |
-| `ControlledToggle` | Controller + `@expo/ui` Switch | Toggle switch |
-| `FormErrorSummary` | `FieldErrors` | Renders field error messages |
-| `useUnsavedFormGuard` | — | Dirty state guard hook |
+| Adapter | Wraps | Created | Mounted | Runtime | Device |
+|---------|-------|---------|---------|---------|--------|
+| `ControlledAppInput` | `react-hook-form` Controller + TextInput | Yes | No | No | No |
+| `ControlledSelect` | Controller + NativePicker | Yes | No | No | No |
+| `ControlledToggle` | Controller + `@expo/ui` Switch | Yes | No | No | No |
+| `FormErrorSummary` | `FieldErrors` | Yes | No | No | No |
+| `useUnsavedFormGuard` | — | Yes | No | No | No |
 
 ### Media (`src/platform/media/`)
 
-| Adapter | Wraps | Purpose |
-|---------|-------|---------|
-| `mediaTransforms` | `expo-image-manipulator` | compress, resize, crop, rotate, flip |
+| Adapter | Wraps | Created | Mounted | Runtime | Device |
+|---------|-------|---------|---------|---------|--------|
+| `mediaTransforms` | `expo-image-manipulator` | Yes | No | No | No |
+
+Operations implemented: compress, resize, crop, rotate, flip.
+Missing capabilities: normalizeImage, resizeForUpload, cropToAspectRatio, createThumbnail, exportImage, orientation handling, output format/MIME metadata.
 
 ### Monitoring (`src/platform/monitoring/`)
 
-| Adapter | Wraps | Purpose |
-|---------|-------|---------|
-| `Sentry` | `@sentry/react-native` | Lazy-init proxy (no-op in Expo Go) |
-| `initSentry` | — | Runtime Sentry initialization with DSN |
-| `AppErrorBoundary` | React.Component | Error boundary with Sentry capture |
+| Adapter | Wraps | Created | Mounted | Runtime | Device |
+|---------|-------|---------|---------|---------|--------|
+| `Sentry` | `@sentry/react-native` (lazy require) | Yes | No | No | No |
+| `initSentry` | — | Yes | No | No | No |
+| `AppErrorBoundary` | React.Component + Sentry | Yes | No | No | No |
 
-## Validation
+## Missing Runtime Validation
 
-All changes validated with:
-- `npx expo install --check` — Dependencies up to date
-- `npx expo-doctor` — 21/21 checks passed
-- `npm run typecheck` — TypeScript compilation clean
-- `npm run verify:phase` — 312 tests passed, 27 skipped, 0 failed
-- `platformCapabilities.test.ts` — 30 platform adapter coverage tests
+The following gaps remain after PLATFORM-01:
+
+1. **KeyboardProvider not mounted at App.tsx root** — adapter created but not integrated
+2. **ServerStateProvider not mounted at App.tsx root** — adapter created but not integrated
+3. **Sentry not initialised at app startup** — `initSentry()` not called in App.tsx
+4. **AppErrorBoundary not replacing the old ErrorBoundary** — both exist; old one is used
+5. **No React Query mobile integration** — no NetInfo onlineManager, no AppState focusManager, no cache lifecycle
+6. **No pilot query migrated to TanStack Query** — no feature uses the query infrastructure
+7. **No keyboard pilot in any screen** — CreateGroupChatScreen still uses KeyboardAvoidingView
+8. **Media transforms incomplete** — 5 of 10 required operations missing
+9. **No Expo UI Host strategy** — NativeSheet/NativePicker/ControlledToggle may fail without Host ancestor
+10. **No EAS build evidence** — no native build has been attempted
+11. **No device validation** — ADB not available on the development machine
+12. **`lint:design-tokens` script missing** — package.json references a non-existent script
 
 ## Testing
 
-Platform capability tests in `src/__tests__/platformCapabilities.test.ts` verify:
-- All adapter files exist and export correct interfaces
-- Barrel exports are complete
-- SDK 56 configuration (EAS Update, plugins, splash, channels)
-- No top-level splash field (migrated to plugin)
+Platform capability tests in `src/__tests__/platformCapabilities.test.ts` are **static source-string checks**, not behavioural tests. They verify:
+- Adapter files exist and contain expected import strings
+- Barrel exports contain expected names
+- SDK 56 configuration values in app.json/eas.json
 
-## Commit History
+They do **not** verify runtime rendering, provider mounting, or native module behaviour.
 
-1. `chore(platform): upgrade Expo SDK 55 to 56` — Core upgrade with breaking change fixes
-2. `feat(platform): add native UI and keyboard foundation` — @expo/ui + keyboard adapters
-3. `feat(platform): add server state and form foundation` — React Query + React Hook Form adapters
-4. `feat(platform): add media transformation service` — expo-image-manipulator adapter
-5. `feat(platform): configure monitoring and EAS Update` — Sentry + expo-updates config
-6. `test(platform): add platform capability coverage tests` — 30 adapter coverage tests
+## Commit History (PLATFORM-01: 10 commits)
+
+1. `42e10ab` — chore(platform): restore verification baseline
+2. `b75c50f` — test(platform): retire 31 obsolete static guardrail tests
+3. `4258db2` — chore(platform): upgrade Expo SDK 54 to 55
+4. `2859f71` — chore(platform): upgrade Expo SDK 55 to 56
+5. `b9693e8` — feat(platform): add native UI and keyboard foundation
+6. `edb3205` — feat(platform): add server state and form foundation
+7. `23051ae` — feat(platform): add media transformation service
+8. `994c9ef` — feat(platform): configure monitoring and EAS Update
+9. `ec56be1` — test(platform): add platform capability coverage tests
+10. `b3ccdad` — docs(platform): document SDK 56 native architecture
