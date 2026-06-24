@@ -125,7 +125,12 @@ export type RootStackParamList = {
   MyListings: { type?: 'coown' | 'auction' | 'standard' } | undefined;
   // Explore / Creator screens
   CreateLook: undefined;
-  CreatorStudio: { type?: 'look' | 'poster' };
+  CreatorStudio: {
+    type: 'look' | 'poster';
+    draftId?: string;
+    templateId?: string;
+    sourceDocumentId?: string;
+  };
   CoOwnIssue: { assetId?: string };
   OutfitBuilder: undefined;
   // UI-22R.6B — Experience elevation

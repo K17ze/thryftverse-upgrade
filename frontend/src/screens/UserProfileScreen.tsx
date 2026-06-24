@@ -448,7 +448,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               error={looksError}
               isSelfProfile={isSelfProfile}
               onRetry={loadProfileLooks}
-              onCreateLook={() => navigation.navigate('CreateLook')}
+              onCreateLook={() => navigation.navigate('CreatorStudio', { type: 'look' })}
               navigation={navigation}
             />
           </View>

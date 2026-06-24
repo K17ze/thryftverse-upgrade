@@ -8,6 +8,7 @@ import {
   Dimensions,
   SafeAreaView,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -24,7 +25,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 function CreatorStudioInner() {
   const navigation = useNavigation<any>();
-  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage } = useCreator();
+  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, commitLayerTransform, autosaveStatus, isLoadingDraft } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
@@ -33,15 +34,17 @@ function CreatorStudioInner() {
 
   const page = document.pages[activePageIndex];
 
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
   const canvasWidth = useMemo(() => {
-    const maxW = SCREEN_W - 32;
-    const maxH = 420;
+    const maxW = screenWidth - 32;
+    const maxH = Math.min(screenHeight * 0.55, 520);
     const ratio = document.canvas.aspectRatio;
     if (maxW / ratio <= maxH) {
       return Math.floor(maxW);
     }
     return Math.floor(maxH * ratio);
-  }, [document.canvas.aspectRatio]);
+  }, [screenWidth, screenHeight, document.canvas.aspectRatio]);
 
   const canvasHeight = useMemo(() => {
     return Math.floor(canvasWidth / document.canvas.aspectRatio);
@@ -84,7 +87,15 @@ function CreatorStudioInner() {
           <Text style={styles.titleText}>
             {document.type === 'look' ? 'Look Studio' : 'Poster Studio'}
           </Text>
-          {isDirty && <View style={styles.dirtyDot} />}
+          {isLoadingDraft ? (
+            <Text style={styles.autosaveText}>Loading…</Text>
+          ) : autosaveStatus === 'saving' ? (
+            <Text style={styles.autosaveText}>Saving…</Text>
+          ) : autosaveStatus === 'failed' ? (
+            <Text style={[styles.autosaveText, { color: '#ff6b6b' }]}>Save failed</Text>
+          ) : isDirty ? (
+            <View style={styles.dirtyDot} />
+          ) : null}
         </View>
 
         <View style={styles.topRight}>
@@ -133,7 +144,7 @@ function CreatorStudioInner() {
                     `Page ${i + 1}`,
                     undefined,
                     [
-                      { text: 'Duplicate', onPress: () => { setActivePageIndex(i); addPage(); } },
+                      { text: 'Duplicate', onPress: () => duplicatePage(i) },
                       { text: 'Delete', style: 'destructive', onPress: () => removePage(i) },
                       { text: 'Cancel', style: 'cancel' },
                     ],
@@ -174,7 +185,7 @@ function CreatorStudioInner() {
           selectedLayerId={selectedLayerId}
           onLayerPress={handleLayerPress}
           onCanvasPress={handleCanvasPress}
-          onLayerTransformChange={(layerId, updates) => updateLayer(layerId, updates)}
+          onLayerTransformChange={(layerId, updates) => commitLayerTransform(layerId, updates, 'Transform layer')}
         />
       </View>
 
@@ -235,9 +246,12 @@ function CreatorStudioInner() {
 export function CreatorStudioScreen() {
   const route = useRoute<any>();
   const initialType = route.params?.type === 'poster' ? 'poster' : 'look';
+  const draftId = route.params?.draftId as string | undefined;
+  const templateId = route.params?.templateId as string | undefined;
+  const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
 
   return (
-    <CreatorProvider initialType={initialType}>
+    <CreatorProvider initialType={initialType} draftId={draftId} templateId={templateId} sourceDocumentId={sourceDocumentId}>
       <CreatorStudioInner />
     </CreatorProvider>
   );
@@ -282,6 +296,13 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: Colors.brand,
+    marginTop: 2,
+  },
+  autosaveText: {
+    fontSize: 10,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   topRight: {
     flexDirection: 'row',

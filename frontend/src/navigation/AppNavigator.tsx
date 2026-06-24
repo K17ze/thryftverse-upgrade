@@ -100,6 +100,8 @@ import EditListingScreen from '../screens/EditListingScreen';
 
 // Explore / Creator screens
 import CreateLookScreen from '../screens/CreateLookScreen';
+import { CreateLookRedirect } from '../screens/CreateLookRedirect';
+import { CreatePosterRedirect } from '../screens/CreatePosterRedirect';
 import { CreatorStudioScreen } from '../creator';
 import OutfitBuilderScreen from '../screens/OutfitBuilderScreen';
 import CoOwnIssueScreen from '../screens/CoOwnIssueScreen';
@@ -211,7 +213,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Closet" component={ClosetScreen} />
       <Stack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
       <Stack.Screen name="PosterViewer" component={PosterViewerScreen} options={modalScreenOptions} />
-      <Stack.Screen name="CreatePoster" component={CreatePosterScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreatePoster" component={CreatePosterRedirect} options={modalScreenOptions} />
       <Stack.Screen name="PosterStoryActivity" component={PosterStoryActivityScreen} options={modalScreenOptions} />
       <Stack.Screen name="PosterArchive" component={PosterArchiveScreen} options={modalScreenOptions} />
       <Stack.Screen name="PosterHighlightEditor" component={PosterHighlightEditorScreen} options={modalScreenOptions} />
@@ -296,7 +298,7 @@ export default function AppNavigator() {
       <Stack.Screen name="VisualSearch" component={VisualSearchScreen} />
 
       {/* Explore / Creator screens */}
-      <Stack.Screen name="CreateLook" component={CreateLookScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreateLook" component={CreateLookRedirect} options={modalScreenOptions} />
       <Stack.Screen name="CreatorStudio" component={CreatorStudioScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" component={OutfitBuilderScreen} options={modalScreenOptions} />
       <Stack.Screen name="CoOwnIssue" component={CoOwnIssueScreen} options={modalScreenOptions} />

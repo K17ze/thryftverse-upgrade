@@ -152,7 +152,7 @@ export default function LooksTab() {
   }, [loadLooks]);
 
   const handleCreateLook = useCallback(() => {
-    navigation.navigate('CreateLook');
+    navigation.navigate('CreatorStudio', { type: 'look' });
   }, [navigation]);
 
   if (isLoading) {

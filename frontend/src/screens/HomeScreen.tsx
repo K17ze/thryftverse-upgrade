@@ -568,7 +568,7 @@ export default function HomeScreen() {
           <AnimatedPressable
             style={styles.posterCard}
             activeOpacity={0.9}
-            onPress={() => { haptic.light(); navigation.navigate('CreatePoster'); }}
+            onPress={() => { haptic.light(); navigation.navigate('CreatorStudio', { type: 'poster' }); }}
             accessibilityLabel="Create a new poster"
             accessibilityRole="button"
             accessibilityHint="Opens poster creator for auction or promotion posts"

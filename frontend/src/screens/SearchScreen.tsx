@@ -87,7 +87,7 @@ export default function SearchScreen() {
         </View>
         <View style={styles.headerRight}>
           <View style={styles.creatorActions}>
-            <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('CreateLook')}>
+            <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('CreatorStudio', { type: 'look' })}>
               <Ionicons name="camera-outline" size={18} color={Colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('GlobalSearch')}>

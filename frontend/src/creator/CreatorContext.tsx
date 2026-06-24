@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import type { CreatorDocument, CreatorLayer } from './composition';
+import type { CreatorDocument, CreatorLayer, CreatorPage } from './composition';
 import {
   createEmptyDocument,
   addLayerToPage,
@@ -21,6 +21,8 @@ export interface CreatorContextValue {
   undoLabel: string | null;
   redoLabel: string | null;
   isDirty: boolean;
+  autosaveStatus: 'idle' | 'saving' | 'saved' | 'failed';
+  isLoadingDraft: boolean;
 
   setDocument: (doc: CreatorDocument) => void;
   setActivePageIndex: (index: number) => void;
@@ -28,17 +30,24 @@ export interface CreatorContextValue {
 
   addLayer: (layer: CreatorLayer) => void;
   updateLayer: (id: string, updates: Partial<CreatorLayer>) => void;
+  commitLayerTransform: (id: string, updates: Partial<CreatorLayer>, label: string) => void;
   removeLayer: (id: string) => void;
   duplicateLayer: (id: string) => void;
   reorderLayer: (id: string, direction: 'front' | 'forward' | 'backward' | 'back') => void;
+  toggleLayerLock: (id: string) => void;
+  toggleLayerVisibility: (id: string) => void;
 
   updateMetadata: (updates: Partial<CreatorDocument['metadata']>) => void;
   updateCanvas: (updates: Partial<CreatorDocument['canvas']>) => void;
   addPage: () => void;
+  duplicatePage: (index: number) => void;
   removePage: (index: number) => void;
+  reorderPages: (fromIndex: number, toIndex: number) => void;
+  updatePageDuration: (index: number, durationMs: number) => void;
 
   undo: () => void;
   redo: () => void;
+  retryAutosave: () => void;
 
   saveDraft: () => Promise<void>;
   loadDraft: (id: string) => Promise<boolean>;
@@ -49,7 +58,15 @@ const CreatorContext = createContext<CreatorContextValue | null>(null);
 const AUTOSAVE_INTERVAL_MS = 5000;
 const MAX_PAGES = 10;
 
-export function CreatorProvider({ children, initialType }: { children: React.ReactNode; initialType: 'look' | 'poster' }) {
+export interface CreatorProviderProps {
+  children: React.ReactNode;
+  initialType: 'look' | 'poster';
+  draftId?: string;
+  templateId?: string;
+  sourceDocumentId?: string;
+}
+
+export function CreatorProvider({ children, initialType, draftId, templateId, sourceDocumentId }: CreatorProviderProps) {
   const initialDoc = useMemo(() => createEmptyDocument(initialType), [initialType]);
   const [document, setDocumentState] = useState<CreatorDocument>(initialDoc);
   const [activePageIndex, setActivePageIndex] = useState(0);
@@ -59,6 +76,8 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
   const [undoLabel, setUndoLabel] = useState<string | null>(null);
   const [redoLabel, setRedoLabel] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
 
   const historyRef = useRef(new HistoryStack(initialDoc));
   const lastSavedDocRef = useRef(JSON.stringify(initialDoc));
@@ -67,6 +86,23 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
   useEffect(() => {
     CreatorAnalytics.sessionStart(initialType);
   }, [initialType]);
+
+  // Load draft on mount if draftId is provided
+  useEffect(() => {
+    if (!draftId) return;
+    let cancelled = false;
+    setIsLoadingDraft(true);
+    CreatorDraftService.loadDraft(draftId).then((doc) => {
+      if (cancelled || !doc) return;
+      setDocument(doc);
+      CreatorAnalytics.draftLoad(doc.type);
+    }).catch(() => {
+      // Corrupt or missing draft — stay with empty document
+    }).finally(() => {
+      if (!cancelled) setIsLoadingDraft(false);
+    });
+    return () => { cancelled = true; };
+  }, [draftId, setDocument]);
 
   const syncHistoryButtons = useCallback(() => {
     const h = historyRef.current;
@@ -116,15 +152,17 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
     });
   }, [activePageIndex]);
 
-  const commitLayerUpdate = useCallback((id: string, updates: Partial<CreatorLayer>, label: string) => {
+  const commitLayerTransform = useCallback((id: string, updates: Partial<CreatorLayer>, label: string) => {
     setDocumentState((prev) => {
       const doc = updateLayerInPage(prev, activePageIndex, id, updates);
+      doc.updatedAt = new Date().toISOString();
       historyRef.current.push(doc, label);
       setIsDirty(true);
       syncHistoryButtons();
       return doc;
     });
-  }, [activePageIndex, syncHistoryButtons]);
+    CreatorAnalytics.layerTransform(document.type, updates.type ?? 'transform');
+  }, [activePageIndex, syncHistoryButtons, document.type]);
 
   const removeLayer = useCallback((id: string) => {
     const layerType = document.pages[activePageIndex]?.layers.find((l) => l.id === id)?.type ?? 'unknown';
@@ -155,6 +193,31 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
     setDocumentState((prev) => {
       const doc = reorderLayerZ(prev, activePageIndex, id, direction);
       historyRef.current.push(doc, `Move ${direction}`);
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+    CreatorAnalytics.layerReorder(document.type, direction);
+  }, [activePageIndex, syncHistoryButtons, document.type]);
+
+  const toggleLayerLock = useCallback((id: string) => {
+    setDocumentState((prev) => {
+      const layer = prev.pages[activePageIndex]?.layers.find((l) => l.id === id);
+      if (!layer) return prev;
+      const doc = updateLayerInPage(prev, activePageIndex, id, { locked: !layer.locked });
+      historyRef.current.push(doc, layer.locked ? 'Unlock layer' : 'Lock layer');
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+  }, [activePageIndex, syncHistoryButtons]);
+
+  const toggleLayerVisibility = useCallback((id: string) => {
+    setDocumentState((prev) => {
+      const layer = prev.pages[activePageIndex]?.layers.find((l) => l.id === id);
+      if (!layer) return prev;
+      const doc = updateLayerInPage(prev, activePageIndex, id, { hidden: !layer.hidden });
+      historyRef.current.push(doc, layer.hidden ? 'Show layer' : 'Hide layer');
       setIsDirty(true);
       syncHistoryButtons();
       return doc;
@@ -196,6 +259,62 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
     });
     setActivePageIndex((prev) => prev + 1);
     setSelectedLayerId(null);
+    CreatorAnalytics.pageAdd(document.type, document.pages.length + 1);
+  }, [syncHistoryButtons, document.type, document.pages.length]);
+
+  const duplicatePage = useCallback((index: number) => {
+    setDocumentState((prev) => {
+      if (prev.pages.length >= MAX_PAGES) return prev;
+      const sourcePage = prev.pages[index];
+      if (!sourcePage) return prev;
+      const clonedLayers = sourcePage.layers.map((l) => ({
+        ...l,
+        id: `${l.id}_clone_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      }));
+      const newPage: CreatorPage = {
+        id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        layers: clonedLayers,
+        durationMs: sourcePage.durationMs,
+      };
+      const newPages = [...prev.pages];
+      newPages.splice(index + 1, 0, newPage);
+      const doc = { ...prev, pages: newPages, updatedAt: new Date().toISOString() };
+      historyRef.current.push(doc, 'Duplicate page');
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+    setActivePageIndex(index + 1);
+    setSelectedLayerId(null);
+  }, [syncHistoryButtons]);
+
+  const reorderPages = useCallback((fromIndex: number, toIndex: number) => {
+    setDocumentState((prev) => {
+      if (fromIndex === toIndex || fromIndex < 0 || fromIndex >= prev.pages.length || toIndex < 0 || toIndex >= prev.pages.length) return prev;
+      const newPages = [...prev.pages];
+      const [moved] = newPages.splice(fromIndex, 1);
+      newPages.splice(toIndex, 0, moved);
+      const doc = { ...prev, pages: newPages, updatedAt: new Date().toISOString() };
+      historyRef.current.push(doc, 'Reorder pages');
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+    setActivePageIndex(toIndex);
+    setSelectedLayerId(null);
+  }, [syncHistoryButtons]);
+
+  const updatePageDuration = useCallback((index: number, durationMs: number) => {
+    setDocumentState((prev) => {
+      const newPages = [...prev.pages];
+      if (!newPages[index]) return prev;
+      newPages[index] = { ...newPages[index], durationMs };
+      const doc = { ...prev, pages: newPages, updatedAt: new Date().toISOString() };
+      historyRef.current.push(doc, 'Update duration');
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
   }, [syncHistoryButtons]);
 
   const removePage = useCallback((index: number) => {
@@ -236,10 +355,31 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
   }, [syncHistoryButtons, document.type]);
 
   const saveDraft = useCallback(async () => {
-    await CreatorDraftService.saveDraft(document);
-    lastSavedDocRef.current = JSON.stringify(document);
-    setIsDirty(false);
+    setAutosaveStatus('saving');
+    try {
+      await CreatorDraftService.saveDraft(document);
+      lastSavedDocRef.current = JSON.stringify(document);
+      setIsDirty(false);
+      setAutosaveStatus('saved');
+      CreatorAnalytics.draftSave(document.type);
+    } catch {
+      setAutosaveStatus('failed');
+    }
   }, [document]);
+
+  const retryAutosave = useCallback(async () => {
+    if (!isDirty) return;
+    setAutosaveStatus('saving');
+    try {
+      const current = historyRef.current.current();
+      await CreatorDraftService.saveDraft(current);
+      lastSavedDocRef.current = JSON.stringify(current);
+      setIsDirty(false);
+      setAutosaveStatus('saved');
+    } catch {
+      setAutosaveStatus('failed');
+    }
+  }, [isDirty]);
 
   const loadDraft = useCallback(async (id: string): Promise<boolean> => {
     const doc = await CreatorDraftService.loadDraft(id);
@@ -254,6 +394,7 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
   useEffect(() => {
     if (!isDirty) return;
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    setAutosaveStatus('saving');
     autosaveTimerRef.current = setTimeout(async () => {
       const current = historyRef.current.current();
       const currentStr = JSON.stringify(current);
@@ -262,9 +403,12 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
           await CreatorDraftService.saveDraft(current);
           lastSavedDocRef.current = currentStr;
           setIsDirty(false);
+          setAutosaveStatus('saved');
         } catch {
-          // silently fail — autosave must not crash the editor
+          setAutosaveStatus('failed');
         }
+      } else {
+        setAutosaveStatus('saved');
       }
     }, AUTOSAVE_INTERVAL_MS);
     return () => {
@@ -281,20 +425,29 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
     undoLabel,
     redoLabel,
     isDirty,
+    autosaveStatus,
+    isLoadingDraft,
     setDocument,
     setActivePageIndex,
     selectLayer,
     addLayer,
     updateLayer,
+    commitLayerTransform,
     removeLayer,
     duplicateLayer,
     reorderLayer,
+    toggleLayerLock,
+    toggleLayerVisibility,
     updateMetadata,
     updateCanvas,
     addPage,
+    duplicatePage,
     removePage,
+    reorderPages,
+    updatePageDuration,
     undo,
     redo,
+    retryAutosave,
     saveDraft,
     loadDraft,
   };

@@ -520,7 +520,7 @@ export default function MyProfileScreen() {
                 title="No Looks yet"
                 subtitle="Create your first Look to showcase your style."
                 ctaLabel="Create Look"
-                onCtaPress={() => navigation.navigate('CreateLook')}
+                onCtaPress={() => navigation.navigate('CreatorStudio', { type: 'look' })}
               />
             ) : (
               <View style={{ paddingHorizontal: Space.md }}>
