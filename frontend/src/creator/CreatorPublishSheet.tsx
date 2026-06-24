@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
 import { useCreator } from './CreatorContext';
@@ -20,6 +21,7 @@ import { createLookOnApi } from '../services/looksApi';
 import { createPosterStory } from '../services/postersApi';
 import type { CreatorStoryCreateFrame } from './publishTypes';
 import { CreatorAnalytics } from './creatorAnalytics';
+import { uploadAllLocalMedia, hasLocalUris } from './mediaUploadPipeline';
 
 export interface CreatorPublishSheetProps {
   visible: boolean;
@@ -28,31 +30,47 @@ export interface CreatorPublishSheetProps {
 
 export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetProps) {
   const { document, saveDraft } = useCreator();
-  const [stage, setStage] = useState<'review' | 'publishing' | 'success' | 'error'>('review');
+  const navigation = useNavigation<any>();
+  const [stage, setStage] = useState<'review' | 'uploading' | 'publishing' | 'success' | 'error'>('review');
   const [errorMessage, setErrorMessage] = useState('');
   const [publishedId, setPublishedId] = useState('');
+  const [uploadProgress, setUploadProgress] = useState('');
 
   const handleClose = useCallback(() => {
-    if (stage === 'publishing') return;
+    if (stage === 'publishing' || stage === 'uploading') return;
     setStage('review');
     setErrorMessage('');
     onClose();
   }, [stage, onClose]);
 
   const handlePublish = useCallback(async () => {
-    setStage('publishing');
     CreatorAnalytics.publishStart(document.type);
     try {
-      if (document.type === 'look') {
-        const mediaLayer = document.pages[0].layers.find((l) => l.type === 'media');
+      let workingDoc = document;
+
+      // Upload all local media URIs before publishing
+      if (hasLocalUris(document)) {
+        setStage('uploading');
+        workingDoc = await uploadAllLocalMedia(document, (progress) => {
+          if (progress.total > 0) {
+            setUploadProgress(`Uploading media ${progress.completed + 1} of ${progress.total}`);
+          }
+        });
+      }
+
+      setStage('publishing');
+      setUploadProgress('');
+
+      if (workingDoc.type === 'look') {
+        const mediaLayer = workingDoc.pages[0].layers.find((l) => l.type === 'media');
         if (!mediaLayer || mediaLayer.type !== 'media') {
           throw new Error('No media found in document');
         }
-        const tags = document.pages[0].layers
+        const tags = workingDoc.pages[0].layers
           .filter((l) => l.type === 'product')
           .map((l) => ({
             id: l.id,
-            listingId: l.type === 'product' ? l.payload.listingId : null,
+            listingId: l.type === 'product' ? l.payload.listingId : undefined,
             label: l.type === 'product' ? l.payload.snapshotTitle : '',
             x: l.x,
             y: l.y,
@@ -60,10 +78,10 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
 
         const result = await createLookOnApi({
           id: createStableId('look'),
-          title: document.metadata.title || 'Untitled Look',
-          caption: document.metadata.caption,
+          title: workingDoc.metadata.title || 'Untitled Look',
+          caption: workingDoc.metadata.caption,
           mediaUrl: mediaLayer.payload.mediaUri,
-          visibility: document.metadata.visibility,
+          visibility: workingDoc.metadata.visibility,
           tags,
           status: 'published',
         });
@@ -71,7 +89,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
         setStage('success');
         CreatorAnalytics.publishSuccess('look', result.lookId);
       } else {
-        const frames: CreatorStoryCreateFrame[] = document.pages.map((page, i) => ({
+        const frames: CreatorStoryCreateFrame[] = workingDoc.pages.map((page, i) => ({
           id: page.id,
           mediaType: page.layers.find((l) => l.type === 'media')?.type === 'media'
             ? (page.layers.find((l) => l.type === 'media') as any).payload.mediaType
@@ -100,10 +118,10 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
 
         const result = await createPosterStory({
           id: createStableId('story'),
-          audience: document.metadata.visibility,
-          allowReplies: document.metadata.allowReplies,
-          allowReactions: document.metadata.allowReactions,
-          expiresInHours: document.metadata.expiresInHours ?? 24,
+          audience: workingDoc.metadata.visibility,
+          allowReplies: workingDoc.metadata.allowReplies,
+          allowReactions: workingDoc.metadata.allowReactions,
+          expiresInHours: workingDoc.metadata.expiresInHours ?? 24,
           frames,
         });
         setPublishedId(result.storyId);
@@ -135,6 +153,13 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
           <PublishReview document={document} onPublish={handlePublish} onSaveDraft={saveDraft} />
         )}
 
+        {stage === 'uploading' && (
+          <View style={styles.centerState}>
+            <ActivityIndicator size="large" color={Colors.brand} />
+            <Text style={styles.centerStateText}>{uploadProgress || 'Uploading media...'}</Text>
+          </View>
+        )}
+
         {stage === 'publishing' && (
           <View style={styles.centerState}>
             <ActivityIndicator size="large" color={Colors.brand} />
@@ -147,6 +172,22 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
             <Ionicons name="checkmark-circle" size={48} color="#4cd964" />
             <Text style={styles.centerStateTitle}>Published!</Text>
             <Text style={styles.centerStateText}>Your {document.type} is now live.</Text>
+            <Pressable
+              onPress={() => {
+                onClose();
+                setStage('review');
+                if (document.type === 'look') {
+                  navigation.replace('LookDetail', { lookId: publishedId });
+                } else {
+                  navigation.replace('PosterViewer', { storyId: publishedId });
+                }
+              }}
+              style={styles.retryBtn}
+              accessibilityLabel="View published content"
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryBtnText}>View</Text>
+            </Pressable>
           </View>
         )}
 
@@ -180,16 +221,28 @@ function PublishReview({
 
   return (
     <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
-      {/* Preview */}
-      <View style={styles.previewContainer}>
-        <CreatorCanvas
-          document={document}
-          page={document.pages[0]}
-          canvasWidth={canvasWidth}
-          canvasHeight={canvasHeight}
-          mode="preview"
-        />
-      </View>
+      {/* Preview — all pages */}
+      {document.pages.length > 1 && (
+        <Text style={styles.sectionLabel}>Preview ({document.pages.length} pages)</Text>
+      )}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.previewScroll}
+        contentContainerStyle={styles.previewContainer}
+      >
+        {document.pages.map((page) => (
+          <View key={page.id} style={styles.previewPageWrapper}>
+            <CreatorCanvas
+              document={document}
+              page={page}
+              canvasWidth={canvasWidth}
+              canvasHeight={canvasHeight}
+              mode="preview"
+            />
+          </View>
+        ))}
+      </ScrollView>
 
       {/* Caption */}
       <Text style={styles.sectionLabel}>Caption</Text>
@@ -326,6 +379,13 @@ const styles = StyleSheet.create({
   previewContainer: {
     alignItems: 'center',
     paddingVertical: Space.sm,
+    gap: Space.md,
+  },
+  previewScroll: {
+    marginHorizontal: -Space.md,
+  },
+  previewPageWrapper: {
+    marginHorizontal: Space.md,
   },
   sectionLabel: {
     fontFamily: Typography.family.semibold,

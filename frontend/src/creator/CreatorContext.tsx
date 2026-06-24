@@ -11,6 +11,7 @@ import {
 import { HistoryStack } from './history';
 import { CreatorDraftService } from './drafts';
 import { CreatorAnalytics } from './creatorAnalytics';
+import { getTemplateById } from './templates';
 
 export interface CreatorContextValue {
   document: CreatorDocument;
@@ -103,6 +104,16 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     });
     return () => { cancelled = true; };
   }, [draftId, setDocument]);
+
+  // Load template on mount if templateId is provided (and no draftId takes priority)
+  useEffect(() => {
+    if (!templateId || draftId) return;
+    const template = getTemplateById(templateId);
+    if (template) {
+      const doc = template.build();
+      setDocument(doc);
+    }
+  }, [templateId, draftId, setDocument]);
 
   const syncHistoryButtons = useCallback(() => {
     const h = historyRef.current;
