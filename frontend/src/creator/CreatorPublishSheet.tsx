@@ -19,6 +19,7 @@ import { createStableId } from '../utils/createStableId';
 import { createLookOnApi } from '../services/looksApi';
 import { createPosterStory } from '../services/postersApi';
 import type { CreatorStoryCreateFrame } from './publishTypes';
+import { CreatorAnalytics } from './creatorAnalytics';
 
 export interface CreatorPublishSheetProps {
   visible: boolean;
@@ -40,6 +41,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
 
   const handlePublish = useCallback(async () => {
     setStage('publishing');
+    CreatorAnalytics.publishStart(document.type);
     try {
       if (document.type === 'look') {
         const mediaLayer = document.pages[0].layers.find((l) => l.type === 'media');
@@ -67,6 +69,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
         });
         setPublishedId(result.lookId);
         setStage('success');
+        CreatorAnalytics.publishSuccess('look', result.lookId);
       } else {
         const frames: CreatorStoryCreateFrame[] = document.pages.map((page, i) => ({
           id: page.id,
@@ -105,10 +108,12 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
         });
         setPublishedId(result.storyId);
         setStage('success');
+        CreatorAnalytics.publishSuccess('poster', result.storyId);
       }
     } catch (err: any) {
       setErrorMessage(err?.message ?? 'Publishing failed');
       setStage('error');
+      CreatorAnalytics.publishError(document.type, err?.message ?? 'Unknown error');
     }
   }, [document]);
 

@@ -10,6 +10,7 @@ import {
 } from './composition';
 import { HistoryStack } from './history';
 import { CreatorDraftService } from './drafts';
+import { CreatorAnalytics } from './creatorAnalytics';
 
 export interface CreatorContextValue {
   document: CreatorDocument;
@@ -63,6 +64,10 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
   const lastSavedDocRef = useRef(JSON.stringify(initialDoc));
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    CreatorAnalytics.sessionStart(initialType);
+  }, [initialType]);
+
   const syncHistoryButtons = useCallback(() => {
     const h = historyRef.current;
     setCanUndo(h.canUndo());
@@ -101,7 +106,8 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
       return doc;
     });
     setSelectedLayerId(layer.id);
-  }, [activePageIndex, syncHistoryButtons]);
+    CreatorAnalytics.layerAdd(document.type, layer.type);
+  }, [activePageIndex, syncHistoryButtons, document.type]);
 
   const updateLayer = useCallback((id: string, updates: Partial<CreatorLayer>) => {
     setDocumentState((prev) => {
@@ -121,6 +127,7 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
   }, [activePageIndex, syncHistoryButtons]);
 
   const removeLayer = useCallback((id: string) => {
+    const layerType = document.pages[activePageIndex]?.layers.find((l) => l.id === id)?.type ?? 'unknown';
     setDocumentState((prev) => {
       const doc = removeLayerFromPage(prev, activePageIndex, id);
       historyRef.current.push(doc, 'Remove layer');
@@ -129,9 +136,11 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
       return doc;
     });
     setSelectedLayerId(null);
-  }, [activePageIndex, syncHistoryButtons]);
+    CreatorAnalytics.layerRemove(document.type, layerType);
+  }, [activePageIndex, syncHistoryButtons, document.type, document.pages]);
 
   const duplicateLayer = useCallback((id: string) => {
+    const layerType = document.pages[activePageIndex]?.layers.find((l) => l.id === id)?.type ?? 'unknown';
     setDocumentState((prev) => {
       const doc = duplicateLayerInPage(prev, activePageIndex, id);
       historyRef.current.push(doc, 'Duplicate layer');
@@ -139,7 +148,8 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
       syncHistoryButtons();
       return doc;
     });
-  }, [activePageIndex, syncHistoryButtons]);
+    CreatorAnalytics.layerDuplicate(document.type, layerType);
+  }, [activePageIndex, syncHistoryButtons, document.type, document.pages]);
 
   const reorderLayer = useCallback((id: string, direction: 'front' | 'forward' | 'backward' | 'back') => {
     setDocumentState((prev) => {
@@ -211,8 +221,9 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
       setDocumentState(doc);
       setSelectedLayerId(null);
       syncHistoryButtons();
+      CreatorAnalytics.undo(document.type);
     }
-  }, [syncHistoryButtons]);
+  }, [syncHistoryButtons, document.type]);
 
   const redo = useCallback(() => {
     const doc = historyRef.current.redo();
@@ -220,8 +231,9 @@ export function CreatorProvider({ children, initialType }: { children: React.Rea
       setDocumentState(doc);
       setSelectedLayerId(null);
       syncHistoryButtons();
+      CreatorAnalytics.redo(document.type);
     }
-  }, [syncHistoryButtons]);
+  }, [syncHistoryButtons, document.type]);
 
   const saveDraft = useCallback(async () => {
     await CreatorDraftService.saveDraft(document);
