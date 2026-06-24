@@ -54,6 +54,7 @@ export function CreatorToolDock({ onPublish, onSettings, onToolPress }: CreatorT
             key={tool.label}
             onPress={() => onToolPress(tool.mode)}
             style={styles.toolBtn}
+            hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
             accessibilityLabel={`Add ${tool.label}`}
             accessibilityRole="button"
           >
@@ -69,6 +70,7 @@ export function CreatorToolDock({ onPublish, onSettings, onToolPress }: CreatorT
         <Pressable
           onPress={onSettings}
           style={styles.actionBtn}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           accessibilityLabel="Settings"
           accessibilityRole="button"
         >

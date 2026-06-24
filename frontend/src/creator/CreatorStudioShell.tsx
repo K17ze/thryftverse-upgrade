@@ -124,7 +124,7 @@ function CreatorStudioInner() {
     <SafeAreaView style={styles.container}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <Pressable onPress={handleBack} style={styles.topBtn} accessibilityLabel="Back" accessibilityRole="button">
+        <Pressable onPress={handleBack} style={styles.topBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityLabel="Back" accessibilityRole="button">
           <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
         </Pressable>
 
@@ -148,6 +148,7 @@ function CreatorStudioInner() {
             onPress={undo}
             disabled={!canUndo}
             style={[styles.topBtn, !canUndo && styles.topBtnDisabled]}
+            hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
             accessibilityLabel="Undo"
             accessibilityRole="button"
           >
@@ -157,6 +158,7 @@ function CreatorStudioInner() {
             onPress={redo}
             disabled={!canRedo}
             style={[styles.topBtn, !canRedo && styles.topBtnDisabled]}
+            hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
             accessibilityLabel="Redo"
             accessibilityRole="button"
           >
@@ -165,6 +167,7 @@ function CreatorStudioInner() {
           <Pressable
             onPress={() => setShowLayers(true)}
             style={styles.topBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
             accessibilityLabel="Layers"
             accessibilityRole="button"
           >
@@ -173,6 +176,7 @@ function CreatorStudioInner() {
           <Pressable
             onPress={() => navigation.navigate('CreatorDraftList')}
             style={styles.topBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
             accessibilityLabel="Drafts"
             accessibilityRole="button"
           >
@@ -240,7 +244,7 @@ function CreatorStudioInner() {
           onCanvasPress={handleCanvasPress}
           onLayerTransformChange={(layerId, updates) => commitLayerTransform(layerId, updates, 'Transform layer')}
           onLayerDoubleTap={(layerId) => {
-            const l = page.layers.find((x) => x.id === layerId);
+            const l = page?.layers.find((x) => x.id === layerId);
             if (l?.type === 'text') {
               setEditingLayer(l);
               setPickerMode('text');
