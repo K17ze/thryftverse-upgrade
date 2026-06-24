@@ -679,6 +679,10 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && /^\/sellers\/[^/]+$/.test(path)) {
+    return true;
+  }
+
   if (method === 'GET' && (path === '/poster-stories' || path.startsWith('/poster-stories/'))) {
     return true;
   }
@@ -11779,6 +11783,114 @@ app.patch('/users/me', async (request, reply) => {
     ok: true,
     user: toProfilePayload(user),
   };
+});
+
+app.get('/sellers/:sellerId', async (request, reply) => {
+  const paramsSchema = z.object({ sellerId: z.string().min(2) });
+  const { sellerId } = paramsSchema.parse(request.params);
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const userResult = await readDb.query<{
+    id: string;
+    username: string;
+    avatar: string | null;
+    location: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, username, avatar, location, created_at FROM users WHERE id = $1 LIMIT 1`,
+    [sellerId]
+  );
+
+  const user = userResult.rows[0];
+  if (!user) {
+    reply.code(404);
+    return { ok: false, error: 'Seller not found' };
+  }
+
+  const reviewStats = await readDb.query<{
+    avg_rating: string | null;
+    review_count: string;
+  }>(
+    `SELECT AVG(rating)::numeric(3,2) AS avg_rating, COUNT(*)::text AS review_count FROM order_reviews WHERE seller_id = $1`,
+    [sellerId]
+  );
+
+  const salesResult = await readDb.query<{ completed_sales: string }>(
+    `SELECT COUNT(*)::text AS completed_sales FROM orders WHERE seller_id = $1 AND status = 'completed'`,
+    [sellerId]
+  );
+
+  const activeListingsResult = await readDb.query<{ active_count: string }>(
+    `SELECT COUNT(*)::text AS active_count FROM listings WHERE seller_id = $1 AND status = 'active'`,
+    [sellerId]
+  );
+
+  let isFollowing = false;
+  if (viewerUserId) {
+    const followResult = await readDb.query<{ id: string }>(
+      `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
+      [viewerUserId, sellerId]
+    );
+    isFollowing = followResult.rowCount > 0;
+  }
+
+  const avgRating = reviewStats.rows[0]?.avg_rating ? Number(reviewStats.rows[0].avg_rating) : null;
+  const reviewCount = reviewStats.rows[0]?.review_count ? Number(reviewStats.rows[0].review_count) : 0;
+  const completedSales = salesResult.rows[0]?.completed_sales ? Number(salesResult.rows[0].completed_sales) : 0;
+  const activeListingCount = activeListingsResult.rows[0]?.active_count ? Number(activeListingsResult.rows[0].active_count) : 0;
+
+  return {
+    ok: true,
+    seller: {
+      id: user.id,
+      username: user.username,
+      avatar: user.avatar,
+      location: user.location,
+      rating: avgRating,
+      reviewCount,
+      completedSales,
+      activeListingCount,
+      memberSince: user.created_at,
+      isFollowing,
+    },
+  };
+});
+
+app.post('/sellers/:sellerId/follow', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ sellerId: z.string().min(2) });
+  const { sellerId } = paramsSchema.parse(request.params);
+  const userId = request.authUser.userId;
+
+  if (userId === sellerId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot follow yourself' };
+  }
+
+  const existing = await readDb.query<{ id: string }>(
+    `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
+    [userId, sellerId]
+  );
+
+  if (existing.rowCount > 0) {
+    await db.query(
+      `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
+      [userId, sellerId]
+    );
+    return { ok: true, isFollowing: false };
+  }
+
+  const followId = `follow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await db.query(
+    `INSERT INTO user_follows (id, follower_id, following_id, created_at) VALUES ($1, $2, $3, NOW())`,
+    [followId, userId, sellerId]
+  );
+
+  return { ok: true, isFollowing: true };
 });
 
 app.get('/users/:userId/profile', async (request, reply) => {

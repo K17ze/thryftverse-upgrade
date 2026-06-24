@@ -53,6 +53,8 @@ import {
   useListingDetail,
   useRecommendations,
   useContinueExploring,
+  useSellerTrust,
+  useSellerFollow,
   ProductAnalytics,
   setProductAnalyticsHandler,
   setProductSessionId,
@@ -107,6 +109,9 @@ export default function ItemDetailScreen() {
 
   const item = queryData?.listing ?? null;
   const serverCommerce = queryData?.commerce ?? null;
+
+  const { data: sellerTrustData } = useSellerTrust(item?.sellerId);
+  const sellerFollowMutation = useSellerFollow(item?.sellerId);
 
   useEffect(() => {
     setProductAnalyticsHandler((event) => {
@@ -237,7 +242,9 @@ export default function ItemDetailScreen() {
     returnPolicy: serverCommerce.returnPolicy,
     authenticity: serverCommerce.authenticity,
   } : undefined);
-  const seller = buildSellerTrustSummary(item.seller);
+  const seller = sellerTrustData
+    ? sellerTrustData
+    : buildSellerTrustSummary(item.seller);
 
   const recommendationSections = recommendationsData?.sections ?? [];
   const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
@@ -351,6 +358,7 @@ export default function ItemDetailScreen() {
           {seller && (
             <SellerTrustCard
               seller={seller}
+              onFollow={() => sellerFollowMutation.mutate()}
               onOpenProfile={() => {
                 if (item) ProductAnalytics.sellerProfileOpen(item.id, seller.id);
                 navigation.navigate('UserProfile', { userId: seller.id });
