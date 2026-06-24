@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 type SentryLike = {
   init?: (...args: unknown[]) => unknown;
@@ -19,21 +20,72 @@ const SentryStub: SentryLike = new Proxy({}, {
 });
 
 let sentryInstance: SentryLike = SentryStub;
+let sentryInitialised = false;
 
-export function initSentry(dsn?: string): void {
+export interface SentryInitOptions {
+  dsn?: string;
+  environment?: 'development' | 'preview' | 'production';
+  release?: string;
+  dist?: string;
+}
+
+export function initSentry(opts?: SentryInitOptions): void {
+  if (sentryInitialised) return;
+
+  const dsn = opts?.dsn ?? Constants?.expoConfig?.extra?.sentryDsn;
+
   if (!dsn) return;
+
+  sentryInitialised = true;
+
   try {
     const realSentry = require('@sentry/react-native');
+    const environment = opts?.environment ?? (__DEV__ ? 'development' : 'production');
+    const release = opts?.release ?? Constants?.expoConfig?.version;
+    const dist = opts?.dist;
+
     realSentry.init({
       dsn,
       enableInExpoDevelopment: false,
       debug: __DEV__,
-      environment: __DEV__ ? 'development' : 'production',
+      environment,
+      release,
+      ...(dist ? { dist } : {}),
+      beforeSend(event: any) {
+        if (!event) return event;
+        if (event.request) {
+          delete event.request.headers;
+          delete event.request.cookies;
+          delete event.request.data;
+        }
+        if (event.breadcrumbs) {
+          event.breadcrumbs = event.breadcrumbs.filter((bc: any) => {
+            const cat = bc?.category ?? '';
+            if (cat === 'auth' || cat === 'payment' || cat === 'chat' || cat === 'profile') {
+              return false;
+            }
+            return true;
+          });
+        }
+        return event;
+      },
     });
+
+    realSentry.setTag('platform', Platform.OS);
+
     sentryInstance = realSentry as SentryLike;
   } catch {
     sentryInstance = SentryStub;
   }
+}
+
+export function isSentryInitialised(): boolean {
+  return sentryInitialised;
+}
+
+export function resetSentryForTesting(): void {
+  sentryInstance = SentryStub;
+  sentryInitialised = false;
 }
 
 export const Sentry: SentryLike = new Proxy({}, {

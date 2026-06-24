@@ -1,3 +1,3 @@
 export { AppErrorBoundary } from './AppErrorBoundary';
-export { Sentry, initSentry } from './sentry';
-export type { SentryLike } from './sentry';
+export { Sentry, initSentry, isSentryInitialised, resetSentryForTesting } from './sentry';
+export type { SentryLike, SentryInitOptions } from './sentry';

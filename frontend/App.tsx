@@ -23,7 +23,9 @@ import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
 import { ToastContainer } from './src/components/Toast';
-import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { AppErrorBoundary, initSentry } from './src/platform/monitoring';
+import { KeyboardProvider } from './src/platform/keyboard';
+import { ServerStateProvider } from './src/platform/server';
 import { BrandedSplash } from './src/components/BrandedSplash';
 import { Typography } from './src/theme/designTokens';
 import { ThemeProvider } from './src/theme/ThemeContext';
@@ -47,6 +49,8 @@ import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCou
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Keep app startup resilient even if splash API rejects.
 });
+
+initSentry();
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -375,9 +379,11 @@ export default function App() {
   }
 
   return (
-    <ErrorBoundary>
+    <AppErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
+          <KeyboardProvider>
+          <ServerStateProvider>
           <ThemeProvider>
             <ToastProvider>
               <BackendDataProvider>
@@ -410,8 +416,10 @@ export default function App() {
               <ToastContainer />
             </ToastProvider>
           </ThemeProvider>
+          </ServerStateProvider>
+          </KeyboardProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
-    </ErrorBoundary>
+    </AppErrorBoundary>
   );
 }
