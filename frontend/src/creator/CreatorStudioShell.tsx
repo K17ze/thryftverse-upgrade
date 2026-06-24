@@ -15,6 +15,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
 import { CreatorProvider, useCreator } from './CreatorContext';
+import type { CreatorLayer } from './composition';
 import { CreatorCanvas } from './CreatorCanvas';
 import { CreatorLayersSheet } from './CreatorLayersSheet';
 import { CreatorToolDock } from './CreatorToolDock';
@@ -32,6 +33,7 @@ function CreatorStudioInner() {
   const [showPublish, setShowPublish] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [pickerMode, setPickerMode] = useState<AssetPickerMode | null>(null);
+  const [editingLayer, setEditingLayer] = useState<CreatorLayer | null>(null);
 
   const page = document.pages[activePageIndex];
 
@@ -238,6 +240,7 @@ function CreatorStudioInner() {
           onLayerDoubleTap={(layerId) => {
             const l = page.layers.find((x) => x.id === layerId);
             if (l?.type === 'text') {
+              setEditingLayer(l);
               setPickerMode('text');
             }
           }}
@@ -296,8 +299,15 @@ function CreatorStudioInner() {
       <CreatorAssetPicker
         visible={pickerMode !== null}
         mode={pickerMode ?? 'media'}
-        onClose={() => setPickerMode(null)}
-        onAddLayer={(layer) => addLayer(layer)}
+        editingLayer={editingLayer}
+        onClose={() => { setPickerMode(null); setEditingLayer(null); }}
+        onAddLayer={(layer) => {
+          if (editingLayer) {
+            updateLayer(editingLayer.id, layer);
+          } else {
+            addLayer(layer);
+          }
+        }}
       />
     </SafeAreaView>
   );

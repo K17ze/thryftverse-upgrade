@@ -29,17 +29,18 @@ export interface CreatorAssetPickerProps {
   mode: AssetPickerMode;
   onClose: () => void;
   onAddLayer: (layer: CreatorLayer) => void;
+  editingLayer?: CreatorLayer | null;
 }
 
-export function CreatorAssetPicker({ visible, mode, onClose, onAddLayer }: CreatorAssetPickerProps) {
+export function CreatorAssetPicker({ visible, mode, onClose, onAddLayer, editingLayer }: CreatorAssetPickerProps) {
   if (!visible) return null;
 
   return (
-    <AssetPickerContent mode={mode} onClose={onClose} onAddLayer={onAddLayer} />
+    <AssetPickerContent mode={mode} onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />
   );
 }
 
-function AssetPickerContent({ mode, onClose, onAddLayer }: { mode: AssetPickerMode; onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode: AssetPickerMode; onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   switch (mode) {
     case 'media':
       return <MediaPicker onClose={onClose} onAddLayer={onAddLayer} />;
@@ -50,7 +51,7 @@ function AssetPickerContent({ mode, onClose, onAddLayer }: { mode: AssetPickerMo
     case 'look':
       return <LookPicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'text':
-      return <TextPicker onClose={onClose} onAddLayer={onAddLayer} />;
+      return <TextPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'shape':
       return <ShapePicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'vote':
@@ -423,29 +424,63 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
 
 // ── Text Picker ────────────────────────────────────────────────────
 
-function TextPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
-  const [text, setText] = useState('');
+const TEXT_STYLES: Array<{ key: string; label: string }> = [
+  { key: 'clean', label: 'Clean' },
+  { key: 'headline', label: 'Headline' },
+  { key: 'editorial', label: 'Editorial' },
+  { key: 'compact', label: 'Compact' },
+];
+
+const TEXT_COLORS = ['#ffffff', '#000000', '#ff6b6b', '#4cd964', '#5ac8fa', '#ffcc00', '#ff9500', '#5856d6'];
+
+const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: string }> = [
+  { key: 'left', icon: 'text-outline' },
+  { key: 'center', icon: 'text-center' },
+  { key: 'right', icon: 'text-end' },
+];
+
+function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const isEditing = editingLayer?.type === 'text';
+  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+
+  const [text, setText] = useState(existingPayload?.text ?? '');
+  const [textStyle, setTextStyle] = useState(existingPayload?.textStyle ?? 'clean');
+  const [textColor, setTextColor] = useState(existingPayload?.textColor ?? '#ffffff');
+  const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>(existingPayload?.alignment ?? 'center');
 
   const handleAdd = useCallback(() => {
     if (!text.trim()) return;
-    onAddLayer({
-      ...baseLayer(createStableId('text'), 10),
-      type: 'text',
-      width: 0.6,
-      height: 0.1,
-      payload: {
-        text: text.trim(),
-        textStyle: 'clean',
-        textColor: '#ffffff',
-        alignment: 'center',
-        opacity: 1,
-      },
-    });
+    if (isEditing && editingLayer) {
+      onAddLayer({
+        ...editingLayer,
+        payload: {
+          ...editingLayer.payload,
+          text: text.trim(),
+          textStyle,
+          textColor,
+          alignment,
+        },
+      } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('text'), 10),
+        type: 'text',
+        width: 0.6,
+        height: 0.1,
+        payload: {
+          text: text.trim(),
+          textStyle,
+          textColor,
+          alignment,
+          opacity: 1,
+        },
+      });
+    }
     onClose();
-  }, [text, onAddLayer, onClose]);
+  }, [text, textStyle, textColor, alignment, isEditing, editingLayer, onAddLayer, onClose]);
 
   return (
-    <PickerShell title="Add Text" onClose={onClose}>
+    <PickerShell title={isEditing ? 'Edit Text' : 'Add Text'} onClose={onClose}>
       <View style={styles.textPickerBody}>
         <TextInput
           style={styles.textInput}
@@ -458,8 +493,55 @@ function TextPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           autoFocus
           accessibilityLabel="Text content"
         />
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel="Add text" accessibilityRole="button">
-          <Text style={styles.saveBtnText}>Add Text</Text>
+
+        {/* Style selector */}
+        <Text style={styles.pickerSectionLabel}>Style</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {TEXT_STYLES.map((s) => (
+            <Pressable
+              key={s.key}
+              onPress={() => setTextStyle(s.key)}
+              style={[styles.styleOption, textStyle === s.key && styles.styleOptionActive]}
+              accessibilityLabel={`Text style ${s.label}`}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.styleOptionText, textStyle === s.key && styles.styleOptionTextActive]}>{s.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {/* Color selector */}
+        <Text style={styles.pickerSectionLabel}>Color</Text>
+        <View style={styles.colorRow}>
+          {TEXT_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => setTextColor(c)}
+              style={[styles.colorOption, { backgroundColor: c }, textColor === c && styles.colorOptionActive]}
+              accessibilityLabel={`Text color ${c}`}
+              accessibilityRole="button"
+            />
+          ))}
+        </View>
+
+        {/* Alignment */}
+        <Text style={styles.pickerSectionLabel}>Alignment</Text>
+        <View style={styles.alignmentRow}>
+          {TEXT_ALIGNMENTS.map((a) => (
+            <Pressable
+              key={a.key}
+              onPress={() => setAlignment(a.key)}
+              style={[styles.alignmentOption, alignment === a.key && styles.alignmentOptionActive]}
+              accessibilityLabel={`Align ${a.key}`}
+              accessibilityRole="button"
+            >
+              <Ionicons name={a.icon as any} size={18} color={alignment === a.key ? Colors.brand : Colors.textSecondary} />
+            </Pressable>
+          ))}
+        </View>
+
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button">
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Text'}</Text>
         </Pressable>
       </View>
     </PickerShell>
@@ -616,6 +698,18 @@ const styles = StyleSheet.create({
   saveBtn: { height: 44, borderRadius: Radius.md, backgroundColor: Colors.brand, justifyContent: 'center', alignItems: 'center' },
   saveBtnDisabled: { opacity: 0.4 },
   saveBtnText: { color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.body.size },
+  pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
+  styleScroll: { marginHorizontal: -Space.md },
+  styleOption: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt, marginRight: Space.sm },
+  styleOptionActive: { borderColor: Colors.brand, backgroundColor: `${Colors.brand}15` },
+  styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textPrimary },
+  styleOptionTextActive: { color: Colors.brand },
+  colorRow: { flexDirection: 'row', gap: Space.sm, flexWrap: 'wrap' },
+  colorOption: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: 'transparent' },
+  colorOptionActive: { borderColor: Colors.brand },
+  alignmentRow: { flexDirection: 'row', gap: Space.sm },
+  alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
+  alignmentOptionActive: { borderColor: Colors.brand, backgroundColor: `${Colors.brand}15` },
   shapeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Space.md, paddingVertical: Space.lg, paddingHorizontal: Space.md },
   shapeOption: { alignItems: 'center', gap: 6, width: 80, paddingVertical: Space.sm },
   shapeLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: Colors.textSecondary },
