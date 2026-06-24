@@ -23,7 +23,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 function CreatorStudioInner() {
   const navigation = useNavigation<any>();
-  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer } = useCreator();
+  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
@@ -146,6 +146,7 @@ function CreatorStudioInner() {
           selectedLayerId={selectedLayerId}
           onLayerPress={handleLayerPress}
           onCanvasPress={handleCanvasPress}
+          onLayerTransformChange={(layerId, updates) => updateLayer(layerId, updates)}
         />
       </View>
 

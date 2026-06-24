@@ -1,6 +1,13 @@
-import React, { useCallback } from 'react';
-import { View, Text, Image, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  runOnJS,
+  withTiming,
+} from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
 import { Video, ResizeMode } from '../components/compat/Video';
@@ -17,6 +24,7 @@ export interface CreatorCanvasProps {
   onLayerPress?: (layerId: string) => void;
   onCanvasPress?: () => void;
   onLayerPositionChange?: (layerId: string, x: number, y: number) => void;
+  onLayerTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
 }
 
 export function CreatorCanvas({
@@ -28,6 +36,7 @@ export function CreatorCanvas({
   selectedLayerId,
   onLayerPress,
   onCanvasPress,
+  onLayerTransformChange,
 }: CreatorCanvasProps) {
   const { canvas } = document;
   const visibleLayers = getVisibleLayersSorted(page);
@@ -48,7 +57,7 @@ export function CreatorCanvas({
   };
 
   return (
-    <View
+    <GestureHandlerRootView
       style={[
         styles.canvas,
         {
@@ -72,9 +81,10 @@ export function CreatorCanvas({
           mode={mode}
           isSelected={selectedLayerId === layer.id}
           onPress={onLayerPress}
+          onTransformChange={onLayerTransformChange}
         />
       ))}
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
@@ -85,7 +95,11 @@ interface LayerRendererProps {
   mode: 'edit' | 'preview' | 'view';
   isSelected: boolean;
   onPress?: (layerId: string) => void;
+  onTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
 }
+
+const SNAP_THRESHOLD = 0.02;
+const SAFE_MARGIN = 0.05;
 
 function LayerRenderer({
   layer,
@@ -94,44 +108,166 @@ function LayerRenderer({
   mode,
   isSelected,
   onPress,
+  onTransformChange,
 }: LayerRendererProps) {
+  const translateX = useSharedValue(layer.x * canvasWidth);
+  const translateY = useSharedValue(layer.y * canvasHeight);
+  const scaleSV = useSharedValue(layer.scale);
+  const rotationSV = useSharedValue(layer.rotation);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  const startScale = useSharedValue(1);
+  const startRotation = useSharedValue(0);
+
   const handlePress = useCallback(() => {
     if (mode === 'edit' && onPress && !layer.locked) {
       onPress(layer.id);
     }
   }, [mode, onPress, layer.id, layer.locked]);
 
+  const handlePositionCommit = useCallback((finalX: number, finalY: number) => {
+    let normX = finalX / canvasWidth;
+    let normY = finalY / canvasHeight;
+    // Snapping to center
+    if (Math.abs(normX - 0.5) < SNAP_THRESHOLD) normX = 0.5;
+    if (Math.abs(normY - 0.5) < SNAP_THRESHOLD) normY = 0.5;
+    // Clamp to safe area
+    normX = Math.max(SAFE_MARGIN, Math.min(1 - SAFE_MARGIN, normX));
+    normY = Math.max(SAFE_MARGIN, Math.min(1 - SAFE_MARGIN, normY));
+    translateX.value = withTiming(normX * canvasWidth, { duration: 0 });
+    translateY.value = withTiming(normY * canvasHeight, { duration: 0 });
+    onTransformChange?.(layer.id, { x: normX, y: normY });
+  }, [canvasWidth, canvasHeight, layer.id, onTransformChange, translateX, translateY]);
+
+  const handleTransformCommit = useCallback((finalScale: number, finalRotation: number) => {
+    const clampedScale = Math.max(0.2, Math.min(5, finalScale));
+    scaleSV.value = withTiming(clampedScale, { duration: 0 });
+    rotationSV.value = withTiming(finalRotation, { duration: 0 });
+    onTransformChange?.(layer.id, { scale: clampedScale, rotation: finalRotation });
+  }, [layer.id, onTransformChange, scaleSV, rotationSV]);
+
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(mode === 'edit' && !layer.locked)
+        .minDistance(3)
+        .onStart(() => {
+          startX.value = translateX.value;
+          startY.value = translateY.value;
+          runOnJS(onPress)?.(layer.id);
+        })
+        .onUpdate((e) => {
+          translateX.value = startX.value + e.translationX;
+          translateY.value = startY.value + e.translationY;
+        })
+        .onEnd((e) => {
+          const finalX = startX.value + e.translationX;
+          const finalY = startY.value + e.translationY;
+          runOnJS(handlePositionCommit)(finalX, finalY);
+        }),
+    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit]
+  );
+
+  const pinchGesture = useMemo(
+    () =>
+      Gesture.Pinch()
+        .enabled(mode === 'edit' && !layer.locked)
+        .onStart(() => {
+          startScale.value = scaleSV.value;
+        })
+        .onUpdate((e) => {
+          scaleSV.value = startScale.value * e.scale;
+        })
+        .onEnd(() => {
+          runOnJS(handleTransformCommit)(scaleSV.value, rotationSV.value);
+        }),
+    [mode, layer.locked, scaleSV, startScale, rotationSV, handleTransformCommit]
+  );
+
+  const rotationGesture = useMemo(
+    () =>
+      Gesture.Rotation()
+        .enabled(mode === 'edit' && !layer.locked)
+        .onStart(() => {
+          startRotation.value = rotationSV.value;
+        })
+        .onUpdate((e) => {
+          rotationSV.value = startRotation.value + e.rotation;
+        })
+        .onEnd(() => {
+          runOnJS(handleTransformCommit)(scaleSV.value, rotationSV.value);
+        }),
+    [mode, layer.locked, rotationSV, startRotation, scaleSV, handleTransformCommit]
+  );
+
+  const tapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .enabled(mode === 'edit' && !layer.locked)
+        .onEnd(() => {
+          runOnJS(handlePress)();
+        }),
+    [mode, layer.locked, handlePress]
+  );
+
+  const composedGesture = useMemo(
+    () => Gesture.Race(Gesture.Simultaneous(pinchGesture, rotationGesture), panGesture, tapGesture),
+    [panGesture, pinchGesture, rotationGesture, tapGesture]
+  );
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const baseWidth = layer.width * canvasWidth;
+    const baseHeight = layer.height * canvasHeight;
+    const w = baseWidth * scaleSV.value;
+    const h = baseHeight * scaleSV.value;
+    return {
+      position: 'absolute' as const,
+      left: translateX.value - w / 2,
+      top: translateY.value - h / 2,
+      width: w,
+      height: h,
+      transform: [
+        { rotate: `${rotationSV.value}deg` },
+      ],
+      opacity: layer.opacity,
+      zIndex: layer.zIndex,
+    };
+  });
+
+  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight);
+
+  if (mode === 'edit' && !layer.locked) {
+    return (
+      <GestureDetector gesture={composedGesture}>
+        <Reanimated.View style={animatedStyle}>
+          <View style={[styles.layerInner, isSelected && styles.layerSelected]}>
+            {content}
+          </View>
+          {isSelected && <SelectionHandles />}
+        </Reanimated.View>
+      </GestureDetector>
+    );
+  }
+
   const left = layer.x * canvasWidth;
   const top = layer.y * canvasHeight;
   const width = layer.width * canvasWidth * layer.scale;
   const height = layer.height * canvasHeight * layer.scale;
 
-  const layerStyle: any = {
-    position: 'absolute',
-    left: left - width / 2,
-    top: top - height / 2,
-    width,
-    height,
-    transform: [{ rotate: `${layer.rotation}deg` }],
-    opacity: layer.opacity,
-    zIndex: layer.zIndex,
-  };
-
-  const content = renderLayerContent(layer, width, height);
-
-  if (mode === 'edit' && !layer.locked) {
-    return (
-      <Pressable style={layerStyle} onPress={handlePress}>
-        <View style={[styles.layerInner, isSelected && styles.layerSelected]}>
-          {content}
-        </View>
-        {isSelected && <SelectionHandles />}
-      </Pressable>
-    );
-  }
-
   return (
-    <View style={layerStyle} pointerEvents="none">
+    <View
+      style={{
+        position: 'absolute',
+        left: left - width / 2,
+        top: top - height / 2,
+        width,
+        height,
+        transform: [{ rotate: `${layer.rotation}deg` }],
+        opacity: layer.opacity,
+        zIndex: layer.zIndex,
+      }}
+      pointerEvents="none"
+    >
       <View style={styles.layerInner}>
         {content}
       </View>
