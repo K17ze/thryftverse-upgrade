@@ -12,6 +12,7 @@ import { HistoryStack } from './history';
 import { CreatorDraftService } from './drafts';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { getTemplateById } from './templates';
+import { createStableId } from '../utils/createStableId';
 
 export interface CreatorContextValue {
   document: CreatorDocument;
@@ -114,6 +115,41 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       setDocument(doc);
     }
   }, [templateId, draftId, setDocument]);
+
+  // Load source document for remix if sourceDocumentId is provided
+  useEffect(() => {
+    if (!sourceDocumentId || draftId || templateId) return;
+    let cancelled = false;
+    setIsLoadingDraft(true);
+    CreatorDraftService.loadDraft(sourceDocumentId).then((sourceDoc) => {
+      if (cancelled || !sourceDoc) return;
+      // Check if source allows remix
+      if (!sourceDoc.metadata.allowRemix) {
+        // Source doesn't allow remix — start with empty doc
+        return;
+      }
+      // Create remixed document with attribution
+      const remixedDoc: CreatorDocument = {
+        ...sourceDoc,
+        id: createStableId('doc'),
+        metadata: {
+          ...sourceDoc.metadata,
+          sourceDocumentId: sourceDoc.id,
+          sourceCreatorId: undefined,
+          allowRemix: false,
+          title: `Remix of ${sourceDoc.metadata.title || 'Untitled'}`,
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setDocument(remixedDoc);
+    }).catch(() => {
+      // Source not found — stay with empty document
+    }).finally(() => {
+      if (!cancelled) setIsLoadingDraft(false);
+    });
+    return () => { cancelled = true; };
+  }, [sourceDocumentId, draftId, templateId, setDocument]);
 
   const syncHistoryButtons = useCallback(() => {
     const h = historyRef.current;

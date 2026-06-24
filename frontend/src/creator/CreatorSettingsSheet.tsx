@@ -91,6 +91,19 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             accessibilityLabel="Accessibility description"
           />
 
+          {/* Shared: Remix attribution */}
+          {document.metadata.sourceDocumentId && (
+            <>
+              <Text style={styles.sectionLabel}>Remix Attribution</Text>
+              <View style={styles.attributionBox}>
+                <Ionicons name="git-branch-outline" size={16} color={Colors.textSecondary} />
+                <Text style={styles.attributionText}>
+                  Remixed from another {document.type}
+                </Text>
+              </View>
+            </>
+          )}
+
           {/* Look-specific settings */}
           {isLook && (
             <>
@@ -387,5 +400,21 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
     color: Colors.surface,
+  },
+  attributionBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  attributionText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    color: Colors.textSecondary,
   },
 });
