@@ -83,7 +83,7 @@ export default function ItemDetailScreen() {
   const { itemId } = route.params || {};
 
   const {
-    data: queryListing,
+    data: queryData,
     isLoading: queryLoading,
     isError: queryError,
     refetch: refetchListing,
@@ -102,7 +102,8 @@ export default function ItemDetailScreen() {
     isFetchingNextPage: exploreFetching,
   } = useContinueExploring(itemId);
 
-  const item = queryListing ?? null;
+  const item = queryData?.listing ?? null;
+  const serverCommerce = queryData?.commerce ?? null;
 
   useEffect(() => {
     setProductAnalyticsHandler((event) => {
@@ -209,15 +210,20 @@ export default function ItemDetailScreen() {
   const formattedOriginal = hasDiscount
     ? formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })
     : null;
-  const formattedProtectionTotal = item.priceWithProtection != null
-    ? formatFromFiat(item.priceWithProtection, 'GBP', { displayMode: 'fiat' })
+  const formattedProtectionTotal = serverCommerce?.estimatedTotal != null
+    ? formatFromFiat(serverCommerce.estimatedTotal, 'GBP', { displayMode: 'fiat' })
     : null;
 
   const capabilities = buildCapabilities(item, currentUser?.id);
-  const commerce = buildCommerceContext(item, {
-    shippingMethod: item.shippingMethod ?? null,
-    shippingPayer: (item.shippingPayer as 'buyer' | 'seller' | null) ?? null,
-  });
+  const commerce = buildCommerceContext(item, serverCommerce ? {
+    buyerProtectionFee: serverCommerce.buyerProtectionFee,
+    estimatedTotal: serverCommerce.estimatedTotal,
+    shippingMethod: serverCommerce.shippingMethod,
+    shippingPayer: (serverCommerce.shippingPayer as 'buyer' | 'seller' | null) ?? null,
+    protectionPolicy: serverCommerce.protectionPolicy,
+    returnPolicy: serverCommerce.returnPolicy,
+    authenticity: serverCommerce.authenticity,
+  } : undefined);
   const seller = buildSellerTrustSummary(item.seller);
 
   const recommendationSections = recommendationsData?.sections ?? [];

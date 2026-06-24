@@ -168,9 +168,33 @@ export interface ListingApiItem {
   seller?: ListingSeller | null;
 }
 
+export interface ListingCommerceServerContext {
+  itemPrice: number;
+  buyerProtectionFee: number;
+  estimatedTotal: number;
+  currency: string;
+  shippingMethod: string | null;
+  shippingPayer: string | null;
+  protectionPolicy: {
+    available: boolean;
+    label: string;
+    summary: string;
+  } | null;
+  returnPolicy: {
+    accepted: boolean;
+    windowDays?: number;
+    conditions?: string;
+  } | null;
+  authenticity: {
+    status: 'not_offered' | 'eligible' | 'verified';
+    label?: string;
+  } | null;
+}
+
 export interface ListingSingleResponse {
   ok: boolean;
   listing?: ListingApiItem;
+  commerce?: ListingCommerceServerContext;
   error?: string;
 }
 

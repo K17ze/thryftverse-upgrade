@@ -14848,6 +14848,13 @@ app.get('/listings/:listingId', async (request, reply) => {
     [listingId]
   );
 
+  const itemPrice = Number(row.price_gbp);
+  const buyerProtectionFee = Number(Math.max(
+    itemPrice * 0.05 + 0.7,
+    itemPrice * 0.02
+  ).toFixed(2));
+  const estimatedTotal = Number((itemPrice + buyerProtectionFee).toFixed(2));
+
   return {
     ok: true,
     listing: {
@@ -14855,7 +14862,7 @@ app.get('/listings/:listingId', async (request, reply) => {
       sellerId: row.seller_id,
       title: row.title,
       description: row.description,
-      priceGbp: Number(row.price_gbp),
+      priceGbp: itemPrice,
       imageUrl: row.image_url,
       images: imagesResult.rows.map((r) => r.image_url),
       status: row.status,
@@ -14877,6 +14884,28 @@ app.get('/listings/:listingId', async (request, reply) => {
             location: null,
           }
         : null,
+    },
+    commerce: {
+      itemPrice,
+      buyerProtectionFee,
+      estimatedTotal,
+      currency: 'GBP',
+      shippingMethod: row.shipping_method,
+      shippingPayer: row.shipping_payer,
+      protectionPolicy: {
+        available: true,
+        label: 'Buyer Protection',
+        summary:
+          'Items covered by Thryftverse Buyer Protection. If your item doesn\u2019t arrive or doesn\u2019t match the description, you may be eligible for a refund.',
+      },
+      returnPolicy: {
+        accepted: true,
+        windowDays: 14,
+        conditions: 'Item must be returned in the same condition as received.',
+      },
+      authenticity: {
+        status: 'not_offered' as const,
+      },
     },
   };
 });

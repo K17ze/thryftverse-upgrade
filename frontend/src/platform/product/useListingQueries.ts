@@ -3,7 +3,13 @@ import { queryKeys } from '../server/queryKeys';
 import { fetchRecommendations } from './recommendationService';
 import type { RecommendationSectionKey } from './recommendationTypes';
 import { fetchListingByIdFromApi } from '../../services/listingsApi';
+import type { ListingCommerceServerContext } from '../../services/listingsApi';
 import type { Listing } from '../../data/mockData';
+
+export interface ListingDetailResult {
+  listing: Listing;
+  commerce?: ListingCommerceServerContext;
+}
 
 function mapApiListingToListing(row: any): Listing {
   const price = Number(row.priceGbp ?? 0);
@@ -38,7 +44,10 @@ export function useListingDetail(listingId: string | undefined) {
       if (!res.ok || !res.listing) {
         throw new Error(res.error || 'Listing not found');
       }
-      return mapApiListingToListing(res.listing);
+      return {
+        listing: mapApiListingToListing(res.listing),
+        commerce: res.commerce,
+      } as ListingDetailResult;
     },
     enabled: !!listingId,
     staleTime: 5 * 60 * 1000,
