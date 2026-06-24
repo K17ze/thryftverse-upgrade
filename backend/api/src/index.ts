@@ -14978,6 +14978,433 @@ app.get('/listings/:listingId/related', async (request, reply) => {
   };
 });
 
+// ── Sectioned recommendations ─────────────────────────────────────
+
+const COMPLEMENTARY_CATEGORY_MAP: Record<string, string[]> = {
+  tops: ['bottoms', 'outerwear', 'shoes', 'bags'],
+  bottoms: ['tops', 'shoes', 'bags', 'outerwear'],
+  dresses: ['shoes', 'bags', 'accessories', 'outerwear'],
+  shoes: ['bottoms', 'dresses', 'bags'],
+  bags: ['tops', 'bottoms', 'shoes', 'accessories'],
+  outerwear: ['tops', 'bottoms', 'shoes', 'bags'],
+  accessories: ['tops', 'dresses', 'bags'],
+  jewellery: ['dresses', 'tops', 'bags'],
+};
+
+function getComplementaryCategories(category: string | null): string[] {
+  if (!category) return [];
+  return COMPLEMENTARY_CATEGORY_MAP[category.toLowerCase().trim()] ?? [];
+}
+
+function scoreListing(
+  candidate: {
+    id: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    price_gbp: number | string;
+    seller_id: string;
+    created_at: string;
+  },
+  source: {
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    price_gbp: number | string;
+    seller_id: string;
+  }
+): number {
+  let score = 0;
+  if (candidate.category && source.category && candidate.category === source.category) score += 30;
+  if (candidate.brand && source.brand && candidate.brand.toLowerCase() === source.brand.toLowerCase()) score += 25;
+  if (candidate.size && source.size && candidate.size.toLowerCase() === source.size.toLowerCase()) score += 20;
+  if (candidate.condition && source.condition && candidate.condition.toLowerCase() === source.condition.toLowerCase()) score += 15;
+  const candidatePrice = Number(candidate.price_gbp);
+  const sourcePrice = Number(source.price_gbp);
+  if (sourcePrice > 0) {
+    const priceDiff = Math.abs(candidatePrice - sourcePrice) / sourcePrice;
+    if (priceDiff < 0.2) score += 15;
+    else if (priceDiff < 0.5) score += 8;
+  }
+  const ageDays = (Date.now() - new Date(candidate.created_at).getTime()) / (1000 * 60 * 60 * 24);
+  if (ageDays < 7) score += 5;
+  else if (ageDays < 30) score += 2;
+  return score;
+}
+
+app.get('/listings/:listingId/recommendations', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const querySchema = z.object({
+    sections: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(24).optional().default(8),
+    cursor: z.string().optional(),
+    sessionId: z.string().optional(),
+  });
+  const { listingId } = paramsSchema.parse(request.params);
+  const { sections: sectionsParam, limit, cursor } = querySchema.parse(request.query ?? {});
+
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const sourceResult = await readDb.query<{
+    id: string;
+    seller_id: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    price_gbp: number | string;
+    status: string;
+  }>(
+    `SELECT id, seller_id, category, brand, size, condition, price_gbp, status FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId]
+  );
+
+  const source = sourceResult.rows[0];
+  if (!source) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  const requestedSections = sectionsParam
+    ? (sectionsParam.split(',') as string[])
+    : null;
+
+  type CandidateRow = {
+    id: string;
+    seller_id: string;
+    title: string;
+    description: string;
+    price_gbp: number | string;
+    image_url: string | null;
+    status: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    original_price_gbp: number | string | null;
+    created_at: string;
+    seller_username: string | null;
+  };
+
+  const fetchCandidates = async (whereClause: string, args: unknown[], limitCount: number) => {
+    const result = await readDb.query<CandidateRow>(
+      `
+        SELECT
+          l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+          l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
+          u.username AS seller_username
+        FROM listings l
+        LEFT JOIN users u ON u.id = l.seller_id
+        WHERE ${whereClause}
+        ORDER BY l.created_at DESC
+        LIMIT $${args.length + 1}
+      `,
+      [...args, limitCount]
+    );
+
+    const listingIds = result.rows.map((r) => r.id);
+    const imagesResult = listingIds.length
+      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
+          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
+          [listingIds]
+        )
+      : { rows: [] };
+
+    const imagesByListing = new Map<string, string[]>();
+    for (const img of imagesResult.rows) {
+      const arr = imagesByListing.get(img.listing_id) ?? [];
+      arr.push(img.image_url);
+      imagesByListing.set(img.listing_id, arr);
+    }
+
+    return result.rows.map((row) => ({
+      row,
+      images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+    }));
+  };
+
+  const mapToListingItem = (candidate: { row: CandidateRow; images: string[] }) => ({
+    id: candidate.row.id,
+    sellerId: candidate.row.seller_id,
+    title: candidate.row.title,
+    description: candidate.row.description,
+    priceGbp: Number(candidate.row.price_gbp),
+    imageUrl: candidate.row.image_url,
+    images: candidate.images,
+    status: candidate.row.status,
+    category: candidate.row.category,
+    brand: candidate.row.brand,
+    size: candidate.row.size,
+    condition: candidate.row.condition,
+    originalPriceGbp: candidate.row.original_price_gbp === null ? null : Number(candidate.row.original_price_gbp),
+    createdAt: candidate.row.created_at,
+    seller: candidate.row.seller_username
+      ? {
+          id: candidate.row.seller_id,
+          username: candidate.row.seller_username,
+          avatar: null,
+          rating: null,
+          reviewCount: null,
+          location: null,
+        }
+      : null,
+  });
+
+  const sections: Array<{
+    key: string;
+    title: string;
+    subtitle?: string;
+    reason?: string;
+    personalised: boolean;
+    items: ReturnType<typeof mapToListingItem>[];
+    nextCursor?: string;
+  }> = [];
+
+  const shouldInclude = (key: string) => !requestedSections || requestedSections.includes(key);
+
+  // 1. Similar style
+  if (shouldInclude('similar_style')) {
+    const candidates = await fetchCandidates(
+      `l.id != $1 AND l.status = 'active' AND l.category = $2`,
+      [listingId, source.category ?? ''],
+      limit + 4
+    );
+    const scored = candidates
+      .map((c) => ({ c, score: scoreListing(c.row, source) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((x) => x.c);
+    if (scored.length > 0) {
+      sections.push({
+        key: 'similar_style',
+        title: 'Similar in style',
+        subtitle: source.category ? `More in ${source.category}` : undefined,
+        reason: 'Same category and visual style',
+        personalised: false,
+        items: scored.map(mapToListingItem),
+      });
+    }
+  }
+
+  // 2. Same brand
+  if (shouldInclude('same_brand') && source.brand) {
+    const candidates = await fetchCandidates(
+      `l.id != $1 AND l.status = 'active' AND l.brand ILIKE $2`,
+      [listingId, `%${source.brand}%`],
+      limit
+    );
+    if (candidates.length > 0) {
+      sections.push({
+        key: 'same_brand',
+        title: `More from ${source.brand}`,
+        reason: 'Same brand',
+        personalised: false,
+        items: candidates.map(mapToListingItem),
+      });
+    }
+  }
+
+  // 3. Same size and condition
+  if (shouldInclude('same_size_condition') && source.size && source.condition) {
+    const candidates = await fetchCandidates(
+      `l.id != $1 AND l.status = 'active' AND l.size ILIKE $2 AND l.condition ILIKE $3`,
+      [listingId, `%${source.size}%`, `%${source.condition}%`],
+      limit
+    );
+    if (candidates.length > 0) {
+      sections.push({
+        key: 'same_size_condition',
+        title: 'Your size and condition',
+        subtitle: `Size ${source.size} · ${source.condition}`,
+        reason: 'Same size and condition',
+        personalised: false,
+        items: candidates.map(mapToListingItem),
+      });
+    }
+  }
+
+  // 4. Better price
+  if (shouldInclude('better_price')) {
+    const sourcePrice = Number(source.price_gbp);
+    if (sourcePrice > 0) {
+      const candidates = await fetchCandidates(
+        `l.id != $1 AND l.status = 'active' AND l.category = $2 AND l.price_gbp < $3`,
+        [listingId, source.category ?? '', sourcePrice],
+        limit
+      );
+      if (candidates.length > 0) {
+        sections.push({
+          key: 'better_price',
+          title: 'Better price alternatives',
+          subtitle: 'Similar items for less',
+          reason: 'Lower price alternatives',
+          personalised: false,
+          items: candidates.map(mapToListingItem),
+        });
+      }
+    }
+  }
+
+  // 5. More from seller
+  if (shouldInclude('more_from_seller')) {
+    const candidates = await fetchCandidates(
+      `l.id != $1 AND l.status = 'active' AND l.seller_id = $2`,
+      [listingId, source.seller_id],
+      limit
+    );
+    if (candidates.length > 0) {
+      sections.push({
+        key: 'more_from_seller',
+        title: 'More from this seller',
+        subtitle: 'Bundle and save on shipping',
+        reason: 'From the same seller',
+        personalised: false,
+        items: candidates.map(mapToListingItem),
+      });
+    }
+  }
+
+  // 6. Complete the look (complementary categories)
+  if (shouldInclude('complete_the_look')) {
+    const complementaryCats = getComplementaryCategories(source.category);
+    if (complementaryCats.length > 0) {
+      const placeholders = complementaryCats.map((_, i) => `$${i + 2}`).join(', ');
+      const candidates = await fetchCandidates(
+        `l.id != $1 AND l.status = 'active' AND l.category IN (${placeholders})`,
+        [listingId, ...complementaryCats],
+        limit
+      );
+      if (candidates.length > 0) {
+        sections.push({
+          key: 'complete_the_look',
+          title: 'Complete the look',
+          subtitle: 'Pieces that go well together',
+          reason: 'Complementary categories',
+          personalised: false,
+          items: candidates.map(mapToListingItem),
+        });
+      }
+    }
+  }
+
+  // 7. Seen in looks
+  if (shouldInclude('seen_in_looks')) {
+    const looksResult = await readDb.query<{
+      look_id: string;
+      look_title: string;
+      media_url: string;
+      creator_id: string;
+      creator_username: string | null;
+    }>(
+      `
+        SELECT lt.look_id, l.title AS look_title, l.media_url, l.creator_id, u.username AS creator_username
+        FROM look_tags lt
+        JOIN looks l ON l.id = lt.look_id
+        LEFT JOIN users u ON u.id = l.creator_id
+        WHERE lt.listing_id = $1 AND l.status = 'published'
+        LIMIT 12
+      `,
+      [listingId]
+    );
+    if (looksResult.rows.length > 0) {
+      const lookItems = looksResult.rows.map((row) => ({
+        id: row.look_id,
+        sellerId: row.creator_id,
+        title: row.look_title,
+        description: '',
+        priceGbp: 0,
+        imageUrl: row.media_url,
+        images: [row.media_url],
+        status: 'active',
+        category: null,
+        brand: null,
+        size: null,
+        condition: null,
+        originalPriceGbp: null,
+        createdAt: '',
+        seller: row.creator_username
+          ? { id: row.creator_id, username: row.creator_username, avatar: null, rating: null, reviewCount: null, location: null }
+          : null,
+      }));
+      sections.push({
+        key: 'seen_in_looks',
+        title: 'Seen in Looks',
+        subtitle: 'Styled by the community',
+        reason: 'Tagged in community Looks',
+        personalised: false,
+        items: lookItems,
+      });
+    }
+  }
+
+  // 8. Inspired by saves (personalised)
+  if (shouldInclude('inspired_by_saves') && viewerUserId) {
+    const savesResult = await readDb.query<{ listing_id: string }>(
+      `SELECT listing_id FROM interactions WHERE user_id = $1 AND action = 'wishlist' ORDER BY created_at DESC LIMIT 20`,
+      [viewerUserId]
+    );
+    if (savesResult.rows.length > 0) {
+      const savedListingIds = savesResult.rows.map((r) => r.listing_id);
+      const savedListingsResult = await readDb.query<{ category: string | null; brand: string | null }>(
+        `SELECT category, brand FROM listings WHERE id = ANY($1)`,
+        [savedListingIds]
+      );
+      const savedCategories = new Set(savedListingsResult.rows.map((r) => r.category).filter(Boolean) as string[]);
+      const savedBrands = new Set(savedListingsResult.rows.map((r) => r.brand).filter(Boolean) as string[]);
+
+      if (savedCategories.size > 0 || savedBrands.size > 0) {
+        const catPlaceholders = Array.from(savedCategories).map((_, i) => `$${i + 2}`).join(', ');
+        const catArgs = [listingId, ...Array.from(savedCategories)];
+        const candidates = await fetchCandidates(
+          `l.id != $1 AND l.status = 'active' AND l.category IN (${catPlaceholders})`,
+          catArgs,
+          limit
+        );
+        if (candidates.length > 0) {
+          sections.push({
+            key: 'inspired_by_saves',
+            title: 'Inspired by your saves',
+            subtitle: 'Based on items you\u2019ve saved',
+            reason: 'Based on your saves',
+            personalised: true,
+            items: candidates.map(mapToListingItem),
+          });
+        }
+      }
+    }
+  }
+
+  // 9. Continue exploring
+  if (shouldInclude('continue_exploring')) {
+    const offset = cursor ? parseInt(cursor, 10) || 0 : 0;
+    const candidates = await fetchCandidates(
+      `l.id != $1 AND l.status = 'active'`,
+      [listingId],
+      limit + 1
+    );
+    const sliced = candidates.slice(offset, offset + limit);
+    const hasMore = offset + limit < candidates.length;
+    if (sliced.length > 0) {
+      sections.push({
+        key: 'continue_exploring',
+        title: 'Explore more',
+        subtitle: 'Keep discovering',
+        reason: 'Recently viewed and trending',
+        personalised: false,
+        items: sliced.map(mapToListingItem),
+        nextCursor: hasMore ? String(offset + limit) : undefined,
+      });
+    }
+  }
+
+  return {
+    listingId,
+    sections,
+  };
+});
+
 app.patch('/listings/:listingId', async (request, reply) => {
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const { listingId } = paramsSchema.parse(request.params);

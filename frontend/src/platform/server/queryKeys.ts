@@ -9,6 +9,8 @@ export const queryKeys = {
     detail: (id: string) => ['listing', 'detail', id] as const,
     search: (query: string) => ['listing', 'search', query] as const,
     category: (category: string) => ['listing', 'category', category] as const,
+    recommendations: (id: string, sections?: string[]) =>
+      ['listing', 'recommendations', id, sections ?? 'all'] as const,
   },
   auction: {
     detail: (id: string) => ['auction', 'detail', id] as const,
