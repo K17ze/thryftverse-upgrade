@@ -1,6 +1,7 @@
-import React from 'react';
-import { StyleSheet, View, Text, Pressable } from 'react-native';
+import React, { useEffect } from 'react';
+import { BackHandler, StyleSheet, View, Text, Pressable } from 'react-native';
 import { BottomSheet as ExpoBottomSheet, type SnapPoint } from '@expo/ui';
+import { ExpoUIHost } from './ExpoUIHost';
 
 export interface NativeSheetProps {
   visible: boolean;
@@ -19,6 +20,15 @@ export function NativeSheet({
   showDragIndicator = true,
   testID,
 }: NativeSheetProps) {
+  useEffect(() => {
+    if (!visible) return;
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      onDismiss();
+      return true;
+    });
+    return () => handler.remove();
+  }, [visible, onDismiss]);
+
   return (
     <ExpoBottomSheet
       isPresented={visible}
@@ -27,7 +37,15 @@ export function NativeSheet({
       showDragIndicator={showDragIndicator}
       testID={testID}
     >
-      {children}
+      <ExpoUIHost style={styles.host}>
+        {children}
+      </ExpoUIHost>
     </ExpoBottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  host: {
+    flex: 1,
+  },
+});

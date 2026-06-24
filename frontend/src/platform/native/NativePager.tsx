@@ -1,9 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, Pressable, ScrollView, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../theme/designTokens';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export interface NativePagerPage {
   key: string;
@@ -26,16 +24,17 @@ export function NativePager({
   tabBarStyle = 'full',
   testID,
 }: NativePagerProps) {
+  const { width: screenWidth } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({ x: activeIndex * SCREEN_WIDTH, animated: true });
+      scrollRef.current.scrollTo({ x: activeIndex * screenWidth, animated: true });
     }
-  }, [activeIndex]);
+  }, [activeIndex, screenWidth]);
 
   const handleScroll = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    const index = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
     if (index !== activeIndex && index >= 0 && index < pages.length) {
       onIndexChange(index);
     }
@@ -51,6 +50,9 @@ export function NativePager({
               key={page.key}
               style={[styles.tab, isActive && styles.tabActive]}
               onPress={() => onIndexChange(i)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={page.label}
             >
               <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{page.label}</Text>
               {isActive && <View style={styles.tabIndicator} />}
@@ -68,7 +70,7 @@ export function NativePager({
         style={styles.pager}
       >
         {pages.map((page) => (
-          <View key={page.key} style={styles.page}>
+          <View key={page.key} style={[styles.page, { width: screenWidth }]}>
             {page.render()}
           </View>
         ))}
@@ -117,6 +119,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   page: {
-    width: SCREEN_WIDTH,
+    flex: 1,
   },
 });

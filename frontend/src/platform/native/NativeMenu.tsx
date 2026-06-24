@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, Text, Pressable } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View, Text, Pressable, BackHandler } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../theme/designTokens';
 
@@ -18,6 +18,15 @@ export interface NativeMenuProps {
 }
 
 export function NativeMenu({ visible, onDismiss, options, testID }: NativeMenuProps) {
+  useEffect(() => {
+    if (!visible) return;
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      onDismiss();
+      return true;
+    });
+    return () => handler.remove();
+  }, [visible, onDismiss]);
+
   if (!visible) return null;
   return (
     <Pressable style={styles.overlay} onPress={onDismiss} testID={testID}>
