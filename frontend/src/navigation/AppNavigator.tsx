@@ -100,6 +100,7 @@ import EditListingScreen from '../screens/EditListingScreen';
 
 // Explore / Creator screens
 import CreateLookScreen from '../screens/CreateLookScreen';
+import { CreatorStudioScreen } from '../creator';
 import OutfitBuilderScreen from '../screens/OutfitBuilderScreen';
 import CoOwnIssueScreen from '../screens/CoOwnIssueScreen';
 // UI-22R.6B — Experience elevation
@@ -296,6 +297,7 @@ export default function AppNavigator() {
 
       {/* Explore / Creator screens */}
       <Stack.Screen name="CreateLook" component={CreateLookScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreatorStudio" component={CreatorStudioScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" component={OutfitBuilderScreen} options={modalScreenOptions} />
       <Stack.Screen name="CoOwnIssue" component={CoOwnIssueScreen} options={modalScreenOptions} />
       {/* UI-22R.6B — Experience elevation */}
