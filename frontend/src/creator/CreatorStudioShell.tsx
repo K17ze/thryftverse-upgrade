@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
 import { CreatorProvider, useCreator } from './CreatorContext';
@@ -65,6 +65,46 @@ function CreatorStudioInner() {
       navigation.goBack();
     }
   }, [isDirty, navigation]);
+
+  // Keyboard shortcuts (web/tablet)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const isMeta = e.metaKey || e.ctrlKey;
+      if (isMeta && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        if (canUndo) undo();
+      } else if ((isMeta && e.key === 'z' && e.shiftKey) || (isMeta && e.key === 'y')) {
+        e.preventDefault();
+        if (canRedo) redo();
+      } else if (e.key === 'Escape') {
+        if (showPublish) setShowPublish(false);
+        else if (showLayers) setShowLayers(false);
+        else if (showSettings) setShowSettings(false);
+        else if (selectedLayerId) selectLayer(null);
+        else handleBack();
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedLayerId) {
+        e.preventDefault();
+        removeLayer(selectedLayerId);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [canUndo, canRedo, undo, redo, showPublish, showLayers, showSettings, selectedLayerId, selectLayer, removeLayer, handleBack]);
+
+  // Hardware back button — intercept to close sheets first
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (showPublish) { setShowPublish(false); return true; }
+        if (showLayers) { setShowLayers(false); return true; }
+        if (showSettings) { setShowSettings(false); return true; }
+        if (pickerMode) { setPickerMode(null); return true; }
+        if (selectedLayerId) { selectLayer(null); return true; }
+        return false;
+      };
+      return onBackPress;
+    }, [showPublish, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
+  );
 
   const handleCanvasPress = useCallback(() => {
     selectLayer(null);
