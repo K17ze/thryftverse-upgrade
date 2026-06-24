@@ -1,18 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
-  Dimensions,
-  Pressable,
+  ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedScrollHandler,
   useSharedValue,
-  useAnimatedStyle,
   withSpring,
   withTiming,
   withSequence,
@@ -31,27 +27,53 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Motion } from '../constants/motion';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
-import { AppButton } from '../components/ui/AppButton';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
-import { SharedTransitionView } from '../components/SharedTransitionView';
-import { CachedImage } from '../components/CachedImage';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { FlagshipEmptyGraphic } from '../components/flagship';
-import { ListingMediaHero } from '../components/listing/ListingMediaHero';
-import { ListingIdentityBlock } from '../components/listing/ListingIdentityBlock';
-import { ListingSellerRow } from '../components/listing/ListingSellerRow';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 
-const { width, height } = Dimensions.get('window');
+import {
+  ProductMediaGallery,
+  ProductDetailHeader,
+  ProductIdentitySummary,
+  ProductAttributeChips,
+  ProductDescription,
+  ProductCommerceSummary,
+  SellerTrustCard,
+  RecommendationRail,
+  SeenInLooksRail,
+  DiscoveryGrid,
+  ProductActionBar,
+  ProductDetailSkeleton,
+  ProductErrorState,
+  FullscreenMediaViewer,
+} from '../components/product';
+
+import {
+  useListingDetail,
+  useRecommendations,
+  useContinueExploring,
+  ProductAnalytics,
+  setProductAnalyticsHandler,
+  setProductSessionId,
+  buildCommerceContext,
+  buildSellerTrustSummary,
+  buildCapabilities,
+} from '../platform/product';
+
+import { useWindowDimensions } from 'react-native';
 
 export default function ItemDetailScreen() {
   const { isDark } = useAppTheme();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
+  const [fullscreenIndex, setFullscreenIndex] = useState(0);
+  const [fullscreenVisible, setFullscreenVisible] = useState(false);
+
   const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
   const isFav = useStore((state) => state.isWishlisted(route.params?.itemId));
   const toggleFav = useStore((state) => state.toggleWishlist);
@@ -59,38 +81,111 @@ export default function ItemDetailScreen() {
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
 
   const { itemId } = route.params || {};
-  const item = listings.find((l) => l.id === itemId);
-  const resolvedSeller = item?.seller ?? undefined;
-  const sellerItems = item ? listings.filter((l) => l.sellerId === item.sellerId && l.id !== item.id) : [];
 
-  const [relatedListings, setRelatedListings] = React.useState<Listing[]>([]);
-  const [relatedLoading, setRelatedLoading] = React.useState(false);
-  const [descExpanded, setDescExpanded] = useState(false);
+  const {
+    data: queryListing,
+    isLoading: queryLoading,
+    isError: queryError,
+    refetch: refetchListing,
+  } = useListingDetail(itemId);
 
-  React.useEffect(() => {
-    if (!itemId) return;
-    let cancelled = false;
-    setRelatedLoading(true);
-    import('../services/listingsApi').then(({ fetchRelatedListings }) =>
-      fetchRelatedListings(itemId)
-        .then((res) => {
-          if (!cancelled && res.ok && res.items) setRelatedListings(res.items);
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (!cancelled) setRelatedLoading(false);
-        })
-    );
-    return () => {
-      cancelled = true;
-    };
+  const {
+    data: recommendationsData,
+    isLoading: recsLoading,
+    isError: recsError,
+  } = useRecommendations(itemId);
+
+  const {
+    data: exploreData,
+    fetchNextPage: exploreNextPage,
+    hasNextPage: exploreHasNextPage,
+    isFetchingNextPage: exploreFetching,
+  } = useContinueExploring(itemId);
+
+  const item = queryListing ?? listings.find((l) => l.id === itemId) ?? null;
+
+  useEffect(() => {
+    setProductAnalyticsHandler((event) => {
+      // Analytics dispatched via existing infrastructure
+    });
+    const session = `item_${itemId}_${Date.now()}`;
+    setProductSessionId(session);
   }, [itemId]);
 
+  useEffect(() => {
+    if (item) {
+      ProductAnalytics.itemView(item.id);
+    }
+  }, [item?.id]);
+
   const { formatFromFiat } = useFormattedPrice();
+  const { show } = useToast();
+  const haptic = useHaptic();
+
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
+
+  const bigHeartScale = useSharedValue(0);
+  const bigHeartOpacity = useSharedValue(0);
+
+  const handleDoubleTap = () => {
+    haptic.heavy();
+    if (item && !isFav) {
+      toggleFav(item.id);
+      show('Added to wishlist', 'success');
+    }
+    bigHeartOpacity.value = 1;
+    bigHeartScale.value = withSequence(
+      withSpring(1.5, Motion.spring.flagshipPop),
+      withTiming(1.5, { duration: 400 }),
+      withTiming(0, { duration: 200 })
+    );
+  };
+
+  const handleToggleFav = () => {
+    if (!item) return;
+    toggleFav(item.id);
+    ProductAnalytics.itemSave(item.id);
+    if (!isFav) {
+      show('Added to wishlist', 'success');
+    }
+  };
+
+  const handleShare = () => {
+    setShareVisible(true);
+    if (item) ProductAnalytics.itemShare(item.id);
+  };
+
+  const handleOpenFullscreen = (index: number) => {
+    setFullscreenIndex(index);
+    setFullscreenVisible(true);
+    if (item) ProductAnalytics.mediaZoom(item.id);
+  };
+
+  if (queryLoading && !item) {
+    return (
+      <View style={styles.container}>
+        <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <ProductDetailSkeleton />
+      </View>
+    );
+  }
+
+  if (queryError && !item) {
+    return (
+      <View style={styles.container}>
+        <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <ProductErrorState onRetry={() => refetchListing()} />
+      </View>
+    );
+  }
 
   if (!item) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.xl }]}>
+        <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
         <FlagshipEmptyGraphic variant="box" size={140} />
         <Text style={{ marginTop: Space.md, fontSize: 16, fontFamily: Typography.family.medium, color: Colors.textSecondary, textAlign: 'center' }}>
           Item not found
@@ -109,142 +204,116 @@ export default function ItemDetailScreen() {
     );
   }
 
-  const { show } = useToast();
-  const haptic = useHaptic();
-
-  const handleToggleFav = () => {
-    toggleFav(item.id);
-    if (!isFav) {
-      show('Added to wishlist ♥', 'success');
-    }
-  };
-
-  const handleShare = () => {
-    setShareVisible(true);
-  };
-
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollY.value = event.contentOffset.y;
-  });
-
-  const bigHeartScale = useSharedValue(0);
-  const bigHeartOpacity = useSharedValue(0);
-
-  const handleDoubleTap = () => {
-    haptic.heavy();
-    if (!isFav) {
-      toggleFav(item.id);
-      show('Added to wishlist ♥', 'success');
-    }
-    bigHeartOpacity.value = 1;
-    bigHeartScale.value = withSequence(
-      withSpring(1.5, Motion.spring.flagshipPop),
-      withTiming(1.5, { duration: 400 }),
-      withTiming(0, { duration: 200 })
-    );
-  };
-
-  const isOwner = currentUser?.id && item.sellerId === currentUser.id;
   const hasDiscount = item.originalPrice !== undefined && item.originalPrice > item.price;
   const formattedPrice = formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' });
   const formattedOriginal = hasDiscount
     ? formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })
     : null;
+  const formattedProtectionTotal = formatFromFiat(item.priceWithProtection, 'GBP', { displayMode: 'fiat' });
 
-  const specs: { label: string; value: string }[] = [];
-  if (item.size) specs.push({ label: 'Size', value: item.size });
-  if (item.condition) specs.push({ label: 'Condition', value: item.condition });
-  if (item.category) specs.push({ label: 'Category', value: item.category });
-  if (item.brand) specs.push({ label: 'Brand', value: item.brand });
+  const capabilities = buildCapabilities(item, currentUser?.id);
+  const commerce = buildCommerceContext(item);
+  const seller = buildSellerTrustSummary(item.seller);
 
-  const descriptionIsLong = item.description && item.description.length > 180;
-  const displayDesc = descExpanded || !descriptionIsLong
-    ? item.description
-    : item.description.slice(0, 180) + '…';
+  const recommendationSections = recommendationsData?.sections ?? [];
+  const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
+  const railSections = recommendationSections.filter(
+    (s) => s.key !== 'seen_in_looks' && s.key !== 'continue_exploring'
+  );
+
+  const exploreItems: Listing[] = useMemo(() => {
+    const allPages = exploreData?.pages ?? [];
+    const items: Listing[] = [];
+    for (const page of allPages) {
+      const section = page.sections.find((s) => s.key === 'continue_exploring');
+      if (section) items.push(...section.items);
+    }
+    return items;
+  }, [exploreData]);
+
+  const heroHeight = Math.min(screenHeight * 0.62, screenWidth * 1.35);
+
+  const handlePressRecommendation = (recItem: Listing) => {
+    navigation.push('ItemDetail', { itemId: recItem.id });
+  };
+
+  const handlePressLook = (lookItem: Listing) => {
+    if (lookItem.price === 0) {
+      navigation.navigate('LookDetail', { lookId: lookItem.id });
+    } else {
+      navigation.push('ItemDetail', { itemId: lookItem.id });
+    }
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* ── 1. EDGE-TO-EDGE MEDIA HERO ── */}
+      <ProductDetailHeader
+        brand={item.brand}
+        title={item.title}
+        price={formattedPrice}
+        scrollY={scrollY}
+        heroHeight={heroHeight}
+        onBack={() => navigation.goBack()}
+        onShare={handleShare}
+        isFav={isFav}
+        onToggleFav={handleToggleFav}
+      />
+
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 100 }}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
-        <ListingMediaHero
+        <ProductMediaGallery
           images={item.images}
           itemId={item.id}
           isFav={isFav}
           isSaved={isItemSavedAnywhere(item.id)}
           isSold={!!item.isSold}
           topInset={insets.top}
+          scrollY={scrollY}
           onBack={() => navigation.goBack()}
           onShare={() => { haptic.light(); handleShare(); }}
           onSave={() => { haptic.medium(); setCollectionModalVisible(true); }}
           onToggleFav={handleToggleFav}
           onDoubleTap={handleDoubleTap}
+          onZoomStart={() => { if (item) ProductAnalytics.mediaZoom(item.id); }}
+          onOpenFullscreen={handleOpenFullscreen}
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
-          scrollY={scrollY}
         />
 
         <Reanimated.View entering={FadeInDown.duration(350).delay(80)}>
-          {/* ── 2. PRODUCT IDENTITY AND PRICE ── */}
-          <ListingIdentityBlock
+          <ProductIdentitySummary
             brand={item.brand}
             title={item.title}
             price={formattedPrice}
             originalPrice={formattedOriginal}
             hasDiscount={hasDiscount}
+            protectionTotal={formattedProtectionTotal}
           />
 
-          {/* ── 3. ONE-LINE PURCHASE CONTEXT ── */}
-          <View style={styles.purchaseContextRow}>
-            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.purchaseContextText}>
-              Payment and delivery options are confirmed at checkout.
-            </Text>
-          </View>
+          <ProductAttributeChips
+            size={item.size}
+            condition={item.condition}
+            category={item.category}
+          />
 
-          {/* ── 4. ESSENTIAL SPECIFICATIONS ── */}
-          {specs.length > 0 && (
-            <View style={styles.specsSection}>
-              {specs.map((spec, i) => (
-                <View
-                  key={spec.label}
-                  style={[styles.specRow, i < specs.length - 1 && styles.specRowBorder]}
-                >
-                  <Text style={styles.specLabel}>{spec.label}</Text>
-                  <Text style={styles.specValue}>{spec.value}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          <ProductDescription description={item.description} />
 
-          {/* ── 5. DESCRIPTION AND CONDITION ── */}
-          {item.description ? (
-            <View style={styles.descriptionSection}>
-              <Text style={styles.sectionHeading}>Description</Text>
-              <Text style={styles.descriptionText}>
-                {displayDesc}
-              </Text>
-              {descriptionIsLong && (
-                <Pressable onPress={() => setDescExpanded((v) => !v)} hitSlop={8}>
-                  <Text style={styles.showMoreText}>
-                    {descExpanded ? 'Show less' : 'Show more'}
-                  </Text>
-                </Pressable>
-              )}
-              {item.createdAt ? (
-                <Text style={styles.postedDate}>Posted {item.createdAt}</Text>
-              ) : null}
-            </View>
+          {item.createdAt ? (
+            <Text style={styles.postedDate}>Posted {item.createdAt}</Text>
           ) : null}
 
-          {/* Sync retry */}
+          <ProductCommerceSummary
+            commerce={commerce}
+            formattedPrice={formattedPrice}
+            formattedProtectionTotal={formattedProtectionTotal}
+          />
+
           {lastError ? (
             <SyncRetryBanner
               message="Pull latest listing changes now."
@@ -255,160 +324,95 @@ export default function ItemDetailScreen() {
             />
           ) : null}
 
-          {/* ── 6. SELLER IDENTITY ROW ── */}
-          <View style={styles.sellerSection}>
-            <ListingSellerRow
-              seller={resolvedSeller}
-              sellerId={item.sellerId}
-              onProfilePress={() => navigation.navigate('UserProfile', { userId: resolvedSeller!.id })}
+          {seller && (
+            <SellerTrustCard
+              seller={seller}
+              onOpenProfile={() => {
+                if (item) ProductAnalytics.sellerProfileOpen(item.id, seller.id);
+                navigation.navigate('UserProfile', { userId: seller.id });
+              }}
               onMessage={() => {
-                if (!resolvedSeller?.id) return;
+                if (item) ProductAnalytics.sellerMessageStart(item.id);
                 navigation.navigate('NewMessage', {
-                  preselectedUserId: resolvedSeller.id,
-                  preselectedDisplayName: resolvedSeller.username,
+                  preselectedUserId: seller.id,
+                  preselectedDisplayName: seller.username,
                 });
               }}
             />
-          </View>
-
-          {/* ── 7. DELIVERY AND PAYMENT ROWS ── */}
-          <View style={styles.deliverySection}>
-            <View style={styles.deliveryRow}>
-              <Text style={styles.deliveryLabel}>Delivery</Text>
-              <Text style={styles.deliveryValue}>Confirmed at checkout</Text>
-            </View>
-            <View style={[styles.deliveryRow, styles.deliveryRowLast]}>
-              <Text style={styles.deliveryLabel}>Payment</Text>
-              <Text style={styles.deliveryValue}>Through ThryftVerse checkout</Text>
-            </View>
-          </View>
-
-          {/* ── 8. MORE FROM SELLER ── */}
-          {sellerItems.length > 0 && resolvedSeller && (
-            <View style={styles.railSection}>
-              <DiscoverySectionHeader
-                kicker="From the closet"
-                title={`More from @${resolvedSeller.username || 'Seller'}`}
-                actionLabel="See all"
-                onAction={() => navigation.navigate('UserProfile', { userId: resolvedSeller.id })}
-              />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent}>
-                {sellerItems.map((sItem) => (
-                  <AnimatedPressable
-                    key={sItem.id}
-                    style={styles.railCard}
-                    onPress={() => navigation.push('ItemDetail', { itemId: sItem.id })}
-                  >
-                    <SharedTransitionView
-                      style={styles.railImageWrap}
-                      sharedTransitionTag={`image-${sItem.id}-0`}
-                    >
-                      <CachedImage
-                        uri={sItem.images?.[0] ?? ''}
-                        style={styles.railImage}
-                        containerStyle={{ width: '100%', height: '100%', borderRadius: 8 }}
-                        contentFit="cover"
-                      />
-                    </SharedTransitionView>
-                    {sItem.brand ? (
-                      <Text style={styles.railBrand} numberOfLines={1}>{sItem.brand}</Text>
-                    ) : null}
-                    <Text style={styles.railPrice}>
-                      {formatFromFiat(sItem.price, 'GBP', { displayMode: 'fiat' })}
-                    </Text>
-                  </AnimatedPressable>
-                ))}
-              </ScrollView>
-            </View>
           )}
 
-          {/* ── 9. RELATED ITEMS ── */}
-          {relatedListings.length > 0 && (
-            <View style={styles.railSection}>
-              <DiscoverySectionHeader
-                kicker="You might like"
-                title="Related items"
+          {seenInLooksSection && seenInLooksSection.items.length > 0 && (
+            <SeenInLooksRail
+              items={seenInLooksSection.items}
+              onPressItem={handlePressLook}
+            />
+          )}
+
+          {recsLoading && recommendationSections.length === 0 ? (
+            <View style={styles.railLoading}>
+              <ActivityIndicator size="small" color={Colors.textMuted} />
+              <Text style={styles.railLoadingText}>Finding recommendations...</Text>
+            </View>
+          ) : (
+            railSections.map((section) => (
+              <RecommendationRail
+                key={section.key}
+                section={section}
+                listingId={item.id}
+                onPressItem={handlePressRecommendation}
               />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent}>
-                {relatedListings.map((rItem) => (
-                  <AnimatedPressable
-                    key={rItem.id}
-                    style={styles.railCard}
-                    onPress={() => navigation.push('ItemDetail', { itemId: rItem.id })}
-                  >
-                    <SharedTransitionView
-                      style={styles.railImageWrap}
-                      sharedTransitionTag={`image-${rItem.id}-0`}
-                    >
-                      <CachedImage
-                        uri={rItem.images?.[0] ?? ''}
-                        style={styles.railImage}
-                        containerStyle={{ width: '100%', height: '100%', borderRadius: 8 }}
-                        contentFit="cover"
-                      />
-                    </SharedTransitionView>
-                    {rItem.brand ? (
-                      <Text style={styles.railBrand} numberOfLines={1}>{rItem.brand}</Text>
-                    ) : null}
-                    <Text style={styles.railPrice}>
-                      {formatFromFiat(rItem.price, 'GBP', { displayMode: 'fiat' })}
-                    </Text>
-                  </AnimatedPressable>
-                ))}
-              </ScrollView>
+            ))
+          )}
+
+          {exploreItems.length > 0 && (
+            <DiscoveryGrid
+              items={exploreItems}
+              listingId={item.id}
+              onPressItem={handlePressRecommendation}
+              onEndReached={() => exploreNextPage()}
+              hasMore={!!exploreHasNextPage && !exploreFetching}
+            />
+          )}
+
+          {recsError && recommendationSections.length === 0 && (
+            <View style={styles.recErrorRow}>
+              <Text style={styles.recErrorText}>
+                Recommendations are temporarily unavailable.
+              </Text>
             </View>
           )}
         </Reanimated.View>
       </Reanimated.ScrollView>
 
-      {/* ── 10. PERSISTENT COMMERCE ACTION BAR ── */}
-      <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {item.isSold ? (
-          <Text style={styles.soldStatus}>This item has been sold</Text>
-        ) : isOwner ? (
-          <View style={styles.actionRow}>
-            <AppButton
-              style={styles.actionBtn}
-              variant="secondary"
-              size="lg"
-              title="Edit listing"
-              icon={<Ionicons name="create-outline" size={14} color={Colors.textPrimary} />}
-              onPress={() => navigation.navigate('EditListing', { itemId: item.id })}
-              accessibilityLabel={`Edit ${item.title}`}
-            />
-            <AppButton
-              style={styles.actionBtn}
-              variant="primary"
-              size="lg"
-              title="Manage"
-              icon={<Ionicons name="settings-outline" size={14} color={Colors.background} />}
-              onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
-              accessibilityLabel={`Manage ${item.title}`}
-            />
-          </View>
-        ) : (
-          <View style={styles.actionRow}>
-            <AppButton
-              style={styles.actionBtn}
-              variant="secondary"
-              size="lg"
-              title="Make offer"
-              icon={<Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />}
-              onPress={() => navigation.navigate('MakeOffer', { itemId: item.id, price: item.price, title: item.title })}
-              accessibilityLabel={`Make an offer on ${item.title}`}
-            />
-            <AppButton
-              style={styles.actionBtn}
-              variant="primary"
-              size="lg"
-              title="Buy now"
-              icon={<Ionicons name="flash-outline" size={15} color={Colors.background} />}
-              onPress={() => navigation.navigate('Checkout', { itemId: item.id })}
-              accessibilityLabel={`Buy ${item.title} for ${formattedPrice}`}
-            />
-          </View>
-        )}
+      <View style={[styles.actionBarWrap, { paddingBottom: Math.max(insets.bottom, Space.sm) }]}>
+        <ProductActionBar
+          capabilities={capabilities}
+          formattedPrice={formattedPrice}
+          onBuy={() => {
+            if (item) ProductAnalytics.checkoutStart(item.id);
+            navigation.navigate('Checkout', { itemId: item.id });
+          }}
+          onOffer={() => {
+            if (item) ProductAnalytics.offerStart(item.id);
+            navigation.navigate('MakeOffer', { itemId: item.id, price: item.price, title: item.title });
+          }}
+          onMessage={() => {
+            if (item) ProductAnalytics.sellerMessageStart(item.id);
+            navigation.navigate('NewMessage', {
+              preselectedUserId: item.sellerId,
+              preselectedDisplayName: item.seller?.username,
+            });
+          }}
+          onManage={() => navigation.navigate('ManageListing', { itemId: item.id })}
+        />
       </View>
+
+      <FullscreenMediaViewer
+        images={item.images}
+        initialIndex={fullscreenIndex}
+        visible={fullscreenVisible}
+        onClose={() => setFullscreenVisible(false)}
+      />
 
       <SaveToCollectionModal
         visible={collectionModalVisible}
@@ -429,184 +433,46 @@ export default function ItemDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-
-  /* ── purchase context ── */
-  purchaseContextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  purchaseContextText: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-  },
-
-  /* ── specifications ── */
-  specsSection: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-  },
-  specRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-  },
-  specRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  specLabel: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-  },
-  specValue: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-
-  /* ── description ── */
-  descriptionSection: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  sectionHeading: {
-    fontSize: 15,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  descriptionText: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-  },
-  showMoreText: {
-    fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-    marginTop: 6,
-  },
   postedDate: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    marginTop: 10,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
   },
-
-  /* ── sync retry ── */
   syncRetry: {
     marginHorizontal: Space.md,
     marginTop: Space.sm,
   },
-
-  /* ── seller section ── */
-  sellerSection: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    marginTop: Space.sm,
-    paddingVertical: Space.sm,
-  },
-
-  /* ── delivery & payment ── */
-  deliverySection: {
-    paddingHorizontal: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  deliveryRow: {
+  railLoading: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.lg,
   },
-  deliveryRowLast: {
-    borderBottomWidth: 0,
-  },
-  deliveryLabel: {
-    fontSize: 14,
+  railLoadingText: {
+    fontSize: 13,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
   },
-  deliveryValue: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-
-  /* ── related rails ── */
-  railSection: {
-    marginTop: Space.lg,
-  },
-  railContent: {
-    gap: 10,
-    paddingRight: 20,
+  recErrorRow: {
     paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    alignItems: 'center',
   },
-  railCard: {
-    width: 140,
-  },
-  railImageWrap: {
-    width: 140,
-    height: 175,
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  railImage: {
-    width: '100%',
-    height: '100%',
-  },
-  railBrand: {
-    fontSize: 11,
+  recErrorText: {
+    fontSize: 13,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-    marginBottom: 2,
   },
-  railPrice: {
-    fontSize: 14,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-  },
-
-  /* ── action bar ── */
-  actionBar: {
+  actionBarWrap: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
+    backgroundColor: Colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  actionBtn: {
-    flex: 1,
-    borderRadius: 12,
-  },
-  soldStatus: {
-    fontSize: 15,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    paddingVertical: Space.md,
   },
 });

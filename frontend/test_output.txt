@@ -1,0 +1,402 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90mC:/Users/User/Desktop/thryftverse-upgrade-main (1)/thryftverse-upgrade-main/frontend[39m
+
+ [31m❯[39m src/__tests__/visual13b2ProfileFinalPolish.test.ts [2m([22m[2m13 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[32m 59[2mms[22m[39m
+[31m     [31m×[31m 1. MyProfileScreen uses ProfileVisualHeader[39m[32m 14[2mms[22m[39m
+     [32m✓[39m 2. MyProfileScreen does not contain old duplicated legacy hero markers[32m 1[2mms[22m[39m
+     [32m✓[39m 3. MyProfileScreen uses ProfileTabRail[32m 1[2mms[22m[39m
+[31m     [31m×[31m 4. UserProfileScreen uses ProfileVisualHeader[39m[32m 4[2mms[22m[39m
+     [32m✓[39m 5. CollectionDetailScreen has board-style visual layout[32m 1[2mms[22m[39m
+     [32m✓[39m 6. ClosetScreen uses MoodboardCollectionGrid[32m 1[2mms[22m[39m
+[31m     [31m×[31m 7. Looks/Edit/Pulse tabs use coherent visual components[39m[32m 11[2mms[22m[39m
+     [32m✓[39m 8. No fake followers/ratings/reviews in profile screens[32m 12[2mms[22m[39m
+     [32m✓[39m 9. No Unsplash/picsum/placeholder providers[32m 4[2mms[22m[39m
+     [32m✓[39m 10. No gold/yellow/glass colors in new profile components[32m 3[2mms[22m[39m
+     [32m✓[39m 11. ProfileVisualHeader supports hideCover prop[32m 0[2mms[22m[39m
+[31m     [31m×[31m 12. MyProfileScreen tab content is modular (edits/looks/pulse)[39m[32m 5[2mms[22m[39m
+     [32m✓[39m 13. CachedImage renders honest placeholder when uri is empty[32m 1[2mms[22m[39m
+ [31m❯[39m src/__tests__/visual15UiArchitectureFeatureDepth.test.ts [2m([22m[2m18 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[32m 65[2mms[22m[39m
+     [32m✓[39m navigation types include VISUAL-15 routes[32m 3[2mms[22m[39m
+     [32m✓[39m AppNavigator registers VISUAL-15 screens[32m 1[2mms[22m[39m
+[31m     [31m×[31m ConversationInfoScreen exists with user profile actions[39m[32m 22[2mms[22m[39m
+[31m     [31m×[31m MessageRequestsScreen exists with accept/decline actions[39m[32m 11[2mms[22m[39m
+     [32m✓[39m CreateCollectionScreen exists with name, description, privacy[32m 1[2mms[22m[39m
+     [32m✓[39m OrderSupportScreen exists with topic selection and details[32m 1[2mms[22m[39m
+     [32m✓[39m ChatMediaPreviewScreen exists for fullscreen media[32m 1[2mms[22m[39m
+     [32m✓[39m ChatScreen wires ConversationInfo for DMs[32m 1[2mms[22m[39m
+     [32m✓[39m InboxScreen wires MessageRequestsScreen with banner[32m 1[2mms[22m[39m
+     [32m✓[39m ClosetScreen wires CreateCollectionScreen[32m 1[2mms[22m[39m
+     [32m✓[39m OrderDetailScreen wires OrderSupportScreen[32m 3[2mms[22m[39m
+     [32m✓[39m store supports collection isPrivate field[32m 2[2mms[22m[39m
+     [32m✓[39m no fake users/messages in new screens[32m 2[2mms[22m[39m
+[31m     [31m×[31m OrderSupportScreen shows honest support timeline[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m new screens use FlagshipHeader or ScreenHeader[39m[32m 4[2mms[22m[39m
+     [32m✓[39m new screens use AnimatedPressable with haptics[32m 2[2mms[22m[39m
+     [32m✓[39m no hardcoded gold hex in new screens[32m 2[2mms[22m[39m
+     [32m✓[39m all new screens are registered in AppNavigator[32m 1[2mms[22m[39m
+ [31m❯[39m src/__tests__/visual13bProfileClosetSocial.test.ts [2m([22m[2m14 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[32m 62[2mms[22m[39m
+[31m     [31m×[31m 1. MyProfileScreen uses ProfileVisualHeader or ProfileTabRail[39m[32m 15[2mms[22m[39m
+     [32m✓[39m 2. UserProfileScreen uses ProfileVisualHeader or ProfileTabRail[32m 1[2mms[22m[39m
+     [32m✓[39m 3. ClosetScreen uses MoodboardCollectionGrid[32m 1[2mms[22m[39m
+     [32m✓[39m 4. ClosetScreen uses BoardEmptyGraphic for collections empty state[32m 1[2mms[22m[39m
+     [32m✓[39m 5. CollectionDetailScreen uses BoardEmptyGraphic[32m 0[2mms[22m[39m
+[31m     [31m×[31m 6. LooksTab uses LookPreviewCard[39m[32m 13[2mms[22m[39m
+[31m     [31m×[31m 7. EditProfileScreen preserves uploadMedia/updateMyProfile/fetchMyProfile flow[39m[32m 6[2mms[22m[39m
+     [32m✓[39m 8. No fake followers/ratings/reviews in profile screens[32m 3[2mms[22m[39m
+     [32m✓[39m 9. No Unsplash/picsum/placeholder providers in profile/closet screens[32m 10[2mms[22m[39m
+     [32m✓[39m 10. No gold/yellow/glass colors in new profile components[32m 4[2mms[22m[39m
+     [32m✓[39m 11. New visual components exist and are used[32m 2[2mms[22m[39m
+[31m     [31m×[31m 12. No dead unused visual components[39m[32m 4[2mms[22m[39m
+     [32m✓[39m 13. CachedImage renders honest placeholder when uri is empty[32m 1[2mms[22m[39m
+     [32m✓[39m 14. UserProfileScreen has no fake follower counts hardcoded[32m 1[2mms[22m[39m
+ [31m❯[39m src/__tests__/backend17PersistProductFlows.test.ts [2m([22m[2m17 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 48[2mms[22m[39m
+     [32m✓[39m backend has support_tickets migration[32m 3[2mms[22m[39m
+     [32m✓[39m backend has support ticket endpoints[32m 7[2mms[22m[39m
+     [32m✓[39m frontend has supportApi client methods[32m 1[2mms[22m[39m
+     [32m✓[39m OrderSupportScreen calls backend createSupportTicketOnApi[32m 1[2mms[22m[39m
+[31m     [31m×[31m OrderSupportScreen handles backend failure honestly[39m[32m 16[2mms[22m[39m
+     [32m✓[39m OrderDetailScreen loads support tickets from backend API[32m 1[2mms[22m[39m
+     [32m✓[39m backend has collections migration[32m 1[2mms[22m[39m
+     [32m✓[39m backend has collection endpoints[32m 7[2mms[22m[39m
+     [32m✓[39m frontend has collectionsApi client methods[32m 1[2mms[22m[39m
+     [32m✓[39m CreateCollectionScreen calls backend createCollectionOnApi[32m 1[2mms[22m[39m
+     [32m✓[39m ClosetScreen loads collections from backend API[32m 0[2mms[22m[39m
+     [32m✓[39m useStore has backend-aware support ticket actions[32m 1[2mms[22m[39m
+     [32m✓[39m useStore has backend-aware collection actions[32m 1[2mms[22m[39m
+     [32m✓[39m no setTimeout fake success in OrderSupportScreen[32m 0[2mms[22m[39m
+     [32m✓[39m no setTimeout fake success in CreateCollectionScreen[32m 0[2mms[22m[39m
+[31m     [31m×[31m OrderSupportScreen does not show success before backend confirms[39m[32m 3[2mms[22m[39m
+     [32m✓[39m no fake user names or emails in updated screens[32m 2[2mms[22m[39m
+ [31m❯[39m src/__tests__/ui11bCommerceCoOwnTrust.test.ts [2m([22m[2m13 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 72[2mms[22m[39m
+[31m     [31m×[31m OrderDetailScreen uses FlagshipActionCluster and premium timeline[39m[32m 19[2mms[22m[39m
+[31m     [31m×[31m CheckoutScreen uses PremiumActionBar and ElevatedSurface[39m[32m 9[2mms[22m[39m
+     [32m✓[39m MyOrdersScreen uses real backend data and OrderLedgerRow[32m 2[2mms[22m[39m
+     [32m✓[39m CoOwnIssueScreen uses FlagshipEmptyGraphic and FlagshipActionCluster[32m 1[2mms[22m[39m
+     [32m✓[39m co-own screens do not contain fake financial claims[32m 4[2mms[22m[39m
+     [32m✓[39m financial screens do not hardcode balance amounts[32m 2[2mms[22m[39m
+     [32m✓[39m commerce and co-own screens do not use picsum images[32m 8[2mms[22m[39m
+     [32m✓[39m commerce and co-own screens do not use gold or yellow colors[32m 9[2mms[22m[39m
+     [32m✓[39m commerce and co-own screens do not use glass/blur[32m 12[2mms[22m[39m
+     [32m✓[39m financial screens do not nest ElevatedSurface inside list sections[32m 2[2mms[22m[39m
+     [32m✓[39m SuccessScreen uses FlagshipActionCluster and proper border colors[32m 1[2mms[22m[39m
+     [32m✓[39m BalanceHistoryScreen uses ScreenHeader and design tokens[32m 0[2mms[22m[39m
+     [32m✓[39m FlagshipAssetCard uses design system colors only[32m 0[2mms[22m[39m
+ [31m❯[39m src/__tests__/ui11cAuthProfileSettings.test.ts [2m([22m[2m25 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 68[2mms[22m[39m
+     [32m✓[39m AuthLandingScreen does not use external image dependencies[32m 3[2mms[22m[39m
+     [32m✓[39m AuthLandingScreen uses Reanimated FadeIn/FadeInDown/FadeInUp[32m 1[2mms[22m[39m
+     [32m✓[39m LoginScreen uses AppButton and AppInput[32m 1[2mms[22m[39m
+     [32m✓[39m SignUpScreen uses AppButton and AppInput[32m 1[2mms[22m[39m
+     [32m✓[39m ForgotPasswordScreen uses AppButton[32m 1[2mms[22m[39m
+     [32m✓[39m ForgotPasswordScreen uses FadeInDown[32m 0[2mms[22m[39m
+     [32m✓[39m MyProfileScreen imports FlagshipProfileMedia[32m 1[2mms[22m[39m
+     [32m✓[39m UserProfileScreen imports FlagshipProfileMedia[32m 1[2mms[22m[39m
+[31m     [31m×[31m EditProfileScreen imports FlagshipProfileMedia[39m[32m 31[2mms[22m[39m
+[31m     [31m×[31m EditProfileScreen calls persistProfileMediaUri[39m[32m 12[2mms[22m[39m
+     [32m✓[39m SettingsScreen uses SettingsRow[32m 1[2mms[22m[39m
+     [32m✓[39m Settings subpages use FlagshipScreen or FlagshipHeader[32m 2[2mms[22m[39m
+     [32m✓[39m UserProfileScreen does not hardcode follower counts[32m 1[2mms[22m[39m
+     [32m✓[39m MyProfileScreen does not hardcode follower counts[32m 0[2mms[22m[39m
+     [32m✓[39m ActiveSessionsScreen shows honest local-only state[32m 0[2mms[22m[39m
+     [32m✓[39m BlockedUsersScreen does not invent fake blocked users[32m 0[2mms[22m[39m
+     [32m✓[39m TwoFactorSetupScreen does not fake 2FA completion[32m 0[2mms[22m[39m
+     [32m✓[39m ChatSettingsScreen uses honest local state for toggles[32m 0[2mms[22m[39m
+     [32m✓[39m auth and profile screens do not use gold or yellow colors[32m 3[2mms[22m[39m
+     [32m✓[39m auth and profile screens do not use glass/blur[32m 3[2mms[22m[39m
+     [32m✓[39m settings screens do not nest ElevatedSurface inside list sections[32m 1[2mms[22m[39m
+     [32m✓[39m InviteFriendsScreen does not use MOCK_CONTACTS[32m 0[2mms[22m[39m
+     [32m✓[39m AboutScreen uses FadeInDown and design tokens[32m 1[2mms[22m[39m
+     [32m✓[39m ChatSettingsScreen uses FadeInDown[32m 0[2mms[22m[39m
+     [32m✓[39m BlockedUsersScreen uses FlagshipEmptyGraphic[32m 0[2mms[22m[39m
+ [31m❯[39m src/__tests__/visual14ReferenceMatchFinalPolish.test.ts [2m([22m[2m19 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 35[2mms[22m[39m
+[31m     [31m×[31m InboxScreen rows use surface background with border radius and shadow[39m[32m 17[2mms[22m[39m
+     [32m✓[39m InboxScreen list has top padding for card spacing[32m 1[2mms[22m[39m
+     [32m✓[39m MessageBubble has variable border radius for me/them bubbles[32m 1[2mms[22m[39m
+     [32m✓[39m MessageBubble uses brand/surfaceAlt colors for them/me[32m 1[2mms[22m[39m
+     [32m✓[39m MessageBubble uses colour-based separation without shadow[32m 1[2mms[22m[39m
+     [32m✓[39m ChatComposerBar input has border for refined look[32m 0[2mms[22m[39m
+     [32m✓[39m ChatComposerBar send button uses brand colour when active[32m 0[2mms[22m[39m
+     [32m✓[39m WithdrawScreen imports FadeInDown[32m 0[2mms[22m[39m
+     [32m✓[39m WithdrawScreen amount section has entrance animation[32m 0[2mms[22m[39m
+     [32m✓[39m WithdrawScreen bank section has entrance animation[32m 0[2mms[22m[39m
+     [32m✓[39m WithdrawScreen bank card has subtle shadow and border[32m 1[2mms[22m[39m
+     [32m✓[39m no unsplash URLs in production screens[32m 1[2mms[22m[39m
+     [32m✓[39m SettingsScreen uses IdentityCard and SettingsSection/SettingsRow[32m 0[2mms[22m[39m
+[31m     [31m×[31m ProfileVisualHeader component exists and is imported[39m[32m 5[2mms[22m[39m
+     [32m✓[39m ProfileTabRail component exists and is imported[32m 1[2mms[22m[39m
+     [32m✓[39m DiscoverySectionHeader component exists[32m 0[2mms[22m[39m
+     [32m✓[39m EditorialDiscoveryHero component exists[32m 0[2mms[22m[39m
+     [32m✓[39m PressPresets hook exists and is imported[32m 1[2mms[22m[39m
+     [32m✓[39m no hardcoded gold hex in touched screens[32m 1[2mms[22m[39m
+ [31m❯[39m src/__tests__/ui18ReferencePerfectProductUx.test.ts [2m([22m[2m15 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 42[2mms[22m[39m
+[31m     [31m×[31m CollectionDetailScreen has share action and edit navigation[39m[32m 20[2mms[22m[39m
+[31m     [31m×[31m ItemDetailScreen has trust badge[39m[32m 4[2mms[22m[39m
+     [32m✓[39m ItemDetailScreen has upgraded empty state with FlagshipEmptyGraphic[32m 1[2mms[22m[39m
+[31m     [31m×[31m OrderDetailScreen has tappable support card[39m[32m 6[2mms[22m[39m
+     [32m✓[39m InboxScreen has improved request banner[32m 1[2mms[22m[39m
+     [32m✓[39m OrderSupportScreen has visual success state[32m 1[2mms[22m[39m
+     [32m✓[39m ChatMediaPreviewScreen has video support and error handling[32m 0[2mms[22m[39m
+     [32m✓[39m CreateCollectionScreen has backend submit with error handling[32m 1[2mms[22m[39m
+     [32m✓[39m EditCollectionScreen is registered in navigation[32m 1[2mms[22m[39m
+     [32m✓[39m SupportTicketDetailScreen is registered in navigation[32m 1[2mms[22m[39m
+     [32m✓[39m EditCollectionScreen uses ScreenHeader, AppInput, AppButton[32m 1[2mms[22m[39m
+     [32m✓[39m SupportTicketDetailScreen uses PremiumStatusPill, ScreenHeader, FadeInDown[32m 1[2mms[22m[39m
+     [32m✓[39m no fake user data in new screens[32m 1[2mms[22m[39m
+     [32m✓[39m no gold or yellow color regressions in new screens[32m 1[2mms[22m[39m
+     [32m✓[39m supportApi and collectionsApi imports remain in store[32m 1[2mms[22m[39m
+ [31m❯[39m src/__tests__/appWideTruthAndVisualGuardrails.test.ts [2m([22m[2m16 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 134[2mms[22m[39m
+     [32m✓[39m no images.unsplash.com in production screens[32m 12[2mms[22m[39m
+     [32m✓[39m no images.unsplash.com in production components[32m 1[2mms[22m[39m
+     [32m✓[39m no images.unsplash.com in production data files[32m 1[2mms[22m[39m
+     [32m✓[39m no picsum.photos in production screens[32m 12[2mms[22m[39m
+     [32m✓[39m no picsum.photos in production components[32m 1[2mms[22m[39m
+     [32m✓[39m no picsum.photos in production data files[32m 1[2mms[22m[39m
+     [32m✓[39m no placeholder.com in production screens[32m 21[2mms[22m[39m
+     [32m✓[39m no MOCK_USERS in production screens[32m 14[2mms[22m[39m
+     [32m✓[39m no MOCK_CONTACTS in production screens[32m 12[2mms[22m[39m
+     [32m✓[39m no MOCK_LISTINGS in production screens[32m 9[2mms[22m[39m
+[31m     [31m×[31m no gold/yellow hardcoded colors in production screens[39m[32m 21[2mms[22m[39m
+     [32m✓[39m no fake followers text in profile screens[32m 1[2mms[22m[39m
+     [32m✓[39m no fake financial claims in co-own screens[32m 2[2mms[22m[39m
+     [32m✓[39m no loremflickr in production[32m 11[2mms[22m[39m
+     [32m✓[39m AuthLandingScreen has no remote image URLs[32m 0[2mms[22m[39m
+     [32m✓[39m no glass/blur in production screens[32m 13[2mms[22m[39m
+ [31m❯[39m src/__tests__/ui19SellCoownChatContextUx.test.ts [2m([22m[2m18 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 59[2mms[22m[39m
+     [32m✓[39m backend has collection PATCH endpoint[32m 8[2mms[22m[39m
+     [32m✓[39m backend has collection DELETE endpoint[32m 5[2mms[22m[39m
+     [32m✓[39m frontend collectionsApi has updateCollection[32m 1[2mms[22m[39m
+     [32m✓[39m frontend collectionsApi has deleteCollectionOnApi[32m 1[2mms[22m[39m
+     [32m✓[39m useStore has updateCollectionOnApi[32m 1[2mms[22m[39m
+     [32m✓[39m EditCollectionScreen calls updateCollectionOnApi on save[32m 1[2mms[22m[39m
+     [32m✓[39m ListingPreviewScreen is registered in navigation[32m 1[2mms[22m[39m
+[31m     [31m×[31m ListingPreviewScreen uses premium visual primitives[39m[32m 17[2mms[22m[39m
+[31m     [31m×[31m SellScreen has Preview button leading to ListingPreview[39m[32m 9[2mms[22m[39m
+     [32m✓[39m TradeConfirmScreen is registered in navigation[32m 1[2mms[22m[39m
+     [32m✓[39m TradeConfirmScreen uses premium visual primitives[32m 1[2mms[22m[39m
+     [32m✓[39m TradeScreen navigates to TradeConfirm with order summary[32m 1[2mms[22m[39m
+     [32m✓[39m ManageListingScreen has upgraded action cluster[32m 1[2mms[22m[39m
+[31m     [31m×[31m ChatScreen TaggedItemCard has quick action buttons[39m[32m 6[2mms[22m[39m
+     [32m✓[39m CreateAuctionScreen calls createAuction backend API[32m 1[2mms[22m[39m
+     [32m✓[39m CreateAuctionScreen has terms and fees section[32m 1[2mms[22m[39m
+     [32m✓[39m no fake user data in new screens[32m 2[2mms[22m[39m
+     [32m✓[39m no gold or yellow color regressions in new screens[32m 2[2mms[22m[39m
+ [31m❯[39m src/__tests__/visual13aDiscoveryUpgrade.test.ts [2m([22m[2m14 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 34[2mms[22m[39m
+     [32m✓[39m 1. HomeScreen uses new editorial/visual discovery components[32m 3[2mms[22m[39m
+     [32m✓[39m 2. BrowseScreen uses PinterestMasonryGrid[32m 1[2mms[22m[39m
+     [32m✓[39m 3. GlobalSearchScreen uses editorial discovery components[32m 1[2mms[22m[39m
+     [32m✓[39m 4. VisualSearchScreen does not look like a placeholder[32m 1[2mms[22m[39m
+     [32m✓[39m 5. CategoryTreeScreen uses VisualCategoryTile and no fake images[32m 1[2mms[22m[39m
+     [32m✓[39m 6. CategoryDetailScreen uses PinterestMasonryGrid[32m 0[2mms[22m[39m
+[31m     [31m×[31m 7. ProductCardV2 does not regress to heavy card treatment[39m[32m 11[2mms[22m[39m
+     [32m✓[39m 8. No Unsplash/picsum/placeholder providers in discovery screens[32m 4[2mms[22m[39m
+     [32m✓[39m 9. No fake stats (ratings/reviews hardcoded)[32m 2[2mms[22m[39m
+     [32m✓[39m 10. No gold/yellow/glass colors in new components[32m 3[2mms[22m[39m
+     [32m✓[39m 11. New visual components exist and are used[32m 1[2mms[22m[39m
+     [32m✓[39m 12. CachedImage renders honest placeholder when uri is empty[32m 0[2mms[22m[39m
+     [32m✓[39m 13. No dead unused visual components[32m 2[2mms[22m[39m
+     [32m✓[39m 14. Explore tabs feel like real social/visual modules[32m 1[2mms[22m[39m
+ [31m❯[39m src/__tests__/screen-import-smoke.test.ts [2m([22m[2m126 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m7 skipped[39m[2m)[22m[32m 61[2mms[22m[39m
+     [32m✓[39m has a default export[32m 3[2mms[22m[39m
+     [2m[90m↓[39m[22m imports PremiumTextField
+     [2m[90m↓[39m[22m imports PremiumSelectRow
+     [2m[90m↓[39m[22m imports FlagshipStickyFooter
+     [2m[90m↓[39m[22m uses reactive theme (useAppTheme)
+     [32m✓[39m does not use ActiveTheme[32m 1[2mms[22m[39m
+     [32m✓[39m has no hardcoded gold/yellow colors[32m 0[2mms[22m[39m
+     [32m✓[39m has a default export[32m 0[2mms[22m[39m
+     [32m✓[39m imports PremiumTextField[32m 0[2mms[22m[39m
+     [32m✓[39m imports FlagshipScreen and FlagshipFormSection[32m 0[2mms[22m[39m
+     [32m✓[39m has no hardcoded gold/yellow colors[32m 0[2mms[22m[39m
+     [32m✓[39m has a default export[32m 0[2mms[22m[39m
+     [2m[90m↓[39m[22m uses Animated.ScrollView for reanimated scroll handler
+     [2m[90m↓[39m[22m has useAnimatedScrollHandler safety comment
+     [32m✓[39m has auth guard before publish[32m 1[2mms[22m[39m
+     [32m✓[39m does not send sellerId with unknown fallback[32m 0[2mms[22m[39m
+     [32m✓[39m blocks publish if currentUser is missing[32m 0[2mms[22m[39m
+     [32m✓[39m has no hardcoded gold/yellow colors[32m 0[2mms[22m[39m
+     [32m✓[39m has a default export[32m 0[2mms[22m[39m
+     [32m✓[39m does not import MOCK_USERS[32m 0[2mms[22m[39m
+     [32m✓[39m does not import MY_USER[32m 0[2mms[22m[39m
+     [32m✓[39m does not import ActiveTheme[32m 0[2mms[22m[39m
+     [32m✓[39m does not contain fake conversationId[32m 0[2mms[22m[39m
+     [32m✓[39m does not contain fake growth claim[32m 0[2mms[22m[39m
+     [32m✓[39m does not contain fake support chat navigation[32m 0[2mms[22m[39m
+     [32m✓[39m uses reactive theme (useAppTheme)[32m 0[2mms[22m[39m
+     [32m✓[39m has real ItemDetail navigation[32m 0[2mms[22m[39m
+     [32m✓[39m has real ManageListing navigation[32m 0[2mms[22m[39m
+     [32m✓[39m has real HelpSupport navigation[32m 0[2mms[22m[39m
+     [32m✓[39m uses design tokens (Space, Type, Radius)[32m 0[2mms[22m[39m
+     [32m✓[39m has no hardcoded gold/yellow colors[32m 0[2mms[22m[39m
+     [32m✓[39m has a default export[32m 0[2mms[22m[39m
+     [32m✓[39m does not import getFreshPosters mock[32m 0[2mms[22m[39m
+     [2m[90m↓[39m[22m uses real poster API
+     [32m✓[39m has no gold/yellow gradient colors[32m 0[2mms[22m[39m
+     [32m✓[39m has a default export[32m 0[2mms[22m[39m
+     [32m✓[39m does not import MOCK_USERS[32m 0[2mms[22m[39m
+     [32m✓[39m has a default export[32m 0[2mms[22m[39m
+     [32m✓[39m does not import MOCK_USERS[32m 0[2mms[22m[39m
+     [32m✓[39m has a default export[32m 0[2mms[22m[39m
+     [32m✓[39m does not import ActiveTheme[32m 0[2mms[22m[39m
+     [32m✓[39m has a default export[32m 0[2mms[22m[39m
+     [32m✓[39m does not import ActiveTheme[32m 0[2mms[22m[39m
+     [32m✓[39m has a default export[32m 0[2mms[22m[39m
+     [32m✓[39m does not import ActiveTheme[32m 0[2mms[22m[39m
+     [32m✓[39m shows honest unavailable state[32m 0[2mms[22m[39m
+     [32m✓[39m calls backend visual-search endpoint[32m 0[2mms[22m[39m
+     [32m✓[39m has a default export[32m 0[2mms[22m[39m
+     [32m✓[39m does not import ActiveTheme[32m 0[2mms[22m[39m
+     [32m✓[39m uses fetchFilteredListings[32m 0[2mms[22m[39m
+     [32m✓[39m does not show raw seller ID slices[32m 0[2mms[22m[39m
+     [32m✓[39m uses backend seller object[32m 0[2mms[22m[39m
+     [32m✓[39m fetches related listings from backend[32m 0[2mms[22m[39m
+     [32m✓[39m does not contain hardcoded RECENT_SEARCHES array[32m 0[2mms[22m[39m
+     [32m✓[39m uses AsyncStorage for recent searches[32m 0[2mms[22m[39m
+     [32m✓[39m does not claim fake trends[32m 0[2mms[22m[39m
+     [32m✓[39m does not import MOCK_LISTINGS[32m 0[2mms[22m[39m
+     [32m✓[39m does not use mockFind[32m 0[2mms[22m[39m
+     [32m✓[39m does not use picsum fallback[32m 0[2mms[22m[39m
+     [32m✓[39m calls createOrder backend API[32m 0[2mms[22m[39m
+     [32m✓[39m calls createCommercePaymentIntent backend API[32m 0[2mms[22m[39m
+     [32m✓[39m does not import MOCK_LISTINGS or MOCK_USERS[32m 0[2mms[22m[39m
+     [32m✓[39m calls listUserOrders backend API[32m 0[2mms[22m[39m
+     [32m✓[39m does not use mockFind[32m 0[2mms[22m[39m
+     [32m✓[39m does not import MOCK_LISTINGS or MOCK_USERS[32m 0[2mms[22m[39m
+     [32m✓[39m calls getOrder backend API[32m 0[2mms[22m[39m
+     [32m✓[39m does not use picsum fallback[32m 0[2mms[22m[39m
+     [32m✓[39m calls listUserPaymentMethods backend API[32m 0[2mms[22m[39m
+     [32m✓[39m does not hardcode a balance amount[32m 0[2mms[22m[39m
+     [32m✓[39m does not hardcode availableBalance[32m 0[2mms[22m[39m
+     [32m✓[39m does not hardcode availableIzeBalance[32m 0[2mms[22m[39m
+     [32m✓[39m calls getIzePosition backend API[32m 0[2mms[22m[39m
+     [32m✓[39m does not contain fake transaction data[32m 0[2mms[22m[39m
+     [32m✓[39m does not hardcode availableBalance[32m 0[2mms[22m[39m
+     [32m✓[39m calls getWalletSnapshot or listPayoutAccounts backend API[32m 0[2mms[22m[39m
+     [32m✓[39m does not contain fake transaction months[32m 0[2mms[22m[39m
+     [32m✓[39m does not import MOCK_USERS[32m 0[2mms[22m[39m
+     [32m✓[39m PaymentsScreen.tsx imports at least one premium primitive[32m 0[2mms[22m[39m
+     [32m✓[39m PaymentsScreen.tsx has no gold/yellow color literals[32m 0[2mms[22m[39m
+     [32m✓[39m PaymentsScreen.tsx does not import glass/blur components[32m 0[2mms[22m[39m
+     [32m✓[39m BalanceScreen.tsx imports at least one premium primitive[32m 0[2mms[22m[39m
+     [32m✓[39m BalanceScreen.tsx has no gold/yellow color literals[32m 0[2mms[22m[39m
+     [32m✓[39m BalanceScreen.tsx does not import glass/blur components[32m 0[2mms[22m[39m
+     [32m✓[39m PostageScreen.tsx imports at least one premium primitive[32m 0[2mms[22m[39m
+     [32m✓[39m PostageScreen.tsx has no gold/yellow color literals[32m 0[2mms[22m[39m
+     [32m✓[39m PostageScreen.tsx does not import glass/blur components[32m 0[2mms[22m[39m
+     [32m✓[39m SettingsScreen.tsx imports at least one premium primitive[32m 0[2mms[22m[39m
+     [32m✓[39m SettingsScreen.tsx has no gold/yellow color literals[32m 0[2mms[22m[39m
+     [32m✓[39m SettingsScreen.tsx does not import glass/blur components[32m 0[2mms[22m[39m
+     [32m✓[39m AccountSettingsScreen.tsx imports at least one premium primitive[32m 0[2mms[22m[39m
+     [32m✓[39m AccountSettingsScreen.tsx has no gold/yellow color literals[32m 0[2mms[22m[39m
+     [32m✓[39m AccountSettingsScreen.tsx does not import glass/blur components[32m 0[2mms[22m[39m
+     [32m✓[39m MyOrdersScreen.tsx imports at least one premium primitive[32m 0[2mms[22m[39m
+     [32m✓[39m MyOrdersScreen.tsx has no gold/yellow color literals[32m 0[2mms[22m[39m
+     [32m✓[39m MyOrdersScreen.tsx does not import glass/blur components[32m 0[2mms[22m[39m
+     [32m✓[39m ListingSuccessScreen.tsx imports at least one premium primitive[32m 0[2mms[22m[39m
+     [32m✓[39m ListingSuccessScreen.tsx has no gold/yellow color literals[32m 0[2mms[22m[39m
+     [32m✓[39m ListingSuccessScreen.tsx does not import glass/blur components[32m 0[2mms[22m[39m
+     [32m✓[39m PaymentsScreen.tsx does not nest ElevatedSurface inside PremiumListSection[32m 0[2mms[22m[39m
+     [32m✓[39m PaymentsScreen.tsx does not nest ElevatedSurface inside SettingsSection[32m 0[2mms[22m[39m
+     [32m✓[39m PostageScreen.tsx does not nest ElevatedSurface inside PremiumListSection[32m 0[2mms[22m[39m
+     [32m✓[39m PostageScreen.tsx does not nest ElevatedSurface inside SettingsSection[32m 0[2mms[22m[39m
+     [32m✓[39m BalanceScreen.tsx does not nest ElevatedSurface inside PremiumListSection[32m 0[2mms[22m[39m
+     [32m✓[39m BalanceScreen.tsx does not nest ElevatedSurface inside SettingsSection[32m 0[2mms[22m[39m
+     [32m✓[39m AccountSettingsScreen.tsx does not nest ElevatedSurface inside PremiumListSection[32m 0[2mms[22m[39m
+     [32m✓[39m AccountSettingsScreen.tsx does not nest ElevatedSurface inside SettingsSection[32m 0[2mms[22m[39m
+     [32m✓[39m SettingsScreen.tsx does not nest ElevatedSurface inside PremiumListSection[32m 0[2mms[22m[39m
+     [32m✓[39m SettingsScreen.tsx does not nest ElevatedSurface inside SettingsSection[32m 0[2mms[22m[39m
+     [32m✓[39m MyProfileScreen.tsx does not import mock users[32m 0[2mms[22m[39m
+     [32m✓[39m MyProfileScreen.tsx has no fake follower counts[32m 0[2mms[22m[39m
+     [32m✓[39m MyProfileScreen.tsx has no fake rating strings[32m 0[2mms[22m[39m
+     [32m✓[39m MyProfileScreen.tsx does not hardcode gold/yellow[32m 0[2mms[22m[39m
+     [32m✓[39m MyProfileScreen.tsx does not import glass/blur[32m 0[2mms[22m[39m
+     [32m✓[39m UserProfileScreen.tsx does not import mock users[32m 0[2mms[22m[39m
+     [32m✓[39m UserProfileScreen.tsx has no fake follower counts[32m 0[2mms[22m[39m
+     [32m✓[39m UserProfileScreen.tsx has no fake rating strings[32m 0[2mms[22m[39m
+     [32m✓[39m UserProfileScreen.tsx does not hardcode gold/yellow[32m 0[2mms[22m[39m
+     [32m✓[39m UserProfileScreen.tsx does not import glass/blur[32m 0[2mms[22m[39m
+     [32m✓[39m EditProfileScreen.tsx does not import mock users[32m 0[2mms[22m[39m
+     [32m✓[39m EditProfileScreen.tsx has no fake follower counts[32m 0[2mms[22m[39m
+     [32m✓[39m EditProfileScreen.tsx has no fake rating strings[32m 0[2mms[22m[39m
+     [32m✓[39m EditProfileScreen.tsx does not hardcode gold/yellow[32m 0[2mms[22m[39m
+     [32m✓[39m EditProfileScreen.tsx does not import glass/blur[32m 0[2mms[22m[39m
+     [32m✓[39m MyProfileScreen calls backend profile fetch[32m 0[2mms[22m[39m
+[31m     [31m×[31m UserProfileScreen calls backend public profile fetch[39m[32m 29[2mms[22m[39m
+     [32m✓[39m EditProfileScreen calls backend profile update[32m 1[2mms[22m[39m
+ [31m❯[39m src/__tests__/feature16WireArchitecture.test.ts [2m([22m[2m11 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 33[2mms[22m[39m
+     [32m✓[39m useStore has SupportTicket type and real actions[32m 4[2mms[22m[39m
+     [32m✓[39m support tickets are persisted in store partialize[32m 1[2mms[22m[39m
+     [32m✓[39m OrderSupportScreen calls real createSupportTicket store action[32m 1[2mms[22m[39m
+     [32m✓[39m OrderSupportScreen shows success state after real store action[32m 1[2mms[22m[39m
+     [32m✓[39m OrderDetailScreen reads support tickets from store[32m 1[2mms[22m[39m
+[31m     [31m×[31m OrderDetailScreen renders support status card when ticket exists[39m[32m 18[2mms[22m[39m
+     [32m✓[39m ChatMediaPreview handles missing URI[32m 1[2mms[22m[39m
+     [32m✓[39m ChatMediaPreview uses real Video component for video[32m 1[2mms[22m[39m
+     [32m✓[39m ConversationInfoScreen uses real store actions[32m 1[2mms[22m[39m
+     [32m✓[39m MessageRequestsScreen uses real store state and actions[32m 1[2mms[22m[39m
+     [32m✓[39m no fake user names or emails in new screens[32m 3[2mms[22m[39m
+ [31m❯[39m src/__tests__/visual13cMotionInteractionLayer.test.ts [2m([22m[2m34 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 346[2mms[22m[39m
+     [32m✓[39m AnimatedPressable default disableAnimation is false (animations enabled)[32m 3[2mms[22m[39m
+     [32m✓[39m usePremiumPressFeedback hook exists with PressPresets[32m 1[2mms[22m[39m
+     [32m✓[39m AppButton uses press feedback (scaleValue + disableAnimation false)[32m 1[2mms[22m[39m
+     [32m✓[39m ProductCardV2 uses PressPresets.card on image press[32m 0[2mms[22m[39m
+     [32m✓[39m LookPreviewCard uses PressPresets.card[32m 0[2mms[22m[39m
+     [32m✓[39m ClosetBoardCard uses PressPresets.card[32m 0[2mms[22m[39m
+     [32m✓[39m FlagshipOrderCard uses AnimatedPressable + PressPresets[32m 0[2mms[22m[39m
+     [32m✓[39m CachedImage has shimmer loading state[32m 0[2mms[22m[39m
+     [32m✓[39m CachedImage has fade-in animation on load[32m 0[2mms[22m[39m
+     [32m✓[39m CachedImage renders ImageEmptyGraphic when uri is missing[32m 1[2mms[22m[39m
+     [32m✓[39m MasonrySkeleton exists for masonry grid layouts[32m 0[2mms[22m[39m
+     [32m✓[39m BoardSkeleton exists for board card layouts[32m 0[2mms[22m[39m
+     [32m✓[39m OrderRowSkeleton exists for order list layouts[32m 0[2mms[22m[39m
+     [32m✓[39m BrowseScreen uses MasonrySkeleton instead of generic rectangles[32m 0[2mms[22m[39m
+     [32m✓[39m ImageEmptyGraphic exists and is used[32m 0[2mms[22m[39m
+     [32m✓[39m BoardEmptyGraphic exists[32m 0[2mms[22m[39m
+     [32m✓[39m FlagshipEmptyGraphic has multiple variants[32m 0[2mms[22m[39m
+     [32m✓[39m SearchEmptyGraphic exists[32m 0[2mms[22m[39m
+     [32m✓[39m OrdersEmptyGraphic exists[32m 0[2mms[22m[39m
+     [32m✓[39m ProfileTabRail uses animated sliding indicator[32m 0[2mms[22m[39m
+     [32m✓[39m no unsplash URLs in production screens/components/data[32m 80[2mms[22m[39m
+     [32m✓[39m no picsum URLs in production screens/components/data[32m 59[2mms[22m[39m
+     [32m✓[39m no placeholder.com in production screens[32m 19[2mms[22m[39m
+     [32m✓[39m no MOCK_USERS in production screens[32m 22[2mms[22m[39m
+     [32m✓[39m no MOCK_LISTINGS in production screens[32m 28[2mms[22m[39m
+[31m     [31m×[31m no hardcoded gold hex in screens[39m[32m 34[2mms[22m[39m
+     [32m✓[39m no glass/blur regressions in production screens[32m 36[2mms[22m[39m
+     [32m✓[39m motion utilities are actually imported by production components[32m 49[2mms[22m[39m
+     [32m✓[39m BrowseScreen has FadeInDown entrance animations[32m 0[2mms[22m[39m
+     [32m✓[39m ItemDetailScreen has FadeInDown entrance animations[32m 0[2mms[22m[39m
+[31m     [31m×[31m MyOrdersScreen has FadeInDown entrance animations[39m[32m 4[2mms[22m[39m
+     [32m✓[39m ProductCardV2 has haptic on wishlist toggle[32m 0[2mms[22m[39m
+     [32m✓[39m ProfileVisualHeader has haptic on follow and share[32m 0[2mms[22m[39m
+     [32m✓[39m ItemDetailScreen has haptic on share and save[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/flagshipComponentsApplied.test.ts [2m([22m[2m48 tests[22m[2m | [22m[33m9 skipped[39m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m src/__tests__/ui20CoOwnFinancialTruth.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/__tests__/pricingDisplayModes.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m src/__tests__/ui21DeviceAudit.test.ts [2m([22m[2m29 tests[22m[2m | [22m[33m5 skipped[39m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m src/__tests__/profileMediaTruth.test.ts [2m([22m[2m14 tests[22m[2m | [22m[33m5 skipped[39m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/__tests__/ui22MessagingElevation.test.ts [2m([22m[2m28 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/__tests__/animated-scroll-usage.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 211[2mms[22m[39m
+ [32m✓[39m src/__tests__/ui22ClosetElevation.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/__tests__/marketDataFallbacks.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 240[2mms[22m[39m
+ [32m✓[39m src/__tests__/chatRuntimeBehaviour.test.ts [2m([22m[2m49 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m src/__tests__/ui22ExploreElevation.test.ts [2m([22m[2m13 tests[22m[2m | [22m[33m1 skipped[39m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/__tests__/platformCapabilities.test.ts [2m([22m[2m38 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [31m❯[39m src/__tests__/smoke-flows.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/__tests__/checkoutJourney.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m src/__tests__/notificationRouting.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/premium-form-primitives.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/__tests__/settingsPreferences.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/auctionUpgrade.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/__tests__/coOwnTruthRules.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/__tests__/i18n.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/tradeSubmitFlows.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/__tests__/syndicatePrefill.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/currencyAuthoringFlows.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/syncStatus.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/platformRuntime.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 398[2mms[22m[39m
+     [33m[2m✓[22m[39m initSentry with DSN sets initialised flag [33m 383[2mms[22m[39m
+
+[2m Test Files [22m [1m[31m16 failed[39m[22m[2m | [22m[1m[32m23 passed[39m[22m[90m (39)[39m
+[2m      Tests [22m [1m[31m32 failed[39m[22m[2m | [22m[1m[32m684 passed[39m[22m[2m | [22m[33m27 skipped[39m[90m (743)[39m
+[2m   Start at [22m 01:19:57
+[2m   Duration [22m 1.78s[2m (transform 3.87s, setup 1.54s, import 4.35s, tests 2.29s, environment 8ms)[22m
+
