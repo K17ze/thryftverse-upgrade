@@ -15,7 +15,7 @@ export type RootStackParamList = {
   ItemDetail: { itemId: string };
   Closet: undefined;
   PosterViewer: { storyId: string; startFrameIndex?: number };
-  CreatePoster: undefined;
+  CreatePoster: { mode?: 'poster' | 'look' } | undefined;
   PosterStoryActivity: { storyId: string };
   PosterArchive: undefined;
   PosterHighlightEditor: { highlightId?: string };
@@ -155,6 +155,9 @@ export type RootStackParamList = {
   BlockedUsers: undefined;
   PrivacySettings: undefined;
   About: undefined;
+  MutedConversations: undefined;
+  ArchivedConversations: undefined;
+  ManageQuickReplies: { role: 'seller' | 'buyer' };
   // VISUAL-15 — UI Architecture + Feature Depth
   ConversationInfo: { conversationId: string };
   MessageRequests: undefined;

@@ -3,6 +3,7 @@ import { Linking, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { CachedImage } from '../components/CachedImage';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -177,8 +178,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
   const securityStatusParts: string[] = [];
   if (twoFactorEnabled) securityStatusParts.push('2FA enabled');
-  if (blockedCount > 0) securityStatusParts.push(`${blockedCount} blocked`);
-  if (securityStatusParts.length === 0) securityStatusParts.push('Basic');
+  if (currentUser?.emailVerified) securityStatusParts.push('Verified email');
 
   const notificationSummary = `${pushEnabledCount}/${pushTotalCount} categories`;
 
@@ -195,7 +195,7 @@ export default function SettingsScreen({ navigation }: Props) {
       <View style={styles.identityRow}>
         <View style={[styles.identityAvatar, { backgroundColor: colors.surfaceAlt }]}>
           {avatarUri ? (
-            <Text style={styles.identityAvatarText}>{displayName.charAt(0).toUpperCase()}</Text>
+            <CachedImage uri={avatarUri} style={styles.identityAvatarImage} contentFit="cover" />
           ) : (
             <Text style={styles.identityAvatarText}>{displayName.charAt(0).toUpperCase()}</Text>
           )}
@@ -261,14 +261,12 @@ export default function SettingsScreen({ navigation }: Props) {
           {/* Account */}
           <SettingsSection title="Account" noCard>
             <SettingsRow
-              icon="person-outline"
               title="Public profile"
               subtitle="Avatar, name, bio, username"
               onPress={() => navigation.navigate('EditProfile')}
               isFirst
             />
             <SettingsRow
-              icon="lock-closed-outline"
               title="Private details"
               subtitle="Email, phone, identity"
               onPress={() => navigation.navigate('AccountSettings')}
@@ -280,7 +278,12 @@ export default function SettingsScreen({ navigation }: Props) {
               onPress={() => navigation.navigate('ChangePassword')}
             />
             <SettingsRow
-              icon="phone-portrait-outline"
+              icon="shield-checkmark-outline"
+              title="Two-factor authentication"
+              subtitle={twoFactorEnabled ? 'Enabled' : 'Not enabled'}
+              onPress={() => navigation.navigate('TwoFactorSetup')}
+            />
+            <SettingsRow
               title="Devices & sessions"
               onPress={() => navigation.navigate('ActiveSessions')}
               isLast
@@ -410,6 +413,49 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
 
+          {/* Data & permissions */}
+          <SettingsSection title="Data & permissions" noCard>
+            <SettingsRow
+              title="Download my data"
+              subtitle="Not available yet"
+              disabled
+              onPress={() => {}}
+              isFirst
+            />
+            <SettingsRow
+              title="Search & viewing history"
+              subtitle="Not available yet"
+              disabled
+              onPress={() => {}}
+            />
+            <SettingsRow
+              title="Personalisation data"
+              subtitle="Not available yet"
+              disabled
+              onPress={() => {}}
+            />
+            <SettingsRow
+              title="Connected services"
+              subtitle="Not available yet"
+              disabled
+              onPress={() => {}}
+            />
+            <SettingsRow
+              title="Deactivate account"
+              subtitle="Not available yet"
+              disabled
+              onPress={() => {}}
+            />
+            <SettingsRow
+              title="Delete account"
+              subtitle="Not available yet"
+              disabled
+              danger
+              onPress={() => {}}
+              isLast
+            />
+          </SettingsSection>
+
           {/* Help */}
           <SettingsSection title="Help" noCard>
             <SettingsRow
@@ -493,6 +539,12 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  identityAvatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   identityAvatarText: {
     fontSize: Type.bodyEmphasis.size,

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, ActivityIndicator, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { Colors } from '../../constants/colors';
@@ -37,6 +37,7 @@ interface PosterFrameStripProps {
   onDuplicateFrame?: (index: number) => void;
   maxFrames?: number;
   publishStates?: Record<string, FramePublishState>;
+  posterMode?: 'poster' | 'look';
 }
 
 export function PosterFrameStrip({
@@ -49,9 +50,34 @@ export function PosterFrameStrip({
   onDuplicateFrame,
   maxFrames = 10,
   publishStates,
+  posterMode = 'poster',
 }: PosterFrameStripProps) {
   const canAdd = frames.length < maxFrames;
   const activeFrame = frames[activeIndex];
+  const thumbAspect = posterMode === 'look' ? (4 / 3) : (16 / 9);
+  const thumbHeight = Math.round(THUMB_SIZE * thumbAspect);
+
+  const [contextMenuIndex, setContextMenuIndex] = useState<number | null>(null);
+
+  const handleContextAction = useCallback((action: 'moveLeft' | 'moveRight' | 'duplicate' | 'remove') => {
+    if (contextMenuIndex === null) return;
+    const idx = contextMenuIndex;
+    setContextMenuIndex(null);
+    switch (action) {
+      case 'moveLeft':
+        onMoveFrame?.(idx, idx - 1);
+        break;
+      case 'moveRight':
+        onMoveFrame?.(idx, idx + 1);
+        break;
+      case 'duplicate':
+        onDuplicateFrame?.(idx);
+        break;
+      case 'remove':
+        onRemoveFrame?.(idx);
+        break;
+    }
+  }, [contextMenuIndex, onMoveFrame, onDuplicateFrame, onRemoveFrame]);
 
   return (
     <View style={styles.container}>
@@ -67,8 +93,11 @@ export function PosterFrameStrip({
             <Pressable
               key={frame.id}
               onPress={() => onSelectIndex(index)}
+              onLongPress={() => setContextMenuIndex(index)}
+              delayLongPress={400}
               style={[
                 styles.frameThumb,
+                { height: thumbHeight },
                 index === activeIndex && styles.frameThumbActive,
               ]}
               accessibilityLabel={`Frame ${index + 1}${index === activeIndex ? ' (active)' : ''}`}
@@ -153,7 +182,7 @@ export function PosterFrameStrip({
         {canAdd && (
           <Pressable
             onPress={onAddFrame}
-            style={styles.addFrame}
+            style={[styles.addFrame, { height: thumbHeight }]}
             accessibilityLabel="Add new frame"
             accessibilityRole="button"
           >
@@ -211,6 +240,75 @@ export function PosterFrameStrip({
           )}
         </View>
       )}
+
+      {/* Context menu modal for long-press on frame thumbnail */}
+      <Modal
+        visible={contextMenuIndex !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setContextMenuIndex(null)}
+      >
+        <Pressable style={styles.contextOverlay} onPress={() => setContextMenuIndex(null)}>
+          <Pressable style={styles.contextSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.contextTitle}>
+              Frame {contextMenuIndex !== null ? contextMenuIndex + 1 : ''}
+            </Text>
+            {contextMenuIndex !== null && contextMenuIndex > 0 && (
+              <Pressable
+                style={styles.contextItem}
+                onPress={() => handleContextAction('moveLeft')}
+                accessibilityLabel="Move frame left"
+                accessibilityRole="button"
+              >
+                <Ionicons name="chevron-back-outline" size={20} color={Colors.textPrimary} />
+                <Text style={styles.contextItemText}>Move left</Text>
+              </Pressable>
+            )}
+            {contextMenuIndex !== null && contextMenuIndex < frames.length - 1 && (
+              <Pressable
+                style={styles.contextItem}
+                onPress={() => handleContextAction('moveRight')}
+                accessibilityLabel="Move frame right"
+                accessibilityRole="button"
+              >
+                <Ionicons name="chevron-forward-outline" size={20} color={Colors.textPrimary} />
+                <Text style={styles.contextItemText}>Move right</Text>
+              </Pressable>
+            )}
+            {onDuplicateFrame && frames.length < maxFrames && (
+              <Pressable
+                style={styles.contextItem}
+                onPress={() => handleContextAction('duplicate')}
+                accessibilityLabel="Duplicate frame"
+                accessibilityRole="button"
+              >
+                <Ionicons name="copy-outline" size={20} color={Colors.textPrimary} />
+                <Text style={styles.contextItemText}>Duplicate</Text>
+              </Pressable>
+            )}
+            {onRemoveFrame && frames.length > 1 && (
+              <Pressable
+                style={styles.contextItem}
+                onPress={() => handleContextAction('remove')}
+                accessibilityLabel="Remove frame"
+                accessibilityRole="button"
+              >
+                <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
+                <Text style={[styles.contextItemText, { color: '#ff6b6b' }]}>Remove</Text>
+              </Pressable>
+            )}
+            <Pressable
+              style={styles.contextCancelBtn}
+              onPress={() => setContextMenuIndex(null)}
+              accessibilityLabel="Cancel"
+              accessibilityRole="button"
+            >
+              <Text style={styles.contextCancelText}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -228,7 +326,6 @@ const styles = StyleSheet.create({
   },
   frameThumb: {
     width: THUMB_SIZE,
-    height: THUMB_SIZE * (16 / 9),
     borderRadius: Radius.sm,
     borderWidth: 2,
     borderColor: 'transparent',
@@ -304,7 +401,6 @@ const styles = StyleSheet.create({
   },
   addFrame: {
     width: THUMB_SIZE,
-    height: THUMB_SIZE * (16 / 9),
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
@@ -329,6 +425,58 @@ const styles = StyleSheet.create({
   },
   frameOpLabel: {
     fontSize: 10,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+  },
+  contextOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  contextSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.lg,
+    gap: Space.sm,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+    marginTop: Space.sm,
+  },
+  contextTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    marginBottom: Space.xs,
+  },
+  contextItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: 12,
+    minHeight: 44,
+  },
+  contextItemText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
+  contextCancelBtn: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+  },
+  contextCancelText: {
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
   },

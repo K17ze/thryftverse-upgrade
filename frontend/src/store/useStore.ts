@@ -404,6 +404,15 @@ interface StoreState {
   setOffersInChatEnabled: (v: boolean) => void;
   orderUpdatesInChatEnabled: boolean;
   setOrderUpdatesInChatEnabled: (v: boolean) => void;
+  // Quick replies (seller-side, locally editable)
+  sellerQuickReplies: string[];
+  addSellerQuickReply: (text: string) => void;
+  updateSellerQuickReply: (index: number, text: string) => void;
+  removeSellerQuickReply: (index: number) => void;
+  buyerQuickReplies: string[];
+  addBuyerQuickReply: (text: string) => void;
+  updateBuyerQuickReply: (index: number, text: string) => void;
+  removeBuyerQuickReply: (index: number) => void;
   // Enabled bots (global)
   enabledBotIds: string[];
   toggleEnabledBot: (botId: string) => void;
@@ -1316,6 +1325,36 @@ export const useStore = create<StoreState>()(
   setOffersInChatEnabled: (v) => set({ offersInChatEnabled: v }),
   orderUpdatesInChatEnabled: true,
   setOrderUpdatesInChatEnabled: (v) => set({ orderUpdatesInChatEnabled: v }),
+  sellerQuickReplies: [
+    'Yes, still available!',
+    'I can ship this today if you want to go ahead.',
+    'Thanks for your interest! What would you like to know?',
+    'I can do a small discount for a quick sale.',
+  ],
+  addSellerQuickReply: (text) => set((state) => ({
+    sellerQuickReplies: [...state.sellerQuickReplies, text],
+  })),
+  updateSellerQuickReply: (index, text) => set((state) => ({
+    sellerQuickReplies: state.sellerQuickReplies.map((r, i) => i === index ? text : r),
+  })),
+  removeSellerQuickReply: (index) => set((state) => ({
+    sellerQuickReplies: state.sellerQuickReplies.filter((_, i) => i !== index),
+  })),
+  buyerQuickReplies: [
+    'Hi, is this still available?',
+    'Would you consider an offer on this?',
+    'Can I see more photos?',
+    'What\'s your best price?',
+  ],
+  addBuyerQuickReply: (text) => set((state) => ({
+    buyerQuickReplies: [...state.buyerQuickReplies, text],
+  })),
+  updateBuyerQuickReply: (index, text) => set((state) => ({
+    buyerQuickReplies: state.buyerQuickReplies.map((r, i) => i === index ? text : r),
+  })),
+  removeBuyerQuickReply: (index) => set((state) => ({
+    buyerQuickReplies: state.buyerQuickReplies.filter((_, i) => i !== index),
+  })),
   supportTickets: [],
   createSupportTicket: (ticket) => {
     const id = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1649,6 +1688,8 @@ export const useStore = create<StoreState>()(
         messageRequests: state.messageRequests,
         offersInChatEnabled: state.offersInChatEnabled,
         orderUpdatesInChatEnabled: state.orderUpdatesInChatEnabled,
+        sellerQuickReplies: state.sellerQuickReplies,
+        buyerQuickReplies: state.buyerQuickReplies,
         enabledBotIds: state.enabledBotIds,
         customBots: state.customBots,
         supportTickets: state.supportTickets,

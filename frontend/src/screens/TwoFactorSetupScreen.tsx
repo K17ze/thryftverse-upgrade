@@ -11,7 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
@@ -120,7 +120,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)} style={{ flex: 1 }}>
+        <Reanimated.View entering={FadeIn.duration(300)} style={{ flex: 1 }}>
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingTop: Space.sm, paddingBottom: Space.xl }}

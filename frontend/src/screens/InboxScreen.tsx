@@ -56,6 +56,8 @@ import { InboxConversationRow } from '../components/chat/InboxConversationRow';
 
 import { MessagingSegmentRail, MessagingSegment } from '../components/chat/MessagingSegmentRail';
 
+import { classifyConversation } from '../utils/conversationClassification';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 
@@ -67,22 +69,6 @@ type NavT = StackNavigationProp<RootStackParamList>;
 type ConvoItem = Conversation;
 
 type InboxSegment = MessagingSegment | 'unread' | 'archived';
-
-function isBuyingConversation(conversation: Conversation, currentUserId?: string): boolean {
-  if (!conversation.itemId) return false;
-  const counterpartyId = conversation.participantIds?.find(
-    (id) => id !== 'me' && id !== currentUserId
-  );
-  return counterpartyId === conversation.sellerId;
-}
-
-function isSellingConversation(conversation: Conversation, currentUserId?: string): boolean {
-  if (!conversation.itemId) return false;
-  const counterpartyId = conversation.participantIds?.find(
-    (id) => id !== 'me' && id !== currentUserId
-  );
-  return counterpartyId !== conversation.sellerId;
-}
 
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
   const { listings } = useBackendData();
@@ -300,9 +286,9 @@ export default function InboxScreen() {
 
       if (segment === 'groups' && conversation.type !== 'group') return false;
 
-      if (segment === 'buying' && !isBuyingConversation(conversation, currentUser?.id)) return false;
+      if (segment === 'buying' && !classifyConversation(conversation, currentUser?.id).isBuying) return false;
 
-      if (segment === 'selling' && !isSellingConversation(conversation, currentUser?.id)) return false;
+      if (segment === 'selling' && !classifyConversation(conversation, currentUser?.id).isSelling) return false;
 
       if (segment === 'requests') return isRequest;
 
@@ -372,14 +358,14 @@ export default function InboxScreen() {
 
   const buyingUnreadCount = useMemo(
     () => conversations.filter(
-      (c) => !archivedIds.includes(c.id) && !messageRequests.includes(c.id) && c.unread && isBuyingConversation(c, currentUser?.id)
+      (c) => !archivedIds.includes(c.id) && !messageRequests.includes(c.id) && c.unread && classifyConversation(c, currentUser?.id).isBuying
     ).length,
     [conversations, archivedIds, messageRequests, currentUser?.id]
   );
 
   const sellingUnreadCount = useMemo(
     () => conversations.filter(
-      (c) => !archivedIds.includes(c.id) && !messageRequests.includes(c.id) && c.unread && isSellingConversation(c, currentUser?.id)
+      (c) => !archivedIds.includes(c.id) && !messageRequests.includes(c.id) && c.unread && classifyConversation(c, currentUser?.id).isSelling
     ).length,
     [conversations, archivedIds, messageRequests, currentUser?.id]
   );

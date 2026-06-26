@@ -14,7 +14,6 @@ import ItemDetailScreen from '../screens/ItemDetailScreen';
 import ClosetScreen from '../screens/ClosetScreen';
 import CollectionDetailScreen from '../screens/CollectionDetailScreen';
 import PosterViewerScreen from '../screens/PosterViewerScreen';
-import CreatePosterScreen from '../screens/CreatePosterScreen';
 import PosterStoryActivityScreen from '../screens/PosterStoryActivityScreen';
 import PosterArchiveScreen from '../screens/PosterArchiveScreen';
 import PosterHighlightEditorScreen from '../screens/PosterHighlightEditorScreen';
@@ -134,6 +133,9 @@ import ActiveSessionsScreen from '../screens/ActiveSessionsScreen';
 import BlockedUsersScreen from '../screens/BlockedUsersScreen';
 import PrivacySettingsScreen from '../screens/PrivacySettingsScreen';
 import AboutScreen from '../screens/AboutScreen';
+import MutedConversationsScreen from '../screens/MutedConversationsScreen';
+import ArchivedConversationsScreen from '../screens/ArchivedConversationsScreen';
+import ManageQuickRepliesScreen from '../screens/ManageQuickRepliesScreen';
 
 // Diagnostic — dev only
 import RuntimeSmokeTestScreen from '../screens/RuntimeSmokeTestScreen';
@@ -316,6 +318,9 @@ export default function AppNavigator() {
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
       <Stack.Screen name="PrivacySettings" component={PrivacySettingsScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
+      <Stack.Screen name="MutedConversations" component={MutedConversationsScreen} />
+      <Stack.Screen name="ArchivedConversations" component={ArchivedConversationsScreen} />
+      <Stack.Screen name="ManageQuickReplies" component={ManageQuickRepliesScreen} />
 
       {/* VISUAL-15 — UI Architecture + Feature Depth */}
       <Stack.Screen name="ConversationInfo" component={ConversationInfoScreen} />

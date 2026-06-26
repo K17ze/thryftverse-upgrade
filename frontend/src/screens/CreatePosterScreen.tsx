@@ -28,8 +28,10 @@ import { PosterFrameCanvas } from '../components/poster/PosterFrameCanvas';
 import { createStableId } from '../utils/createStableId';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const CANVAS_W = Math.min(SCREEN_W - 40, 360);
-const CANVAS_H = CANVAS_W * (16 / 9);
+const POSTER_CANVAS_W = Math.min(SCREEN_W - 40, 360);
+const POSTER_CANVAS_H = POSTER_CANVAS_W * (16 / 9);
+const LOOK_CANVAS_W = Math.min(SCREEN_W - 40, 320);
+const LOOK_CANVAS_H = LOOK_CANVAS_W * (4 / 3);
 
 type Props = StackScreenProps<RootStackParamList, 'CreatePoster'>;
 
@@ -93,10 +95,18 @@ function validateFrames(frames: ComposerFrame[]): string | null {
   return null;
 }
 
-export default function CreatePosterScreen({ navigation }: Props) {
+export default function CreatePosterScreen({ navigation, route }: Props) {
   const { isDark } = useAppTheme();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
+
+  const posterMode = route.params?.mode ?? 'poster';
+  const isLookMode = posterMode === 'look';
+  const canvasAspect = isLookMode ? (4 / 3) : (16 / 9);
+
+  const [measuredWidth, setMeasuredWidth] = useState(0);
+  const canvasW = measuredWidth > 0 ? Math.min(measuredWidth - 40, isLookMode ? 320 : 360) : (isLookMode ? LOOK_CANVAS_W : POSTER_CANVAS_W);
+  const canvasH = Math.round(canvasW * canvasAspect);
 
   const [phase, setPhase] = useState<'editing' | 'preview'>('editing');
   const [frames, setFrames] = useState<ComposerFrame[]>([createBlankFrame()]);
@@ -294,8 +304,8 @@ export default function CreatePosterScreen({ navigation }: Props) {
       }
       event.preventDefault();
       Alert.alert(
-        'Discard this Poster?',
-        'Your Story has not been shared.',
+        isLookMode ? 'Discard this Look?' : 'Discard this Poster?',
+        isLookMode ? 'Your Look has not been shared.' : 'Your Story has not been shared.',
         [
           { text: 'Keep editing', style: 'cancel' },
           {
@@ -441,6 +451,7 @@ export default function CreatePosterScreen({ navigation }: Props) {
         allowReplies,
         allowReactions,
         expiresInHours: 24,
+        posterMode,
         frames: uploadedFrames,
       });
 
@@ -499,7 +510,11 @@ export default function CreatePosterScreen({ navigation }: Props) {
   const previewFrame = frames[previewIndex];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView
+      style={styles.container}
+      edges={['top']}
+      onLayout={(e) => setMeasuredWidth(e.nativeEvent.layout.width)}
+    >
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.topBar}>
@@ -514,10 +529,24 @@ export default function CreatePosterScreen({ navigation }: Props) {
         </AnimatedPressable>
 
         <Text style={styles.topTitle}>
-          {phase === 'editing' ? 'Create Story' : 'Preview'}
+          {phase === 'editing' ? (isLookMode ? 'Create Look' : 'Create Story') : 'Preview'}
         </Text>
 
         {phase === 'editing' ? (
+          <AnimatedPressable
+            onPress={() => {
+              setPreviewIndex(activeFrameIndex);
+              setPhase('preview');
+            }}
+            style={styles.topBarAction}
+            activeOpacity={0.7}
+            scaleValue={0.9}
+            hapticFeedback="light"
+            disabled={!hasContent}
+          >
+            <Text style={[styles.topBarActionText, !hasContent && styles.topBarActionTextDisabled]}>Next</Text>
+          </AnimatedPressable>
+        ) : (
           <AnimatedPressable
             onPress={() => setShowSettings(!showSettings)}
             style={styles.iconBtn}
@@ -526,19 +555,6 @@ export default function CreatePosterScreen({ navigation }: Props) {
             hapticFeedback="light"
           >
             <Ionicons name="settings-outline" size={24} color={Colors.textPrimary} />
-          </AnimatedPressable>
-        ) : (
-          <AnimatedPressable
-            onPress={() => {
-              setPhase('editing');
-              setActiveFrameIndex(previewIndex);
-            }}
-            style={styles.iconBtn}
-            activeOpacity={0.7}
-            scaleValue={0.9}
-            hapticFeedback="light"
-          >
-            <Ionicons name="create-outline" size={24} color={Colors.textPrimary} />
           </AnimatedPressable>
         )}
       </View>
@@ -554,8 +570,9 @@ export default function CreatePosterScreen({ navigation }: Props) {
               onRemoveSticker={removeSticker}
               selectedStickerId={selectedStickerId}
               onSelectSticker={handleSelectSticker}
-              canvasWidth={CANVAS_W}
-              canvasHeight={CANVAS_H}
+              canvasWidth={canvasW}
+              canvasHeight={canvasH}
+              posterMode={posterMode}
             />
           )}
 
@@ -592,8 +609,8 @@ export default function CreatePosterScreen({ navigation }: Props) {
               <PosterFrameCanvas
                 frame={previewFrame}
                 mode="preview"
-                width={CANVAS_W}
-                height={CANVAS_H}
+                width={canvasW}
+                height={canvasH}
               />
 
               {/* Progress segments */}
@@ -654,9 +671,10 @@ export default function CreatePosterScreen({ navigation }: Props) {
         onDuplicateFrame={duplicateFrame}
         maxFrames={MAX_FRAMES}
         publishStates={publishStates}
+        posterMode={posterMode}
       />
 
-      {showSettings && phase === 'editing' && (
+      {showSettings && phase === 'preview' && (
         <View style={styles.settingsSheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>Story settings</Text>
@@ -709,19 +727,7 @@ export default function CreatePosterScreen({ navigation }: Props) {
         {publishProgress && (
           <Text style={styles.publishProgress}>{publishProgress}</Text>
         )}
-        {phase === 'editing' ? (
-          <AnimatedPressable
-            style={styles.publishBtn}
-            onPress={() => {
-              setPreviewIndex(activeFrameIndex);
-              setPhase('preview');
-            }}
-            activeOpacity={0.85}
-            disabled={!hasContent}
-          >
-            <Text style={styles.publishBtnText}>Preview</Text>
-          </AnimatedPressable>
-        ) : (
+        {phase === 'editing' ? null : (
           <AnimatedPressable
             style={[styles.publishBtn, !hasContent && styles.publishBtnDisabled]}
             onPress={handlePublish}
@@ -731,7 +737,7 @@ export default function CreatePosterScreen({ navigation }: Props) {
             {isPublishing ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={styles.publishBtnText}>Publish Story</Text>
+              <Text style={styles.publishBtnText}>{isLookMode ? 'Publish Look' : 'Publish Story'}</Text>
             )}
           </AnimatedPressable>
         )}
@@ -765,6 +771,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  topBarAction: {
+    paddingHorizontal: Space.md,
+    height: 36,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topBarActionText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  topBarActionTextDisabled: {
+    color: Colors.textMuted,
+  },
   editorBody: {
     flex: 1,
     alignItems: 'center',
@@ -773,7 +794,9 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   captionInput: {
-    width: CANVAS_W,
+    flex: 1,
+    width: '100%',
+    maxWidth: 360,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: Colors.textPrimary,
@@ -812,7 +835,8 @@ const styles = StyleSheet.create({
   previewNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: CANVAS_W,
+    width: '100%',
+    maxWidth: 360,
     marginTop: Space.sm,
   },
   navBtn: {

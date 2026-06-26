@@ -114,6 +114,7 @@ export interface PosterStoryCreateBody {
   allowReplies?: boolean;
   allowReactions?: boolean;
   expiresInHours?: number;
+  posterMode?: 'poster' | 'look';
   frames: PosterStoryCreateFrame[];
 }
 

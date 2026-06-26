@@ -243,6 +243,7 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
       allowReplies: doc.metadata.allowReplies,
       allowReactions: doc.metadata.allowReactions,
       expiresInHours: doc.metadata.expiresInHours ?? 24,
+      posterMode: doc.type,
       frames,
     },
     remixAttribution: {

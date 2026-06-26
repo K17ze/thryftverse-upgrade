@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,9 @@ export default function MessageRequestsScreen() {
   const declineMessageRequest = useStore((state) => state.declineMessageRequest);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const currentUser = useStore((state) => state.currentUser);
+  const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const requestConversations = useMemo(() => {
     return conversations.filter((c) => messageRequests.includes(c.id));
@@ -61,6 +64,50 @@ export default function MessageRequestsScreen() {
             haptic.heavy();
             declineMessageRequest(id);
             show('Request declined', 'info');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBlock = (id: string, name: string) => {
+    Alert.alert(
+      `Block ${name}?`,
+      'They will not be able to message you or see your profile.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: () => {
+            haptic.heavy();
+            declineMessageRequest(id);
+            const counterpartyId = conversations.find((c) => c.id === id)?.participantIds?.find(
+              (pid) => pid !== 'me' && pid !== currentUser?.id
+            );
+            if (counterpartyId) {
+              toggleBlockedUser(counterpartyId);
+            }
+            show(`${name} blocked`, 'info');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReport = (id: string, name: string) => {
+    Alert.alert(
+      `Report ${name}?`,
+      'Report this user for suspicious or inappropriate behaviour. They will be declined automatically.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report',
+          style: 'destructive',
+          onPress: () => {
+            haptic.heavy();
+            declineMessageRequest(id);
+            show('Report submitted. Request declined.', 'info');
           },
         },
       ]
@@ -121,13 +168,15 @@ export default function MessageRequestsScreen() {
             </View>
           )}
 
-          {/* Safety note */}
-          <View style={styles.safetyNote}>
-            <Ionicons name="shield-outline" size={12} color={Colors.textMuted} />
-            <Text style={styles.safetyNoteText}>
-              If this seems suspicious, decline and block.
-            </Text>
-          </View>
+          {/* Safety note — only for non-marketplace requests */}
+          {!listing && (
+            <View style={styles.safetyNote}>
+              <Ionicons name="shield-outline" size={12} color={Colors.textMuted} />
+              <Text style={styles.safetyNoteText}>
+                If this seems suspicious, decline and block.
+              </Text>
+            </View>
+          )}
 
           {/* Actions */}
           <View style={styles.requestActions}>
@@ -154,6 +203,61 @@ export default function MessageRequestsScreen() {
               <Text style={styles.requestAcceptText}>Accept</Text>
             </AnimatedPressable>
           </View>
+
+          {/* Progressive disclosure: expanded actions */}
+          {expandedId === item.id ? (
+            <View style={styles.expandedActions}>
+              <AnimatedPressable
+                onPress={() => handleBlock(item.id, displayTitle)}
+                activeOpacity={0.85}
+                scaleValue={0.96}
+                hapticFeedback="medium"
+                accessibilityRole="button"
+                accessibilityLabel={`Block ${displayTitle}`}
+                style={styles.expandedBtn}
+              >
+                <Ionicons name="ban-outline" size={14} color={Colors.danger} />
+                <Text style={styles.expandedBtnTextDanger}>Block</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => handleReport(item.id, displayTitle)}
+                activeOpacity={0.85}
+                scaleValue={0.96}
+                hapticFeedback="medium"
+                accessibilityRole="button"
+                accessibilityLabel={`Report ${displayTitle}`}
+                style={styles.expandedBtn}
+              >
+                <Ionicons name="flag-outline" size={14} color={Colors.danger} />
+                <Text style={styles.expandedBtnTextDanger}>Report</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => setExpandedId(null)}
+                activeOpacity={0.85}
+                scaleValue={0.96}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Hide options"
+                style={styles.expandedBtn}
+              >
+                <Ionicons name="chevron-up-outline" size={14} color={Colors.textMuted} />
+                <Text style={styles.expandedBtnTextMuted}>Less</Text>
+              </AnimatedPressable>
+            </View>
+          ) : (
+            <AnimatedPressable
+              onPress={() => setExpandedId(item.id)}
+              activeOpacity={0.85}
+              scaleValue={0.96}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Show more options"
+              style={styles.moreBtn}
+            >
+              <Text style={styles.moreBtnText}>Block or report</Text>
+              <Ionicons name="chevron-down-outline" size={12} color={Colors.textMuted} />
+            </AnimatedPressable>
+          )}
         </View>
         <View style={styles.requestSeparator} />
       </View>
@@ -357,5 +461,44 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginLeft: Space.md,
     marginRight: Space.md,
+  },
+  expandedActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingTop: Space.xs,
+  },
+  expandedBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  expandedBtnTextDanger: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.danger,
+  },
+  expandedBtnTextMuted: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textMuted,
+  },
+  moreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+  },
+  moreBtnText: {
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
   },
 });

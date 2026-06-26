@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -56,7 +56,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Active Sessions" subtitle="Device security overview" onBack={() => navigation.goBack()} />}>
       {/* Security overview */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <View style={[styles.trustSurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
           <View style={styles.trustHeader}>
             <Ionicons name="shield-checkmark-outline" size={20} color={Colors.success} />
@@ -69,7 +69,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* This device */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <SettingsSection title="This device" noCard>
           {sessions.filter((s) => s.isCurrent).map((session) => (
             <View key={session.id} style={styles.sessionRow}>
@@ -89,7 +89,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Other devices */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <SettingsSection title="Other devices" noCard>
           <View style={styles.emptyGroup}>
             <Ionicons name="desktop-outline" size={32} color={Colors.textMuted} />
@@ -101,7 +101,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={{ paddingHorizontal: 16, marginTop: 16 }}>
+      <Reanimated.View entering={FadeIn.duration(300)} style={{ paddingHorizontal: 16, marginTop: 16 }}>
         <AppButton
           title="End all other sessions"
           onPress={handleEndAllOthers}

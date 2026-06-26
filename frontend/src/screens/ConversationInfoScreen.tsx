@@ -17,7 +17,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { CachedImage } from '../components/CachedImage';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useBackendData } from '../context/BackendDataContext';
 
 type Props = StackScreenProps<RootStackParamList, 'ConversationInfo'>;
@@ -51,26 +51,11 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
 
   if (!conversation) {
     return (
-      <SafeAreaView edges={['top']} style={styles.screenRoot}>
-        <View style={styles.compactHeader}>
-          <AnimatedPressable
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-            scaleValue={0.92}
-            hapticFeedback="light"
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-            style={styles.backBtn}
-          >
-            <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={styles.headerTitle}>Conversation</Text>
-          <View style={styles.backBtn} />
-        </View>
+      <FlagshipScreen header={<FlagshipHeader title="Conversation" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
         <View style={styles.center}>
           <Caption color={Colors.textMuted}>Conversation not found</Caption>
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -130,23 +115,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const handle = counterpartyId ? `@${counterpartyId.slice(0, 12)}` : 'Direct message';
 
   return (
-    <SafeAreaView edges={['top']} style={styles.screenRoot}>
-      <View style={styles.compactHeader}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          scaleValue={0.92}
-          hapticFeedback="light"
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-          style={styles.backBtn}
-        >
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Chat details</Text>
-        <View style={styles.backBtn} />
-      </View>
-
+    <FlagshipScreen header={<FlagshipHeader title="Chat details" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Partner Identity */}
         <View>
@@ -274,7 +243,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
           </Section>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -357,31 +326,6 @@ function RowItem({
 }
 
 const styles = StyleSheet.create({
-  screenRoot: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  compactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: Type.title.size,
-    fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,

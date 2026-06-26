@@ -6,7 +6,7 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
@@ -108,7 +108,7 @@ export default function PostageScreen({ navigation }: Props) {
         />
       }
     >
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <View style={[styles.deliveryTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
           <Ionicons name="cube-outline" size={18} color={Colors.brand} />
           <Text style={[styles.deliveryTrustText, { color: Colors.textSecondary }]}>
@@ -166,7 +166,7 @@ export default function PostageScreen({ navigation }: Props) {
       </View>
 
       {/* Default Carrier */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <PremiumListSection title="Default Carrier" subtitle={carrierScopeLabel ? `Region policy: ${carrierScopeLabel}` : undefined}>
           {isHydrating ? (
             <FlagshipState variant="loading" />
@@ -197,7 +197,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Shipping Options */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <PremiumListSection title="Shipping Options">
           <SettingsCell
             icon="gift-outline"
@@ -223,7 +223,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Footer note */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <Text style={styles.footerNote}>
           These are your default settings. You can override postage for individual items when
           listing.

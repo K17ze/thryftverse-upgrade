@@ -6,7 +6,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -31,7 +31,7 @@ export default function AboutScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="About" subtitle="Thryftverse app information" onBack={() => navigation.goBack()} />}>
-        <Reanimated.View entering={FadeInDown.duration(300).delay(0)} style={styles.brandWrap}>
+        <Reanimated.View entering={FadeIn.duration(300)} style={styles.brandWrap}>
           <View style={styles.brandIcon}>
             <Ionicons name="shirt-outline" size={40} color={Colors.brand} />
           </View>
@@ -39,7 +39,7 @@ export default function AboutScreen({ navigation }: Props) {
           <Text style={styles.brandVersion}>Version 1.0.0 (Build 2026.06.05)</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <Reanimated.View entering={FadeIn.duration(300)}>
           <Text style={styles.sectionLabel}>Legal</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable
@@ -93,7 +93,7 @@ export default function AboutScreen({ navigation }: Props) {
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={FadeIn.duration(300)}>
           <Text style={styles.sectionLabel}>Support</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable

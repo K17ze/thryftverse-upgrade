@@ -70,6 +70,8 @@ import { ChatListingContextBar } from '../components/chat/ChatListingContextBar'
 
 import { ChatActionSheet, ChatAction } from '../components/chat/ChatActionSheet';
 
+import { AttachmentReviewSheet } from '../components/chat/AttachmentReviewSheet';
+
 import { Space, Radius, Type } from '../theme/designTokens';
 
 import { MessageContextMenu } from '../components/chat/MessageContextMenu';
@@ -95,6 +97,10 @@ import {
   isLastInCluster as isLastInClusterHelper,
 } from '../utils/messageGrouping';
 
+import { detectChatSafetyWarning } from '../utils/chatSafetyWarnings';
+
+import { isTrustedSystemMessage, resolveSystemMessageProvenance } from '../utils/systemMessageProvenance';
+
 
 
 type Props = StackScreenProps<RootStackParamList, 'Chat'>;
@@ -112,6 +118,8 @@ interface Message {
   type: MsgType;
 
   sender: 'me' | 'them';
+
+  senderId?: string;
 
   senderLabel?: string;
 
@@ -187,6 +195,9 @@ export default function ChatScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
 
   const { listings } = useBackendData();
+
+  const sellerQuickReplies = useStore((state) => state.sellerQuickReplies);
+  const buyerQuickReplies = useStore((state) => state.buyerQuickReplies);
 
   const conversation = useMemo(
 
@@ -272,6 +283,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           sender,
 
+          senderId: resolvedSenderId,
+
           senderLabel,
 
           offer: {
@@ -294,13 +307,19 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         id: entry.id,
 
-        type: entry.mediaUri ? 'media' : 'text',
+        type: entry.isSystem || entry.type === 'system' ? 'system' : entry.mediaUri ? 'media' : 'text',
 
         sender,
+
+        senderId: resolvedSenderId,
 
         senderLabel,
 
         text: entry.text ?? entry.systemTitle ?? '',
+
+        isSystem: entry.isSystem,
+
+        systemTitle: entry.systemTitle,
 
         date: entry.timestamp,
 
@@ -351,6 +370,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [syncError, setSyncError] = useState(false);
 
   const [attachmentPickerVisible, setAttachmentPickerVisible] = useState(false);
+
+  const [pendingAttachment, setPendingAttachment] = useState<{ uri: string; mediaType: 'image' | 'video' } | null>(null);
 
   const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
 
@@ -1150,19 +1171,11 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           const uri = result.assets[0].uri;
 
-          const outgoing = createMediaMessage(uri);
+          const mediaType = isVideoUri(uri) ? 'video' : 'image';
 
-          pushMessage(outgoing);
+          setPendingAttachment({ uri, mediaType });
 
-          appendToConversationStore(outgoing, currentUser?.id ?? 'me');
-
-          show(mediaTypeLabel(outgoing.mediaType!) + ' attached', 'success');
-
-          haptic.success();
-
-          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-
-          sendMediaMessage(outgoing.id, uri, outgoing.mediaType!);
+          haptic.light();
 
         }
 
@@ -1192,19 +1205,11 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           const uri = result.assets[0].uri;
 
-          const outgoing = createMediaMessage(uri);
+          const mediaType = isVideoUri(uri) ? 'video' : 'image';
 
-          pushMessage(outgoing);
+          setPendingAttachment({ uri, mediaType });
 
-          appendToConversationStore(outgoing, currentUser?.id ?? 'me');
-
-          show(mediaTypeLabel(outgoing.mediaType!) + ' captured', 'success');
-
-          haptic.success();
-
-          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-
-          sendMediaMessage(outgoing.id, uri, outgoing.mediaType!);
+          haptic.light();
 
         }
 
@@ -1216,6 +1221,21 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     }
 
+  };
+
+  const handleSendPendingAttachment = (caption: string) => {
+    if (!pendingAttachment) return;
+    const { uri, mediaType } = pendingAttachment;
+    const outgoing = createMediaMessage(uri);
+    if (caption) {
+      outgoing.text = caption;
+    }
+    pushMessage(outgoing);
+    appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+    haptic.success();
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    sendMediaMessage(outgoing.id, uri, mediaType);
+    setPendingAttachment(null);
   };
 
 
@@ -1311,8 +1331,9 @@ export default function ChatScreen({ navigation, route }: Props) {
       ) : content;
     }
 
-    // System message — trusted system event with distinct visual identity
-    if (msg.type === 'system' || msg.isSystem) {
+    // System message — only render trusted styling if provenance is verified
+    if ((msg.type === 'system' || msg.isSystem) && msg.senderId && isTrustedSystemMessage({ id: msg.id, senderId: msg.senderId, isSystem: msg.isSystem, type: msg.type === 'system' ? 'system' : undefined, systemTitle: msg.systemTitle, text: msg.text, timestamp: msg.date ?? '' } as any)) {
+      const provenance = resolveSystemMessageProvenance({ id: msg.id, senderId: msg.senderId, isSystem: msg.isSystem, type: msg.type === 'system' ? 'system' : undefined, systemTitle: msg.systemTitle, text: msg.text, timestamp: msg.date ?? '' } as any);
       const content = (
         <View key={msg.id} style={styles.statusWrap}>
           <MarketplaceChatCard
@@ -1320,6 +1341,9 @@ export default function ChatScreen({ navigation, route }: Props) {
             systemTitle={msg.systemTitle}
             text={msg.text}
           />
+          {provenance.isProtected && (
+            <Text style={styles.systemProvenanceBadge}>Verified</Text>
+          )}
         </View>
       );
       return dateSeparator ? (
@@ -1676,15 +1700,21 @@ export default function ChatScreen({ navigation, route }: Props) {
             quickReplies={linkedListing ? (
               linkedListing.sellerId === currentUser?.id
                 ? [
-                    { label: 'Still available', onPress: () => setInput('Yes, still available!') },
-                    { label: 'I can ship today', onPress: () => setInput('I can ship this today if you want to go ahead.') },
+                    ...sellerQuickReplies.slice(0, 4).map((text) => ({
+                      label: text.length > 30 ? text.slice(0, 28) + '…' : text,
+                      onPress: () => setInput(text),
+                    })),
+                    { label: 'Manage replies', onPress: () => navigation.navigate('ManageQuickReplies', { role: 'seller' }) },
                   ]
                 : [
-                    { label: 'Is this still available?', onPress: () => setInput('Hi, is this still available?') },
-                    { label: 'Can I make an offer?', onPress: () => setInput('Would you consider an offer on this?') },
+                    ...buyerQuickReplies.slice(0, 4).map((text) => ({
+                      label: text.length > 30 ? text.slice(0, 28) + '…' : text,
+                      onPress: () => setInput(text),
+                    })),
+                    { label: 'Manage replies', onPress: () => navigation.navigate('ManageQuickReplies', { role: 'buyer' }) },
                   ]
             ) : undefined}
-            safetyWarning={linkedListing && linkedListing.sellerId !== currentUser?.id ? 'Never pay outside Thryftverse. Use checkout for buyer protection.' : undefined}
+            safetyWarning={conversation ? detectChatSafetyWarning(conversation, currentUser?.id, conversation.messages)?.message : undefined}
           />
         </View>
 
@@ -1697,6 +1727,16 @@ export default function ChatScreen({ navigation, route }: Props) {
             }
           }}
         />
+
+        {pendingAttachment && (
+          <AttachmentReviewSheet
+            visible={!!pendingAttachment}
+            uri={pendingAttachment.uri}
+            mediaType={pendingAttachment.mediaType}
+            onClose={() => setPendingAttachment(null)}
+            onSend={handleSendPendingAttachment}
+          />
+        )}
 
         <ScrollToBottomFAB visible={showScrollToBottom} onPress={scrollToBottom} />
 
@@ -1833,6 +1873,13 @@ const styles = StyleSheet.create({
     marginVertical: Space.xs,
     paddingHorizontal: Space.md,
     alignItems: 'center',
+  },
+
+  systemProvenanceBadge: {
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.brand,
+    marginTop: 2,
   },
 
   statusHint: {

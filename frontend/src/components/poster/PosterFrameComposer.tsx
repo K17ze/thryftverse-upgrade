@@ -49,6 +49,7 @@ interface PosterFrameComposerProps {
   onSelectSticker: (id: string | null) => void;
   canvasWidth?: number;
   canvasHeight?: number;
+  posterMode?: 'poster' | 'look';
 }
 
 export function PosterFrameComposer({
@@ -61,6 +62,7 @@ export function PosterFrameComposer({
   onSelectSticker,
   canvasWidth = CANVAS_W,
   canvasHeight = CANVAS_H,
+  posterMode = 'poster',
 }: PosterFrameComposerProps) {
   const { show } = useToast();
 
@@ -259,14 +261,22 @@ export function PosterFrameComposer({
   const isVideo = frame.mediaType === 'video';
   const showDurationSelector = !isVideo;
 
-  const toolRailItems: Array<{ type: PosterStickerType | 'media'; icon: string; label: string }> = [
-    { type: 'media', icon: 'images-outline', label: 'Media' },
-    { type: 'text', icon: 'text-outline', label: 'Text' },
-    { type: 'mention', icon: 'at-outline', label: 'Mention' },
-    { type: 'listing', icon: 'pricetag-outline', label: 'Item' },
-    { type: 'look', icon: 'shirt-outline', label: 'Look' },
-    { type: 'style_vote', icon: 'bar-chart-outline', label: 'Vote' },
-  ];
+  const toolRailItems: Array<{ type: PosterStickerType | 'media'; icon: string; label: string }> = posterMode === 'look'
+    ? [
+        { type: 'media', icon: 'images-outline', label: 'Media' },
+        { type: 'look', icon: 'shirt-outline', label: 'Look' },
+        { type: 'text', icon: 'text-outline', label: 'Text' },
+        { type: 'mention', icon: 'at-outline', label: 'Mention' },
+        { type: 'listing', icon: 'pricetag-outline', label: 'Item' },
+      ]
+    : [
+        { type: 'media', icon: 'images-outline', label: 'Media' },
+        { type: 'text', icon: 'text-outline', label: 'Text' },
+        { type: 'mention', icon: 'at-outline', label: 'Mention' },
+        { type: 'listing', icon: 'pricetag-outline', label: 'Item' },
+        { type: 'look', icon: 'shirt-outline', label: 'Look' },
+        { type: 'style_vote', icon: 'bar-chart-outline', label: 'Vote' },
+      ];
 
   return (
     <View style={styles.container}>
@@ -283,7 +293,7 @@ export function PosterFrameComposer({
 
       {/* Background color selector for text frames */}
       {isTextFrame && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bgScroll}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.bgScroll, { width: canvasWidth }]}>
           {BG_COLORS.map((c) => (
             <Pressable
               key={c}
@@ -324,13 +334,52 @@ export function PosterFrameComposer({
         </View>
       )}
 
-      {/* Sticker manipulation toolbar */}
+      {/* Contextual sticker toolbar — tools vary by sticker type */}
       {selectedSticker && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stickerToolbar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.stickerToolbar, { width: canvasWidth }]}>
+          {/* Edit — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={() => openEditEditor(selectedSticker)} accessibilityLabel="Edit sticker">
             <Ionicons name="create-outline" size={20} color={Colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Edit</Text>
           </Pressable>
+
+          {/* Text color — only for text stickers */}
+          {selectedSticker.type === 'text' && (
+            <Pressable
+              style={styles.stickerToolBtn}
+              onPress={() => {
+                const currentColor = (selectedSticker.payload as any).textColor ?? '#ffffff';
+                const colors = ['#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00', '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55'];
+                const idx = colors.indexOf(currentColor);
+                const nextColor = colors[(idx + 1) % colors.length];
+                onUpdateSticker(selectedSticker.id, { payload: { ...selectedSticker.payload, textColor: nextColor } });
+              }}
+              accessibilityLabel="Change text color"
+            >
+              <Ionicons name="color-palette-outline" size={20} color={Colors.textPrimary} />
+              <Text style={styles.stickerToolLabel}>Color</Text>
+            </Pressable>
+          )}
+
+          {/* Text style — only for text stickers */}
+          {selectedSticker.type === 'text' && (
+            <Pressable
+              style={styles.stickerToolBtn}
+              onPress={() => {
+                const styles_arr = ['editorial', 'minimal', 'label', 'outline'] as const;
+                const current = (selectedSticker.payload as any).textStyle ?? 'editorial';
+                const idx = styles_arr.indexOf(current as any);
+                const nextStyle = styles_arr[(idx + 1) % styles_arr.length];
+                onUpdateSticker(selectedSticker.id, { payload: { ...selectedSticker.payload, textStyle: nextStyle } });
+              }}
+              accessibilityLabel="Cycle text style"
+            >
+              <Ionicons name="text-outline" size={20} color={Colors.textPrimary} />
+              <Text style={styles.stickerToolLabel}>Style</Text>
+            </Pressable>
+          )}
+
+          {/* Scale — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={() => handleScaleChange(-SCALE_STEP)} accessibilityLabel="Make smaller">
             <Ionicons name="remove-circle-outline" size={20} color={Colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Smaller</Text>
@@ -339,6 +388,8 @@ export function PosterFrameComposer({
             <Ionicons name="add-circle-outline" size={20} color={Colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Larger</Text>
           </Pressable>
+
+          {/* Rotate — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={() => handleRotate(-1)} accessibilityLabel="Rotate left">
             <Ionicons name="return-up-back-outline" size={20} color={Colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Rotate L</Text>
@@ -347,10 +398,38 @@ export function PosterFrameComposer({
             <Ionicons name="return-up-forward-outline" size={20} color={Colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Rotate R</Text>
           </Pressable>
+
+          {/* Layer ordering — bring to front / send to back */}
+          <Pressable
+            style={styles.stickerToolBtn}
+            onPress={() => {
+              const maxSort = Math.max(...frame.stickers.map((s) => s.sortOrder));
+              onUpdateSticker(selectedSticker.id, { sortOrder: maxSort + 1 });
+            }}
+            accessibilityLabel="Bring to front"
+          >
+            <Ionicons name="arrow-up-circle-outline" size={20} color={Colors.textPrimary} />
+            <Text style={styles.stickerToolLabel}>Front</Text>
+          </Pressable>
+          <Pressable
+            style={styles.stickerToolBtn}
+            onPress={() => {
+              const minSort = Math.min(...frame.stickers.map((s) => s.sortOrder));
+              onUpdateSticker(selectedSticker.id, { sortOrder: minSort - 1 });
+            }}
+            accessibilityLabel="Send to back"
+          >
+            <Ionicons name="arrow-down-circle-outline" size={20} color={Colors.textPrimary} />
+            <Text style={styles.stickerToolLabel}>Back</Text>
+          </Pressable>
+
+          {/* Duplicate — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={handleDuplicate} accessibilityLabel="Duplicate sticker">
             <Ionicons name="copy-outline" size={20} color={Colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Duplicate</Text>
           </Pressable>
+
+          {/* Delete — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={handleDelete} accessibilityLabel="Delete sticker">
             <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
             <Text style={[styles.stickerToolLabel, { color: '#ff6b6b' }]}>Delete</Text>
@@ -359,7 +438,7 @@ export function PosterFrameComposer({
       )}
 
       {/* Tool rail */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.toolRail}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.toolRail, { width: canvasWidth }]}>
         {toolRailItems.map((item) => (
           <Pressable
             key={item.type}
@@ -434,7 +513,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   bgScroll: {
-    width: CANVAS_W,
+    maxHeight: 40,
   },
   bgDot: {
     width: 24,
@@ -474,7 +553,6 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   stickerToolbar: {
-    width: CANVAS_W,
     maxHeight: 52,
   },
   stickerToolBtn: {
@@ -491,7 +569,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   toolRail: {
-    width: CANVAS_W,
     maxHeight: 64,
   },
   railBtn: {
