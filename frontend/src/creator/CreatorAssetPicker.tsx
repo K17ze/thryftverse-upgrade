@@ -530,8 +530,8 @@ const TEXT_COLORS = ['#ffffff', '#000000', '#ff6b6b', '#4cd964', '#5ac8fa', '#ff
 
 const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: string }> = [
   { key: 'left', icon: 'text-outline' },
-  { key: 'center', icon: 'text-center' },
-  { key: 'right', icon: 'text-end' },
+  { key: 'center', icon: 'text' },
+  { key: 'right', icon: 'text-right' },
 ];
 
 function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {

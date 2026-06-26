@@ -76,8 +76,12 @@ function CreatorStudioInner() {
     }
   }, [isDirty, navigation]);
 
-  // Keyboard shortcuts (web/tablet)
+  // Keyboard shortcuts (web/tablet only — window.addEventListener is not
+  // available on React Native/Hermes, so guard the entire effect).
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+      return;
+    }
     const handler = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey;
       if (isMeta && e.key === 'z' && !e.shiftKey) {
