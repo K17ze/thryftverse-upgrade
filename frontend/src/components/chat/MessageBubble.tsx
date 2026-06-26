@@ -213,8 +213,8 @@ const styles = StyleSheet.create({
     width: 28,
   },
   bubbleColumn: {
-    maxWidth: '80%',
-    gap: 4,
+    maxWidth: '78%',
+    gap: 3,
   },
   senderName: {
     fontSize: Type.caption.size,
@@ -224,9 +224,9 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   bubble: {
-    paddingHorizontal: Space.md - 2,
-    paddingVertical: Space.sm + 2,
-    gap: 4,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm,
+    gap: 3,
   },
   bubbleMe: {
     backgroundColor: Colors.brand,
@@ -264,11 +264,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 4,
-    marginTop: 2,
+    gap: 3,
+    marginTop: 1,
   },
   metaRowMe: {
-    opacity: 0.85,
+    opacity: 0.7,
   },
   timestamp: {
     fontSize: Type.meta.size,

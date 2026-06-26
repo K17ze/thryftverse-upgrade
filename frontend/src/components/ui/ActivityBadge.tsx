@@ -11,7 +11,7 @@ import Reanimated, {
   useAnimatedStyle,
   withRepeat,
   withTiming,
-  FadeInDown,
+  FadeIn,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -139,7 +139,7 @@ export function ActivityBadge({
   const showCount = count !== undefined && count > 0;
 
   return (
-    <Reanimated.View entering={FadeInDown.duration(300)} style={style}>
+    <Reanimated.View entering={FadeIn.duration(300)} style={style}>
       <View
         style={[
           styles.badge,

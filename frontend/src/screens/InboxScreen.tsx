@@ -68,6 +68,22 @@ type ConvoItem = Conversation;
 
 type InboxSegment = MessagingSegment | 'unread' | 'archived';
 
+function isBuyingConversation(conversation: Conversation, currentUserId?: string): boolean {
+  if (!conversation.itemId) return false;
+  const counterpartyId = conversation.participantIds?.find(
+    (id) => id !== 'me' && id !== currentUserId
+  );
+  return counterpartyId === conversation.sellerId;
+}
+
+function isSellingConversation(conversation: Conversation, currentUserId?: string): boolean {
+  if (!conversation.itemId) return false;
+  const counterpartyId = conversation.participantIds?.find(
+    (id) => id !== 'me' && id !== currentUserId
+  );
+  return counterpartyId !== conversation.sellerId;
+}
+
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
   const { listings } = useBackendData();
   const listing = useMemo(() => listings.find((l) => l.id === itemId), [listings, itemId]);
@@ -284,6 +300,10 @@ export default function InboxScreen() {
 
       if (segment === 'groups' && conversation.type !== 'group') return false;
 
+      if (segment === 'buying' && !isBuyingConversation(conversation, currentUser?.id)) return false;
+
+      if (segment === 'selling' && !isSellingConversation(conversation, currentUser?.id)) return false;
+
       if (segment === 'requests') return isRequest;
 
       if (segment === 'archived') return isArchived;
@@ -349,6 +369,20 @@ export default function InboxScreen() {
 
 
   const unreadCount = useMemo(() => visibleConversations.filter((c) => c.unread).length, [visibleConversations]);
+
+  const buyingUnreadCount = useMemo(
+    () => conversations.filter(
+      (c) => !archivedIds.includes(c.id) && !messageRequests.includes(c.id) && c.unread && isBuyingConversation(c, currentUser?.id)
+    ).length,
+    [conversations, archivedIds, messageRequests, currentUser?.id]
+  );
+
+  const sellingUnreadCount = useMemo(
+    () => conversations.filter(
+      (c) => !archivedIds.includes(c.id) && !messageRequests.includes(c.id) && c.unread && isSellingConversation(c, currentUser?.id)
+    ).length,
+    [conversations, archivedIds, messageRequests, currentUser?.id]
+  );
 
 
 
@@ -717,28 +751,6 @@ export default function InboxScreen() {
 
           <AnimatedPressable
 
-            style={styles.iconBtn}
-
-            onPress={() => navigation.navigate('CreateGroupChat')}
-
-            activeOpacity={0.7}
-
-            scaleValue={0.9}
-
-            hapticFeedback="light"
-
-            accessibilityLabel="Create new group chat"
-
-            accessibilityRole="button"
-
-          >
-
-            <Ionicons name="people-outline" size={20} color={Colors.textSecondary} />
-
-          </AnimatedPressable>
-
-          <AnimatedPressable
-
             style={styles.newMessageBtn}
 
             onPress={() => navigation.navigate('NewMessage')}
@@ -798,6 +810,8 @@ export default function InboxScreen() {
           onChange={(s) => setSegment(s)}
 
           requestCount={messageRequests.length}
+          buyingCount={buyingUnreadCount}
+          sellingCount={sellingUnreadCount}
 
         />
 
@@ -914,6 +928,39 @@ export default function InboxScreen() {
                 </AnimatedPressable>
               </View>
 
+            )}
+
+            {segment === 'all' && (buyingUnreadCount > 0 || sellingUnreadCount > 0) && (
+              <View style={styles.needsActionRow}>
+                {buyingUnreadCount > 0 && (
+                  <AnimatedPressable
+                    style={styles.needsActionChip}
+                    onPress={() => setSegment('buying')}
+                    activeOpacity={0.85}
+                    scaleValue={0.97}
+                    hapticFeedback="light"
+                    accessibilityLabel={`${buyingUnreadCount} unread buying conversations`}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="cart-outline" size={14} color={Colors.brand} />
+                    <Text style={styles.needsActionText}>{buyingUnreadCount} buying</Text>
+                  </AnimatedPressable>
+                )}
+                {sellingUnreadCount > 0 && (
+                  <AnimatedPressable
+                    style={styles.needsActionChip}
+                    onPress={() => setSegment('selling')}
+                    activeOpacity={0.85}
+                    scaleValue={0.97}
+                    hapticFeedback="light"
+                    accessibilityLabel={`${sellingUnreadCount} unread selling conversations`}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="pricetag-outline" size={14} color={Colors.brand} />
+                    <Text style={styles.needsActionText}>{sellingUnreadCount} selling</Text>
+                  </AnimatedPressable>
+                )}
+              </View>
             )}
 
             <AnimatedFlashList
@@ -1053,6 +1100,46 @@ export default function InboxScreen() {
                         ctaLabel="Create group"
 
                         onCtaPress={() => navigation.navigate('CreateGroupChat')}
+
+                      />
+
+                    );
+
+                  case 'buying':
+
+                    return (
+
+                      <EmptyState
+
+                        icon="cart-outline"
+
+                        title="No buying conversations"
+
+                        subtitle="When you message a seller about a listing, it'll appear here."
+
+                        ctaLabel="Browse listings"
+
+                        onCtaPress={() => navigation.navigate('MainTabs')}
+
+                      />
+
+                    );
+
+                  case 'selling':
+
+                    return (
+
+                      <EmptyState
+
+                        icon="pricetag-outline"
+
+                        title="No selling conversations"
+
+                        subtitle="When buyers message you about your listings, they'll appear here."
+
+                        ctaLabel="View all"
+
+                        onCtaPress={() => setSegment('all')}
 
                       />
 
@@ -1907,6 +1994,29 @@ const styles = StyleSheet.create({
 
     gap: Space.xs + 2,
 
+  },
+
+  needsActionRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+  },
+  needsActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+    backgroundColor: `${Colors.brand}0D`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.brand}33`,
+  },
+  needsActionText: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.brand,
   },
 
 });

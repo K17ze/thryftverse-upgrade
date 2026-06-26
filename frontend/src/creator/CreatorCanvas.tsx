@@ -464,6 +464,53 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
 function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'product' }> }) {
   const { payload } = layer;
   const isSold = payload.availability === 'sold';
+  const isDeleted = payload.availability === 'deleted';
+  const hasImage = !!payload.snapshotImageUrl;
+  const hasHotspot = !!payload.hotspotLabel;
+
+  if (hasImage) {
+    return (
+      <View style={productStyles.imageContainer}>
+        <Image
+          source={{ uri: payload.snapshotImageUrl! }}
+          style={productStyles.thumbnail}
+          resizeMode="cover"
+        />
+        <View style={productStyles.imageOverlay}>
+          <Text style={productStyles.imageTitle} numberOfLines={1}>
+            {payload.snapshotTitle || 'Listing'}
+          </Text>
+          {payload.snapshotPriceGbp !== undefined && (
+            <Text style={[productStyles.imagePrice, isSold && productStyles.soldPrice]}>
+              {isSold ? 'SOLD' : `£${payload.snapshotPriceGbp.toFixed(0)}`}
+            </Text>
+          )}
+        </View>
+        {isSold && (
+          <View style={productStyles.soldBadge}>
+            <Text style={productStyles.soldBadgeText}>SOLD</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  if (hasHotspot) {
+    return (
+      <View style={productStyles.hotspotContainer}>
+        <View style={productStyles.hotspotDot} />
+        <Text style={productStyles.hotspotLabel} numberOfLines={1}>
+          {payload.hotspotLabel}
+        </Text>
+        {payload.snapshotPriceGbp !== undefined && !isSold && (
+          <Text style={productStyles.hotspotPrice}>
+            £{payload.snapshotPriceGbp.toFixed(0)}
+          </Text>
+        )}
+      </View>
+    );
+  }
+
   return (
     <View style={productStyles.container}>
       <View style={productStyles.row}>
@@ -471,8 +518,8 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
         <Text style={productStyles.title} numberOfLines={1}>{payload.snapshotTitle || 'Listing'}</Text>
       </View>
       {payload.snapshotPriceGbp !== undefined && (
-        <Text style={[productStyles.price, isSold && productStyles.soldPrice]}>
-          {isSold ? 'SOLD' : `£${payload.snapshotPriceGbp.toFixed(0)}`}
+        <Text style={[productStyles.price, isSold && productStyles.soldPrice, isDeleted && productStyles.deletedPrice]}>
+          {isSold ? 'SOLD' : isDeleted ? 'UNAVAILABLE' : `£${payload.snapshotPriceGbp.toFixed(0)}`}
         </Text>
       )}
     </View>
@@ -678,6 +725,80 @@ const productStyles = StyleSheet.create({
   },
   soldPrice: {
     color: '#ff6b6b',
+  },
+  deletedPrice: {
+    color: '#888',
+  },
+  imageContainer: {
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    width: '100%',
+    height: '100%',
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: Space.xs,
+    paddingVertical: Space.xs,
+    gap: 1,
+  },
+  imageTitle: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: 10,
+  },
+  imagePrice: {
+    color: Colors.brand,
+    fontFamily: Typography.family.bold,
+    fontSize: Type.caption.size,
+  },
+  soldBadge: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm,
+    backgroundColor: '#ff6b6b',
+    borderRadius: Radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  soldBadgeText: {
+    color: '#fff',
+    fontFamily: Typography.family.bold,
+    fontSize: 9,
+  },
+  hotspotContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: 5,
+  },
+  hotspotDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.brand,
+  },
+  hotspotLabel: {
+    color: '#fff',
+    fontFamily: Typography.family.medium,
+    fontSize: 10,
+    flex: 1,
+  },
+  hotspotPrice: {
+    color: Colors.brand,
+    fontFamily: Typography.family.bold,
+    fontSize: 10,
   },
 });
 

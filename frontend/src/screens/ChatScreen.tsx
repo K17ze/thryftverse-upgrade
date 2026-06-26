@@ -101,7 +101,7 @@ type Props = StackScreenProps<RootStackParamList, 'Chat'>;
 
 
 
-type MsgType = 'text' | 'offer' | 'offer_declined' | 'purchase_status' | 'media';
+type MsgType = 'text' | 'offer' | 'offer_declined' | 'purchase_status' | 'media' | 'system';
 
 
 
@@ -116,6 +116,10 @@ interface Message {
   senderLabel?: string;
 
   text?: string;
+
+  isSystem?: boolean;
+
+  systemTitle?: string;
 
   offer?: { price: number; originalPrice: number; status?: 'pending' | 'declined' | 'countered' | 'accepted' };
 
@@ -1307,6 +1311,25 @@ export default function ChatScreen({ navigation, route }: Props) {
       ) : content;
     }
 
+    // System message — trusted system event with distinct visual identity
+    if (msg.type === 'system' || msg.isSystem) {
+      const content = (
+        <View key={msg.id} style={styles.statusWrap}>
+          <MarketplaceChatCard
+            type="system"
+            systemTitle={msg.systemTitle}
+            text={msg.text}
+          />
+        </View>
+      );
+      return dateSeparator ? (
+        <View key={msg.id + '_group'}>
+          {dateSeparator}
+          {content}
+        </View>
+      ) : content;
+    }
+
     // Offer message — use MarketplaceChatCard
     if (msg.type === 'offer' || msg.type === 'offer_declined') {
       const isMe = msg.sender === 'me';
@@ -1521,6 +1544,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 : () => navigation.navigate('Checkout', { itemId: linkedListing.id })
             }
             onTitlePress={() => navigation.navigate('ItemDetail', { itemId: linkedListing.id })}
+            defaultCollapsed
           />
         )}
 
@@ -1649,6 +1673,18 @@ export default function ChatScreen({ navigation, route }: Props) {
             onCameraPress={() => handleAttachmentSelect('camera')}
             placeholder="Message..."
             isSending={composerSending}
+            quickReplies={linkedListing ? (
+              linkedListing.sellerId === currentUser?.id
+                ? [
+                    { label: 'Still available', onPress: () => setInput('Yes, still available!') },
+                    { label: 'I can ship today', onPress: () => setInput('I can ship this today if you want to go ahead.') },
+                  ]
+                : [
+                    { label: 'Is this still available?', onPress: () => setInput('Hi, is this still available?') },
+                    { label: 'Can I make an offer?', onPress: () => setInput('Would you consider an offer on this?') },
+                  ]
+            ) : undefined}
+            safetyWarning={linkedListing && linkedListing.sellerId !== currentUser?.id ? 'Never pay outside Thryftverse. Use checkout for buyer protection.' : undefined}
           />
         </View>
 
@@ -1777,7 +1813,12 @@ const styles = StyleSheet.create({
 
   dateWrap: {
     alignItems: 'center',
-    marginVertical: Space.md,
+    marginVertical: Space.sm + 2,
+    paddingVertical: 3,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    alignSelf: 'center',
   },
 
   dateText: {

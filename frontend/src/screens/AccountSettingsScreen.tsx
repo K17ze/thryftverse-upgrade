@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
@@ -242,7 +241,7 @@ export default function AccountSettingsScreen() {
 
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title="Account" subtitle="Manage your identity and information" onBack={() => navigation.goBack()} />}
+      header={<FlagshipHeader title="Private details" onBack={() => navigation.goBack()} />}
       stickyFooter={
         <FlagshipStickyFooter
           actions={[
@@ -257,129 +256,108 @@ export default function AccountSettingsScreen() {
         />
       }
     >
-      {/* Identity Summary */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <View style={[styles.identitySurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-          <View style={styles.identityRow}>
-            {user?.avatar ? (
-              <View style={styles.identityAvatar}>
-                <CachedImage uri={user.avatar} style={styles.identityAvatarImage} contentFit="cover" />
-              </View>
-            ) : (
-              <View style={[styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
-                <Text style={styles.identityAvatarText}>{(user?.username ?? '?').charAt(0).toUpperCase()}</Text>
-              </View>
-            )}
-            <View style={styles.identityText}>
-              <Text style={styles.identityName}>{displayName || user?.username || 'Not signed in'}</Text>
-              <Text style={[styles.identityMeta, { color: Colors.textMuted }]}>@{user?.username ?? '—'}</Text>
+      <View style={[styles.identitySurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+        <View style={styles.identityRow}>
+          {user?.avatar ? (
+            <View style={styles.identityAvatar}>
+              <CachedImage uri={user.avatar} style={styles.identityAvatarImage} contentFit="cover" />
             </View>
-            <AnimatedPressable
-              onPress={() => navigation.navigate('EditProfile')}
-              scaleValue={0.92}
-              hapticFeedback="light"
-            >
-              <Text style={[styles.identityEdit, { color: Colors.brand }]}>Edit</Text>
-            </AnimatedPressable>
+          ) : (
+            <View style={[styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+              <Text style={styles.identityAvatarText}>{(user?.username ?? '?').charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
+          <View style={styles.identityText}>
+            <Text style={styles.identityName}>{displayName || user?.username || 'Not signed in'}</Text>
+            <Text style={[styles.identityMeta, { color: Colors.textMuted }]}>@{user?.username ?? '—'}</Text>
           </View>
+          <AnimatedPressable
+            onPress={() => navigation.navigate('EditProfile')}
+            scaleValue={0.92}
+            hapticFeedback="light"
+          >
+            <Text style={[styles.identityEdit, { color: Colors.brand }]}>Edit</Text>
+          </AnimatedPressable>
         </View>
-      </Reanimated.View>
+      </View>
 
-      {/* Personal Information */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
-        <SettingsSection title="Personal information" noCard>
-            {isHydrating ? (
-              <View style={{ padding: 16 }}>
-                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-                <View style={{ height: 8 }} />
-                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-                <View style={{ height: 8 }} />
-                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              </View>
-            ) : (
-              <>
-                <DetailRow label="Display name" value={displayName} onPress={() => openEdit('fullName', displayName)} />
-                <DetailRow label="Username" value={user?.username ?? '—'} />
-                <DetailRow
-                  label="Country"
-                  value={(userAny?.country as string) || '—'}
-                  isLast
-                />
-              </>
-            )}
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Personal information" noCard>
+          {isHydrating ? (
+            <View style={{ padding: 16 }}>
+              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+              <View style={{ height: 8 }} />
+              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+              <View style={{ height: 8 }} />
+              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+            </View>
+          ) : (
+            <>
+              <DetailRow label="Display name" value={displayName} onPress={() => openEdit('fullName', displayName)} />
+              <DetailRow label="Username" value={user?.username ?? '—'} />
+              <DetailRow
+                label="Country"
+                value={(userAny?.country as string) || '—'}
+                isLast
+              />
+            </>
+          )}
+      </SettingsSection>
 
-      {/* Contact Information */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
-        <SettingsSection title="Contact" noCard>
-            {isHydrating ? (
-              <View style={{ padding: 16 }}>
-                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-                <View style={{ height: 8 }} />
-                <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              </View>
-            ) : (
-              <>
-                <DetailRow label="Phone" value={phone || '—'} onPress={() => openEdit('phone', phone)} />
-                <DetailRow label="Email" value={email || '—'} isLast />
-              </>
-            )}
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Contact" noCard>
+          {isHydrating ? (
+            <View style={{ padding: 16 }}>
+              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+              <View style={{ height: 8 }} />
+              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
+            </View>
+          ) : (
+            <>
+              <DetailRow label="Phone" value={phone || '—'} onPress={() => openEdit('phone', phone)} />
+              <DetailRow label="Email" value={email || '—'} isLast />
+            </>
+          )}
+      </SettingsSection>
 
-      {/* Security */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
-        <SettingsSection title="Security" noCard>
-            <DetailRow label="Password" value="••••••••" onPress={() => navigation.navigate('ChangePassword')} />
-            <DetailRow
-              label="Two-Factor Authentication"
-              value={twoFactorEnabled ? 'Enabled' : 'Off'}
-              onPress={() => handleToggleTwoFactor(!twoFactorEnabled)}
-              isLast
-            />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Security" noCard>
+          <DetailRow label="Password" value="••••••••" onPress={() => navigation.navigate('ChangePassword')} />
+          <DetailRow
+            label="Two-factor authentication"
+            value={twoFactorEnabled ? 'Enabled' : 'Off'}
+            onPress={() => handleToggleTwoFactor(!twoFactorEnabled)}
+            isLast
+          />
+      </SettingsSection>
 
-      {/* Preferences */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
-        <SettingsSection title="Preferences" noCard>
-            <DetailRow
-              label="Holiday Mode"
-              value={holidayMode ? 'On' : 'Off'}
-              onPress={() => updateAccountPreferences({ holidayMode: !holidayMode })}
-            />
-            <DetailRow
-              label="Private Profile"
-              value={privateProfile ? 'On' : 'Off'}
-              onPress={() => updateAccountPreferences({ privateProfile: !privateProfile })}
-              isLast
-            />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Shop preferences" noCard>
+          <DetailRow
+            label="Holiday mode"
+            value={holidayMode ? 'On' : 'Off'}
+            onPress={() => updateAccountPreferences({ holidayMode: !holidayMode })}
+          />
+          <DetailRow
+            label="Private profile"
+            value={privateProfile ? 'On' : 'Off'}
+            onPress={() => updateAccountPreferences({ privateProfile: !privateProfile })}
+            isLast
+          />
+      </SettingsSection>
 
-      {/* Data Controls */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(220)}>
-        <SettingsSection title="Data" noCard>
-            <DetailRow
-              label="Download my data"
-              value=""
-              onPress={() => void handleDownloadData()}
-              loading={isExporting}
-              isLast
-            />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Data & ownership" noCard>
+          <DetailRow
+            label="Download my data"
+            value=""
+            onPress={() => void handleDownloadData()}
+            loading={isExporting}
+            isLast
+          />
+      </SettingsSection>
 
-      {/* Danger Zone */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(260)}>
-        <FlagshipDangerZone
-          title="Delete Account"
-          description="This will permanently remove your account and all associated data. This action cannot be undone."
-          actionLabel="Delete Account"
-          onAction={handleDeleteAccount}
-        />
-      </Reanimated.View>
+      <FlagshipDangerZone
+        title="Delete account"
+        description="This will permanently remove your account and all associated data. This action cannot be undone."
+        actionLabel="Delete account"
+        onAction={handleDeleteAccount}
+      />
 
       {/* Inline Edit Modal */}
       <Modal visible={editingField !== null} transparent animationType="slide" onRequestClose={closeEdit}>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
@@ -18,6 +18,7 @@ export interface ChatListingContextBarProps {
   secondaryActionIcon?: string;
   onSecondaryAction?: () => void;
   onTitlePress?: () => void;
+  defaultCollapsed?: boolean;
 }
 
 export function ChatListingContextBar({
@@ -32,20 +33,24 @@ export function ChatListingContextBar({
   secondaryActionIcon,
   onSecondaryAction,
   onTitlePress,
+  defaultCollapsed = false,
 }: ChatListingContextBarProps) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+
   return (
     <View style={styles.root}>
-      <AnimatedPressable
-        onPress={onTitlePress}
-        activeOpacity={0.85}
-        scaleValue={0.98}
-        hapticFeedback="light"
-        disabled={!onTitlePress}
-        accessibilityRole={onTitlePress ? 'button' : undefined}
-        accessibilityLabel={`Linked listing: ${title}, ${price}, ${availability}`}
-        accessibilityHint="Opens the listing detail page"
-      >
-        <View style={styles.row}>
+      <View style={styles.rowContainer}>
+        <AnimatedPressable
+          onPress={onTitlePress}
+          activeOpacity={0.85}
+          scaleValue={0.98}
+          hapticFeedback="light"
+          disabled={!onTitlePress}
+          accessibilityRole={onTitlePress ? 'button' : undefined}
+          accessibilityLabel={`Linked listing: ${title}, ${price}, ${availability}`}
+          accessibilityHint="Opens the listing detail page"
+          style={styles.row}
+        >
           {thumbnailUri ? (
             <CachedImage
               uri={thumbnailUri}
@@ -67,36 +72,46 @@ export function ChatListingContextBar({
           {onTitlePress && (
             <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
           )}
-        </View>
-      </AnimatedPressable>
-      <View style={styles.actionsRow}>
-        <AnimatedPressable
-          style={styles.primaryBtn}
-          onPress={onPrimaryAction}
-          activeOpacity={0.85}
-          scaleValue={0.96}
-          hapticFeedback="light"
-          accessibilityRole="button"
-          accessibilityLabel={primaryActionLabel}
-        >
-          <Ionicons name={primaryActionIcon as any} size={14} color={Colors.textInverse} />
-          <Text style={styles.primaryBtnText}>{primaryActionLabel}</Text>
         </AnimatedPressable>
-        {secondaryActionLabel && onSecondaryAction ? (
+        <Pressable
+          onPress={() => setCollapsed((c) => !c)}
+          accessibilityRole="button"
+          accessibilityLabel={collapsed ? 'Expand listing actions' : 'Collapse listing actions'}
+          style={styles.collapseBtn}
+        >
+          <Ionicons name={collapsed ? 'chevron-down-outline' : 'chevron-up-outline'} size={16} color={Colors.textMuted} />
+        </Pressable>
+      </View>
+      {!collapsed && (
+        <View style={styles.actionsRow}>
           <AnimatedPressable
-            style={styles.secondaryBtn}
-            onPress={onSecondaryAction}
+            style={styles.primaryBtn}
+            onPress={onPrimaryAction}
             activeOpacity={0.85}
             scaleValue={0.96}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel={secondaryActionLabel}
+            accessibilityLabel={primaryActionLabel}
           >
-            <Ionicons name={(secondaryActionIcon ?? 'chatbubbles-outline') as any} size={14} color={Colors.textPrimary} />
-            <Text style={styles.secondaryBtnText}>{secondaryActionLabel}</Text>
+            <Ionicons name={primaryActionIcon as any} size={14} color={Colors.textInverse} />
+            <Text style={styles.primaryBtnText}>{primaryActionLabel}</Text>
           </AnimatedPressable>
-        ) : null}
-      </View>
+          {secondaryActionLabel && onSecondaryAction ? (
+            <AnimatedPressable
+              style={styles.secondaryBtn}
+              onPress={onSecondaryAction}
+              activeOpacity={0.85}
+              scaleValue={0.96}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={secondaryActionLabel}
+            >
+              <Ionicons name={(secondaryActionIcon ?? 'chatbubbles-outline') as any} size={14} color={Colors.textPrimary} />
+              <Text style={styles.secondaryBtnText}>{secondaryActionLabel}</Text>
+            </AnimatedPressable>
+          ) : null}
+        </View>
+      )}
     </View>
   );
 }
@@ -110,10 +125,22 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     gap: Space.sm,
   },
+  rowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    flex: 1,
+  },
+  collapseBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   thumb: {
     width: 44,

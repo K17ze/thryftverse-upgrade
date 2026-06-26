@@ -95,9 +95,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#141414',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: '#1a1a1a',
     gap: Space.sm,
   },
   scrollContent: {
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   toolLabel: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: '#999',
   },
   actions: {
     flexDirection: 'row',
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: '#1a1a1a',
   },
   publishBtn: {
     paddingHorizontal: Space.md + 4,

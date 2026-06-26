@@ -12,11 +12,12 @@ interface OfferData {
 }
 
 interface MarketplaceChatCardProps {
-  type: 'offer' | 'purchase_status' | 'listing_share' | 'safety_notice';
+  type: 'offer' | 'purchase_status' | 'listing_share' | 'safety_notice' | 'system';
   isMe?: boolean;
   senderLabel?: string;
   offer?: OfferData;
   text?: string;
+  systemTitle?: string;
   formattedPrice?: string;
   formattedOriginalPrice?: string;
   onAccept?: () => void;
@@ -30,6 +31,7 @@ export function MarketplaceChatCard({
   senderLabel,
   offer,
   text,
+  systemTitle,
   formattedPrice,
   formattedOriginalPrice,
   onAccept,
@@ -86,6 +88,9 @@ export function MarketplaceChatCard({
     const lines = text.split('\n');
     return (
       <View style={styles.statusInline}>
+        <View style={styles.statusInlineIcon}>
+          <Ionicons name="cube-outline" size={12} color={Colors.textMuted} />
+        </View>
         <Text style={styles.statusInlineTitle}>{lines[0]}</Text>
         <Text style={styles.statusInlineBody}>{lines.slice(1).join('\n')}</Text>
       </View>
@@ -97,6 +102,22 @@ export function MarketplaceChatCard({
       <View style={styles.noticeInline}>
         <Ionicons name="shield-checkmark-outline" size={14} color={Colors.textMuted} />
         <Text style={styles.noticeInlineText}>{text}</Text>
+      </View>
+    );
+  }
+
+  if (type === 'system') {
+    return (
+      <View style={styles.systemEvent}>
+        <View style={styles.systemEventIcon}>
+          <Ionicons name="shield-outline" size={12} color={Colors.textMuted} />
+        </View>
+        {systemTitle ? (
+          <Text style={styles.systemEventTitle}>{systemTitle}</Text>
+        ) : null}
+        {text ? (
+          <Text style={styles.systemEventText}>{text}</Text>
+        ) : null}
       </View>
     );
   }
@@ -197,8 +218,21 @@ const styles = StyleSheet.create({
     maxWidth: '85%',
     alignItems: 'center',
     gap: 2,
-    paddingVertical: Space.xs,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  statusInlineIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 2,
   },
   statusInlineTitle: {
     fontSize: Type.caption.size,
@@ -226,5 +260,37 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
+  },
+  systemEvent: {
+    alignSelf: 'center',
+    maxWidth: '85%',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  systemEventIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  systemEventTitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+  },
+  systemEventText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    textAlign: 'center',
   },
 });

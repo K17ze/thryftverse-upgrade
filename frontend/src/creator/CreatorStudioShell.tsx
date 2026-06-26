@@ -49,7 +49,7 @@ function CreatorStudioInner() {
 
   const canvasWidth = useMemo(() => {
     const maxW = screenWidth - 32;
-    const maxH = Math.min(screenHeight * 0.55, 520);
+    const maxH = screenHeight * 0.62;
     const ratio = document.canvas.aspectRatio;
     if (maxW / ratio <= maxH) {
       return Math.floor(maxW);
@@ -143,7 +143,7 @@ function CreatorStudioInner() {
       {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable onPress={handleBack} style={styles.topBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityLabel="Back" accessibilityRole="button">
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color="#e0e0e0" />
         </Pressable>
 
         <View style={styles.topCenter}>
@@ -170,7 +170,7 @@ function CreatorStudioInner() {
             accessibilityLabel="Undo"
             accessibilityRole="button"
           >
-            <Ionicons name="arrow-undo" size={20} color={canUndo ? Colors.textPrimary : Colors.textMuted} />
+            <Ionicons name="arrow-undo" size={20} color={canUndo ? '#e0e0e0' : '#555'} />
           </Pressable>
           <Pressable
             onPress={redo}
@@ -180,7 +180,7 @@ function CreatorStudioInner() {
             accessibilityLabel="Redo"
             accessibilityRole="button"
           >
-            <Ionicons name="arrow-redo" size={20} color={canRedo ? Colors.textPrimary : Colors.textMuted} />
+            <Ionicons name="arrow-redo" size={20} color={canRedo ? '#e0e0e0' : '#555'} />
           </Pressable>
           <Pressable
             onPress={() => setShowLayers(true)}
@@ -189,7 +189,7 @@ function CreatorStudioInner() {
             accessibilityLabel="Layers"
             accessibilityRole="button"
           >
-            <Ionicons name="layers-outline" size={22} color={Colors.textPrimary} />
+            <Ionicons name="layers-outline" size={22} color="#e0e0e0" />
           </Pressable>
           <Pressable
             onPress={() => setShowTemplates(true)}
@@ -198,7 +198,7 @@ function CreatorStudioInner() {
             accessibilityLabel="Templates"
             accessibilityRole="button"
           >
-            <Ionicons name="grid-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="grid-outline" size={20} color="#e0e0e0" />
           </Pressable>
           <Pressable
             onPress={() => navigation.navigate('CreatorDraftList')}
@@ -207,7 +207,7 @@ function CreatorStudioInner() {
             accessibilityLabel="Drafts"
             accessibilityRole="button"
           >
-            <Ionicons name="document-text-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="document-text-outline" size={20} color="#e0e0e0" />
           </Pressable>
         </View>
       </View>
@@ -215,33 +215,43 @@ function CreatorStudioInner() {
       {/* Page strip (for poster) */}
       {document.type === 'poster' && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pageStrip} contentContainerStyle={styles.pageStripContent}>
-          {document.pages.map((p, i) => (
-            <Pressable
-              key={p.id}
-              onPress={() => {
-                selectLayer(null);
-                setActivePageIndex(i);
-              }}
-              onLongPress={() => {
-                if (document.pages.length > 1) {
-                  Alert.alert(
-                    `Page ${i + 1}`,
-                    undefined,
-                    [
-                      { text: 'Duplicate', onPress: () => duplicatePage(i) },
-                      { text: 'Delete', style: 'destructive', onPress: () => removePage(i) },
-                      { text: 'Cancel', style: 'cancel' },
-                    ],
-                  );
-                }
-              }}
-              style={[styles.pageThumb, i === activePageIndex && { borderColor: accentColor }]}
-              accessibilityLabel={`Page ${i + 1}`}
-              accessibilityRole="button"
-            >
-              <Text style={styles.pageThumbText}>{i + 1}</Text>
-            </Pressable>
-          ))}
+          {document.pages.map((p, i) => {
+            const thumbW = 36;
+            const thumbH = Math.floor(thumbW * document.canvas.aspectRatio);
+            return (
+              <Pressable
+                key={p.id}
+                onPress={() => {
+                  selectLayer(null);
+                  setActivePageIndex(i);
+                }}
+                onLongPress={() => {
+                  if (document.pages.length > 1) {
+                    Alert.alert(
+                      `Page ${i + 1}`,
+                      undefined,
+                      [
+                        { text: 'Duplicate', onPress: () => duplicatePage(i) },
+                        { text: 'Delete', style: 'destructive', onPress: () => removePage(i) },
+                        { text: 'Cancel', style: 'cancel' },
+                      ],
+                    );
+                  }
+                }}
+                style={[styles.pageThumb, { height: thumbH }, i === activePageIndex && { borderColor: accentColor }]}
+                accessibilityLabel={`Page ${i + 1}`}
+                accessibilityRole="button"
+              >
+                <CreatorCanvas
+                  document={document}
+                  page={p}
+                  canvasWidth={thumbW}
+                  canvasHeight={thumbH}
+                  mode="view"
+                />
+              </Pressable>
+            );
+          })}
           {document.pages.length < 10 && (
             <Pressable
               onPress={() => {
@@ -252,7 +262,7 @@ function CreatorStudioInner() {
               accessibilityLabel="Add page"
               accessibilityRole="button"
             >
-              <Ionicons name="add" size={18} color={Colors.textSecondary} />
+              <Ionicons name="add" size={18} color="#888" />
             </Pressable>
           )}
         </ScrollView>
@@ -284,16 +294,73 @@ function CreatorStudioInner() {
         />
       </View>
 
-      {/* Selection toolbar */}
+      {/* Selection toolbar — contextual tools per layer type */}
       {selectedLayer && (
         <View style={styles.selectionToolbar}>
+          {/* Layer-type-specific actions */}
+          {selectedLayer.type === 'text' && (
+            <Pressable
+              onPress={() => {
+                setEditingLayer(selectedLayer);
+                setPickerMode('text');
+              }}
+              style={styles.selBtn}
+              accessibilityLabel="Edit text"
+              accessibilityRole="button"
+            >
+              <Ionicons name="create-outline" size={18} color="#e0e0e0" />
+            </Pressable>
+          )}
+          {selectedLayer.type === 'media' && (
+            <Pressable
+              onPress={() => {
+                setEditingLayer(selectedLayer);
+                setPickerMode('media');
+              }}
+              style={styles.selBtn}
+              accessibilityLabel="Replace media"
+              accessibilityRole="button"
+            >
+              <Ionicons name="swap-horizontal-outline" size={18} color="#e0e0e0" />
+            </Pressable>
+          )}
+          {selectedLayer.type === 'product' && (
+            <Pressable
+              onPress={() => {
+                setEditingLayer(selectedLayer);
+                setPickerMode('product');
+              }}
+              style={styles.selBtn}
+              accessibilityLabel="Change product"
+              accessibilityRole="button"
+            >
+              <Ionicons name="pricetag-outline" size={18} color="#e0e0e0" />
+            </Pressable>
+          )}
+          {selectedLayer.type === 'mention' && (
+            <Pressable
+              onPress={() => {
+                setEditingLayer(selectedLayer);
+                setPickerMode('mention');
+              }}
+              style={styles.selBtn}
+              accessibilityLabel="Edit mention"
+              accessibilityRole="button"
+            >
+              <Ionicons name="person-outline" size={18} color="#e0e0e0" />
+            </Pressable>
+          )}
+
+          <View style={styles.selDivider} />
+
+          {/* Universal z-order controls */}
           <Pressable
             onPress={() => reorderLayer(selectedLayer.id, 'forward')}
             style={styles.selBtn}
             accessibilityLabel="Bring forward"
             accessibilityRole="button"
           >
-            <Ionicons name="arrow-up" size={18} color={Colors.textPrimary} />
+            <Ionicons name="arrow-up" size={18} color="#e0e0e0" />
           </Pressable>
           <Pressable
             onPress={() => reorderLayer(selectedLayer.id, 'backward')}
@@ -301,7 +368,7 @@ function CreatorStudioInner() {
             accessibilityLabel="Send backward"
             accessibilityRole="button"
           >
-            <Ionicons name="arrow-down" size={18} color={Colors.textPrimary} />
+            <Ionicons name="arrow-down" size={18} color="#e0e0e0" />
           </Pressable>
           <Pressable
             onPress={() => duplicateLayer(selectedLayer.id)}
@@ -309,7 +376,7 @@ function CreatorStudioInner() {
             accessibilityLabel="Duplicate layer"
             accessibilityRole="button"
           >
-            <Ionicons name="copy-outline" size={18} color={Colors.textPrimary} />
+            <Ionicons name="copy-outline" size={18} color="#e0e0e0" />
           </Pressable>
           <Pressable
             onPress={() => removeLayer(selectedLayer.id)}
@@ -374,7 +441,7 @@ export function CreatorStudioScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#0d0d0d',
   },
   topBar: {
     flexDirection: 'row',
@@ -383,7 +450,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#1a1a1a',
   },
   topBtn: {
     width: 40,
@@ -403,7 +470,7 @@ const styles = StyleSheet.create({
   titleText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
-    color: Colors.textPrimary,
+    color: '#e0e0e0',
   },
   dirtyDot: {
     width: 6,
@@ -424,7 +491,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   pageStrip: {
-    maxHeight: 52,
+    maxHeight: 72,
+    backgroundColor: '#0d0d0d',
   },
   pageStripContent: {
     paddingHorizontal: Space.md,
@@ -433,39 +501,40 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   pageThumb: {
-    width: 32,
-    height: 32,
+    width: 36,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: '#1a1a1a',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
+    overflow: 'hidden',
   },
   pageThumbActive: {
     borderColor: Colors.brand,
   },
   addPageBtn: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 48,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: '#333',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: '#1a1a1a',
   },
   pageThumbText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
-    color: Colors.textPrimary,
+    color: '#e0e0e0',
   },
   canvasArea: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: Space.md,
+    backgroundColor: '#0d0d0d',
   },
   selectionToolbar: {
     flexDirection: 'row',
@@ -473,9 +542,9 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#141414',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: '#1a1a1a',
   },
   selBtn: {
     width: 44,
@@ -483,6 +552,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: '#1a1a1a',
+  },
+  selDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#333',
   },
 });

@@ -27,38 +27,35 @@ import { Space, Radius, Type } from '../theme/designTokens';
 import { Typography } from '../theme/designTokens';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { IdentityCard } from '../components/settings/IdentityCard';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
-import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { useAppTheme as useTheme } from '../theme/ThemeContext';
 
 type Props = StackScreenProps<RootStackParamList, 'Settings'>;
 
-interface RouteMeta {
+interface DestinationMeta {
   key: string;
+  label: string;
   searchTerms: string;
   section: string;
 }
 
-const ROUTE_METADATA: RouteMeta[] = [
-  { key: 'EditProfile', searchTerms: 'edit profile avatar name bio', section: 'Account Centre' },
-  { key: 'Postage', searchTerms: 'postage shipping address delivery', section: 'Account Centre' },
-  { key: 'Closet', searchTerms: 'closet saved wishlist collections', section: 'Account Centre' },
-  { key: 'Wallet', searchTerms: 'wallet balance payout', section: 'Seller Hub' },
-  { key: 'Payments', searchTerms: 'payment methods card bank', section: 'Seller Hub' },
-  { key: 'BalanceHistory', searchTerms: 'balance history payouts', section: 'Seller Hub' },
-  { key: 'AccountSettings', searchTerms: 'account details email phone', section: 'Trust & Security' },
-  { key: 'ChangePassword', searchTerms: 'password security', section: 'Trust & Security' },
-  { key: 'TwoFactorSetup', searchTerms: 'two factor authentication 2fa', section: 'Trust & Security' },
-  { key: 'ActiveSessions', searchTerms: 'devices sessions active', section: 'Trust & Security' },
-  { key: 'BlockedUsers', searchTerms: 'blocked users', section: 'Trust & Security' },
-  { key: 'PrivacySettings', searchTerms: 'privacy controls', section: 'Trust & Security' },
-  { key: 'PushNotifications', searchTerms: 'push notifications alerts', section: 'Preferences' },
-  { key: 'Personalisation', searchTerms: 'personalisation feed preferences', section: 'Preferences' },
-  { key: 'HelpSupport', searchTerms: 'help support faq contact', section: 'Support' },
-  { key: 'About', searchTerms: 'about version', section: 'Support' },
+const DESTINATIONS: DestinationMeta[] = [
+  { key: 'EditProfile', label: 'Public profile', searchTerms: 'edit profile avatar name bio username', section: 'Account' },
+  { key: 'AccountSettings', label: 'Private details', searchTerms: 'account details email phone private', section: 'Account' },
+  { key: 'Postage', label: 'Delivery addresses', searchTerms: 'postage shipping address delivery buying', section: 'Buying' },
+  { key: 'Payments', label: 'Payment methods', searchTerms: 'payment methods card bank buying', section: 'Buying' },
+  { key: 'Closet', label: 'Saved & collections', searchTerms: 'closet saved wishlist collections buying', section: 'Buying' },
+  { key: 'Wallet', label: 'Payout account', searchTerms: 'wallet balance payout selling', section: 'Selling & payouts' },
+  { key: 'BalanceHistory', label: 'Payout history', searchTerms: 'balance history payouts selling', section: 'Selling & payouts' },
+  { key: 'Postage', label: 'Shipping preferences', searchTerms: 'postage shipping preferences selling', section: 'Selling & payouts' },
+  { key: 'PrivacySettings', label: 'Privacy & safety', searchTerms: 'privacy controls visibility safety blocked', section: 'Privacy & safety' },
+  { key: 'ChatSettings', label: 'Messages & notifications', searchTerms: 'messages chat notifications messaging', section: 'Messages & notifications' },
+  { key: 'Personalisation', label: 'Personalisation & appearance', searchTerms: 'personalisation feed preferences theme currency language appearance', section: 'Personalisation & appearance' },
+  { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push notifications alerts categories', section: 'Messages & notifications' },
+  { key: 'HelpSupport', label: 'Help', searchTerms: 'help support faq contact', section: 'Help' },
+  { key: 'About', label: 'About Thryftverse', searchTerms: 'about version', section: 'Help' },
 ];
 
 export default function SettingsScreen({ navigation }: Props) {
@@ -67,7 +64,9 @@ export default function SettingsScreen({ navigation }: Props) {
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const savedPaymentMethod = useStore((state) => state.savedPaymentMethod);
   const savedAddress = useStore((state) => state.savedAddress);
+  const blockedCount = useStore((s) => s.blockedUsers.length);
   const { show } = useToast();
+  const { colors } = useTheme();
 
   const {
     language: selectedLanguage,
@@ -112,11 +111,6 @@ export default function SettingsScreen({ navigation }: Props) {
     () => themeOptions.find((option) => option.toLowerCase() === themePreference),
     [themeOptions, themePreference]
   );
-
-  const pushNotificationsSubtitle = t('settings.push.subtitle', {
-    enabled: pushEnabledCount,
-    total: pushTotalCount,
-  });
 
   const handleCurrencySelect = (option: string) => {
     const selectedCode = option.split(' | ')[0] as SupportedCurrencyCode;
@@ -166,23 +160,27 @@ export default function SettingsScreen({ navigation }: Props) {
     navigation.replace('AuthLanding');
   }, [logout, navigation]);
 
-  const matchesSearch = (terms: string) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase().trim();
-    return terms.toLowerCase().includes(q);
-  };
+  const isSearching = searchQuery.trim().length > 0;
+  const q = searchQuery.toLowerCase().trim();
 
-  const showSection = (sectionName: string) => {
-    if (!searchQuery.trim()) return true;
-    return (
-      sectionName.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-      ROUTE_METADATA.some(
-        (r) =>
-          r.section === sectionName &&
-          r.searchTerms.toLowerCase().includes(searchQuery.toLowerCase().trim())
-      )
+  const searchResults = React.useMemo(() => {
+    if (!isSearching) return [];
+    return DESTINATIONS.filter((d) =>
+      d.searchTerms.toLowerCase().includes(q) ||
+      d.label.toLowerCase().includes(q) ||
+      d.section.toLowerCase().includes(q)
     );
-  };
+  }, [isSearching, q]);
+
+  const avatarUri = (currentUser as any)?.avatar || null;
+  const displayName = currentUser?.username ?? 'Not signed in';
+
+  const securityStatusParts: string[] = [];
+  if (twoFactorEnabled) securityStatusParts.push('2FA enabled');
+  if (blockedCount > 0) securityStatusParts.push(`${blockedCount} blocked`);
+  if (securityStatusParts.length === 0) securityStatusParts.push('Basic');
+
+  const notificationSummary = `${pushEnabledCount}/${pushTotalCount} categories`;
 
   return (
     <FlagshipScreen
@@ -193,180 +191,201 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       }
     >
-      {/* Search */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <View style={{ marginBottom: Space.lg }}>
-          <AppSearchBar
-            placeholder="Search settings"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            containerStyle={styles.searchField}
-          />
+      {/* Compact identity row */}
+      <View style={styles.identityRow}>
+        <View style={[styles.identityAvatar, { backgroundColor: colors.surfaceAlt }]}>
+          {avatarUri ? (
+            <Text style={styles.identityAvatarText}>{displayName.charAt(0).toUpperCase()}</Text>
+          ) : (
+            <Text style={styles.identityAvatarText}>{displayName.charAt(0).toUpperCase()}</Text>
+          )}
         </View>
-      </Reanimated.View>
+        <View style={styles.identityText}>
+          <Text style={[styles.identityName, { color: colors.textPrimary }]} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <Text style={[styles.identityStatus, { color: colors.textMuted }]} numberOfLines={1}>
+            {securityStatusParts.join(' · ')}
+          </Text>
+        </View>
+        <AnimatedPressable
+          onPress={() => navigation.navigate('EditProfile')}
+          activeOpacity={0.7}
+          scaleValue={0.96}
+          hapticFeedback="light"
+          accessibilityLabel="Edit profile"
+          accessibilityRole="button"
+          style={[styles.identityEditBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+        >
+          <Ionicons name="pencil-outline" size={16} color={colors.textPrimary} />
+        </AnimatedPressable>
+      </View>
 
-      {/* Identity First */}
-      {showSection('Account Centre') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
-          <View style={[styles.identitySurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-            <IdentityCard
-              user={currentUser}
-              onPress={() => navigation.navigate('EditProfile')}
-              variant="commanding"
-            />
-            <View style={styles.quickActions}>
-              <AnimatedPressable
-                style={styles.quickAction}
-                onPress={() => navigation.navigate('EditProfile')}
-                activeOpacity={0.85}
-                scaleValue={0.97}
-                hapticFeedback="light"
-              >
-                <Ionicons name="create-outline" size={18} color={Colors.textPrimary} />
-                <Text style={styles.quickActionText}>Edit Profile</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={styles.quickAction}
-                onPress={() => navigation.navigate('Wallet')}
-                activeOpacity={0.85}
-                scaleValue={0.97}
-                hapticFeedback="light"
-              >
-                <Ionicons name="wallet-outline" size={18} color={Colors.textPrimary} />
-                <Text style={styles.quickActionText}>Wallet</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={styles.quickAction}
-                onPress={() => navigation.navigate('AccountSettings')}
-                activeOpacity={0.85}
-                scaleValue={0.97}
-                hapticFeedback="light"
-              >
-                <Ionicons name="shield-checkmark-outline" size={18} color={Colors.textPrimary} />
-                <Text style={styles.quickActionText}>Security</Text>
-              </AnimatedPressable>
+      {/* Search */}
+      <View style={{ marginBottom: Space.md }}>
+        <AppSearchBar
+          placeholder="Search settings"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          containerStyle={styles.searchField}
+        />
+      </View>
+
+      {isSearching ? (
+        /* Search results — direct matching rows */
+        <SettingsSection title="Results" noCard>
+          {searchResults.length === 0 ? (
+            <View style={styles.emptySearch}>
+              <Text style={[styles.emptySearchText, { color: colors.textMuted }]}>
+                No matching settings
+              </Text>
             </View>
-          </View>
-        </Reanimated.View>
-      )}
-
-      {/* Account Centre */}
-      {showSection('Account Centre') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          ) : (
+            searchResults.map((dest, i) => (
+              <SettingsRow
+                key={`${dest.key}-${i}`}
+                title={dest.label}
+                subtitle={dest.section}
+                onPress={() => {
+                  setSearchQuery('');
+                  (navigation as any).navigate(dest.key);
+                }}
+                isFirst={i === 0}
+                isLast={i === searchResults.length - 1}
+              />
+            ))
+          )}
+        </SettingsSection>
+      ) : (
+        <>
+          {/* Account */}
           <SettingsSection title="Account" noCard>
             <SettingsRow
-              icon="location-outline"
-              title="Addresses"
-              subtitle={savedAddress ? 'Manage delivery addresses' : 'None saved'}
-              value={savedAddress ? 'Manage' : 'Add'}
-              onPress={() => navigation.navigate('Postage')}
-              isFirst
-            />
-            <SettingsRow
-              icon="shirt-outline"
-              title="Closet"
-              subtitle="Saved, Wishlist & Collections"
-              onPress={() => navigation.navigate('Closet')}
-              isLast
-            />
-          </SettingsSection>
-        </Reanimated.View>
-      )}
-
-      {/* Seller Hub */}
-      {showSection('Seller Hub') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
-          <SettingsSection title="Selling & Money" noCard>
-            <SettingsRow
-              icon="wallet-outline"
-              title="Balance & Wallet"
-              value="Manage"
-              onPress={() => navigation.navigate('Wallet')}
-              isFirst
-            />
-            <SettingsRow
-              icon="card-outline"
-              title="Payment Methods"
-              value={savedPaymentMethod ? 'Manage' : 'None'}
-              onPress={() => navigation.navigate('Payments')}
-            />
-            <SettingsRow
-              icon="cash-outline"
-              title="Payouts"
-              value="Manage"
-              onPress={() => navigation.navigate('BalanceHistory')}
-            />
-            <SettingsRow
-              icon="cube-outline"
-              title="Shipping"
-              value="Manage"
-              onPress={() => navigation.navigate('Postage')}
-              isLast
-            />
-          </SettingsSection>
-        </Reanimated.View>
-      )}
-
-      {/* Trust & Security */}
-      {showSection('Trust & Security') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-          <SettingsSection title="Trust & Security" noCard>
-            <SettingsRow
-              icon="person-circle-outline"
-              title="Account Details"
-              value="View"
-              onPress={() => navigation.navigate('AccountSettings')}
+              icon="person-outline"
+              title="Public profile"
+              subtitle="Avatar, name, bio, username"
+              onPress={() => navigation.navigate('EditProfile')}
               isFirst
             />
             <SettingsRow
               icon="lock-closed-outline"
-              title="Password"
-              value="••••••••"
+              title="Private details"
+              subtitle="Email, phone, identity"
+              onPress={() => navigation.navigate('AccountSettings')}
+            />
+            <SettingsRow
+              icon="key-outline"
+              title="Password & authentication"
+              subtitle={twoFactorEnabled ? '2FA enabled' : 'Password only'}
               onPress={() => navigation.navigate('ChangePassword')}
             />
             <SettingsRow
-              icon="shield-checkmark-outline"
-              title="Two-Factor Authentication"
-              value={twoFactorEnabled ? 'On' : 'Off'}
-              onPress={() => navigation.navigate('TwoFactorSetup')}
-            />
-            <SettingsRow
               icon="phone-portrait-outline"
-              title="Devices & Sessions"
-              value="Manage"
+              title="Devices & sessions"
               onPress={() => navigation.navigate('ActiveSessions')}
-            />
-            <SettingsRow
-              icon="ban-outline"
-              title="Blocked Users"
-              value="View"
-              onPress={() => navigation.navigate('BlockedUsers')}
-            />
-            <SettingsRow
-              icon="eye-outline"
-              title="Privacy Controls"
-              value="Manage"
-              onPress={() => navigation.navigate('PrivacySettings')}
               isLast
             />
           </SettingsSection>
-        </Reanimated.View>
-      )}
 
-      {/* Preferences */}
-      {showSection('Preferences') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
-          <SettingsSection title="Preferences" noCard>
+          {/* Buying */}
+          <SettingsSection title="Buying" noCard>
+            <SettingsRow
+              icon="location-outline"
+              title="Delivery addresses"
+              subtitle={savedAddress ? '1 saved' : 'None saved'}
+              onPress={() => navigation.navigate('Postage')}
+              isFirst
+            />
+            <SettingsRow
+              icon="card-outline"
+              title="Payment methods"
+              subtitle={savedPaymentMethod ? savedPaymentMethod.label : 'None saved'}
+              onPress={() => navigation.navigate('Payments')}
+            />
+            <SettingsRow
+              icon="heart-outline"
+              title="Saved & collections"
+              onPress={() => navigation.navigate('Closet')}
+              isLast
+            />
+          </SettingsSection>
+
+          {/* Selling & payouts */}
+          <SettingsSection title="Selling & payouts" noCard>
+            <SettingsRow
+              icon="wallet-outline"
+              title="Payout account"
+              subtitle="Balance and wallet"
+              onPress={() => navigation.navigate('Wallet')}
+              isFirst
+            />
+            <SettingsRow
+              icon="cash-outline"
+              title="Payout history"
+              onPress={() => navigation.navigate('BalanceHistory')}
+            />
+            <SettingsRow
+              icon="cube-outline"
+              title="Shipping preferences"
+              onPress={() => navigation.navigate('Postage')}
+              isLast
+            />
+          </SettingsSection>
+
+          {/* Privacy & safety */}
+          <SettingsSection title="Privacy & safety" noCard>
+            <SettingsRow
+              icon="eye-outline"
+              title="Profile visibility"
+              subtitle="Private profile, activity, message permissions"
+              onPress={() => navigation.navigate('PrivacySettings')}
+              isFirst
+            />
+            <SettingsRow
+              icon="ban-outline"
+              title="Blocked users"
+              subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None'}
+              onPress={() => navigation.navigate('BlockedUsers')}
+              isLast
+            />
+          </SettingsSection>
+
+          {/* Messages & notifications */}
+          <SettingsSection title="Messages & notifications" noCard>
+            <SettingsRow
+              icon="chatbubble-outline"
+              title="Chat privacy"
+              subtitle="Who can message you, read receipts"
+              onPress={() => navigation.navigate('ChatSettings')}
+              isFirst
+            />
+            <SettingsRow
+              icon="notifications-outline"
+              title="Notification categories"
+              subtitle={notificationSummary}
+              onPress={() => navigation.navigate('PushNotifications')}
+            />
+            <SettingsRow
+              icon="mail-outline"
+              title="Email notifications"
+              toggleValue={emailNotificationsEnabled}
+              onToggle={handleToggleEmailNotifications}
+              isLast
+            />
+          </SettingsSection>
+
+          {/* Personalisation & appearance */}
+          <SettingsSection title="Personalisation & appearance" noCard>
             <SettingsRow
               icon="swap-horizontal-outline"
-              title="Currency Display"
+              title="Currency display"
               value={displayModeLabel}
               onPress={cycleDisplayMode}
               isFirst
             />
             <SettingsRow
               icon="globe-outline"
-              title="Local Currency"
+              title="Local currency"
               value={`${currencyCode} (${CURRENCIES[currencyCode].symbol})`}
               onPress={() => setCurrencyPickerVisible(true)}
             />
@@ -384,35 +403,18 @@ export default function SettingsScreen({ navigation }: Props) {
             />
             <SettingsRow
               icon="options-outline"
-              title="Personalisation"
-              subtitle="Content preferences and recommendations"
+              title="Content preferences"
+              subtitle="Feed and recommendations"
               onPress={() => navigation.navigate('Personalisation')}
-            />
-            <SettingsRow
-              icon="notifications-outline"
-              title="Push Notifications"
-              subtitle={pushNotificationsSubtitle}
-              onPress={() => navigation.navigate('PushNotifications')}
-            />
-            <SettingsRow
-              icon="mail-outline"
-              title="Email Notifications"
-              toggleValue={emailNotificationsEnabled}
-              onToggle={handleToggleEmailNotifications}
               isLast
             />
           </SettingsSection>
-        </Reanimated.View>
-      )}
 
-      {/* Support */}
-      {showSection('Support') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
-          <SettingsSection title="Support" noCard>
+          {/* Help */}
+          <SettingsSection title="Help" noCard>
             <SettingsRow
               icon="help-circle-outline"
               title="Help Centre"
-              subtitle="FAQs, contact us, and more"
               onPress={() => navigation.navigate('HelpSupport')}
               isFirst
             />
@@ -434,14 +436,12 @@ export default function SettingsScreen({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </Reanimated.View>
-      )}
 
-      {/* Logout / Sign Out */}
-      {matchesSearch('log out sign out') && (
-        <Reanimated.View entering={FadeInDown.duration(300).delay(280)}>
-          <SettingsSignOutRow username={currentUser?.username} onSignOut={handleLogout} />
-        </Reanimated.View>
+          {/* Sign out */}
+          <View style={{ marginTop: Space.lg }}>
+            <SettingsSignOutRow username={currentUser?.username} onSignOut={handleLogout} />
+          </View>
+        </>
       )}
 
       <BottomSheetPicker
@@ -479,56 +479,53 @@ const styles = StyleSheet.create({
   searchField: {
     borderRadius: 999,
     backgroundColor: 'transparent',
-    height: 48,
+    height: 44,
   },
-  headerMeta: {
-    maxWidth: 120,
-  },
-  headerMetaText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    textAlign: 'right',
-  },
-  accountCard: {
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    marginHorizontal: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  accountDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginHorizontal: Space.md,
-  },
-  identitySurface: {
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    marginHorizontal: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.lg,
-  },
-  quickActions: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.md,
-    gap: Space.sm,
-  },
-  quickAction: {
-    flex: 1,
+  identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs + 2,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    gap: Space.sm + 2,
+    marginBottom: Space.md,
   },
-  quickActionText: {
-    fontSize: Type.caption.size,
+  identityAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  identityAvatarText: {
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+  },
+  identityText: {
+    flex: 1,
+    gap: 2,
+  },
+  identityName: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  identityStatus: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  identityEditBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  emptySearch: {
+    paddingVertical: Space.lg,
+    alignItems: 'center',
+  },
+  emptySearchText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
   },
 });

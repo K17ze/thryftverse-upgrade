@@ -78,6 +78,7 @@ export default function MessageRequestsScreen() {
     return (
       <View>
         <View style={styles.requestRow}>
+          {/* Identity section */}
           <View style={styles.requestIdentity}>
             <AvatarRing
               uri={avatarUri}
@@ -95,21 +96,40 @@ export default function MessageRequestsScreen() {
               <Caption color={Colors.textMuted} numberOfLines={2} style={styles.requestPreview}>
                 {item.lastMessage ?? 'Wants to message you'}
               </Caption>
-              {listing && (
-                <View style={styles.requestListingContext}>
-                  {listing.images?.[0] ? (
-                    <CachedImage uri={listing.images[0]} style={styles.requestListingThumb} contentFit="cover" />
-                  ) : (
-                    <View style={styles.requestListingThumbPlaceholder}>
-                      <Ionicons name="pricetag-outline" size={12} color={Colors.textMuted} />
-                    </View>
-                  )}
-                  <Caption color={Colors.textSecondary} numberOfLines={1} style={styles.requestListingTitle}>{listing.title}</Caption>
-                </View>
-              )}
             </View>
           </View>
 
+          {/* Listing context card */}
+          {listing && (
+            <View style={styles.listingCard}>
+              {listing.images?.[0] ? (
+                <CachedImage uri={listing.images[0]} style={styles.listingThumb} contentFit="cover" />
+              ) : (
+                <View style={styles.listingThumbPlaceholder}>
+                  <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
+                </View>
+              )}
+              <View style={styles.listingInfo}>
+                <Caption color={Colors.textSecondary} numberOfLines={1} style={styles.listingTitle}>{listing.title}</Caption>
+                {listing.price != null && (
+                  <Text style={styles.listingPrice}>
+                    £{listing.price.toFixed(2)}
+                  </Text>
+                )}
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+            </View>
+          )}
+
+          {/* Safety note */}
+          <View style={styles.safetyNote}>
+            <Ionicons name="shield-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.safetyNoteText}>
+              If this seems suspicious, decline and block.
+            </Text>
+          </View>
+
+          {/* Actions */}
           <View style={styles.requestActions}>
             <AnimatedPressable
               style={styles.requestDecline}
@@ -154,7 +174,14 @@ export default function MessageRequestsScreen() {
         >
           <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
         </AnimatedPressable>
-        <Text style={styles.headerTitle}>Message Requests</Text>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>Requests</Text>
+          <Text style={styles.headerSubtitle}>
+            {requestConversations.length > 0
+              ? `${requestConversations.length} pending · Accept to chat`
+              : 'People you don\'t follow'}
+          </Text>
+        </View>
         <View style={styles.backBtn} />
       </View>
       {requestConversations.length === 0 ? (
@@ -198,115 +225,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTitleWrap: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
   headerTitle: {
-    fontSize: Type.title.size,
+    fontSize: Type.subtitle.size,
     fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
+    letterSpacing: Type.subtitle.letterSpacing,
+  },
+  headerSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
   },
   listContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xxl,
   },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    marginBottom: Space.sm,
-    gap: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm + 6,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  nameText: {
-    flex: 1,
-  },
-  cardText: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 2,
-  },
-  previewText: {
-    lineHeight: Type.caption.lineHeight + 2,
-    marginTop: 2,
-  },
-  listingContext: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    marginTop: Space.xs,
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  listingThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.sm,
-  },
-  listingThumbPlaceholder: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listingTitle: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    maxWidth: 180,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-  },
-  declineBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  declineText: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
-  },
-  acceptBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.textPrimary,
-  },
-  acceptText: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textInverse,
-  },
   requestRow: {
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    gap: Space.md,
+    gap: Space.sm,
   },
   requestIdentity: {
     flexDirection: 'row',
@@ -331,40 +274,55 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight + 2,
     marginTop: 2,
   },
-  requestListingContext: {
+  listingCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-    marginTop: Space.xs,
-    alignSelf: 'flex-start',
+    gap: Space.sm,
     backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
     borderRadius: Radius.md,
+    padding: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
   },
-  requestListingThumb: {
-    width: 20,
-    height: 20,
+  listingThumb: {
+    width: 40,
+    height: 40,
     borderRadius: Radius.sm,
   },
-  requestListingThumbPlaceholder: {
-    width: 20,
-    height: 20,
+  listingThumbPlaceholder: {
+    width: 40,
+    height: 40,
     borderRadius: Radius.sm,
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  requestListingTitle: {
+  listingInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  listingTitle: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    maxWidth: 180,
+  },
+  listingPrice: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textPrimary,
+  },
+  safetyNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.xs,
+  },
+  safetyNoteText: {
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
   },
   requestActions: {
     flexDirection: 'row',
     gap: Space.sm,
-    paddingLeft: 56 + Space.sm + 6,
   },
   requestDecline: {
     flex: 1,
@@ -397,7 +355,7 @@ const styles = StyleSheet.create({
   requestSeparator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
-    marginLeft: 56 + Space.sm + 6 + Space.md,
+    marginLeft: Space.md,
     marginRight: Space.md,
   },
 });

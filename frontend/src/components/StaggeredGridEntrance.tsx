@@ -18,13 +18,8 @@
 import React from 'react';
 import { View, StyleProp, ViewStyle } from 'react-native';
 import Reanimated, {
-  FadeInDown,
   FadeIn,
   ZoomIn,
-  withDelay,
-  withTiming,
-  withSpring,
-  Easing,
 } from 'react-native-reanimated';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
@@ -34,8 +29,8 @@ interface StaggeredItemProps {
   index: number;
   /** Delay per item in ms (default 45) */
   staggerMs?: number;
-  /** Animation type: 'fadeDown' | 'fade' | 'zoom' | 'springUp' */
-  animation?: 'fadeDown' | 'fade' | 'zoom' | 'springUp';
+  /** Animation type: 'fade' | 'zoom' */
+  animation?: 'fade' | 'zoom';
   /** Max items to stagger before instant (default 12) */
   maxStagger?: number;
   style?: StyleProp<ViewStyle>;
@@ -45,7 +40,7 @@ export function StaggeredItem({
   children,
   index,
   staggerMs = 45,
-  animation = 'fadeDown',
+  animation = 'fade',
   maxStagger = 12,
   style,
 }: StaggeredItemProps) {
@@ -59,13 +54,6 @@ export function StaggeredItem({
 
   const enterAnimation = React.useMemo(() => {
     switch (animation) {
-      case 'fadeDown':
-        return FadeInDown
-          .duration(Motion.list.enterDuration)
-          .delay(delay)
-          .springify()
-          .damping(Motion.spring.flagship.damping)
-          .stiffness(Motion.spring.flagship.stiffness);
       case 'fade':
         return FadeIn
           .duration(Motion.list.enterDuration)
@@ -77,15 +65,8 @@ export function StaggeredItem({
           .springify()
           .damping(Motion.spring.flagshipPop.damping)
           .stiffness(Motion.spring.flagshipPop.stiffness);
-      case 'springUp':
-        return FadeInDown
-          .duration(Motion.list.enterDuration + 100)
-          .delay(delay)
-          .springify()
-          .damping(14)
-          .stiffness(200);
       default:
-        return FadeInDown.duration(300).delay(delay);
+        return FadeIn.duration(300).delay(delay);
     }
   }, [animation, delay]);
 
@@ -105,7 +86,7 @@ interface StaggeredGridEntranceProps {
   columns?: number;
   /** Delay per item in ms (default 45) */
   staggerMs?: number;
-  animation?: 'fadeDown' | 'fade' | 'zoom' | 'springUp';
+  animation?: 'fade' | 'zoom';
   /** Container style */
   style?: StyleProp<ViewStyle>;
 }
@@ -118,7 +99,7 @@ export function StaggeredGridEntrance({
   children,
   columns = 2,
   staggerMs = 45,
-  animation = 'fadeDown',
+  animation = 'fade',
   style,
 }: StaggeredGridEntranceProps) {
   return (

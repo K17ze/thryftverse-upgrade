@@ -18,6 +18,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { CachedImage } from '../components/CachedImage';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBackendData } from '../context/BackendDataContext';
 
 type Props = StackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
@@ -35,6 +36,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const participantNameLookup = useStore((state) => (state as any).participantNameLookup as Map<string, string> | undefined);
+  const { listings } = useBackendData();
 
   const conversation = useMemo(
     () => conversations.find((c) => c.id === conversationId),
@@ -141,7 +143,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
         >
           <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
         </AnimatedPressable>
-        <Text style={styles.headerTitle}>Conversation Info</Text>
+        <Text style={styles.headerTitle}>Chat details</Text>
         <View style={styles.backBtn} />
       </View>
 
@@ -186,7 +188,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
 
         {/* Media & shared */}
         <View>
-          <Section title="Media & shared">
+          <Section title="Shared">
             <RowItem
               icon="images-outline"
               label="Photos & videos"
@@ -197,38 +199,58 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
                 return count > 0 ? `${count}` : undefined;
               })()}
             />
+            {(() => {
+              const linkCount = conversation.messages?.filter((m) => m.text && /https?:\/\//.test(m.text)).length ?? 0;
+              return linkCount > 0 ? (
+                <RowItem
+                  icon="link-outline"
+                  label="Links"
+                  detail={`${linkCount}`}
+                />
+              ) : null;
+            })()}
+            {(() => {
+              const offerCount = conversation.messages?.filter((m) => m.type === 'offer').length ?? 0;
+              return offerCount > 0 ? (
+                <RowItem
+                  icon="cash-outline"
+                  label="Offers"
+                  detail={`${offerCount}`}
+                />
+              ) : null;
+            })()}
           </Section>
         </View>
 
         {/* Marketplace context */}
-        {conversation.itemId && (
-          <View>
-            <Section title="Context">
-              <RowItem
-                icon="pricetag-outline"
-                label="View linked listing"
-                onPress={() => {
-                if (conversation.itemId) {
-                  navigation.navigate('ItemDetail', { itemId: conversation.itemId });
-                }
-              }}
-                showChevron
-              />
-            </Section>
-          </View>
-        )}
+        {conversation.itemId && (() => {
+          const listing = listings.find((l) => l.id === conversation.itemId);
+          return (
+            <View>
+              <Section title="Listing">
+                <RowItem
+                  icon="pricetag-outline"
+                  label={listing?.title ?? 'View linked listing'}
+                  detail={listing ? `£${listing.price.toFixed(2)}` : undefined}
+                  onPress={() => navigation.navigate('ItemDetail', { itemId: conversation.itemId! })}
+                  showChevron
+                />
+              </Section>
+            </View>
+          );
+        })()}
 
         {/* Actions */}
         <View>
           <Section title="Actions">
             <RowItem
               icon={isMuted ? 'volume-mute-outline' : 'volume-high-outline'}
-              label={isMuted ? 'Unmute notifications' : 'Mute notifications'}
+              label={isMuted ? 'Unmute' : 'Mute'}
               onPress={handleToggleMute}
             />
             <RowItem
               icon="archive-outline"
-              label="Archive chat"
+              label="Archive"
               onPress={handleArchive}
             />
           </Section>
@@ -236,7 +258,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
 
         {/* Danger zone */}
         <View>
-          <Section title="Danger zone" danger>
+          <Section title="Danger" danger>
             <RowItem
               icon={isBlocked ? 'person-add-outline' : 'person-remove-outline'}
               label={isBlocked ? 'Unblock user' : 'Block user'}

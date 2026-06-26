@@ -15,16 +15,24 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
 import { CreatorDraftService, type DraftMeta } from './drafts';
 import { createStableId } from '../utils/createStableId';
+import { CreatorCanvas } from './CreatorCanvas';
+import type { CreatorDocument } from './composition';
 
 export function CreatorDraftListScreen() {
   const navigation = useNavigation<any>();
   const [drafts, setDrafts] = useState<DraftMeta[]>([]);
+  const [draftDocs, setDraftDocs] = useState<Record<string, CreatorDocument | null>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadDrafts = useCallback(async () => {
     const items = await CreatorDraftService.listDrafts();
     setDrafts(items);
+    const docs: Record<string, CreatorDocument | null> = {};
+    await Promise.all(items.map(async (item) => {
+      docs[item.id] = await CreatorDraftService.loadDraft(item.id);
+    }));
+    setDraftDocs(docs);
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -84,20 +92,36 @@ export function CreatorDraftListScreen() {
     loadDrafts();
   }, [loadDrafts]);
 
-  const renderItem = useCallback(({ item }: { item: DraftMeta }) => (
+  const renderItem = useCallback(({ item }: { item: DraftMeta }) => {
+    const doc = draftDocs[item.id];
+    const thumbW = 44;
+    const thumbH = doc ? Math.floor(thumbW / doc.canvas.aspectRatio) : 44;
+    return (
     <Pressable
       onPress={() => handleOpenDraft(item)}
       style={styles.draftRow}
       accessibilityLabel={`Open draft ${item.title}`}
       accessibilityRole="button"
     >
-      <View style={[styles.draftIcon, { backgroundColor: item.type === 'look' ? '#5856d620' : '#ff950020' }]}>
-        <Ionicons
-          name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
-          size={20}
-          color={item.type === 'look' ? '#5856d6' : '#ff9500'}
-        />
-      </View>
+      {doc ? (
+        <View style={[styles.draftThumb, { height: thumbH }]}>
+          <CreatorCanvas
+            document={doc}
+            page={doc.pages[0]}
+            canvasWidth={thumbW}
+            canvasHeight={thumbH}
+            mode="view"
+          />
+        </View>
+      ) : (
+        <View style={[styles.draftIcon, { backgroundColor: item.type === 'look' ? '#5856d620' : '#ff950020' }]}>
+          <Ionicons
+            name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
+            size={20}
+            color={item.type === 'look' ? '#5856d6' : '#ff9500'}
+          />
+        </View>
+      )}
       <View style={styles.draftInfo}>
         <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
         <Text style={styles.draftMeta}>
@@ -131,7 +155,7 @@ export function CreatorDraftListScreen() {
         </Pressable>
       </View>
     </Pressable>
-  ), [handleOpenDraft, handleDeleteDraft, handleDuplicateDraft]);
+  ); }, [handleOpenDraft, handleDeleteDraft, handleDuplicateDraft, draftDocs]);
 
   if (loading) {
     return (
@@ -221,6 +245,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
+  },
+  draftThumb: {
+    width: 44,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
   },
   draftIcon: {
     width: 40,

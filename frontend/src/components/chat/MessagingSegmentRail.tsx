@@ -1,30 +1,36 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Pressable } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Space, Type, TypeStyles, Typography } from '../../theme/designTokens';
 
-export type MessagingSegment = 'all' | 'requests' | 'groups';
+export type MessagingSegment = 'all' | 'buying' | 'selling' | 'requests' | 'groups';
 
 export interface MessagingSegmentRailProps {
   active: MessagingSegment;
   onChange: (segment: MessagingSegment) => void;
   requestCount?: number;
+  buyingCount?: number;
+  sellingCount?: number;
 }
 
 export function MessagingSegmentRail({
   active,
   onChange,
   requestCount = 0,
+  buyingCount = 0,
+  sellingCount = 0,
 }: MessagingSegmentRailProps) {
   const segments: { key: MessagingSegment; label: string; badge?: number }[] = [
     { key: 'all', label: 'All' },
+    { key: 'buying', label: 'Buying', badge: buyingCount > 0 ? buyingCount : undefined },
+    { key: 'selling', label: 'Selling', badge: sellingCount > 0 ? sellingCount : undefined },
     { key: 'requests', label: 'Requests', badge: requestCount > 0 ? requestCount : undefined },
     { key: 'groups', label: 'Groups' },
   ];
 
   return (
-    <View style={styles.root}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.root} contentContainerStyle={styles.content}>
       {segments.map((seg) => {
         const isActive = seg.key === active;
         return (
@@ -54,7 +60,7 @@ export function MessagingSegmentRail({
           </Pressable>
         );
       })}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -67,6 +73,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
+  },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
   },
   tab: {
     flexDirection: 'row',

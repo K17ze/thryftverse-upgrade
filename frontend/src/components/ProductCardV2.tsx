@@ -185,7 +185,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
   }
 
   return (
-    <StaggeredItem index={index} animation="fadeDown" staggerMs={40}>
+    <StaggeredItem index={index} animation="fade" staggerMs={40}>
       {cardContent}
     </StaggeredItem>
   );
