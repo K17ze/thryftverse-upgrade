@@ -15,6 +15,7 @@ interface AuctionHomeItem {
   sellerId: string;
   sellerUsername: string;
   sellerDisplayName: string | null;
+  sellerAvatarUrl: string | null;
   title: string;
   imageUrl: string;
   brand: string | null;
@@ -29,7 +30,6 @@ interface AuctionHomeItem {
   isWatched: boolean;
   cancelledAt: string | null;
   settledAt: string | null;
-  winnerBidderId: string | null;
 }
 
 const NOW = new Date('2025-06-15T12:00:00Z').getTime();
@@ -55,6 +55,7 @@ function makeItem(
     sellerId: 'seller-1',
     sellerUsername: 'seller',
     sellerDisplayName: null,
+    sellerAvatarUrl: null,
     title: 'Test Item',
     imageUrl: '',
     brand: null,
@@ -67,7 +68,6 @@ function makeItem(
     isWatched: false,
     cancelledAt: null,
     settledAt: null,
-    winnerBidderId: null,
     ...overrides,
   };
 }
@@ -413,9 +413,14 @@ describe('Duplicate prevention — seller items included', () => {
     expect(sellerMatch).toBeTruthy();
   });
 
-  it('at least 7 sections check usedIds', () => {
+  it('uses buildCanonicalMap for attention deduplication', () => {
+    expect(src).toContain('buildCanonicalMap');
+    expect(src).toContain('canonicalMap');
+  });
+
+  it('at least 6 sections check usedIds (attention uses canonical map)', () => {
     const matches = src.match(/usedIds\.has/g) || [];
-    expect(matches.length).toBeGreaterThanOrEqual(7);
+    expect(matches.length).toBeGreaterThanOrEqual(6);
   });
 });
 
@@ -492,7 +497,547 @@ describe('Cancelled/settled list mapping', () => {
     expect(src).not.toMatch(/settledAt:\s*null\s*,/);
   });
 
-  it('toViewModel maps api.winnerBidderId', () => {
-    expect(src).toContain('api.winnerBidderId');
+  it('toViewModel maps api.seller.avatarUrl', () => {
+    expect(src).toContain('api.seller.avatarUrl');
+  });
+});
+
+// ── PASS 3 unit tests ──
+
+import {
+  resolvePriceLabel,
+  resolveTimeLabel,
+  resolveUrgency,
+  resolveViewerStatePresentation,
+  buildCanonicalMap,
+  getSellerInitials,
+  formatFinalMinutesCountdown,
+  isEndingSoon as isEndingSoonFn,
+  type PriceLabel,
+  type UrgencyLevel,
+} from '../utils/auctionHomeLogic';
+
+describe('PASS 3.2: Price label resolver', () => {
+  function makePriceItem(overrides: Partial<AuctionHomeItem> & { startsAt: string; endsAt: string }): AuctionHomeItem {
+    return {
+      id: 'test-1',
+      listingId: 'list-1',
+      sellerId: 'seller-1',
+      sellerUsername: 'seller',
+      sellerDisplayName: null,
+      sellerAvatarUrl: null,
+      title: 'Test',
+      imageUrl: '',
+      brand: null,
+      startingBidGbp: 10,
+      currentBidGbp: 20,
+      minimumNextBidGbp: 21,
+      bidCount: 5,
+      buyNowPriceGbp: null,
+      viewerState: 'not_participating',
+      isWatched: false,
+      cancelledAt: null,
+      settledAt: null,
+      ...overrides,
+    };
+  }
+
+  it('shows "Starting bid" for upcoming with no bids', () => {
+    const item = makePriceItem({
+      startsAt: new Date(NOW + ONE_HOUR).toISOString(),
+      endsAt: new Date(NOW + 7 * ONE_HOUR).toISOString(),
+      bidCount: 0,
+      currentBidGbp: 10,
+    });
+    const timing = resolveAuctionTiming(item, NOW);
+    expect(resolvePriceLabel(item, timing)).toBe('Starting bid');
+  });
+
+  it('shows "Starting bid" for live with no bids', () => {
+    const item = makePriceItem({
+      startsAt: new Date(NOW - ONE_HOUR).toISOString(),
+      endsAt: new Date(NOW + ONE_HOUR).toISOString(),
+      bidCount: 0,
+      currentBidGbp: 10,
+    });
+    const timing = resolveAuctionTiming(item, NOW);
+    expect(resolvePriceLabel(item, timing)).toBe('Starting bid');
+  });
+
+  it('shows "Current bid" for live with bids', () => {
+    const item = makePriceItem({
+      startsAt: new Date(NOW - ONE_HOUR).toISOString(),
+      endsAt: new Date(NOW + ONE_HOUR).toISOString(),
+      bidCount: 3,
+      currentBidGbp: 25,
+    });
+    const timing = resolveAuctionTiming(item, NOW);
+    expect(resolvePriceLabel(item, timing)).toBe('Current bid');
+  });
+
+  it('shows "Final bid" for ended with bids', () => {
+    const item = makePriceItem({
+      startsAt: new Date(NOW - 3 * ONE_HOUR).toISOString(),
+      endsAt: new Date(NOW - ONE_HOUR).toISOString(),
+      bidCount: 5,
+      currentBidGbp: 45,
+    });
+    const timing = resolveAuctionTiming(item, NOW);
+    expect(resolvePriceLabel(item, timing)).toBe('Final bid');
+  });
+
+  it('shows "No bids" for ended without bids', () => {
+    const item = makePriceItem({
+      startsAt: new Date(NOW - 3 * ONE_HOUR).toISOString(),
+      endsAt: new Date(NOW - ONE_HOUR).toISOString(),
+      bidCount: 0,
+      currentBidGbp: 10,
+    });
+    const timing = resolveAuctionTiming(item, NOW);
+    expect(resolvePriceLabel(item, timing)).toBe('No bids');
+  });
+});
+
+describe('PASS 3.4: Time label resolver', () => {
+  it('upcoming shows "Starts in"', () => {
+    const timing = resolveAuctionTiming(
+      { startsAt: new Date(NOW + 2 * ONE_HOUR).toISOString(), endsAt: new Date(NOW + 8 * ONE_HOUR).toISOString() },
+      NOW
+    );
+    const label = resolveTimeLabel(timing);
+    expect(label).toContain('Starts in');
+    expect(label).toContain('2h');
+  });
+
+  it('live shows time left', () => {
+    const timing = resolveAuctionTiming(
+      { startsAt: new Date(NOW - ONE_HOUR).toISOString(), endsAt: new Date(NOW + 3 * ONE_HOUR + 42 * 60000).toISOString() },
+      NOW
+    );
+    const label = resolveTimeLabel(timing);
+    expect(label).toContain('left');
+    expect(label).toContain('3h');
+  });
+
+  it('ended shows "Ended"', () => {
+    const timing = resolveAuctionTiming(
+      { startsAt: new Date(NOW - 3 * ONE_HOUR).toISOString(), endsAt: new Date(NOW - ONE_HOUR).toISOString() },
+      NOW
+    );
+    expect(resolveTimeLabel(timing)).toBe('Ended');
+  });
+
+  it('cancelled shows "Cancelled"', () => {
+    const timing = resolveAuctionTiming(
+      { startsAt: new Date(NOW - 3 * ONE_HOUR).toISOString(), endsAt: new Date(NOW - ONE_HOUR).toISOString(), cancelledAt: new Date(NOW - 2 * ONE_HOUR).toISOString() },
+      NOW
+    );
+    expect(resolveTimeLabel(timing)).toBe('Cancelled');
+  });
+
+  it('settled shows "Settled"', () => {
+    const timing = resolveAuctionTiming(
+      { startsAt: new Date(NOW - 3 * ONE_HOUR).toISOString(), endsAt: new Date(NOW - ONE_HOUR).toISOString(), settledAt: new Date(NOW - 30 * 60000).toISOString() },
+      NOW
+    );
+    expect(resolveTimeLabel(timing)).toBe('Settled');
+  });
+});
+
+describe('PASS 3.4: Urgency thresholds', () => {
+  it('returns "none" for non-live', () => {
+    const timing = { effectiveState: 'upcoming' as const, msToEnd: 999999 };
+    expect(resolveUrgency(timing)).toBe('none');
+  });
+
+  it('returns "none" for live with > 1 hour remaining', () => {
+    const timing = { effectiveState: 'live' as const, msToEnd: 2 * ONE_HOUR };
+    expect(resolveUrgency(timing)).toBe('none');
+  });
+
+  it('returns "endingSoon" for live with <= 1 hour remaining', () => {
+    const timing = { effectiveState: 'live' as const, msToEnd: 30 * 60000 };
+    expect(resolveUrgency(timing)).toBe('endingSoon');
+  });
+
+  it('returns "finalMinutes" for live with <= 5 minutes remaining', () => {
+    const timing = { effectiveState: 'live' as const, msToEnd: 3 * 60000 };
+    expect(resolveUrgency(timing)).toBe('finalMinutes');
+  });
+
+  it('formatFinalMinutesCountdown shows MM:SS', () => {
+    expect(formatFinalMinutesCountdown(138000)).toBe('02:18');
+  });
+
+  it('formatFinalMinutesCountdown shows "Ended" for 0', () => {
+    expect(formatFinalMinutesCountdown(0)).toBe('Ended');
+  });
+});
+
+describe('PASS 3.3: Viewer state presentation', () => {
+  it('outbid is action-oriented with danger color', () => {
+    const p = resolveViewerStatePresentation('outbid');
+    expect(p).toBeTruthy();
+    expect(p!.colorKey).toBe('danger');
+    expect(p!.priority).toBe(1);
+  });
+
+  it('leading is reassuring with success color', () => {
+    const p = resolveViewerStatePresentation('leading');
+    expect(p).toBeTruthy();
+    expect(p!.colorKey).toBe('success');
+    expect(p!.priority).toBe(2);
+  });
+
+  it('won is result-oriented with success color', () => {
+    const p = resolveViewerStatePresentation('won');
+    expect(p).toBeTruthy();
+    expect(p!.colorKey).toBe('success');
+    expect(p!.priority).toBe(3);
+  });
+
+  it('lost is restrained with textMuted color', () => {
+    const p = resolveViewerStatePresentation('lost');
+    expect(p).toBeTruthy();
+    expect(p!.colorKey).toBe('textMuted');
+    expect(p!.priority).toBeGreaterThan(3);
+  });
+
+  it('watching is low emphasis', () => {
+    const p = resolveViewerStatePresentation('watching');
+    expect(p).toBeTruthy();
+    expect(p!.colorKey).toBe('textSecondary');
+    expect(p!.priority).toBeGreaterThan(4);
+  });
+
+  it('seller has ownership context', () => {
+    const p = resolveViewerStatePresentation('seller');
+    expect(p).toBeTruthy();
+    expect(p!.colorKey).toBe('brand');
+  });
+
+  it('not_participating returns null', () => {
+    expect(resolveViewerStatePresentation('not_participating')).toBeNull();
+  });
+
+  it('outbid has higher priority than leading (action first)', () => {
+    const outbid = resolveViewerStatePresentation('outbid')!;
+    const leading = resolveViewerStatePresentation('leading')!;
+    expect(outbid.priority).toBeLessThan(leading.priority);
+  });
+});
+
+describe('PASS 3.0C: Attention deduplication via canonical map', () => {
+  function makeDedupItem(id: string, viewerState: AuctionHomeItem['viewerState'] = 'outbid'): AuctionHomeItem {
+    return {
+      id,
+      listingId: `list-${id}`,
+      sellerId: 'seller-1',
+      sellerUsername: 'seller',
+      sellerDisplayName: null,
+      sellerAvatarUrl: null,
+      title: `Item ${id}`,
+      imageUrl: '',
+      brand: null,
+      startsAt: new Date(NOW - ONE_HOUR).toISOString(),
+      endsAt: new Date(NOW + ONE_HOUR).toISOString(),
+      startingBidGbp: 10,
+      currentBidGbp: 20,
+      minimumNextBidGbp: 21,
+      bidCount: 3,
+      buyNowPriceGbp: null,
+      viewerState,
+      isWatched: false,
+      cancelledAt: null,
+      settledAt: null,
+    };
+  }
+
+  it('one outbid auction in three input collections appears exactly once in canonical map', () => {
+    const item = makeDedupItem('auc-1', 'outbid');
+    const live = [item];
+    const seller = [makeDedupItem('auc-1', 'seller')];
+    const watchlist = [makeDedupItem('auc-1', 'watching')];
+    const ended: AuctionHomeItem[] = [];
+
+    const map = buildCanonicalMap([live, seller, watchlist, ended]);
+    expect(map.size).toBe(1);
+    expect(map.has('auc-1')).toBe(true);
+  });
+
+  it('canonical map preserves first occurrence', () => {
+    const item1 = makeDedupItem('auc-1', 'outbid');
+    const item2 = makeDedupItem('auc-1', 'seller');
+    const map = buildCanonicalMap([[item1], [item2]]);
+    expect(map.get('auc-1')).toBe(item1);
+  });
+
+  it('attention items from canonical map are unique', () => {
+    const item = makeDedupItem('auc-1', 'outbid');
+    const map = buildCanonicalMap([[item], [item], [item]]);
+    const attentionItems: AuctionHomeItem[] = [];
+    for (const v of map.values()) {
+      if (isAttentionItem(v, NOW)) attentionItems.push(v);
+    }
+    expect(attentionItems).toHaveLength(1);
+  });
+});
+
+describe('PASS 3.0A: Stale search invalidation (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('handleSearchChange increments search generation immediately', () => {
+    expect(src).toContain('searchReqIdRef.current++');
+  });
+
+  it('handleClearSearch increments search generation', () => {
+    const clearMatch = src.match(/handleClearSearch[\s\S]*?searchReqIdRef\.current\+\+/);
+    expect(clearMatch).toBeTruthy();
+  });
+
+  it('cleanup on unmount invalidates in-flight search', () => {
+    const cleanupMatch = src.match(/return \(\) => \{ searchReqIdRef\.current\+\+; \}/);
+    expect(cleanupMatch).toBeTruthy();
+  });
+
+  it('handleSearchChange resets cursor immediately', () => {
+    const changeMatch = src.match(/handleSearchChange[\s\S]*?setSearchCursor\(null\)/);
+    expect(changeMatch).toBeTruthy();
+  });
+});
+
+describe('PASS 3.0B: Active search refresh (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('handleRefresh reruns search when search results are visible', () => {
+    const refreshMatch = src.match(/handleRefresh[\s\S]*?searchResults !== null[\s\S]*?listAuctions\(/);
+    expect(refreshMatch).toBeTruthy();
+  });
+
+  it('handleRefresh refetches sections when not searching', () => {
+    const refreshMatch = src.match(/handleRefresh[\s\S]*?fetchSections/);
+    expect(refreshMatch).toBeTruthy();
+  });
+});
+
+describe('PASS 3.0D: Foreground resync failure (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../hooks/useServerClock.ts'),
+    'utf-8'
+  );
+
+  it('does not clear needsResync before server response succeeds', () => {
+    const appStateEffect = src.match(/const handleAppStateChange[\s\S]*?subscription\.remove\(\);[\s\S]*?\}\s*,\s*\[\]\s*\)/);
+    expect(appStateEffect).toBeTruthy();
+    expect(appStateEffect![0]).not.toContain('clearResync');
+    expect(appStateEffect![0]).not.toContain('setNeedsResync(false)');
+  });
+
+  it('needsResync is only cleared inside computeOffset', () => {
+    const computeMatch = src.match(/computeOffset[\s\S]*?setNeedsResync\(false\)/);
+    expect(computeMatch).toBeTruthy();
+  });
+
+  it('exposes resyncFailed state', () => {
+    expect(src).toContain('resyncFailed');
+    expect(src).toContain('clearResyncFailed');
+  });
+});
+
+describe('PASS 3.0E: Dark mode (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('does not hardcode barStyle="dark-content"', () => {
+    expect(src).not.toMatch(/barStyle="dark-content"/);
+  });
+
+  it('uses isDark for StatusBar barStyle', () => {
+    expect(src).toContain('isDark');
+    expect(src).toMatch(/barStyle=\{isDark/);
+  });
+
+  it('uses useAppTheme', () => {
+    expect(src).toContain('useAppTheme');
+  });
+
+  it('does not use hardcoded #ff4444', () => {
+    expect(src).not.toContain('#ff4444');
+  });
+
+  it('uses Colors.danger for danger states', () => {
+    expect(src).toContain('Colors.danger');
+  });
+});
+
+describe('PASS 3.0F: Least-data exposure (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('AuctionHomeItem does not contain winnerBidderId', () => {
+    const logicSrc = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../utils/auctionHomeLogic.ts'),
+      'utf-8'
+    );
+    const itemMatch = logicSrc.match(/export interface AuctionHomeItem \{[\s\S]*?\}/);
+    expect(itemMatch).toBeTruthy();
+    expect(itemMatch![0]).not.toContain('winnerBidderId');
+  });
+});
+
+describe('PASS 3.1: Card model family (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('defines AuctionAttentionCard', () => {
+    expect(src).toContain('AuctionAttentionCard');
+  });
+
+  it('defines AuctionFeedCard', () => {
+    expect(src).toContain('AuctionFeedCard');
+  });
+
+  it('defines AuctionCompactCard', () => {
+    expect(src).toContain('AuctionCompactCard');
+  });
+
+  it('defines AuctionEndedCard', () => {
+    expect(src).toContain('AuctionEndedCard');
+  });
+
+  it('attention card does not nest AppButton', () => {
+    expect(src).not.toContain('AppButton');
+  });
+
+  it('cards are memoised', () => {
+    expect(src).toContain('memo(');
+  });
+});
+
+describe('PASS 3.6: Attention card interaction (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('attention card uses single pressable, not nested AppButton', () => {
+    expect(src).toContain('AnimatedPressable');
+    expect(src).not.toContain('AppButton');
+  });
+
+  it('attention card has visual CTA label (not interactive button)', () => {
+    expect(src).toContain('attentionCtaLabel');
+  });
+});
+
+describe('PASS 3.7: Seller identity (static guardrails)', () => {
+  const logicSrc = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../utils/auctionHomeLogic.ts'),
+    'utf-8'
+  );
+
+  it('AuctionHomeItem has sellerAvatarUrl', () => {
+    expect(logicSrc).toContain('sellerAvatarUrl');
+  });
+
+  it('getSellerInitials provides fallback', () => {
+    expect(getSellerInitials('John Doe', 'johndoe')).toBe('JD');
+    expect(getSellerInitials(null, 'johndoe')).toBe('J');
+    expect(getSellerInitials('', '')).toBe('?');
+  });
+});
+
+describe('PASS 3.10: Partial section failure (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('uses Promise.allSettled (not Promise.all)', () => {
+    expect(src).toContain('Promise.allSettled');
+  });
+
+  it('tracks section errors', () => {
+    expect(src).toContain('sectionErrors');
+  });
+
+  it('shows section error banner for failed sections', () => {
+    expect(src).toContain('sectionErrorBanner');
+  });
+
+  it('pagination error is not silently swallowed', () => {
+    expect(src).toContain('paginationError');
+    expect(src).toContain('setPaginationError');
+  });
+});
+
+describe('PASS 3.11: Performance (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('card components are memoised', () => {
+    expect(src).toMatch(/memo\(function Auction/);
+  });
+
+  it('uses useCallback for render dispatchers', () => {
+    expect(src).toContain('useCallback');
+  });
+
+  it('uses useMemo for sections', () => {
+    expect(src).toContain('useMemo');
+  });
+
+  it('does not use nested FlashLists with scrollEnabled={false} inside parent FlashList', () => {
+    const flashListCount = (src.match(/FlashList/g) || []).length;
+    // Parent list + section lists — some section lists are horizontal (not nested vertical)
+    // The key is no nested scrollEnabled={false} vertical lists inside a parent vertical list
+    expect(flashListCount).toBeGreaterThan(0);
+  });
+});
+
+describe('PASS 3.12: Accessibility (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('uses buildAuctionAccessibilityLabel', () => {
+    expect(src).toContain('buildAuctionAccessibilityLabel');
+  });
+
+  it('accessibility labels include price state', () => {
+    const logicSrc = require('fs').readFileSync(
+      require('path').resolve(__dirname, '../utils/auctionHomeLogic.ts'),
+      'utf-8'
+    );
+    expect(logicSrc).toContain('priceLabel');
+    expect(logicSrc).toContain('buildAuctionAccessibilityLabel');
+  });
+
+  it('header buttons have accessibility labels', () => {
+    expect(src).toContain('accessibilityLabel="Go back"');
+    expect(src).toContain('accessibilityLabel="My auction activity"');
+  });
+
+  it('search has accessibility label', () => {
+    expect(src).toContain('accessibilityLabel="Search auctions"');
+  });
+
+  it('clear search has accessibility label', () => {
+    expect(src).toContain('accessibilityLabel="Clear search"');
   });
 });

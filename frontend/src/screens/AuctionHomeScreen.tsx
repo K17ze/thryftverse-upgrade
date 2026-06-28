@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { memo, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
   RefreshControl,
   Pressable,
   StatusBar,
+  Text,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,14 +17,28 @@ import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import type { SupportedCurrencyCode } from '../constants/currencies';
 import type { CurrencyDisplayMode } from '../utils/currency';
-import { useServerClockTick, resolveAuctionTiming, formatCountdown } from '../hooks/useServerClock';
-import { isAttentionItem, isEndingSoon, type AuctionHomeItem } from '../utils/auctionHomeLogic';
+import { useServerClockTick, resolveAuctionTiming } from '../hooks/useServerClock';
+import {
+  isAttentionItem,
+  isEndingSoon,
+  buildCanonicalMap,
+  resolvePriceLabel,
+  resolveTimeLabel,
+  resolveUrgency,
+  resolveViewerStatePresentation,
+  formatFinalMinutesCountdown,
+  getSellerInitials,
+  buildAuctionAccessibilityLabel,
+  type AuctionHomeItem,
+  type PriceLabel,
+  type UrgencyLevel,
+} from '../utils/auctionHomeLogic';
+import { useAppTheme } from '../theme/ThemeContext';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
-import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { Space, Radius } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
@@ -37,8 +52,8 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 type SectionKind =
   | 'attention'
-  | 'live'
   | 'endingSoon'
+  | 'live'
   | 'upcoming'
   | 'watchlist'
   | 'recentlyEnded'
@@ -57,6 +72,7 @@ function toViewModel(api: MarketAuction): AuctionHomeItem {
     sellerId: api.seller.id,
     sellerUsername: api.seller.username,
     sellerDisplayName: api.seller.displayName,
+    sellerAvatarUrl: api.seller.avatarUrl,
     title: api.title,
     imageUrl: api.imageUrl ?? '',
     brand: api.brand,
@@ -71,13 +87,68 @@ function toViewModel(api: MarketAuction): AuctionHomeItem {
     isWatched: api.isWatched,
     cancelledAt: api.cancelledAt ?? null,
     settledAt: api.settledAt ?? null,
-    winnerBidderId: api.winnerBidderId ?? null,
   };
 }
 
 type FormatFromFiat = (amount: number, currency?: SupportedCurrencyCode, opts?: { displayMode?: CurrencyDisplayMode }) => string;
 
-function AuctionHomeCard({
+// ── Color resolver for viewer state ──
+function getColorForKey(key: 'danger' | 'brand' | 'success' | 'textSecondary' | 'textMuted'): string {
+  switch (key) {
+    case 'danger': return Colors.danger;
+    case 'brand': return Colors.brand;
+    case 'success': return Colors.success;
+    case 'textSecondary': return Colors.textSecondary;
+    case 'textMuted': return Colors.textMuted;
+  }
+}
+
+// ── Seller identity component ──
+const SellerIdentity = memo(function SellerIdentity({ item, size }: { item: AuctionHomeItem; size: number }) {
+  if (item.sellerAvatarUrl) {
+    return (
+      <CachedImage
+        uri={item.sellerAvatarUrl}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        containerStyle={{ width: size, height: size, borderRadius: size / 2 }}
+        contentFit="cover"
+      />
+    );
+  }
+  return (
+    <View style={[styles.sellerInitials, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={[styles.sellerInitialsText, { fontSize: size * 0.4 }]}>
+        {getSellerInitials(item.sellerDisplayName, item.sellerUsername)}
+      </Text>
+    </View>
+  );
+});
+
+// ── Viewer state badge ──
+function ViewerStateBadge({ item, style }: { item: AuctionHomeItem; style?: object }) {
+  const presentation = resolveViewerStatePresentation(item.viewerState);
+  if (!presentation) return null;
+  const color = getColorForKey(presentation.colorKey);
+  return (
+    <View style={[styles.viewerBadge, { backgroundColor: color + 'E6' }, style]}>
+      <Ionicons name={presentation.icon as any} size={8} color={Colors.textInverse} />
+      <Text style={styles.viewerBadgeText}>{presentation.text}</Text>
+    </View>
+  );
+}
+
+// ── Live pill ──
+function LivePill() {
+  return (
+    <View style={styles.livePill}>
+      <View style={[styles.liveDot, { backgroundColor: Colors.danger }]} />
+      <Text style={styles.livePillText}>Live</Text>
+    </View>
+  );
+}
+
+// ── PASS 3.1: AuctionAttentionCard — prominent full-width row ──
+const AuctionAttentionCard = memo(function AuctionAttentionCard({
   item,
   nowMs,
   onPress,
@@ -89,108 +160,22 @@ function AuctionHomeCard({
   formatFromFiat: FormatFromFiat;
 }) {
   const timing = resolveAuctionTiming(item, nowMs);
-  const sellerLabel = item.sellerDisplayName ?? `@${item.sellerUsername}`;
-
-  const stateLabel: string =
-    timing.effectiveState === 'cancelled' ? 'Cancelled' :
-    timing.effectiveState === 'settled' ? 'Settled' :
-    timing.effectiveState === 'ended' ? 'Ended' :
-    timing.effectiveState === 'upcoming' ? `Starts ${formatCountdown(timing.msToStart)}` :
-    formatCountdown(timing.msToEnd);
-
-  const viewerBadge: { text: string; color: string } | null =
-    item.viewerState === 'outbid' ? { text: 'Outbid', color: '#ff4444' } :
-    item.viewerState === 'leading' ? { text: 'Leading', color: Colors.brand } :
-    item.viewerState === 'won' ? { text: 'Won', color: Colors.brand } :
-    item.viewerState === 'lost' ? { text: 'Lost', color: '#ff4444' } :
-    item.viewerState === 'seller' ? { text: 'Your auction', color: Colors.brand } :
-    null;
-
-  return (
-    <AnimatedPressable
-      style={styles.card}
-      onPress={onPress}
-      activeOpacity={0.92}
-      scaleValue={0.985}
-      accessibilityRole="button"
-      accessibilityLabel={`Auction: ${item.title}`}
-      accessibilityHint="Opens auction details"
-    >
-      <View style={styles.cardImageWrap}>
-        {item.imageUrl ? (
-          <CachedImage
-            uri={item.imageUrl}
-            style={styles.cardImage}
-            containerStyle={styles.cardImageContainer}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={styles.cardImagePlaceholder}>
-            <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
-          </View>
-        )}
-        {timing.effectiveState === 'live' && (
-          <View style={styles.livePill}>
-            <View style={styles.liveDot} />
-            <Meta style={styles.livePillText}>Live</Meta>
-          </View>
-        )}
-        {viewerBadge && (
-          <View style={[styles.viewerBadge, { backgroundColor: viewerBadge.color + 'E6' }]}>
-            <Meta style={styles.viewerBadgeText}>{viewerBadge.text}</Meta>
-          </View>
-        )}
-      </View>
-      <View style={styles.cardBody}>
-        <BodyEmphasis style={styles.cardTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-        <Meta style={styles.cardSeller}>by {sellerLabel}</Meta>
-        <View style={styles.cardStatsRow}>
-          <View style={styles.cardStat}>
-            <Meta style={styles.cardStatLabel}>Current bid</Meta>
-            <Body style={styles.cardStatValue}>
-              {formatFromFiat(item.currentBidGbp, 'GBP', { displayMode: 'fiat' })}
-            </Body>
-          </View>
-          <View style={styles.cardStat}>
-            <Meta style={styles.cardStatLabel}>{item.bidCount} bids</Meta>
-            <Body style={styles.cardTimer}>{stateLabel}</Body>
-          </View>
-        </View>
-      </View>
-    </AnimatedPressable>
-  );
-}
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <BodyEmphasis style={styles.sectionTitle}>{title}</BodyEmphasis>
-    </View>
-  );
-}
-
-function AttentionCard({
-  item,
-  onPress,
-  formatFromFiat,
-}: {
-  item: AuctionHomeItem;
-  onPress: () => void;
-  formatFromFiat: FormatFromFiat;
-}) {
-  const ctaText =
-    item.viewerState === 'outbid' ? 'Bid again' :
-    item.viewerState === 'won' ? 'View result' :
-    'View';
+  const priceLabel = resolvePriceLabel(item, timing);
+  const priceAmount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
+  const priceText = priceLabel === 'No bids' ? 'No bids' : formatFromFiat(priceAmount, 'GBP', { displayMode: 'fiat' });
+  const timeLabel = resolveTimeLabel(timing);
+  const ctaText = item.viewerState === 'outbid' ? 'Bid again' : item.viewerState === 'won' ? 'View result' : 'View';
+  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText);
 
   return (
     <AnimatedPressable
       style={styles.attentionCard}
-      onPress={onPress}
+      onPress={() => { haptics.tap(); onPress(); }}
       activeOpacity={0.92}
       scaleValue={0.985}
       accessibilityRole="button"
-      accessibilityLabel={`Attention: ${item.title} — ${ctaText}`}
+      accessibilityLabel={a11yLabel}
+      accessibilityHint="Opens auction details"
     >
       <View style={styles.attentionImageWrap}>
         {item.imageUrl ? (
@@ -205,6 +190,7 @@ function AttentionCard({
             <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
           </View>
         )}
+        <ViewerStateBadge item={item} style={styles.attentionViewerBadge} />
       </View>
       <View style={styles.attentionBody}>
         <BodyEmphasis style={styles.attentionTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
@@ -213,23 +199,227 @@ function AttentionCard({
           {item.viewerState === 'won' && 'You won this auction'}
         </Meta>
         <View style={styles.attentionRow}>
-          <Body style={styles.attentionBid}>
-            {formatFromFiat(item.currentBidGbp, 'GBP', { displayMode: 'fiat' })}
-          </Body>
-          <AppButton
-            title={ctaText}
-            variant="primary"
-            size="sm"
-            onPress={onPress}
-            hapticFeedback="medium"
-            accessibilityLabel={ctaText}
-          />
+          <View style={styles.attentionPriceCol}>
+            <Meta style={styles.attentionPriceLabel}>{priceLabel}</Meta>
+            <Body style={styles.attentionBid}>{priceText}</Body>
+          </View>
+          <View style={styles.attentionCtaWrap}>
+            <Text style={styles.attentionCtaLabel}>{ctaText}</Text>
+            <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+          </View>
         </View>
       </View>
     </AnimatedPressable>
   );
-}
+});
 
+// ── PASS 3.1: AuctionFeedCard — media-led cards for live/ending soon ──
+const AuctionFeedCard = memo(function AuctionFeedCard({
+  item,
+  nowMs,
+  onPress,
+  formatFromFiat,
+}: {
+  item: AuctionHomeItem;
+  nowMs: number;
+  onPress: () => void;
+  formatFromFiat: FormatFromFiat;
+}) {
+  const timing = resolveAuctionTiming(item, nowMs);
+  const urgency = resolveUrgency(timing);
+  const priceLabel = resolvePriceLabel(item, timing);
+  const priceAmount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
+  const priceText = priceLabel === 'No bids' ? 'No bids' : formatFromFiat(priceAmount, 'GBP', { displayMode: 'fiat' });
+
+  const timeLabel = urgency === 'finalMinutes'
+    ? formatFinalMinutesCountdown(timing.msToEnd)
+    : resolveTimeLabel(timing);
+
+  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText);
+  const sellerLabel = item.sellerDisplayName ?? `@${item.sellerUsername}`;
+
+  return (
+    <AnimatedPressable
+      style={styles.feedCard}
+      onPress={onPress}
+      activeOpacity={0.92}
+      scaleValue={0.985}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+      accessibilityHint="Opens auction details"
+    >
+      <View style={styles.feedCardImageWrap}>
+        {item.imageUrl ? (
+          <CachedImage
+            uri={item.imageUrl}
+            style={styles.feedCardImage}
+            containerStyle={styles.feedCardImageContainer}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={styles.feedCardImagePlaceholder}>
+            <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+          </View>
+        )}
+        {timing.effectiveState === 'live' && <LivePill />}
+        <ViewerStateBadge item={item} />
+        {urgency === 'finalMinutes' && (
+          <View style={styles.finalMinutesPill}>
+            <Text style={styles.finalMinutesText}>{timeLabel}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.feedCardBody}>
+        <BodyEmphasis style={styles.feedCardTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
+        <View style={styles.feedCardSellerRow}>
+          <SellerIdentity item={item} size={16} />
+          <Meta style={styles.feedCardSeller} numberOfLines={1}>{sellerLabel}</Meta>
+        </View>
+        <View style={styles.feedCardStatsRow}>
+          <View style={styles.feedCardStat}>
+            <Meta style={styles.feedCardStatLabel}>{priceLabel}</Meta>
+            <Body style={styles.feedCardStatValue}>{priceText}</Body>
+          </View>
+          <View style={styles.feedCardStatRight}>
+            <Meta style={styles.feedCardBidCount}>{item.bidCount > 0 ? `${item.bidCount} bids` : 'No bids'}</Meta>
+            {urgency !== 'finalMinutes' && (
+              <Body style={[
+                styles.feedCardTimer,
+                urgency === 'endingSoon' && { color: Colors.danger },
+              ]}>{timeLabel}</Body>
+            )}
+          </View>
+        </View>
+      </View>
+    </AnimatedPressable>
+  );
+});
+
+// ── PASS 3.1: AuctionCompactCard — horizontal cards for upcoming/watching ──
+const AuctionCompactCard = memo(function AuctionCompactCard({
+  item,
+  nowMs,
+  onPress,
+  formatFromFiat,
+}: {
+  item: AuctionHomeItem;
+  nowMs: number;
+  onPress: () => void;
+  formatFromFiat: FormatFromFiat;
+}) {
+  const timing = resolveAuctionTiming(item, nowMs);
+  const priceLabel = resolvePriceLabel(item, timing);
+  const priceAmount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
+  const priceText = priceLabel === 'No bids' ? 'No bids' : formatFromFiat(priceAmount, 'GBP', { displayMode: 'fiat' });
+  const timeLabel = resolveTimeLabel(timing);
+  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText);
+
+  return (
+    <AnimatedPressable
+      style={styles.compactCard}
+      onPress={onPress}
+      activeOpacity={0.92}
+      scaleValue={0.985}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+      accessibilityHint="Opens auction details"
+    >
+      <View style={styles.compactCardImageWrap}>
+        {item.imageUrl ? (
+          <CachedImage
+            uri={item.imageUrl}
+            style={styles.compactCardImage}
+            containerStyle={styles.compactCardImageContainer}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={styles.compactCardImagePlaceholder}>
+            <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
+          </View>
+        )}
+        {timing.effectiveState === 'live' && <LivePill />}
+        <ViewerStateBadge item={item} style={styles.compactViewerBadge} />
+      </View>
+      <View style={styles.compactCardBody}>
+        <BodyEmphasis style={styles.compactCardTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
+        <Meta style={styles.compactCardPriceLabel}>{priceLabel}</Meta>
+        <Body style={styles.compactCardPrice}>{priceText}</Body>
+        <Meta style={styles.compactCardTime}>{timeLabel}</Meta>
+      </View>
+    </AnimatedPressable>
+  );
+});
+
+// ── PASS 3.1: AuctionEndedCard — restrained result rows for recently ended ──
+const AuctionEndedCard = memo(function AuctionEndedCard({
+  item,
+  nowMs,
+  onPress,
+  formatFromFiat,
+}: {
+  item: AuctionHomeItem;
+  nowMs: number;
+  onPress: () => void;
+  formatFromFiat: FormatFromFiat;
+}) {
+  const timing = resolveAuctionTiming(item, nowMs);
+  const priceLabel = resolvePriceLabel(item, timing);
+  const priceAmount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
+  const priceText = priceLabel === 'No bids' ? 'No bids' : formatFromFiat(priceAmount, 'GBP', { displayMode: 'fiat' });
+  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText);
+
+  return (
+    <AnimatedPressable
+      style={styles.endedCard}
+      onPress={onPress}
+      activeOpacity={0.92}
+      scaleValue={0.985}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+      accessibilityHint="Opens auction details"
+    >
+      <View style={styles.endedCardImageWrap}>
+        {item.imageUrl ? (
+          <CachedImage
+            uri={item.imageUrl}
+            style={styles.endedCardImage}
+            containerStyle={styles.endedCardImageContainer}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={styles.endedCardImagePlaceholder}>
+            <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
+          </View>
+        )}
+        <ViewerStateBadge item={item} style={styles.endedViewerBadge} />
+      </View>
+      <View style={styles.endedCardBody}>
+        <BodyEmphasis style={styles.endedCardTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
+        <View style={styles.endedCardStatsRow}>
+          <View>
+            <Meta style={styles.endedCardPriceLabel}>{priceLabel}</Meta>
+            <Body style={styles.endedCardPrice}>{priceText}</Body>
+          </View>
+          <View style={styles.endedCardRightCol}>
+            <Meta style={styles.endedCardBidCount}>{item.bidCount > 0 ? `${item.bidCount} bids` : 'No bids'}</Meta>
+            <Body style={styles.endedCardStatus}>{resolveTimeLabel(timing)}</Body>
+          </View>
+        </View>
+      </View>
+    </AnimatedPressable>
+  );
+});
+
+// ── Section header ──
+const SectionHeader = memo(function SectionHeader({ title }: { title: string }) {
+  return (
+    <View style={styles.sectionHeader}>
+      <BodyEmphasis style={styles.sectionTitle}>{title}</BodyEmphasis>
+    </View>
+  );
+});
+
+// ── Section data ──
 interface SectionData {
   live: AuctionHomeItem[];
   upcoming: AuctionHomeItem[];
@@ -237,6 +427,7 @@ interface SectionData {
   seller: AuctionHomeItem[];
   watchlist: AuctionHomeItem[];
   serverNow: string | null;
+  sectionErrors: Partial<Record<SectionKind, boolean>>;
 }
 
 const EMPTY_SECTION_DATA: SectionData = {
@@ -246,11 +437,14 @@ const EMPTY_SECTION_DATA: SectionData = {
   seller: [],
   watchlist: [],
   serverNow: null,
+  sectionErrors: {},
 };
 
+// ── Main screen ──
 export default function AuctionHomeScreen() {
   const navigation = useNavigation<NavT>();
   const { formatFromFiat } = useFormattedPrice();
+  const { isDark } = useAppTheme();
 
   const [sectionData, setSectionData] = React.useState<SectionData>(EMPTY_SECTION_DATA);
   const [loading, setLoading] = React.useState(true);
@@ -262,18 +456,20 @@ export default function AuctionHomeScreen() {
   const [searchError, setSearchError] = React.useState<string | null>(null);
   const [searchCursor, setSearchCursor] = React.useState<string | null>(null);
   const [isLoadingMoreSearch, setIsLoadingMoreSearch] = React.useState(false);
+  const [paginationError, setPaginationError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  const { nowMs, resync, needsResync, clearResync } = useServerClockTick(sectionData.serverNow);
+  const { nowMs, resync, needsResync, clearResync, resyncFailed, clearResyncFailed } = useServerClockTick(sectionData.serverNow);
 
   const requestIdRef = React.useRef(0);
 
+  // ── PASS 3.10: Partial section success — use Promise.allSettled ──
   const fetchSections = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     const reqId = ++requestIdRef.current;
     try {
-      const [liveResult, upcomingResult, endedResult, sellerResult, watchlistResult] = await Promise.all([
+      const results = await Promise.allSettled([
         listAuctions({ status: 'live', sort: 'endingSoon', limit: 30 }),
         listAuctions({ status: 'scheduled', sort: 'newest', limit: 20 }),
         listAuctions({ status: 'ended', sort: 'newest', limit: 20 }),
@@ -283,16 +479,35 @@ export default function AuctionHomeScreen() {
 
       if (reqId !== requestIdRef.current) return;
 
-      const serverNow = liveResult.serverNow;
-      setSectionData({
-        live: liveResult.items.map(toViewModel),
-        upcoming: upcomingResult.items.map(toViewModel),
-        ended: endedResult.items.map(toViewModel),
-        seller: sellerResult.items.map(toViewModel),
-        watchlist: watchlistResult.items.map(toViewModel),
-        serverNow,
-      });
-      resync(serverNow);
+      const [liveRes, upcomingRes, endedRes, sellerRes, watchlistRes] = results;
+      const sectionErrors: Partial<Record<SectionKind, boolean>> = {};
+
+      const live = liveRes.status === 'fulfilled' ? liveRes.value.items.map(toViewModel) : [];
+      if (liveRes.status === 'rejected') sectionErrors.live = true;
+
+      const upcoming = upcomingRes.status === 'fulfilled' ? upcomingRes.value.items.map(toViewModel) : [];
+      if (upcomingRes.status === 'rejected') sectionErrors.upcoming = true;
+
+      const ended = endedRes.status === 'fulfilled' ? endedRes.value.items.map(toViewModel) : [];
+      if (endedRes.status === 'rejected') sectionErrors.recentlyEnded = true;
+
+      const seller = sellerRes.status === 'fulfilled' ? sellerRes.value.items.map(toViewModel) : [];
+      if (sellerRes.status === 'rejected') sectionErrors.sellerTools = true;
+
+      const watchlist = watchlistRes.status === 'fulfilled' ? watchlistRes.value.items.map(toViewModel) : [];
+      if (watchlistRes.status === 'rejected') sectionErrors.watchlist = true;
+
+      const serverNow = liveRes.status === 'fulfilled' ? liveRes.value.serverNow : null;
+
+      setSectionData({ live, upcoming, ended, seller, watchlist, serverNow, sectionErrors });
+
+      if (serverNow) {
+        resync(serverNow);
+        clearResyncFailed();
+      } else if (results.some(r => r.status === 'rejected')) {
+        // All failed
+        setError('Unable to load auctions');
+      }
     } catch {
       if (reqId === requestIdRef.current) {
         setError('Unable to load auctions');
@@ -303,25 +518,76 @@ export default function AuctionHomeScreen() {
         setRefreshing(false);
       }
     }
-  }, [resync]);
+  }, [resync, clearResyncFailed]);
 
   React.useEffect(() => {
     void fetchSections();
   }, [fetchSections]);
 
+  // ── PASS 3.0D: Don't clear needsResync before fresh server response succeeds ──
   React.useEffect(() => {
     if (needsResync) {
-      clearResync();
       void fetchSections();
+      // needsResync is only cleared inside fetchSections when resync(serverNow) succeeds
     }
-  }, [needsResync, clearResync, fetchSections]);
+  }, [needsResync, fetchSections]);
 
+  // ── PASS 3.0B: Refresh active experience ──
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
-    void fetchSections();
-  }, [fetchSections]);
+    if (searchResults !== null && debouncedQuery.trim().length > 0) {
+      // Rerun active search from page one
+      setPaginationError(null);
+      const reqId = ++searchReqIdRef.current;
+      setSearchLoading(true);
+      setSearchError(null);
+      listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', limit: 30 })
+        .then((result) => {
+          if (reqId !== searchReqIdRef.current) return;
+          setSearchResults(result.items.map(toViewModel));
+          setSearchCursor(result.nextCursor);
+        })
+        .catch(() => {
+          if (reqId !== searchReqIdRef.current) return;
+          setSearchError('Search failed');
+          setSearchResults([]);
+        })
+        .finally(() => {
+          if (reqId === searchReqIdRef.current) {
+            setSearchLoading(false);
+            setRefreshing(false);
+          }
+        });
+    } else {
+      void fetchSections();
+    }
+  }, [fetchSections, searchResults, debouncedQuery]);
 
-  const searchReqIdRef = React.useRef(0);
+  // ── PASS 3.0A: Stale search invalidation with generation token ──
+  const searchReqIdRef = useRef(0);
+
+  const handleSearchChange = useCallback((text: string) => {
+    // Increment generation immediately to invalidate any in-flight request
+    searchReqIdRef.current++;
+    setSearchQuery(text);
+    setDebouncedQuery(text);
+    // Invalidate immediately — don't wait for next request
+    setSearchResults(text.trim().length === 0 ? null : searchResults);
+    setSearchCursor(null);
+    setSearchError(null);
+    setPaginationError(null);
+  }, [searchResults]);
+
+  const handleClearSearch = useCallback(() => {
+    searchReqIdRef.current++;
+    setSearchQuery('');
+    setDebouncedQuery('');
+    setSearchResults(null);
+    setSearchCursor(null);
+    setSearchLoading(false);
+    setSearchError(null);
+    setPaginationError(null);
+  }, []);
 
   React.useEffect(() => {
     if (debouncedQuery.trim().length === 0) {
@@ -354,9 +620,15 @@ export default function AuctionHomeScreen() {
     return () => clearTimeout(timer);
   }, [debouncedQuery]);
 
+  // Cleanup on unmount — invalidate any in-flight search
+  React.useEffect(() => {
+    return () => { searchReqIdRef.current++; };
+  }, []);
+
   const loadMoreSearch = React.useCallback(async () => {
     if (!searchCursor || isLoadingMoreSearch) return;
     setIsLoadingMoreSearch(true);
+    setPaginationError(null);
     const reqId = ++searchReqIdRef.current;
     try {
       const result = await listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', cursor: searchCursor, limit: 30 });
@@ -369,7 +641,9 @@ export default function AuctionHomeScreen() {
       });
       setSearchCursor(result.nextCursor);
     } catch {
-      // Silent fail on pagination
+      if (reqId === searchReqIdRef.current) {
+        setPaginationError('Failed to load more results');
+      }
     } finally {
       if (reqId === searchReqIdRef.current) {
         setIsLoadingMoreSearch(false);
@@ -377,27 +651,31 @@ export default function AuctionHomeScreen() {
     }
   }, [searchCursor, isLoadingMoreSearch, debouncedQuery]);
 
-  const sections = React.useMemo(() => {
+  // ── PASS 3.0C: Deduplicate before attention filtering ──
+  const sections = useMemo(() => {
     if (searchResults !== null) return [];
+
+    // Build canonical unique map before any section computation
+    const canonicalMap = buildCanonicalMap([
+      sectionData.live,
+      sectionData.upcoming,
+      sectionData.ended,
+      sectionData.seller,
+      sectionData.watchlist,
+    ]);
 
     const usedIds = new Set<string>();
     const result: Section[] = [];
 
-    const allItems = [
-      ...sectionData.live,
-      ...sectionData.upcoming,
-      ...sectionData.ended,
-      ...sectionData.seller,
-      ...sectionData.watchlist,
-    ];
-
-    // 1. Needs your attention
-    const attentionItems = allItems.filter((item) => {
-      if (usedIds.has(item.id)) return false;
-      return isAttentionItem(item, nowMs);
-    });
+    // 1. Needs your attention — uses canonical map, not raw collections
+    const attentionItems: AuctionHomeItem[] = [];
+    for (const item of canonicalMap.values()) {
+      if (isAttentionItem(item, nowMs)) {
+        attentionItems.push(item);
+        usedIds.add(item.id);
+      }
+    }
     if (attentionItems.length > 0) {
-      attentionItems.forEach((a) => usedIds.add(a.id));
       result.push({ kind: 'attention', title: 'Needs your attention', items: attentionItems });
     }
 
@@ -468,11 +746,11 @@ export default function AuctionHomeScreen() {
     return result;
   }, [sectionData, nowMs]);
 
-  const navigateToDetail = React.useCallback((auctionId: string) => {
+  const navigateToDetail = useCallback((auctionId: string) => {
     navigation.navigate('AuctionDetail', { auctionId });
   }, [navigation]);
 
-  const handleBack = React.useCallback(() => {
+  const handleBack = useCallback(() => {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
@@ -480,40 +758,58 @@ export default function AuctionHomeScreen() {
     }
   }, [navigation]);
 
-  const renderItem = ({ item }: { item: AuctionHomeItem }) => (
-    <AuctionHomeCard
+  // ── Render dispatchers ──
+  const renderAttentionItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
+    <AuctionAttentionCard
       item={item}
       nowMs={nowMs}
       onPress={() => navigateToDetail(item.id)}
       formatFromFiat={formatFromFiat}
     />
-  );
+  ), [nowMs, navigateToDetail, formatFromFiat]);
 
-  const renderAttentionItem = ({ item }: { item: AuctionHomeItem }) => (
-    <AttentionCard
+  const renderFeedItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
+    <AuctionFeedCard
       item={item}
+      nowMs={nowMs}
       onPress={() => navigateToDetail(item.id)}
       formatFromFiat={formatFromFiat}
     />
-  );
+  ), [nowMs, navigateToDetail, formatFromFiat]);
 
-  const renderSection = (section: Section) => {
+  const renderCompactItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
+    <AuctionCompactCard
+      item={item}
+      nowMs={nowMs}
+      onPress={() => navigateToDetail(item.id)}
+      formatFromFiat={formatFromFiat}
+    />
+  ), [nowMs, navigateToDetail, formatFromFiat]);
+
+  const renderEndedItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
+    <AuctionEndedCard
+      item={item}
+      nowMs={nowMs}
+      onPress={() => navigateToDetail(item.id)}
+      formatFromFiat={formatFromFiat}
+    />
+  ), [nowMs, navigateToDetail, formatFromFiat]);
+
+  const renderSection = useCallback((section: Section) => {
     if (section.items.length === 0) return null;
 
     const isHorizontal = section.kind === 'upcoming' || section.kind === 'watchlist';
 
+    let renderItem: (props: { item: AuctionHomeItem }) => React.ReactElement;
+    if (section.kind === 'attention') renderItem = renderAttentionItem;
+    else if (section.kind === 'recentlyEnded') renderItem = renderEndedItem;
+    else if (isHorizontal) renderItem = renderCompactItem;
+    else renderItem = renderFeedItem;
+
     return (
       <View key={section.kind} style={styles.sectionWrap}>
         <SectionHeader title={section.title} />
-        {section.kind === 'attention' ? (
-          <FlashList
-            data={section.items}
-            keyExtractor={(item) => item.id}
-            renderItem={renderAttentionItem}
-            scrollEnabled={false}
-            ItemSeparatorComponent={() => <View style={{ height: Space.sm }} />}
-          />
-        ) : isHorizontal ? (
+        {isHorizontal ? (
           <FlashList
             data={section.items}
             keyExtractor={(item) => item.id}
@@ -531,19 +827,22 @@ export default function AuctionHomeScreen() {
             ItemSeparatorComponent={() => <View style={{ height: Space.sm }} />}
           />
         )}
+        {sectionData.sectionErrors[section.kind] && (
+          <View style={styles.sectionErrorBanner}>
+            <Ionicons name="alert-circle-outline" size={12} color={Colors.textMuted} />
+            <Meta style={styles.sectionErrorText}>Section unavailable</Meta>
+          </View>
+        )}
       </View>
     );
-  };
+  }, [renderAttentionItem, renderFeedItem, renderCompactItem, renderEndedItem, sectionData.sectionErrors]);
 
-  const renderHeader = () => (
+  const renderHeader = useCallback(() => (
     <View>
       <View style={styles.searchWrap}>
         <AppInput
           value={searchQuery}
-          onChangeText={(text) => {
-            setSearchQuery(text);
-            setDebouncedQuery(text);
-          }}
+          onChangeText={handleSearchChange}
           placeholder="Search auctions..."
           prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
           accessibilityLabel="Search auctions"
@@ -553,7 +852,7 @@ export default function AuctionHomeScreen() {
         {searchQuery.length > 0 && (
           <Pressable
             style={styles.clearSearchBtn}
-            onPress={() => { setSearchQuery(''); setDebouncedQuery(''); }}
+            onPress={handleClearSearch}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Clear search"
@@ -569,10 +868,17 @@ export default function AuctionHomeScreen() {
           <Meta style={styles.errorText}>{error}</Meta>
         </View>
       )}
-    </View>
-  );
 
-  const renderLoadingState = () => (
+      {resyncFailed && !error && (
+        <View style={styles.errorBanner}>
+          <Ionicons name="sync-outline" size={16} color={Colors.textMuted} />
+          <Meta style={styles.errorText}>Clock sync failed — pull to refresh</Meta>
+        </View>
+      )}
+    </View>
+  ), [searchQuery, handleSearchChange, handleClearSearch, error, resyncFailed]);
+
+  const renderLoadingState = useCallback(() => (
     <View style={styles.loadingWrap}>
       {[0, 1, 2].map((i) => (
         <View key={i} style={styles.loadingCard}>
@@ -584,13 +890,17 @@ export default function AuctionHomeScreen() {
         </View>
       ))}
     </View>
-  );
+  ), []);
 
   const isSearching = searchResults !== null;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
+      {/* PASS 3.0E: Use theme for StatusBar */}
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={Colors.background}
+      />
 
       <View style={styles.headerBar}>
         <Pressable
@@ -618,7 +928,7 @@ export default function AuctionHomeScreen() {
         <FlashList
           data={searchResults}
           keyExtractor={(item) => item.id}
-          renderItem={renderItem}
+          renderItem={renderFeedItem}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={
             searchLoading ? renderLoadingState() : (
@@ -632,14 +942,17 @@ export default function AuctionHomeScreen() {
           ListFooterComponent={
             searchCursor ? (
               <View style={styles.loadMoreWrap}>
-                <AppButton
-                  title={isLoadingMoreSearch ? 'Loading...' : 'Load More'}
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => void loadMoreSearch()}
-                  disabled={isLoadingMoreSearch}
+                {paginationError && (
+                  <Meta style={styles.paginationErrorText}>{paginationError}</Meta>
+                )}
+                <Text
                   style={styles.loadMoreBtn}
-                />
+                  onPress={() => void loadMoreSearch()}
+                  accessibilityRole="button"
+                  accessibilityLabel={isLoadingMoreSearch ? 'Loading more results' : 'Load more results'}
+                >
+                  {isLoadingMoreSearch ? 'Loading...' : 'Load More'}
+                </Text>
               </View>
             ) : null
           }
@@ -745,6 +1058,17 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.textMuted,
   },
+  sectionErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.xs,
+  },
+  sectionErrorText: {
+    color: Colors.textMuted,
+    fontSize: 11,
+  },
   sectionWrap: {
     marginBottom: Space.lg,
   },
@@ -756,41 +1080,40 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   sectionTitle: {
-    fontSize: 16,
-  },
-  sectionAction: {
-    color: Colors.brand,
+    fontSize: 15,
   },
   horizontalListContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
   },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
-    width: 260,
-  },
-  cardImageWrap: {
-    position: 'relative',
-  },
-  cardImageContainer: {
-    width: '100%',
-    height: 140,
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  cardImagePlaceholder: {
-    width: '100%',
-    height: 140,
+  // ── Seller identity ──
+  sellerInitials: {
     backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sellerInitialsText: {
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  // ── Viewer state badge ──
+  viewerBadge: {
+    position: 'absolute',
+    top: Space.xs,
+    right: Space.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: Radius.full,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  viewerBadgeText: {
+    color: Colors.textInverse,
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  // ── Live pill ──
   livePill: {
     position: 'absolute',
     top: Space.xs,
@@ -807,55 +1130,12 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#ff4444',
   },
   livePillText: {
     color: '#fff',
     fontSize: 9,
   },
-  viewerBadge: {
-    position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    borderRadius: Radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  viewerBadgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  cardBody: {
-    padding: Space.sm,
-  },
-  cardTitle: {
-    fontSize: 13,
-    marginBottom: 2,
-  },
-  cardSeller: {
-    color: Colors.textMuted,
-    marginBottom: Space.sm,
-  },
-  cardStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  cardStat: {},
-  cardStatLabel: {
-    color: Colors.textMuted,
-    marginBottom: 2,
-  },
-  cardStatValue: {
-    fontSize: 14,
-    color: Colors.brand,
-  },
-  cardTimer: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    textAlign: 'right',
-  },
+  // ── Attention card ──
   attentionCard: {
     flexDirection: 'row',
     backgroundColor: Colors.surface,
@@ -883,6 +1163,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  attentionViewerBadge: {
+    top: 4,
+    left: 4,
+    right: 'auto',
+  },
   attentionBody: {
     flex: 1,
     padding: Space.sm,
@@ -901,10 +1186,228 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  attentionPriceCol: {},
+  attentionPriceLabel: {
+    color: Colors.textMuted,
+    marginBottom: 2,
+  },
   attentionBid: {
     fontSize: 15,
     color: Colors.brand,
   },
+  attentionCtaWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  attentionCtaLabel: {
+    fontSize: 13,
+    color: Colors.brand,
+    fontWeight: '600',
+  },
+  // ── Feed card (live, ending soon) ──
+  feedCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    width: 260,
+  },
+  feedCardImageWrap: {
+    position: 'relative',
+  },
+  feedCardImageContainer: {
+    width: '100%',
+    height: 140,
+  },
+  feedCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  feedCardImagePlaceholder: {
+    width: '100%',
+    height: 140,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  finalMinutesPill: {
+    position: 'absolute',
+    bottom: Space.xs,
+    left: Space.xs,
+    backgroundColor: Colors.danger,
+    borderRadius: Radius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  finalMinutesText: {
+    color: Colors.textInverse,
+    fontSize: 10,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  feedCardBody: {
+    padding: Space.sm,
+  },
+  feedCardTitle: {
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  feedCardSellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: Space.sm,
+  },
+  feedCardSeller: {
+    color: Colors.textMuted,
+    flex: 1,
+  },
+  feedCardStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  feedCardStat: {},
+  feedCardStatLabel: {
+    color: Colors.textMuted,
+    marginBottom: 2,
+  },
+  feedCardStatValue: {
+    fontSize: 14,
+    color: Colors.brand,
+  },
+  feedCardStatRight: {
+    alignItems: 'flex-end',
+  },
+  feedCardBidCount: {
+    color: Colors.textMuted,
+    marginBottom: 2,
+  },
+  feedCardTimer: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    textAlign: 'right',
+  },
+  // ── Compact card (upcoming, watching) ──
+  compactCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    width: 180,
+  },
+  compactCardImageWrap: {
+    position: 'relative',
+  },
+  compactCardImageContainer: {
+    width: '100%',
+    height: 100,
+  },
+  compactCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  compactCardImagePlaceholder: {
+    width: '100%',
+    height: 100,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactViewerBadge: {
+    top: 4,
+    left: 4,
+    right: 'auto',
+  },
+  compactCardBody: {
+    padding: Space.xs + 2,
+  },
+  compactCardTitle: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  compactCardPriceLabel: {
+    color: Colors.textMuted,
+    marginBottom: 1,
+  },
+  compactCardPrice: {
+    fontSize: 13,
+    color: Colors.brand,
+    marginBottom: 4,
+  },
+  compactCardTime: {
+    color: Colors.textSecondary,
+  },
+  // ── Ended card ──
+  endedCard: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    marginHorizontal: Space.md,
+  },
+  endedCardImageWrap: {
+    position: 'relative',
+  },
+  endedCardImageContainer: {
+    width: 72,
+    height: 72,
+  },
+  endedCardImage: {
+    width: 72,
+    height: 72,
+  },
+  endedCardImagePlaceholder: {
+    width: 72,
+    height: 72,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endedViewerBadge: {
+    top: 4,
+    left: 4,
+    right: 'auto',
+  },
+  endedCardBody: {
+    flex: 1,
+    padding: Space.sm,
+    justifyContent: 'center',
+  },
+  endedCardTitle: {
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  endedCardStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  endedCardPriceLabel: {
+    color: Colors.textMuted,
+    marginBottom: 1,
+  },
+  endedCardPrice: {
+    fontSize: 13,
+    color: Colors.brand,
+  },
+  endedCardRightCol: {
+    alignItems: 'flex-end',
+  },
+  endedCardBidCount: {
+    color: Colors.textMuted,
+    marginBottom: 1,
+  },
+  endedCardStatus: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  // ── Loading ──
   loadingWrap: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
@@ -917,11 +1420,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  // ── Pagination ──
   loadMoreWrap: {
     alignItems: 'center',
     paddingVertical: Space.md,
+    gap: 6,
   },
   loadMoreBtn: {
-    minWidth: 140,
+    fontSize: 14,
+    color: Colors.brand,
+    fontWeight: '600',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  paginationErrorText: {
+    color: Colors.danger,
+    fontSize: 12,
   },
 });

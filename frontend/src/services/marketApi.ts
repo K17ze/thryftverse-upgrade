@@ -33,7 +33,6 @@ export interface MarketAuction {
   isWatched: boolean;
   cancelledAt: string | null;
   settledAt: string | null;
-  winnerBidderId: string | null;
   createdAt: string;
 }
 

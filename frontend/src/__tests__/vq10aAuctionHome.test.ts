@@ -165,8 +165,10 @@ describe('VQ-10A PASS 2.1: List API state truth', () => {
     expect(apiSrc).toContain('settledAt: string | null;');
   });
 
-  it('MarketAuction has winnerBidderId field', () => {
-    expect(apiSrc).toContain('winnerBidderId: string | null;');
+  it('MarketAuction does NOT expose winnerBidderId (least-data exposure)', () => {
+    const marketAuctionMatch = apiSrc.match(/export interface MarketAuction \{[\s\S]*?\}/);
+    expect(marketAuctionMatch).toBeTruthy();
+    expect(marketAuctionMatch![0]).not.toContain('winnerBidderId');
   });
 
   it('AuctionHomeScreen toViewModel uses api.cancelledAt (not hardcoded null)', () => {
@@ -181,9 +183,9 @@ describe('VQ-10A PASS 2.1: List API state truth', () => {
     expect(src).not.toMatch(/settledAt:\s*null\s*,/);
   });
 
-  it('AuctionHomeScreen toViewModel uses api.winnerBidderId', () => {
+  it('AuctionHomeScreen toViewModel uses api.seller.avatarUrl', () => {
     const src = readSrc('screens/AuctionHomeScreen.tsx');
-    expect(src).toContain('api.winnerBidderId');
+    expect(src).toContain('api.seller.avatarUrl');
   });
 });
 
@@ -341,12 +343,13 @@ describe('VQ-10A PASS 2.1: Complete duplicate prevention', () => {
     expect(sellerMatch).toBeTruthy();
   });
 
-  it('usedIds is applied to all sections (attention, endingSoon, live, upcoming, watchlist, ended, seller)', () => {
+  it('usedIds is applied to sections (endingSoon, live, upcoming, watchlist, ended, seller) with canonical map for attention)', () => {
     const sectionsMatch = src.match(/usedIds\.has[\s\S]*?(?:return result|return \[\])/);
     expect(sectionsMatch).toBeTruthy();
     const body = sectionsMatch![0];
     const usedIdsCount = (body.match(/usedIds\.has/g) || []).length;
-    expect(usedIdsCount).toBeGreaterThanOrEqual(7);
+    expect(usedIdsCount).toBeGreaterThanOrEqual(6);
+    expect(src).toContain('buildCanonicalMap');
   });
 
   it('priority order: attention first, seller last', () => {
@@ -393,7 +396,7 @@ describe('VQ-10A PASS 2.1: Visual hierarchy guardrails', () => {
   });
 
   it('card shows time remaining', () => {
-    expect(src).toContain('formatCountdown');
+    expect(src).toContain('resolveTimeLabel');
   });
 
   it('uses SafeAreaView as root (not nested in another screen)', () => {
@@ -446,7 +449,9 @@ describe('VQ-10A PASS 2.1: Backend list response fields', () => {
     expect(backendSrc).toContain('settledAt: row.settled_at');
   });
 
-  it('GET /auctions response mapping includes winnerBidderId', () => {
-    expect(backendSrc).toContain('winnerBidderId: row.winner_bidder_id');
+  it('GET /auctions list response mapping does NOT expose winnerBidderId', () => {
+    const listEndpointMatch = backendSrc.match(/app\.get\('\/auctions'[^]*?return \{[\s\S]*?ok: true,[\s\S]*?items,[\s\S]*?nextCursor,[\s\S]*?serverNow[\s\S]*?\}/);
+    expect(listEndpointMatch).toBeTruthy();
+    expect(listEndpointMatch![0]).not.toContain('winnerBidderId');
   });
 });

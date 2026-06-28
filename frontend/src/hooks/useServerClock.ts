@@ -70,11 +70,14 @@ export interface ServerClockResult {
   resync: (serverNow: string) => void;
   needsResync: boolean;
   clearResync: () => void;
+  resyncFailed: boolean;
+  clearResyncFailed: () => void;
 }
 
 export function useServerClock(initialServerNow: string | null): ServerClockResult {
   const [offsetMs, setOffsetMs] = React.useState(0);
   const [needsResync, setNeedsResync] = React.useState(false);
+  const [resyncFailed, setResyncFailed] = React.useState(false);
   const offsetRef = React.useRef(0);
   const lastSyncRef = React.useRef(0);
 
@@ -87,6 +90,7 @@ export function useServerClock(initialServerNow: string | null): ServerClockResu
     setOffsetMs(newOffset);
     lastSyncRef.current = deviceMs;
     setNeedsResync(false);
+    setResyncFailed(false);
   }, []);
 
   React.useEffect(() => {
@@ -116,9 +120,13 @@ export function useServerClock(initialServerNow: string | null): ServerClockResu
     setNeedsResync(false);
   }, []);
 
+  const clearResyncFailed = React.useCallback(() => {
+    setResyncFailed(false);
+  }, []);
+
   const serverNowMs = Date.now() + offsetRef.current;
 
-  return { serverNowMs, offsetMs, resync, needsResync, clearResync };
+  return { serverNowMs, offsetMs, resync, needsResync, clearResync, resyncFailed, clearResyncFailed };
 }
 
 export function useServerClockTick(initialServerNow: string | null): ServerClockResult & { nowMs: number } {

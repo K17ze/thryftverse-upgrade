@@ -38,7 +38,6 @@ describe('auction contract types', () => {
       isWatched: false,
       cancelledAt: null,
       settledAt: null,
-      winnerBidderId: null,
       createdAt: '2025-01-01T00:00:00Z',
     };
 
