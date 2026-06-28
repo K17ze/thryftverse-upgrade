@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
-import AuctionsScreen from './AuctionsScreen';
+import AuctionHomeScreen from './AuctionHomeScreen';
 import CoOwnScreen from './SyndicateScreen';
 import { RootStackParamList } from '../navigation/types';
 import { AppButton } from '../components/ui/AppButton';
@@ -59,9 +59,9 @@ export default function TradeHubScreen() {
   const quickActions = React.useMemo(() => {
     if (activeTab === 'AUCTIONS') {
       return [
+        { key: 'open-auction-home', label: 'Browse Auctions', icon: 'storefront-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('AuctionHome'); } },
         { key: 'create-auction', label: 'Create Auction', icon: 'hammer-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreateAuction'); } },
         { key: 'my-bids', label: 'My Bids', icon: 'list-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('MyBids'); } },
-        { key: 'my-listings', label: 'My Listings', icon: 'pricetags-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('MyListings'); } },
       ];
     }
     return [
@@ -140,7 +140,7 @@ export default function TradeHubScreen() {
         style={styles.tabContent}
         entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)}
       >
-        {activeTab === 'AUCTIONS' ? <AuctionsScreen /> : <CoOwnScreen />}
+        {activeTab === 'AUCTIONS' ? <AuctionHomeScreen /> : <CoOwnScreen />}
       </Reanimated.View>
     </SafeAreaView>
   );
