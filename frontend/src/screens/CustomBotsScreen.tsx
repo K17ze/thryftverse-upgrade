@@ -98,7 +98,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
         onBack={() => navigation.goBack()}
         rightAction={
           <AnimatedPressable
-            onPress={() => navigation.navigate({ name: 'BotBuilder', params: {} })}
+            onPress={() => navigation.navigate('BotBuilder', {})}
             activeOpacity={0.7}
             scaleValue={0.92}
             hapticFeedback="light"
@@ -182,7 +182,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
               You have not created any custom bots yet.
             </Caption>
             <AnimatedPressable
-              onPress={() => navigation.navigate({ name: 'BotBuilder', params: {} })}
+              onPress={() => navigation.navigate('BotBuilder', {})}
               activeOpacity={0.7}
               scaleValue={0.98}
               hapticFeedback="light"

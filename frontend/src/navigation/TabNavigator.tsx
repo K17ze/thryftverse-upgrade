@@ -1,22 +1,17 @@
-import React, { useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
+import React, { useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Reanimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-} from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { TabParamList, RootStackParamList } from './types';
 import { Colors } from '../constants/colors';
 import { Space, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useStore } from '../store/useStore';
 import { CachedImage } from '../components/CachedImage';
+import { NativeSheet } from '../platform/native/NativeSheet';
 
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -31,27 +26,14 @@ const AVATAR_SIZE = 25;
 
 interface TabIconProps {
   name: keyof typeof Ionicons.glyphMap;
+  nameFocused?: keyof typeof Ionicons.glyphMap;
   color: string;
   focused: boolean;
   badgeCount?: number;
 }
 
-const TabIcon = ({ name, color, focused, badgeCount }: TabIconProps) => {
-  const reducedMotion = useReducedMotion();
-  const scale = useSharedValue(1);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      scale.value = 1;
-    } else {
-      scale.value = withTiming(focused ? 1 : 1, { duration: 120 });
-    }
-  }, [focused, reducedMotion, scale]);
-
-  const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
+const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps) => {
+  const iconName = focused && nameFocused ? nameFocused : name;
   const displayBadge = badgeCount !== undefined && badgeCount > 0;
   const badgeLabel = displayBadge
     ? badgeCount! > 99 ? '99+' : String(badgeCount)
@@ -59,9 +41,7 @@ const TabIcon = ({ name, color, focused, badgeCount }: TabIconProps) => {
 
   return (
     <View style={styles.tabIconWrap}>
-      <Reanimated.View style={iconStyle}>
-        <Ionicons name={name} size={23} color={color} />
-      </Reanimated.View>
+      <Ionicons name={iconName} size={23} color={color} />
       {displayBadge && (
         <View
           style={styles.badge}
@@ -127,7 +107,7 @@ const CreateActionSheet = ({
   const haptic = useHaptic();
 
   const actions = [
-    { key: 'sell', label: 'List an item', icon: 'pricetag-outline' as const, route: 'Sell' as const, primary: true },
+    { key: 'sell', label: 'List an item', icon: 'pricetag-outline' as const, route: 'Sell' as const },
     { key: 'look', label: 'Create a Look', icon: 'shirt-outline' as const, route: 'CreateLook' as const },
     { key: 'poster', label: 'Create a Poster', icon: 'images-outline' as const, route: 'CreatePoster' as const, params: { mode: 'poster' } },
     { key: 'auction', label: 'Create auction', icon: 'hammer-outline' as const, route: 'CreateAuction' as const },
@@ -141,50 +121,33 @@ const CreateActionSheet = ({
   };
 
   return (
-    <Modal
+    <NativeSheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onDismiss={onClose}
+      testID="create-action-sheet"
     >
-      <Pressable style={styles.sheetOverlay} onPress={onClose}>
-        <Pressable
-          style={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, 16) }]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>Create</Text>
-          {actions.map((action) => (
-            <Pressable
-              key={action.key}
-              style={styles.sheetAction}
-              onPress={() => handlePress(action)}
-              accessibilityRole="button"
-              accessibilityLabel={action.label}
-            >
-              <Ionicons
-                name={action.icon}
-                size={22}
-                color={action.primary ? Colors.brand : Colors.textPrimary}
-              />
-              <Text
-                style={[
-                  styles.sheetActionLabel,
-                  action.primary && styles.sheetActionLabelPrimary,
-                ]}
-              >
-                {action.label}
-              </Text>
-              {action.primary && (
-                <View style={styles.sheetPrimaryBadge}>
-                  <Text style={styles.sheetPrimaryBadgeText}>Primary</Text>
-                </View>
-              )}
-            </Pressable>
-          ))}
-        </Pressable>
-      </Pressable>
-    </Modal>
+      <View style={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <Text style={styles.sheetTitle}>Create</Text>
+        {actions.map((action) => (
+          <Pressable
+            key={action.key}
+            style={styles.sheetAction}
+            onPress={() => handlePress(action)}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+          >
+            <Ionicons
+              name={action.icon}
+              size={22}
+              color={Colors.textPrimary}
+            />
+            <Text style={styles.sheetActionLabel}>
+              {action.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </NativeSheet>
   );
 };
 
@@ -196,9 +159,13 @@ export default function TabNavigator() {
   const setCreateSheetVisible = useStore((s) => s.setCreateSheetVisible);
   const conversations = useStore((s) => s.conversations);
   const messageRequests = useStore((s) => s.messageRequests);
-  const unreadCount = conversations.filter((c) => c.unread).length;
-  const requestCount = messageRequests.length;
-  const inboxBadgeCount = unreadCount + requestCount;
+  const requestIds = React.useMemo(() => new Set(messageRequests), [messageRequests]);
+  const inboxBadgeCount = React.useMemo(() => {
+    const unreadNonRequestCount = conversations.filter(
+      (c) => c.unread && !requestIds.has(c.id)
+    ).length;
+    return unreadNonRequestCount + requestIds.size;
+  }, [conversations, requestIds]);
   const lastTabRef = useRef<string>('Home');
 
   const handleCreatePress = useCallback(() => {
@@ -237,10 +204,6 @@ export default function TabNavigator() {
         screenListeners={{
           tabPress: (e: any) => {
             const currentTab = e.target?.split('-')[0];
-            if (currentTab === lastTabRef.current && currentTab !== 'Create') {
-              // Re-press on current tab — let the screen handle scroll-to-top
-              // The screen can listen for this via navigation.addListener('tabPress')
-            }
             if (currentTab !== lastTabRef.current) {
               haptic.light();
               lastTabRef.current = currentTab;
@@ -272,25 +235,23 @@ export default function TabNavigator() {
           name="Create"
           component={View}
           options={{
-            tabBarButton: () => (
+            tabBarButton: (props: any) => (
               <Pressable
+                {...props}
                 style={styles.createButton}
                 onPress={handleCreatePress}
+                onLongPress={props.onLongPress}
                 accessibilityRole="button"
                 accessibilityLabel="Create"
                 accessibilityHint="Opens create actions"
+                accessibilityState={props.accessibilityState}
+                testID={props.testID}
               >
                 <View style={styles.createControl}>
                   <Ionicons name="add" size={24} color={Colors.surface} />
                 </View>
               </Pressable>
             ),
-          }}
-          listeners={{
-            tabPress: (e: any) => {
-              e.preventDefault();
-              handleCreatePress();
-            },
           }}
         />
         <Tab.Screen
@@ -416,31 +377,18 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     color: Colors.textMuted,
   },
-  sheetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
   sheetContent: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingTop: 8,
+    paddingTop: Space.sm,
     paddingHorizontal: Space.md,
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.borderLight,
-    alignSelf: 'center',
-    marginBottom: 12,
   },
   sheetTitle: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    marginBottom: 12,
+    marginBottom: Space.sm,
   },
   sheetAction: {
     flexDirection: 'row',
@@ -453,19 +401,5 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
     flex: 1,
-  },
-  sheetActionLabelPrimary: {
-    fontFamily: Typography.family.bold,
-  },
-  sheetPrimaryBadge: {
-    backgroundColor: Colors.borderLight,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  sheetPrimaryBadgeText: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
-    color: Colors.brand,
   },
 });

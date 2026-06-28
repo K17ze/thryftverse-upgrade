@@ -6,13 +6,13 @@ import {
   Pressable,
   ScrollView,
   Dimensions,
-  SafeAreaView,
   Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';

@@ -192,31 +192,6 @@ export interface PosterStyleVoteResult {
   totalVotes: number;
 }
 
-// ── Types: Highlights ───────────────────────────────────────────────
-
-export interface PosterHighlightFrame {
-  frameId: string;
-  sortOrder: number;
-  mediaUrl: string;
-  mediaType: PosterMediaType;
-  caption: string;
-  backgroundColor: string | null;
-}
-
-export interface PosterHighlight {
-  id: string;
-  title: string;
-  coverFrameId: string | null;
-  coverUrl: string | null;
-  sortOrder: number;
-  createdAt: string;
-  frames: PosterHighlightFrame[];
-}
-
-export interface PosterHighlightListResponse {
-  items: PosterHighlight[];
-}
-
 // ── Legacy types (for backward compat with existing posters table) ──
 
 export interface PosterApiItem {
@@ -374,61 +349,6 @@ export async function fetchPosterStoryArchive(options?: {
   if (options?.includeActive !== undefined) params.set('includeActive', String(options.includeActive));
   const qs = params.toString();
   return fetchJson<PosterStoryListResponse>(`/poster-stories/archive${qs ? `?${qs}` : ''}`);
-}
-
-// ── API Functions: Highlights ───────────────────────────────────────
-
-export async function fetchPosterHighlights(userId: string): Promise<PosterHighlightListResponse> {
-  return fetchJson<PosterHighlightListResponse>(`/users/${userId}/poster-highlights`);
-}
-
-export async function createPosterHighlight(body: {
-  id: string;
-  title: string;
-  coverFrameId?: string;
-  frameIds: string[];
-}): Promise<{ ok: boolean; highlightId: string }> {
-  return fetchJson<{ ok: boolean; highlightId: string }>('/poster-highlights', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
-
-export async function updatePosterHighlight(
-  highlightId: string,
-  body: { title?: string; coverFrameId?: string }
-): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(`/poster-highlights/${highlightId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
-
-export async function deletePosterHighlight(highlightId: string): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(`/poster-highlights/${highlightId}`, { method: 'DELETE' });
-}
-
-export async function addFrameToHighlight(
-  highlightId: string,
-  frameId: string
-): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(`/poster-highlights/${highlightId}/frames`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ frameId }),
-  });
-}
-
-export async function removeFrameFromHighlight(
-  highlightId: string,
-  frameId: string
-): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(
-    `/poster-highlights/${highlightId}/frames/${frameId}`,
-    { method: 'DELETE' }
-  );
 }
 
 // ── Legacy API Functions (backward compat wrappers) ─────────────────

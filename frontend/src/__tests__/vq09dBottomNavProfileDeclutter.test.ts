@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 const ROOT = resolve(__dirname, '..');
 
 function readSrc(rel: string): string {
   return readFileSync(resolve(ROOT, rel), 'utf-8');
+}
+
+function fileExists(rel: string): boolean {
+  return existsSync(resolve(ROOT, rel));
 }
 
 describe('VQ-09D: Bottom Navigation — five-destination model', () => {
@@ -60,9 +64,29 @@ describe('VQ-09D: Central Create control', () => {
     expect(tabNavSrc).toContain('tabBarButton:');
   });
 
-  it('Create tab prevents default navigation and opens action sheet', () => {
-    expect(tabNavSrc).toContain('e.preventDefault()');
+  it('Create tab has single press path (no redundant tabPress listener)', () => {
     expect(tabNavSrc).toContain('handleCreatePress');
+    const createSection = tabNavSrc.slice(
+      tabNavSrc.indexOf('name="Create"'),
+      tabNavSrc.indexOf('name="Inbox"')
+    );
+    expect(createSection).not.toContain('listeners:');
+    expect(createSection).not.toContain('tabPress');
+  });
+
+  it('Create tabBarButton preserves accessibilityState and testID from props', () => {
+    expect(tabNavSrc).toContain('accessibilityState={props.accessibilityState}');
+    expect(tabNavSrc).toContain('testID={props.testID}');
+    expect(tabNavSrc).toContain('onLongPress={props.onLongPress}');
+  });
+
+  it('CreateActionSheet uses NativeSheet (not raw Modal)', () => {
+    expect(tabNavSrc).toContain('NativeSheet');
+    expect(tabNavSrc).not.toContain('<Modal');
+  });
+
+  it('CreateActionSheet does not use unsupported snapPoints', () => {
+    expect(tabNavSrc).not.toContain("snapPoints={['fit']}");
   });
 
   it('CreateActionSheet has 5 actions: sell, look, poster, auction, coown', () => {
@@ -71,10 +95,6 @@ describe('VQ-09D: Central Create control', () => {
     expect(tabNavSrc).toContain("key: 'poster'");
     expect(tabNavSrc).toContain("key: 'auction'");
     expect(tabNavSrc).toContain("key: 'coown'");
-  });
-
-  it('CreateActionSheet sell action is marked as primary', () => {
-    expect(tabNavSrc).toContain('primary: true');
   });
 
   it('CreateActionSheet navigates to Sell route (not SellScreen)', () => {
@@ -87,8 +107,9 @@ describe('VQ-09D: Central Create control', () => {
     expect(tabNavSrc).toContain('accessibilityHint="Opens create actions"');
   });
 
-  it('CreateActionSheet uses Modal with slide animation', () => {
-    expect(tabNavSrc).toContain('animationType="slide"');
+  it('CreateActionSheet uses NativeSheet (not raw Modal)', () => {
+    expect(tabNavSrc).toContain('NativeSheet');
+    expect(tabNavSrc).not.toContain('<Modal');
   });
 
   it('createSheetVisible state is in the store', () => {
@@ -136,6 +157,16 @@ describe('VQ-09D: Bottom-bar visual system', () => {
     expect(tabNavSrc).not.toContain('withSpring');
   });
 
+  it('No timing scale animation on tab icons (no-op removed)', () => {
+    expect(tabNavSrc).not.toContain('withTiming');
+    expect(tabNavSrc).not.toContain('useSharedValue');
+    expect(tabNavSrc).not.toContain('useAnimatedStyle');
+  });
+
+  it('No Reanimated import in TabNavigator', () => {
+    expect(tabNavSrc).not.toContain('react-native-reanimated');
+  });
+
   it('No expanding underline indicator', () => {
     expect(tabNavSrc).not.toContain('activeIndicator');
     expect(tabNavSrc).not.toContain('indicatorWidth');
@@ -154,18 +185,23 @@ describe('VQ-09D: Bottom-bar visual system', () => {
     expect(tabNavSrc).toContain('Typography.family');
   });
 
-  it('Reduced motion is respected in TabIcon', () => {
-    expect(tabNavSrc).toContain('useReducedMotion');
-    expect(tabNavSrc).toContain('reducedMotion');
+  it('Tab icons use outline inactive / filled active pattern', () => {
+    expect(tabNavSrc).toContain('home-outline');
+    expect(tabNavSrc).toContain("'home'");
+    expect(tabNavSrc).toContain('compass-outline');
+    expect(tabNavSrc).toContain("'compass'");
+    expect(tabNavSrc).toContain('chatbubbles-outline');
+    expect(tabNavSrc).toContain("'chatbubbles'");
   });
 });
 
 describe('VQ-09D: Badges', () => {
   const tabNavSrc = readSrc('navigation/TabNavigator.tsx');
 
-  it('Inbox badge counts unread conversations plus message requests', () => {
-    expect(tabNavSrc).toContain('unreadCount');
-    expect(tabNavSrc).toContain('requestCount');
+  it('Inbox badge deduplicates requests and unread conversations', () => {
+    expect(tabNavSrc).toContain('requestIds');
+    expect(tabNavSrc).toContain('requestIds.has');
+    expect(tabNavSrc).toContain('unreadNonRequestCount');
     expect(tabNavSrc).toContain('inboxBadgeCount');
   });
 
@@ -190,17 +226,34 @@ describe('VQ-09D: Badges', () => {
 
 describe('VQ-09D: Trade Hub relocation', () => {
   const profileSrc = readSrc('screens/MyProfileScreen.tsx');
+  const appNavSrc = readSrc('navigation/AppNavigator.tsx');
+  const typesSrc = readSrc('navigation/types.ts');
 
   it('Trade Hub is accessible from profile utility rail', () => {
     expect(profileSrc).toContain('Trade Hub');
   });
 
-  it('Trade Hub utility item navigates to CoOwnHub', () => {
-    expect(profileSrc).toContain("navigation.navigate('CoOwnHub')");
+  it('Trade Hub utility item navigates to TradeHub (not CoOwnHub)', () => {
+    expect(profileSrc).toContain("navigation.navigate('TradeHub')");
+    expect(profileSrc).not.toContain("navigation.navigate('CoOwnHub')");
   });
 
   it('Trade Hub utility item has pulse icon', () => {
     expect(profileSrc).toContain('pulse-outline');
+  });
+
+  it('TradeHub is registered as a stack route in AppNavigator', () => {
+    expect(appNavSrc).toContain('name="TradeHub"');
+    expect(appNavSrc).toContain('TradeHubScreen');
+  });
+
+  it('TradeHub route is in RootStackParamList', () => {
+    expect(typesSrc).toContain('TradeHub: undefined;');
+  });
+
+  it('CoOwnHub remains a separate route', () => {
+    expect(appNavSrc).toContain('name="CoOwnHub"');
+    expect(typesSrc).toContain('CoOwnHub:');
   });
 });
 
@@ -237,6 +290,27 @@ describe('VQ-09D: Profile Highlights removal', () => {
   it('PosterHighlightEditor screen is not registered in AppNavigator', () => {
     expect(appNavSrc).not.toContain('PosterHighlightEditor');
   });
+
+  it('ProfileHighlightsRow component file is deleted', () => {
+    expect(fileExists('components/poster/ProfileHighlightsRow.tsx')).toBe(false);
+  });
+
+  it('PosterHighlightEditorScreen file is deleted', () => {
+    expect(fileExists('screens/PosterHighlightEditorScreen.tsx')).toBe(false);
+  });
+
+  it('postersApi.ts does not export highlight types or functions', () => {
+    const apiSrc = readSrc('services/postersApi.ts');
+    expect(apiSrc).not.toContain('PosterHighlightFrame');
+    expect(apiSrc).not.toContain('PosterHighlight ');
+    expect(apiSrc).not.toContain('PosterHighlightListResponse');
+    expect(apiSrc).not.toContain('fetchPosterHighlights');
+    expect(apiSrc).not.toContain('createPosterHighlight');
+    expect(apiSrc).not.toContain('updatePosterHighlight');
+    expect(apiSrc).not.toContain('deletePosterHighlight');
+    expect(apiSrc).not.toContain('addFrameToHighlight');
+    expect(apiSrc).not.toContain('removeFrameFromHighlight');
+  });
 });
 
 describe('VQ-09D: Tab interaction behaviour', () => {
@@ -247,13 +321,36 @@ describe('VQ-09D: Tab interaction behaviour', () => {
     expect(tabNavSrc).toContain('lastTabRef');
   });
 
-  it('Create tab press is prevented from navigating (opens sheet instead)', () => {
-    expect(tabNavSrc).toContain('tabPress');
-    expect(tabNavSrc).toContain('e.preventDefault()');
+  it('Create tab uses custom tabBarButton (single press path, no tabPress listener)', () => {
+    expect(tabNavSrc).toContain('tabBarButton');
+    expect(tabNavSrc).toContain('handleCreatePress');
   });
 
   it('Tab bar hides on keyboard', () => {
     expect(tabNavSrc).toContain('tabBarHideOnKeyboard: true');
+  });
+
+  it('Home screen uses useScrollToTop for re-press scroll-to-top', () => {
+    const homeSrc = readSrc('screens/HomeScreen.tsx');
+    expect(homeSrc).toContain('useScrollToTop');
+  });
+
+  it('Explore screen uses useScrollToTop for re-press scroll-to-top', () => {
+    const exploreSrc = readSrc('screens/SearchScreen.tsx');
+    expect(exploreSrc).toContain('useScrollToTop');
+    expect(exploreSrc).toContain('scrollRef');
+  });
+
+  it('Inbox screen uses useScrollToTop for re-press scroll-to-top', () => {
+    const inboxSrc = readSrc('screens/InboxScreen.tsx');
+    expect(inboxSrc).toContain('useScrollToTop');
+    expect(inboxSrc).toContain('listRef');
+  });
+
+  it('Profile screen uses useScrollToTop for re-press scroll-to-top', () => {
+    const profileSrc = readSrc('screens/MyProfileScreen.tsx');
+    expect(profileSrc).toContain('useScrollToTop');
+    expect(profileSrc).toContain('scrollRef');
   });
 });
 

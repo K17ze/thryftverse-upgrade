@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   AnimatedPressable
 } from '../components/AnimatedPressable';
@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { RefreshIndicator } from '../components/RefreshIndicator';
@@ -47,6 +47,8 @@ export default function SearchScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
+  const scrollRef = useRef<Reanimated.ScrollView>(null);
+  useScrollToTop(scrollRef);
 
   const [activeTab, setActiveTab] = useState<'pulse' | 'looks' | 'edit'>('pulse');
 
@@ -140,6 +142,7 @@ export default function SearchScreen() {
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
 
         <Reanimated.ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.gridContent}
           showsVerticalScrollIndicator={false}
           onScroll={scrollHandler}

@@ -18,6 +18,7 @@ import PosterStoryActivityScreen from '../screens/PosterStoryActivityScreen';
 import PosterArchiveScreen from '../screens/PosterArchiveScreen';
 
 import SellScreen from '../screens/SellScreen';
+import TradeHubScreen from '../screens/TradeHubScreen';
 import CreateAuctionScreen from '../screens/CreateAuctionScreen';
 import AuctionDetailScreen from '../screens/AuctionDetailScreen';
 import CreateCoOwnScreen from '../screens/CreateSyndicateScreen';
@@ -221,6 +222,7 @@ export default function AppNavigator() {
       <Stack.Screen name="PosterArchive" component={PosterArchiveScreen} options={modalScreenOptions} />
 
       <Stack.Screen name="Sell" component={SellScreen} options={modalScreenOptions} />
+      <Stack.Screen name="TradeHub" component={TradeHubScreen} />
       <Stack.Screen name="CreateAuction" component={CreateAuctionScreen} options={modalScreenOptions} />
       <Stack.Screen name="AuctionDetail" component={AuctionDetailScreen} />
       <Stack.Screen name="CreateCoOwn" component={CreateCoOwnScreen} options={modalScreenOptions} />

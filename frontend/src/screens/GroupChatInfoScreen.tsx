@@ -146,7 +146,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <RowItem
             icon="create-outline"
             label="Edit group"
-            onPress={() => navigation.navigate({ name: 'EditGroup', params: { conversationId } })}
+            onPress={() => navigation.navigate('EditGroup', { conversationId })}
             showChevron
           />
         </Section>

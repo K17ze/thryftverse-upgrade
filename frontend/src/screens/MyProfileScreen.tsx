@@ -23,7 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Typography, Space, Radius } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -55,6 +55,8 @@ export default function MyProfileScreen() {
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
   const reducedMotionEnabled = useReducedMotion();
+  const scrollRef = React.useRef<Reanimated.ScrollView>(null);
+  useScrollToTop(scrollRef);
   const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'about'>('listings');
 
   const { show } = useToast();
@@ -305,7 +307,7 @@ export default function MyProfileScreen() {
       {
         icon: 'pulse-outline' as const,
         label: 'Trade Hub',
-        onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
+        onPress: () => { haptic.light(); navigation.navigate('TradeHub'); },
         accessibilityLabel: 'Open Trade Hub',
       },
     ],
@@ -376,6 +378,7 @@ export default function MyProfileScreen() {
       </Reanimated.View>
 
       <Reanimated.ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingTop: COVER_HEIGHT - 50 }]}
         onScroll={scrollHandler}

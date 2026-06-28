@@ -201,6 +201,7 @@ export type RootStackParamList = {
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
   Sell: undefined;
+  TradeHub: undefined;
 };
 
 export type TabParamList = {

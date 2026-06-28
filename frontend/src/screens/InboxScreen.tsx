@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 
 import { AnimatedPressable } from '../components/AnimatedPressable';
 
@@ -10,7 +10,7 @@ import { FlashList } from '@shopify/flash-list';
 
 import { Ionicons } from '@expo/vector-icons';
 
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useScrollToTop } from '@react-navigation/native';
 
 import { StackNavigationProp } from '@react-navigation/stack';
 
@@ -243,6 +243,8 @@ export default function InboxScreen() {
 
 
   const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
+  const listRef = useRef<any>(null);
+  useScrollToTop(listRef);
 
 
 
@@ -951,6 +953,7 @@ export default function InboxScreen() {
 
             <AnimatedFlashList
 
+            ref={listRef}
             data={visibleConversations}
 
             keyExtractor={(c: any) => c.id}

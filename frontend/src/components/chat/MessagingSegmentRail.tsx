@@ -66,9 +66,6 @@ export function MessagingSegmentRail({
 
 const styles = StyleSheet.create({
   root: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
