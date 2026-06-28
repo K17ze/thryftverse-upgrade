@@ -438,6 +438,10 @@ interface StoreState {
   setProfileMediaOverride: (userId: string, updates: Partial<ProfileMediaOverride>) => void;
   updateUserAvatar: (uri: string) => void;
   updateUserCover: (uri: string) => void;
+
+  // Create action sheet
+  createSheetVisible: boolean;
+  setCreateSheetVisible: (visible: boolean) => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -1655,6 +1659,9 @@ export const useStore = create<StoreState>()(
         profileMediaOverrides: nextOverrides,
       };
     }),
+
+  createSheetVisible: false,
+  setCreateSheetVisible: (visible) => set({ createSheetVisible: visible }),
 }),
     {
       name: 'thryftverse-store',

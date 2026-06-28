@@ -33,7 +33,7 @@ import {
 import type { PosterStory, PosterHighlight, PosterHighlightFrame } from '../services/postersApi';
 import { CachedImage } from '../components/CachedImage';
 
-type Props = StackScreenProps<RootStackParamList, 'PosterHighlightEditor'>;
+type Props = StackScreenProps<RootStackParamList, any>;
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const THUMB_W = (SCREEN_W - Space.md * 4) / 3;

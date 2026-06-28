@@ -18,7 +18,6 @@ export type RootStackParamList = {
   CreatePoster: { mode?: 'poster' | 'look' } | undefined;
   PosterStoryActivity: { storyId: string };
   PosterArchive: undefined;
-  PosterHighlightEditor: { highlightId?: string };
   CreateAuction: { listingId?: string } | undefined;
   AuctionDetail: { auctionId: string };
   CreateCoOwn:
@@ -201,13 +200,13 @@ export type RootStackParamList = {
   };
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
+  Sell: undefined;
 };
 
 export type TabParamList = {
   Home: undefined;
-  TradeHub: undefined;
-  Search: undefined;
-  Sell: undefined;
+  Explore: undefined;
+  Create: undefined;
   Inbox: undefined;
   Profile: undefined;
 };
