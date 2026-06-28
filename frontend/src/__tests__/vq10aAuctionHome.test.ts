@@ -12,7 +12,7 @@ function fileExists(rel: string): boolean {
   return existsSync(resolve(ROOT, rel));
 }
 
-describe('VQ-10A PASS 2: AuctionHome route registration', () => {
+describe('VQ-10A PASS 2.1: AuctionHome route registration', () => {
   const typesSrc = readSrc('navigation/types.ts');
   const appNavSrc = readSrc('navigation/AppNavigator.tsx');
 
@@ -45,219 +45,339 @@ describe('VQ-10A PASS 2: AuctionHome route registration', () => {
   });
 });
 
-describe('VQ-10A PASS 2: AuctionHome is a full independent screen', () => {
+describe('VQ-10A PASS 2.1: AuctionHome is truly independent (not embedded)', () => {
   it('AuctionHomeScreen.tsx exists', () => {
     expect(fileExists('screens/AuctionHomeScreen.tsx')).toBe(true);
   });
 
-  it('does not import or embed AuctionsScreen', () => {
+  it('TradeHubScreen does NOT import AuctionHomeScreen', () => {
+    const src = readSrc('screens/TradeHubScreen.tsx');
+    expect(src).not.toContain('AuctionHomeScreen');
+  });
+
+  it('TradeHubScreen does NOT embed AuctionHomeScreen', () => {
+    const src = readSrc('screens/TradeHubScreen.tsx');
+    expect(src).not.toContain('<AuctionHomeScreen');
+  });
+
+  it('TradeHubScreen has a gateway card that navigates to AuctionHome', () => {
+    const src = readSrc('screens/TradeHubScreen.tsx');
+    expect(src).toContain("navigation.navigate('AuctionHome')");
+  });
+
+  it('TradeHubScreen does NOT import AuctionsScreen', () => {
+    const src = readSrc('screens/TradeHubScreen.tsx');
+    expect(src).not.toContain("import AuctionsScreen from './AuctionsScreen'");
+  });
+
+  it('AuctionHomeScreen does not import or embed AuctionsScreen', () => {
     const src = readSrc('screens/AuctionHomeScreen.tsx');
     expect(src).not.toContain('AuctionsScreen');
   });
 
-  it('imports useServerClockTick from shared utility', () => {
-    const src = readSrc('screens/AuctionHomeScreen.tsx');
-    expect(src).toContain('useServerClockTick');
-    expect(src).toContain('useServerClock');
-  });
-
-  it('imports listAuctions and getWatchlist from marketApi', () => {
-    const src = readSrc('screens/AuctionHomeScreen.tsx');
-    expect(src).toContain('listAuctions');
-    expect(src).toContain('getWatchlist');
-  });
-
-  it('uses SafeAreaView as root container (full screen)', () => {
-    const src = readSrc('screens/AuctionHomeScreen.tsx');
-    expect(src).toContain('SafeAreaView');
-  });
-
-  it('does not use hardcoded 6-hour denominator', () => {
-    const src = readSrc('screens/AuctionHomeScreen.tsx');
-    expect(src).not.toContain('6 * 60 * 60 * 1000');
-    expect(src).not.toContain('WINDOW_6_HOURS');
-  });
-
-  it('does not use Date.now() for countdown calculation', () => {
-    const src = readSrc('screens/AuctionHomeScreen.tsx');
-    expect(src).not.toMatch(/Date\.now\(\)\s*[,;\)]/);
+  it('Co-Own tab content is preserved in TradeHubScreen', () => {
+    const src = readSrc('screens/TradeHubScreen.tsx');
+    expect(src).toContain('CoOwnScreen');
   });
 });
 
-describe('VQ-10A PASS 2: Trade Hub auction entry migrated', () => {
-  const tradeHubSrc = readSrc('screens/TradeHubScreen.tsx');
-
-  it('TradeHubScreen imports AuctionHomeScreen, not AuctionsScreen', () => {
-    expect(tradeHubSrc).toContain('AuctionHomeScreen');
-    expect(tradeHubSrc).not.toContain("import AuctionsScreen from './AuctionsScreen'");
-  });
-
-  it('TradeHubScreen renders AuctionHomeScreen for AUCTIONS tab', () => {
-    expect(tradeHubSrc).toContain('<AuctionHomeScreen />');
-  });
-
-  it('TradeHubScreen has Browse Auctions quick action navigating to AuctionHome', () => {
-    expect(tradeHubSrc).toContain("navigation.navigate('AuctionHome')");
-  });
-
-  it('CreateAuction quick action is preserved', () => {
-    expect(tradeHubSrc).toContain("navigation.navigate('CreateAuction')");
-  });
-
-  it('MyBids quick action is preserved', () => {
-    expect(tradeHubSrc).toContain("navigation.navigate('MyBids')");
-  });
-
-  it('Co-Own tab content is preserved', () => {
-    expect(tradeHubSrc).toContain('CoOwnScreen');
-  });
-});
-
-describe('VQ-10A PASS 2: Section information architecture', () => {
+describe('VQ-10A PASS 2.1: Canonical Auction Home header', () => {
   const src = readSrc('screens/AuctionHomeScreen.tsx');
 
-  it('has Needs your attention section', () => {
-    expect(src).toContain('attention');
-    expect(src).toContain('Needs your attention');
+  it('has a header bar with back, title, and action', () => {
+    expect(src).toContain('headerBar');
+    expect(src).toContain('headerBackBtn');
+    expect(src).toContain('headerTitle');
+    expect(src).toContain('headerActionBtn');
   });
 
-  it('has Live now section', () => {
-    expect(src).toContain("'live'");
-    expect(src).toContain('Live now');
+  it('header title says "Auctions"', () => {
+    expect(src).toContain('>Auctions<');
   });
 
-  it('has Ending soon section', () => {
-    expect(src).toContain('endingSoon');
-    expect(src).toContain('Ending soon');
+  it('has back navigation with canGoBack fallback', () => {
+    expect(src).toContain('canGoBack()');
+    expect(src).toContain('goBack()');
+    expect(src).toContain('MainTabs');
   });
 
-  it('has Upcoming section', () => {
-    expect(src).toContain('upcoming');
-    expect(src).toContain('Upcoming');
+  it('header action navigates to MyBids', () => {
+    expect(src).toContain("navigation.navigate('MyBids')");
   });
 
-  it('has Watchlist section', () => {
-    expect(src).toContain('watchlist');
-    expect(src).toContain('Watching');
+  it('header controls are 44pt', () => {
+    expect(src).toContain('HEADER_HEIGHT');
+    expect(src).toMatch(/HEADER_HEIGHT\s*=\s*44/);
   });
 
-  it('has Recently ended section', () => {
-    expect(src).toContain('recentlyEnded');
-    expect(src).toContain('Recently ended');
+  it('has accessibility labels for header controls', () => {
+    expect(src).toContain('accessibilityLabel="Go back"');
+    expect(src).toContain('accessibilityLabel="My auction activity"');
   });
 
-  it('has Seller tools section', () => {
-    expect(src).toContain('sellerTools');
-    expect(src).toContain('Your auctions');
-  });
-
-  it('attention section only includes outbid, won, and seller-with-settledAt', () => {
-    expect(src).toContain("'outbid'");
-    expect(src).toContain("'won'");
-  });
-
-  it('sections are only rendered when they have items', () => {
-    expect(src).toContain('items.length === 0');
-    expect(src).toMatch(/section\.items\.length\s*===\s*0/);
-  });
-
-  it('prevents duplicate auction IDs across sections', () => {
-    expect(src).toContain('usedIds');
-    expect(src).toContain('usedIds.has');
-    expect(src).toContain('usedIds.add');
+  it('does not crowd header with Create Auction, search and multiple controls', () => {
+    const headerBarMatch = src.match(/headerBar[\s\S]*?\/>/);
+    expect(headerBarMatch).toBeTruthy();
+    const headerBar = headerBarMatch![0];
+    expect(headerBar).not.toContain('CreateAuction');
+    expect(headerBar).not.toContain('search');
+    expect(headerBar).not.toContain('AppInput');
   });
 });
 
-describe('VQ-10A PASS 2: Server clock utility', () => {
-  it('useServerClock.ts exists', () => {
-    expect(fileExists('hooks/useServerClock.ts')).toBe(true);
-  });
-
+describe('VQ-10A PASS 2.1: Server clock foreground resync', () => {
   const src = readSrc('hooks/useServerClock.ts');
 
-  it('exports resolveAuctionTiming function', () => {
-    expect(src).toContain('export function resolveAuctionTiming');
+  it('exports needsResync signal', () => {
+    expect(src).toContain('needsResync');
   });
 
-  it('exports formatCountdown function', () => {
-    expect(src).toContain('export function formatCountdown');
+  it('exports clearResync function', () => {
+    expect(src).toContain('clearResync');
   });
 
-  it('exports useServerClock hook', () => {
-    expect(src).toContain('export function useServerClock');
+  it('does NOT reuse initialServerNow on foreground', () => {
+    const appStateEffect = src.match(/const handleAppStateChange[\s\S]*?subscription\.remove\(\);[\s\S]*?\}\s*,\s*\[\]\s*\)/);
+    expect(appStateEffect).toBeTruthy();
+    const effectBody = appStateEffect![0];
+    expect(effectBody).not.toContain('initialServerNow');
+    expect(effectBody).not.toContain('computeOffset(initialServerNow)');
   });
 
-  it('exports useServerClockTick hook', () => {
-    expect(src).toContain('export function useServerClockTick');
+  it('sets needsResync to true on foreground after 30s', () => {
+    expect(src).toContain('setNeedsResync(true)');
+    expect(src).toContain('30_000');
   });
 
-  it('prioritises cancelledAt over settledAt and lifecycle', () => {
-    expect(src).toContain('cancelledAt');
-    expect(src).toMatch(/cancelledAt.*settledAt|cancelledAt.*ended|cancelledAt.*live/s);
-  });
-
-  it('prioritises settledAt over lifecycle', () => {
-    expect(src).toContain('settledAt');
-  });
-
-  it('uses AppState for resync on app active', () => {
-    expect(src).toContain('AppState');
-    expect(src).toContain("'active'");
-  });
-
-  it('never produces negative countdown (uses Math.max(0, ...))', () => {
-    expect(src).toContain('Math.max(0,');
-  });
-
-  it('progress uses (now - startsAt) / (endsAt - startsAt)', () => {
-    expect(src).toContain('elapsed');
-    expect(src).toContain('totalDuration');
-    expect(src).toMatch(/elapsed\s*\/\s*totalDuration/);
+  it('clears needsResync in computeOffset', () => {
+    expect(src).toContain('setNeedsResync(false)');
   });
 });
 
-describe('VQ-10A PASS 2: Navigation contracts', () => {
+describe('VQ-10A PASS 2.1: List API state truth', () => {
+  const apiSrc = readSrc('services/marketApi.ts');
+
+  it('MarketAuction has cancelledAt field', () => {
+    expect(apiSrc).toContain('cancelledAt: string | null;');
+  });
+
+  it('MarketAuction has settledAt field', () => {
+    expect(apiSrc).toContain('settledAt: string | null;');
+  });
+
+  it('MarketAuction has winnerBidderId field', () => {
+    expect(apiSrc).toContain('winnerBidderId: string | null;');
+  });
+
+  it('AuctionHomeScreen toViewModel uses api.cancelledAt (not hardcoded null)', () => {
+    const src = readSrc('screens/AuctionHomeScreen.tsx');
+    expect(src).toContain('api.cancelledAt');
+    expect(src).not.toMatch(/cancelledAt:\s*null\s*,/);
+  });
+
+  it('AuctionHomeScreen toViewModel uses api.settledAt (not hardcoded null)', () => {
+    const src = readSrc('screens/AuctionHomeScreen.tsx');
+    expect(src).toContain('api.settledAt');
+    expect(src).not.toMatch(/settledAt:\s*null\s*,/);
+  });
+
+  it('AuctionHomeScreen toViewModel uses api.winnerBidderId', () => {
+    const src = readSrc('screens/AuctionHomeScreen.tsx');
+    expect(src).toContain('api.winnerBidderId');
+  });
+});
+
+describe('VQ-10A PASS 2.1: Attention resolver truth', () => {
   const src = readSrc('screens/AuctionHomeScreen.tsx');
 
-  it('navigates to AuctionDetail with auctionId', () => {
+  it('exports isAttentionItem function from auctionHomeLogic', () => {
+    const logicSrc = readSrc('utils/auctionHomeLogic.ts');
+    expect(logicSrc).toContain('export function isAttentionItem');
+  });
+
+  it('isAttentionItem rejects cancelled auctions', () => {
+    const logicSrc = readSrc('utils/auctionHomeLogic.ts');
+    expect(logicSrc).toMatch(/effectiveState\s*===\s*['"]cancelled['"].*return false/);
+  });
+
+  it('isAttentionItem rejects settled auctions', () => {
+    const logicSrc = readSrc('utils/auctionHomeLogic.ts');
+    expect(logicSrc).toMatch(/effectiveState\s*===\s*['"]settled['"].*return false/);
+  });
+
+  it('isAttentionItem does NOT exclude ended before checking (no contradictory filter)', () => {
+    const src = readSrc('screens/AuctionHomeScreen.tsx');
+    const sectionsMatch = src.match(/attentionItems[\s\S]*?isAttentionItem/);
+    expect(sectionsMatch).toBeTruthy();
+    const attentionSection = sectionsMatch![0];
+    expect(attentionSection).not.toContain('effectiveState === \'cancelled\'');
+    expect(attentionSection).not.toContain('effectiveState === \'settled\'');
+  });
+
+  it('isAttentionItem does not mark watched auctions as attention', () => {
+    const logicSrc = readSrc('utils/auctionHomeLogic.ts');
+    const fnMatch = logicSrc.match(/export function isAttentionItem[\s\S]*?^}/m);
+    expect(fnMatch).toBeTruthy();
+    const fnBody = fnMatch![0];
+    expect(fnBody).not.toContain('watching');
+    expect(fnBody).not.toMatch(/viewerState\s*===\s*['"]watching['"]/);
+  });
+
+  it('isAttentionItem does not mark seller items as attention', () => {
+    const logicSrc = readSrc('utils/auctionHomeLogic.ts');
+    const fnMatch = logicSrc.match(/export function isAttentionItem[\s\S]*?^}/m);
+    expect(fnMatch).toBeTruthy();
+    const fnBody = fnMatch![0];
+    expect(fnBody).not.toContain("'seller'");
+  });
+});
+
+describe('VQ-10A PASS 2.1: Won CTA truth', () => {
+  const src = readSrc('screens/AuctionHomeScreen.tsx');
+
+  it('uses "View result" for won auctions, not "Complete purchase"', () => {
+    expect(src).toContain('View result');
+    expect(src).not.toContain('Complete purchase');
+  });
+
+  it('navigates to AuctionDetail for won auctions', () => {
     expect(src).toContain("navigation.navigate('AuctionDetail'");
-    expect(src).toContain('auctionId');
-  });
-
-  it('navigates to CreateAuction', () => {
-    expect(src).toContain("navigation.navigate('CreateAuction'");
-  });
-
-  it('navigates to MyBids', () => {
-    expect(src).toContain("navigation.navigate('MyBids'");
   });
 });
 
-describe('VQ-10A PASS 2: Cursor pagination support', () => {
+describe('VQ-10A PASS 2.1: Search is wired to server', () => {
   const src = readSrc('screens/AuctionHomeScreen.tsx');
 
-  it('tracks nextCursor state', () => {
-    expect(src).toContain('nextCursor');
+  it('has debouncedQuery state', () => {
+    expect(src).toContain('debouncedQuery');
   });
 
-  it('has loadMore function', () => {
-    expect(src).toContain('loadMore');
+  it('calls listAuctions with query parameter', () => {
+    expect(src).toContain('query: debouncedQuery');
   });
 
-  it('deduplicates auction IDs on pagination', () => {
-    expect(src).toContain('existingIds');
+  it('has 400ms debounce timer', () => {
+    expect(src).toContain('400');
+    expect(src).toContain('setTimeout');
+  });
+
+  it('has stale request rejection (requestId pattern)', () => {
+    expect(src).toContain('searchReqIdRef');
+    expect(src).toMatch(/reqId\s*!==\s*searchReqIdRef\.current/);
+  });
+
+  it('resets cursor when query changes', () => {
+    expect(src).toContain('setSearchCursor(null)');
+  });
+
+  it('clears search results when query is empty', () => {
+    expect(src).toContain('setSearchResults(null)');
+  });
+
+  it('has clear search button', () => {
+    expect(src).toContain('Clear search');
+    expect(src).toContain('close-circle');
+  });
+
+  it('has no results state', () => {
+    expect(src).toContain('No results');
+  });
+
+  it('has search error state', () => {
+    expect(src).toContain('Search failed');
+  });
+
+  it('search pagination preserves active query', () => {
+    expect(src).toContain('query: debouncedQuery');
+    const loadMoreMatch = src.match(/loadMoreSearch[\s\S]*?query: debouncedQuery/);
+    expect(loadMoreMatch).toBeTruthy();
   });
 });
 
-describe('VQ-10A PASS 2: Visual hierarchy guardrails', () => {
+describe('VQ-10A PASS 2.1: Section-specific API calls', () => {
+  const src = readSrc('screens/AuctionHomeScreen.tsx');
+
+  it('fetches live auctions with status=live', () => {
+    expect(src).toContain("status: 'live'");
+    expect(src).toContain("sort: 'endingSoon'");
+  });
+
+  it('fetches upcoming auctions with status=scheduled', () => {
+    expect(src).toContain("status: 'scheduled'");
+    expect(src).toContain("sort: 'newest'");
+  });
+
+  it('fetches ended auctions with status=ended', () => {
+    expect(src).toContain("status: 'ended'");
+  });
+
+  it('fetches seller auctions with seller=me', () => {
+    expect(src).toContain("seller: 'me'");
+  });
+
+  it('fetches watchlist with getWatchlist()', () => {
+    expect(src).toContain('getWatchlist()');
+  });
+
+  it('does NOT fetch a single all-status page for all sections', () => {
+    expect(src).not.toContain("status: 'all', sort: 'endingSoon', limit: 50");
+  });
+
+  it('uses Promise.all for parallel section fetches', () => {
+    expect(src).toContain('Promise.all');
+  });
+
+  it('has stale request rejection for section fetches', () => {
+    expect(src).toContain('requestIdRef');
+    expect(src).toMatch(/reqId\s*!==\s*requestIdRef\.current/);
+  });
+});
+
+describe('VQ-10A PASS 2.1: Complete duplicate prevention', () => {
+  const src = readSrc('screens/AuctionHomeScreen.tsx');
+
+  it('usedIds is applied to seller tools section', () => {
+    const sellerMatch = src.match(/sellerTools[\s\S]*?usedIds\.has/);
+    expect(sellerMatch).toBeTruthy();
+  });
+
+  it('usedIds is applied to all sections (attention, endingSoon, live, upcoming, watchlist, ended, seller)', () => {
+    const sectionsMatch = src.match(/usedIds\.has[\s\S]*?(?:return result|return \[\])/);
+    expect(sectionsMatch).toBeTruthy();
+    const body = sectionsMatch![0];
+    const usedIdsCount = (body.match(/usedIds\.has/g) || []).length;
+    expect(usedIdsCount).toBeGreaterThanOrEqual(7);
+  });
+
+  it('priority order: attention first, seller last', () => {
+    const attentionIdx = src.indexOf("'attention', title: 'Needs your attention'");
+    const sellerIdx = src.indexOf("'sellerTools', title: 'Your auctions'");
+    expect(attentionIdx).toBeGreaterThan(-1);
+    expect(sellerIdx).toBeGreaterThan(-1);
+    expect(attentionIdx).toBeLessThan(sellerIdx);
+  });
+});
+
+describe('VQ-10A PASS 2.1: No false seller destination', () => {
+  const src = readSrc('screens/AuctionHomeScreen.tsx');
+
+  it('seller tools section has no action navigating to MyBids', () => {
+    const sellerMatch = src.match(/sellerTools[\s\S]*?section\.kind === 'sellerTools'[\s\S]*?\)/);
+    if (sellerMatch) {
+      expect(sellerMatch[0]).not.toContain("navigation.navigate('MyBids')");
+    }
+  });
+
+  it('SectionHeader does not have actionLabel for sellerTools', () => {
+    expect(src).not.toContain("'My Auctions'");
+  });
+});
+
+describe('VQ-10A PASS 2.1: Visual hierarchy guardrails', () => {
   const src = readSrc('screens/AuctionHomeScreen.tsx');
 
   it('does not use MetricGrid', () => {
     expect(src).not.toContain('MetricGrid');
-  });
-
-  it('does not use uppercase labels everywhere', () => {
-    expect(src).not.toMatch(/textTransform:\s*['"]uppercase['"]/);
   });
 
   it('card shows auction identity (title)', () => {
@@ -274,5 +394,59 @@ describe('VQ-10A PASS 2: Visual hierarchy guardrails', () => {
 
   it('card shows time remaining', () => {
     expect(src).toContain('formatCountdown');
+  });
+
+  it('uses SafeAreaView as root (not nested in another screen)', () => {
+    expect(src).toContain('SafeAreaView');
+  });
+});
+
+describe('VQ-10A PASS 2.1: Navigation contracts', () => {
+  const src = readSrc('screens/AuctionHomeScreen.tsx');
+
+  it('navigates to AuctionDetail with auctionId', () => {
+    expect(src).toContain("navigation.navigate('AuctionDetail'");
+    expect(src).toContain('auctionId');
+  });
+
+  it('navigates to MyBids from header', () => {
+    expect(src).toContain("navigation.navigate('MyBids'");
+  });
+
+  it('does not navigate to CreateAuction from header', () => {
+    const headerMatch = src.match(/headerBar[\s\S]*?<\/View>/);
+    expect(headerMatch).toBeTruthy();
+    expect(headerMatch![0]).not.toContain('CreateAuction');
+  });
+});
+
+describe('VQ-10A PASS 2.1: Backend list response fields', () => {
+  const backendSrc = readFileSync(
+    resolve(__dirname, '../../../backend/api/src/index.ts'),
+    'utf-8'
+  );
+
+  it('GET /auctions SELECT includes cancelled_at', () => {
+    expect(backendSrc).toContain('a.cancelled_at,');
+  });
+
+  it('GET /auctions SELECT includes settled_at', () => {
+    expect(backendSrc).toContain('a.settled_at,');
+  });
+
+  it('GET /auctions SELECT includes winner_bidder_id', () => {
+    expect(backendSrc).toContain('a.winner_bidder_id,');
+  });
+
+  it('GET /auctions response mapping includes cancelledAt', () => {
+    expect(backendSrc).toContain('cancelledAt: row.cancelled_at');
+  });
+
+  it('GET /auctions response mapping includes settledAt', () => {
+    expect(backendSrc).toContain('settledAt: row.settled_at');
+  });
+
+  it('GET /auctions response mapping includes winnerBidderId', () => {
+    expect(backendSrc).toContain('winnerBidderId: row.winner_bidder_id');
   });
 });

@@ -4,6 +4,7 @@ import {
   StyleSheet,
   RefreshControl,
   Pressable,
+  StatusBar,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import type { SupportedCurrencyCode } from '../constants/currencies';
 import type { CurrencyDisplayMode } from '../utils/currency';
 import { useServerClockTick, resolveAuctionTiming, formatCountdown } from '../hooks/useServerClock';
+import { isAttentionItem, isEndingSoon, type AuctionHomeItem } from '../utils/auctionHomeLogic';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
@@ -29,32 +31,9 @@ import {
   listAuctions,
   getWatchlist,
   type MarketAuction,
-  type AuctionViewerState,
 } from '../services/marketApi';
 
 type NavT = StackNavigationProp<RootStackParamList>;
-
-interface AuctionHomeItem {
-  id: string;
-  listingId: string;
-  sellerId: string;
-  sellerUsername: string;
-  sellerDisplayName: string | null;
-  title: string;
-  imageUrl: string;
-  brand: string | null;
-  startsAt: string;
-  endsAt: string;
-  startingBidGbp: number;
-  currentBidGbp: number;
-  minimumNextBidGbp: number;
-  bidCount: number;
-  buyNowPriceGbp: number | null;
-  viewerState: AuctionViewerState;
-  isWatched: boolean;
-  cancelledAt: string | null;
-  settledAt: string | null;
-}
 
 type SectionKind =
   | 'attention'
@@ -69,19 +48,6 @@ interface Section {
   kind: SectionKind;
   title: string;
   items: AuctionHomeItem[];
-}
-
-function isAttentionItem(item: AuctionHomeItem): boolean {
-  if (item.viewerState === 'outbid') return true;
-  if (item.viewerState === 'won') return true;
-  if (item.viewerState === 'seller' && item.settledAt) return true;
-  return false;
-}
-
-function isEndingSoon(item: AuctionHomeItem, nowMs: number): boolean {
-  const timing = resolveAuctionTiming(item, nowMs);
-  if (timing.effectiveState !== 'live') return false;
-  return timing.msToEnd > 0 && timing.msToEnd <= 60 * 60 * 1000;
 }
 
 function toViewModel(api: MarketAuction): AuctionHomeItem {
@@ -103,10 +69,13 @@ function toViewModel(api: MarketAuction): AuctionHomeItem {
     buyNowPriceGbp: api.buyNowPriceGbp,
     viewerState: api.viewerState,
     isWatched: api.isWatched,
-    cancelledAt: null,
-    settledAt: null,
+    cancelledAt: api.cancelledAt ?? null,
+    settledAt: api.settledAt ?? null,
+    winnerBidderId: api.winnerBidderId ?? null,
   };
 }
+
+type FormatFromFiat = (amount: number, currency?: SupportedCurrencyCode, opts?: { displayMode?: CurrencyDisplayMode }) => string;
 
 function AuctionHomeCard({
   item,
@@ -117,7 +86,7 @@ function AuctionHomeCard({
   item: AuctionHomeItem;
   nowMs: number;
   onPress: () => void;
-  formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: { displayMode?: CurrencyDisplayMode }) => string;
+  formatFromFiat: FormatFromFiat;
 }) {
   const timing = resolveAuctionTiming(item, nowMs);
   const sellerLabel = item.sellerDisplayName ?? `@${item.sellerUsername}`;
@@ -192,34 +161,26 @@ function AuctionHomeCard({
   );
 }
 
-function SectionHeader({ title, actionLabel, onAction }: { title: string; actionLabel?: string; onAction?: () => void }) {
+function SectionHeader({ title }: { title: string }) {
   return (
     <View style={styles.sectionHeader}>
       <BodyEmphasis style={styles.sectionTitle}>{title}</BodyEmphasis>
-      {actionLabel && onAction && (
-        <Pressable onPress={onAction} hitSlop={8} accessibilityRole="button" accessibilityLabel={actionLabel}>
-          <Meta style={styles.sectionAction}>{actionLabel}</Meta>
-        </Pressable>
-      )}
     </View>
   );
 }
 
 function AttentionCard({
   item,
-  nowMs,
   onPress,
   formatFromFiat,
 }: {
   item: AuctionHomeItem;
-  nowMs: number;
   onPress: () => void;
-  formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: { displayMode?: CurrencyDisplayMode }) => string;
+  formatFromFiat: FormatFromFiat;
 }) {
   const ctaText =
     item.viewerState === 'outbid' ? 'Bid again' :
-    item.viewerState === 'won' ? 'Complete purchase' :
-    item.viewerState === 'seller' && item.settledAt ? 'View outcome' :
+    item.viewerState === 'won' ? 'View result' :
     'View';
 
   return (
@@ -250,7 +211,6 @@ function AttentionCard({
         <Meta style={styles.attentionReason}>
           {item.viewerState === 'outbid' && 'You have been outbid'}
           {item.viewerState === 'won' && 'You won this auction'}
-          {item.viewerState === 'seller' && item.settledAt && 'Auction settled — view outcome'}
         </Meta>
         <View style={styles.attentionRow}>
           <Body style={styles.attentionBid}>
@@ -270,95 +230,189 @@ function AttentionCard({
   );
 }
 
+interface SectionData {
+  live: AuctionHomeItem[];
+  upcoming: AuctionHomeItem[];
+  ended: AuctionHomeItem[];
+  seller: AuctionHomeItem[];
+  watchlist: AuctionHomeItem[];
+  serverNow: string | null;
+}
+
+const EMPTY_SECTION_DATA: SectionData = {
+  live: [],
+  upcoming: [],
+  ended: [],
+  seller: [],
+  watchlist: [],
+  serverNow: null,
+};
+
 export default function AuctionHomeScreen() {
   const navigation = useNavigation<NavT>();
   const { formatFromFiat } = useFormattedPrice();
 
-  const [allAuctions, setAllAuctions] = React.useState<MarketAuction[]>([]);
-  const [watchlistAuctions, setWatchlistAuctions] = React.useState<MarketAuction[]>([]);
-  const [serverNowStr, setServerNowStr] = React.useState<string | null>(null);
+  const [sectionData, setSectionData] = React.useState<SectionData>(EMPTY_SECTION_DATA);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [debouncedQuery, setDebouncedQuery] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState<AuctionHomeItem[] | null>(null);
+  const [searchLoading, setSearchLoading] = React.useState(false);
+  const [searchError, setSearchError] = React.useState<string | null>(null);
+  const [searchCursor, setSearchCursor] = React.useState<string | null>(null);
+  const [isLoadingMoreSearch, setIsLoadingMoreSearch] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [nextCursor, setNextCursor] = React.useState<string | null>(null);
-  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
-  const { nowMs, resync } = useServerClockTick(serverNowStr);
+  const { nowMs, resync, needsResync, clearResync } = useServerClockTick(sectionData.serverNow);
 
-  const fetchData = React.useCallback(async () => {
+  const requestIdRef = React.useRef(0);
+
+  const fetchSections = React.useCallback(async () => {
     setLoading(true);
     setError(null);
+    const reqId = ++requestIdRef.current;
     try {
-      const [auctionsResult, watchlistResult] = await Promise.all([
-        listAuctions({ status: 'all', sort: 'endingSoon', limit: 50 }),
+      const [liveResult, upcomingResult, endedResult, sellerResult, watchlistResult] = await Promise.all([
+        listAuctions({ status: 'live', sort: 'endingSoon', limit: 30 }),
+        listAuctions({ status: 'scheduled', sort: 'newest', limit: 20 }),
+        listAuctions({ status: 'ended', sort: 'newest', limit: 20 }),
+        listAuctions({ seller: 'me', sort: 'endingSoon', limit: 20 }),
         getWatchlist(),
       ]);
-      setAllAuctions(auctionsResult.items);
-      setServerNowStr(auctionsResult.serverNow);
-      setNextCursor(auctionsResult.nextCursor);
-      setWatchlistAuctions(watchlistResult.items);
-      resync(auctionsResult.serverNow);
-    } catch (err) {
-      setError('Unable to load auctions');
+
+      if (reqId !== requestIdRef.current) return;
+
+      const serverNow = liveResult.serverNow;
+      setSectionData({
+        live: liveResult.items.map(toViewModel),
+        upcoming: upcomingResult.items.map(toViewModel),
+        ended: endedResult.items.map(toViewModel),
+        seller: sellerResult.items.map(toViewModel),
+        watchlist: watchlistResult.items.map(toViewModel),
+        serverNow,
+      });
+      resync(serverNow);
+    } catch {
+      if (reqId === requestIdRef.current) {
+        setError('Unable to load auctions');
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (reqId === requestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [resync]);
 
   React.useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+    void fetchSections();
+  }, [fetchSections]);
+
+  React.useEffect(() => {
+    if (needsResync) {
+      clearResync();
+      void fetchSections();
+    }
+  }, [needsResync, clearResync, fetchSections]);
 
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
-    void fetchData();
-  }, [fetchData]);
+    void fetchSections();
+  }, [fetchSections]);
 
-  const loadMore = React.useCallback(async () => {
-    if (!nextCursor || isLoadingMore) return;
-    setIsLoadingMore(true);
+  const searchReqIdRef = React.useRef(0);
+
+  React.useEffect(() => {
+    if (debouncedQuery.trim().length === 0) {
+      setSearchResults(null);
+      setSearchError(null);
+      setSearchCursor(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const reqId = ++searchReqIdRef.current;
+      setSearchLoading(true);
+      setSearchError(null);
+      listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', limit: 30 })
+        .then((result) => {
+          if (reqId !== searchReqIdRef.current) return;
+          setSearchResults(result.items.map(toViewModel));
+          setSearchCursor(result.nextCursor);
+        })
+        .catch(() => {
+          if (reqId !== searchReqIdRef.current) return;
+          setSearchError('Search failed');
+          setSearchResults([]);
+        })
+        .finally(() => {
+          if (reqId === searchReqIdRef.current) {
+            setSearchLoading(false);
+          }
+        });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [debouncedQuery]);
+
+  const loadMoreSearch = React.useCallback(async () => {
+    if (!searchCursor || isLoadingMoreSearch) return;
+    setIsLoadingMoreSearch(true);
+    const reqId = ++searchReqIdRef.current;
     try {
-      const result = await listAuctions({
-        status: 'all',
-        sort: 'endingSoon',
-        cursor: nextCursor,
-        limit: 30,
-      });
-      setAllAuctions((prev) => {
+      const result = await listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', cursor: searchCursor, limit: 30 });
+      if (reqId !== searchReqIdRef.current) return;
+      setSearchResults((prev) => {
+        if (!prev) return prev;
         const existingIds = new Set(prev.map((a) => a.id));
-        const newItems = result.items.filter((a) => !existingIds.has(a.id));
+        const newItems = result.items.map(toViewModel).filter((a) => !existingIds.has(a.id));
         return [...prev, ...newItems];
       });
-      setNextCursor(result.nextCursor);
+      setSearchCursor(result.nextCursor);
     } catch {
       // Silent fail on pagination
     } finally {
-      setIsLoadingMore(false);
+      if (reqId === searchReqIdRef.current) {
+        setIsLoadingMoreSearch(false);
+      }
     }
-  }, [nextCursor, isLoadingMore]);
-
-  const viewModels = React.useMemo(() => allAuctions.map(toViewModel), [allAuctions]);
-  const watchlistVMs = React.useMemo(() => watchlistAuctions.map(toViewModel), [watchlistAuctions]);
+  }, [searchCursor, isLoadingMoreSearch, debouncedQuery]);
 
   const sections = React.useMemo(() => {
+    if (searchResults !== null) return [];
+
     const usedIds = new Set<string>();
     const result: Section[] = [];
 
+    const allItems = [
+      ...sectionData.live,
+      ...sectionData.upcoming,
+      ...sectionData.ended,
+      ...sectionData.seller,
+      ...sectionData.watchlist,
+    ];
+
     // 1. Needs your attention
-    const attentionItems = viewModels.filter((item) => {
-      const timing = resolveAuctionTiming(item, nowMs);
-      if (timing.effectiveState === 'cancelled' || timing.effectiveState === 'settled') return false;
-      return isAttentionItem(item);
+    const attentionItems = allItems.filter((item) => {
+      if (usedIds.has(item.id)) return false;
+      return isAttentionItem(item, nowMs);
     });
     if (attentionItems.length > 0) {
       attentionItems.forEach((a) => usedIds.add(a.id));
       result.push({ kind: 'attention', title: 'Needs your attention', items: attentionItems });
     }
 
-    // 2. Live now
-    const liveItems = viewModels.filter((item) => {
+    // 2. Ending soon
+    const endingSoonItems = sectionData.live.filter((item) => {
+      if (usedIds.has(item.id)) return false;
+      return isEndingSoon(item, nowMs);
+    });
+    if (endingSoonItems.length > 0) {
+      endingSoonItems.forEach((a) => usedIds.add(a.id));
+      result.push({ kind: 'endingSoon', title: 'Ending soon', items: endingSoonItems });
+    }
+
+    // 3. Live now
+    const liveItems = sectionData.live.filter((item) => {
       if (usedIds.has(item.id)) return false;
       const timing = resolveAuctionTiming(item, nowMs);
       return timing.effectiveState === 'live' && !isEndingSoon(item, nowMs);
@@ -368,18 +422,8 @@ export default function AuctionHomeScreen() {
       result.push({ kind: 'live', title: 'Live now', items: liveItems });
     }
 
-    // 3. Ending soon
-    const endingSoonItems = viewModels.filter((item) => {
-      if (usedIds.has(item.id)) return false;
-      return isEndingSoon(item, nowMs);
-    });
-    if (endingSoonItems.length > 0) {
-      endingSoonItems.forEach((a) => usedIds.add(a.id));
-      result.push({ kind: 'endingSoon', title: 'Ending soon', items: endingSoonItems });
-    }
-
     // 4. Upcoming
-    const upcomingItems = viewModels.filter((item) => {
+    const upcomingItems = sectionData.upcoming.filter((item) => {
       if (usedIds.has(item.id)) return false;
       const timing = resolveAuctionTiming(item, nowMs);
       return timing.effectiveState === 'upcoming';
@@ -390,7 +434,7 @@ export default function AuctionHomeScreen() {
     }
 
     // 5. Watchlist
-    const watchlistItems = watchlistVMs.filter((item) => {
+    const watchlistItems = sectionData.watchlist.filter((item) => {
       if (usedIds.has(item.id)) return false;
       const timing = resolveAuctionTiming(item, nowMs);
       return timing.effectiveState === 'live' || timing.effectiveState === 'upcoming';
@@ -401,26 +445,39 @@ export default function AuctionHomeScreen() {
     }
 
     // 6. Recently ended
-    const endedItems = viewModels.filter((item) => {
+    const endedItems = sectionData.ended.filter((item) => {
       if (usedIds.has(item.id)) return false;
       const timing = resolveAuctionTiming(item, nowMs);
       return timing.effectiveState === 'ended';
     });
     if (endedItems.length > 0) {
+      endedItems.forEach((a) => usedIds.add(a.id));
       result.push({ kind: 'recentlyEnded', title: 'Recently ended', items: endedItems });
     }
 
     // 7. Seller tools
-    const sellerItems = viewModels.filter((item) => item.viewerState === 'seller');
+    const sellerItems = sectionData.seller.filter((item) => {
+      if (usedIds.has(item.id)) return false;
+      return item.viewerState === 'seller';
+    });
     if (sellerItems.length > 0) {
+      sellerItems.forEach((a) => usedIds.add(a.id));
       result.push({ kind: 'sellerTools', title: 'Your auctions', items: sellerItems });
     }
 
     return result;
-  }, [viewModels, watchlistVMs, nowMs]);
+  }, [sectionData, nowMs]);
 
   const navigateToDetail = React.useCallback((auctionId: string) => {
     navigation.navigate('AuctionDetail', { auctionId });
+  }, [navigation]);
+
+  const handleBack = React.useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('MainTabs');
+    }
   }, [navigation]);
 
   const renderItem = ({ item }: { item: AuctionHomeItem }) => (
@@ -435,7 +492,6 @@ export default function AuctionHomeScreen() {
   const renderAttentionItem = ({ item }: { item: AuctionHomeItem }) => (
     <AttentionCard
       item={item}
-      nowMs={nowMs}
       onPress={() => navigateToDetail(item.id)}
       formatFromFiat={formatFromFiat}
     />
@@ -448,17 +504,7 @@ export default function AuctionHomeScreen() {
 
     return (
       <View key={section.kind} style={styles.sectionWrap}>
-        <SectionHeader
-          title={section.title}
-          actionLabel={
-            section.kind === 'sellerTools' ? 'My Auctions' :
-            undefined
-          }
-          onAction={
-            section.kind === 'sellerTools' ? () => { haptics.tap(); navigation.navigate('MyBids'); } :
-            undefined
-          }
-        />
+        <SectionHeader title={section.title} />
         {section.kind === 'attention' ? (
           <FlashList
             data={section.items}
@@ -494,34 +540,27 @@ export default function AuctionHomeScreen() {
       <View style={styles.searchWrap}>
         <AppInput
           value={searchQuery}
-          onChangeText={setSearchQuery}
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            setDebouncedQuery(text);
+          }}
           placeholder="Search auctions..."
           prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
           accessibilityLabel="Search auctions"
           returnKeyType="search"
-          onSubmitEditing={() => void fetchData()}
+          onSubmitEditing={() => setDebouncedQuery(searchQuery)}
         />
-      </View>
-
-      <View style={styles.quickActionsRow}>
-        <AppButton
-          title="My Bids"
-          icon={<Ionicons name="list-outline" size={14} color={Colors.textSecondary} />}
-          variant="secondary"
-          size="sm"
-          style={styles.quickActionBtn}
-          onPress={() => { haptics.tap(); navigation.navigate('MyBids'); }}
-          accessibilityLabel="My auction activity"
-        />
-        <AppButton
-          title="Create Auction"
-          icon={<Ionicons name="add" size={14} color={Colors.background} />}
-          variant="primary"
-          size="sm"
-          style={styles.quickActionBtn}
-          onPress={() => { haptics.tap(); navigation.navigate('CreateAuction'); }}
-          accessibilityLabel="Create auction"
-        />
+        {searchQuery.length > 0 && (
+          <Pressable
+            style={styles.clearSearchBtn}
+            onPress={() => { setSearchQuery(''); setDebouncedQuery(''); }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+          >
+            <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+          </Pressable>
+        )}
       </View>
 
       {error && (
@@ -547,73 +586,150 @@ export default function AuctionHomeScreen() {
     </View>
   );
 
+  const isSearching = searchResults !== null;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <FlashList
-        data={sections}
-        keyExtractor={(item) => item.kind}
-        renderItem={({ item }) => renderSection(item)}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={
-          loading ? renderLoadingState() : (
-            <EmptyState
-              icon="hammer-outline"
-              title="No auctions yet"
-              subtitle="Check back later for live auctions."
-            />
-          )
-        }
-        ListFooterComponent={
-          nextCursor ? (
-            <View style={styles.loadMoreWrap}>
-              <AppButton
-                title={isLoadingMore ? 'Loading...' : 'Load More'}
-                variant="secondary"
-                size="sm"
-                onPress={() => void loadMore()}
-                disabled={isLoadingMore}
-                style={styles.loadMoreBtn}
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
+
+      <View style={styles.headerBar}>
+        <Pressable
+          onPress={handleBack}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          style={styles.headerBackBtn}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+        </Pressable>
+        <BodyEmphasis style={styles.headerTitle}>Auctions</BodyEmphasis>
+        <Pressable
+          onPress={() => { haptics.tap(); navigation.navigate('MyBids'); }}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="My auction activity"
+          style={styles.headerActionBtn}
+        >
+          <Ionicons name="list-outline" size={22} color={Colors.textPrimary} />
+        </Pressable>
+      </View>
+
+      {isSearching ? (
+        <FlashList
+          data={searchResults}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={
+            searchLoading ? renderLoadingState() : (
+              <EmptyState
+                icon="search-outline"
+                title="No results"
+                subtitle={searchError ?? `No auctions match "${searchQuery}"`}
               />
-            </View>
-          ) : null
-        }
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
-          />
-        }
-      />
+            )
+          }
+          ListFooterComponent={
+            searchCursor ? (
+              <View style={styles.loadMoreWrap}>
+                <AppButton
+                  title={isLoadingMoreSearch ? 'Loading...' : 'Load More'}
+                  variant="secondary"
+                  size="sm"
+                  onPress={() => void loadMoreSearch()}
+                  disabled={isLoadingMoreSearch}
+                  style={styles.loadMoreBtn}
+                />
+              </View>
+            ) : null
+          }
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={Colors.brand}
+              colors={[Colors.brand]}
+              progressBackgroundColor={Colors.surfaceAlt}
+            />
+          }
+        />
+      ) : (
+        <FlashList
+          data={sections}
+          keyExtractor={(item) => item.kind}
+          renderItem={({ item }) => renderSection(item)}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={
+            loading ? renderLoadingState() : (
+              <EmptyState
+                icon="hammer-outline"
+                title="No auctions yet"
+                subtitle="Check back later for live auctions."
+              />
+            )
+          }
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={Colors.brand}
+              colors={[Colors.brand]}
+              progressBackgroundColor={Colors.surfaceAlt}
+            />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
+
+const HEADER_HEIGHT = 44;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
   },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.sm,
+    height: HEADER_HEIGHT,
+  },
+  headerBackBtn: {
+    width: HEADER_HEIGHT,
+    height: HEADER_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
+  },
+  headerActionBtn: {
+    width: HEADER_HEIGHT,
+    height: HEADER_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   contentContainer: {
     paddingBottom: Space.xl,
   },
   searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     marginBottom: Space.sm,
   },
-  quickActionsRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
-  quickActionBtn: {
-    flex: 1,
+  clearSearchBtn: {
+    position: 'absolute',
+    right: Space.md + 8,
+    top: Space.sm + 14,
   },
   errorBanner: {
     flexDirection: 'row',

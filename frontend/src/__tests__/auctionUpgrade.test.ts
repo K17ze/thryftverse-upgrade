@@ -36,6 +36,9 @@ describe('auction contract types', () => {
       lifecycle: 'live',
       viewerState: 'leading',
       isWatched: false,
+      cancelledAt: null,
+      settledAt: null,
+      winnerBidderId: null,
       createdAt: '2025-01-01T00:00:00Z',
     };
 

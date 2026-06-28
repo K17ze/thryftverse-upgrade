@@ -1,9 +1,36 @@
 import { describe, it, expect } from 'vitest';
-import {
-  resolveAuctionTiming,
-  formatCountdown,
-  type AuctionTimingInput,
-} from '../hooks/useServerClock';
+import { resolveAuctionTiming, formatCountdown } from '../hooks/useServerClock';
+import { isAttentionItem } from '../utils/auctionHomeLogic';
+
+interface AuctionTimingInput {
+  startsAt: string;
+  endsAt: string;
+  cancelledAt?: string | null;
+  settledAt?: string | null;
+}
+
+interface AuctionHomeItem {
+  id: string;
+  listingId: string;
+  sellerId: string;
+  sellerUsername: string;
+  sellerDisplayName: string | null;
+  title: string;
+  imageUrl: string;
+  brand: string | null;
+  startsAt: string;
+  endsAt: string;
+  startingBidGbp: number;
+  currentBidGbp: number;
+  minimumNextBidGbp: number;
+  bidCount: number;
+  buyNowPriceGbp: number | null;
+  viewerState: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
+  isWatched: boolean;
+  cancelledAt: string | null;
+  settledAt: string | null;
+  winnerBidderId: string | null;
+}
 
 const NOW = new Date('2025-06-15T12:00:00Z').getTime();
 const ONE_HOUR = 60 * 60 * 1000;
@@ -17,6 +44,32 @@ function makeTiming(
   const startsAt = new Date(NOW + startsAtOffset).toISOString();
   const endsAt = new Date(NOW + endsAtOffset).toISOString();
   return { startsAt, endsAt, ...extra };
+}
+
+function makeItem(
+  overrides: Partial<AuctionHomeItem> & { startsAt: string; endsAt: string }
+): AuctionHomeItem {
+  return {
+    id: overrides.id ?? 'test-1',
+    listingId: 'list-1',
+    sellerId: 'seller-1',
+    sellerUsername: 'seller',
+    sellerDisplayName: null,
+    title: 'Test Item',
+    imageUrl: '',
+    brand: null,
+    startingBidGbp: 10,
+    currentBidGbp: 20,
+    minimumNextBidGbp: 21,
+    bidCount: 5,
+    buyNowPriceGbp: null,
+    viewerState: 'not_participating',
+    isWatched: false,
+    cancelledAt: null,
+    settledAt: null,
+    winnerBidderId: null,
+    ...overrides,
+  };
 }
 
 describe('useServerClock — resolveAuctionTiming', () => {
@@ -165,5 +218,281 @@ describe('useServerClock — formatCountdown', () => {
   it('formats days correctly', () => {
     const ms = 2 * ONE_DAY + 3 * ONE_HOUR + 30 * 60 * 1000;
     expect(formatCountdown(ms)).toBe('2d 03h 30m');
+  });
+});
+
+describe('useServerClock — foreground resync (needsResync signal)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../hooks/useServerClock.ts'),
+    'utf-8'
+  );
+
+  it('does not recompute offset from initialServerNow on foreground', () => {
+    const appStateEffect = src.match(/const handleAppStateChange[\s\S]*?subscription\.remove\(\);[\s\S]*?\}\s*,\s*\[\]\s*\)/);
+    expect(appStateEffect).toBeTruthy();
+    const effectBody = appStateEffect![0];
+    expect(effectBody).not.toContain('initialServerNow');
+    expect(effectBody).not.toContain('computeOffset(initialServerNow)');
+  });
+
+  it('emits needsResync signal instead of recomputing', () => {
+    expect(src).toContain('setNeedsResync(true)');
+  });
+
+  it('preserves last valid offset until fresh data arrives', () => {
+    expect(src).toContain('offsetRef.current');
+    expect(src).toContain('needsResync');
+    expect(src).toContain('clearResync');
+  });
+
+  it('no backwards clock jump: offset is only updated via computeOffset with fresh serverNow', () => {
+    const appStateEffect = src.match(/const handleAppStateChange[\s\S]*?subscription\.remove\(\);[\s\S]*?\}\s*,\s*\[\]\s*\)/);
+    expect(appStateEffect).toBeTruthy();
+    expect(appStateEffect![0]).not.toMatch(/computeOffset\(initialServerNow\)/);
+    expect(src).toMatch(/computeOffset\(serverNow\)/);
+  });
+});
+
+describe('isAttentionItem — exhaustive state table', () => {
+  const baseStarts = new Date(NOW - ONE_HOUR).toISOString();
+  const baseEnds = new Date(NOW + ONE_HOUR).toISOString();
+  const pastStarts = new Date(NOW - 3 * ONE_HOUR).toISOString();
+  const pastEnds = new Date(NOW - ONE_HOUR).toISOString();
+  const futureStarts = new Date(NOW + ONE_HOUR).toISOString();
+  const futureEnds = new Date(NOW + 7 * ONE_HOUR).toISOString();
+
+  it('returns true for outbid while live', () => {
+    const item = makeItem({
+      startsAt: baseStarts,
+      endsAt: baseEnds,
+      viewerState: 'outbid',
+    });
+    expect(isAttentionItem(item, NOW)).toBe(true);
+  });
+
+  it('returns true for won after ended', () => {
+    const item = makeItem({
+      startsAt: pastStarts,
+      endsAt: pastEnds,
+      viewerState: 'won',
+    });
+    expect(isAttentionItem(item, NOW)).toBe(true);
+  });
+
+  it('returns false for leading while live', () => {
+    const item = makeItem({
+      startsAt: baseStarts,
+      endsAt: baseEnds,
+      viewerState: 'leading',
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+
+  it('returns false for watching while live', () => {
+    const item = makeItem({
+      startsAt: baseStarts,
+      endsAt: baseEnds,
+      viewerState: 'watching',
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+
+  it('returns false for not_participating while live', () => {
+    const item = makeItem({
+      startsAt: baseStarts,
+      endsAt: baseEnds,
+      viewerState: 'not_participating',
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+
+  it('returns false for seller while live', () => {
+    const item = makeItem({
+      startsAt: baseStarts,
+      endsAt: baseEnds,
+      viewerState: 'seller',
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+
+  it('returns false for seller after ended', () => {
+    const item = makeItem({
+      startsAt: pastStarts,
+      endsAt: pastEnds,
+      viewerState: 'seller',
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+
+  it('returns false for seller with settledAt', () => {
+    const item = makeItem({
+      startsAt: pastStarts,
+      endsAt: pastEnds,
+      viewerState: 'seller',
+      settledAt: new Date(NOW - 30 * 60 * 1000).toISOString(),
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+
+  it('returns false for lost after ended', () => {
+    const item = makeItem({
+      startsAt: pastStarts,
+      endsAt: pastEnds,
+      viewerState: 'lost',
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+
+  it('returns false for cancelled auctions', () => {
+    const item = makeItem({
+      startsAt: baseStarts,
+      endsAt: baseEnds,
+      viewerState: 'outbid',
+      cancelledAt: new Date(NOW - 30 * 60 * 1000).toISOString(),
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+
+  it('returns false for settled auctions', () => {
+    const item = makeItem({
+      startsAt: pastStarts,
+      endsAt: pastEnds,
+      viewerState: 'won',
+      settledAt: new Date(NOW - 30 * 60 * 1000).toISOString(),
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+
+  it('returns false for outbid while upcoming', () => {
+    const item = makeItem({
+      startsAt: futureStarts,
+      endsAt: futureEnds,
+      viewerState: 'outbid',
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+
+  it('returns false for won while live (not yet ended)', () => {
+    const item = makeItem({
+      startsAt: baseStarts,
+      endsAt: baseEnds,
+      viewerState: 'won',
+    });
+    expect(isAttentionItem(item, NOW)).toBe(false);
+  });
+});
+
+describe('isAttentionItem — won CTA truth', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('uses "View result" for won auctions', () => {
+    expect(src).toContain('View result');
+  });
+
+  it('does not use "Complete purchase"', () => {
+    expect(src).not.toContain('Complete purchase');
+  });
+});
+
+describe('Duplicate prevention — seller items included', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('seller section checks usedIds.has before adding', () => {
+    const sellerMatch = src.match(/sellerItems[\s\S]*?usedIds\.has/);
+    expect(sellerMatch).toBeTruthy();
+  });
+
+  it('seller items are added to usedIds after inclusion', () => {
+    const sellerMatch = src.match(/sellerItems[\s\S]*?usedIds\.add/);
+    expect(sellerMatch).toBeTruthy();
+  });
+
+  it('at least 7 sections check usedIds', () => {
+    const matches = src.match(/usedIds\.has/g) || [];
+    expect(matches.length).toBeGreaterThanOrEqual(7);
+  });
+});
+
+describe('Section query contracts', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('live section uses status=live, sort=endingSoon', () => {
+    expect(src).toContain("status: 'live'");
+    expect(src).toContain("sort: 'endingSoon'");
+  });
+
+  it('upcoming section uses status=scheduled, sort=newest', () => {
+    expect(src).toContain("status: 'scheduled'");
+  });
+
+  it('ended section uses status=ended, sort=newest', () => {
+    expect(src).toContain("status: 'ended'");
+  });
+
+  it('seller section uses seller=me', () => {
+    expect(src).toContain("seller: 'me'");
+  });
+
+  it('watchlist uses getWatchlist()', () => {
+    expect(src).toContain('getWatchlist()');
+  });
+
+  it('does not use a single all-status fetch for all sections', () => {
+    expect(src).not.toContain("status: 'all', sort: 'endingSoon', limit: 50");
+  });
+});
+
+describe('Search query propagation', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('passes debouncedQuery to listAuctions', () => {
+    expect(src).toContain('query: debouncedQuery');
+  });
+
+  it('resets cursor on new query', () => {
+    expect(src).toContain('setSearchCursor(null)');
+  });
+
+  it('has stale request rejection', () => {
+    expect(src).toContain('searchReqIdRef');
+    expect(src).toMatch(/reqId\s*!==\s*searchReqIdRef\.current/);
+  });
+
+  it('clear search restores default sections', () => {
+    expect(src).toContain('setSearchResults(null)');
+    expect(src).toContain("setDebouncedQuery('')");
+  });
+});
+
+describe('Cancelled/settled list mapping', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('toViewModel maps api.cancelledAt (not hardcoded null)', () => {
+    expect(src).toContain('api.cancelledAt');
+    expect(src).not.toMatch(/cancelledAt:\s*null\s*,/);
+  });
+
+  it('toViewModel maps api.settledAt (not hardcoded null)', () => {
+    expect(src).toContain('api.settledAt');
+    expect(src).not.toMatch(/settledAt:\s*null\s*,/);
+  });
+
+  it('toViewModel maps api.winnerBidderId', () => {
+    expect(src).toContain('api.winnerBidderId');
   });
 });

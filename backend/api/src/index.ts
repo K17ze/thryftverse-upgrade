@@ -28797,6 +28797,9 @@ app.get('/auctions', async (request, reply) => {
     min_increment_gbp: number | string;
     bid_count: number;
     status: string;
+    cancelled_at: string | null;
+    settled_at: string | null;
+    winner_bidder_id: string | null;
     title: string | null;
     image_url: string | null;
     brand: string | null;
@@ -28823,6 +28826,9 @@ app.get('/auctions', async (request, reply) => {
         a.min_increment_gbp,
         a.bid_count,
         a.status,
+        a.cancelled_at,
+        a.settled_at,
+        a.winner_bidder_id,
         a.winner_bidder_id AS auction_winner_id,
         a.created_at,
         l.title,
@@ -28900,6 +28906,9 @@ app.get('/auctions', async (request, reply) => {
       lifecycle: computedStatus,
       viewerState,
       isWatched,
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      winnerBidderId: row.winner_bidder_id,
       createdAt: row.created_at,
     };
   });

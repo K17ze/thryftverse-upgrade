@@ -68,10 +68,13 @@ export interface ServerClockResult {
   serverNowMs: number;
   offsetMs: number;
   resync: (serverNow: string) => void;
+  needsResync: boolean;
+  clearResync: () => void;
 }
 
 export function useServerClock(initialServerNow: string | null): ServerClockResult {
   const [offsetMs, setOffsetMs] = React.useState(0);
+  const [needsResync, setNeedsResync] = React.useState(false);
   const offsetRef = React.useRef(0);
   const lastSyncRef = React.useRef(0);
 
@@ -83,6 +86,7 @@ export function useServerClock(initialServerNow: string | null): ServerClockResu
     offsetRef.current = newOffset;
     setOffsetMs(newOffset);
     lastSyncRef.current = deviceMs;
+    setNeedsResync(false);
   }, []);
 
   React.useEffect(() => {
@@ -95,22 +99,26 @@ export function useServerClock(initialServerNow: string | null): ServerClockResu
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
         const elapsed = Date.now() - lastSyncRef.current;
-        if (elapsed > 30_000 && initialServerNow) {
-          computeOffset(initialServerNow);
+        if (elapsed > 30_000) {
+          setNeedsResync(true);
         }
       }
     };
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, [initialServerNow, computeOffset]);
+  }, []);
 
   const resync = React.useCallback((serverNow: string) => {
     computeOffset(serverNow);
   }, [computeOffset]);
 
+  const clearResync = React.useCallback(() => {
+    setNeedsResync(false);
+  }, []);
+
   const serverNowMs = Date.now() + offsetRef.current;
 
-  return { serverNowMs, offsetMs, resync };
+  return { serverNowMs, offsetMs, resync, needsResync, clearResync };
 }
 
 export function useServerClockTick(initialServerNow: string | null): ServerClockResult & { nowMs: number } {

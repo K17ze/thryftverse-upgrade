@@ -31,6 +31,9 @@ export interface MarketAuction {
   lifecycle: AuctionLifecycle;
   viewerState: AuctionViewerState;
   isWatched: boolean;
+  cancelledAt: string | null;
+  settledAt: string | null;
+  winnerBidderId: string | null;
   createdAt: string;
 }
 

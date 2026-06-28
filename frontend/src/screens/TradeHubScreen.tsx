@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
-import AuctionHomeScreen from './AuctionHomeScreen';
+import { EmptyState } from '../components/EmptyState';
 import CoOwnScreen from './SyndicateScreen';
 import { RootStackParamList } from '../navigation/types';
 import { AppButton } from '../components/ui/AppButton';
@@ -59,7 +59,6 @@ export default function TradeHubScreen() {
   const quickActions = React.useMemo(() => {
     if (activeTab === 'AUCTIONS') {
       return [
-        { key: 'open-auction-home', label: 'Browse Auctions', icon: 'storefront-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('AuctionHome'); } },
         { key: 'create-auction', label: 'Create Auction', icon: 'hammer-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreateAuction'); } },
         { key: 'my-bids', label: 'My Bids', icon: 'list-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('MyBids'); } },
       ];
@@ -140,7 +139,28 @@ export default function TradeHubScreen() {
         style={styles.tabContent}
         entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)}
       >
-        {activeTab === 'AUCTIONS' ? <AuctionHomeScreen /> : <CoOwnScreen />}
+        {activeTab === 'AUCTIONS' ? (
+          <View style={styles.gatewayWrap}>
+            <AnimatedPressable
+              style={styles.gatewayCard}
+              onPress={() => { haptics.tap(); navigation.navigate('AuctionHome'); }}
+              activeOpacity={0.92}
+              scaleValue={0.985}
+              accessibilityRole="button"
+              accessibilityLabel="Browse auctions"
+              accessibilityHint="Opens the full auction discovery screen"
+            >
+              <View style={styles.gatewayIconWrap}>
+                <Ionicons name="storefront-outline" size={28} color={Colors.brand} />
+              </View>
+              <View style={styles.gatewayBody}>
+                <BodyEmphasis style={styles.gatewayTitle}>Browse Auctions</BodyEmphasis>
+                <Meta style={styles.gatewaySubtitle}>Discover live, upcoming and ending auctions</Meta>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+            </AnimatedPressable>
+          </View>
+        ) : <CoOwnScreen />}
       </Reanimated.View>
     </SafeAreaView>
   );
@@ -222,5 +242,38 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     flex: 1,
+  },
+  gatewayWrap: {
+    flex: 1,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+  },
+  gatewayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Space.md,
+    gap: Space.md,
+  },
+  gatewayIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gatewayBody: {
+    flex: 1,
+  },
+  gatewayTitle: {
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  gatewaySubtitle: {
+    color: Colors.textMuted,
   },
 });
