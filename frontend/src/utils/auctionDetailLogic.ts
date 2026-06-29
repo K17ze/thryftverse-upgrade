@@ -413,7 +413,7 @@ export function formatBidActivityRow(
   return {
     id: bid.id,
     amountText: formatFromFiat(bid.amountGbp, 'GBP', { displayMode: 'fiat' }),
-    bidderLabel: bid.isViewer ? 'You' : `@${bid.bidderUsername}`,
+    bidderLabel: bid.isViewer ? 'You' : 'Bidder',
     isViewer: bid.isViewer,
     isTopBid: index === 0,
     relativeTime: null,

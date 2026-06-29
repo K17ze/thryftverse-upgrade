@@ -85,6 +85,7 @@ export default function AuctionDetailScreen() {
   const [isBuyNowLoading, setIsBuyNowLoading] = React.useState(false);
   const [watchToggling, setWatchToggling] = React.useState(false);
   const [isTransitionRefreshing, setIsTransitionRefreshing] = React.useState(false);
+  const [composerError, setComposerError] = React.useState<string | null>(null);
 
   const serverNowRef = React.useRef<string | null>(null);
   const { secondClock, minuteClock, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed } =
@@ -170,12 +171,14 @@ export default function AuctionDetailScreen() {
     if (!auction) return;
     const suggested = getSuggestedBidDisplayAmount(auction.minimumNextBidGbp, currencyCode, goldRates);
     setBidInput(suggested.toFixed(2));
+    setComposerError(null);
     setBidComposerVisible(true);
   };
 
   const closeBidComposer = () => {
     setBidComposerVisible(false);
     setBidInput('');
+    setComposerError(null);
   };
 
   const bumpBid = (pct: number) => {
@@ -190,21 +193,24 @@ export default function AuctionDetailScreen() {
 
     const amount = Number(bidInput);
     if (!Number.isFinite(amount) || amount <= 0) {
-      show('Invalid bid amount', 'error');
+      const msg = 'Enter a valid bid amount';
+      setComposerError(msg);
+      show(msg, 'error');
       return;
     }
 
     const amountInGbp = convertDisplayToGbpAmount(amount, currencyCode, goldRates);
     if (!Number.isFinite(amountInGbp) || amountInGbp <= 0) {
-      show('Invalid bid amount', 'error');
+      const msg = 'Invalid bid amount for this currency';
+      setComposerError(msg);
+      show(msg, 'error');
       return;
     }
 
     if (amountInGbp < auction.minimumNextBidGbp) {
-      show(
-        `Bid must be at least ${formatFromFiat(auction.minimumNextBidGbp, 'GBP', { displayMode: 'fiat' })}`,
-        'error'
-      );
+      const msg = `Bid must be at least ${formatFromFiat(auction.minimumNextBidGbp, 'GBP', { displayMode: 'fiat' })}`;
+      setComposerError(msg);
+      show(msg, 'error');
       return;
     }
 
@@ -222,7 +228,9 @@ export default function AuctionDetailScreen() {
       closeBidComposer();
     } catch (err) {
       const parsed = parseApiError(err, 'Unable to place bid');
+      setComposerError(parsed.message);
       show(parsed.message, 'error');
+      void fetchDetail();
     } finally {
       setIsSubmittingBid(false);
     }
@@ -603,19 +611,21 @@ export default function AuctionDetailScreen() {
               <Meta style={styles.sellerHandle}>@{auction.seller.username}</Meta>
             </View>
           </AnimatedPressable>
-          <Pressable
-            style={styles.sellerMessageBtn}
-            onPress={() =>
-              navigation.navigate('NewMessage', {
-                preselectedUserId: auction.seller.id,
-                preselectedDisplayName: auction.seller.username,
-              })
-            }
-            accessibilityRole="button"
-            accessibilityLabel={`Message ${auction.seller.username}`}
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.textPrimary} />
-          </Pressable>
+          {!isSeller && (
+            <Pressable
+              style={styles.sellerMessageBtn}
+              onPress={() =>
+                navigation.navigate('NewMessage', {
+                  preselectedUserId: auction.seller.id,
+                  preselectedDisplayName: auction.seller.username,
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel={`Message ${auction.seller.username}`}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.textPrimary} />
+            </Pressable>
+          )}
         </View>
 
         {/* ── 7. Bid activity ── */}
@@ -643,7 +653,9 @@ export default function AuctionDetailScreen() {
                       ) : (
                         <Ionicons name="person-circle-outline" size={18} color={Colors.textMuted} />
                       )}
-                      <Text style={styles.bidderName}>{row.bidderLabel}</Text>
+                      <Text style={styles.bidderName}>
+                        {row.isViewer ? 'You' : 'Bidder'}
+                      </Text>
                     </View>
                     <View style={styles.bidRowRight}>
                       <Text style={styles.bidAmount}>{row.amountText}</Text>
@@ -846,7 +858,10 @@ export default function AuctionDetailScreen() {
 
             <AppInput
               value={bidInput}
-              onChangeText={(v) => setBidInput(sanitizeDecimalInput(v))}
+              onChangeText={(v) => {
+                setBidInput(sanitizeDecimalInput(v));
+                setComposerError(null);
+              }}
               keyboardType="decimal-pad"
               placeholder="0.00"
               prefix={currencyCode}
@@ -863,11 +878,21 @@ export default function AuctionDetailScreen() {
                   style={styles.bumpChip}
                   variant="secondary"
                   size="sm"
-                  onPress={() => bumpBid(pct)}
+                  onPress={() => {
+                    bumpBid(pct);
+                    setComposerError(null);
+                  }}
                   accessibilityLabel={`Increase bid by ${Math.round(pct * 100)} percent`}
                 />
               ))}
             </View>
+
+            {composerError && (
+              <View style={styles.composerErrorRow}>
+                <Ionicons name="alert-circle-outline" size={14} color={Colors.danger} />
+                <Text style={styles.composerErrorText}>{composerError}</Text>
+              </View>
+            )}
 
             <View style={styles.composerActions}>
               <AppButton
@@ -1478,6 +1503,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Space.sm,
     marginBottom: Space.md,
+  },
+  composerErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(220,38,38,0.08)',
+    marginBottom: Space.sm,
+  },
+  composerErrorText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.danger,
+    fontFamily: 'Inter_500Medium',
+    lineHeight: 18,
   },
   bumpChip: {
     flex: 1,

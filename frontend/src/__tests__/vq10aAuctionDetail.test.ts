@@ -492,7 +492,7 @@ describe('PASS 4.10: Bid activity formatting', () => {
     expect(row.isTopBid).toBe(true);
   });
 
-  it('formats non-viewer bid with username', () => {
+  it('formats non-viewer bid with masked identity', () => {
     const bid = {
       id: 2,
       bidderUsername: 'otheruser',
@@ -502,7 +502,8 @@ describe('PASS 4.10: Bid activity formatting', () => {
     };
     const row = formatBidActivityRow(bid, 1, formatFromFiat);
     expect(row.isViewer).toBe(false);
-    expect(row.bidderLabel).toBe('@otheruser');
+    expect(row.bidderLabel).toBe('Bidder');
+    expect(row.bidderLabel).not.toContain('otheruser');
     expect(row.isTopBid).toBe(false);
   });
 });
@@ -530,19 +531,22 @@ describe('PASS 4.11: Accessibility label', () => {
   });
 });
 
+// ── Module-level source reads for static guardrails and parity tests ──
+
+const fs = require('fs');
+const path = require('path');
+const screenSrc = fs.readFileSync(
+  path.resolve(__dirname, '../screens/AuctionDetailScreen.tsx'),
+  'utf-8'
+);
+const logicSrc = fs.readFileSync(
+  path.resolve(__dirname, '../utils/auctionDetailLogic.ts'),
+  'utf-8'
+);
+
 // ── Static guardrails ──
 
 describe('PASS 4.12: Static guardrails (source inspection)', () => {
-  const fs = require('fs');
-  const path = require('path');
-  const screenSrc = fs.readFileSync(
-    path.resolve(__dirname, '../screens/AuctionDetailScreen.tsx'),
-    'utf-8'
-  );
-  const logicSrc = fs.readFileSync(
-    path.resolve(__dirname, '../utils/auctionDetailLogic.ts'),
-    'utf-8'
-  );
 
   it('uses useBucketedServerClock (not local interval)', () => {
     expect(screenSrc).toContain('useBucketedServerClock');
@@ -723,5 +727,410 @@ describe('PASS 4.12: Static guardrails (source inspection)', () => {
 
   it('bid count is demoted (not competing with price)', () => {
     expect(screenSrc).toMatch(/bidCountValue[\s\S]*?color:\s*Colors\.textSecondary/);
+  });
+});
+
+// ── PASS 4.1 Parity: Bid authoring contract ──
+
+describe('PASS 4.1: Bid authoring currency contract', () => {
+  it('screen imports getSuggestedBidDisplayAmount', () => {
+    expect(screenSrc).toContain('getSuggestedBidDisplayAmount');
+  });
+
+  it('screen imports convertDisplayToGbpAmount', () => {
+    expect(screenSrc).toContain('convertDisplayToGbpAmount');
+  });
+
+  it('screen imports sanitizeDecimalInput', () => {
+    expect(screenSrc).toContain('sanitizeDecimalInput');
+  });
+
+  it('screen uses currencyCode and goldRates', () => {
+    expect(screenSrc).toContain('currencyCode');
+    expect(screenSrc).toContain('goldRates');
+  });
+
+  it('screen validates minimumNextBidGbp', () => {
+    expect(screenSrc).toContain('minimumNextBidGbp');
+  });
+
+  it('screen rounds to two decimals before submission', () => {
+    expect(screenSrc).toContain('toFixed(2)');
+  });
+
+  it('screen preserves +1%, +3%, +5% bump controls', () => {
+    expect(screenSrc).toContain('0.01');
+    expect(screenSrc).toContain('0.03');
+    expect(screenSrc).toContain('0.05');
+    expect(screenSrc).toContain('bumpBid');
+  });
+});
+
+// ── PASS 4.1 Parity: Idempotency ──
+
+describe('PASS 4.1: Idempotency and mutation safety', () => {
+  it('screen imports createStableId', () => {
+    expect(screenSrc).toContain('createStableId');
+  });
+
+  it('screen has isSubmittingBid guard', () => {
+    expect(screenSrc).toContain('isSubmittingBid');
+  });
+
+  it('screen has isBuyNowLoading guard', () => {
+    expect(screenSrc).toContain('isBuyNowLoading');
+  });
+
+  it('idempotency key created once per submission attempt (not in render)', () => {
+    expect(screenSrc).toMatch(/const idempotencyKey = createStableId\(\)/);
+  });
+
+  it('submitBid has duplicate guard at top', () => {
+    const submitSection = screenSrc.substring(
+      screenSrc.indexOf('const submitBid'),
+      screenSrc.indexOf('const handleBuyNow')
+    );
+    expect(submitSection).toContain('isSubmittingBid');
+    expect(submitSection).toMatch(/if\s*\(!auction\s*\|\|\s*isSubmittingBid\)/);
+  });
+
+  it('Buy Now has duplicate guard at top', () => {
+    const buyNowSection = screenSrc.substring(
+      screenSrc.indexOf('const handleBuyNow'),
+      screenSrc.indexOf('const confirmBuyNow')
+    );
+    expect(buyNowSection).toContain('isBuyNowLoading');
+  });
+});
+
+// ── PASS 4.1 Parity: Compliance and error adoption ──
+
+describe('PASS 4.1: Compliance and error adoption', () => {
+  it('screen imports parseApiError', () => {
+    expect(screenSrc).toContain('parseApiError');
+  });
+
+  it('bid errors appear inline in composer (composerError state)', () => {
+    expect(screenSrc).toContain('composerError');
+    expect(screenSrc).toContain('composerErrorRow');
+    expect(screenSrc).toContain('composerErrorText');
+  });
+
+  it('validation errors set composerError', () => {
+    expect(screenSrc).toMatch(/setComposerError/);
+  });
+
+  it('backend error sets composerError and triggers refetch', () => {
+    const submitSection = screenSrc.substring(
+      screenSrc.indexOf('const submitBid'),
+      screenSrc.indexOf('const handleBuyNow')
+    );
+    expect(submitSection).toContain('setComposerError');
+    expect(submitSection).toContain('fetchDetail');
+  });
+
+  it('composer error clears on input change', () => {
+    const inputSection = screenSrc.substring(
+      screenSrc.indexOf('onChangeText={(v) =>'),
+      screenSrc.indexOf('keyboardType')
+    );
+    expect(inputSection).toContain('setComposerError(null)');
+  });
+});
+
+// ── PASS 4.1 Parity: Watch ──
+
+describe('PASS 4.1: Watch parity', () => {
+  it('has optimistic update', () => {
+    const watchSection = screenSrc.substring(
+      screenSrc.indexOf('const handleToggleWatch'),
+      screenSrc.indexOf('const openBidComposer')
+    );
+    expect(watchSection).toContain('setAuction');
+    expect(watchSection).toContain('isWatched: !wasWatching');
+  });
+
+  it('has watchToggling duplicate guard', () => {
+    const watchSection = screenSrc.substring(
+      screenSrc.indexOf('const handleToggleWatch'),
+      screenSrc.indexOf('const openBidComposer')
+    );
+    expect(watchSection).toContain('watchToggling');
+  });
+
+  it('has POST add and DELETE remove', () => {
+    expect(screenSrc).toContain('addToWatchlist');
+    expect(screenSrc).toContain('removeFromWatchlist');
+  });
+
+  it('has rollback on failure', () => {
+    const watchSection = screenSrc.substring(
+      screenSrc.indexOf('const handleToggleWatch'),
+      screenSrc.indexOf('const openBidComposer')
+    );
+    expect(watchSection).toContain('catch');
+    expect(watchSection).toContain('wasWatching');
+  });
+
+  it('floating watch and sticky dock use same handleToggleWatch', () => {
+    expect(screenSrc).toContain('handleToggleWatch');
+    const occurrences = (screenSrc.match(/handleToggleWatch/g) || []).length;
+    expect(occurrences).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ── PASS 4.1 Parity: Seller and messaging ──
+
+describe('PASS 4.1: Seller and messaging parity', () => {
+  it('has UserProfile navigation for seller profile', () => {
+    expect(screenSrc).toContain('UserProfile');
+    expect(screenSrc).toContain('auction.seller.id');
+  });
+
+  it('has NewMessage navigation with preselectedUserId', () => {
+    expect(screenSrc).toContain('NewMessage');
+    expect(screenSrc).toContain('preselectedUserId');
+    expect(screenSrc).toContain('preselectedDisplayName');
+  });
+
+  it('hides Message Seller when viewer is seller', () => {
+    const sellerSection = screenSrc.substring(
+      screenSrc.indexOf('sellerSection'),
+      screenSrc.indexOf('Bid activity')
+    );
+    expect(sellerSection).toContain('!isSeller');
+    expect(sellerSection).toContain('sellerMessageBtn');
+  });
+
+  it('does not use fabricated conversation IDs', () => {
+    expect(screenSrc).not.toMatch(/conversationId.*seller/);
+    expect(screenSrc).not.toMatch(/seller.*conversationId/);
+    expect(screenSrc).not.toContain('partnerUserId');
+  });
+
+  it('has avatar fallback for missing avatarUrl', () => {
+    expect(screenSrc).toContain('sellerAvatarPlaceholder');
+    expect(screenSrc).toContain('person');
+  });
+
+  it('has displayName fallback to @username', () => {
+    expect(screenSrc).toContain('displayName');
+    expect(screenSrc).toContain('username');
+  });
+});
+
+// ── PASS 4.1 Parity: Bid activity privacy ──
+
+describe('PASS 4.1: Bid activity privacy', () => {
+  it('masks non-viewer bidder identity', () => {
+    const bid = {
+      id: 1,
+      bidderUsername: 'privateuser',
+      amountGbp: 100,
+      createdAt: '2025-06-15T11:00:00Z',
+      isViewer: false,
+    };
+    const row = formatBidActivityRow(bid, 0, formatFromFiat);
+    expect(row.bidderLabel).toBe('Bidder');
+    expect(row.bidderLabel).not.toContain('privateuser');
+  });
+
+  it('preserves You for viewer bids', () => {
+    const bid = {
+      id: 2,
+      bidderUsername: 'me',
+      amountGbp: 120,
+      createdAt: '2025-06-15T11:01:00Z',
+      isViewer: true,
+    };
+    const row = formatBidActivityRow(bid, 0, formatFromFiat);
+    expect(row.bidderLabel).toBe('You');
+  });
+
+  it('screen does not expose raw bidderUsername in render', () => {
+    const bidActivitySection = screenSrc.substring(
+      screenSrc.indexOf('Bid activity'),
+      screenSrc.indexOf('Description and item')
+    );
+    expect(bidActivitySection).not.toContain('bidderUsername');
+  });
+});
+
+// ── PASS 4.1 Parity: Refresh and lifecycle ──
+
+describe('PASS 4.1: Refresh and lifecycle parity', () => {
+  it('has initial detail fetch', () => {
+    expect(screenSrc).toContain('fetchDetail');
+  });
+
+  it('has pull-to-refresh', () => {
+    expect(screenSrc).toContain('RefreshControl');
+    expect(screenSrc).toContain('handleRefresh');
+  });
+
+  it('has serverNow resync', () => {
+    expect(screenSrc).toContain('resync(');
+    expect(screenSrc).toContain('serverNow');
+  });
+
+  it('has foreground resync', () => {
+    expect(screenSrc).toContain('needsResync');
+  });
+
+  it('has lifecycle transition detection', () => {
+    expect(screenSrc).toContain('detectLifecycleTransition');
+    expect(screenSrc).toContain('prevLifecycleRef');
+  });
+
+  it('has transition loop guard', () => {
+    expect(screenSrc).toContain('isTransitionRefreshing');
+  });
+
+  it('has post-bid refetch', () => {
+    const submitSection = screenSrc.substring(
+      screenSrc.indexOf('const submitBid'),
+      screenSrc.indexOf('const handleBuyNow')
+    );
+    expect(submitSection).toContain('fetchDetail');
+  });
+
+  it('has post-Buy-Now refetch', () => {
+    const buyNowSection = screenSrc.substring(
+      screenSrc.indexOf('const confirmBuyNow'),
+      screenSrc.indexOf('const detailInput')
+    );
+    expect(buyNowSection).toContain('fetchDetail');
+  });
+});
+
+// ── PASS 4.1 Parity: Loading and state continuity ──
+
+describe('PASS 4.1: Loading and state continuity', () => {
+  it('has initial skeleton', () => {
+    expect(screenSrc).toContain('SkeletonLoader');
+    expect(screenSrc).toContain('loading');
+  });
+
+  it('has detail failure retry', () => {
+    expect(screenSrc).toContain('EmptyState');
+    expect(screenSrc).toContain('Go Back');
+  });
+
+  it('has bid activity failure isolation', () => {
+    expect(screenSrc).toContain('bidActivityError');
+    expect(screenSrc).toContain('subSectionError');
+  });
+
+  it('has bid submission loading state', () => {
+    expect(screenSrc).toContain('Submitting...');
+  });
+
+  it('has Buy Now loading state', () => {
+    expect(screenSrc).toContain('Processing...');
+  });
+
+  it('has watch loading state', () => {
+    expect(screenSrc).toContain('watchToggling');
+  });
+});
+
+// ── PASS 4.1 Parity: Buy Now quality ──
+
+describe('PASS 4.1: Buy Now quality and truth', () => {
+  it('has fixed authoritative price', () => {
+    expect(screenSrc).toContain('buyNowPriceGbp');
+  });
+
+  it('has idempotency key for Buy Now', () => {
+    const buyNowSection = screenSrc.substring(
+      screenSrc.indexOf('const confirmBuyNow'),
+      screenSrc.indexOf('const detailInput')
+    );
+    expect(buyNowSection).toContain('createStableId');
+    expect(buyNowSection).toContain('idempotencyKey');
+  });
+
+  it('has loading guard', () => {
+    expect(screenSrc).toContain('isBuyNowLoading');
+  });
+
+  it('has backend transaction call', () => {
+    const buyNowSection = screenSrc.substring(
+      screenSrc.indexOf('const confirmBuyNow'),
+      screenSrc.indexOf('const detailInput')
+    );
+    expect(buyNowSection).toContain('placeAuctionBid');
+  });
+
+  it('has structured error handling', () => {
+    const buyNowSection = screenSrc.substring(
+      screenSrc.indexOf('const confirmBuyNow'),
+      screenSrc.indexOf('const detailInput')
+    );
+    expect(buyNowSection).toContain('parseApiError');
+  });
+
+  it('has authoritative refetch', () => {
+    const buyNowSection = screenSrc.substring(
+      screenSrc.indexOf('const confirmBuyNow'),
+      screenSrc.indexOf('const detailInput')
+    );
+    expect(buyNowSection).toContain('fetchDetail');
+  });
+
+  it('does not navigate to Checkout prematurely from dock', () => {
+    const dockStart = screenSrc.indexOf('Sticky bottom action dock');
+    const dockEnd = screenSrc.indexOf('sellerDockInfo');
+    const dockSection = screenSrc.substring(dockStart, dockEnd);
+    expect(dockSection).not.toContain('Checkout');
+  });
+
+  it('Alert.alert is interim confirmation (not final review UI)', () => {
+    expect(screenSrc).toContain('Alert.alert');
+    expect(screenSrc).toContain('confirmBuyNow');
+  });
+});
+
+// ── PASS 4.1 Parity: UI/UX quality ──
+
+describe('PASS 4.1: UI/UX quality parity', () => {
+  it('has single dominant CTA in sticky dock', () => {
+    expect(screenSrc).toContain('actionDockFull');
+    expect(screenSrc).not.toContain('inlineActionRow');
+  });
+
+  it('has KeyboardAvoidingView for composer', () => {
+    expect(screenSrc).toContain('KeyboardAvoidingView');
+  });
+
+  it('minimum next bid is visible in composer', () => {
+    expect(screenSrc).toContain('Minimum next bid');
+    expect(screenSrc).toContain('minimumNextBidGbp');
+  });
+
+  it('entered amount is visible and editable', () => {
+    expect(screenSrc).toContain('AppInput');
+    expect(screenSrc).toContain('bidInput');
+    expect(screenSrc).toContain('onChangeText');
+  });
+
+  it('errors appear near the relevant control (composerErrorRow)', () => {
+    expect(screenSrc).toContain('composerErrorRow');
+  });
+
+  it('seller actions remain discoverable (profile + message)', () => {
+    expect(screenSrc).toContain('UserProfile');
+    expect(screenSrc).toContain('NewMessage');
+  });
+
+  it('terminal states do not show dead controls', () => {
+    expect(screenSrc).toContain('isTerminal');
+    expect(screenSrc).toContain('terminalDock');
+    expect(screenSrc).toContain('showBidControls');
+  });
+
+  it('controls disabled during submission', () => {
+    expect(screenSrc).toContain('disabled={isSubmittingBid');
+    expect(screenSrc).toContain('disabled={isBuyNowLoading');
   });
 });
