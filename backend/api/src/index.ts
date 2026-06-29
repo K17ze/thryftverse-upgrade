@@ -29230,9 +29230,11 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       min_increment_gbp: number | string;
       bid_count: number;
       buy_now_price_gbp: number | string | null;
+      cancelled_at: string | null;
+      settled_at: string | null;
     }>(
       `
-        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp
+        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at
         FROM auctions
         WHERE id = $1
         FOR UPDATE
@@ -29249,17 +29251,35 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
 
     if (auction.seller_id === bidderId) {
       await client.query('ROLLBACK');
-      reply.code(400);
-      return { ok: false, error: 'Seller cannot bid on their own auction' };
+      reply.code(403);
+      return { ok: false, error: 'Seller cannot bid on their own auction', code: 'SELLER_RESTRICTED' };
+    }
+
+    if (auction.cancelled_at) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has been cancelled.', code: 'AUCTION_CANCELLED' };
+    }
+
+    if (auction.settled_at) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has been settled.', code: 'AUCTION_SETTLED' };
     }
 
     const status = resolveAuctionStatus(new Date(auction.starts_at), new Date(auction.ends_at));
     await client.query('UPDATE auctions SET status = $2, updated_at = NOW() WHERE id = $1', [auctionId, status]);
 
-    if (status !== 'live') {
+    if (status === 'upcoming') {
       await client.query('ROLLBACK');
       reply.code(409);
-      return { ok: false, error: `Auction is ${status}; bidding is closed` };
+      return { ok: false, error: 'This auction has not started yet.', code: 'AUCTION_NOT_STARTED' };
+    }
+
+    if (status === 'ended') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has ended. Bidding is no longer available.', code: 'AUCTION_ENDED' };
     }
 
     const currentBid = Number(auction.current_bid_gbp);
@@ -29355,7 +29375,17 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       };
     }
 
-    const isBuyNow = auction.buy_now_price_gbp !== null && amountGbp >= Number(auction.buy_now_price_gbp);
+    // Reject bids that meet or exceed the Buy Now price — user must use the dedicated Buy Now flow
+    if (auction.buy_now_price_gbp !== null && amountGbp >= Number(auction.buy_now_price_gbp)) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Your bid meets or exceeds the Buy Now price. Use Buy Now to purchase this item immediately.',
+        code: 'BUY_NOW_REVIEW_REQUIRED',
+        buyNowPriceGbp: Number(auction.buy_now_price_gbp),
+      };
+    }
 
     const bidResult = await client.query<{
       id: number;
@@ -29371,32 +29401,16 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
 
     const nextBidCount = auction.bid_count + 1;
 
-    if (isBuyNow) {
-      await client.query(
-        `
-          UPDATE auctions
-          SET current_bid_gbp = $2,
-              bid_count = $3,
-              winner_bidder_id = $4,
-              winner_bid_id = $5,
-              status = 'ended',
-              updated_at = NOW()
-          WHERE id = $1
-        `,
-        [auctionId, amountGbp, nextBidCount, bidderId, bidResult.rows[0].id]
-      );
-    } else {
-      await client.query(
-        `
-          UPDATE auctions
-          SET current_bid_gbp = $2,
-              bid_count = $3,
-              updated_at = NOW()
-          WHERE id = $1
-        `,
-        [auctionId, amountGbp, nextBidCount]
-      );
-    }
+    await client.query(
+      `
+        UPDATE auctions
+        SET current_bid_gbp = $2,
+            bid_count = $3,
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [auctionId, amountGbp, nextBidCount]
+    );
 
     if (amlAssessment.shouldCreateAlert) {
       amlAlert = await createAmlAlert(client, {
@@ -29427,7 +29441,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         bidderId,
         amountGbp,
         bidCount: nextBidCount,
-        isBuyNow,
+        isBuyNow: false,
       },
     });
 
@@ -29438,22 +29452,20 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         auctionId,
         currentBidGbp: amountGbp,
         bidCount: nextBidCount,
-        isBuyNow,
+        isBuyNow: false,
       },
     });
 
     try {
       await queueUserNotification({
         userId: auction.seller_id,
-        title: isBuyNow ? 'Auction won via Buy Now' : 'New auction bid',
-        body: isBuyNow
-          ? `Your auction was won via Buy Now for ${amountGbp.toFixed(2)} GBP.`
-          : `A new bid of ${amountGbp.toFixed(2)} GBP was placed on auction ${auctionId}.`,
+        title: 'New auction bid',
+        body: `A new bid of ${amountGbp.toFixed(2)} GBP was placed on auction ${auctionId}.`,
         payload: {
           auctionId,
           bidderId,
           amountGbp,
-          event: isBuyNow ? 'auction_buy_now' : 'auction_bid',
+          event: 'auction_bid',
         },
         metadata: {
           source: 'auction_bid_route',
@@ -29488,7 +29500,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         id: auctionId,
         currentBidGbp: amountGbp,
         bidCount: nextBidCount,
-        isBuyNow,
+        isBuyNow: false,
       },
       aml: amlAlert
         ? {
@@ -29503,6 +29515,368 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
     return {
       ok: false,
       error: `Unable to place bid: ${(error as Error).message}`,
+    };
+  } finally {
+    client.release();
+  }
+});
+
+// ── Dedicated Buy Now endpoint — atomic fixed-price purchase ──
+app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ auctionId: z.string().min(2) });
+  const bodySchema = z.object({
+    idempotencyKey: z.string().min(4).max(140),
+    expectedPriceGbp: z.number().positive(),
+  });
+
+  const { auctionId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+  const buyerId = request.authUser.userId;
+  const idempotencyKey = payload.idempotencyKey;
+
+  // Idempotency check — replay returns original Buy Now result
+  const existingBuyNow = await db.query<{ id: number; amount_gbp: number | string; created_at: string }>(
+    `SELECT id, amount_gbp, created_at FROM auction_bids WHERE auction_id = $1 AND bidder_id = $2 AND idempotency_key = $3 LIMIT 1`,
+    [auctionId, buyerId, idempotencyKey]
+  );
+  if (existingBuyNow.rows[0]) {
+    const auctionState = await db.query<{ current_bid_gbp: number | string; bid_count: number; status: string; winner_bidder_id: string | null }>(
+      'SELECT current_bid_gbp, bid_count, status, winner_bidder_id FROM auctions WHERE id = $1 LIMIT 1',
+      [auctionId]
+    );
+    const aRow = auctionState.rows[0];
+    return {
+      ok: true,
+      idempotent: true,
+      isBuyNow: true,
+      bid: {
+        id: existingBuyNow.rows[0].id,
+        auctionId,
+        bidderId: buyerId,
+        amountGbp: Number(existingBuyNow.rows[0].amount_gbp),
+        createdAt: existingBuyNow.rows[0].created_at,
+      },
+      auction: {
+        id: auctionId,
+        currentBidGbp: aRow ? Number(aRow.current_bid_gbp) : Number(existingBuyNow.rows[0].amount_gbp),
+        bidCount: aRow?.bid_count ?? 1,
+        isBuyNow: true,
+        status: aRow?.status ?? 'ended',
+        winnerBidderId: aRow?.winner_bidder_id ?? buyerId,
+      },
+      aml: null,
+    };
+  }
+
+  const client = await db.connect();
+  let amlAlert: { alertId: string; status: string } | null = null;
+  try {
+    await client.query('BEGIN');
+
+    const auctionResult = await client.query<{
+      id: string;
+      seller_id: string;
+      starts_at: string;
+      ends_at: string;
+      current_bid_gbp: number | string;
+      min_increment_gbp: number | string;
+      bid_count: number;
+      buy_now_price_gbp: number | string | null;
+      cancelled_at: string | null;
+      settled_at: string | null;
+    }>(
+      `
+        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at
+        FROM auctions
+        WHERE id = $1
+        FOR UPDATE
+      `,
+      [auctionId]
+    );
+
+    const auction = auctionResult.rows[0];
+    if (!auction) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Auction not found' };
+    }
+
+    if (auction.seller_id === buyerId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Seller cannot purchase their own auction', code: 'SELLER_RESTRICTED' };
+    }
+
+    if (auction.cancelled_at) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has been cancelled.', code: 'AUCTION_CANCELLED' };
+    }
+
+    if (auction.settled_at) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has been settled.', code: 'AUCTION_SETTLED' };
+    }
+
+    const status = resolveAuctionStatus(new Date(auction.starts_at), new Date(auction.ends_at));
+    await client.query('UPDATE auctions SET status = $2, updated_at = NOW() WHERE id = $1', [auctionId, status]);
+
+    if (status === 'upcoming') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has not started yet.', code: 'AUCTION_NOT_STARTED' };
+    }
+
+    if (status === 'ended') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has ended. Buy Now is no longer available.', code: 'AUCTION_ENDED' };
+    }
+
+    const buyNowPriceGbp = auction.buy_now_price_gbp !== null ? Number(auction.buy_now_price_gbp) : null;
+    if (!buyNowPriceGbp || buyNowPriceGbp <= 0) {
+      await client.query('ROLLBACK');
+      reply.code(400);
+      return { ok: false, error: 'This auction does not have a Buy Now price.', code: 'BUY_NOW_UNAVAILABLE' };
+    }
+
+    // Verify the client's expected price matches the authoritative stored price
+    const expectedPrice = roundTo(payload.expectedPriceGbp, 2);
+    if (expectedPrice !== buyNowPriceGbp) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'The Buy Now price has changed. Please review the updated price.',
+        code: 'BUY_NOW_PRICE_CHANGED',
+        currentBuyNowPriceGbp: buyNowPriceGbp,
+      };
+    }
+
+    // Use the authoritative server price as the transaction amount
+    const transactionAmountGbp = buyNowPriceGbp;
+
+    const eligibility = await evaluateMarketEligibility(client, {
+      userId: buyerId,
+      market: 'auctions',
+      orderNotionalGbp: transactionAmountGbp,
+    });
+
+    if (!eligibility.allowed) {
+      await client.query('ROLLBACK');
+
+      await appendComplianceAuditSafe(request, {
+        eventType: 'auction.buy_now.blocked.eligibility',
+        subjectUserId: buyerId,
+        payload: {
+          auctionId,
+          amountGbp: transactionAmountGbp,
+          code: eligibility.code,
+          message: eligibility.message,
+        },
+      });
+
+      reply.code(403);
+      return {
+        ok: false,
+        error: eligibility.message,
+        code: eligibility.code,
+      };
+    }
+
+    const amlAssessment = await evaluateAmlRisk(client, {
+      userId: buyerId,
+      market: 'auctions',
+      amountGbp: transactionAmountGbp,
+      counterpartyUserId: auction.seller_id,
+    });
+
+    if (amlAssessment.shouldBlock) {
+      await client.query('ROLLBACK');
+
+      if (amlAssessment.shouldCreateAlert) {
+        amlAlert = await createAmlAlert(db, {
+          userId: buyerId,
+          relatedUserId: auction.seller_id,
+          market: 'auctions',
+          eventType: 'buy_now',
+          amountGbp: transactionAmountGbp,
+          referenceId: auctionId,
+          ruleCode: 'AML_PRE_TRADE_BLOCK',
+          notes: 'Auction Buy Now blocked by AML pre-trade evaluation',
+          context: {
+            auctionId,
+            buyerId,
+            sellerId: auction.seller_id,
+          },
+          assessment: amlAssessment,
+        });
+      }
+
+      await appendComplianceAuditSafe(request, {
+        eventType: 'auction.buy_now.blocked.aml',
+        subjectUserId: buyerId,
+        payload: {
+          auctionId,
+          amountGbp: transactionAmountGbp,
+          riskScore: amlAssessment.riskScore,
+          riskLevel: amlAssessment.riskLevel,
+          alertId: amlAlert?.alertId ?? null,
+        },
+      });
+
+      reply.code(403);
+      return {
+        ok: false,
+        error: 'Buy Now blocked by AML controls. Please contact support for manual review.',
+        code: 'AML_BLOCKED',
+        riskLevel: amlAssessment.riskLevel,
+        alertId: amlAlert?.alertId ?? null,
+      };
+    }
+
+    // Insert exactly one transaction/bid record
+    const bidResult = await client.query<{
+      id: number;
+      created_at: string;
+    }>(
+      `
+        INSERT INTO auction_bids (auction_id, bidder_id, amount_gbp, idempotency_key)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, created_at
+      `,
+      [auctionId, buyerId, transactionAmountGbp, idempotencyKey]
+    );
+
+    const nextBidCount = auction.bid_count + 1;
+
+    // Mark the auction ended and set winner fields atomically
+    await client.query(
+      `
+        UPDATE auctions
+        SET current_bid_gbp = $2,
+            bid_count = $3,
+            winner_bidder_id = $4,
+            winner_bid_id = $5,
+            status = 'ended',
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [auctionId, transactionAmountGbp, nextBidCount, buyerId, bidResult.rows[0].id]
+    );
+
+    if (amlAssessment.shouldCreateAlert) {
+      amlAlert = await createAmlAlert(client, {
+        userId: buyerId,
+        relatedUserId: auction.seller_id,
+        market: 'auctions',
+        eventType: 'buy_now',
+        amountGbp: transactionAmountGbp,
+        referenceId: auctionId,
+        ruleCode: 'AML_POST_BUY_NOW_MONITOR',
+        notes: 'Auction Buy Now generated elevated AML risk score',
+        context: {
+          auctionId,
+          buyerId,
+          sellerId: auction.seller_id,
+        },
+        assessment: amlAssessment,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    publishRealtimeEvent({
+      topic: `auction:${auctionId}`,
+      type: 'auction.buy_now.completed',
+      payload: {
+        auctionId,
+        buyerId,
+        amountGbp: transactionAmountGbp,
+        bidCount: nextBidCount,
+        isBuyNow: true,
+      },
+    });
+
+    publishRealtimeEvent({
+      topic: 'auctions.market',
+      type: 'auction.buy_now.completed',
+      payload: {
+        auctionId,
+        currentBidGbp: transactionAmountGbp,
+        bidCount: nextBidCount,
+        isBuyNow: true,
+      },
+    });
+
+    try {
+      await queueUserNotification({
+        userId: auction.seller_id,
+        title: 'Auction won via Buy Now',
+        body: `Your auction was won via Buy Now for ${transactionAmountGbp.toFixed(2)} GBP.`,
+        payload: {
+          auctionId,
+          buyerId,
+          amountGbp: transactionAmountGbp,
+          event: 'auction_buy_now',
+        },
+        metadata: {
+          source: 'auction_buy_now_route',
+        },
+      });
+    } catch (error) {
+      request.log.error({ err: error, auctionId }, 'Failed to queue seller Buy Now notification');
+    }
+
+    await appendComplianceAuditSafe(request, {
+      eventType: 'auction.buy_now.completed',
+      subjectUserId: buyerId,
+      payload: {
+        auctionId,
+        amountGbp: transactionAmountGbp,
+        bidCount: nextBidCount,
+        amlAlertId: amlAlert?.alertId ?? null,
+      },
+    });
+
+    reply.code(201);
+    return {
+      ok: true,
+      isBuyNow: true,
+      bid: {
+        id: bidResult.rows[0].id,
+        auctionId,
+        bidderId: buyerId,
+        amountGbp: transactionAmountGbp,
+        createdAt: bidResult.rows[0].created_at,
+      },
+      auction: {
+        id: auctionId,
+        currentBidGbp: transactionAmountGbp,
+        bidCount: nextBidCount,
+        isBuyNow: true,
+        status: 'ended',
+        winnerBidderId: buyerId,
+      },
+      aml: amlAlert
+        ? {
+          alertId: amlAlert.alertId,
+          status: amlAlert.status,
+        }
+        : null,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    reply.code(500);
+    return {
+      ok: false,
+      error: `Unable to complete Buy Now: ${(error as Error).message}`,
     };
   } finally {
     client.release();

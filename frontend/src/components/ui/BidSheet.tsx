@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
@@ -16,8 +17,10 @@ import { Space, Radius, Typography } from '../../theme/designTokens';
 import {
   sanitizeDecimalInput,
 } from '../../utils/currencyAuthoringFlows';
+import { createStableId } from '../../utils/createStableId';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { GoldRates } from '../../utils/currency';
+import type { AuctionDetailResponse } from '../../services/marketApi';
 import {
   validateBidEntry,
   applyQuickIncrement,
@@ -52,7 +55,7 @@ interface BidSheetProps {
   goldRates: Partial<GoldRates>;
   formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: any) => string;
   onSubmitBid: (gbpAmount: number, idempotencyKey: string) => Promise<void>;
-  onRefreshDetail: () => Promise<void>;
+  onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
   serverClockMs: number;
 }
 
@@ -72,6 +75,7 @@ export function BidSheet({
   const [error, setError] = React.useState<TransactionError | null>(null);
   const [gbpAmount, setGbpAmount] = React.useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isPreflighting, setIsPreflighting] = React.useState(false);
   const [sheetOpenedAtMs, setSheetOpenedAtMs] = React.useState(0);
   const [currentMinimum, setCurrentMinimum] = React.useState(auction.minimumNextBidGbp);
   const idempotencyKeyRef = React.useRef<string | null>(null);
@@ -95,12 +99,15 @@ export function BidSheet({
   React.useEffect(() => {
     if (visible && shouldCloseSheetDueToLifecycle(auction.effectiveState)) {
       setError({
-        kind: 'auction_ended',
+        kind: auction.effectiveState === 'cancelled' ? 'auction_cancelled' : 'auction_ended',
         message: auction.effectiveState === 'cancelled'
           ? 'This auction has been cancelled.'
-          : 'This auction has ended. Bidding is no longer available.',
+          : auction.effectiveState === 'settled'
+            ? 'This auction has been settled.'
+            : 'This auction has ended. Bidding is no longer available.',
         canRetry: false,
         transactionPossible: false,
+        isAmbiguous: false,
       });
       setStage('error');
     }
@@ -119,64 +126,98 @@ export function BidSheet({
   };
 
   const handleQuickIncrement = (pct: number) => {
-    setBidInput(applyQuickIncrement(bidInput, pct, auction.currentBidGbp));
+    setBidInput(applyQuickIncrement(bidInput, pct, auction.currentBidGbp, currencyCode, goldRates));
     setError(null);
   };
 
   const handleProceedToReview = async () => {
-    // Stale check — refresh if sheet has been open > 30s
-    if (isSheetStateStale(sheetOpenedAtMs, Date.now())) {
-      await onRefreshDetail();
+    setIsPreflighting(true);
+    try {
+      // Stale check — refresh if sheet has been open > 30s, use returned snapshot
+      let minForValidation = currentMinimum;
+      let stateForValidation = auction.effectiveState;
+      if (isSheetStateStale(sheetOpenedAtMs, Date.now())) {
+        const snapshot = await onRefreshDetail();
+        if (snapshot) {
+          minForValidation = snapshot.auction.minimumNextBidGbp;
+          setCurrentMinimum(minForValidation);
+          // Reset stale timestamp after successful refresh
+          setSheetOpenedAtMs(Date.now());
+        }
+      }
+
+      const result = validateBidEntry(bidInput, currencyCode, goldRates, {
+        minimumNextBidGbp: minForValidation,
+        isSeller: auction.isSeller,
+        effectiveState: stateForValidation,
+        isSubmitting,
+      });
+
+      if (!result.valid || !result.gbpAmount) {
+        setError(result.error);
+        return;
+      }
+
+      // Use local variable for validated amount — do not rely on state after setGbpAmount
+      const validatedGbpAmount = result.gbpAmount;
+      setGbpAmount(validatedGbpAmount);
+      setError(null);
+      setStage('review');
+    } finally {
+      setIsPreflighting(false);
     }
-
-    const result = validateBidEntry(bidInput, currencyCode, goldRates, {
-      minimumNextBidGbp: currentMinimum,
-      isSeller: auction.isSeller,
-      effectiveState: auction.effectiveState,
-      isSubmitting,
-    });
-
-    if (!result.valid || !result.gbpAmount) {
-      setError(result.error);
-      return;
-    }
-
-    setGbpAmount(result.gbpAmount);
-    setError(null);
-    setStage('review');
   };
 
   const handleConfirmBid = async () => {
     if (isSubmitting || gbpAmount === null) return;
 
-    // Stale check — refresh if sheet has been open > 30s since last review
-    if (isSheetStateStale(sheetOpenedAtMs, Date.now())) {
-      await onRefreshDetail();
-      // Re-validate after refresh in case minimum changed
-      const result = validateBidEntry(bidInput, currencyCode, goldRates, {
-        minimumNextBidGbp: auction.minimumNextBidGbp,
-        isSeller: auction.isSeller,
-        effectiveState: auction.effectiveState,
-        isSubmitting,
-      });
-      if (!result.valid || !result.gbpAmount) {
-        setError(result.error);
-        setStage('entry');
-        return;
+    setIsPreflighting(true);
+    let validatedGbpAmount = gbpAmount;
+
+    try {
+      // Stale check — refresh if sheet has been open > 30s, use returned snapshot
+      if (isSheetStateStale(sheetOpenedAtMs, Date.now())) {
+        const snapshot = await onRefreshDetail();
+        if (snapshot) {
+          const minFromSnapshot = snapshot.auction.minimumNextBidGbp;
+          setCurrentMinimum(minFromSnapshot);
+          setSheetOpenedAtMs(Date.now());
+
+          // Re-validate after refresh using the returned snapshot values
+          const snapshotState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled' =
+            snapshot.auction.cancelledAt ? 'cancelled'
+            : snapshot.auction.settledAt ? 'settled'
+            : snapshot.auction.lifecycle;
+          const result = validateBidEntry(bidInput, currencyCode, goldRates, {
+            minimumNextBidGbp: minFromSnapshot,
+            isSeller: auction.isSeller,
+            effectiveState: snapshotState,
+            isSubmitting,
+          });
+          if (!result.valid || !result.gbpAmount) {
+            setError(result.error);
+            setStage('entry');
+            return;
+          }
+          validatedGbpAmount = result.gbpAmount;
+          setGbpAmount(validatedGbpAmount);
+        }
       }
-      setGbpAmount(result.gbpAmount);
+    } finally {
+      setIsPreflighting(false);
     }
 
-    // Create idempotency key once per attempt
+    // PASS 5: Create idempotency key using createStableId, once per attempt
     if (!idempotencyKeyRef.current) {
-      idempotencyKeyRef.current = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      idempotencyKeyRef.current = createStableId();
     }
 
     setIsSubmitting(true);
     setStage('submitting');
 
     try {
-      await onSubmitBid(gbpAmount, idempotencyKeyRef.current);
+      // Submit the validated local variable, not stale state
+      await onSubmitBid(validatedGbpAmount, idempotencyKeyRef.current);
       setStage('success');
     } catch (err) {
       const parsed = parseApiError(err, 'Unable to place bid');
@@ -190,16 +231,20 @@ export function BidSheet({
       );
       setError(txError);
 
-      // Refetch on conflict to get updated state
-      if (txError.transactionPossible) {
+      if (txError.isAmbiguous) {
+        // Ambiguous failure — preserve the same idempotency key for replay
+        // Do NOT reset the key. User retries with the same key.
+        setStage('error');
+      } else if (txError.transactionPossible) {
+        // Definitive rejection with retry possible — refresh and reset key for new attempt
         await onRefreshDetail();
         if (txError.updatedMinimumGbp) {
           setCurrentMinimum(txError.updatedMinimumGbp);
         }
-        // Reset idempotency key so the next attempt gets a fresh key
         idempotencyKeyRef.current = null;
         setStage('entry');
       } else {
+        // Definitive terminal rejection — no retry
         setStage('error');
       }
     } finally {
@@ -219,7 +264,15 @@ export function BidSheet({
 
   const handleRetry = () => {
     setError(null);
-    setStage('entry');
+    if (error?.isAmbiguous) {
+      // Ambiguous failure — retry with the same idempotency key
+      // Key is preserved, go back to review to confirm retry
+      setStage('review');
+    } else {
+      // Definitive rejection — new key will be generated on next confirm
+      idempotencyKeyRef.current = null;
+      setStage('entry');
+    }
   };
 
   const displayAmount = Number(bidInput);
@@ -299,8 +352,12 @@ export function BidSheet({
               {[0.01, 0.03, 0.05].map((pct) => (
                 <Pressable
                   key={pct}
-                  style={styles.incrementChip}
+                  style={({ pressed }) => [
+                    styles.incrementChip,
+                    pressed && styles.incrementChipPressed,
+                  ]}
                   onPress={() => handleQuickIncrement(pct)}
+                  disabled={isPreflighting || isSubmitting}
                   accessibilityLabel={`Increase bid by ${Math.round(pct * 100)} percent`}
                   accessibilityRole="button"
                 >
@@ -332,7 +389,8 @@ export function BidSheet({
                 variant="primary"
                 size="md"
                 align="center"
-                title="Review bid"
+                title={isPreflighting ? 'Checking...' : 'Review bid'}
+                disabled={isPreflighting || isSubmitting}
                 accessibilityLabel="Review your bid"
               />
             </View>
@@ -407,7 +465,8 @@ export function BidSheet({
                 variant="primary"
                 size="md"
                 align="center"
-                title="Confirm bid"
+                title={isPreflighting ? 'Checking...' : 'Confirm bid'}
+                disabled={isPreflighting || isSubmitting}
                 accessibilityLabel="Confirm and submit your bid"
               />
             </View>
@@ -581,8 +640,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     alignItems: 'center',
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: 'center',
+  },
+  incrementChipPressed: {
+    backgroundColor: Colors.border,
+    opacity: 0.7,
   },
   incrementText: {
     fontSize: 13,

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
@@ -16,10 +15,13 @@ import {
   isBuyNowValid,
   mapApiErrorToTransactionError,
   shouldCloseSheetDueToLifecycle,
+  isSheetStateStale,
   type TransactionError,
 } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
+import { createStableId } from '../../utils/createStableId';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
+import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
 
 export interface BuyNowSheetAuctionContext {
   id: string;
@@ -37,8 +39,8 @@ interface BuyNowSheetProps {
   auction: BuyNowSheetAuctionContext;
   currencyCode: SupportedCurrencyCode;
   formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: any) => string;
-  onSubmitBuyNow: (gbpAmount: number, idempotencyKey: string) => Promise<void>;
-  onRefreshDetail: () => Promise<void>;
+  onSubmitBuyNow: (gbpAmount: number, idempotencyKey: string) => Promise<BuyNowResult>;
+  onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
 }
 
 type BuyNowStage = 'review' | 'submitting' | 'success' | 'error';
@@ -55,6 +57,8 @@ export function BuyNowSheet({
   const [stage, setStage] = React.useState<BuyNowStage>('review');
   const [error, setError] = React.useState<TransactionError | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isPreflighting, setIsPreflighting] = React.useState(false);
+  const [sheetOpenedAtMs, setSheetOpenedAtMs] = React.useState(0);
   const idempotencyKeyRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
@@ -62,6 +66,8 @@ export function BuyNowSheet({
       setStage('review');
       setError(null);
       setIsSubmitting(false);
+      setIsPreflighting(false);
+      setSheetOpenedAtMs(Date.now());
       idempotencyKeyRef.current = null;
     }
   }, [visible]);
@@ -69,12 +75,15 @@ export function BuyNowSheet({
   React.useEffect(() => {
     if (visible && shouldCloseSheetDueToLifecycle(auction.effectiveState)) {
       setError({
-        kind: 'auction_ended',
+        kind: auction.effectiveState === 'cancelled' ? 'auction_cancelled' : 'auction_ended',
         message: auction.effectiveState === 'cancelled'
           ? 'This auction has been cancelled.'
-          : 'This auction has ended. Buy Now is no longer available.',
+          : auction.effectiveState === 'settled'
+            ? 'This auction has been settled.'
+            : 'This auction has ended. Buy Now is no longer available.',
         canRetry: false,
         transactionPossible: false,
+        isAmbiguous: false,
       });
       setStage('error');
     }
@@ -90,15 +99,75 @@ export function BuyNowSheet({
   const handleConfirm = async () => {
     if (!canBuyNow || !auction.buyNowPriceGbp) return;
 
-    if (!idempotencyKeyRef.current) {
-      idempotencyKeyRef.current = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    // PASS 4: Authoritative preflight when stale
+    let authoritativePrice = auction.buyNowPriceGbp;
+    let authoritativeState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled' = auction.effectiveState;
+
+    setIsPreflighting(true);
+    try {
+      if (isSheetStateStale(sheetOpenedAtMs, Date.now())) {
+        const snapshot = await onRefreshDetail();
+        if (snapshot) {
+          authoritativePrice = snapshot.auction.buyNowPriceGbp ?? auction.buyNowPriceGbp;
+          authoritativeState = (snapshot.auction.lifecycle as 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled') ?? auction.effectiveState;
+          // Also check terminal state fields from snapshot
+          if (snapshot.auction.cancelledAt) authoritativeState = 'cancelled';
+          if (snapshot.auction.settledAt) authoritativeState = 'settled';
+          setSheetOpenedAtMs(Date.now());
+
+          // Verify auction is still live
+          if (authoritativeState !== 'live') {
+            setError({
+              kind: authoritativeState === 'cancelled' ? 'auction_cancelled'
+                : authoritativeState === 'settled' ? 'auction_settled'
+                : 'auction_ended',
+              message: 'This auction is no longer live. Buy Now is unavailable.',
+              canRetry: false,
+              transactionPossible: false,
+              isAmbiguous: false,
+            });
+            setStage('error');
+            return;
+          }
+
+          // Verify displayed price matches authoritative price
+          const expectedPrice = Number(auction.buyNowPriceGbp.toFixed(2));
+          const serverPrice = Number(authoritativePrice.toFixed(2));
+          if (expectedPrice !== serverPrice) {
+            setError({
+              kind: 'buy_now_price_changed',
+              message: 'The Buy Now price has changed. Please review the updated price.',
+              currentBuyNowPriceGbp: serverPrice,
+              canRetry: true,
+              transactionPossible: true,
+              isAmbiguous: false,
+            });
+            setStage('review');
+            return;
+          }
+        }
+      }
+    } finally {
+      setIsPreflighting(false);
     }
+
+    // PASS 5: Create idempotency key using createStableId
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = createStableId();
+    }
+
+    // Use the authoritative server price as the transaction amount
+    const transactionAmount = Number(authoritativePrice.toFixed(2));
 
     setIsSubmitting(true);
     setStage('submitting');
 
     try {
-      await onSubmitBuyNow(Number(auction.buyNowPriceGbp.toFixed(2)), idempotencyKeyRef.current);
+      const result = await onSubmitBuyNow(transactionAmount, idempotencyKeyRef.current);
+      // PASS 4: Verify the response explicitly confirms Buy Now
+      if (!result.isBuyNow) {
+        throw new Error('Buy Now response did not confirm purchase. Please try again.');
+      }
       setStage('success');
     } catch (err) {
       const parsed = parseApiError(err, 'Unable to complete Buy Now');
@@ -112,12 +181,16 @@ export function BuyNowSheet({
       );
       setError(txError);
 
-      if (txError.transactionPossible) {
+      if (txError.isAmbiguous) {
+        // Ambiguous failure — preserve the same idempotency key for replay
+        setStage('error');
+      } else if (txError.transactionPossible) {
+        // Definitive rejection with retry possible — refresh and reset key
         await onRefreshDetail();
-        // Reset idempotency key so the next attempt gets a fresh key
         idempotencyKeyRef.current = null;
         setStage('review');
       } else {
+        // Definitive terminal rejection
         setStage('error');
       }
     } finally {
@@ -132,7 +205,14 @@ export function BuyNowSheet({
 
   const handleRetry = () => {
     setError(null);
-    setStage('review');
+    if (error?.isAmbiguous) {
+      // Ambiguous failure — retry with the same idempotency key
+      setStage('review');
+    } else {
+      // Definitive rejection — new key will be generated on next confirm
+      idempotencyKeyRef.current = null;
+      setStage('review');
+    }
   };
 
   const priceText = auction.buyNowPriceGbp
@@ -228,11 +308,11 @@ export function BuyNowSheet({
               <AppButton
                 style={[styles.actionBtn, styles.primaryBtn]}
                 onPress={handleConfirm}
-                disabled={!canBuyNow}
+                disabled={!canBuyNow || isPreflighting || isSubmitting}
                 variant="primary"
                 size="md"
                 align="center"
-                title="Confirm Buy Now"
+                title={isPreflighting ? 'Checking...' : 'Confirm Buy Now'}
                 accessibilityLabel="Confirm Buy Now purchase"
               />
             </View>

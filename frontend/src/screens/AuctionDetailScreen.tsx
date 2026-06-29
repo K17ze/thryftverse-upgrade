@@ -29,10 +29,13 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   getAuctionDetail,
   placeAuctionBid,
+  buyAuctionNow,
   addToWatchlist,
   removeFromWatchlist,
   type AuctionDetail as AuctionDetailType,
   type AuctionBidActivity,
+  type AuctionDetailResponse,
+  type BuyNowResult,
 } from '../services/marketApi';
 import { BidSheet } from '../components/ui/BidSheet';
 import { BuyNowSheet } from '../components/ui/BuyNowSheet';
@@ -84,7 +87,7 @@ export default function AuctionDetailScreen() {
 
   const prevLifecycleRef = React.useRef<AuctionEffectiveState | null>(null);
 
-  const fetchDetail = React.useCallback(async () => {
+  const fetchDetail = React.useCallback(async (): Promise<AuctionDetailResponse | null> => {
     try {
       const res = await getAuctionDetail(auctionId);
       serverNowRef.current = res.serverNow;
@@ -94,10 +97,12 @@ export default function AuctionDetailScreen() {
       setError(null);
       resync(res.serverNow);
       clearResyncFailed();
+      return res;
     } catch (err) {
       const parsed = parseApiError(err, 'Failed to load auction');
       setError(parsed.message);
       markResyncFailed();
+      return null;
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -158,6 +163,11 @@ export default function AuctionDetailScreen() {
     }
   };
 
+  // Authoritative refresh that returns the fetched snapshot for transaction preflight
+  const refreshDetailForTransaction = React.useCallback(async (): Promise<AuctionDetailResponse | null> => {
+    return fetchDetail();
+  }, [fetchDetail]);
+
   const openBidSheet = () => {
     if (!auction) return;
     setBidSheetVisible(true);
@@ -167,20 +177,18 @@ export default function AuctionDetailScreen() {
     setBidSheetVisible(false);
   };
 
-  const handleSubmitBid = async (gbpAmount: number, idempotencyKey: string) => {
+  // PASS 6: Sheet owns transaction feedback. Parent only calls API and returns typed result.
+  // No duplicate toast — sheet handles inline error/success presentation.
+  const handleSubmitBid = async (gbpAmount: number, idempotencyKey: string): Promise<void> => {
     if (!auction || isSubmittingBid) return;
     setIsSubmittingBid(true);
 
     try {
       await placeAuctionBid(auction.id, { amountGbp: gbpAmount, idempotencyKey });
+      // Post-success refresh — do not convert to error if refresh fails
       await fetchDetail();
-      show(
-        `Bid placed: ${formatFromFiat(gbpAmount, 'GBP', { displayMode: 'fiat' })}`,
-        'success'
-      );
     } catch (err) {
-      const parsed = parseApiError(err, 'Unable to place bid');
-      show(parsed.message, 'error');
+      // Single reconciliation fetch for conflict errors
       void fetchDetail();
       throw err;
     } finally {
@@ -197,17 +205,30 @@ export default function AuctionDetailScreen() {
     setBuyNowSheetVisible(false);
   };
 
-  const handleSubmitBuyNow = async (gbpAmount: number, idempotencyKey: string) => {
-    if (!auction?.buyNowPriceGbp || isBuyNowLoading) return;
+  // PASS 4: Buy Now calls dedicated API, verifies isBuyNow in response
+  // PASS 6: Sheet owns feedback — no duplicate toast from parent
+  const handleSubmitBuyNow = async (gbpAmount: number, idempotencyKey: string): Promise<BuyNowResult> => {
+    if (!auction?.buyNowPriceGbp || isBuyNowLoading) throw new Error('Buy Now not available');
     setIsBuyNowLoading(true);
 
     try {
-      await placeAuctionBid(auction.id, { amountGbp: gbpAmount, idempotencyKey });
-      await fetchDetail();
-      show(`Buy Now accepted: ${auction.title}`, 'success');
+      const result = await buyAuctionNow(auction.id, {
+        idempotencyKey,
+        expectedPriceGbp: gbpAmount,
+      });
+      // Verify the response explicitly confirms Buy Now
+      if (!result.isBuyNow) {
+        throw new Error('Buy Now response did not confirm purchase. Please try again.');
+      }
+      // Post-success refresh — do not convert to error if refresh fails
+      try {
+        await fetchDetail();
+      } catch {
+        // Retain successful transaction result; sheet shows sync-pending message
+      }
+      return result;
     } catch (err) {
-      const parsed = parseApiError(err, 'Unable to complete Buy Now');
-      show(parsed.message, 'error');
+      // Single reconciliation fetch
       void fetchDetail();
       throw err;
     } finally {
@@ -781,7 +802,7 @@ export default function AuctionDetailScreen() {
           goldRates={goldRates}
           formatFromFiat={formatFromFiat}
           onSubmitBid={handleSubmitBid}
-          onRefreshDetail={fetchDetail}
+          onRefreshDetail={refreshDetailForTransaction}
           serverClockMs={minuteClock}
         />
       )}
@@ -803,7 +824,7 @@ export default function AuctionDetailScreen() {
           currencyCode={currencyCode}
           formatFromFiat={formatFromFiat}
           onSubmitBuyNow={handleSubmitBuyNow}
-          onRefreshDetail={fetchDetail}
+          onRefreshDetail={refreshDetailForTransaction}
         />
       )}
     </View>

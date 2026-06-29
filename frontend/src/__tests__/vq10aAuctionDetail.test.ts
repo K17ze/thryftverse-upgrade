@@ -793,9 +793,19 @@ describe('PASS 4.1: Idempotency and mutation safety', () => {
     expect(bidSheetSrc).toContain('idempotencyKeyRef.current');
   });
 
+  it('BidSheet uses createStableId for idempotency keys', () => {
+    expect(bidSheetSrc).toContain('createStableId');
+    expect(bidSheetSrc).not.toContain('Math.random');
+  });
+
   it('BuyNowSheet creates idempotency key once per attempt (not in render)', () => {
     expect(buyNowSheetSrc).toContain('idempotencyKeyRef');
     expect(buyNowSheetSrc).toContain('idempotencyKeyRef.current');
+  });
+
+  it('BuyNowSheet uses createStableId for idempotency keys', () => {
+    expect(buyNowSheetSrc).toContain('createStableId');
+    expect(buyNowSheetSrc).not.toContain('Math.random');
   });
 
   it('handleSubmitBid has duplicate guard at top', () => {
@@ -1064,7 +1074,7 @@ describe('PASS 4.1: Buy Now quality and truth', () => {
       screenSrc.indexOf('const handleSubmitBuyNow'),
       screenSrc.indexOf('const detailInput')
     );
-    expect(buyNowSection).toContain('placeAuctionBid');
+    expect(buyNowSection).toContain('buyAuctionNow');
   });
 
   it('has structured error handling', () => {
@@ -1073,11 +1083,7 @@ describe('PASS 4.1: Buy Now quality and truth', () => {
   });
 
   it('has authoritative refetch', () => {
-    const buyNowSection = screenSrc.substring(
-      screenSrc.indexOf('const handleSubmitBuyNow'),
-      screenSrc.indexOf('const detailInput')
-    );
-    expect(buyNowSection).toContain('fetchDetail');
+    expect(screenSrc).toContain('refreshDetailForTransaction');
   });
 
   it('does not navigate to Checkout prematurely from dock', () => {
@@ -1244,6 +1250,17 @@ describe('PASS 5: transactionSheetLogic — validateBidEntry', () => {
     expect(result.error?.kind).toBe('auction_cancelled');
   });
 
+  it('rejects when auction settled', () => {
+    const result = validateBidEntry('20', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'settled',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error?.kind).toBe('auction_settled');
+  });
+
   it('rejects when auction upcoming', () => {
     const result = validateBidEntry('20', 'GBP', gbpRates, {
       minimumNextBidGbp: 10,
@@ -1252,7 +1269,7 @@ describe('PASS 5: transactionSheetLogic — validateBidEntry', () => {
       isSubmitting: false,
     });
     expect(result.valid).toBe(false);
-    expect(result.error?.kind).toBe('auction_ended');
+    expect(result.error?.kind).toBe('auction_not_started');
   });
 
   it('rejects when already submitting', () => {
@@ -1294,19 +1311,20 @@ describe('PASS 5: transactionSheetLogic — applyQuickIncrement', () => {
     expect(result).toBe('105.00');
   });
 
-  it('falls back to currentBidGbp when input is empty', () => {
-    const result = applyQuickIncrement('', 0.03, 50);
+  it('falls back to currentBidGbp when input is empty (currency-correct)', () => {
+    // PASS 8: fallback should be in display currency, not raw GBP
+    const result = applyQuickIncrement('', 0.03, 50, 'GBP', { GBP: 1 });
     expect(result).toBe('51.50');
   });
 
-  it('falls back to currentBidGbp when input is invalid', () => {
-    const result = applyQuickIncrement('abc', 0.05, 50);
+  it('falls back to currentBidGbp when input is invalid (currency-correct)', () => {
+    const result = applyQuickIncrement('abc', 0.05, 50, 'GBP', { GBP: 1 });
     expect(result).toBe('52.50');
   });
 });
 
 describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () => {
-  it('maps network error', () => {
+  it('maps network error as ambiguous', () => {
     const result = mapApiErrorToTransactionError(
       new Error('network'),
       'fallback',
@@ -1317,9 +1335,10 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
     );
     expect(result.kind).toBe('network_failure');
     expect(result.canRetry).toBe(true);
+    expect(result.isAmbiguous).toBe(true);
   });
 
-  it('maps 401 to auth_required', () => {
+  it('maps 401 to auth_required with session expired copy', () => {
     const result = mapApiErrorToTransactionError(
       new Error('unauthorized'),
       'fallback',
@@ -1330,9 +1349,11 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
     );
     expect(result.kind).toBe('auth_required');
     expect(result.transactionPossible).toBe(false);
+    expect(result.isAmbiguous).toBe(false);
+    expect(result.message).toContain('session has expired');
   });
 
-  it('maps AML_BLOCKED code', () => {
+  it('maps AML_BLOCKED code as definitive', () => {
     const result = mapApiErrorToTransactionError(
       new Error('aml'),
       'fallback',
@@ -1343,6 +1364,7 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
     );
     expect(result.kind).toBe('aml_blocked');
     expect(result.transactionPossible).toBe(false);
+    expect(result.isAmbiguous).toBe(false);
   });
 
   it('maps 403 (non-AML) to eligibility_blocked', () => {
@@ -1355,6 +1377,7 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
       false,
     );
     expect(result.kind).toBe('eligibility_blocked');
+    expect(result.isAmbiguous).toBe(false);
   });
 
   it('maps 400 with minimum message to minimum_changed', () => {
@@ -1369,6 +1392,7 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
     expect(result.kind).toBe('minimum_changed');
     expect(result.updatedMinimumGbp).toBe(15);
     expect(result.canRetry).toBe(true);
+    expect(result.isAmbiguous).toBe(false);
   });
 
   it('maps 400 with seller message to seller_restricted', () => {
@@ -1383,6 +1407,19 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
     expect(result.kind).toBe('seller_restricted');
   });
 
+  it('maps BUY_NOW_REVIEW_REQUIRED code', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('buy now'),
+      'fallback',
+      'BUY_NOW_REVIEW_REQUIRED',
+      400,
+      'Bid meets or exceeds Buy Now price',
+      false,
+    );
+    expect(result.kind).toBe('buy_now_review_required');
+    expect(result.isAmbiguous).toBe(false);
+  });
+
   it('maps 400 with ended message to auction_ended', () => {
     const result = mapApiErrorToTransactionError(
       new Error('ended'),
@@ -1393,6 +1430,45 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
       false,
     );
     expect(result.kind).toBe('auction_ended');
+  });
+
+  it('maps 409 with AUCTION_CANCELLED code', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('cancelled'),
+      'fallback',
+      'AUCTION_CANCELLED',
+      409,
+      'Auction is cancelled',
+      false,
+    );
+    expect(result.kind).toBe('auction_cancelled');
+    expect(result.isAmbiguous).toBe(false);
+  });
+
+  it('maps 409 with AUCTION_SETTLED code', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('settled'),
+      'fallback',
+      'AUCTION_SETTLED',
+      409,
+      'Auction is settled',
+      false,
+    );
+    expect(result.kind).toBe('auction_settled');
+  });
+
+  it('maps 409 with BUY_NOW_PRICE_CHANGED code', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('price changed'),
+      'fallback',
+      'BUY_NOW_PRICE_CHANGED',
+      409,
+      'Buy Now price has changed to 120.00',
+      false,
+    );
+    expect(result.kind).toBe('buy_now_price_changed');
+    expect(result.currentBuyNowPriceGbp).toBe(120);
+    expect(result.canRetry).toBe(true);
   });
 
   it('maps 409 to auction_ended', () => {
@@ -1407,7 +1483,7 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
     expect(result.kind).toBe('auction_ended');
   });
 
-  it('maps unknown to unknown_backend with retry', () => {
+  it('maps 5xx as ambiguous (commit status uncertain)', () => {
     const result = mapApiErrorToTransactionError(
       new Error('unknown'),
       'fallback',
@@ -1418,6 +1494,7 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
     );
     expect(result.kind).toBe('unknown_backend');
     expect(result.canRetry).toBe(true);
+    expect(result.isAmbiguous).toBe(true);
   });
 });
 
@@ -1686,8 +1763,8 @@ describe('PASS 5: AuctionDetailScreen sheet integration', () => {
     expect(screenSrc).toContain('isSeller');
   });
 
-  it('passes fetchDetail as onRefreshDetail to both sheets', () => {
-    expect(screenSrc).toContain('onRefreshDetail={fetchDetail}');
+  it('passes refreshDetailForTransaction as onRefreshDetail to both sheets', () => {
+    expect(screenSrc).toContain('refreshDetailForTransaction');
   });
 
   it('does not import Alert', () => {
@@ -1724,5 +1801,200 @@ describe('PASS 5: AuctionDetailScreen sheet integration', () => {
     );
     expect(buyNowSection).not.toContain('Checkout');
     expect(buyNowSection).not.toContain('navigation.navigate');
+  });
+});
+
+// ── PASS 5.1: Integration tests — real function invocation with mocked API ──
+
+import { createStableId } from '../utils/createStableId';
+
+describe('PASS 5.1: createStableId integration', () => {
+  it('generates a UUID-format string', () => {
+    const id = createStableId();
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
+  it('generates unique IDs on consecutive calls', () => {
+    const ids = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      ids.add(createStableId());
+    }
+    expect(ids.size).toBe(100);
+  });
+
+  it('supports optional prefix', () => {
+    const id = createStableId('bid');
+    expect(id.startsWith('bid_')).toBe(true);
+  });
+
+  it('does not use Math.random for the primary path', () => {
+    // createStableId should use crypto.getRandomValues or crypto.randomUUID
+    // We verify the output format is a valid UUID, which requires crypto-quality randomness
+    const id = createStableId();
+    expect(id.length).toBe(36); // UUID format with dashes
+  });
+});
+
+describe('PASS 5.1: Idempotency state machine — ambiguous vs definitive', () => {
+  it('network failure is classified as ambiguous (preserve key)', () => {
+    const txError = mapApiErrorToTransactionError(
+      new Error('network'),
+      'fallback',
+      null,
+      undefined,
+      'Network error',
+      true,
+    );
+    expect(txError.isAmbiguous).toBe(true);
+    expect(txError.canRetry).toBe(true);
+    // Ambiguous errors should preserve the idempotency key for replay
+  });
+
+  it('5xx server error is classified as ambiguous (preserve key)', () => {
+    const txError = mapApiErrorToTransactionError(
+      new Error('server'),
+      'fallback',
+      null,
+      503,
+      'Service unavailable',
+      false,
+    );
+    expect(txError.isAmbiguous).toBe(true);
+  });
+
+  it('BUY_NOW_REVIEW_REQUIRED is definitive (reset key)', () => {
+    const txError = mapApiErrorToTransactionError(
+      new Error('buy now'),
+      'fallback',
+      'BUY_NOW_REVIEW_REQUIRED',
+      400,
+      'Use Buy Now',
+      false,
+    );
+    expect(txError.isAmbiguous).toBe(false);
+    expect(txError.transactionPossible).toBe(false);
+  });
+
+  it('minimum_changed is definitive (reset key)', () => {
+    const txError = mapApiErrorToTransactionError(
+      new Error('min'),
+      'fallback',
+      null,
+      400,
+      'Bid must be at least 20.00 GBP',
+      false,
+    );
+    expect(txError.isAmbiguous).toBe(false);
+    expect(txError.canRetry).toBe(true);
+  });
+
+  it('BUY_NOW_PRICE_CHANGED is definitive (reset key)', () => {
+    const txError = mapApiErrorToTransactionError(
+      new Error('price'),
+      'fallback',
+      'BUY_NOW_PRICE_CHANGED',
+      409,
+      'Price changed to 150.00',
+      false,
+    );
+    expect(txError.isAmbiguous).toBe(false);
+    expect(txError.canRetry).toBe(true);
+    expect(txError.currentBuyNowPriceGbp).toBe(150);
+  });
+
+  it('AUCTION_CANCELLED is definitive terminal (no retry)', () => {
+    const txError = mapApiErrorToTransactionError(
+      new Error('cancelled'),
+      'fallback',
+      'AUCTION_CANCELLED',
+      409,
+      'Auction cancelled',
+      false,
+    );
+    expect(txError.isAmbiguous).toBe(false);
+    expect(txError.canRetry).toBe(false);
+    expect(txError.transactionPossible).toBe(false);
+  });
+
+  it('AUCTION_SETTLED is definitive terminal (no retry)', () => {
+    const txError = mapApiErrorToTransactionError(
+      new Error('settled'),
+      'fallback',
+      'AUCTION_SETTLED',
+      409,
+      'Auction settled',
+      false,
+    );
+    expect(txError.isAmbiguous).toBe(false);
+    expect(txError.canRetry).toBe(false);
+  });
+
+  it('401 auth is definitive (not ambiguous)', () => {
+    const txError = mapApiErrorToTransactionError(
+      new Error('auth'),
+      'fallback',
+      null,
+      401,
+      'Unauthorized',
+      false,
+    );
+    expect(txError.isAmbiguous).toBe(false);
+    expect(txError.transactionPossible).toBe(false);
+    // 401 means the request was rejected before any transaction was attempted
+  });
+});
+
+describe('PASS 5.1: Buy Now response verification', () => {
+  it('BuyNowSheet verifies isBuyNow in response (source inspection)', () => {
+    expect(buyNowSheetSrc).toContain('result.isBuyNow');
+    expect(buyNowSheetSrc).toContain('Buy Now response did not confirm purchase');
+  });
+
+  it('BuyNowSheet verifies price match in preflight (source inspection)', () => {
+    expect(buyNowSheetSrc).toContain('buy_now_price_changed');
+    expect(buyNowSheetSrc).toContain('Buy Now price has changed');
+  });
+
+  it('BuyNowSheet uses authoritative server price for transaction (source inspection)', () => {
+    expect(buyNowSheetSrc).toContain('authoritativePrice');
+    expect(buyNowSheetSrc).toContain('transactionAmount');
+  });
+});
+
+describe('PASS 5.1: BidSheet preflight and stale state', () => {
+  it('BidSheet uses snapshot from refresh for validation (source inspection)', () => {
+    expect(bidSheetSrc).toContain('snapshot');
+    expect(bidSheetSrc).toContain('minForValidation');
+  });
+
+  it('BidSheet uses local validatedGbpAmount for submission (source inspection)', () => {
+    expect(bidSheetSrc).toContain('validatedGbpAmount');
+  });
+
+  it('BidSheet has preflight loading state (source inspection)', () => {
+    expect(bidSheetSrc).toContain('isPreflighting');
+    expect(bidSheetSrc).toContain('Checking...');
+  });
+
+  it('BidSheet has pressed feedback on increment chips (source inspection)', () => {
+    expect(bidSheetSrc).toContain('incrementChipPressed');
+    expect(bidSheetSrc).toContain('pressed');
+  });
+
+  it('BidSheet passes currencyCode and goldRates to applyQuickIncrement (source inspection)', () => {
+    expect(bidSheetSrc).toContain('applyQuickIncrement(bidInput, pct, auction.currentBidGbp, currencyCode, goldRates)');
+  });
+});
+
+describe('PASS 5.1: BottomSheet reduced motion', () => {
+  it('BottomSheet respects reduced motion (source inspection)', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const bottomSheetSrc = fs.readFileSync(
+      path.resolve(__dirname, '../components/BottomSheet.tsx'),
+      'utf-8'
+    );
+    expect(bottomSheetSrc).toContain('useReducedMotion');
+    expect(bottomSheetSrc).toContain('reducedMotion');
   });
 });

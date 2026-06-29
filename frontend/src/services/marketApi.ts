@@ -456,6 +456,43 @@ export async function placeAuctionBid(
   };
 }
 
+export interface BuyNowResult {
+  ok: true;
+  isBuyNow: true;
+  idempotent?: boolean;
+  bid: MarketAuctionBid;
+  auction: {
+    id: string;
+    currentBidGbp: number;
+    bidCount: number;
+    isBuyNow: true;
+    status: string;
+    winnerBidderId: string | null;
+  };
+  aml: { alertId: string; status: string } | null;
+}
+
+export interface BuyNowInput {
+  idempotencyKey: string;
+  expectedPriceGbp: number;
+}
+
+export async function buyAuctionNow(
+  auctionId: string,
+  input: BuyNowInput
+): Promise<BuyNowResult> {
+  const payload = await fetchJson<BuyNowResult>(
+    `/auctions/${encodeURIComponent(auctionId)}/buy-now`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+
+  return payload;
+}
+
 export async function listAuctionBids(
   auctionId: string,
   options: ListAuctionBidsOptions = {}
