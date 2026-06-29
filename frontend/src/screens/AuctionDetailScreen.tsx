@@ -6,15 +6,12 @@ import {
   RefreshControl,
   Pressable,
   Text,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
@@ -37,13 +34,8 @@ import {
   type AuctionDetail as AuctionDetailType,
   type AuctionBidActivity,
 } from '../services/marketApi';
-import {
-  convertDisplayToGbpAmount,
-  getSuggestedBidDisplayAmount,
-  sanitizeDecimalInput,
-} from '../utils/currencyAuthoringFlows';
-import { AppInput } from '../components/ui/AppInput';
-import { createStableId } from '../utils/createStableId';
+import { BidSheet } from '../components/ui/BidSheet';
+import { BuyNowSheet } from '../components/ui/BuyNowSheet';
 import { useBucketedServerClock, type AuctionEffectiveState } from '../hooks/useServerClock';
 import {
   resolveStateAction,
@@ -79,13 +71,12 @@ export default function AuctionDetailScreen() {
   const [error, setError] = React.useState<string | null>(null);
   const [bidActivityError, setBidActivityError] = React.useState(false);
 
-  const [bidComposerVisible, setBidComposerVisible] = React.useState(false);
-  const [bidInput, setBidInput] = React.useState('');
+  const [bidSheetVisible, setBidSheetVisible] = React.useState(false);
+  const [buyNowSheetVisible, setBuyNowSheetVisible] = React.useState(false);
   const [isSubmittingBid, setIsSubmittingBid] = React.useState(false);
   const [isBuyNowLoading, setIsBuyNowLoading] = React.useState(false);
   const [watchToggling, setWatchToggling] = React.useState(false);
   const [isTransitionRefreshing, setIsTransitionRefreshing] = React.useState(false);
-  const [composerError, setComposerError] = React.useState<string | null>(null);
 
   const serverNowRef = React.useRef<string | null>(null);
   const { secondClock, minuteClock, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed } =
@@ -167,110 +158,58 @@ export default function AuctionDetailScreen() {
     }
   };
 
-  const openBidComposer = () => {
+  const openBidSheet = () => {
     if (!auction) return;
-    const suggested = getSuggestedBidDisplayAmount(auction.minimumNextBidGbp, currencyCode, goldRates);
-    setBidInput(suggested.toFixed(2));
-    setComposerError(null);
-    setBidComposerVisible(true);
+    setBidSheetVisible(true);
   };
 
-  const closeBidComposer = () => {
-    setBidComposerVisible(false);
-    setBidInput('');
-    setComposerError(null);
+  const closeBidSheet = () => {
+    setBidSheetVisible(false);
   };
 
-  const bumpBid = (pct: number) => {
-    const base = Number(bidInput);
-    const current = Number.isFinite(base) && base > 0 ? base : (auction?.currentBidGbp ?? 0);
-    const nextValue = Number((current * (1 + pct)).toFixed(2));
-    setBidInput(nextValue.toFixed(2));
-  };
-
-  const submitBid = async () => {
+  const handleSubmitBid = async (gbpAmount: number, idempotencyKey: string) => {
     if (!auction || isSubmittingBid) return;
-
-    const amount = Number(bidInput);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      const msg = 'Enter a valid bid amount';
-      setComposerError(msg);
-      show(msg, 'error');
-      return;
-    }
-
-    const amountInGbp = convertDisplayToGbpAmount(amount, currencyCode, goldRates);
-    if (!Number.isFinite(amountInGbp) || amountInGbp <= 0) {
-      const msg = 'Invalid bid amount for this currency';
-      setComposerError(msg);
-      show(msg, 'error');
-      return;
-    }
-
-    if (amountInGbp < auction.minimumNextBidGbp) {
-      const msg = `Bid must be at least ${formatFromFiat(auction.minimumNextBidGbp, 'GBP', { displayMode: 'fiat' })}`;
-      setComposerError(msg);
-      show(msg, 'error');
-      return;
-    }
-
-    const roundedAmount = Number(amountInGbp.toFixed(2));
-    const idempotencyKey = createStableId();
     setIsSubmittingBid(true);
 
     try {
-      await placeAuctionBid(auction.id, { amountGbp: roundedAmount, idempotencyKey });
+      await placeAuctionBid(auction.id, { amountGbp: gbpAmount, idempotencyKey });
       await fetchDetail();
       show(
-        `Bid placed: ${formatFromFiat(roundedAmount, 'GBP', { displayMode: 'fiat' })}`,
+        `Bid placed: ${formatFromFiat(gbpAmount, 'GBP', { displayMode: 'fiat' })}`,
         'success'
       );
-      closeBidComposer();
     } catch (err) {
       const parsed = parseApiError(err, 'Unable to place bid');
-      setComposerError(parsed.message);
       show(parsed.message, 'error');
       void fetchDetail();
+      throw err;
     } finally {
       setIsSubmittingBid(false);
     }
   };
 
-  const handleBuyNow = () => {
+  const openBuyNowSheet = () => {
     if (!auction?.buyNowPriceGbp || isBuyNowLoading) return;
-    const priceText = formatFromFiat(auction.buyNowPriceGbp, 'GBP', { displayMode: 'fiat' });
-    Alert.alert(
-      'Buy Now',
-      `Buy ${auction.title} now for ${priceText}? This ends the auction immediately. This is a fixed-price purchase, not a bid.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Buy Now',
-          style: 'default',
-          onPress: () => void confirmBuyNow(),
-        },
-      ]
-    );
+    setBuyNowSheetVisible(true);
   };
 
-  const confirmBuyNow = async () => {
+  const closeBuyNowSheet = () => {
+    setBuyNowSheetVisible(false);
+  };
+
+  const handleSubmitBuyNow = async (gbpAmount: number, idempotencyKey: string) => {
     if (!auction?.buyNowPriceGbp || isBuyNowLoading) return;
     setIsBuyNowLoading(true);
 
     try {
-      const idempotencyKey = createStableId();
-      const result = await placeAuctionBid(auction.id, {
-        amountGbp: Number(auction.buyNowPriceGbp.toFixed(2)),
-        idempotencyKey,
-      });
+      await placeAuctionBid(auction.id, { amountGbp: gbpAmount, idempotencyKey });
       await fetchDetail();
-      show(`Won via Buy Now: ${auction.title}`, 'success');
-      if (result.auction.isBuyNow) {
-        navigation.navigate('Checkout', { itemId: auction.listingId });
-      }
+      show(`Buy Now accepted: ${auction.title}`, 'success');
     } catch (err) {
-      const parsed = parseApiError(err, 'Unable to complete buy now');
+      const parsed = parseApiError(err, 'Unable to complete Buy Now');
       show(parsed.message, 'error');
+      void fetchDetail();
+      throw err;
     } finally {
       setIsBuyNowLoading(false);
     }
@@ -772,7 +711,7 @@ export default function AuctionDetailScreen() {
             style={styles.actionDockFull}
             onPress={() => {
               if (stateAction.primary.type === 'placeBid' || stateAction.primary.type === 'increaseBid' || stateAction.primary.type === 'bidAgain') {
-                openBidComposer();
+                openBidSheet();
               } else if (stateAction.primary.type === 'watchAuction') {
                 void handleToggleWatch();
               } else if (stateAction.primary.type === 'viewSimilar') {
@@ -788,7 +727,7 @@ export default function AuctionDetailScreen() {
           {buyNowAvailable && stateAction.secondary.type === 'buyNow' && (
             <Pressable
               style={styles.buyNowLink}
-              onPress={handleBuyNow}
+              onPress={openBuyNowSheet}
               disabled={isBuyNowLoading}
               accessibilityRole="button"
               accessibilityLabel={`Buy now for ${formatFromFiat(auction.buyNowPriceGbp!, 'GBP', { displayMode: 'fiat' })}`}
@@ -821,103 +760,51 @@ export default function AuctionDetailScreen() {
         </View>
       )}
 
-      {/* ── Bid composer modal ── */}
-      {bidComposerVisible && auction && (
-        <View style={styles.overlay}>
-          <Pressable
-            style={styles.dismissLayer}
-            onPress={closeBidComposer}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss bid composer"
-          />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
-            style={styles.bidComposerCard}
-          >
-            <View style={styles.composerHandle} />
-            <Headline style={styles.composerTitle} numberOfLines={1}>{auction.title}</Headline>
+      {/* ── Bid transaction sheet ── */}
+      {auction && (
+        <BidSheet
+          visible={bidSheetVisible}
+          onDismiss={closeBidSheet}
+          auction={{
+            id: auction.id,
+            title: auction.title,
+            imageUrl: auction.imageUrl,
+            currentBidGbp: auction.currentBidGbp,
+            minimumNextBidGbp: auction.minimumNextBidGbp,
+            endsAt: auction.endsAt,
+            sellerName: auction.seller.displayName ?? auction.seller.username,
+            effectiveState: effectiveState ?? 'upcoming',
+            isSeller,
+            countdownText: countdown.text,
+          }}
+          currencyCode={currencyCode}
+          goldRates={goldRates}
+          formatFromFiat={formatFromFiat}
+          onSubmitBid={handleSubmitBid}
+          onRefreshDetail={fetchDetail}
+          serverClockMs={minuteClock}
+        />
+      )}
 
-            <View style={styles.composerBidInfo}>
-              <View>
-                <Meta style={styles.composerLabel}>Current bid</Meta>
-                <Text style={styles.composerCurrentValue}>
-                  {formatFromFiat(auction.currentBidGbp, 'GBP', { displayMode: 'fiat' })}
-                </Text>
-              </View>
-              <View style={styles.composerDivider} />
-              <View>
-                <Meta style={styles.composerLabel}>Minimum next bid</Meta>
-                <Text style={styles.composerMinValue}>
-                  {formatFromFiat(auction.minimumNextBidGbp, 'GBP', { displayMode: 'fiat' })}
-                </Text>
-              </View>
-            </View>
-
-            <AppInput
-              value={bidInput}
-              onChangeText={(v) => {
-                setBidInput(sanitizeDecimalInput(v));
-                setComposerError(null);
-              }}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              prefix={currencyCode}
-              accessibilityLabel="Bid amount"
-              accessibilityHint="Enter your bid amount"
-              containerStyle={styles.composerInput}
-            />
-
-            <View style={styles.bumpRow}>
-              {[0.01, 0.03, 0.05].map((pct) => (
-                <AppButton
-                  key={pct}
-                  title={`+${Math.round(pct * 100)}%`}
-                  style={styles.bumpChip}
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => {
-                    bumpBid(pct);
-                    setComposerError(null);
-                  }}
-                  accessibilityLabel={`Increase bid by ${Math.round(pct * 100)} percent`}
-                />
-              ))}
-            </View>
-
-            {composerError && (
-              <View style={styles.composerErrorRow}>
-                <Ionicons name="alert-circle-outline" size={14} color={Colors.danger} />
-                <Text style={styles.composerErrorText}>{composerError}</Text>
-              </View>
-            )}
-
-            <View style={styles.composerActions}>
-              <AppButton
-                style={styles.composerActionBtn}
-                onPress={closeBidComposer}
-                variant="secondary"
-                size="sm"
-                align="center"
-                title="Cancel"
-                accessibilityLabel="Cancel bid"
-              />
-              <AppButton
-                style={[styles.composerActionBtn, styles.composerSubmitBtn]}
-                onPress={submitBid}
-                disabled={isSubmittingBid}
-                variant="primary"
-                size="sm"
-                align="center"
-                title={isSubmittingBid ? 'Submitting...' : 'Place bid'}
-                accessibilityLabel="Place bid"
-              />
-            </View>
-          </Reanimated.View>
-          </KeyboardAvoidingView>
-        </View>
+      {/* ── Buy Now transaction sheet ── */}
+      {auction && (
+        <BuyNowSheet
+          visible={buyNowSheetVisible}
+          onDismiss={closeBuyNowSheet}
+          auction={{
+            id: auction.id,
+            title: auction.title,
+            imageUrl: auction.imageUrl,
+            buyNowPriceGbp: auction.buyNowPriceGbp,
+            sellerName: auction.seller.displayName ?? auction.seller.username,
+            effectiveState: effectiveState ?? 'upcoming',
+            isSeller,
+          }}
+          currencyCode={currencyCode}
+          formatFromFiat={formatFromFiat}
+          onSubmitBuyNow={handleSubmitBuyNow}
+          onRefreshDetail={fetchDetail}
+        />
       )}
     </View>
   );
@@ -1438,100 +1325,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textMuted,
     fontFamily: 'Inter_500Medium',
-  },
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 300,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  dismissLayer: {
-    ...StyleSheet.absoluteFill,
-  },
-  bidComposerCard: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  composerHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginBottom: Space.md,
-  },
-  composerTitle: {
-    marginBottom: Space.md,
-    textAlign: 'center',
-  },
-  composerBidInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: Space.md,
-    paddingHorizontal: Space.md,
-  },
-  composerLabel: {
-    fontSize: 11,
-    marginBottom: 2,
-  },
-  composerCurrentValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  composerDivider: {
-    width: 1,
-    backgroundColor: Colors.border,
-  },
-  composerMinValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.brand,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  composerInput: {
-    marginBottom: Space.sm,
-  },
-  bumpRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginBottom: Space.md,
-  },
-  composerErrorRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(220,38,38,0.08)',
-    marginBottom: Space.sm,
-  },
-  composerErrorText: {
-    flex: 1,
-    fontSize: 13,
-    color: Colors.danger,
-    fontFamily: 'Inter_500Medium',
-    lineHeight: 18,
-  },
-  bumpChip: {
-    flex: 1,
-  },
-  composerActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-  },
-  composerActionBtn: {
-    flex: 1,
-  },
-  composerSubmitBtn: {
-    flex: 1.5,
   },
 });

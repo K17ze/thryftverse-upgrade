@@ -543,6 +543,18 @@ const logicSrc = fs.readFileSync(
   path.resolve(__dirname, '../utils/auctionDetailLogic.ts'),
   'utf-8'
 );
+const bidSheetSrc = fs.readFileSync(
+  path.resolve(__dirname, '../components/ui/BidSheet.tsx'),
+  'utf-8'
+);
+const buyNowSheetSrc = fs.readFileSync(
+  path.resolve(__dirname, '../components/ui/BuyNowSheet.tsx'),
+  'utf-8'
+);
+const txLogicSrc = fs.readFileSync(
+  path.resolve(__dirname, '../utils/transactionSheetLogic.ts'),
+  'utf-8'
+);
 
 // ── Static guardrails ──
 
@@ -616,9 +628,9 @@ describe('PASS 4.12: Static guardrails (source inspection)', () => {
     expect(screenSrc).toContain('isSeller');
   });
 
-  it('has bid composer with minimum next bid', () => {
-    expect(screenSrc).toContain('composerBidInfo');
-    expect(screenSrc).toContain('minimumNextBidGbp');
+  it('BidSheet shows minimum next bid', () => {
+    expect(bidSheetSrc).toContain('Minimum next bid');
+    expect(bidSheetSrc).toContain('minimumNextBidGbp');
   });
 
   it('has accessibility label for screen', () => {
@@ -689,9 +701,9 @@ describe('PASS 4.12: Static guardrails (source inspection)', () => {
     expect(screenSrc).toContain('buyNowLinkText');
   });
 
-  it('Buy Now requires confirmation via Alert.alert', () => {
-    expect(screenSrc).toContain('Alert.alert');
-    expect(screenSrc).toContain('confirmBuyNow');
+  it('Buy Now requires confirmation via BuyNowSheet', () => {
+    expect(screenSrc).toContain('BuyNowSheet');
+    expect(screenSrc).not.toContain('Alert.alert');
   });
 
   it('does not navigate to Checkout for viewResult in sticky dock', () => {
@@ -703,9 +715,8 @@ describe('PASS 4.12: Static guardrails (source inspection)', () => {
 
   // ── Correction pass 2 guardrails ──
 
-  it('has KeyboardAvoidingView in bid composer', () => {
-    expect(screenSrc).toContain('KeyboardAvoidingView');
-    expect(screenSrc).toContain('Platform.OS');
+  it('BidSheet uses BottomSheet with keyboard support', () => {
+    expect(bidSheetSrc).toContain('BottomSheet');
   });
 
   it('touch targets are at least 44pt (back and watch buttons)', () => {
@@ -733,46 +744,42 @@ describe('PASS 4.12: Static guardrails (source inspection)', () => {
 // ── PASS 4.1 Parity: Bid authoring contract ──
 
 describe('PASS 4.1: Bid authoring currency contract', () => {
-  it('screen imports getSuggestedBidDisplayAmount', () => {
-    expect(screenSrc).toContain('getSuggestedBidDisplayAmount');
+  it('BidSheet imports getSuggestedBidDisplayAmount (via transactionSheetLogic)', () => {
+    expect(txLogicSrc).toContain('getSuggestedBidDisplayAmount');
   });
 
-  it('screen imports convertDisplayToGbpAmount', () => {
-    expect(screenSrc).toContain('convertDisplayToGbpAmount');
+  it('BidSheet imports convertDisplayToGbpAmount (via transactionSheetLogic)', () => {
+    expect(txLogicSrc).toContain('convertDisplayToGbpAmount');
   });
 
-  it('screen imports sanitizeDecimalInput', () => {
-    expect(screenSrc).toContain('sanitizeDecimalInput');
+  it('BidSheet imports sanitizeDecimalInput', () => {
+    expect(bidSheetSrc).toContain('sanitizeDecimalInput');
   });
 
-  it('screen uses currencyCode and goldRates', () => {
+  it('screen passes currencyCode and goldRates to BidSheet', () => {
     expect(screenSrc).toContain('currencyCode');
     expect(screenSrc).toContain('goldRates');
   });
 
-  it('screen validates minimumNextBidGbp', () => {
-    expect(screenSrc).toContain('minimumNextBidGbp');
+  it('BidSheet validates minimumNextBidGbp', () => {
+    expect(bidSheetSrc).toContain('minimumNextBidGbp');
   });
 
-  it('screen rounds to two decimals before submission', () => {
-    expect(screenSrc).toContain('toFixed(2)');
+  it('transactionSheetLogic rounds to two decimals before submission', () => {
+    expect(txLogicSrc).toContain('toFixed(2)');
   });
 
-  it('screen preserves +1%, +3%, +5% bump controls', () => {
-    expect(screenSrc).toContain('0.01');
-    expect(screenSrc).toContain('0.03');
-    expect(screenSrc).toContain('0.05');
-    expect(screenSrc).toContain('bumpBid');
+  it('BidSheet preserves +1%, +3%, +5% bump controls', () => {
+    expect(bidSheetSrc).toContain('0.01');
+    expect(bidSheetSrc).toContain('0.03');
+    expect(bidSheetSrc).toContain('0.05');
+    expect(bidSheetSrc).toContain('applyQuickIncrement');
   });
 });
 
 // ── PASS 4.1 Parity: Idempotency ──
 
 describe('PASS 4.1: Idempotency and mutation safety', () => {
-  it('screen imports createStableId', () => {
-    expect(screenSrc).toContain('createStableId');
-  });
-
   it('screen has isSubmittingBid guard', () => {
     expect(screenSrc).toContain('isSubmittingBid');
   });
@@ -781,23 +788,28 @@ describe('PASS 4.1: Idempotency and mutation safety', () => {
     expect(screenSrc).toContain('isBuyNowLoading');
   });
 
-  it('idempotency key created once per submission attempt (not in render)', () => {
-    expect(screenSrc).toMatch(/const idempotencyKey = createStableId\(\)/);
+  it('BidSheet creates idempotency key once per attempt (not in render)', () => {
+    expect(bidSheetSrc).toContain('idempotencyKeyRef');
+    expect(bidSheetSrc).toContain('idempotencyKeyRef.current');
   });
 
-  it('submitBid has duplicate guard at top', () => {
+  it('BuyNowSheet creates idempotency key once per attempt (not in render)', () => {
+    expect(buyNowSheetSrc).toContain('idempotencyKeyRef');
+    expect(buyNowSheetSrc).toContain('idempotencyKeyRef.current');
+  });
+
+  it('handleSubmitBid has duplicate guard at top', () => {
     const submitSection = screenSrc.substring(
-      screenSrc.indexOf('const submitBid'),
-      screenSrc.indexOf('const handleBuyNow')
+      screenSrc.indexOf('const handleSubmitBid'),
+      screenSrc.indexOf('const openBuyNowSheet')
     );
     expect(submitSection).toContain('isSubmittingBid');
-    expect(submitSection).toMatch(/if\s*\(!auction\s*\|\|\s*isSubmittingBid\)/);
   });
 
-  it('Buy Now has duplicate guard at top', () => {
+  it('handleSubmitBuyNow has duplicate guard at top', () => {
     const buyNowSection = screenSrc.substring(
-      screenSrc.indexOf('const handleBuyNow'),
-      screenSrc.indexOf('const confirmBuyNow')
+      screenSrc.indexOf('const handleSubmitBuyNow'),
+      screenSrc.indexOf('const detailInput')
     );
     expect(buyNowSection).toContain('isBuyNowLoading');
   });
@@ -810,31 +822,28 @@ describe('PASS 4.1: Compliance and error adoption', () => {
     expect(screenSrc).toContain('parseApiError');
   });
 
-  it('bid errors appear inline in composer (composerError state)', () => {
-    expect(screenSrc).toContain('composerError');
-    expect(screenSrc).toContain('composerErrorRow');
-    expect(screenSrc).toContain('composerErrorText');
+  it('BidSheet has inline error display (error state + errorRow style)', () => {
+    expect(bidSheetSrc).toContain('error');
+    expect(bidSheetSrc).toContain('errorRow');
+    expect(bidSheetSrc).toContain('errorText');
   });
 
-  it('validation errors set composerError', () => {
-    expect(screenSrc).toMatch(/setComposerError/);
+  it('BidSheet validation errors set error state', () => {
+    expect(bidSheetSrc).toContain('setError');
   });
 
-  it('backend error sets composerError and triggers refetch', () => {
-    const submitSection = screenSrc.substring(
-      screenSrc.indexOf('const submitBid'),
-      screenSrc.indexOf('const handleBuyNow')
+  it('BidSheet backend error sets error and triggers refetch', () => {
+    const submitSection = bidSheetSrc.substring(
+      bidSheetSrc.indexOf('handleConfirmBid'),
+      bidSheetSrc.indexOf('handleEditFromReview')
     );
-    expect(submitSection).toContain('setComposerError');
-    expect(submitSection).toContain('fetchDetail');
+    expect(submitSection).toContain('setError');
+    expect(submitSection).toContain('onRefreshDetail');
   });
 
-  it('composer error clears on input change', () => {
-    const inputSection = screenSrc.substring(
-      screenSrc.indexOf('onChangeText={(v) =>'),
-      screenSrc.indexOf('keyboardType')
-    );
-    expect(inputSection).toContain('setComposerError(null)');
+  it('BidSheet error clears on input change', () => {
+    expect(bidSheetSrc).toContain('handleInputChange');
+    expect(bidSheetSrc).toContain('setError(null)');
   });
 });
 
@@ -844,7 +853,7 @@ describe('PASS 4.1: Watch parity', () => {
   it('has optimistic update', () => {
     const watchSection = screenSrc.substring(
       screenSrc.indexOf('const handleToggleWatch'),
-      screenSrc.indexOf('const openBidComposer')
+      screenSrc.indexOf('const openBidSheet')
     );
     expect(watchSection).toContain('setAuction');
     expect(watchSection).toContain('isWatched: !wasWatching');
@@ -853,7 +862,7 @@ describe('PASS 4.1: Watch parity', () => {
   it('has watchToggling duplicate guard', () => {
     const watchSection = screenSrc.substring(
       screenSrc.indexOf('const handleToggleWatch'),
-      screenSrc.indexOf('const openBidComposer')
+      screenSrc.indexOf('const openBidSheet')
     );
     expect(watchSection).toContain('watchToggling');
   });
@@ -866,7 +875,7 @@ describe('PASS 4.1: Watch parity', () => {
   it('has rollback on failure', () => {
     const watchSection = screenSrc.substring(
       screenSrc.indexOf('const handleToggleWatch'),
-      screenSrc.indexOf('const openBidComposer')
+      screenSrc.indexOf('const openBidSheet')
     );
     expect(watchSection).toContain('catch');
     expect(watchSection).toContain('wasWatching');
@@ -988,15 +997,15 @@ describe('PASS 4.1: Refresh and lifecycle parity', () => {
 
   it('has post-bid refetch', () => {
     const submitSection = screenSrc.substring(
-      screenSrc.indexOf('const submitBid'),
-      screenSrc.indexOf('const handleBuyNow')
+      screenSrc.indexOf('const handleSubmitBid'),
+      screenSrc.indexOf('const openBuyNowSheet')
     );
     expect(submitSection).toContain('fetchDetail');
   });
 
   it('has post-Buy-Now refetch', () => {
     const buyNowSection = screenSrc.substring(
-      screenSrc.indexOf('const confirmBuyNow'),
+      screenSrc.indexOf('const handleSubmitBuyNow'),
       screenSrc.indexOf('const detailInput')
     );
     expect(buyNowSection).toContain('fetchDetail');
@@ -1022,7 +1031,7 @@ describe('PASS 4.1: Loading and state continuity', () => {
   });
 
   it('has bid submission loading state', () => {
-    expect(screenSrc).toContain('Submitting...');
+    expect(bidSheetSrc).toContain('Submitting');
   });
 
   it('has Buy Now loading state', () => {
@@ -1042,12 +1051,8 @@ describe('PASS 4.1: Buy Now quality and truth', () => {
   });
 
   it('has idempotency key for Buy Now', () => {
-    const buyNowSection = screenSrc.substring(
-      screenSrc.indexOf('const confirmBuyNow'),
-      screenSrc.indexOf('const detailInput')
-    );
-    expect(buyNowSection).toContain('createStableId');
-    expect(buyNowSection).toContain('idempotencyKey');
+    expect(buyNowSheetSrc).toContain('idempotencyKeyRef');
+    expect(buyNowSheetSrc).toContain('idempotencyKey');
   });
 
   it('has loading guard', () => {
@@ -1056,23 +1061,20 @@ describe('PASS 4.1: Buy Now quality and truth', () => {
 
   it('has backend transaction call', () => {
     const buyNowSection = screenSrc.substring(
-      screenSrc.indexOf('const confirmBuyNow'),
+      screenSrc.indexOf('const handleSubmitBuyNow'),
       screenSrc.indexOf('const detailInput')
     );
     expect(buyNowSection).toContain('placeAuctionBid');
   });
 
   it('has structured error handling', () => {
-    const buyNowSection = screenSrc.substring(
-      screenSrc.indexOf('const confirmBuyNow'),
-      screenSrc.indexOf('const detailInput')
-    );
-    expect(buyNowSection).toContain('parseApiError');
+    expect(buyNowSheetSrc).toContain('parseApiError');
+    expect(buyNowSheetSrc).toContain('mapApiErrorToTransactionError');
   });
 
   it('has authoritative refetch', () => {
     const buyNowSection = screenSrc.substring(
-      screenSrc.indexOf('const confirmBuyNow'),
+      screenSrc.indexOf('const handleSubmitBuyNow'),
       screenSrc.indexOf('const detailInput')
     );
     expect(buyNowSection).toContain('fetchDetail');
@@ -1085,9 +1087,9 @@ describe('PASS 4.1: Buy Now quality and truth', () => {
     expect(dockSection).not.toContain('Checkout');
   });
 
-  it('Alert.alert is interim confirmation (not final review UI)', () => {
-    expect(screenSrc).toContain('Alert.alert');
-    expect(screenSrc).toContain('confirmBuyNow');
+  it('BuyNowSheet replaces Alert.alert with proper review sheet', () => {
+    expect(screenSrc).not.toContain('Alert.alert');
+    expect(screenSrc).toContain('BuyNowSheet');
   });
 });
 
@@ -1099,23 +1101,23 @@ describe('PASS 4.1: UI/UX quality parity', () => {
     expect(screenSrc).not.toContain('inlineActionRow');
   });
 
-  it('has KeyboardAvoidingView for composer', () => {
-    expect(screenSrc).toContain('KeyboardAvoidingView');
+  it('BidSheet uses BottomSheet with KeyboardAvoidingView', () => {
+    expect(bidSheetSrc).toContain('BottomSheet');
   });
 
-  it('minimum next bid is visible in composer', () => {
-    expect(screenSrc).toContain('Minimum next bid');
-    expect(screenSrc).toContain('minimumNextBidGbp');
+  it('minimum next bid is visible in BidSheet', () => {
+    expect(bidSheetSrc).toContain('Minimum next bid');
+    expect(bidSheetSrc).toContain('minimumNextBidGbp');
   });
 
-  it('entered amount is visible and editable', () => {
-    expect(screenSrc).toContain('AppInput');
-    expect(screenSrc).toContain('bidInput');
-    expect(screenSrc).toContain('onChangeText');
+  it('entered amount is visible and editable in BidSheet', () => {
+    expect(bidSheetSrc).toContain('AppInput');
+    expect(bidSheetSrc).toContain('bidInput');
+    expect(bidSheetSrc).toContain('onChangeText');
   });
 
-  it('errors appear near the relevant control (composerErrorRow)', () => {
-    expect(screenSrc).toContain('composerErrorRow');
+  it('errors appear near the relevant control (errorRow)', () => {
+    expect(bidSheetSrc).toContain('errorRow');
   });
 
   it('seller actions remain discoverable (profile + message)', () => {
@@ -1130,7 +1132,597 @@ describe('PASS 4.1: UI/UX quality parity', () => {
   });
 
   it('controls disabled during submission', () => {
-    expect(screenSrc).toContain('disabled={isSubmittingBid');
-    expect(screenSrc).toContain('disabled={isBuyNowLoading');
+    expect(screenSrc).toContain('isSubmittingBid');
+    expect(screenSrc).toContain('isBuyNowLoading');
+    expect(bidSheetSrc).toContain('isSubmitting');
+    expect(buyNowSheetSrc).toContain('isSubmitting');
+  });
+});
+
+// ── PASS 5: Transaction sheet logic ──
+
+import {
+  validateBidEntry,
+  applyQuickIncrement,
+  mapApiErrorToTransactionError,
+  isBuyNowValid,
+  shouldCloseSheetDueToLifecycle,
+  isSheetStateStale,
+  formatGbpEquivalent,
+  getSuggestedBid,
+} from '../utils/transactionSheetLogic';
+
+describe('PASS 5: transactionSheetLogic — validateBidEntry', () => {
+  const gbpRates = { GBP: 1, IZE: 10, USD: 1.25 };
+
+  it('rejects empty/invalid input', () => {
+    const result = validateBidEntry('', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'live',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error?.kind).toBe('invalid_amount');
+  });
+
+  it('rejects zero input', () => {
+    const result = validateBidEntry('0', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'live',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error?.kind).toBe('invalid_amount');
+  });
+
+  it('rejects below minimum', () => {
+    const result = validateBidEntry('5', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'live',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error?.kind).toBe('below_minimum');
+  });
+
+  it('accepts at minimum', () => {
+    const result = validateBidEntry('10', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'live',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(true);
+    expect(result.gbpAmount).toBe(10);
+  });
+
+  it('accepts above minimum', () => {
+    const result = validateBidEntry('15', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'live',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(true);
+    expect(result.gbpAmount).toBe(15);
+  });
+
+  it('rejects when seller', () => {
+    const result = validateBidEntry('20', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: true,
+      effectiveState: 'live',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error?.kind).toBe('seller_restricted');
+    expect(result.error?.transactionPossible).toBe(false);
+  });
+
+  it('rejects when auction ended', () => {
+    const result = validateBidEntry('20', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'ended',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error?.kind).toBe('auction_ended');
+  });
+
+  it('rejects when auction cancelled', () => {
+    const result = validateBidEntry('20', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'cancelled',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error?.kind).toBe('auction_cancelled');
+  });
+
+  it('rejects when auction upcoming', () => {
+    const result = validateBidEntry('20', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'upcoming',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error?.kind).toBe('auction_ended');
+  });
+
+  it('rejects when already submitting', () => {
+    const result = validateBidEntry('20', 'GBP', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'live',
+      isSubmitting: true,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toBeNull();
+  });
+
+  it('converts non-GBP currency correctly', () => {
+    const result = validateBidEntry('12.50', 'USD', gbpRates, {
+      minimumNextBidGbp: 10,
+      isSeller: false,
+      effectiveState: 'live',
+      isSubmitting: false,
+    });
+    expect(result.valid).toBe(true);
+    expect(result.gbpAmount).toBe(10);
+  });
+});
+
+describe('PASS 5: transactionSheetLogic — applyQuickIncrement', () => {
+  it('increments by 1%', () => {
+    const result = applyQuickIncrement('100', 0.01, 50);
+    expect(result).toBe('101.00');
+  });
+
+  it('increments by 3%', () => {
+    const result = applyQuickIncrement('100', 0.03, 50);
+    expect(result).toBe('103.00');
+  });
+
+  it('increments by 5%', () => {
+    const result = applyQuickIncrement('100', 0.05, 50);
+    expect(result).toBe('105.00');
+  });
+
+  it('falls back to currentBidGbp when input is empty', () => {
+    const result = applyQuickIncrement('', 0.03, 50);
+    expect(result).toBe('51.50');
+  });
+
+  it('falls back to currentBidGbp when input is invalid', () => {
+    const result = applyQuickIncrement('abc', 0.05, 50);
+    expect(result).toBe('52.50');
+  });
+});
+
+describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () => {
+  it('maps network error', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('network'),
+      'fallback',
+      null,
+      undefined,
+      'network',
+      true,
+    );
+    expect(result.kind).toBe('network_failure');
+    expect(result.canRetry).toBe(true);
+  });
+
+  it('maps 401 to auth_required', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('unauthorized'),
+      'fallback',
+      null,
+      401,
+      'Unauthorized',
+      false,
+    );
+    expect(result.kind).toBe('auth_required');
+    expect(result.transactionPossible).toBe(false);
+  });
+
+  it('maps AML_BLOCKED code', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('aml'),
+      'fallback',
+      'AML_BLOCKED',
+      403,
+      'AML blocked',
+      false,
+    );
+    expect(result.kind).toBe('aml_blocked');
+    expect(result.transactionPossible).toBe(false);
+  });
+
+  it('maps 403 (non-AML) to eligibility_blocked', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('eligibility'),
+      'fallback',
+      null,
+      403,
+      'Not eligible',
+      false,
+    );
+    expect(result.kind).toBe('eligibility_blocked');
+  });
+
+  it('maps 400 with minimum message to minimum_changed', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('min'),
+      'fallback',
+      null,
+      400,
+      'Bid must be at least 15.00 GBP',
+      false,
+    );
+    expect(result.kind).toBe('minimum_changed');
+    expect(result.updatedMinimumGbp).toBe(15);
+    expect(result.canRetry).toBe(true);
+  });
+
+  it('maps 400 with seller message to seller_restricted', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('seller'),
+      'fallback',
+      null,
+      400,
+      'Seller cannot bid on their own auction',
+      false,
+    );
+    expect(result.kind).toBe('seller_restricted');
+  });
+
+  it('maps 400 with ended message to auction_ended', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('ended'),
+      'fallback',
+      null,
+      400,
+      'Auction is ended; bidding is closed',
+      false,
+    );
+    expect(result.kind).toBe('auction_ended');
+  });
+
+  it('maps 409 to auction_ended', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('conflict'),
+      'fallback',
+      null,
+      409,
+      'Auction is ended; bidding is closed',
+      false,
+    );
+    expect(result.kind).toBe('auction_ended');
+  });
+
+  it('maps unknown to unknown_backend with retry', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('unknown'),
+      'fallback',
+      null,
+      500,
+      'Server error',
+      false,
+    );
+    expect(result.kind).toBe('unknown_backend');
+    expect(result.canRetry).toBe(true);
+  });
+});
+
+describe('PASS 5: transactionSheetLogic — isBuyNowValid', () => {
+  it('valid when live, not seller, has price', () => {
+    expect(isBuyNowValid({
+      buyNowPriceGbp: 100,
+      isSeller: false,
+      effectiveState: 'live',
+      isSubmitting: false,
+    })).toBe(true);
+  });
+
+  it('invalid when no price', () => {
+    expect(isBuyNowValid({
+      buyNowPriceGbp: null,
+      isSeller: false,
+      effectiveState: 'live',
+      isSubmitting: false,
+    })).toBe(false);
+  });
+
+  it('invalid when seller', () => {
+    expect(isBuyNowValid({
+      buyNowPriceGbp: 100,
+      isSeller: true,
+      effectiveState: 'live',
+      isSubmitting: false,
+    })).toBe(false);
+  });
+
+  it('invalid when not live', () => {
+    expect(isBuyNowValid({
+      buyNowPriceGbp: 100,
+      isSeller: false,
+      effectiveState: 'ended',
+      isSubmitting: false,
+    })).toBe(false);
+  });
+
+  it('invalid when submitting', () => {
+    expect(isBuyNowValid({
+      buyNowPriceGbp: 100,
+      isSeller: false,
+      effectiveState: 'live',
+      isSubmitting: true,
+    })).toBe(false);
+  });
+});
+
+describe('PASS 5: transactionSheetLogic — lifecycle guards', () => {
+  it('shouldCloseSheetDueToLifecycle returns true for ended', () => {
+    expect(shouldCloseSheetDueToLifecycle('ended')).toBe(true);
+  });
+
+  it('shouldCloseSheetDueToLifecycle returns true for cancelled', () => {
+    expect(shouldCloseSheetDueToLifecycle('cancelled')).toBe(true);
+  });
+
+  it('shouldCloseSheetDueToLifecycle returns true for settled', () => {
+    expect(shouldCloseSheetDueToLifecycle('settled')).toBe(true);
+  });
+
+  it('shouldCloseSheetDueToLifecycle returns false for live', () => {
+    expect(shouldCloseSheetDueToLifecycle('live')).toBe(false);
+  });
+
+  it('shouldCloseSheetDueToLifecycle returns false for upcoming', () => {
+    expect(shouldCloseSheetDueToLifecycle('upcoming')).toBe(false);
+  });
+});
+
+describe('PASS 5: transactionSheetLogic — stale state', () => {
+  it('isSheetStateStale returns true after threshold', () => {
+    expect(isSheetStateStale(1000, 35000, 30000)).toBe(true);
+  });
+
+  it('isSheetStateStale returns false within threshold', () => {
+    expect(isSheetStateStale(1000, 15000, 30000)).toBe(false);
+  });
+});
+
+describe('PASS 5: transactionSheetLogic — formatGbpEquivalent', () => {
+  it('returns null for GBP', () => {
+    expect(formatGbpEquivalent(100, 100, 'GBP')).toBeNull();
+  });
+
+  it('returns formatted string for non-GBP', () => {
+    const result = formatGbpEquivalent(125, 100, 'USD');
+    expect(result).toContain('£100.00');
+  });
+});
+
+describe('PASS 5: transactionSheetLogic — getSuggestedBid', () => {
+  it('returns a numeric string', () => {
+    const result = getSuggestedBid(100, 'GBP', { GBP: 1 });
+    const parsed = Number(result);
+    expect(Number.isFinite(parsed)).toBe(true);
+    expect(parsed).toBeGreaterThan(100);
+  });
+});
+
+// ── PASS 5: BidSheet static guardrails ──
+
+describe('PASS 5: BidSheet static guardrails', () => {
+  it('has two-stage flow (entry and review)', () => {
+    expect(bidSheetSrc).toContain('entry');
+    expect(bidSheetSrc).toContain('review');
+    expect(bidSheetSrc).toContain('Review bid');
+  });
+
+  it('has success stage', () => {
+    expect(bidSheetSrc).toContain('success');
+    expect(bidSheetSrc).toContain('Bid placed');
+  });
+
+  it('has error stage', () => {
+    expect(bidSheetSrc).toContain('error');
+    expect(bidSheetSrc).toContain('errorTitle');
+  });
+
+  it('has submitting stage', () => {
+    expect(bidSheetSrc).toContain('submitting');
+  });
+
+  it('has item context header with title and seller', () => {
+    expect(bidSheetSrc).toContain('itemHeader');
+    expect(bidSheetSrc).toContain('itemTitle');
+    expect(bidSheetSrc).toContain('sellerName');
+  });
+
+  it('has current bid and minimum next bid display', () => {
+    expect(bidSheetSrc).toContain('Current bid');
+    expect(bidSheetSrc).toContain('Minimum next bid');
+  });
+
+  it('has quick increment chips (+1%, +3%, +5%)', () => {
+    expect(bidSheetSrc).toContain('incrementChip');
+    expect(bidSheetSrc).toContain('Math.round(pct * 100)');
+    expect(bidSheetSrc).toContain('0.01');
+    expect(bidSheetSrc).toContain('0.03');
+    expect(bidSheetSrc).toContain('0.05');
+  });
+
+  it('has binding commitment notice in review', () => {
+    expect(bidSheetSrc).toContain('binding');
+  });
+
+  it('has GBP equivalent display for non-GBP currencies', () => {
+    expect(bidSheetSrc).toContain('gbpEquivalent');
+  });
+
+  it('has lifecycle guard effect', () => {
+    expect(bidSheetSrc).toContain('shouldCloseSheetDueToLifecycle');
+  });
+
+  it('has stale state check before review', () => {
+    expect(bidSheetSrc).toContain('isSheetStateStale');
+  });
+
+  it('has idempotency key ref (not recreated on re-render)', () => {
+    expect(bidSheetSrc).toContain('idempotencyKeyRef');
+  });
+
+  it('has accessibility labels', () => {
+    expect(bidSheetSrc).toContain('accessibilityLabel');
+    expect(bidSheetSrc).toContain('accessibilityHint');
+  });
+
+  it('prevents dismiss during submission', () => {
+    expect(bidSheetSrc).toContain('isSubmitting');
+    const dismissSection = bidSheetSrc.substring(
+      bidSheetSrc.indexOf('handleDismiss'),
+      bidSheetSrc.indexOf('handleRetry')
+    );
+    expect(dismissSection).toContain('isSubmitting');
+  });
+});
+
+// ── PASS 5: BuyNowSheet static guardrails ──
+
+describe('PASS 5: BuyNowSheet static guardrails', () => {
+  it('has review stage with price display', () => {
+    expect(buyNowSheetSrc).toContain('review');
+    expect(buyNowSheetSrc).toContain('priceValue');
+  });
+
+  it('has success stage', () => {
+    expect(buyNowSheetSrc).toContain('success');
+    expect(buyNowSheetSrc).toContain('Buy Now accepted');
+  });
+
+  it('has error stage', () => {
+    expect(buyNowSheetSrc).toContain('error');
+    expect(buyNowSheetSrc).toContain('errorTitle');
+  });
+
+  it('has submitting stage', () => {
+    expect(buyNowSheetSrc).toContain('submitting');
+  });
+
+  it('has item context header', () => {
+    expect(buyNowSheetSrc).toContain('itemHeader');
+    expect(buyNowSheetSrc).toContain('itemTitle');
+  });
+
+  it('states this is a fixed-price purchase, not a bid', () => {
+    expect(buyNowSheetSrc).toContain('fixed-price purchase');
+    expect(buyNowSheetSrc).toContain('not a bid');
+  });
+
+  it('states auction will end immediately', () => {
+    expect(buyNowSheetSrc).toContain('immediately end the auction');
+  });
+
+  it('has lifecycle guard', () => {
+    expect(buyNowSheetSrc).toContain('shouldCloseSheetDueToLifecycle');
+  });
+
+  it('has idempotency key ref', () => {
+    expect(buyNowSheetSrc).toContain('idempotencyKeyRef');
+  });
+
+  it('has accessibility labels', () => {
+    expect(buyNowSheetSrc).toContain('accessibilityLabel');
+  });
+
+  it('prevents dismiss during submission', () => {
+    const dismissSection = buyNowSheetSrc.substring(
+      buyNowSheetSrc.indexOf('handleDismiss'),
+      buyNowSheetSrc.indexOf('handleRetry')
+    );
+    expect(dismissSection).toContain('isSubmitting');
+  });
+
+  it('has isBuyNowValid guard', () => {
+    expect(buyNowSheetSrc).toContain('isBuyNowValid');
+  });
+
+  it('does not navigate to Checkout', () => {
+    expect(buyNowSheetSrc).not.toContain('Checkout');
+    expect(buyNowSheetSrc).not.toContain('navigation.navigate');
+  });
+});
+
+// ── PASS 5: AuctionDetailScreen integration guardrails ──
+
+describe('PASS 5: AuctionDetailScreen sheet integration', () => {
+  it('renders BidSheet with auction context', () => {
+    expect(screenSrc).toContain('BidSheet');
+    expect(screenSrc).toContain('bidSheetVisible');
+    expect(screenSrc).toContain('closeBidSheet');
+  });
+
+  it('renders BuyNowSheet with auction context', () => {
+    expect(screenSrc).toContain('BuyNowSheet');
+    expect(screenSrc).toContain('buyNowSheetVisible');
+    expect(screenSrc).toContain('closeBuyNowSheet');
+  });
+
+  it('passes effectiveState to both sheets', () => {
+    expect(screenSrc).toContain('effectiveState');
+  });
+
+  it('passes isSeller to both sheets', () => {
+    expect(screenSrc).toContain('isSeller');
+  });
+
+  it('passes fetchDetail as onRefreshDetail to both sheets', () => {
+    expect(screenSrc).toContain('onRefreshDetail={fetchDetail}');
+  });
+
+  it('does not import Alert', () => {
+    expect(screenSrc).not.toMatch(/\bAlert\b/);
+  });
+
+  it('does not import KeyboardAvoidingView', () => {
+    expect(screenSrc).not.toContain('KeyboardAvoidingView');
+  });
+
+  it('does not import Platform', () => {
+    expect(screenSrc).not.toMatch(/\bPlatform\b/);
+  });
+
+  it('does not have old composer state variables', () => {
+    expect(screenSrc).not.toContain('bidComposerVisible');
+    expect(screenSrc).not.toContain('composerError');
+    expect(screenSrc).not.toContain('bidInput');
+  });
+
+  it('does not have old composer functions', () => {
+    expect(screenSrc).not.toContain('openBidComposer');
+    expect(screenSrc).not.toContain('closeBidComposer');
+    expect(screenSrc).not.toContain('bumpBid');
+    expect(screenSrc).not.toContain('submitBid');
+    expect(screenSrc).not.toContain('handleBuyNow');
+    expect(screenSrc).not.toContain('confirmBuyNow');
+  });
+
+  it('does not navigate to Checkout from Buy Now', () => {
+    const buyNowSection = screenSrc.substring(
+      screenSrc.indexOf('handleSubmitBuyNow'),
+      screenSrc.indexOf('const detailInput')
+    );
+    expect(buyNowSection).not.toContain('Checkout');
+    expect(buyNowSection).not.toContain('navigation.navigate');
   });
 });
