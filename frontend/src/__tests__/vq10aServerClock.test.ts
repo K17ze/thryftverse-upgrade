@@ -1,6 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { resolveAuctionTiming, formatCountdown } from '../hooks/useServerClock';
-import { isAttentionItem } from '../utils/auctionHomeLogic';
+import {
+  isAttentionItem,
+  resolvePriceLabel,
+  resolvePriceText,
+  resolveTimeLabel,
+  resolveUrgency,
+  resolveViewerStatePresentation,
+  buildAuctionAccessibilityLabel,
+  selectFirstServerTime,
+  isAllRejected,
+  fulfilledCount,
+  makeSectionLoadState,
+  createSearchState,
+  IDLE_SEARCH_STATE,
+  getSellerInitials,
+} from '../utils/auctionHomeLogic';
 
 interface AuctionTimingInput {
   startsAt: string;
@@ -242,7 +257,7 @@ describe('useServerClock — foreground resync (needsResync signal)', () => {
   it('preserves last valid offset until fresh data arrives', () => {
     expect(src).toContain('offsetRef.current');
     expect(src).toContain('needsResync');
-    expect(src).toContain('clearResync');
+    expect(src).toContain('markResyncFailed');
   });
 
   it('no backwards clock jump: offset is only updated via computeOffset with fresh serverNow', () => {
@@ -467,7 +482,7 @@ describe('Search query propagation', () => {
   });
 
   it('resets cursor on new query', () => {
-    expect(src).toContain('setSearchCursor(null)');
+    expect(src).toContain('searchState');
   });
 
   it('has stale request rejection', () => {
@@ -476,7 +491,7 @@ describe('Search query propagation', () => {
   });
 
   it('clear search restores default sections', () => {
-    expect(src).toContain('setSearchResults(null)');
+    expect(src).toContain('IDLE_SEARCH_STATE');
     expect(src).toContain("setDebouncedQuery('')");
   });
 });
@@ -505,12 +520,7 @@ describe('Cancelled/settled list mapping', () => {
 // ── PASS 3 unit tests ──
 
 import {
-  resolvePriceLabel,
-  resolveTimeLabel,
-  resolveUrgency,
-  resolveViewerStatePresentation,
   buildCanonicalMap,
-  getSellerInitials,
   formatFinalMinutesCountdown,
   isEndingSoon as isEndingSoonFn,
   type PriceLabel,
@@ -804,7 +814,7 @@ describe('PASS 3.0A: Stale search invalidation (static guardrails)', () => {
   });
 
   it('handleSearchChange resets cursor immediately', () => {
-    const changeMatch = src.match(/handleSearchChange[\s\S]*?setSearchCursor\(null\)/);
+    const changeMatch = src.match(/handleSearchChange[\s\S]*?createSearchState/);
     expect(changeMatch).toBeTruthy();
   });
 });
@@ -816,7 +826,7 @@ describe('PASS 3.0B: Active search refresh (static guardrails)', () => {
   );
 
   it('handleRefresh reruns search when search results are visible', () => {
-    const refreshMatch = src.match(/handleRefresh[\s\S]*?searchResults !== null[\s\S]*?listAuctions\(/);
+    const refreshMatch = src.match(/handleRefresh[\s\S]*?searchState\.status !== 'idle'[\s\S]*?listAuctions\(/);
     expect(refreshMatch).toBeTruthy();
   });
 
@@ -835,7 +845,6 @@ describe('PASS 3.0D: Foreground resync failure (static guardrails)', () => {
   it('does not clear needsResync before server response succeeds', () => {
     const appStateEffect = src.match(/const handleAppStateChange[\s\S]*?subscription\.remove\(\);[\s\S]*?\}\s*,\s*\[\]\s*\)/);
     expect(appStateEffect).toBeTruthy();
-    expect(appStateEffect![0]).not.toContain('clearResync');
     expect(appStateEffect![0]).not.toContain('setNeedsResync(false)');
   });
 
@@ -1039,5 +1048,345 @@ describe('PASS 3.12: Accessibility (static guardrails)', () => {
 
   it('clear search has accessibility label', () => {
     expect(src).toContain('accessibilityLabel="Clear search"');
+  });
+});
+
+// ── PASS 3.1 PURE UNIT TESTS ──
+// All tests below are pure unit tests — no React Native component mounting.
+
+describe('PASS 3.1: Server-time fallback selection (pure unit)', () => {
+  it('selects first valid serverNow from multiple sources', () => {
+    const sources = [
+      { serverNow: null },
+      { serverNow: '2025-06-15T12:00:00Z' },
+      { serverNow: '2025-06-15T12:01:00Z' },
+    ];
+    expect(selectFirstServerTime(sources)).toBe('2025-06-15T12:00:00Z');
+  });
+
+  it('returns null when all sources are null', () => {
+    const sources = [
+      { serverNow: null },
+      { serverNow: null },
+    ];
+    expect(selectFirstServerTime(sources)).toBeNull();
+  });
+
+  it('returns null for empty array', () => {
+    expect(selectFirstServerTime([])).toBeNull();
+  });
+
+  it('selects from upcoming when live is null', () => {
+    const sources = [
+      { serverNow: null },
+      { serverNow: '2025-06-15T13:00:00Z' },
+    ];
+    expect(selectFirstServerTime(sources)).toBe('2025-06-15T13:00:00Z');
+  });
+});
+
+describe('PASS 3.1: All-failed detection (pure unit)', () => {
+  it('returns true when all results are rejected', () => {
+    const results: PromiseSettledResult<unknown>[] = [
+      { status: 'rejected', reason: new Error('fail') },
+      { status: 'rejected', reason: new Error('fail') },
+    ];
+    expect(isAllRejected(results)).toBe(true);
+  });
+
+  it('returns false when at least one is fulfilled', () => {
+    const results: PromiseSettledResult<unknown>[] = [
+      { status: 'fulfilled', value: {} },
+      { status: 'rejected', reason: new Error('fail') },
+    ];
+    expect(isAllRejected(results)).toBe(false);
+  });
+
+  it('returns false for empty array', () => {
+    expect(isAllRejected([])).toBe(false);
+  });
+
+  it('fulfilledCount counts only fulfilled', () => {
+    const results: PromiseSettledResult<unknown>[] = [
+      { status: 'fulfilled', value: {} },
+      { status: 'rejected', reason: new Error('fail') },
+      { status: 'fulfilled', value: {} },
+    ];
+    expect(fulfilledCount(results)).toBe(2);
+  });
+});
+
+describe('PASS 3.1: Partial success detection (pure unit)', () => {
+  it('all rejected → isAllRejected=true, fulfilledCount=0', () => {
+    const results: PromiseSettledResult<unknown>[] = [
+      { status: 'rejected', reason: new Error('a') },
+      { status: 'rejected', reason: new Error('b') },
+      { status: 'rejected', reason: new Error('c') },
+    ];
+    expect(isAllRejected(results)).toBe(true);
+    expect(fulfilledCount(results)).toBe(0);
+  });
+
+  it('partial success → isAllRejected=false, fulfilledCount>0', () => {
+    const results: PromiseSettledResult<unknown>[] = [
+      { status: 'fulfilled', value: { items: [] } },
+      { status: 'rejected', reason: new Error('b') },
+    ];
+    expect(isAllRejected(results)).toBe(false);
+    expect(fulfilledCount(results)).toBe(1);
+  });
+});
+
+describe('PASS 3.1: Section load state (pure unit)', () => {
+  it('error state when hasError=true', () => {
+    const state = makeSectionLoadState([], true);
+    expect(state.status).toBe('error');
+    expect(state.items).toEqual([]);
+  });
+
+  it('empty state when no items and no error', () => {
+    const state = makeSectionLoadState([], false);
+    expect(state.status).toBe('empty');
+    expect(state.items).toEqual([]);
+  });
+
+  it('ready state when items exist', () => {
+    const items = [{ id: '1' } as any];
+    const state = makeSectionLoadState(items, false);
+    expect(state.status).toBe('ready');
+    expect(state.items).toBe(items);
+  });
+
+  it('error takes precedence over items', () => {
+    const items = [{ id: '1' } as any];
+    const state = makeSectionLoadState(items, true);
+    expect(state.status).toBe('error');
+    expect(state.items).toEqual([]);
+  });
+});
+
+describe('PASS 3.1: Search state transitions (pure unit)', () => {
+  it('IDLE_SEARCH_STATE has idle status', () => {
+    expect(IDLE_SEARCH_STATE.status).toBe('idle');
+    expect(IDLE_SEARCH_STATE.items).toEqual([]);
+    expect(IDLE_SEARCH_STATE.cursor).toBeNull();
+  });
+
+  it('A -> B: createSearchState for B replaces A', () => {
+    const stateA = createSearchState('sneakers', 'ready', [{ id: '1' } as any], 'cursor1');
+    const stateB = createSearchState('jacket', 'loading');
+    expect(stateB.query).toBe('jacket');
+    expect(stateB.status).toBe('loading');
+    expect(stateB.items).toEqual([]);
+    expect(stateB.cursor).toBeNull();
+  });
+
+  it('A -> clear: returns to idle', () => {
+    const stateA = createSearchState('sneakers', 'ready', [{ id: '1' } as any], 'cursor1');
+    expect(stateA.status).toBe('ready');
+    const cleared = IDLE_SEARCH_STATE;
+    expect(cleared.status).toBe('idle');
+    expect(cleared.items).toEqual([]);
+  });
+
+  it('A -> B -> A: re-creating A produces correct query', () => {
+    const stateA1 = createSearchState('sneakers', 'ready', [{ id: '1' } as any]);
+    const stateB = createSearchState('jacket', 'loading');
+    const stateA2 = createSearchState('sneakers', 'loading');
+    expect(stateA1.query).toBe('sneakers');
+    expect(stateB.query).toBe('jacket');
+    expect(stateA2.query).toBe('sneakers');
+    expect(stateA2.items).toEqual([]);
+  });
+});
+
+describe('PASS 3.1: Price labels for settled/cancelled/no-bids (pure unit)', () => {
+  const fmt = (amt: number) => `£${amt}`;
+
+  it('settled with bids → Final bid', () => {
+    const item = { bidCount: 3, currentBidGbp: 50, startingBidGbp: 10 } as any;
+    const timing = { effectiveState: 'settled' } as any;
+    expect(resolvePriceLabel(item, timing)).toBe('Final bid');
+    expect(resolvePriceText(item, timing, 'Final bid', fmt)).toBe('£50');
+  });
+
+  it('settled without bids → No bids', () => {
+    const item = { bidCount: 0, currentBidGbp: 10, startingBidGbp: 10 } as any;
+    const timing = { effectiveState: 'settled' } as any;
+    expect(resolvePriceLabel(item, timing)).toBe('No bids');
+    expect(resolvePriceText(item, timing, 'No bids', fmt)).toBe('No bids');
+  });
+
+  it('cancelled with bids → Final bid', () => {
+    const item = { bidCount: 2, currentBidGbp: 30, startingBidGbp: 10 } as any;
+    const timing = { effectiveState: 'cancelled' } as any;
+    expect(resolvePriceLabel(item, timing)).toBe('Final bid');
+    expect(resolvePriceText(item, timing, 'Final bid', fmt)).toBe('£30');
+  });
+
+  it('cancelled without bids → No bids', () => {
+    const item = { bidCount: 0, currentBidGbp: 10, startingBidGbp: 10 } as any;
+    const timing = { effectiveState: 'cancelled' } as any;
+    expect(resolvePriceLabel(item, timing)).toBe('No bids');
+    expect(resolvePriceText(item, timing, 'No bids', fmt)).toBe('No bids');
+  });
+
+  it('live with bids → Current bid', () => {
+    const item = { bidCount: 5, currentBidGbp: 100, startingBidGbp: 10 } as any;
+    const timing = { effectiveState: 'live' } as any;
+    expect(resolvePriceLabel(item, timing)).toBe('Current bid');
+  });
+
+  it('live without bids → Starting bid', () => {
+    const item = { bidCount: 0, currentBidGbp: 10, startingBidGbp: 10 } as any;
+    const timing = { effectiveState: 'live' } as any;
+    expect(resolvePriceLabel(item, timing)).toBe('Starting bid');
+  });
+
+  it('upcoming → Starting bid', () => {
+    const item = { bidCount: 0, currentBidGbp: 10, startingBidGbp: 10 } as any;
+    const timing = { effectiveState: 'upcoming' } as any;
+    expect(resolvePriceLabel(item, timing)).toBe('Starting bid');
+  });
+});
+
+describe('PASS 3.1: No-bid presentation (pure unit)', () => {
+  const fmt = (amt: number) => `£${amt}`;
+
+  it('accessibility label says No bids once (not twice)', () => {
+    const item = {
+      title: 'Test Auction',
+      bidCount: 0,
+      viewerState: 'not_participating',
+    } as any;
+    const timing = { effectiveState: 'ended', msToStart: 0, msToEnd: -1000 } as any;
+    const label = buildAuctionAccessibilityLabel(item, timing, 'No bids', 'No bids');
+    const matchCount = (label.match(/No bids/g) || []).length;
+    expect(matchCount).toBe(1);
+  });
+
+  it('accessibility label for settled with bids includes Final bid and bid count', () => {
+    const item = {
+      title: 'Test Auction',
+      bidCount: 3,
+      viewerState: 'won',
+    } as any;
+    const timing = { effectiveState: 'settled', msToStart: 0, msToEnd: -1000 } as any;
+    const label = buildAuctionAccessibilityLabel(item, timing, 'Final bid', '£50');
+    expect(label).toContain('Final bid £50');
+    expect(label).toContain('3 bids');
+    expect(label).toContain('Won');
+  });
+
+  it('cancelled auction does not show current bid label', () => {
+    const item = { bidCount: 0, currentBidGbp: 10, startingBidGbp: 10 } as any;
+    const timing = { effectiveState: 'cancelled' } as any;
+    expect(resolvePriceLabel(item, timing)).not.toBe('Current bid');
+  });
+});
+
+describe('PASS 3.1: Countdown update precision (pure unit)', () => {
+  it('ended items have urgency none', () => {
+    const timing = { effectiveState: 'ended' as const, msToEnd: -1000 };
+    expect(resolveUrgency(timing)).toBe('none');
+  });
+
+  it('upcoming items have urgency none', () => {
+    const timing = { effectiveState: 'upcoming' as const, msToEnd: 3600000 };
+    expect(resolveUrgency(timing)).toBe('none');
+  });
+
+  it('live with >5min has urgency endingSoon or none', () => {
+    const timing30min = { effectiveState: 'live' as const, msToEnd: 30 * 60 * 1000 };
+    expect(resolveUrgency(timing30min)).toBe('endingSoon');
+    const timing2hr = { effectiveState: 'live' as const, msToEnd: 2 * 60 * 60 * 1000 };
+    expect(resolveUrgency(timing2hr)).toBe('none');
+  });
+
+  it('live with <=5min has urgency finalMinutes', () => {
+    const timing = { effectiveState: 'live' as const, msToEnd: 3 * 60 * 1000 };
+    expect(resolveUrgency(timing)).toBe('finalMinutes');
+  });
+
+  it('live with <=1min has urgency finalMinutes', () => {
+    const timing = { effectiveState: 'live' as const, msToEnd: 30 * 1000 };
+    expect(resolveUrgency(timing)).toBe('finalMinutes');
+  });
+});
+
+describe('PASS 3.1: Resync failure and retry (pure unit)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../hooks/useServerClock.ts'),
+    'utf-8'
+  );
+
+  it('markResyncFailed clears needsResync and sets resyncFailed', () => {
+    expect(src).toContain('markResyncFailed');
+    expect(src).toMatch(/setNeedsResync\(false\).*setResyncFailed\(true\)/s);
+  });
+
+  it('resyncFailed is cleared on successful computeOffset', () => {
+    expect(src).toMatch(/computeOffset[\s\S]*?setResyncFailed\(false\)/);
+  });
+
+  it('does not have clearResync (removed dead API)', () => {
+    expect(src).not.toMatch(/\bclearResync\b(?!Failed)/);
+  });
+
+  it('has bucketed clocks for performance', () => {
+    expect(src).toContain('secondClock');
+    expect(src).toContain('minuteClock');
+    expect(src).toContain('useBucketedServerClock');
+  });
+});
+
+describe('PASS 3.1: Card interaction consistency (static guardrails)', () => {
+  const src = require('fs').readFileSync(
+    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
+    'utf-8'
+  );
+
+  it('no haptics import in screen', () => {
+    expect(src).not.toContain('haptics');
+  });
+
+  it('all card components use clockMs prop (not nowMs)', () => {
+    expect(src).not.toContain('nowMs');
+    expect(src).toContain('clockMs');
+  });
+
+  it('uses bucketed server clock (secondClock + minuteClock)', () => {
+    expect(src).toContain('secondClock');
+    expect(src).toContain('minuteClock');
+    expect(src).toContain('useBucketedServerClock');
+  });
+
+  it('uses AuctionSearchState model', () => {
+    expect(src).toContain('searchState');
+    expect(src).toContain('createSearchState');
+    expect(src).toContain('IDLE_SEARCH_STATE');
+  });
+
+  it('uses selectFirstServerTime for server-time fallback', () => {
+    expect(src).toContain('selectFirstServerTime');
+  });
+
+  it('uses isAllRejected for all-failed detection', () => {
+    expect(src).toContain('isAllRejected');
+  });
+
+  it('uses markResyncFailed (not clearResync)', () => {
+    expect(src).toContain('markResyncFailed');
+    expect(src).not.toMatch(/\bclearResync\b(?!Failed)/);
+  });
+
+  it('renders section error card with retry for failed sections', () => {
+    expect(src).toContain('sectionErrorCard');
+    expect(src).toContain('Retry');
+  });
+
+  it('uses sectionStates for section load state tracking', () => {
+    expect(src).toContain('sectionStates');
+    expect(src).toContain('makeSectionLoadState');
   });
 });

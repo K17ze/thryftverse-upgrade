@@ -44,13 +44,37 @@ export function resolveUrgency(timing: { effectiveState: AuctionEffectiveState; 
 export type PriceLabel = 'Starting bid' | 'Current bid' | 'Final bid' | 'No bids';
 
 export function resolvePriceLabel(item: AuctionHomeItem, timing: { effectiveState: AuctionEffectiveState }): PriceLabel {
-  if (timing.effectiveState === 'ended') {
+  if (timing.effectiveState === 'cancelled') {
+    return item.bidCount > 0 ? 'Final bid' : 'No bids';
+  }
+  if (timing.effectiveState === 'settled' || timing.effectiveState === 'ended') {
     return item.bidCount > 0 ? 'Final bid' : 'No bids';
   }
   if (timing.effectiveState === 'upcoming') {
     return 'Starting bid';
   }
   return item.bidCount > 0 ? 'Current bid' : 'Starting bid';
+}
+
+export function resolvePriceText(
+  item: AuctionHomeItem,
+  timing: { effectiveState: AuctionEffectiveState },
+  priceLabel: PriceLabel,
+  formatFromFiat: (amount: number, currency?: any, opts?: any) => string
+): string {
+  if (priceLabel === 'No bids') return 'No bids';
+  const amount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
+  return formatFromFiat(amount, 'GBP', { displayMode: 'fiat' });
+}
+
+export function resolvePriceDisplay(
+  item: AuctionHomeItem,
+  timing: { effectiveState: AuctionEffectiveState },
+  formatFromFiat: (amount: number, currency?: any, opts?: any) => string
+): { label: PriceLabel; text: string } {
+  const label = resolvePriceLabel(item, timing);
+  const text = resolvePriceText(item, timing, label, formatFromFiat);
+  return { label, text };
 }
 
 // ── Time label resolver ──
@@ -174,5 +198,73 @@ export function buildAuctionAccessibilityLabel(
   const viewerPresentation = resolveViewerStatePresentation(item.viewerState);
   const viewerText = viewerPresentation ? `, ${viewerPresentation.text}` : '';
   const bidText = item.bidCount > 0 ? `, ${item.bidCount} bids` : '';
+  if (priceLabel === 'No bids') {
+    return `${item.title}, No bids${viewerText}, ${timeLabel}`;
+  }
   return `${item.title}, ${priceLabel} ${priceText}${viewerText}, ${timeLabel}${bidText}`;
+}
+
+// ── PASS 2: Server-time fallback selection ──
+
+export interface ServerTimeSource {
+  serverNow: string | null;
+}
+
+export function selectFirstServerTime<T extends ServerTimeSource>(
+  sources: T[]
+): string | null {
+  for (const s of sources) {
+    if (s.serverNow) return s.serverNow;
+  }
+  return null;
+}
+
+// ── PASS 2: All-failed detection ──
+
+export function isAllRejected(results: PromiseSettledResult<unknown>[]): boolean {
+  return results.length > 0 && results.every(r => r.status === 'rejected');
+}
+
+export function fulfilledCount(results: PromiseSettledResult<unknown>[]): number {
+  return results.filter(r => r.status === 'fulfilled').length;
+}
+
+// ── PASS 3: Section load state ──
+
+export type SectionLoadState =
+  | { status: 'ready'; items: AuctionHomeItem[] }
+  | { status: 'empty'; items: [] }
+  | { status: 'error'; items: [] };
+
+export function makeSectionLoadState(items: AuctionHomeItem[], hasError: boolean): SectionLoadState {
+  if (hasError) return { status: 'error', items: [] };
+  if (items.length === 0) return { status: 'empty', items: [] };
+  return { status: 'ready', items };
+}
+
+// ── PASS 4: Search state model ──
+
+export type SearchStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
+
+export interface AuctionSearchState {
+  query: string;
+  status: SearchStatus;
+  items: AuctionHomeItem[];
+  cursor: string | null;
+}
+
+export const IDLE_SEARCH_STATE: AuctionSearchState = {
+  query: '',
+  status: 'idle',
+  items: [],
+  cursor: null,
+};
+
+export function createSearchState(
+  query: string,
+  status: SearchStatus,
+  items: AuctionHomeItem[] = [],
+  cursor: string | null = null
+): AuctionSearchState {
+  return { query, status, items, cursor };
 }

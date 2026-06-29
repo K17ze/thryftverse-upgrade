@@ -64,13 +64,15 @@ export function formatCountdown(ms: number): string {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+// ── Resync lifecycle: idle → needsResync → refreshing → succeeded | failed ──
+
 export interface ServerClockResult {
   serverNowMs: number;
   offsetMs: number;
   resync: (serverNow: string) => void;
   needsResync: boolean;
-  clearResync: () => void;
   resyncFailed: boolean;
+  markResyncFailed: () => void;
   clearResyncFailed: () => void;
 }
 
@@ -116,8 +118,9 @@ export function useServerClock(initialServerNow: string | null): ServerClockResu
     computeOffset(serverNow);
   }, [computeOffset]);
 
-  const clearResync = React.useCallback(() => {
+  const markResyncFailed = React.useCallback(() => {
     setNeedsResync(false);
+    setResyncFailed(true);
   }, []);
 
   const clearResyncFailed = React.useCallback(() => {
@@ -126,25 +129,43 @@ export function useServerClock(initialServerNow: string | null): ServerClockResu
 
   const serverNowMs = Date.now() + offsetRef.current;
 
-  return { serverNowMs, offsetMs, resync, needsResync, clearResync, resyncFailed, clearResyncFailed };
+  return { serverNowMs, offsetMs, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed };
 }
 
-export function useServerClockTick(initialServerNow: string | null): ServerClockResult & { nowMs: number } {
+// ── PASS 5: Bucketed clocks — second precision for final minutes, minute otherwise ──
+
+export interface BucketedClockResult extends ServerClockResult {
+  secondClock: number;
+  minuteClock: number;
+}
+
+export function useBucketedServerClock(initialServerNow: string | null): BucketedClockResult {
   const clock = useServerClock(initialServerNow);
   const offsetRef = React.useRef(0);
-  const [nowMs, setNowMs] = React.useState(() => Date.now() + clock.offsetMs);
+  const [secondClock, setSecondClock] = React.useState(() => Date.now() + clock.offsetMs);
+  const [minuteClock, setMinuteClock] = React.useState(() => {
+    const now = Date.now() + clock.offsetMs;
+    return now - (now % 60_000);
+  });
 
   React.useEffect(() => {
     offsetRef.current = clock.offsetMs;
-    setNowMs(Date.now() + clock.offsetMs);
+    const now = Date.now() + clock.offsetMs;
+    setSecondClock(now);
+    setMinuteClock(now - (now % 60_000));
   }, [clock.offsetMs]);
 
   React.useEffect(() => {
     const intervalId = setInterval(() => {
-      setNowMs(Date.now() + offsetRef.current);
+      const now = Date.now() + offsetRef.current;
+      setSecondClock(now);
+      setMinuteClock((prev) => {
+        const floored = now - (now % 60_000);
+        return floored !== prev ? floored : prev;
+      });
     }, 1000);
     return () => clearInterval(intervalId);
   }, []);
 
-  return { ...clock, nowMs };
+  return { ...clock, secondClock, minuteClock };
 }

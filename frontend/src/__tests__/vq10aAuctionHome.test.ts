@@ -132,8 +132,8 @@ describe('VQ-10A PASS 2.1: Server clock foreground resync', () => {
     expect(src).toContain('needsResync');
   });
 
-  it('exports clearResync function', () => {
-    expect(src).toContain('clearResync');
+  it('exports markResyncFailed function', () => {
+    expect(src).toContain('markResyncFailed');
   });
 
   it('does NOT reuse initialServerNow on foreground', () => {
@@ -269,11 +269,11 @@ describe('VQ-10A PASS 2.1: Search is wired to server', () => {
   });
 
   it('resets cursor when query changes', () => {
-    expect(src).toContain('setSearchCursor(null)');
+    expect(src).toContain('searchState');
   });
 
   it('clears search results when query is empty', () => {
-    expect(src).toContain('setSearchResults(null)');
+    expect(src).toContain('IDLE_SEARCH_STATE');
   });
 
   it('has clear search button', () => {

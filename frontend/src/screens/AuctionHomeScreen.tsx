@@ -17,21 +17,31 @@ import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import type { SupportedCurrencyCode } from '../constants/currencies';
 import type { CurrencyDisplayMode } from '../utils/currency';
-import { useServerClockTick, resolveAuctionTiming } from '../hooks/useServerClock';
+import { useBucketedServerClock, resolveAuctionTiming } from '../hooks/useServerClock';
 import {
   isAttentionItem,
   isEndingSoon,
   buildCanonicalMap,
   resolvePriceLabel,
+  resolvePriceText,
   resolveTimeLabel,
   resolveUrgency,
   resolveViewerStatePresentation,
   formatFinalMinutesCountdown,
   getSellerInitials,
   buildAuctionAccessibilityLabel,
+  selectFirstServerTime,
+  isAllRejected,
+  fulfilledCount,
+  makeSectionLoadState,
+  createSearchState,
+  IDLE_SEARCH_STATE,
   type AuctionHomeItem,
   type PriceLabel,
   type UrgencyLevel,
+  type SectionLoadState,
+  type AuctionSearchState,
+  type SearchStatus,
 } from '../utils/auctionHomeLogic';
 import { useAppTheme } from '../theme/ThemeContext';
 import { CachedImage } from '../components/CachedImage';
@@ -41,7 +51,6 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
 import { AppInput } from '../components/ui/AppInput';
 import { Space, Radius } from '../theme/designTokens';
-import { haptics } from '../utils/haptics';
 import {
   listAuctions,
   getWatchlist,
@@ -150,19 +159,18 @@ function LivePill() {
 // ── PASS 3.1: AuctionAttentionCard — prominent full-width row ──
 const AuctionAttentionCard = memo(function AuctionAttentionCard({
   item,
-  nowMs,
+  clockMs,
   onPress,
   formatFromFiat,
 }: {
   item: AuctionHomeItem;
-  nowMs: number;
+  clockMs: number;
   onPress: () => void;
   formatFromFiat: FormatFromFiat;
 }) {
-  const timing = resolveAuctionTiming(item, nowMs);
+  const timing = resolveAuctionTiming(item, clockMs);
   const priceLabel = resolvePriceLabel(item, timing);
-  const priceAmount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
-  const priceText = priceLabel === 'No bids' ? 'No bids' : formatFromFiat(priceAmount, 'GBP', { displayMode: 'fiat' });
+  const priceText = resolvePriceText(item, timing, priceLabel, formatFromFiat);
   const timeLabel = resolveTimeLabel(timing);
   const ctaText = item.viewerState === 'outbid' ? 'Bid again' : item.viewerState === 'won' ? 'View result' : 'View';
   const a11yLabel = buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText);
@@ -170,7 +178,7 @@ const AuctionAttentionCard = memo(function AuctionAttentionCard({
   return (
     <AnimatedPressable
       style={styles.attentionCard}
-      onPress={() => { haptics.tap(); onPress(); }}
+      onPress={onPress}
       activeOpacity={0.92}
       scaleValue={0.985}
       accessibilityRole="button"
@@ -216,20 +224,19 @@ const AuctionAttentionCard = memo(function AuctionAttentionCard({
 // ── PASS 3.1: AuctionFeedCard — media-led cards for live/ending soon ──
 const AuctionFeedCard = memo(function AuctionFeedCard({
   item,
-  nowMs,
+  clockMs,
   onPress,
   formatFromFiat,
 }: {
   item: AuctionHomeItem;
-  nowMs: number;
+  clockMs: number;
   onPress: () => void;
   formatFromFiat: FormatFromFiat;
 }) {
-  const timing = resolveAuctionTiming(item, nowMs);
+  const timing = resolveAuctionTiming(item, clockMs);
   const urgency = resolveUrgency(timing);
   const priceLabel = resolvePriceLabel(item, timing);
-  const priceAmount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
-  const priceText = priceLabel === 'No bids' ? 'No bids' : formatFromFiat(priceAmount, 'GBP', { displayMode: 'fiat' });
+  const priceText = resolvePriceText(item, timing, priceLabel, formatFromFiat);
 
   const timeLabel = urgency === 'finalMinutes'
     ? formatFinalMinutesCountdown(timing.msToEnd)
@@ -298,19 +305,18 @@ const AuctionFeedCard = memo(function AuctionFeedCard({
 // ── PASS 3.1: AuctionCompactCard — horizontal cards for upcoming/watching ──
 const AuctionCompactCard = memo(function AuctionCompactCard({
   item,
-  nowMs,
+  clockMs,
   onPress,
   formatFromFiat,
 }: {
   item: AuctionHomeItem;
-  nowMs: number;
+  clockMs: number;
   onPress: () => void;
   formatFromFiat: FormatFromFiat;
 }) {
-  const timing = resolveAuctionTiming(item, nowMs);
+  const timing = resolveAuctionTiming(item, clockMs);
   const priceLabel = resolvePriceLabel(item, timing);
-  const priceAmount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
-  const priceText = priceLabel === 'No bids' ? 'No bids' : formatFromFiat(priceAmount, 'GBP', { displayMode: 'fiat' });
+  const priceText = resolvePriceText(item, timing, priceLabel, formatFromFiat);
   const timeLabel = resolveTimeLabel(timing);
   const a11yLabel = buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText);
 
@@ -353,19 +359,18 @@ const AuctionCompactCard = memo(function AuctionCompactCard({
 // ── PASS 3.1: AuctionEndedCard — restrained result rows for recently ended ──
 const AuctionEndedCard = memo(function AuctionEndedCard({
   item,
-  nowMs,
+  clockMs,
   onPress,
   formatFromFiat,
 }: {
   item: AuctionHomeItem;
-  nowMs: number;
+  clockMs: number;
   onPress: () => void;
   formatFromFiat: FormatFromFiat;
 }) {
-  const timing = resolveAuctionTiming(item, nowMs);
+  const timing = resolveAuctionTiming(item, clockMs);
   const priceLabel = resolvePriceLabel(item, timing);
-  const priceAmount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
-  const priceText = priceLabel === 'No bids' ? 'No bids' : formatFromFiat(priceAmount, 'GBP', { displayMode: 'fiat' });
+  const priceText = resolvePriceText(item, timing, priceLabel, formatFromFiat);
   const a11yLabel = buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText);
 
   return (
@@ -428,6 +433,7 @@ interface SectionData {
   watchlist: AuctionHomeItem[];
   serverNow: string | null;
   sectionErrors: Partial<Record<SectionKind, boolean>>;
+  sectionStates: Partial<Record<SectionKind, SectionLoadState>>;
 }
 
 const EMPTY_SECTION_DATA: SectionData = {
@@ -438,6 +444,7 @@ const EMPTY_SECTION_DATA: SectionData = {
   watchlist: [],
   serverNow: null,
   sectionErrors: {},
+  sectionStates: {},
 };
 
 // ── Main screen ──
@@ -449,21 +456,17 @@ export default function AuctionHomeScreen() {
   const [sectionData, setSectionData] = React.useState<SectionData>(EMPTY_SECTION_DATA);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [searchState, setSearchState] = React.useState<AuctionSearchState>(IDLE_SEARCH_STATE);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [debouncedQuery, setDebouncedQuery] = React.useState('');
-  const [searchResults, setSearchResults] = React.useState<AuctionHomeItem[] | null>(null);
-  const [searchLoading, setSearchLoading] = React.useState(false);
-  const [searchError, setSearchError] = React.useState<string | null>(null);
-  const [searchCursor, setSearchCursor] = React.useState<string | null>(null);
   const [isLoadingMoreSearch, setIsLoadingMoreSearch] = React.useState(false);
   const [paginationError, setPaginationError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  const { nowMs, resync, needsResync, clearResync, resyncFailed, clearResyncFailed } = useServerClockTick(sectionData.serverNow);
+  const { secondClock, minuteClock, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed } = useBucketedServerClock(sectionData.serverNow);
 
   const requestIdRef = React.useRef(0);
 
-  // ── PASS 3.10: Partial section success — use Promise.allSettled ──
   const fetchSections = React.useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -481,36 +484,55 @@ export default function AuctionHomeScreen() {
 
       const [liveRes, upcomingRes, endedRes, sellerRes, watchlistRes] = results;
       const sectionErrors: Partial<Record<SectionKind, boolean>> = {};
+      const sectionStates: Partial<Record<SectionKind, SectionLoadState>> = {};
 
       const live = liveRes.status === 'fulfilled' ? liveRes.value.items.map(toViewModel) : [];
-      if (liveRes.status === 'rejected') sectionErrors.live = true;
+      if (liveRes.status === 'rejected') { sectionErrors.live = true; sectionStates.live = makeSectionLoadState([], true); }
+      else { sectionStates.live = makeSectionLoadState(live, false); }
 
       const upcoming = upcomingRes.status === 'fulfilled' ? upcomingRes.value.items.map(toViewModel) : [];
-      if (upcomingRes.status === 'rejected') sectionErrors.upcoming = true;
+      if (upcomingRes.status === 'rejected') { sectionErrors.upcoming = true; sectionStates.upcoming = makeSectionLoadState([], true); }
+      else { sectionStates.upcoming = makeSectionLoadState(upcoming, false); }
 
       const ended = endedRes.status === 'fulfilled' ? endedRes.value.items.map(toViewModel) : [];
-      if (endedRes.status === 'rejected') sectionErrors.recentlyEnded = true;
+      if (endedRes.status === 'rejected') { sectionErrors.recentlyEnded = true; sectionStates.recentlyEnded = makeSectionLoadState([], true); }
+      else { sectionStates.recentlyEnded = makeSectionLoadState(ended, false); }
 
       const seller = sellerRes.status === 'fulfilled' ? sellerRes.value.items.map(toViewModel) : [];
-      if (sellerRes.status === 'rejected') sectionErrors.sellerTools = true;
+      if (sellerRes.status === 'rejected') { sectionErrors.sellerTools = true; sectionStates.sellerTools = makeSectionLoadState([], true); }
+      else { sectionStates.sellerTools = makeSectionLoadState(seller, false); }
 
       const watchlist = watchlistRes.status === 'fulfilled' ? watchlistRes.value.items.map(toViewModel) : [];
-      if (watchlistRes.status === 'rejected') sectionErrors.watchlist = true;
+      if (watchlistRes.status === 'rejected') { sectionErrors.watchlist = true; sectionStates.watchlist = makeSectionLoadState([], true); }
+      else { sectionStates.watchlist = makeSectionLoadState(watchlist, false); }
 
-      const serverNow = liveRes.status === 'fulfilled' ? liveRes.value.serverNow : null;
+      // PASS 2: Select first valid serverNow from any fulfilled source
+      const serverNow = selectFirstServerTime([
+        liveRes.status === 'fulfilled' ? liveRes.value : null,
+        upcomingRes.status === 'fulfilled' ? upcomingRes.value : null,
+        endedRes.status === 'fulfilled' ? endedRes.value : null,
+        sellerRes.status === 'fulfilled' ? sellerRes.value : null,
+      ].filter(Boolean) as { serverNow: string | null }[]);
 
-      setSectionData({ live, upcoming, ended, seller, watchlist, serverNow, sectionErrors });
+      setSectionData({ live, upcoming, ended, seller, watchlist, serverNow, sectionErrors, sectionStates });
 
       if (serverNow) {
         resync(serverNow);
         clearResyncFailed();
-      } else if (results.some(r => r.status === 'rejected')) {
-        // All failed
+      } else if (isAllRejected(results)) {
+        // PASS 2: Only show global error when ALL requests failed
         setError('Unable to load auctions');
+        markResyncFailed();
+      } else if (fulfilledCount(results) > 0) {
+        // Partial success — some sections loaded, serverNow may be null if clock sources failed
+        if (!serverNow) {
+          markResyncFailed();
+        }
       }
     } catch {
       if (reqId === requestIdRef.current) {
         setError('Unable to load auctions');
+        markResyncFailed();
       }
     } finally {
       if (reqId === requestIdRef.current) {
@@ -518,103 +540,87 @@ export default function AuctionHomeScreen() {
         setRefreshing(false);
       }
     }
-  }, [resync, clearResyncFailed]);
+  }, [resync, clearResyncFailed, markResyncFailed]);
 
   React.useEffect(() => {
     void fetchSections();
   }, [fetchSections]);
 
-  // ── PASS 3.0D: Don't clear needsResync before fresh server response succeeds ──
+  // ── PASS 1: needsResync triggers refetch; cleared on success or marked failed ──
   React.useEffect(() => {
     if (needsResync) {
       void fetchSections();
-      // needsResync is only cleared inside fetchSections when resync(serverNow) succeeds
     }
   }, [needsResync, fetchSections]);
 
-  // ── PASS 3.0B: Refresh active experience ──
+  // ── PASS 4: Search state with generation token ──
+  const searchReqIdRef = useRef(0);
+
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
-    if (searchResults !== null && debouncedQuery.trim().length > 0) {
-      // Rerun active search from page one
+    if (searchState.status !== 'idle' && debouncedQuery.trim().length > 0) {
       setPaginationError(null);
       const reqId = ++searchReqIdRef.current;
-      setSearchLoading(true);
-      setSearchError(null);
+      setSearchState(createSearchState(debouncedQuery, 'loading'));
       listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', limit: 30 })
         .then((result) => {
           if (reqId !== searchReqIdRef.current) return;
-          setSearchResults(result.items.map(toViewModel));
-          setSearchCursor(result.nextCursor);
+          const items = result.items.map(toViewModel);
+          setSearchState(createSearchState(debouncedQuery, items.length > 0 ? 'ready' : 'empty', items, result.nextCursor));
         })
         .catch(() => {
           if (reqId !== searchReqIdRef.current) return;
-          setSearchError('Search failed');
-          setSearchResults([]);
+          setSearchState(createSearchState(debouncedQuery, 'error'));
         })
         .finally(() => {
           if (reqId === searchReqIdRef.current) {
-            setSearchLoading(false);
             setRefreshing(false);
           }
         });
     } else {
       void fetchSections();
     }
-  }, [fetchSections, searchResults, debouncedQuery]);
+  }, [fetchSections, searchState, debouncedQuery]);
 
-  // ── PASS 3.0A: Stale search invalidation with generation token ──
-  const searchReqIdRef = useRef(0);
-
+  // PASS 4: Clear stale results immediately on query change
   const handleSearchChange = useCallback((text: string) => {
-    // Increment generation immediately to invalidate any in-flight request
     searchReqIdRef.current++;
     setSearchQuery(text);
     setDebouncedQuery(text);
-    // Invalidate immediately — don't wait for next request
-    setSearchResults(text.trim().length === 0 ? null : searchResults);
-    setSearchCursor(null);
-    setSearchError(null);
+    if (text.trim().length === 0) {
+      setSearchState(IDLE_SEARCH_STATE);
+    } else {
+      // Clear previous results — no stale-result flash
+      setSearchState(createSearchState(text, 'loading'));
+    }
     setPaginationError(null);
-  }, [searchResults]);
+  }, []);
 
   const handleClearSearch = useCallback(() => {
     searchReqIdRef.current++;
     setSearchQuery('');
     setDebouncedQuery('');
-    setSearchResults(null);
-    setSearchCursor(null);
-    setSearchLoading(false);
-    setSearchError(null);
+    setSearchState(IDLE_SEARCH_STATE);
     setPaginationError(null);
   }, []);
 
   React.useEffect(() => {
     if (debouncedQuery.trim().length === 0) {
-      setSearchResults(null);
-      setSearchError(null);
-      setSearchCursor(null);
+      setSearchState(IDLE_SEARCH_STATE);
       return;
     }
     const timer = setTimeout(() => {
       const reqId = ++searchReqIdRef.current;
-      setSearchLoading(true);
-      setSearchError(null);
+      setSearchState(createSearchState(debouncedQuery, 'loading'));
       listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', limit: 30 })
         .then((result) => {
           if (reqId !== searchReqIdRef.current) return;
-          setSearchResults(result.items.map(toViewModel));
-          setSearchCursor(result.nextCursor);
+          const items = result.items.map(toViewModel);
+          setSearchState(createSearchState(debouncedQuery, items.length > 0 ? 'ready' : 'empty', items, result.nextCursor));
         })
         .catch(() => {
           if (reqId !== searchReqIdRef.current) return;
-          setSearchError('Search failed');
-          setSearchResults([]);
-        })
-        .finally(() => {
-          if (reqId === searchReqIdRef.current) {
-            setSearchLoading(false);
-          }
+          setSearchState(createSearchState(debouncedQuery, 'error'));
         });
     }, 400);
     return () => clearTimeout(timer);
@@ -626,20 +632,18 @@ export default function AuctionHomeScreen() {
   }, []);
 
   const loadMoreSearch = React.useCallback(async () => {
-    if (!searchCursor || isLoadingMoreSearch) return;
+    if (!searchState.cursor || isLoadingMoreSearch) return;
     setIsLoadingMoreSearch(true);
     setPaginationError(null);
     const reqId = ++searchReqIdRef.current;
     try {
-      const result = await listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', cursor: searchCursor, limit: 30 });
+      const result = await listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', cursor: searchState.cursor, limit: 30 });
       if (reqId !== searchReqIdRef.current) return;
-      setSearchResults((prev) => {
-        if (!prev) return prev;
-        const existingIds = new Set(prev.map((a) => a.id));
+      setSearchState((prev) => {
+        const existingIds = new Set(prev.items.map((a) => a.id));
         const newItems = result.items.map(toViewModel).filter((a) => !existingIds.has(a.id));
-        return [...prev, ...newItems];
+        return { ...prev, items: [...prev.items, ...newItems], cursor: result.nextCursor };
       });
-      setSearchCursor(result.nextCursor);
     } catch {
       if (reqId === searchReqIdRef.current) {
         setPaginationError('Failed to load more results');
@@ -649,11 +653,11 @@ export default function AuctionHomeScreen() {
         setIsLoadingMoreSearch(false);
       }
     }
-  }, [searchCursor, isLoadingMoreSearch, debouncedQuery]);
+  }, [searchState.cursor, isLoadingMoreSearch, debouncedQuery]);
 
   // ── PASS 3.0C: Deduplicate before attention filtering ──
   const sections = useMemo(() => {
-    if (searchResults !== null) return [];
+    if (searchState.status !== 'idle') return [];
 
     // Build canonical unique map before any section computation
     const canonicalMap = buildCanonicalMap([
@@ -670,7 +674,7 @@ export default function AuctionHomeScreen() {
     // 1. Needs your attention — uses canonical map, not raw collections
     const attentionItems: AuctionHomeItem[] = [];
     for (const item of canonicalMap.values()) {
-      if (isAttentionItem(item, nowMs)) {
+      if (isAttentionItem(item, minuteClock)) {
         attentionItems.push(item);
         usedIds.add(item.id);
       }
@@ -682,7 +686,7 @@ export default function AuctionHomeScreen() {
     // 2. Ending soon
     const endingSoonItems = sectionData.live.filter((item) => {
       if (usedIds.has(item.id)) return false;
-      return isEndingSoon(item, nowMs);
+      return isEndingSoon(item, minuteClock);
     });
     if (endingSoonItems.length > 0) {
       endingSoonItems.forEach((a) => usedIds.add(a.id));
@@ -692,8 +696,8 @@ export default function AuctionHomeScreen() {
     // 3. Live now
     const liveItems = sectionData.live.filter((item) => {
       if (usedIds.has(item.id)) return false;
-      const timing = resolveAuctionTiming(item, nowMs);
-      return timing.effectiveState === 'live' && !isEndingSoon(item, nowMs);
+      const timing = resolveAuctionTiming(item, minuteClock);
+      return timing.effectiveState === 'live' && !isEndingSoon(item, minuteClock);
     });
     if (liveItems.length > 0) {
       liveItems.forEach((a) => usedIds.add(a.id));
@@ -703,7 +707,7 @@ export default function AuctionHomeScreen() {
     // 4. Upcoming
     const upcomingItems = sectionData.upcoming.filter((item) => {
       if (usedIds.has(item.id)) return false;
-      const timing = resolveAuctionTiming(item, nowMs);
+      const timing = resolveAuctionTiming(item, minuteClock);
       return timing.effectiveState === 'upcoming';
     });
     if (upcomingItems.length > 0) {
@@ -714,7 +718,7 @@ export default function AuctionHomeScreen() {
     // 5. Watchlist
     const watchlistItems = sectionData.watchlist.filter((item) => {
       if (usedIds.has(item.id)) return false;
-      const timing = resolveAuctionTiming(item, nowMs);
+      const timing = resolveAuctionTiming(item, minuteClock);
       return timing.effectiveState === 'live' || timing.effectiveState === 'upcoming';
     });
     if (watchlistItems.length > 0) {
@@ -725,7 +729,7 @@ export default function AuctionHomeScreen() {
     // 6. Recently ended
     const endedItems = sectionData.ended.filter((item) => {
       if (usedIds.has(item.id)) return false;
-      const timing = resolveAuctionTiming(item, nowMs);
+      const timing = resolveAuctionTiming(item, minuteClock);
       return timing.effectiveState === 'ended';
     });
     if (endedItems.length > 0) {
@@ -744,7 +748,7 @@ export default function AuctionHomeScreen() {
     }
 
     return result;
-  }, [sectionData, nowMs]);
+  }, [sectionData, minuteClock, searchState.status]);
 
   const navigateToDetail = useCallback((auctionId: string) => {
     navigation.navigate('AuctionDetail', { auctionId });
@@ -759,46 +763,70 @@ export default function AuctionHomeScreen() {
   }, [navigation]);
 
   // ── Render dispatchers ──
+  // PASS 5: Attention and feed cards may show final-minute countdowns → secondClock
+  // Compact and ended cards never need second precision → minuteClock
   const renderAttentionItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
     <AuctionAttentionCard
       item={item}
-      nowMs={nowMs}
+      clockMs={secondClock}
       onPress={() => navigateToDetail(item.id)}
       formatFromFiat={formatFromFiat}
     />
-  ), [nowMs, navigateToDetail, formatFromFiat]);
+  ), [secondClock, navigateToDetail, formatFromFiat]);
 
   const renderFeedItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
     <AuctionFeedCard
       item={item}
-      nowMs={nowMs}
+      clockMs={secondClock}
       onPress={() => navigateToDetail(item.id)}
       formatFromFiat={formatFromFiat}
     />
-  ), [nowMs, navigateToDetail, formatFromFiat]);
+  ), [secondClock, navigateToDetail, formatFromFiat]);
 
   const renderCompactItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
     <AuctionCompactCard
       item={item}
-      nowMs={nowMs}
+      clockMs={minuteClock}
       onPress={() => navigateToDetail(item.id)}
       formatFromFiat={formatFromFiat}
     />
-  ), [nowMs, navigateToDetail, formatFromFiat]);
+  ), [minuteClock, navigateToDetail, formatFromFiat]);
 
   const renderEndedItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
     <AuctionEndedCard
       item={item}
-      nowMs={nowMs}
+      clockMs={minuteClock}
       onPress={() => navigateToDetail(item.id)}
       formatFromFiat={formatFromFiat}
     />
-  ), [nowMs, navigateToDetail, formatFromFiat]);
+  ), [minuteClock, navigateToDetail, formatFromFiat]);
 
   const renderSection = useCallback((section: Section) => {
-    if (section.items.length === 0) return null;
-
     const isHorizontal = section.kind === 'upcoming' || section.kind === 'watchlist';
+    const sectionState = sectionData.sectionStates[section.kind];
+
+    // PASS 3: If section errored, render error+retry even with no items
+    if (section.items.length === 0) {
+      if (sectionState?.status === 'error') {
+        return (
+          <View key={section.kind} style={styles.sectionWrap}>
+            <SectionHeader title={section.title} />
+            <View style={styles.sectionErrorCard}>
+              <Meta style={styles.sectionErrorText}>{section.title} is unavailable</Meta>
+              <Pressable
+                onPress={() => void fetchSections()}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Retry ${section.title}`}
+              >
+                <Text style={styles.retryBtn}>Retry</Text>
+              </Pressable>
+            </View>
+          </View>
+        );
+      }
+      return null;
+    }
 
     let renderItem: (props: { item: AuctionHomeItem }) => React.ReactElement;
     if (section.kind === 'attention') renderItem = renderAttentionItem;
@@ -827,15 +855,9 @@ export default function AuctionHomeScreen() {
             ItemSeparatorComponent={() => <View style={{ height: Space.sm }} />}
           />
         )}
-        {sectionData.sectionErrors[section.kind] && (
-          <View style={styles.sectionErrorBanner}>
-            <Ionicons name="alert-circle-outline" size={12} color={Colors.textMuted} />
-            <Meta style={styles.sectionErrorText}>Section unavailable</Meta>
-          </View>
-        )}
       </View>
     );
-  }, [renderAttentionItem, renderFeedItem, renderCompactItem, renderEndedItem, sectionData.sectionErrors]);
+  }, [renderAttentionItem, renderFeedItem, renderCompactItem, renderEndedItem, sectionData.sectionStates, fetchSections]);
 
   const renderHeader = useCallback(() => (
     <View>
@@ -892,7 +914,7 @@ export default function AuctionHomeScreen() {
     </View>
   ), []);
 
-  const isSearching = searchResults !== null;
+  const isSearching = searchState.status !== 'idle';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -914,7 +936,7 @@ export default function AuctionHomeScreen() {
         </Pressable>
         <BodyEmphasis style={styles.headerTitle}>Auctions</BodyEmphasis>
         <Pressable
-          onPress={() => { haptics.tap(); navigation.navigate('MyBids'); }}
+          onPress={() => navigation.navigate('MyBids')}
           hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="My auction activity"
@@ -926,21 +948,21 @@ export default function AuctionHomeScreen() {
 
       {isSearching ? (
         <FlashList
-          data={searchResults}
+          data={searchState.items}
           keyExtractor={(item) => item.id}
           renderItem={renderFeedItem}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={
-            searchLoading ? renderLoadingState() : (
+            searchState.status === 'loading' ? renderLoadingState() : (
               <EmptyState
                 icon="search-outline"
-                title="No results"
-                subtitle={searchError ?? `No auctions match "${searchQuery}"`}
+                title={searchState.status === 'error' ? 'Search failed' : 'No results'}
+                subtitle={searchState.status === 'error' ? 'Pull to refresh and try again.' : `No auctions match "${searchQuery}"`}
               />
             )
           }
           ListFooterComponent={
-            searchCursor ? (
+            searchState.cursor ? (
               <View style={styles.loadMoreWrap}>
                 {paginationError && (
                   <Meta style={styles.paginationErrorText}>{paginationError}</Meta>
@@ -1064,6 +1086,23 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: Space.md,
     paddingTop: Space.xs,
+  },
+  sectionErrorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    marginHorizontal: Space.md,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  retryBtn: {
+    fontSize: 13,
+    color: Colors.brand,
+    fontWeight: '600',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
   },
   sectionErrorText: {
     color: Colors.textMuted,
