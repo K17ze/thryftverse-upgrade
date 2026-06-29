@@ -114,6 +114,8 @@ export function BuyNowSheet({
 
       if (txError.transactionPossible) {
         await onRefreshDetail();
+        // Reset idempotency key so the next attempt gets a fresh key
+        idempotencyKeyRef.current = null;
         setStage('review');
       } else {
         setStage('error');

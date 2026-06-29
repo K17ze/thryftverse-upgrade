@@ -149,6 +149,24 @@ export function BidSheet({
   const handleConfirmBid = async () => {
     if (isSubmitting || gbpAmount === null) return;
 
+    // Stale check — refresh if sheet has been open > 30s since last review
+    if (isSheetStateStale(sheetOpenedAtMs, Date.now())) {
+      await onRefreshDetail();
+      // Re-validate after refresh in case minimum changed
+      const result = validateBidEntry(bidInput, currencyCode, goldRates, {
+        minimumNextBidGbp: auction.minimumNextBidGbp,
+        isSeller: auction.isSeller,
+        effectiveState: auction.effectiveState,
+        isSubmitting,
+      });
+      if (!result.valid || !result.gbpAmount) {
+        setError(result.error);
+        setStage('entry');
+        return;
+      }
+      setGbpAmount(result.gbpAmount);
+    }
+
     // Create idempotency key once per attempt
     if (!idempotencyKeyRef.current) {
       idempotencyKeyRef.current = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -178,6 +196,8 @@ export function BidSheet({
         if (txError.updatedMinimumGbp) {
           setCurrentMinimum(txError.updatedMinimumGbp);
         }
+        // Reset idempotency key so the next attempt gets a fresh key
+        idempotencyKeyRef.current = null;
         setStage('entry');
       } else {
         setStage('error');
