@@ -69,6 +69,11 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
     navigation.goBack();
   };
 
+  const modeLabel =
+    preview.listingMode === 'auction' ? 'Auction' :
+    preview.listingMode === 'co_own' ? 'Co-Own' :
+    'Fixed price';
+
   return (
     <View style={styles.container}>
       <ScrollView

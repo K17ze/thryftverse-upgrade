@@ -28,6 +28,12 @@ export interface UploadQueueState {
   totalCount: number;
 }
 
+export interface UploadQueueResult {
+  state: UploadQueueItemState;
+  publicUrl: string | null;
+  error: string | null;
+}
+
 export type UploadQueueListener = (state: UploadQueueState) => void;
 
 const MAX_CONCURRENCY = 2;
@@ -39,24 +45,57 @@ export class MediaUploadQueue {
   private running = false;
   private activeCount = 0;
   private completionResolver: ((state: UploadQueueState) => void) | null = null;
+  private runPromise: Promise<UploadQueueState> | null = null;
 
   /* ── public API ── */
 
   addAssets(assets: MediaUploadAsset[]): UploadQueueItem[] {
-    const startOrder = this.items.length;
-    const newItems: UploadQueueItem[] = assets.map((asset, i) => ({
-      id: asset.id,
-      asset,
-      order: startOrder + i,
-      state: 'pending',
-      attemptCount: 0,
-      publicUrl: null,
-      error: null,
-      retryable: true,
-    }));
-    this.items.push(...newItems);
+    const added: UploadQueueItem[] = [];
+    for (const asset of assets) {
+      const existing = this.items.find((i) => i.id === asset.id);
+      if (existing) {
+        if (existing.state === 'uploaded') {
+          // already uploaded: do not re-add
+          continue;
+        }
+        if (existing.state === 'pending' || existing.state === 'uploading' || existing.state === 'preparing') {
+          // already in progress: do not duplicate
+          continue;
+        }
+        if (existing.state === 'failed') {
+          // retryable: reset existing item to pending
+          if (existing.retryable && existing.attemptCount < MAX_RETRIES) {
+            existing.state = 'pending';
+            existing.error = null;
+          }
+          continue;
+        }
+        if (existing.state === 'cancelled') {
+          // cancelled items require explicit restore; do not re-add
+          continue;
+        }
+        if (existing.asset.uri !== asset.uri) {
+          // conflicting same ID with different URI: reject
+          throw new Error(`Conflicting asset ID ${asset.id}: existing URI ${existing.asset.uri} vs new URI ${asset.uri}`);
+        }
+        continue;
+      }
+      const item: UploadQueueItem = {
+        id: asset.id,
+        asset,
+        order: this.items.length,
+        state: 'pending',
+        attemptCount: 0,
+        publicUrl: null,
+        error: null,
+        retryable: true,
+      };
+      this.items.push(item);
+      added.push(item);
+    }
+    this.renumber();
     this.emit();
-    return newItems;
+    return added;
   }
 
   retryFailed(): void {
@@ -83,20 +122,24 @@ export class MediaUploadQueue {
     return true;
   }
 
-  /** Cancel only pending items. In-flight uploads continue to completion; the result is ignored. */
+  /**
+   * Cancel a pending item immediately.
+   * For in-flight items, mark as 'finishing' (processItem will transition to cancelled
+   * after the network request completes, without mutating uploaded state).
+   */
   cancelItem(itemId: string): boolean {
     const item = this.items.find((i) => i.id === itemId);
     if (!item) return false;
     if (item.state === 'uploaded') return false;
-    // Only cancel if not currently uploading; in-flight items are marked but allowed to finish
-    if (item.state === 'uploading' || item.state === 'preparing') {
-      // Mark for cancellation; processItem checks this after each network step
+    if (item.state === 'pending') {
       item.state = 'cancelled';
-    } else {
-      item.state = 'cancelled';
+      item.error = null;
+      item.retryable = false;
+      this.emit();
+      return true;
     }
-    item.error = null;
-    item.retryable = false;
+    // In-flight (preparing/uploading): mark with special state so processItem can handle it
+    (item as any)._cancelRequested = true;
     this.emit();
     return true;
   }
@@ -157,6 +200,7 @@ export class MediaUploadQueue {
     this.running = false;
     this.activeCount = 0;
     this.completionResolver = null;
+    this.runPromise = null;
     this.emit();
   }
 
@@ -168,12 +212,29 @@ export class MediaUploadQueue {
     };
   }
 
-  /** Start processing and return a promise that resolves when the queue finishes. */
+  /** Start processing and return a promise that resolves exactly once when the queue finishes. */
   run(): Promise<UploadQueueState> {
-    return new Promise((resolve) => {
+    if (this.runPromise) {
+      return this.runPromise;
+    }
+    this.runPromise = new Promise((resolve) => {
       this.completionResolver = resolve;
       this.start();
     });
+    return this.runPromise;
+  }
+
+  /** Return a deterministic result map keyed by stable asset ID. */
+  getResultMap(): Map<string, UploadQueueResult> {
+    const map = new Map<string, UploadQueueResult>();
+    for (const item of this.items) {
+      map.set(item.id, {
+        state: item.state,
+        publicUrl: item.publicUrl,
+        error: item.error,
+      });
+    }
+    return map;
   }
 
   start(): void {
@@ -213,6 +274,7 @@ export class MediaUploadQueue {
         this.completionResolver(this.getState());
         this.completionResolver = null;
       }
+      this.runPromise = null;
     }
   }
 
@@ -262,24 +324,45 @@ export class MediaUploadQueue {
       const { asset } = item;
       const presign = await presignUpload(asset.fileName, asset.mimeType, 'listings');
 
-      // If item was cancelled while presigning, abort
-      if (this.getItemState(item.id) === 'cancelled') return;
+      // If cancellation was requested while presigning, transition to cancelled and abort
+      if ((item as any)._cancelRequested) {
+        item.state = 'cancelled';
+        item.error = null;
+        item.retryable = false;
+        delete (item as any)._cancelRequested;
+        this.emit();
+        return;
+      }
 
       item.state = 'uploading';
       this.emit();
 
       await uploadToPresignedUrl(presign.url, asset.uri, asset.mimeType);
 
-      // If item was cancelled while uploading, ignore the result
-      if (this.getItemState(item.id) === 'cancelled') return;
+      // If cancellation was requested while uploading, transition to cancelled and ignore result
+      if ((item as any)._cancelRequested) {
+        item.state = 'cancelled';
+        item.error = null;
+        item.retryable = false;
+        delete (item as any)._cancelRequested;
+        this.emit();
+        return;
+      }
 
       item.state = 'uploaded';
       item.publicUrl = presign.publicUrl;
       item.error = null;
       item.retryable = false;
     } catch (err: unknown) {
-      // If item was cancelled during upload, do not overwrite to failed
-      if (this.getItemState(item.id) === 'cancelled') return;
+      // If cancellation was requested during upload, transition to cancelled, not failed
+      if ((item as any)._cancelRequested) {
+        item.state = 'cancelled';
+        item.error = null;
+        item.retryable = false;
+        delete (item as any)._cancelRequested;
+        this.emit();
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Upload failed';
       item.state = 'failed';
       item.error = message;
@@ -287,9 +370,5 @@ export class MediaUploadQueue {
     }
 
     this.emit();
-  }
-
-  private getItemState(itemId: string): UploadQueueItemState {
-    return this.items.find((i) => i.id === itemId)?.state ?? 'cancelled';
   }
 }
