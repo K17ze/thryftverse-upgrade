@@ -132,20 +132,29 @@ export async function createGroupConversationOnApi(input: {
   title: string;
   memberIds: string[];
   itemId?: string;
+  idempotencyKey?: string;
+  description?: string;
+  avatar?: string;
 }): Promise<Conversation> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (input.idempotencyKey) {
+    headers['X-Idempotency-Key'] = input.idempotencyKey;
+  }
   const payload = await fetchJson<{
     ok: true;
     conversation: ApiConversationPayload;
     initialMessage: ApiMessagePayload | null;
   }>('/chat/groups', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       title: input.title.trim(),
       memberIds: input.memberIds,
       itemId: input.itemId,
+      description: input.description,
+      avatar: input.avatar,
     }),
   });
 
@@ -323,7 +332,7 @@ export async function fetchConversationFromApi(conversationId: string): Promise<
 
 export async function updateConversationOnApi(
   conversationId: string,
-  updates: { title?: string }
+  updates: { title?: string; description?: string; avatar?: string }
 ): Promise<void> {
   await fetchJson<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
     method: 'PATCH',

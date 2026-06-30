@@ -14,23 +14,18 @@ import {
 
   FlatList,
 
-  ActivityIndicator,
-
   Alert,
-
-  Share,
+  KeyboardAvoidingView,
+  Pressable,
 
 } from 'react-native';
-
-
-import Reanimated from 'react-native-reanimated';
 
 import { Ionicons } from '@expo/vector-icons';
 
 import NetInfo from '@react-native-community/netinfo';
 
 import { AppState } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 
 import { StackScreenProps } from '@react-navigation/stack';
 
@@ -42,14 +37,11 @@ import { TypeStyles } from '../theme/designTokens';
 
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
-import type { Message as ConversationMessage } from '../data/mockData';
-
 import { useBackendData } from '../context/BackendDataContext';
 
 import { getListingCoverUri, isVideoUri } from '../utils/media';
 
 import { useStore } from '../store/useStore';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 import {
 
@@ -63,12 +55,6 @@ import {
 
 import { useToast } from '../context/ToastContext';
 
-import { CachedImage } from '../components/CachedImage';
-
-import { AppStatusPill } from '../components/ui/AppStatusPill';
-
-import { AppSearchBar } from '../components/ui/AppSearchBar';
-
 import { useHaptic } from '../hooks/useHaptic';
 
 
@@ -78,9 +64,15 @@ import { MessageBubble } from '../components/chat/MessageBubble';
 
 import { MarketplaceChatCard } from '../components/chat/MarketplaceChatCard';
 
+import { ChatTopBar } from '../components/chat/ChatTopBar';
+
+import { ChatListingContextBar } from '../components/chat/ChatListingContextBar';
+
 import { ChatActionSheet, ChatAction } from '../components/chat/ChatActionSheet';
 
-import { Space, Radius, Type, Elevation } from '../theme/designTokens';
+import { AttachmentReviewSheet } from '../components/chat/AttachmentReviewSheet';
+
+import { Space, Radius, Type } from '../theme/designTokens';
 
 import { MessageContextMenu } from '../components/chat/MessageContextMenu';
 
@@ -98,7 +90,16 @@ import * as Clipboard from 'expo-clipboard';
 
 import * as ImagePicker from 'expo-image-picker';
 
-import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
+import { Caption } from '../components/ui/Text';
+
+import {
+  isFirstInCluster as isFirstInClusterHelper,
+  isLastInCluster as isLastInClusterHelper,
+} from '../utils/messageGrouping';
+
+import { detectChatSafetyWarning } from '../utils/chatSafetyWarnings';
+
+import { isTrustedSystemMessage, resolveSystemMessageProvenance } from '../utils/systemMessageProvenance';
 
 
 
@@ -106,7 +107,7 @@ type Props = StackScreenProps<RootStackParamList, 'Chat'>;
 
 
 
-type MsgType = 'text' | 'offer' | 'offer_declined' | 'purchase_status' | 'media';
+type MsgType = 'text' | 'offer' | 'offer_declined' | 'purchase_status' | 'media' | 'system';
 
 
 
@@ -118,9 +119,15 @@ interface Message {
 
   sender: 'me' | 'them';
 
+  senderId?: string;
+
   senderLabel?: string;
 
   text?: string;
+
+  isSystem?: boolean;
+
+  systemTitle?: string;
 
   offer?: { price: number; originalPrice: number; status?: 'pending' | 'declined' | 'countered' | 'accepted' };
 
@@ -146,153 +153,20 @@ const INITIAL_MESSAGES: Message[] = [];
 
 
 
-function TaggedItemCard({
-  itemId,
-  navigation,
-  formatFromFiat,
-  currentUserId,
-}: {
-  itemId?: string;
-  navigation: any;
-  formatFromFiat: any;
-  currentUserId?: string | null;
-}) {
-
-  const { show } = useToast();
-  const { listings } = useBackendData();
-
-  const listing = useMemo(() => {
-
-    if (!itemId) return null;
-
-    return listings.find((l) => l.id === itemId) || null;
-
-  }, [itemId, listings]);
-
-
-
-  if (!listing) return null;
-
-  const isOwner = listing.sellerId === currentUserId;
-  const isSold = !!listing.isSold;
-
-  const handleShareListing = async () => {
-    try {
-      await Share.share({ message: `Check out "${listing.title}" on ThryftVerse` });
-    } catch {
-      await Clipboard.setStringAsync(`ThryftVerse listing: ${listing.title}`);
-      show('Listing link copied to clipboard', 'success');
-    }
-  };
-
-  return (
-
-    <View style={styles.contextGallery}>
-
-      <AnimatedPressable
-
-        style={styles.itemCard}
-
-        onPress={() => navigation.navigate('ItemDetail', { itemId: listing.id })}
-
-        activeOpacity={0.85}
-
-        scaleValue={0.98}
-
-        hapticFeedback="light"
-
-        accessibilityLabel="View listing"
-        accessibilityRole="button"
-      >
-
-        <View style={[styles.itemCardRow, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-          <CachedImage
-            uri={getListingCoverUri(listing.images, '')}
-            style={styles.itemThumbImageV2}
-            containerStyle={styles.itemThumbV2}
-            contentFit="cover"
-          />
-          <View style={styles.itemInfo}>
-            <BodyEmphasis numberOfLines={1}>{listing.title}</BodyEmphasis>
-            <Caption color={Colors.textSecondary}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Caption>
-            {listing.condition && (
-              <View style={styles.itemMetaRow}>
-                <Caption color={Colors.textMuted}>{listing.condition}</Caption>
-                {listing.brand && <Caption color={Colors.textMuted}> · {listing.brand}</Caption>}
-              </View>
-            )}
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-        </View>
-
-        {/* Quick actions — refined to primary + secondary only */}
-        <View style={styles.itemQuickActionsV2}>
-          {isOwner ? (
-            <AnimatedPressable
-              style={styles.itemPrimaryBtn}
-              onPress={() => navigation.navigate('ManageListing', { itemId: listing.id })}
-              activeOpacity={0.8}
-              scaleValue={0.95}
-              hapticFeedback="light"
-              accessibilityLabel="Manage listing"
-            >
-              <Ionicons name="settings-outline" size={14} color={Colors.textInverse} />
-              <Caption color={Colors.textInverse} style={styles.itemPrimaryBtnText}>Manage</Caption>
-            </AnimatedPressable>
-          ) : isSold ? (
-            <View style={styles.itemPrimaryBtn}>
-              <Ionicons name="bag-check-outline" size={14} color={Colors.textInverse} />
-              <Caption color={Colors.textInverse} style={styles.itemPrimaryBtnText}>Sold</Caption>
-            </View>
-          ) : (
-            <>
-              <AnimatedPressable
-                style={styles.itemPrimaryBtn}
-                onPress={() => navigation.navigate('Checkout', { itemId: listing.id })}
-                activeOpacity={0.8}
-                scaleValue={0.95}
-                hapticFeedback="light"
-                accessibilityLabel="Buy now"
-              >
-                <Ionicons name="flash-outline" size={14} color={Colors.textInverse} />
-                <Caption color={Colors.textInverse} style={styles.itemPrimaryBtnText}>Buy now</Caption>
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={styles.itemSecondaryBtn}
-                onPress={() => navigation.navigate('MakeOffer', { itemId: listing.id, price: listing.price, title: listing.title })}
-                activeOpacity={0.8}
-                scaleValue={0.95}
-                hapticFeedback="light"
-                accessibilityLabel="Make offer"
-              >
-                <Ionicons name="chatbubbles-outline" size={14} color={Colors.textPrimary} />
-                <Caption color={Colors.textPrimary} style={styles.itemSecondaryBtnText}>Offer</Caption>
-              </AnimatedPressable>
-            </>
-          )}
-          <AnimatedPressable
-            style={styles.itemSecondaryBtn}
-            onPress={handleShareListing}
-            activeOpacity={0.8}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            accessibilityLabel="Share listing"
-            accessibilityRole="button"
-          >
-            <Ionicons name="share-outline" size={14} color={Colors.textSecondary} />
-            <Caption color={Colors.textSecondary} style={styles.itemSecondaryBtnText}>Share</Caption>
-          </AnimatedPressable>
-        </View>
-
-      </AnimatedPressable>
-
-    </View>
-
-  );
-
+function formatDateSeparator(dateStr: string): string | null {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const input = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((today.getTime() - input.getTime()) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) {
+    return d.toLocaleDateString(undefined, { weekday: 'short' });
+  }
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 }
-
-
 
 export default function ChatScreen({ navigation, route }: Props) {
 
@@ -319,6 +193,11 @@ export default function ChatScreen({ navigation, route }: Props) {
   const haptic = useHaptic();
 
   const insets = useSafeAreaInsets();
+
+  const { listings } = useBackendData();
+
+  const sellerQuickReplies = useStore((state) => state.sellerQuickReplies);
+  const buyerQuickReplies = useStore((state) => state.buyerQuickReplies);
 
   const conversation = useMemo(
 
@@ -404,6 +283,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           sender,
 
+          senderId: resolvedSenderId,
+
           senderLabel,
 
           offer: {
@@ -426,13 +307,19 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         id: entry.id,
 
-        type: entry.mediaUri ? 'media' : 'text',
+        type: entry.isSystem || entry.type === 'system' ? 'system' : entry.mediaUri ? 'media' : 'text',
 
         sender,
+
+        senderId: resolvedSenderId,
 
         senderLabel,
 
         text: entry.text ?? entry.systemTitle ?? '',
+
+        isSystem: entry.isSystem,
+
+        systemTitle: entry.systemTitle,
 
         date: entry.timestamp,
 
@@ -480,7 +367,11 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const [syncError, setSyncError] = useState(false);
+
   const [attachmentPickerVisible, setAttachmentPickerVisible] = useState(false);
+
+  const [pendingAttachment, setPendingAttachment] = useState<{ uri: string; mediaType: 'image' | 'video' } | null>(null);
 
   const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
 
@@ -536,6 +427,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     setIsSyncing(true);
 
+    setSyncError(false);
+
     try {
 
       const syncedMessages = await fetchConversationMessagesFromApi(conversationId);
@@ -546,7 +439,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     } catch {
 
-      // Keep local state when sync unavailable
+      setSyncError(true);
 
     } finally {
 
@@ -1168,6 +1061,64 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 
 
+  const handleRetrySendMessage = (msgId: string) => {
+
+    const msg = messages.find((m) => m.id === msgId);
+
+    if (!msg?.text || msg.status === 'sending') return;
+
+    setMessages((prev) =>
+
+      prev.map((m) =>
+
+        m.id === msgId ? { ...m, status: 'sending' as const } : m
+
+      )
+
+    );
+
+    sendConversationMessageOnApi(conversationId, msg.text)
+
+      .then((serverMsg) => {
+
+        setMessages((prev) =>
+
+          prev.map((m) =>
+
+            m.id === msgId
+
+              ? { ...m, id: serverMsg.id, status: 'sent' as const }
+
+              : m
+
+          )
+
+        );
+
+      })
+
+      .catch(() => {
+
+        setMessages((prev) =>
+
+          prev.map((m) =>
+
+            m.id === msgId ? { ...m, status: 'failed' as const } : m
+
+          )
+
+        );
+
+        show('Message failed to send. Tap to retry.', 'error');
+
+      });
+
+    haptic.light();
+
+  };
+
+
+
   const createMediaMessage = (uri: string): Message => {
 
     const mediaType = isVideoUri(uri) ? 'video' : 'image';
@@ -1220,19 +1171,11 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           const uri = result.assets[0].uri;
 
-          const outgoing = createMediaMessage(uri);
+          const mediaType = isVideoUri(uri) ? 'video' : 'image';
 
-          pushMessage(outgoing);
+          setPendingAttachment({ uri, mediaType });
 
-          appendToConversationStore(outgoing, currentUser?.id ?? 'me');
-
-          show(mediaTypeLabel(outgoing.mediaType!) + ' attached', 'success');
-
-          haptic.success();
-
-          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-
-          sendMediaMessage(outgoing.id, uri, outgoing.mediaType!);
+          haptic.light();
 
         }
 
@@ -1262,19 +1205,11 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           const uri = result.assets[0].uri;
 
-          const outgoing = createMediaMessage(uri);
+          const mediaType = isVideoUri(uri) ? 'video' : 'image';
 
-          pushMessage(outgoing);
+          setPendingAttachment({ uri, mediaType });
 
-          appendToConversationStore(outgoing, currentUser?.id ?? 'me');
-
-          show(mediaTypeLabel(outgoing.mediaType!) + ' captured', 'success');
-
-          haptic.success();
-
-          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-
-          sendMediaMessage(outgoing.id, uri, outgoing.mediaType!);
+          haptic.light();
 
         }
 
@@ -1286,6 +1221,21 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     }
 
+  };
+
+  const handleSendPendingAttachment = (caption: string) => {
+    if (!pendingAttachment) return;
+    const { uri, mediaType } = pendingAttachment;
+    const outgoing = createMediaMessage(uri);
+    if (caption) {
+      outgoing.text = caption;
+    }
+    pushMessage(outgoing);
+    appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+    haptic.success();
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    sendMediaMessage(outgoing.id, uri, mediaType);
+    setPendingAttachment(null);
   };
 
 
@@ -1329,8 +1279,19 @@ export default function ChatScreen({ navigation, route }: Props) {
   const renderMessage = (msg: Message, index: number) => {
     const prevMsg = messages[index - 1];
     const nextMsg = messages[index + 1];
-    const isFirstInCluster = !prevMsg || prevMsg.sender !== msg.sender;
-    const isLastInCluster = !nextMsg || nextMsg.sender !== msg.sender;
+
+    const clusterFirst = isFirstInClusterHelper(
+      { sender: msg.sender, type: msg.type, date: msg.date },
+      prevMsg ? { sender: prevMsg.sender, type: prevMsg.type, date: prevMsg.date } : undefined
+    );
+
+    const clusterLast = isLastInClusterHelper(
+      { sender: msg.sender, type: msg.type, date: msg.date },
+      nextMsg ? { sender: nextMsg.sender, type: nextMsg.type, date: nextMsg.date } : undefined
+    );
+
+    const isFirstInCluster = clusterFirst;
+    const isLastInCluster = clusterLast;
 
     // Spacing tiers (8px base grid)
     let spacingTop: number = Space.sm;
@@ -1343,45 +1304,24 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (isLastInCluster) marginBottom = Space.sm;
 
     const showDateSeparator = dateSeparatorIndices.has(index);
-    const dateLabel = msg.date
-      ? (() => {
-          try {
-            const d = new Date(msg.date);
-            return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-          } catch {
-            return msg.date.split('T')[0] ?? msg.date;
-          }
-        })()
-      : null;
+    const dateLabel = msg.date ? formatDateSeparator(msg.date) : null;
 
     const dateSeparator = showDateSeparator && dateLabel ? (
       <View style={styles.dateWrap}>
-        <View style={styles.datePill}>
-          <Caption color={Colors.textMuted} style={styles.dateText}>{dateLabel}</Caption>
-        </View>
+        <Text style={styles.dateText}>{dateLabel}</Text>
       </View>
     ) : null;
 
-    // Purchase status message
+    // Purchase status message — inline centered event
     if (msg.type === 'purchase_status') {
-      const lines = msg.text!.split('\n');
       const content = (
-        <Reanimated.View key={msg.id} style={styles.statusWrap}>
-          <View style={styles.statusCardSolid}>
-            <BodyEmphasis style={styles.statusTitle}>{lines[0]}</BodyEmphasis>
-            <Caption color={Colors.textSecondary} style={styles.statusBody}>{lines.slice(1).join('\n')}</Caption>
-            <AnimatedPressable
-              onPress={() => show('Tracking requires a linked order. Use My Orders for tracking.', 'info')}
-              accessibilityRole="button"
-              accessibilityLabel="Open tracking"
-              activeOpacity={0.7}
-              scaleValue={0.98}
-              hapticFeedback="light"
-            >
-              <Caption color={Colors.brand} style={styles.statusLink}>Tracking information</Caption>
-            </AnimatedPressable>
-          </View>
-        </Reanimated.View>
+        <View key={msg.id} style={styles.statusWrap}>
+          <MarketplaceChatCard
+            type="purchase_status"
+            text={msg.text}
+          />
+          <Text style={styles.statusHint}>Open My Orders for tracking information.</Text>
+        </View>
       );
       return dateSeparator ? (
         <View key={msg.id + '_group'}>
@@ -1391,57 +1331,45 @@ export default function ChatScreen({ navigation, route }: Props) {
       ) : content;
     }
 
-    // Offer message
+    // System message — only render trusted styling if provenance is verified
+    if ((msg.type === 'system' || msg.isSystem) && msg.senderId && isTrustedSystemMessage({ id: msg.id, senderId: msg.senderId, isSystem: msg.isSystem, type: msg.type === 'system' ? 'system' : undefined, systemTitle: msg.systemTitle, text: msg.text, timestamp: msg.date ?? '' } as any)) {
+      const provenance = resolveSystemMessageProvenance({ id: msg.id, senderId: msg.senderId, isSystem: msg.isSystem, type: msg.type === 'system' ? 'system' : undefined, systemTitle: msg.systemTitle, text: msg.text, timestamp: msg.date ?? '' } as any);
+      const content = (
+        <View key={msg.id} style={styles.statusWrap}>
+          <MarketplaceChatCard
+            type="system"
+            systemTitle={msg.systemTitle}
+            text={msg.text}
+          />
+          {provenance.isProtected && (
+            <Text style={styles.systemProvenanceBadge}>Verified</Text>
+          )}
+        </View>
+      );
+      return dateSeparator ? (
+        <View key={msg.id + '_group'}>
+          {dateSeparator}
+          {content}
+        </View>
+      ) : content;
+    }
+
+    // Offer message — use MarketplaceChatCard
     if (msg.type === 'offer' || msg.type === 'offer_declined') {
       const isMe = msg.sender === 'me';
-      const offerStatus = msg.offer!.status;
       const content = (
-        <Reanimated.View key={msg.id} style={[styles.msgRow, isMe && styles.msgRowRight, { marginTop: spacingTop, marginBottom }]}>
-          <View style={[styles.offerCard, isMe && styles.offerCardMe]}>
-            {isGroup && !isMe && msg.senderLabel ? (
-              <Meta color={Colors.textMuted} style={styles.offerSender}>{msg.senderLabel}</Meta>
-            ) : null}
-            <View style={styles.offerPriceRow}>
-              <Text style={styles.offerPriceText}>{formatFromFiat(msg.offer!.price, 'GBP', { displayMode: 'fiat' })}</Text>
-              <Caption color={Colors.textMuted}>
-                <Text style={styles.strike}>{formatFromFiat(msg.offer!.originalPrice, 'GBP', { displayMode: 'fiat' })}</Text>
-              </Caption>
-            </View>
-            {offerStatus === 'declined' && (
-              <AppStatusPill style={styles.offerPill} tone="negative" iconName="close-circle-outline" label="Declined" />
-            )}
-            {offerStatus === 'accepted' && (
-              <AppStatusPill style={styles.offerPill} tone="positive" iconName="checkmark-circle-outline" label="Accepted" />
-            )}
-            {!offerStatus && isMe && (
-              <AppStatusPill style={styles.offerPill} tone="neutral" iconName="time-outline" label="Waiting" />
-            )}
-            {!isMe && !offerStatus && (
-              <View style={styles.offerActions}>
-                <AnimatedPressable
-                  style={styles.passBtn}
-                  onPress={() => handleDeclineOffer(msg.id)}
-                  activeOpacity={0.85}
-                  scaleValue={0.96}
-                  hapticFeedback="light"
-                >
-                  <Ionicons name="close-outline" size={14} color={Colors.textPrimary} />
-                  <Text style={styles.passBtnText}>Pass</Text>
-                </AnimatedPressable>
-                <AnimatedPressable
-                  style={styles.acceptBtn}
-                  onPress={() => handleAcceptOffer(msg.id)}
-                  activeOpacity={0.85}
-                  scaleValue={0.96}
-                  hapticFeedback="medium"
-                >
-                  <Ionicons name="flash-outline" size={14} color={Colors.textInverse} />
-                  <Text style={styles.acceptBtnText}>Accept</Text>
-                </AnimatedPressable>
-              </View>
-            )}
-          </View>
-        </Reanimated.View>
+        <View key={msg.id} style={[styles.msgRow, isMe && styles.msgRowRight, { marginTop: spacingTop, marginBottom }]}>
+          <MarketplaceChatCard
+            type="offer"
+            isMe={isMe}
+            senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
+            offer={msg.offer}
+            formattedPrice={formatFromFiat(msg.offer!.price, 'GBP', { displayMode: 'fiat' })}
+            formattedOriginalPrice={formatFromFiat(msg.offer!.originalPrice, 'GBP', { displayMode: 'fiat' })}
+            onAccept={() => handleAcceptOffer(msg.id)}
+            onDecline={() => handleDeclineOffer(msg.id)}
+          />
+        </View>
       );
       return dateSeparator ? (
         <View key={msg.id + '_group'}>
@@ -1469,7 +1397,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             ) : null}
           </AnimatedPressable>
         ) : null}
-        <Reanimated.View
+        <View
           key={msg.id}
           style={[styles.msgRow, isMe && styles.msgRowRight, { marginTop: spacingTop, marginBottom }]}
         >
@@ -1518,7 +1446,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             mediaUri={msg.mediaUri}
             mediaType={msg.mediaType}
             uploadStatus={msg.uploadStatus}
-            onRetry={msg.uploadStatus === 'failed' ? () => handleRetryUpload(msg.id) : undefined}
+            onRetry={msg.uploadStatus === 'failed' ? () => handleRetryUpload(msg.id) : msg.status === 'failed' ? () => handleRetrySendMessage(msg.id) : undefined}
             isFirstInCluster={isFirstInCluster}
             isLastInCluster={isLastInCluster}
             showAvatar={!isMe && isFirstInCluster}
@@ -1531,7 +1459,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               </View>
             ) : null;
           })()}
-        </Reanimated.View>
+        </View>
       </View>
     );
 
@@ -1549,15 +1477,51 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 
 
-  return (
+  const avatarUri = !isGroup
+    ? (conversation?.avatar ||
+      (resolvedPartnerId ? profileMediaOverrides[resolvedPartnerId]?.avatar : undefined) ||
+      null)
+    : null;
+  const topBarTitle = isGroup ? (conversation?.title ?? 'Group chat') : sellerHandle;
+  const topBarSubtitle = isGroup
+    ? `${conversation?.participantIds?.length ?? 0} members`
+    : 'Marketplace chat';
+  const topBarInitials = isGroup
+    ? (conversation?.title?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? 'G')
+    : (sellerHandle.slice(0, 2).toUpperCase());
 
-    <FlagshipScreen
-      header={
-        <FlagshipHeader
-          title={isGroup ? (conversation?.title ?? 'Group chat') : '@' + sellerHandle}
-          subtitle={isGroup ? (conversation?.participantIds?.length ?? 0) + ' members' : undefined}
+  const linkedListing = useMemo(() => {
+    const itemId = routeItemId ?? conversation?.itemId;
+    if (!itemId) return null;
+    return listings.find((l) => l.id === itemId) ?? null;
+  }, [routeItemId, conversation?.itemId, listings]);
+
+  return (
+    <SafeAreaView edges={['bottom']} style={styles.screenRoot}>
+      <KeyboardAvoidingView
+        style={styles.screenRoot}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
+        <ChatTopBar
+          title={topBarTitle}
+          subtitle={topBarSubtitle}
+          avatarUrl={avatarUri}
+          initials={topBarInitials}
+          variant={isGroup ? 'group' : 'dm'}
           onBack={() => navigation.goBack()}
-          titleAccessibilityLabel={isGroup ? 'Open group info' : 'Open profile'}
+          onSearch={() => {
+            if (isSearchActive) {
+              setIsSearchActive(false);
+              setSearchQuery('');
+            } else {
+              setIsSearchActive(true);
+            }
+          }}
+          onInfo={() => {
+            if (!conversation) return;
+            navigation.navigate(isGroup ? 'GroupChatInfo' : 'ConversationInfo', { conversationId: conversation.id });
+          }}
           onTitlePress={() => {
             if (!conversation) return;
             if (isGroup) {
@@ -1568,212 +1532,103 @@ export default function ChatScreen({ navigation, route }: Props) {
               navigation.navigate('ConversationInfo', { conversationId: conversation.id });
             }
           }}
-          avatar={
-            !isGroup ? (
-              (() => {
-                const avatarUri =
-                  conversation?.avatar ||
-                  (resolvedPartnerId ? profileMediaOverrides[resolvedPartnerId]?.avatar : undefined) ||
-                  '';
-                return (
-                  <View style={styles.headerAvatarV2}>
-                    <CachedImage
-                      uri={avatarUri}
-                      style={styles.headerAvatarImageV2}
-                      contentFit="cover"
-                    />
-                  </View>
-                );
-              })()
-            ) : null
-          }
-          rightAction={
-            <View style={styles.headerActions}>
-              <AnimatedPressable
-                style={styles.headerActionBtn}
-                onPress={() => setIsSearchActive((v) => !v)}
-                activeOpacity={0.7}
-                scaleValue={0.9}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel={isSearchActive ? 'Close search' : 'Search in conversation'}
-                accessibilityState={{ selected: isSearchActive }}>
-                <Ionicons name="search-outline" size={20} color={Colors.textSecondary} />
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={styles.headerActionBtn}
-                onPress={() => {
-                  if (!conversation) return;
-                  navigation.navigate(isGroup ? 'GroupChatInfo' : 'ConversationInfo', { conversationId: conversation.id });
-                }}
-                activeOpacity={0.7}
-                scaleValue={0.9}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel={isGroup ? 'Group info' : 'Conversation info'}>
-                <Ionicons name="information-circle-outline" size={20} color={Colors.textSecondary} />
-              </AnimatedPressable>
-            </View>
-          }
+          isSearchActive={isSearchActive}
+          searchValue={searchQuery}
+          onSearchValueChange={(q: string) => { setSearchQuery(q); setSearchMatchIndex(0); }}
+          searchResultLabel={searchMatches.length > 0 ? `${searchMatchIndex + 1}/${searchMatches.length}` : undefined}
+          onPreviousResult={() => setSearchMatchIndex((i) => Math.max(0, i - 1))}
+          onNextResult={() => setSearchMatchIndex((i) => Math.min(searchMatches.length - 1, i + 1))}
+          onCloseSearch={() => { setIsSearchActive(false); setSearchQuery(''); }}
         />
-      }
-      keyboardAvoiding
-      scrollEnabled={false}
-    >
 
-
-
-      {isSearchActive && (
-
-        <View style={styles.searchBarRow}>
-
-          <AppSearchBar
-
-            placeholder="Search in chat"
-
-            value={searchQuery}
-
-            onChangeText={(q: string) => { setSearchQuery(q); setSearchMatchIndex(0); }}
-
-            containerStyle={styles.searchBar}
-
-            inputProps={{}}
-
+        {!isGroup && linkedListing && (
+          <ChatListingContextBar
+            thumbnailUri={getListingCoverUri(linkedListing.images, '')}
+            title={linkedListing.title}
+            price={formatFromFiat(linkedListing.price, 'GBP', { displayMode: 'fiat' })}
+            availability={linkedListing.isSold ? 'Sold' : 'Available'}
+            primaryActionLabel={linkedListing.sellerId === currentUser?.id ? 'View item' : 'View item'}
+            primaryActionIcon="eye-outline"
+            onPrimaryAction={() => navigation.navigate('ItemDetail', { itemId: linkedListing.id })}
+            secondaryActionLabel={
+              linkedListing.isSold
+                ? undefined
+                : linkedListing.sellerId === currentUser?.id
+                ? 'Manage'
+                : 'Buy now'
+            }
+            secondaryActionIcon={
+              linkedListing.sellerId === currentUser?.id ? 'settings-outline' : 'flash-outline'
+            }
+            onSecondaryAction={
+              linkedListing.isSold
+                ? undefined
+                : linkedListing.sellerId === currentUser?.id
+                ? () => navigation.navigate('ManageListing', { itemId: linkedListing.id })
+                : () => navigation.navigate('Checkout', { itemId: linkedListing.id })
+            }
+            onTitlePress={() => navigation.navigate('ItemDetail', { itemId: linkedListing.id })}
+            defaultCollapsed
           />
+        )}
 
-          {searchMatches.length > 0 && (
-
-            <View style={styles.searchNav}>
-
-              <Text style={styles.searchCount}>{searchMatchIndex + 1}/{searchMatches.length}</Text>
-
-              <AnimatedPressable
-
-                onPress={() => setSearchMatchIndex((i) => Math.max(0, i - 1))}
-
-                activeOpacity={0.7}
-
-                scaleValue={0.9}
-
-                hapticFeedback="light"
-
-              >
-
-                <Ionicons name="chevron-up" size={20} color={Colors.textPrimary} />
-
-              </AnimatedPressable>
-
-              <AnimatedPressable
-
-                onPress={() => setSearchMatchIndex((i) => Math.min(searchMatches.length - 1, i + 1))}
-
-                activeOpacity={0.7}
-
-                scaleValue={0.9}
-
-                hapticFeedback="light"
-
-              >
-
-                <Ionicons name="chevron-down" size={20} color={Colors.textPrimary} />
-
-              </AnimatedPressable>
-
-            </View>
-
-          )}
-
-        </View>
-
-      )}
-
-
-
-      {selectionMode ? (
-
-        <View style={styles.selectionToolbar}>
-
-          <AnimatedPressable onPress={exitSelectionMode} activeOpacity={0.7} scaleValue={0.92} hapticFeedback="light">
-
-            <Ionicons name="close-outline" size={24} color={Colors.textPrimary} />
-
-          </AnimatedPressable>
-
-          <Caption color={Colors.textMuted}>{selectedMessageIds.size} selected</Caption>
-
-          <AnimatedPressable
-
-            onPress={handleBulkDelete}
-
-            activeOpacity={0.7}
-
-            scaleValue={0.92}
-
-            hapticFeedback="medium"
-
-            accessibilityLabel="Delete selected"
-
-          >
-
-            <Ionicons name="trash-outline" size={22} color={Colors.danger} />
-
-          </AnimatedPressable>
-
-        </View>
-
-      ) : null}
-
-
-
-      {!isGroup && routeItemId ? (
-
-        <TaggedItemCard itemId={routeItemId} navigation={navigation} formatFromFiat={formatFromFiat} currentUserId={currentUser?.id} />
-
-      ) : null}
-
-
-
+        {selectionMode ? (
+          <View style={styles.selectionToolbar}>
+            <AnimatedPressable onPress={exitSelectionMode} activeOpacity={0.7} scaleValue={0.92} hapticFeedback="light">
+              <Ionicons name="close-outline" size={24} color={Colors.textPrimary} />
+            </AnimatedPressable>
+            <Caption color={Colors.textMuted}>{selectedMessageIds.size} selected</Caption>
+            <AnimatedPressable
+              onPress={handleBulkDelete}
+              activeOpacity={0.7}
+              scaleValue={0.92}
+              hapticFeedback="medium"
+              accessibilityLabel="Delete selected"
+            >
+              <Ionicons name="trash-outline" size={22} color={Colors.danger} />
+            </AnimatedPressable>
+          </View>
+        ) : null}
 
         {isSyncing ? (
-
           <SkeletonChatLoader count={6} />
-
+        ) : syncError && !messages.length ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyGlyph}>
+              <Ionicons name="cloud-offline-outline" size={40} color={Colors.textMuted} />
+            </View>
+            <Text style={styles.emptyTitle}>Couldn't load messages</Text>
+            <Text style={styles.emptyBody}>
+              Check your connection and try again.
+            </Text>
+            <Pressable
+              onPress={() => void syncMessagesFromApi()}
+              style={styles.retryBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading messages"
+            >
+              <Ionicons name="refresh" size={16} color={Colors.textInverse} />
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </Pressable>
+          </View>
         ) : messages.length ? (
-
           <FlatList
-
             ref={listRef}
-
             data={messages}
-
             renderItem={({ item, index }) => renderMessage(item, index)}
-
             keyExtractor={(item) => item.id}
-
             contentContainerStyle={styles.messageList}
-
             showsVerticalScrollIndicator={false}
-
             keyboardDismissMode="on-drag"
-
             keyboardShouldPersistTaps="always"
-
             onScroll={(e) => {
-
               const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-
               const isNearBottom = contentSize.height - contentOffset.y - layoutMeasurement.height < 150;
-
               setShowScrollToBottom(!isNearBottom);
-
             }}
-
             scrollEventThrottle={200}
-
           />
-
         ) : (
-
           <View style={styles.emptyState}>
             <View style={styles.emptyGlyph}>
               <Ionicons name="chatbubbles-outline" size={40} color={Colors.textMuted} />
@@ -1787,192 +1642,144 @@ export default function ChatScreen({ navigation, route }: Props) {
               <Caption color={Colors.textMuted}>Type below</Caption>
             </View>
           </View>
-
         )}
 
-
-
         <View style={[styles.composerWrap, { paddingBottom: Math.max(insets.bottom, Space.sm) + 8 }]}>
-
           {replyTo ? (
-
             <ReplyQuote
-
               senderName={replyTo.senderLabel ?? 'Thryft user'}
-
               text={replyTo.text ?? ''}
-
               onClose={() => setReplyTo(null)}
-
             />
-
           ) : null}
 
           {reactingToMessage ? (
-
             <EmojiReactionsBar
-
               reactions={reactingToMessage.reactions ?? []}
-
               onReact={(emoji) => {
-
                 if (reactingToMessage) {
-
                   addMessageReaction(conversationId, reactingToMessage.id, emoji);
-
                 }
-
                 setReactingToMessage(null);
-
               }}
-
             />
-
           ) : null}
 
           {isOffline && (
-
             <View style={styles.offlineBanner}>
-
               <Ionicons name="cloud-offline-outline" size={16} color={Colors.textSecondary} />
-
               <Text style={styles.offlineBannerText}>You are offline. Messages will be sent when you reconnect.</Text>
-
             </View>
-
           )}
 
           {recentlyDeleted.length > 0 && (
-
             <View style={styles.undoBanner}>
-
               <Text style={styles.undoBannerText}>
-
                 {recentlyDeleted.length} message{recentlyDeleted.length === 1 ? '' : 's'} deleted
-
               </Text>
-
               <AnimatedPressable
-
                 onPress={handleUndoDelete}
-
                 activeOpacity={0.7}
-
                 scaleValue={0.95}
-
                 hapticFeedback="light"
-
                 accessibilityLabel="Undo message deletion"
-
               >
-
                 <Text style={styles.undoBannerAction}>Undo</Text>
-
               </AnimatedPressable>
-
             </View>
-
           )}
 
           <ChatComposerBar
-
             value={input}
-
             onChangeText={setInput}
-
             onSend={sendMessage}
-
             onAttachmentPress={() => setAttachmentPickerVisible(true)}
-
             onCameraPress={() => handleAttachmentSelect('camera')}
-
             placeholder="Message..."
-
             isSending={composerSending}
-
+            quickReplies={linkedListing ? (
+              linkedListing.sellerId === currentUser?.id
+                ? [
+                    ...sellerQuickReplies.slice(0, 4).map((text) => ({
+                      label: text.length > 30 ? text.slice(0, 28) + '…' : text,
+                      onPress: () => setInput(text),
+                    })),
+                    { label: 'Manage replies', onPress: () => navigation.navigate('ManageQuickReplies', { role: 'seller' }) },
+                  ]
+                : [
+                    ...buyerQuickReplies.slice(0, 4).map((text) => ({
+                      label: text.length > 30 ? text.slice(0, 28) + '…' : text,
+                      onPress: () => setInput(text),
+                    })),
+                    { label: 'Manage replies', onPress: () => navigation.navigate('ManageQuickReplies', { role: 'buyer' }) },
+                  ]
+            ) : undefined}
+            safetyWarning={conversation ? detectChatSafetyWarning(conversation, currentUser?.id, conversation.messages)?.message : undefined}
           />
-
         </View>
 
-
-      <ChatActionSheet
-        visible={attachmentPickerVisible}
-        onClose={() => setAttachmentPickerVisible(false)}
-        onSelect={(action) => {
-          if (action === 'gallery' || action === 'camera') {
-            handleAttachmentSelect(action);
-          }
-        }}
-      />
-
-
-
-      <ScrollToBottomFAB visible={showScrollToBottom} onPress={scrollToBottom} />
-
-
-
-      <MessageContextMenu
-
-        visible={contextMenuVisible}
-
-        onClose={() => setContextMenuVisible(false)}
-
-        onAction={(action) => {
-
-          if (!selectedMessage) return;
-
-          switch (action) {
-
-            case 'copy': {
-
-              Clipboard.setString(selectedMessage.text ?? '');
-
-              show('Copied', 'success');
-
-              break;
-
+        <ChatActionSheet
+          visible={attachmentPickerVisible}
+          onClose={() => setAttachmentPickerVisible(false)}
+          onSelect={(action) => {
+            if (action === 'gallery' || action === 'camera') {
+              handleAttachmentSelect(action);
             }
+          }}
+        />
 
-            case 'reply':
+        {pendingAttachment && (
+          <AttachmentReviewSheet
+            visible={!!pendingAttachment}
+            uri={pendingAttachment.uri}
+            mediaType={pendingAttachment.mediaType}
+            onClose={() => setPendingAttachment(null)}
+            onSend={handleSendPendingAttachment}
+          />
+        )}
 
-              setReplyTo(selectedMessage);
+        <ScrollToBottomFAB visible={showScrollToBottom} onPress={scrollToBottom} />
 
-              break;
-
-            case 'select':
-
-              enterSelectionMode(selectedMessage.id);
-
-              break;
-
-            case 'react':
-
-              setReactingToMessage(selectedMessage);
-
-              break;
-
-            case 'delete':
-
-              handleDeleteMessage(selectedMessage);
-
-              break;
-
-            default:
-
-              break;
-
-          }
-
-        }}
-
-        messageText={selectedMessage?.text ?? undefined}
-
-        isOwnMessage={selectedMessage?.sender === 'me'}
-
-      />
-
-    </FlagshipScreen>
-
+        <MessageContextMenu
+          visible={contextMenuVisible}
+          onClose={() => setContextMenuVisible(false)}
+          onAction={(action) => {
+            if (!selectedMessage) return;
+            switch (action) {
+              case 'copy': {
+                Clipboard.setStringAsync(selectedMessage.text ?? '');
+                show('Copied', 'success');
+                break;
+              }
+              case 'reply':
+                setReplyTo(selectedMessage);
+                break;
+              case 'react':
+                setReactingToMessage(selectedMessage);
+                break;
+              case 'delete':
+                handleDeleteMessage(selectedMessage);
+                break;
+              case 'retry':
+                if (selectedMessage.uploadStatus === 'failed') {
+                  handleRetryUpload(selectedMessage.id);
+                } else {
+                  handleRetrySendMessage(selectedMessage.id);
+                }
+                break;
+              case 'report':
+                show('Report submitted. Thank you.', 'success');
+                break;
+              default:
+                break;
+            }
+          }}
+          messageText={selectedMessage?.text ?? undefined}
+          isOwnMessage={selectedMessage?.sender === 'me'}
+          isFailed={selectedMessage?.status === 'failed' || selectedMessage?.uploadStatus === 'failed'}
+        />
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 
 }
@@ -1981,783 +1788,227 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
 
-  headerAvatarRing: {
-
-    width: 42,
-
-    height: 42,
-
-    borderRadius: Radius.full,
-
-    borderWidth: 2,
-
-    borderColor: Colors.border,
-
-    padding: 2,
-
-    justifyContent: 'center',
-
-    alignItems: 'center',
-
-  },
-
-  headerAvatarImage: {
-
-    width: 34,
-
-    height: 34,
-
-    borderRadius: Radius.full,
-
-  },
-  headerAvatarV2: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-  },
-  headerAvatarImageV2: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-  },
-
-  headerActions: {
-
-    flexDirection: 'row',
-
-    gap: Space.xs,
-
-  },
-
-  headerActionBtn: {
-
-    width: 40,
-
-    height: 40,
-
-    borderRadius: Radius.full,
-
-    justifyContent: 'center',
-
-    alignItems: 'center',
-
+  screenRoot: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
 
   selectionToolbar: {
-
     flexDirection: 'row',
-
     alignItems: 'center',
-
     justifyContent: 'space-between',
-
     paddingHorizontal: Space.md,
-
     paddingVertical: Space.sm,
-
     backgroundColor: Colors.surfaceAlt,
-
     borderBottomWidth: StyleSheet.hairlineWidth,
-
     borderBottomColor: Colors.border,
-
-    ...Elevation.subtle,
-
   },
-
-
-
-  contextGallery: {
-
-    paddingHorizontal: Space.md,
-
-    paddingTop: Space.sm,
-
-    paddingBottom: Space.xs,
-
-  },
-
-  itemCard: {
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-  },
-
-  itemCardRow: {
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    gap: Space.sm,
-
-    padding: Space.sm,
-
-    borderRadius: Radius.lg,
-
-    borderWidth: StyleSheet.hairlineWidth,
-
-    ...Elevation.subtle,
-
-  },
-
-  itemThumb: {
-
-    width: 44,
-
-    height: 44,
-
-    borderRadius: Radius.md,
-
-    backgroundColor: Colors.surfaceAlt,
-
-    overflow: 'hidden',
-
-  },
-
-  itemThumbImage: {
-
-    width: 44,
-
-    height: 44,
-
-    borderRadius: Radius.md,
-
-  },
-  itemMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  itemQuickActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  itemQuickBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 6,
-    ...Elevation.subtle,
-  },
-  itemQuickText: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-  itemThumbV2: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    overflow: 'hidden',
-  },
-  itemThumbImageV2: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.md,
-  },
-  itemQuickActionsV2: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  itemPrimaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.textPrimary,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.sm + 4,
-    paddingVertical: 8,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  itemPrimaryBtnText: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-  itemSecondaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.sm + 4,
-    paddingVertical: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  itemSecondaryBtnText: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-
-  itemInfo: {
-
-    flex: 1,
-
-    justifyContent: 'center',
-
-  },
-
-
 
   emptyState: {
-
     flex: 1,
-
     alignItems: 'center',
-
     justifyContent: 'center',
-
     gap: Space.sm,
-
     paddingHorizontal: Space.xl,
-
+    paddingBottom: Space.xxl,
   },
 
-  emptyIconCircle: {
-
-    width: 72,
-
-    height: 72,
-
-    borderRadius: Radius.full,
-
-    backgroundColor: Colors.surface,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    marginBottom: Space.sm,
-
-    ...Elevation.subtle,
-
-  },
   emptyGlyph: {
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
-    opacity: 0.5,
+    width: 80,
+    height: 80,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
   },
 
   emptyTitle: {
-
     fontSize: Type.subtitle.size,
-
     fontFamily: TypeStyles.title.fontFamily,
-
     color: Colors.textPrimary,
-
     textAlign: 'center',
-
     letterSpacing: Type.subtitle.letterSpacing,
-
   },
 
   emptyBody: {
-
     fontSize: Type.caption.size,
-
     fontFamily: TypeStyles.body.fontFamily,
-
     color: Colors.textSecondary,
-
     textAlign: 'center',
-
     lineHeight: Type.caption.lineHeight,
-
     marginTop: Space.xs,
-
   },
 
   emptyCtaRow: {
-
     flexDirection: 'row',
-
     alignItems: 'center',
-
     gap: Space.xs,
-
     marginTop: Space.md,
-
   },
 
-
-
   messageList: {
-
     paddingVertical: Space.sm,
-
   },
 
   dateWrap: {
-
     alignItems: 'center',
-
-    marginVertical: Space.md,
-
-  },
-
-  datePill: {
-
-    backgroundColor: Colors.surfaceAlt,
-
-    borderRadius: Radius.full,
-
+    marginVertical: Space.sm + 2,
+    paddingVertical: 3,
     paddingHorizontal: Space.sm,
-
-    paddingVertical: Space.xs,
-
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    alignSelf: 'center',
   },
 
   dateText: {
-
     fontSize: Type.meta.size,
-
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-
+    fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
     textTransform: 'uppercase',
-
     letterSpacing: 0.5,
-
   },
-
-
 
   statusWrap: {
-
     marginVertical: Space.xs,
-
     paddingHorizontal: Space.md,
-
+    alignItems: 'center',
   },
 
-  statusCardSolid: {
-
-    gap: Space.xs,
-
-    backgroundColor: Colors.surface,
-
-    borderRadius: Radius.lg,
-
-    padding: Space.sm,
-
-    borderWidth: StyleSheet.hairlineWidth,
-
-    borderColor: Colors.border,
-
-    ...Elevation.subtle,
-
+  systemProvenanceBadge: {
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.brand,
+    marginTop: 2,
   },
 
-  statusTitle: { marginBottom: Space.xs },
-
-  statusBody: { lineHeight: 20 },
-
-  statusLink: { marginTop: Space.sm },
-
-
+  statusHint: {
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
+    marginTop: Space.xs,
+    textAlign: 'center',
+  },
 
   msgRow: {
-
     flexDirection: 'row',
-
     alignItems: 'flex-end',
-
     gap: Space.xs,
-
     paddingHorizontal: Space.md,
-
   },
 
   msgRowRight: {
-
     flexDirection: 'row-reverse',
-
   },
-
-
-
-  offerCard: {
-
-    maxWidth: '78%',
-
-    gap: Space.xs,
-
-    backgroundColor: Colors.surface,
-
-    borderRadius: Radius.lg,
-
-    padding: Space.sm,
-
-    borderWidth: StyleSheet.hairlineWidth,
-
-    borderColor: Colors.border,
-
-    ...Elevation.subtle,
-
-  },
-
-  offerCardMe: {
-
-    alignSelf: 'flex-end',
-
-  },
-
-  offerSender: {
-
-    marginBottom: 2,
-
-  },
-
-  offerPriceRow: {
-
-    flexDirection: 'row',
-
-    alignItems: 'baseline',
-
-    gap: Space.sm,
-
-  },
-
-  offerPriceText: {
-
-    fontSize: Type.priceLarge.size,
-
-    fontFamily: TypeStyles.title.fontFamily,
-
-    color: Colors.textPrimary,
-
-  },
-
-  strike: {
-
-    textDecorationLine: 'line-through',
-
-  },
-
-  offerPill: {
-
-    alignSelf: 'flex-start',
-
-    marginTop: Space.xs,
-
-  },
-
-  offerActions: {
-
-    flexDirection: 'row',
-
-    gap: Space.sm,
-
-    marginTop: Space.sm,
-
-  },
-
-  passBtn: {
-
-    flex: 1,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    gap: 6,
-
-    backgroundColor: Colors.surfaceAlt,
-
-    borderRadius: Radius.md,
-
-    paddingVertical: 10,
-
-    borderWidth: 0.5,
-
-    borderColor: Colors.border,
-
-  },
-
-  passBtnText: {
-
-    fontSize: Type.caption.size,
-
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-
-    color: Colors.textPrimary,
-
-  },
-
-  acceptBtn: {
-
-    flex: 1,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    gap: 6,
-
-    backgroundColor: Colors.brand,
-
-    borderRadius: Radius.md,
-
-    paddingVertical: 10,
-
-    borderWidth: 1,
-
-    borderColor: Colors.brand,
-
-  },
-
-  acceptBtnText: {
-
-    fontSize: Type.caption.size,
-
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-
-    color: Colors.textInverse,
-
-  },
-
-
 
   linkPreviewWrap: {
-
     maxWidth: '78%',
-
     alignSelf: 'flex-start',
-
     marginTop: Space.xs,
-
   },
 
   linkPreviewWrapRight: {
-
     alignSelf: 'flex-end',
-
   },
 
-
-
   selectionRow: {
-
     flexDirection: 'row',
-
     alignItems: 'center',
-
     paddingHorizontal: Space.sm,
-
   },
 
   selectionRowRight: {
-
     flexDirection: 'row-reverse',
-
   },
 
   checkbox: {
-
     width: 22,
-
     height: 22,
-
     borderRadius: Radius.sm,
-
     borderWidth: 2,
-
     borderColor: Colors.border,
-
     backgroundColor: Colors.surfaceAlt,
-
     alignItems: 'center',
-
     justifyContent: 'center',
-
     marginHorizontal: Space.sm,
-
   },
 
   checkboxActive: {
-
     backgroundColor: Colors.brand,
-
     borderColor: Colors.brand,
-
   },
 
-
-
   composerWrap: {
-
     paddingHorizontal: Space.md,
-
     paddingBottom: Space.sm + 4,
-
     paddingTop: Space.xs,
-
     backgroundColor: Colors.surface,
-
     borderTopWidth: StyleSheet.hairlineWidth,
-
     borderTopColor: Colors.border,
-
   },
 
   undoBanner: {
-
     flexDirection: 'row',
-
     alignItems: 'center',
-
     justifyContent: 'space-between',
-
     backgroundColor: Colors.surfaceAlt,
-
     borderTopWidth: StyleSheet.hairlineWidth,
-
     borderTopColor: Colors.border,
-
     marginHorizontal: -Space.md,
-
     marginTop: -Space.xs,
-
     marginBottom: Space.xs,
-
     paddingHorizontal: Space.md,
-
     paddingVertical: Space.sm,
-
   },
 
   undoBannerText: {
-
     color: Colors.textSecondary,
-
     fontSize: Type.caption.size,
-
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-
   },
 
   undoBannerAction: {
-
     color: Colors.brand,
-
     fontSize: Type.caption.size,
-
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-
-  },
-
-  searchBarRow: {
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    gap: Space.sm,
-
-    paddingHorizontal: Space.md,
-
-    paddingVertical: Space.sm,
-
-    backgroundColor: Colors.background,
-
-    borderBottomWidth: StyleSheet.hairlineWidth,
-
-    borderBottomColor: Colors.border,
-
-  },
-
-  searchBar: {
-
-    flex: 1,
-
-    backgroundColor: Colors.surfaceAlt,
-
-    borderRadius: Radius.full,
-
-    paddingHorizontal: Space.md,
-
-    minHeight: 40,
-
-  },
-
-  searchNav: {
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    gap: Space.sm,
-
-  },
-
-  searchCount: {
-
-    fontSize: Type.caption.size,
-
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-
-    color: Colors.textMuted,
-
-    minWidth: 32,
-
-    textAlign: 'center',
-
   },
 
   offlineBanner: {
-
     flexDirection: 'row',
-
     alignItems: 'center',
-
     justifyContent: 'center',
-
     gap: Space.xs,
-
-    backgroundColor: Colors.surfaceAlt,
-
+    backgroundColor: `${Colors.textMuted}10`,
     borderTopWidth: StyleSheet.hairlineWidth,
-
     borderTopColor: Colors.border,
-
     marginHorizontal: -Space.md,
-
     marginTop: -Space.xs,
-
     marginBottom: Space.xs,
-
     paddingHorizontal: Space.md,
-
-    paddingVertical: Space.sm,
-
+    paddingVertical: Space.sm + 2,
   },
 
   offlineBannerText: {
-
     color: Colors.textSecondary,
-
     fontSize: Type.caption.size,
-
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
 
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    backgroundColor: Colors.brand,
+    paddingHorizontal: Space.md + 4,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
+    marginTop: Space.sm,
+  },
+
+  retryBtnText: {
+    color: Colors.textInverse,
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
 });

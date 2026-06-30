@@ -1,10 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
 import { AnimatedPressable } from './AnimatedPressable';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Typography } from '../theme/designTokens';
 
 interface RetryStateProps {
@@ -13,36 +12,23 @@ interface RetryStateProps {
 }
 
 export function RetryState({ onRetry, message = 'Something went wrong.' }: RetryStateProps) {
-  const reducedMotionEnabled = useReducedMotion();
-
-  const iconEnterAnimation = reducedMotionEnabled
-    ? undefined
-    : FadeInDown.duration(500).springify();
-  const titleEnterAnimation = reducedMotionEnabled
-    ? undefined
-    : FadeInDown.delay(100).duration(500).springify();
-  const subtitleEnterAnimation = reducedMotionEnabled
-    ? undefined
-    : FadeInDown.delay(200).duration(500).springify();
-  const ctaEnterAnimation = reducedMotionEnabled
-    ? undefined
-    : FadeInDown.delay(300).duration(500).springify();
+  const enter = FadeIn.duration(300);
 
   return (
     <View style={styles.container}>
-      <Reanimated.View entering={iconEnterAnimation} style={styles.iconBox}>
+      <Reanimated.View entering={enter} style={styles.iconBox}>
         <Ionicons name="warning-outline" size={64} color={Colors.danger} />
       </Reanimated.View>
 
-      <Reanimated.Text entering={titleEnterAnimation} style={styles.title}>
+      <Reanimated.Text entering={enter} style={styles.title}>
         Oops!
       </Reanimated.Text>
 
-      <Reanimated.Text entering={subtitleEnterAnimation} style={styles.subtext}>
+      <Reanimated.Text entering={enter} style={styles.subtext}>
         {message}
       </Reanimated.Text>
 
-      <Reanimated.View entering={ctaEnterAnimation}>
+      <Reanimated.View entering={enter}>
         <AnimatedPressable style={styles.retryBtn} onPress={onRetry}>
           <Text style={styles.retryBtnText}>Try Again</Text>
         </AnimatedPressable>

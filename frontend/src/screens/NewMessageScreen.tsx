@@ -26,9 +26,7 @@ import { useToast } from '../context/ToastContext';
 
 import { Colors } from '../constants/colors';
 
-import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
-
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 
 import { AnimatedPressable } from '../components/AnimatedPressable';
 
@@ -41,6 +39,8 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { Caption, BodyEmphasis } from '../components/ui/Text';
 
 import { EmptyState } from '../components/EmptyState';
+
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 
 
@@ -219,13 +219,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
   return (
 
-    <FlagshipScreen
-
-      header={<FlagshipHeader title="New Message" onBack={() => navigation.goBack()} />}
-
-      scrollEnabled={false}
-
-    >
+    <FlagshipScreen header={<FlagshipHeader title="New Message" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
 
       <View style={styles.searchWrap}>
 

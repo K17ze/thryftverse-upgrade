@@ -1,16 +1,18 @@
-import { Typography } from '../theme/designTokens';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import { View,
+  View,
   Text,
   StyleSheet,
   ScrollView,
   StatusBar,
   Linking,
-  Platform
+  Platform,
+  Pressable,
+  AppState,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
@@ -19,40 +21,39 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { isCheckoutReady } from '../utils/checkoutFlow';
-import { formatCountryPolicyScope, isPaymentMethodAllowed } from '../utils/capabilityPolicy';
+import { isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
 import { useBackendData } from '../context/BackendDataContext';
-import { SyncStatusPill } from '../components/SyncStatusPill';
 import { AddCardSheet } from '../components/checkout/AddCardSheet';
-import { AddAddressSheet } from '../components/checkout/AddAddressSheet';
+import { CheckoutItemSummary } from '../components/checkout/CheckoutItemSummary';
+import { CheckoutSelectionRow } from '../components/checkout/CheckoutSelectionRow';
+import { CheckoutPaymentSelector } from '../components/checkout/CheckoutPaymentSelector';
 import {
   createCommercePaymentIntent,
   createOrder,
+  cancelOrder,
   getPaymentIntentStatus,
   getShippingQuote,
   listUserAddresses,
   listUserPaymentMethods,
+  CommerceAddress,
+  CommercePaymentMethod,
 } from '../services/commerceApi';
 import { CapabilityCarrier, getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { CachedImage } from '../components/CachedImage';
-import { AppButton } from '../components/ui/AppButton';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { Body, Caption, Meta, Headline } from '../components/ui/Text';
 import { haptics } from '../utils/haptics';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getListingCoverUri } from '../utils/media';
-import { t } from '../i18n';
-import { ElevatedSurface } from '../components/ui/ElevatedSurface';
-import { PremiumActionBar } from '../components/ui/PremiumActionBar';
+import { Space, Typography } from '../theme/designTokens';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
-const BRAND = Colors.brand;
-const PANEL_BG = Colors.surfaceAlt;
-const PANEL_SOFT_BG = Colors.surfaceAlt;
-const PANEL_BORDER = Colors.border;
-const FOOTER_BG = Colors.background;
+
+type CheckoutStage =
+  | 'idle'
+  | 'creating_order'
+  | 'opening_payment'
+  | 'awaiting_payment'
+  | 'payment_pending'
+  | 'payment_failed';
 
 interface CheckoutPostageOption {
   carrierId: string | null;
@@ -60,36 +61,32 @@ interface CheckoutPostageOption {
   etaLabel: string;
   priceFromGbp: number;
   liveQuote: boolean;
+  tracking: boolean;
 }
 
 const DEFAULT_POSTAGE_OPTION: CheckoutPostageOption = {
   carrierId: null,
-  label: t('checkout.postage.default.label'),
-  etaLabel: t('checkout.postage.default.eta'),
+  label: 'Standard shipping',
+  etaLabel: '2-3 working days',
   priceFromGbp: 2.89,
   liveQuote: false,
+  tracking: false,
 };
 
 const UNAVAILABLE_REGION_POSTAGE_OPTION: CheckoutPostageOption = {
   carrierId: null,
-  label: 'Shipping quote not available for your region',
+  label: 'Shipping not available for your region',
   etaLabel: 'Unavailable',
   priceFromGbp: 0,
   liveQuote: false,
+  tracking: false,
 };
 
 function toEtaLabelFromRange(etaMinDays: number, etaMaxDays: number): string {
   if (etaMinDays === etaMaxDays) {
-    return t('checkout.postage.eta.single', {
-      days: etaMinDays,
-      plural: etaMinDays === 1 ? '' : 's',
-    });
+    return `${etaMinDays} working day${etaMinDays === 1 ? '' : 's'}`;
   }
-
-  return t('checkout.postage.eta.range', {
-    min: etaMinDays,
-    max: etaMaxDays,
-  });
+  return `${etaMinDays}-${etaMaxDays} working days`;
 }
 
 function toEtaLabel(carrier: CapabilityCarrier): string {
@@ -99,7 +96,7 @@ function toEtaLabel(carrier: CapabilityCarrier): string {
 const PAYMENT_INTENT_POLL_ATTEMPTS = 12;
 const PAYMENT_INTENT_POLL_INTERVAL_MS = 1_500;
 
-type CheckoutPaymentSettlementStatus = 'succeeded' | 'failed' | 'pending';
+type CheckoutPaymentSettlementStatus = 'succeeded' | 'failed' | 'pending' | 'aborted';
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -108,9 +105,14 @@ function wait(ms: number): Promise<void> {
 }
 
 async function waitForPaymentIntentSettlement(
-  intentId: string
+  intentId: string,
+  shouldContinue: () => boolean
 ): Promise<CheckoutPaymentSettlementStatus> {
   for (let attempt = 0; attempt < PAYMENT_INTENT_POLL_ATTEMPTS; attempt += 1) {
+    if (!shouldContinue()) {
+      return 'aborted';
+    }
+
     try {
       const latestIntent = await getPaymentIntentStatus(intentId);
       const normalizedStatus = latestIntent.status.trim().toLowerCase();
@@ -126,6 +128,10 @@ async function waitForPaymentIntentSettlement(
       // Continue polling until timeout to absorb transient API/network failures.
     }
 
+    if (!shouldContinue()) {
+      return 'aborted';
+    }
+
     if (attempt < PAYMENT_INTENT_POLL_ATTEMPTS - 1) {
       await wait(PAYMENT_INTENT_POLL_INTERVAL_MS);
     }
@@ -133,6 +139,35 @@ async function waitForPaymentIntentSettlement(
 
   return 'pending';
 }
+
+function buildOrderSignature(params: {
+  buyerId: string;
+  listingId: string;
+  addressId?: number;
+  paymentMethodId?: number;
+  carrierId?: string;
+  platformCharge: number;
+  postageFee: number;
+}): string {
+  return [
+    params.buyerId,
+    params.listingId,
+    params.addressId ?? 'none',
+    params.paymentMethodId ?? 'none',
+    params.carrierId ?? 'none',
+    params.platformCharge.toFixed(2),
+    params.postageFee.toFixed(2),
+  ].join('|');
+}
+
+const STAGE_LABELS: Record<CheckoutStage, string> = {
+  idle: '',
+  creating_order: 'Creating your order…',
+  opening_payment: 'Opening secure payment…',
+  awaiting_payment: 'Waiting for payment confirmation…',
+  payment_pending: 'Payment is still pending.',
+  payment_failed: 'Payment failed. Try again.',
+};
 
 export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
@@ -143,26 +178,772 @@ export default function CheckoutScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const savedAddress = useStore((state) => state.savedAddress);
   const saveAddress = useStore((state) => state.saveAddress);
+  const clearSavedAddress = useStore((state) => state.clearSavedAddress);
   const savedPaymentMethod = useStore((state) => state.savedPaymentMethod);
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
-  const [isHydratingCheckout, setIsHydratingCheckout] = useState(false);
-  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const clearSavedPaymentMethod = useStore((state) => state.clearSavedPaymentMethod);
+
+  const [isHydrating, setIsHydrating] = useState(false);
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
+  const [isSelectingPayment, setIsSelectingPayment] = useState(false);
+  const [stage, setStage] = useState<CheckoutStage>('idle');
   const [addCardSheetVisible, setAddCardSheetVisible] = useState(false);
-  const [addAddressSheetVisible, setAddAddressSheetVisible] = useState(false);
+  const [paymentSelectorVisible, setPaymentSelectorVisible] = useState(false);
   const [postageOption, setPostageOption] = useState<CheckoutPostageOption>(DEFAULT_POSTAGE_OPTION);
   const [checkoutCapabilities, setCheckoutCapabilities] = useState<UserCountryCapabilities | null>(null);
-  const reducedMotionEnabled = useReducedMotion();
+  const [backendAddresses, setBackendAddresses] = useState<CommerceAddress[]>([]);
+  const [backendPaymentMethods, setBackendPaymentMethods] = useState<CommercePaymentMethod[]>([]);
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [capabilityError, setCapabilityError] = useState<string | null>(null);
+  const [shippingError, setShippingError] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
 
+  const createdOrderIdRef = useRef<string | null>(null);
+  const createdOrderSignatureRef = useRef<string | null>(null);
+  const pendingIntentIdRef = useRef<string | null>(null);
+  const isSubmittingRef = useRef(false);
+  const appStateRef = useRef(AppState.currentState);
+  const isMountedRef = useRef(true);
+  const paymentAttemptRef = useRef(0);
+  const navigationHandledRef = useRef(false);
+
   const item = listings.find((l) => l.id === itemId);
+
+  const isSubmitting = stage === 'creating_order' || stage === 'opening_payment' || stage === 'awaiting_payment';
+  const isInteractionLocked = isSubmitting || isCancellingOrder;
+
+  // --- Eligibility ---
+  const checkoutEligible = useMemo(() => {
+    if (!currentUser?.id || !item) return false;
+    if (isHydrating || isInteractionLocked) return false;
+    if (!savedAddress?.id) return false;
+    if (!savedPaymentMethod?.id) return false;
+    if (!postageOption.carrierId) return false;
+    if (!isPaymentMethodAllowed(checkoutCapabilities, savedPaymentMethod.type)) return false;
+    return true;
+  }, [currentUser?.id, item, isHydrating, isInteractionLocked, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, checkoutCapabilities, savedPaymentMethod?.type]);
+
+  // --- Mount / unmount ---
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      paymentAttemptRef.current += 1;
+    };
+  }, []);
+
+  // --- Single settlement navigation helper ---
+  const handleSettlementNavigation = useCallback(
+    (
+      result: 'succeeded' | 'pending',
+      orderId: string,
+      attemptId?: number
+    ) => {
+      if (navigationHandledRef.current) {
+        return;
+      }
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      if (
+        attemptId !== undefined &&
+        paymentAttemptRef.current !== attemptId
+      ) {
+        return;
+      }
+
+      navigationHandledRef.current = true;
+
+      if (result === 'succeeded') {
+        navigation.replace('Success', { orderId });
+      } else {
+        navigation.replace('OrderDetail', { orderId });
+      }
+    },
+    [navigation]
+  );
+
+  // --- Hydration ---
+  const hydrateCheckout = useCallback(async () => {
+    const userId = currentUser?.id;
+    if (!userId || !item) return;
+
+    setIsHydrating(true);
+    setAddressError(null);
+    setPaymentError(null);
+    setCapabilityError(null);
+    setShippingError(null);
+
+    try {
+      const [
+        addressResult,
+        paymentResult,
+        capabilityResult,
+      ] = await Promise.allSettled([
+        listUserAddresses(userId),
+        listUserPaymentMethods(userId),
+        getUserCountryCapabilities(userId),
+      ]);
+
+      // --- Address result ---
+      let addresses: CommerceAddress[] = [];
+      if (addressResult.status === 'fulfilled') {
+        addresses = addressResult.value;
+        setBackendAddresses(addresses);
+
+        if (addresses.length > 0) {
+          const matchingAddr = savedAddress?.id
+            ? addresses.find((a) => a.id === savedAddress.id)
+            : null;
+          const preferred = matchingAddr ?? addresses.find((a) => a.isDefault) ?? addresses[0];
+          saveAddress({
+            id: preferred.id,
+            name: preferred.name,
+            streetAddress: preferred.streetAddress,
+            apartment: preferred.apartment,
+            city: preferred.city,
+            region: preferred.region,
+            postalCode: preferred.postalCode,
+            countryCode: preferred.countryCode,
+            country: preferred.country,
+            isDefault: preferred.isDefault,
+          });
+        } else {
+          // Backend has no addresses
+          if (savedAddress?.id) {
+            clearSavedAddress();
+          }
+          // Local-only address without ID is retained; Pay stays disabled
+        }
+      } else {
+        // Address request failed — preserve existing local address
+        setAddressError('Delivery addresses could not be refreshed.');
+      }
+
+      // --- Payment result ---
+      let paymentMethods: CommercePaymentMethod[] = [];
+      if (paymentResult.status === 'fulfilled') {
+        paymentMethods = paymentResult.value;
+        setBackendPaymentMethods(paymentMethods);
+
+        if (paymentMethods.length > 0) {
+          const matchingPm = savedPaymentMethod?.id
+            ? paymentMethods.find((pm) => pm.id === savedPaymentMethod.id)
+            : null;
+          const preferredPm = matchingPm ?? paymentMethods.find((pm) => pm.isDefault) ?? paymentMethods[0];
+          savePaymentMethod({
+            id: preferredPm.id,
+            type: preferredPm.type,
+            label: preferredPm.label,
+            details: preferredPm.details ?? undefined,
+            isDefault: preferredPm.isDefault,
+          });
+        } else {
+          // Backend has no payment methods
+          if (savedPaymentMethod?.id) {
+            clearSavedPaymentMethod();
+          }
+        }
+      } else {
+        // Payment request failed — preserve existing selected payment method
+        setPaymentError('Payment methods could not be refreshed.');
+      }
+
+      // --- Capability result ---
+      let capabilities: UserCountryCapabilities | null = null;
+      if (capabilityResult.status === 'fulfilled') {
+        capabilities = capabilityResult.value;
+        if (capabilities) {
+          setCheckoutCapabilities(capabilities);
+        } else {
+          setCapabilityError('Could not verify payment capabilities for your region.');
+        }
+      } else {
+        setCapabilityError('Could not verify payment capabilities for your region.');
+      }
+
+      // --- Shipping quote ---
+      if (capabilities) {
+        const primaryCarrier = capabilities.postage.carriers[0];
+        if (!primaryCarrier) {
+          setPostageOption(UNAVAILABLE_REGION_POSTAGE_OPTION);
+        } else {
+          const fallbackOption: CheckoutPostageOption = {
+            carrierId: primaryCarrier.id,
+            label: primaryCarrier.label,
+            etaLabel: toEtaLabel(primaryCarrier),
+            priceFromGbp: primaryCarrier.priceFromGbp,
+            liveQuote: false,
+            tracking: primaryCarrier.tracking,
+          };
+          setPostageOption(fallbackOption);
+
+          const addrForQuote = savedAddress?.id
+            ? addresses.find((a) => a.id === savedAddress.id)
+            : addresses.find((a) => a.isDefault) ?? addresses[0];
+
+          if (addrForQuote?.id || savedAddress?.postalCode) {
+            try {
+              const quoteResponse = await getShippingQuote({
+                buyerId: userId,
+                listingId: item.id,
+                addressId: addrForQuote?.id ?? savedAddress?.id,
+                destinationPostcode: addrForQuote?.postalCode ?? savedAddress?.postalCode,
+                preferredCarrierId: primaryCarrier.id,
+                declaredValueGbp: item.price,
+              });
+
+              const selectedQuote = quoteResponse.recommendedQuote ?? quoteResponse.quotes[0];
+              if (selectedQuote) {
+                setPostageOption({
+                  carrierId: selectedQuote.carrierId,
+                  label: selectedQuote.label,
+                  etaLabel: toEtaLabelFromRange(selectedQuote.etaMinDays, selectedQuote.etaMaxDays),
+                  priceFromGbp: selectedQuote.priceFromGbp,
+                  liveQuote: selectedQuote.live,
+                  tracking: selectedQuote.tracking,
+                });
+              }
+            } catch {
+              setShippingError('Could not get a live shipping quote. Showing estimated pricing.');
+            }
+          }
+        }
+      }
+    } catch {
+      // Keep local state if backend is unavailable
+    } finally {
+      setIsHydrating(false);
+    }
+  }, [currentUser?.id, item, savedAddress?.id, savedAddress?.postalCode, saveAddress, clearSavedAddress, savePaymentMethod, clearSavedPaymentMethod, savedPaymentMethod?.id]);
+
+  // Single focus-based hydration — no duplicate mount effect
+  useFocusEffect(
+    useCallback(() => {
+      void hydrateCheckout();
+    }, [hydrateCheckout])
+  );
+
+  // --- Cancel stale order (result-bearing) ---
+  const cancelStaleOrder = useCallback(async (): Promise<boolean> => {
+    const orderId = createdOrderIdRef.current;
+
+    if (!orderId) {
+      return true;
+    }
+
+    if (
+      stage === 'opening_payment'
+      || stage === 'awaiting_payment'
+    ) {
+      setOrderError(
+        'Payment is already in progress. Wait for confirmation before changing checkout details.'
+      );
+      return false;
+    }
+
+    setIsCancellingOrder(true);
+    setOrderError(null);
+
+    try {
+      await cancelOrder(orderId);
+
+      createdOrderIdRef.current = null;
+      createdOrderSignatureRef.current = null;
+      pendingIntentIdRef.current = null;
+
+      return true;
+    } catch {
+      setOrderError(
+        'Your existing order could not be cancelled. Checkout details have not been changed.'
+      );
+      return false;
+    } finally {
+      setIsCancellingOrder(false);
+    }
+  }, [stage]);
+
+  // --- Handle Pay ---
+  const handlePay = useCallback(async () => {
+    if (isSubmittingRef.current) return;
+    if (!checkoutEligible) {
+      show('Complete address and payment details before paying.', 'error');
+      return;
+    }
+
+    const userId = currentUser?.id;
+    if (!userId || !item) return;
+
+    const PLATFORM_CHARGE = calculatePlatformChargeGbp(item.price);
+    const POSTAGE_FEE = postageOption.priceFromGbp;
+
+    const signature = buildOrderSignature({
+      buyerId: userId,
+      listingId: item.id,
+      addressId: savedAddress?.id,
+      paymentMethodId: savedPaymentMethod?.id,
+      carrierId: postageOption.carrierId ?? undefined,
+      platformCharge: PLATFORM_CHARGE,
+      postageFee: POSTAGE_FEE,
+    });
+
+    const attemptId = ++paymentAttemptRef.current;
+    navigationHandledRef.current = false;
+
+    isSubmittingRef.current = true;
+    setOrderError(null);
+
+    try {
+      let orderId: string;
+
+      // Reuse existing order if signature matches
+      if (
+        createdOrderIdRef.current
+        && createdOrderSignatureRef.current === signature
+      ) {
+        orderId = createdOrderIdRef.current;
+      } else {
+        // Cancel any stale order first
+        if (
+          createdOrderIdRef.current
+          && createdOrderSignatureRef.current !== signature
+        ) {
+          const cancelled = await cancelStaleOrder();
+
+          if (!cancelled) {
+            setStage('payment_failed');
+            isSubmittingRef.current = false;
+            return;
+          }
+        }
+
+        if (
+          !isMountedRef.current
+          || paymentAttemptRef.current !== attemptId
+        ) {
+          return;
+        }
+
+        setStage('creating_order');
+        const order = await createOrder({
+          buyerId: userId,
+          listingId: item.id,
+          addressId: savedAddress?.id,
+          paymentMethodId: savedPaymentMethod?.id,
+          platformChargeGbp: PLATFORM_CHARGE,
+          postageFeeGbp: POSTAGE_FEE,
+          shippingCarrierId: postageOption.carrierId ?? undefined,
+        });
+
+        if (
+          !isMountedRef.current
+          || paymentAttemptRef.current !== attemptId
+        ) {
+          return;
+        }
+
+        orderId = order.id;
+        createdOrderIdRef.current = orderId;
+        createdOrderSignatureRef.current = signature;
+      }
+
+      // Create payment intent
+      setStage('opening_payment');
+      const intent = await createCommercePaymentIntent({ orderId });
+
+      if (
+        !isMountedRef.current
+        || paymentAttemptRef.current !== attemptId
+      ) {
+        return;
+      }
+
+      pendingIntentIdRef.current = intent.intentId;
+
+      if (intent.nextActionUrl) {
+        try {
+          const supported = await Linking.canOpenURL(intent.nextActionUrl);
+          if (!supported) {
+            setStage('payment_failed');
+            setOrderError('Unable to open payment page. Please try again.');
+            show('Unable to open payment action URL.', 'error');
+            isSubmittingRef.current = false;
+            return;
+          }
+          await Linking.openURL(intent.nextActionUrl);
+          show('Complete authentication in browser, then return.', 'info');
+        } catch {
+          setStage('payment_failed');
+          setOrderError('Could not open payment page. Please try again.');
+          show('Could not open payment page. Please try again.', 'error');
+          isSubmittingRef.current = false;
+          return;
+        }
+      }
+
+      if (
+        !isMountedRef.current
+        || paymentAttemptRef.current !== attemptId
+      ) {
+        return;
+      }
+
+      // Poll for settlement
+      setStage('awaiting_payment');
+      const settlementStatus = await waitForPaymentIntentSettlement(
+        intent.intentId,
+        () => isMountedRef.current && paymentAttemptRef.current === attemptId
+      );
+
+      if (settlementStatus === 'aborted') {
+        return;
+      }
+
+      if (
+        !isMountedRef.current
+        || paymentAttemptRef.current !== attemptId
+      ) {
+        return;
+      }
+
+      if (settlementStatus === 'succeeded') {
+        show('Payment completed', 'success');
+        pendingIntentIdRef.current = null;
+        isSubmittingRef.current = false;
+        handleSettlementNavigation('succeeded', orderId, attemptId);
+        return;
+      }
+
+      if (settlementStatus === 'pending') {
+        setStage('payment_pending');
+        show('Payment is processing. We will update your order shortly.', 'info');
+        isSubmittingRef.current = false;
+        handleSettlementNavigation('pending', orderId, attemptId);
+        return;
+      }
+
+      // Failed
+      setStage('payment_failed');
+      pendingIntentIdRef.current = null;
+      setOrderError('Payment could not be completed. Please try again.');
+      show('Payment could not be completed. Please try again.', 'error');
+    } catch (error: any) {
+      if (
+        !isMountedRef.current
+        || paymentAttemptRef.current !== attemptId
+      ) {
+        return;
+      }
+
+      setStage('payment_failed');
+      const message = error?.message ?? 'Payment could not be completed. Please try again.';
+      setOrderError(message);
+      show(message, 'error');
+    } finally {
+      isSubmittingRef.current = false;
+    }
+  }, [
+    checkoutEligible,
+    currentUser?.id,
+    item,
+    postageOption.carrierId,
+    postageOption.priceFromGbp,
+    savedAddress?.id,
+    savedPaymentMethod?.id,
+    show,
+    handleSettlementNavigation,
+    cancelStaleOrder,
+  ]);
+
+  // --- Address selection change ---
+  const handleAddressPress = useCallback(async () => {
+    haptics.tap();
+
+    if (createdOrderIdRef.current) {
+      const cancelled = await cancelStaleOrder();
+      if (!cancelled) {
+        return;
+      }
+    }
+
+    navigation.navigate('AddressForm', {
+      mode: savedAddress ? 'edit' : 'add',
+      source: 'checkout',
+    });
+  }, [cancelStaleOrder, navigation, savedAddress]);
+
+  // --- Payment selection change ---
+  const handleSelectPaymentMethod = useCallback(async (
+    method: CommercePaymentMethod
+  ) => {
+    if (method.id === savedPaymentMethod?.id) {
+      setPaymentSelectorVisible(false);
+      return;
+    }
+
+    if (createdOrderIdRef.current) {
+      setIsSelectingPayment(true);
+      const cancelled = await cancelStaleOrder();
+      setIsSelectingPayment(false);
+
+      if (!cancelled) {
+        return;
+      }
+    }
+
+    savePaymentMethod({
+      id: method.id,
+      type: method.type,
+      label: method.label,
+      details: method.details ?? undefined,
+      isDefault: method.isDefault,
+    });
+
+    setPaymentSelectorVisible(false);
+  }, [savedPaymentMethod?.id, cancelStaleOrder, savePaymentMethod]);
+
+  // --- Add-card success handler ---
+  const handleAddCardSuccess = useCallback(async () => {
+    if (!currentUser?.id) return;
+
+    try {
+      const methods = await listUserPaymentMethods(currentUser.id);
+      setBackendPaymentMethods(methods);
+
+      const preferred = methods.find((pm) => pm.isDefault) ?? methods[0];
+
+      if (preferred) {
+        if (preferred.id !== savedPaymentMethod?.id) {
+          if (createdOrderIdRef.current) {
+            const cancelled = await cancelStaleOrder();
+            if (!cancelled) {
+              show('Checkout selection could not be changed. The existing order is still active.', 'info');
+              return;
+            }
+          }
+
+          savePaymentMethod({
+            id: preferred.id,
+            type: preferred.type,
+            label: preferred.label,
+            details: preferred.details ?? undefined,
+            isDefault: preferred.isDefault,
+          });
+        }
+      }
+    } catch {
+      setPaymentError('Payment methods could not be refreshed after adding card.');
+    }
+  }, [currentUser?.id, savedPaymentMethod?.id, cancelStaleOrder, savePaymentMethod, show]);
+
+  // --- Delivery selection change ---
+  const canChangePostage = (checkoutCapabilities?.postage.carriers.length ?? 0) > 1;
+
+  const handleDeliveryPress = useCallback(async () => {
+    if (!canChangePostage) return;
+
+    haptics.tap();
+
+    if (createdOrderIdRef.current) {
+      const cancelled = await cancelStaleOrder();
+      if (!cancelled) {
+        return;
+      }
+    }
+
+    navigation.navigate('Postage');
+  }, [canChangePostage, cancelStaleOrder, navigation]);
+
+  // --- Close handler ---
+  const handleClose = useCallback(() => {
+    if (isSubmitting) {
+      Alert.alert(
+        'Payment in progress',
+        'Payment confirmation may still complete after you leave. Check your Orders before trying again.',
+        [
+          { text: 'Stay', style: 'cancel' },
+          {
+            text: 'Leave',
+            style: 'destructive',
+            onPress: () => {
+              paymentAttemptRef.current += 1;
+              pendingIntentIdRef.current = null;
+              navigation.goBack();
+            },
+          },
+        ]
+      );
+      return;
+    }
+    navigation.goBack();
+  }, [isSubmitting, navigation]);
+
+  // --- AppState resume handling ---
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === 'active' &&
+        pendingIntentIdRef.current
+      ) {
+        const intentId = pendingIntentIdRef.current;
+        const orderId = createdOrderIdRef.current;
+        const attemptId = paymentAttemptRef.current;
+
+        void (async () => {
+          try {
+            const latest = await getPaymentIntentStatus(intentId);
+            const status = latest.status.trim().toLowerCase();
+
+            if (
+              !isMountedRef.current
+              || paymentAttemptRef.current !== attemptId
+            ) {
+              return;
+            }
+
+            if (status === 'succeeded' && orderId) {
+              pendingIntentIdRef.current = null;
+              handleSettlementNavigation('succeeded', orderId, attemptId);
+            } else if (status === 'failed' || status === 'cancelled') {
+              pendingIntentIdRef.current = null;
+              setStage('payment_failed');
+            }
+            // Pending: keep pending feedback, do not navigate twice
+          } catch {
+            // Keep pending state
+          }
+        })();
+      }
+      appStateRef.current = nextAppState;
+    });
+
+    return () => subscription.remove();
+  }, [handleSettlementNavigation]);
+
+  // --- Message seller ---
+  const handleMessageSeller = useCallback(() => {
+    if (!item) return;
+    const sellerId = item.sellerId ?? item.seller?.id ?? '';
+    if (!sellerId) return;
+    navigation.navigate('Chat', {
+      conversationId: `checkout_${sellerId}_${item.id}`,
+      focusQuery: item.title,
+      partnerUserId: sellerId,
+    });
+  }, [item, navigation]);
+
+  // --- Self-purchase check ---
+  const isSelfPurchase = useMemo(() => {
+    if (!item || !currentUser?.id) return false;
+    const sellerId = item.sellerId ?? item.seller?.id;
+    return sellerId === currentUser.id;
+  }, [item, currentUser?.id]);
+
+  // --- Render ---
 
   if (!item) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <ScreenHeader title={t('checkout.header.title')} onBack={() => navigation.goBack()} backIcon="close" />
-        <EmptyState icon="cube-outline" title="Item not found" subtitle="This listing is no longer available." ctaLabel="Go back" onCtaPress={() => navigation.goBack()} />
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <Pressable
+            style={styles.closeBtn}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Checkout</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <EmptyState
+          icon="cube-outline"
+          title="Item unavailable"
+          subtitle="This listing can no longer be purchased."
+          ctaLabel="Go back"
+          onCtaPress={() => navigation.goBack()}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <Pressable
+            style={styles.closeBtn}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Checkout</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.signedOutContainer}>
+          <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
+          <Text style={styles.signedOutTitle}>Sign in to checkout</Text>
+          <Text style={styles.signedOutBody}>
+            You need to be signed in to complete your purchase.
+          </Text>
+          <Pressable
+            style={styles.signedOutBtn}
+            onPress={() => navigation.navigate('Login')}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in"
+          >
+            <Text style={styles.signedOutBtnText}>Sign in</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isSelfPurchase) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <Pressable
+            style={styles.closeBtn}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Checkout</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.signedOutContainer}>
+          <Ionicons name="person-circle-outline" size={36} color={Colors.textMuted} />
+          <Text style={styles.signedOutTitle}>Cannot purchase your own listing</Text>
+          <Text style={styles.signedOutBody}>
+            You cannot buy an item you listed for sale.
+          </Text>
+          <Pressable
+            style={styles.signedOutBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Text style={styles.signedOutBtnText}>Go back</Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
     );
   }
@@ -175,671 +956,433 @@ export default function CheckoutScreen() {
     reviewCount: null,
     location: null,
   };
-  const sellerName = resolvedSeller.username ?? resolvedSeller.id.slice(0, 8);
 
   const PLATFORM_CHARGE = calculatePlatformChargeGbp(item.price);
   const POSTAGE_FEE = postageOption.priceFromGbp;
   const TOTAL = item.price + PLATFORM_CHARGE + POSTAGE_FEE;
-  const checkoutReady = isCheckoutReady(savedAddress, savedPaymentMethod);
+
   const allowCardPayments = isPaymentMethodAllowed(checkoutCapabilities, 'card');
-  const paymentPolicyLabel = formatCountryPolicyScope(checkoutCapabilities);
 
-  useEffect(() => {
-    let cancelled = false;
+  const addressNeedsSave = savedAddress && !savedAddress.id;
+  const addressSubtitle = savedAddress
+    ? `${savedAddress.streetAddress}${savedAddress.apartment ? `, ${savedAddress.apartment}` : ''}\n${savedAddress.city}${savedAddress.region ? `, ${savedAddress.region}` : ''} · ${savedAddress.postalCode}\n${savedAddress.country}`
+    : 'Required for delivery';
 
-    const hydratePostageOption = async () => {
-      if (!currentUser?.id) {
-        setPostageOption(DEFAULT_POSTAGE_OPTION);
-        setCheckoutCapabilities(null);
-        return;
-      }
-
-      try {
-        const capabilities = await getUserCountryCapabilities(currentUser.id);
-        if (cancelled) {
-          return;
-        }
-
-        setCheckoutCapabilities(capabilities);
-
-        const primaryCarrier = capabilities.postage.carriers[0];
-        if (!primaryCarrier) {
-          setPostageOption(UNAVAILABLE_REGION_POSTAGE_OPTION);
-          return;
-        }
-
-        const fallbackOption: CheckoutPostageOption = {
-          carrierId: primaryCarrier.id,
-          label: primaryCarrier.label,
-          etaLabel: toEtaLabel(primaryCarrier),
-          priceFromGbp: primaryCarrier.priceFromGbp,
-          liveQuote: false,
-        };
-
-        setPostageOption(fallbackOption);
-
-        if (!savedAddress?.id && !savedAddress?.postalCode) {
-          return;
-        }
-
-        try {
-          const quoteResponse = await getShippingQuote({
-            buyerId: currentUser.id,
-            listingId: item.id,
-            addressId: savedAddress?.id,
-            destinationPostcode: savedAddress?.postalCode,
-            preferredCarrierId: primaryCarrier.id,
-            declaredValueGbp: item.price,
-          });
-
-          if (cancelled) {
-            return;
-          }
-
-          const selectedQuote = quoteResponse.recommendedQuote ?? quoteResponse.quotes[0];
-          if (!selectedQuote) {
-            return;
-          }
-
-          setPostageOption({
-            carrierId: selectedQuote.carrierId,
-            label: selectedQuote.label,
-            etaLabel: toEtaLabelFromRange(selectedQuote.etaMinDays, selectedQuote.etaMaxDays),
-            priceFromGbp: selectedQuote.priceFromGbp,
-            liveQuote: selectedQuote.live,
-          });
-        } catch {
-          // Keep fallback carrier pricing when quote API is unavailable.
-        }
-      } catch {
-        if (!cancelled) {
-          setPostageOption(DEFAULT_POSTAGE_OPTION);
-          setCheckoutCapabilities(null);
-        }
-      }
-    };
-
-    void hydratePostageOption();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser?.id, savedAddress?.id, savedAddress?.postalCode, item.id, item.price]);
-
-  const checkoutStatus = React.useMemo(() => {
-    if (isSubmittingPayment) {
-      return {
-        tone: 'syncing' as const,
-        label: t('checkout.status.processing'),
-      };
-    }
-
-    if (isHydratingCheckout) {
-      return {
-        tone: 'syncing' as const,
-        label: t('checkout.status.syncingDetails'),
-      };
-    }
-
-    if (checkoutReady) {
-      return {
-        tone: 'live' as const,
-        label: t('checkout.status.ready'),
-      };
-    }
-
-    return {
-      tone: 'offline' as const,
-      label: t('checkout.status.incomplete'),
-    };
-  }, [checkoutReady, isHydratingCheckout, isSubmittingPayment]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const hydrateCheckoutDefaults = async () => {
-      const userId = currentUser?.id;
-      if (!userId) {
-        setIsHydratingCheckout(false);
-        return;
-      }
-
-      setIsHydratingCheckout(true);
-      try {
-        const [addresses, paymentMethods] = await Promise.all([
-          listUserAddresses(userId),
-          listUserPaymentMethods(userId),
-        ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        if (!savedAddress && addresses.length > 0) {
-          const preferredAddress = addresses.find((entry) => entry.isDefault) ?? addresses[0];
-          saveAddress({
-            id: preferredAddress.id,
-            name: preferredAddress.name,
-            streetAddress: preferredAddress.streetAddress,
-            apartment: preferredAddress.apartment,
-            city: preferredAddress.city,
-            region: preferredAddress.region,
-            postalCode: preferredAddress.postalCode,
-            countryCode: preferredAddress.countryCode,
-            country: preferredAddress.country,
-            isDefault: preferredAddress.isDefault,
-          });
-        }
-
-        if (!savedPaymentMethod && paymentMethods.length > 0) {
-          const preferredPaymentMethod =
-            paymentMethods.find((entry) => entry.isDefault) ?? paymentMethods[0];
-          savePaymentMethod({
-            id: preferredPaymentMethod.id,
-            type: preferredPaymentMethod.type,
-            label: preferredPaymentMethod.label,
-            details: preferredPaymentMethod.details ?? undefined,
-            isDefault: preferredPaymentMethod.isDefault,
-          });
-        }
-      } catch {
-        // Keep local checkout state if backend data is unavailable.
-      } finally {
-        if (!cancelled) {
-          setIsHydratingCheckout(false);
-        }
-      }
-    };
-
-    void hydrateCheckoutDefaults();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser?.id, saveAddress, savePaymentMethod, savedAddress, savedPaymentMethod]);
-
-  const handlePay = async () => {
-    if (!checkoutReady) {
-      show(t('checkout.toast.addAddressPayment'), 'error');
-      return;
-    }
-
-    if (isSubmittingPayment) {
-      return;
-    }
-
-    const userId = currentUser?.id;
-    if (!userId) {
-      show(t('checkout.toast.signInRequired'), 'error');
-      setIsSubmittingPayment(false);
-      return;
-    }
-
-    setIsSubmittingPayment(true);
-    try {
-      const order = await createOrder({
-        buyerId: userId,
-        listingId: item.id,
-        addressId: savedAddress?.id,
-        paymentMethodId: savedPaymentMethod?.id,
-        platformChargeGbp: PLATFORM_CHARGE,
-        postageFeeGbp: POSTAGE_FEE,
-        shippingCarrierId: postageOption.carrierId ?? undefined,
-      });
-
-      const intent = await createCommercePaymentIntent({ orderId: order.id });
-
-      if (intent.nextActionUrl) {
-        try {
-          const supported = await Linking.canOpenURL(intent.nextActionUrl);
-          if (!supported) {
-            show('Unable to open payment action URL.', 'error');
-            setIsSubmittingPayment(false);
-            return;
-          }
-          await Linking.openURL(intent.nextActionUrl);
-          show(t('checkout.toast.paymentActionRequired'), 'info');
-        } catch {
-          show('Could not open payment page. Please try again.', 'error');
-          setIsSubmittingPayment(false);
-          return;
-        }
-      }
-
-      const settlementStatus = await waitForPaymentIntentSettlement(intent.intentId);
-      if (settlementStatus === 'succeeded') {
-        show(t('checkout.toast.paymentCompleted'), 'success');
-        navigation.replace('Success', { orderId: order.id });
-        return;
-      }
-
-      if (settlementStatus === 'pending') {
-        show(t('checkout.toast.paymentPending'), 'info');
-        navigation.replace('OrderDetail', { orderId: order.id });
-        return;
-      }
-
-      throw new Error('payment-intent-failed');
-    } catch (error: any) {
-      const message = error?.message === 'payment-intent-failed'
-        ? t('checkout.toast.paymentFailed')
-        : (error?.message || t('checkout.toast.paymentFailed'));
-      show(message, 'error');
-    } finally {
-      setIsSubmittingPayment(false);
-    }
-  };
-
-  const handleMessageSeller = React.useCallback(() => {
-    if (!resolvedSeller.id || !item) return;
-    navigation.navigate('Chat', {
-      conversationId: `checkout_${resolvedSeller.id}_${item.id}`,
-      focusQuery: item.title,
-      partnerUserId: resolvedSeller.id,
-    });
-    show('Opening seller chat.', 'info');
-  }, [item, navigation, resolvedSeller.id, show]);
+  const payLabel = isSubmitting
+    ? STAGE_LABELS[stage] || 'Processing…'
+    : stage === 'payment_failed'
+      ? 'Retry payment'
+      : stage === 'payment_pending'
+        ? 'Waiting for confirmation…'
+        : 'Pay securely';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <ScreenHeader
-        title={t('checkout.header.title')}
-        onBack={() => navigation.goBack()}
-        backIcon="close"
-      />
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-
-        {/* Item Summary Card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}>
-        <ElevatedSurface variant="surface" style={styles.itemCard}>
-          <CachedImage uri={getListingCoverUri(item.images, '')} style={styles.itemThumb} contentFit="cover" />
-          <View style={styles.itemInfo}>
-            <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-            <View style={styles.itemSellerRow}>
-              {resolvedSeller.id ? (
-                <AnimatedPressable
-                  style={styles.sellerIdentityChip}
-                  onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: resolvedSeller.id }); }}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open @${sellerName} profile`}
-                  accessibilityHint="Shows seller profile"
-                >
-                  <CachedImage
-                    uri={resolvedSeller.avatar ?? ''}
-                    style={styles.sellerIdentityAvatar}
-                    containerStyle={styles.sellerIdentityAvatarWrap}
-                    contentFit="cover"
-                  />
-                  <Text style={styles.itemSeller}>{t('checkout.header.fromSeller', { seller: sellerName })}</Text>
-                </AnimatedPressable>
-              ) : (
-                <Text style={styles.itemSeller}>{t('checkout.header.fromSeller', { seller: sellerName })}</Text>
-              )}
-
-              {resolvedSeller.id && (
-                <AnimatedPressable
-                  style={styles.sellerMessageBtn}
-                  onPress={() => { haptics.tap(); handleMessageSeller(); }}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Message seller"
-                  accessibilityHint="Opens chat with this seller"
-                >
-                  <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-                </AnimatedPressable>
-              )}
-            </View>
-            <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP')}</Text>
-          </View>
-        </ElevatedSurface>
-        </Reanimated.View>
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(60)}>
-        <ElevatedSurface variant="tint" style={styles.readinessCard}>
-          <View style={styles.readinessTopRow}>
-            <Text style={styles.readinessTitle}>{t('checkout.readiness.title')}</Text>
-            <SyncStatusPill tone={checkoutStatus.tone} label={checkoutStatus.label} compact />
-          </View>
-
-          <View style={styles.readinessChipsRow}>
-            <View style={[styles.readinessChip, savedAddress ? styles.readinessChipReady : styles.readinessChipPending]}>
-              <Text style={[styles.readinessChipText, savedAddress ? styles.readinessChipTextReady : styles.readinessChipTextPending]}>
-                {t('checkout.readiness.address')}
-              </Text>
-            </View>
-            <View style={[styles.readinessChip, savedPaymentMethod ? styles.readinessChipReady : styles.readinessChipPending]}>
-              <Text style={[styles.readinessChipText, savedPaymentMethod ? styles.readinessChipTextReady : styles.readinessChipTextPending]}>
-                {t('checkout.readiness.payment')}
-              </Text>
-            </View>
-            <View style={[styles.readinessChip, checkoutReady ? styles.readinessChipReady : styles.readinessChipPending]}>
-              <Text style={[styles.readinessChipText, checkoutReady ? styles.readinessChipTextReady : styles.readinessChipTextPending]}>
-                {t('checkout.readiness.confirm')}
-              </Text>
-            </View>
-          </View>
-        </ElevatedSurface>
-        </Reanimated.View>
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}>
-        <Text style={styles.sectionTitle}>{t('checkout.section.delivery')}</Text>
-        <ElevatedSurface variant="surface" style={styles.blockBtn}>
-        <AnimatedPressable
-          activeOpacity={0.8}
-          onPress={() => setAddAddressSheetVisible(true)}
-          accessibilityLabel={savedAddress
-            ? t('checkout.a11y.deliveryAddress', { street: savedAddress.streetAddress })
-            : t('checkout.a11y.addDeliveryAddress')}
+      {/* 1. Compact close header */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <Pressable
+          style={styles.closeBtn}
+          onPress={handleClose}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Close checkout"
         >
-          <View style={styles.blockLeft}>
-            <Ionicons name="location-outline" size={24} color={Colors.textPrimary} />
-            <View style={styles.blockTextCol}>
-              <Text style={styles.blockTitle}>
-                {savedAddress ? `${savedAddress.streetAddress}${savedAddress.apartment ? `, ${savedAddress.apartment}` : ''}` : t('checkout.delivery.addAddress')}
-              </Text>
-              <Text style={styles.blockSub}>
-                {savedAddress
-                  ? `${savedAddress.city}${savedAddress.region ? `, ${savedAddress.region}` : ''} | ${savedAddress.postalCode} | ${savedAddress.country}`
-                  : t('checkout.delivery.required')}
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-        </AnimatedPressable>
-        </ElevatedSurface>
+          <Ionicons name="close" size={24} color={Colors.textPrimary} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Checkout</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
-        <ElevatedSurface variant="surface" style={styles.blockBtn}>
-        <AnimatedPressable activeOpacity={0.8} onPress={() => navigation.navigate('Postage')}>
-          <View style={styles.blockLeft}>
-            <Ionicons name="cube-outline" size={24} color={Colors.textPrimary} />
-            <View style={styles.blockTextCol}>
-              <Text style={styles.blockTitle}>{postageOption.label}</Text>
-              <Text style={styles.blockSub}>
-                {postageOption.liveQuote
-                  ? postageOption.etaLabel
-                  : `${postageOption.etaLabel} (${t('checkout.postage.estimated')})`}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.blockRightPrice}>{formatFromFiat(POSTAGE_FEE, 'GBP')}</Text>
-        </AnimatedPressable>
-        </ElevatedSurface>
-        </Reanimated.View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* 2. Product and seller summary */}
+        <CheckoutItemSummary
+          title={item.title}
+          imageUrl={getListingCoverUri(item.images, '')}
+          seller={{
+            id: resolvedSeller.id,
+            username: resolvedSeller.username,
+            avatar: resolvedSeller.avatar,
+          }}
+          priceLabel={formatFromFiat(item.price, 'GBP')}
+          onPressSeller={
+            resolvedSeller.id
+              ? () => { haptics.tap(); navigation.navigate('UserProfile', { userId: resolvedSeller.id }); }
+              : undefined
+          }
+          onPressMessage={resolvedSeller.id ? () => { haptics.tap(); handleMessageSeller(); } : undefined}
+        />
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}>
-        <Text style={styles.sectionTitle}>{t('checkout.section.payment')}</Text>
-        {paymentPolicyLabel ? (
-          <Text style={styles.policyHint}>{t('checkout.payment.policyScope', { scope: paymentPolicyLabel })}</Text>
-        ) : null}
-        <ElevatedSurface variant="surface" style={styles.blockBtn}>
-        <AnimatedPressable
-          activeOpacity={0.8}
+        <View style={styles.sectionDivider} />
+
+        {/* 3. Delivery address */}
+        <CheckoutSelectionRow
+          label="Delivery address"
+          title={savedAddress ? savedAddress.name : 'No address'}
+          subtitle={addressSubtitle}
+          actionLabel={savedAddress ? 'Change' : 'Add'}
+          onPress={handleAddressPress}
+          warningText={addressNeedsSave ? 'Needs saving before payment' : undefined}
+          errorText={addressError ?? undefined}
+          accessibilityLabel={
+            savedAddress
+              ? `Delivery address: ${savedAddress.name}, ${savedAddress.streetAddress}, ${savedAddress.city}, ${savedAddress.postalCode}, ${savedAddress.country}`
+              : 'Add delivery address'
+          }
+          accessibilityHint="Opens address form to add or edit your delivery address"
+        />
+
+        {/* 4. Delivery method */}
+        <CheckoutSelectionRow
+          label="Delivery"
+          title={postageOption.label}
+          subtitle={`${postageOption.etaLabel}${postageOption.liveQuote ? '' : ' (Estimated)'}${postageOption.tracking ? ' · Tracking' : ''}`}
+          actionLabel={formatFromFiat(POSTAGE_FEE, 'GBP')}
+          onPress={canChangePostage ? handleDeliveryPress : undefined}
+          errorText={
+            !postageOption.carrierId
+              ? 'Shipping not available for your region'
+              : shippingError ?? undefined
+          }
+          accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, 'GBP')}`}
+        />
+
+        {/* 5. Payment method */}
+        <CheckoutSelectionRow
+          label="Payment"
+          title={
+            savedPaymentMethod
+              ? savedPaymentMethod.label
+              : allowCardPayments
+                ? 'Add payment method'
+                : 'No payment method'
+          }
+          subtitle={
+            !allowCardPayments && checkoutCapabilities
+              ? 'Cards unavailable in your region'
+              : savedPaymentMethod?.details
+                ? savedPaymentMethod.details
+                : savedPaymentMethod
+                  ? undefined
+                  : 'Required before payment'
+          }
+          actionLabel={savedPaymentMethod ? 'Change' : 'Add'}
           onPress={() => {
-            if (!allowCardPayments) {
-              show(t('checkout.toast.cardsUnavailable'), 'error');
+            haptics.tap();
+            if (!allowCardPayments && checkoutCapabilities) {
+              show('Cards are unavailable for your region.', 'error');
               navigation.navigate('Payments');
               return;
             }
-
-            setAddCardSheetVisible(true);
-          }}
-        >
-          <View style={styles.blockLeft}>
-            <Ionicons name="card-outline" size={24} color={Colors.textPrimary} />
-            <View style={styles.blockTextCol}>
-              <Text style={styles.blockTitle}>{savedPaymentMethod ? savedPaymentMethod.label : t('checkout.payment.addMethod')}</Text>
-              <Text style={styles.blockSub}>
-                {!allowCardPayments
-                  ? t('checkout.payment.cardsUnavailableRegion')
-                  : (savedPaymentMethod?.details ?? t('checkout.payment.cardRailsFallback'))}
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-        </AnimatedPressable>
-        </ElevatedSurface>
-        </Reanimated.View>
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}>
-        <Text style={styles.sectionTitle}>{t('checkout.section.orderSummary')}</Text>
-        <ElevatedSurface variant="surface" style={styles.summaryCard}>
-          <SummaryRow label={t('checkout.summary.itemPrice')} value={formatFromFiat(item.price, 'GBP')} />
-          <SummaryRow label={t('checkout.summary.platformCharge')} value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} info />
-          <SummaryRow
-            label={
-              postageOption.liveQuote
-                ? t('checkout.summary.postage')
-                : `${t('checkout.summary.postage')} (${t('checkout.postage.estimated')})`
+            if (backendPaymentMethods.length > 1) {
+              setPaymentSelectorVisible(true);
+            } else {
+              setAddCardSheetVisible(true);
             }
+          }}
+          errorText={paymentError ?? undefined}
+          accessibilityLabel={
+            savedPaymentMethod
+              ? `Payment method: ${savedPaymentMethod.label}${savedPaymentMethod.details ? `, ${savedPaymentMethod.details}` : ''}`
+              : 'Add payment method'
+          }
+          accessibilityHint="Add or change your payment method"
+        />
+
+        <View style={styles.sectionDivider} />
+
+        {/* 6. Price breakdown */}
+        <View style={styles.priceBreakdown}>
+          <PriceRow label="Item" value={formatFromFiat(item.price, 'GBP')} />
+          <PriceRow label="Platform charge" value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} />
+          <PriceRow
+            label={`Delivery${postageOption.liveQuote ? '' : ' (Estimated)'}`}
             value={formatFromFiat(POSTAGE_FEE, 'GBP')}
           />
-          <View style={styles.divider} />
-          <SummaryRow label={t('checkout.summary.total')} value={formatFromFiat(TOTAL, 'GBP')} bold />
-        </ElevatedSurface>
-        </Reanimated.View>
+          <View style={styles.priceDivider} />
+          <PriceRow label="Total" value={formatFromFiat(TOTAL, 'GBP')} bold />
+        </View>
+
+        {/* 7. Transaction feedback */}
+        {stage !== 'idle' ? (
+          <View style={styles.feedbackRow}>
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color={Colors.brand} />
+            ) : stage === 'payment_failed' ? (
+              <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+            ) : stage === 'payment_pending' ? (
+              <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
+            ) : null}
+            <Text
+              style={[
+                styles.feedbackText,
+                stage === 'payment_failed' && styles.feedbackTextError,
+              ]}
+            >
+              {STAGE_LABELS[stage]}
+            </Text>
+          </View>
+        ) : null}
+
+        {orderError ? (
+          <Text style={styles.orderErrorText}>{orderError}</Text>
+        ) : null}
+
+        {capabilityError ? (
+          <Text style={styles.hintText}>{capabilityError}</Text>
+        ) : null}
 
         <Text style={styles.termsText}>
-          {t('checkout.terms')}
+          By tapping "Pay", you agree to our Terms of Sale and Privacy Policy.
         </Text>
-
-        {!checkoutReady && (
-          <Text style={styles.requirementText}>{t('checkout.requirement')}</Text>
-        )}
-        {isHydratingCheckout && (
-          <Text style={styles.syncText}>{t('checkout.sync.savedDetails')}</Text>
-        )}
-
-        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Sticky Bottom Footer */}
-      <PremiumActionBar
-        primaryLabel={isSubmittingPayment ? t('checkout.cta.processing') : t('checkout.cta.paySecurely')}
-        onPrimaryPress={() => { haptics.press(); handlePay(); }}
-        primaryLoading={isSubmittingPayment}
-        primaryDisabled={!checkoutReady || isSubmittingPayment}
-        errorText={!checkoutReady && !isHydratingCheckout ? t('checkout.requirement') : undefined}
-      />
+      {/* 8. Sticky total + Pay footer */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
+        <View style={styles.footerTotalCol}>
+          <Text style={styles.footerTotalLabel}>Total</Text>
+          <Text style={styles.footerTotalPrice}>{formatFromFiat(TOTAL, 'GBP')}</Text>
+        </View>
+        <Pressable
+          style={[
+            styles.payBtn,
+            (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
+          ]}
+          onPress={() => { haptics.press(); handlePay(); }}
+          disabled={!checkoutEligible || isInteractionLocked}
+          accessibilityRole="button"
+          accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} securely`}
+          accessibilityState={{
+            disabled: !checkoutEligible || isInteractionLocked,
+            busy: isSubmitting,
+          }}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator size="small" color={Colors.textInverse} />
+          ) : null}
+          <Text style={styles.payBtnText}>{payLabel}</Text>
+        </Pressable>
+      </View>
 
-      <AddCardSheet visible={addCardSheetVisible} onDismiss={() => setAddCardSheetVisible(false)} />
-      <AddAddressSheet visible={addAddressSheetVisible} onDismiss={() => setAddAddressSheetVisible(false)} />
+      {/* Sheets */}
+      <AddCardSheet
+        visible={addCardSheetVisible}
+        onDismiss={() => setAddCardSheetVisible(false)}
+        onSuccess={handleAddCardSuccess}
+      />
+      <CheckoutPaymentSelector
+        visible={paymentSelectorVisible}
+        onDismiss={() => setPaymentSelectorVisible(false)}
+        methods={backendPaymentMethods}
+        selectedId={savedPaymentMethod?.id}
+        onSelect={handleSelectPaymentMethod}
+        isSelecting={isSelectingPayment}
+      />
     </SafeAreaView>
   );
 }
 
-function SummaryRow({ label, value, bold, info }: { label: string; value: string; bold?: boolean; info?: boolean }) {
+function PriceRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
-    <View style={summaryStyles.row}>
-      <View style={summaryStyles.labelRow}>
-        <Text style={[summaryStyles.label, bold && summaryStyles.bold]}>{label}</Text>
-        {info && <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} style={{ marginLeft: 6 }} />}
-      </View>
-      <Text style={[summaryStyles.value, bold && summaryStyles.bold]}>{value}</Text>
+    <View style={priceStyles.row}>
+      <Text style={[priceStyles.label, bold && priceStyles.labelBold]}>{label}</Text>
+      <Text style={[priceStyles.value, bold && priceStyles.valueBold]}>{value}</Text>
     </View>
   );
 }
 
-const summaryStyles = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  labelRow: { flexDirection: 'row', alignItems: 'center' },
-  label: { fontSize: 14, fontFamily: Typography.family.regular, color: Colors.textSecondary },
-  value: { fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textPrimary },
-  bold: { fontSize: 16, fontFamily: Typography.family.bold, color: Colors.textPrimary },
+const priceStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  label: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+  },
+  labelBold: {
+    fontSize: 16,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  value: {
+    fontSize: 14,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
+  valueBold: {
+    fontSize: 18,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-
-  scrollContent: { paddingHorizontal: 20, paddingTop: 16 },
-
-  itemCard: {
-    flexDirection: 'row',
-    backgroundColor: PANEL_BG,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 32,
-    gap: 16,
-    alignItems: 'center',
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
-  itemThumb: { width: 64, height: 64, borderRadius: 12 },
-  itemInfo: { flex: 1, justifyContent: 'center' },
-  itemTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
-  itemSellerRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 4,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  sellerIdentityChip: {
-    flex: 1,
-    minHeight: 30,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_SOFT_BG,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sellerIdentityAvatarWrap: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  sellerIdentityAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  itemSeller: { flex: 1, fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textSecondary },
-  sellerMessageBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_BG,
+  closeBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemPrice: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary },
-
-  readinessCard: {
-    backgroundColor: PANEL_BG,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 20,
-  },
-  readinessTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  readinessTitle: {
-    color: Colors.textPrimary,
-    fontSize: 13,
-    fontFamily: Typography.family.bold,
-  },
-  readinessChipsRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  readinessChip: {
-    flex: 1,
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingVertical: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  readinessChipReady: {
-    backgroundColor: Colors.surfaceAlt,
-    borderColor: Colors.border,
-  },
-  readinessChipPending: {
-    backgroundColor: PANEL_SOFT_BG,
-    borderColor: PANEL_BORDER,
-  },
-  readinessChipText: {
-    fontSize: 11,
+  headerTitle: {
+    fontSize: 17,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
+    color: Colors.textPrimary,
   },
-  readinessChipTextReady: {
-    color: BRAND,
+  headerSpacer: {
+    width: 44,
   },
-  readinessChipTextPending: {
+  scrollContent: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+  },
+  sectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginVertical: Space.sm,
+  },
+  priceBreakdown: {
+    paddingVertical: Space.sm,
+  },
+  priceDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginVertical: Space.sm,
+  },
+  feedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.md,
+  },
+  feedbackText: {
+    fontSize: 14,
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
   },
-
-  sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
-  policyHint: {
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    marginBottom: 10,
-    marginLeft: 4,
+  feedbackTextError: {
+    color: Colors.danger,
   },
-
-  blockBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: PANEL_BG,
-    borderWidth: 0.5,
-    borderColor: PANEL_BORDER,
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 16,
-  },
-  blockLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  blockTextCol: { justifyContent: 'center' },
-  blockTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
-  blockSub: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
-  blockRightPrice: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-
-  summaryCard: { backgroundColor: PANEL_BG, borderWidth: 0.5, borderColor: PANEL_BORDER, padding: 24, borderRadius: 20, marginBottom: 24 },
-  divider: { height: 1, backgroundColor: PANEL_BORDER, marginVertical: 12 },
-
-  termsText: { fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted, lineHeight: 18, textAlign: 'center', paddingHorizontal: 16 },
-  requirementText: {
-    marginTop: 12,
-    fontSize: 12,
+  orderErrorText: {
+    fontSize: 14,
     fontFamily: Typography.family.medium,
     color: Colors.danger,
-    textAlign: 'center',
+    paddingVertical: Space.sm,
   },
-  syncText: {
-    marginTop: 10,
+  hintText: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    paddingVertical: Space.xs,
+  },
+  termsText: {
     fontSize: 12,
-    fontFamily: Typography.family.medium,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    lineHeight: 18,
+    textAlign: 'center',
+    paddingTop: Space.md,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+  },
+  footerTotalCol: {
+    flex: 1,
+  },
+  footerTotalLabel: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
+  },
+  footerTotalPrice: {
+    fontSize: 22,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  payBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    minWidth: 180,
+    paddingVertical: 14,
+    paddingHorizontal: Space.lg,
+    borderRadius: 10,
+    backgroundColor: Colors.brand,
+    minHeight: 48,
+  },
+  payBtnDisabled: {
+    opacity: 0.5,
+  },
+  payBtnText: {
+    fontSize: 16,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
+  },
+  signedOutContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.xl,
+    gap: Space.md,
+  },
+  signedOutTitle: {
+    fontSize: 18,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     textAlign: 'center',
   },
-
-  footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: PANEL_BORDER,
-    backgroundColor: FOOTER_BG,
-    paddingHorizontal: 20, paddingTop: 20, paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+  signedOutBody: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
   },
-  footerPriceCol: { flex: 1 },
-  footerTotalLabel: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
-  footerTotalPrice: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary },
-  payBtn: { minWidth: 186, marginLeft: 16 },
+  signedOutBtn: {
+    marginTop: Space.sm,
+    paddingVertical: 14,
+    paddingHorizontal: Space.xl,
+    borderRadius: 10,
+    backgroundColor: Colors.brand,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  signedOutBtnText: {
+    fontSize: 16,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
+  },
 });

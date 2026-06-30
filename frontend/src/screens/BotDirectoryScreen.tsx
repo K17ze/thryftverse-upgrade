@@ -94,7 +94,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
         onBack={() => navigation.goBack()}
         rightAction={
           <AnimatedPressable
-            onPress={() => navigation.navigate({ name: 'CustomBots', params: undefined })}
+            onPress={() => navigation.navigate('CustomBots')}
             activeOpacity={0.7}
             scaleValue={0.92}
             hapticFeedback="light"

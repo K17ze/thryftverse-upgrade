@@ -99,7 +99,7 @@ export default function MarketLedgerScreen() {
   const localEntries = useStore((state) => state.marketLedger);
   const currentUser = useStore((state) => state.currentUser);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
-  const viewerId = currentUser?.id ?? 'u1';
+  const viewerId = currentUser?.id ?? '';
   const reducedMotionEnabled = useReducedMotion();
 
   const [filter, setFilter] = React.useState<LedgerFilter>('ALL');
@@ -112,6 +112,10 @@ export default function MarketLedgerScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
 
   const refreshRemoteLedger = React.useCallback(async () => {
+    if (!viewerId) {
+      setIsSyncingLedger(false);
+      return;
+    }
     setIsSyncingLedger(true);
     try {
       const page = await listUserMarketHistory(viewerId, { channel: 'all', limit: PAGE_SIZE });
@@ -246,6 +250,11 @@ export default function MarketLedgerScreen() {
                 totalAmount={formatSignedMoney(getEntryCashflow(item))}
                 status={item.action === 'bid' ? 'pending' : 'filled'}
                 timestamp={relativeTime(item.timestamp)}
+                onPress={() => {
+                  if (isAuction) {
+                    navigation.navigate('AuctionDetail', { auctionId: item.referenceId });
+                  }
+                }}
               />
             </Reanimated.View>
           );

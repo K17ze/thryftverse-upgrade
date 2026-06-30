@@ -1,6 +1,5 @@
 import React from 'react';
 import { Linking } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -26,82 +25,67 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   };
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Privacy" subtitle="Control your visibility and safety" onBack={() => navigation.goBack()} />}>
-      {/* Profile visibility */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <SettingsSection title="Profile visibility" noCard>
-          <SettingsRow
-            icon="eye-outline"
-            title="Private Profile"
-            subtitle="Only approved followers can see your full profile and listings"
-            toggleValue={accountPreferences.privateProfile}
-            onToggle={(v) => updateAccountPreferences({ privateProfile: v })}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+    <FlagshipScreen header={<FlagshipHeader title="Privacy & safety" onBack={() => navigation.goBack()} />}>
+      <SettingsSection title="Visibility" noCard>
+        <SettingsRow
+          icon="eye-outline"
+          title="Private profile"
+          subtitle="Only approved followers can see your full profile and listings"
+          toggleValue={accountPreferences.privateProfile}
+          onToggle={(v) => updateAccountPreferences({ privateProfile: v })}
+          isFirst
+          isLast
+        />
+      </SettingsSection>
 
-      {/* Activity */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
-        <SettingsSection title="Activity" noCard>
-          <SettingsRow
-            icon="bag-outline"
-            title="Holiday Mode"
-            subtitle="Pause your listings and hide your shop while you're away"
-            toggleValue={accountPreferences.holidayMode}
-            onToggle={(v) => updateAccountPreferences({ holidayMode: v })}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Shop activity" noCard>
+        <SettingsRow
+          icon="bag-outline"
+          title="Holiday mode"
+          subtitle="Pause your listings and hide your shop while you're away"
+          toggleValue={accountPreferences.holidayMode}
+          onToggle={(v) => updateAccountPreferences({ holidayMode: v })}
+          isFirst
+          isLast
+        />
+      </SettingsSection>
 
-      {/* Communication */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
-        <SettingsSection title="Communication" noCard>
-          <SettingsRow
-            icon="chatbubble-ellipses-outline"
-            title="Chat privacy"
-            subtitle="Who can message me, read receipts, and more"
-            onPress={() => navigation.navigate('ChatSettings')}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Messaging" noCard>
+        <SettingsRow
+          icon="chatbubble-ellipses-outline"
+          title="Chat privacy"
+          subtitle="Who can message you, read receipts, blocked users"
+          onPress={() => navigation.navigate('ChatSettings')}
+          isFirst
+          isLast
+        />
+      </SettingsSection>
 
-      {/* Safety */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
-        <SettingsSection title="Safety" noCard>
-          <SettingsRow
-            icon="people-circle-outline"
-            title="Blocked users"
-            value={blockedCount > 0 ? `${blockedCount}` : 'None'}
-            onPress={() => navigation.navigate('BlockedUsers')}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Blocked users" noCard>
+        <SettingsRow
+          icon="ban-outline"
+          title="Manage blocked users"
+          subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None blocked'}
+          onPress={() => navigation.navigate('BlockedUsers')}
+          isFirst
+          isLast
+        />
+      </SettingsSection>
 
-      {/* Data */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
-        <SettingsSection title="Data & transparency" noCard>
-          <SettingsRow
-            icon="document-text-outline"
-            title="Privacy Policy"
-            onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
-            isFirst
-          />
-          <SettingsRow
-            icon="shield-checkmark-outline"
-            title="Terms of Service"
-            onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Legal" noCard>
+        <SettingsRow
+          icon="document-text-outline"
+          title="Privacy Policy"
+          onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
+          isFirst
+        />
+        <SettingsRow
+          icon="shield-checkmark-outline"
+          title="Terms of Service"
+          onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
+          isLast
+        />
+      </SettingsSection>
     </FlagshipScreen>
   );
 }

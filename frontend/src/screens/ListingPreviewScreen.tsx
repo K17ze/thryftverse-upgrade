@@ -1,78 +1,71 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   ScrollView,
   Dimensions,
-  ActivityIndicator,
+  Pressable,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
+
 import { RootStackParamList } from '../navigation/types';
-import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { AppButton } from '../components/ui/AppButton';
-import { CachedImage } from '../components/CachedImage';
-import { useHaptic } from '../hooks/useHaptic';
-import { useToast } from '../context/ToastContext';
+import { Space, Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
-import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
 import { useStore } from '../store/useStore';
-import { isVideoUri } from '../utils/media';
-import { ListingMediaDraftItem } from '../utils/mediaUploadAsset';
+import { haptics } from '../utils/haptics';
+import { ImageViewer } from '../components/ImageViewer';
+import { ListingIdentityBlock } from '../components/listing/ListingIdentityBlock';
+import { ListingPreviewFooter } from '../components/listing/ListingPreviewFooter';
+import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingPreview'>;
 
-const { width } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const HERO_HEIGHT = SCREEN_H * 0.65;
 
 export default function ListingPreviewScreen({ navigation, route }: Props) {
-  const { preview } = route.params;
-  const { isDark } = useAppTheme();
+  const { preview, origin } = route.params;
   const insets = useSafeAreaInsets();
-  const haptic = useHaptic();
-  const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);
 
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const photos = preview?.photos ?? [];
+  const title = preview?.title?.trim() || 'Untitled listing';
+  const hasRealTitle = !!preview?.title?.trim();
+  const priceText = preview?.price != null
+    ? formatFromFiat(preview.price, 'GBP', { displayMode: 'fiat' })
+    : null;
+  const originalPriceText = preview?.originalPrice != null && preview.originalPrice > 0
+    ? formatFromFiat(preview.originalPrice, 'GBP', { displayMode: 'fiat' })
+    : null;
+  const hasDiscount = priceText != null && originalPriceText != null && preview!.originalPrice! > (preview!.price ?? 0);
 
-  const canPublish = useMemo(() => {
-    return preview.title && preview.price !== undefined && (preview.mediaDraftItems?.length ?? preview.photos?.length) > 0;
+  const specs = useMemo(() => {
+    const rows: { label: string; value: string }[] = [];
+    if (preview?.size) rows.push({ label: 'Size', value: preview.size });
+    if (preview?.condition) rows.push({ label: 'Condition', value: preview.condition });
+    if (preview?.category) rows.push({ label: 'Category', value: preview.category });
+    if (preview?.brand) rows.push({ label: 'Brand', value: preview.brand });
+    if (preview?.shippingMethod) {
+      const method = preview.shippingMethod.charAt(0).toUpperCase() + preview.shippingMethod.slice(1);
+      const payer = preview.shippingPayer === 'seller' ? 'Free shipping' : 'Buyer pays';
+      rows.push({ label: 'Shipping', value: `${method} · ${payer}` });
+    } else {
+      rows.push({ label: 'Shipping', value: 'Confirmed at checkout' });
+    }
+    return rows;
   }, [preview]);
 
-  const mediaItems: ListingMediaDraftItem[] = useMemo(() => {
-    if (preview.mediaDraftItems && preview.mediaDraftItems.length > 0) return preview.mediaDraftItems;
-    return preview.photos.map((uri) => ({
-      id: `preview_${uri}`,
-      uri,
-      kind: isVideoUri(uri) ? 'video' : 'image',
-      source: uri.startsWith('http') ? 'remote' : 'local',
-      fileName: 'preview',
-      mimeType: isVideoUri(uri) ? 'video/mp4' : 'image/jpeg',
-      status: uri.startsWith('http') ? 'uploaded' : 'draft',
-      publicUrl: uri.startsWith('http') ? uri : undefined,
-    }));
-  }, [preview.mediaDraftItems, preview.photos]);
+  const description = preview?.description?.trim();
+  const sellerName = currentUser?.displayName || currentUser?.username || 'You';
+  const sellerAvatar = currentUser?.avatar || null;
 
-  const coverUri = mediaItems[0]?.publicUrl || mediaItems[0]?.uri || '';
-  const hasVideo = mediaItems.some((m) => m.kind === 'video' || isVideoUri(m.uri));
-
-  const handlePublish = useCallback(() => {
-    // Preview defers to SellScreen's orchestrated publication flow
-    haptic.heavy();
-    navigation.goBack();
-  }, [haptic, navigation]);
-
-  const handleEdit = () => {
-    haptic.light();
+  const handleBack = () => {
+    haptics.press();
     navigation.goBack();
   };
 
@@ -82,200 +75,171 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
     'Fixed price';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader
-        title="Preview"
-        subtitle="Buyers will see this"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <AnimatedPressable onPress={handleEdit} activeOpacity={0.7} scaleValue={0.95}>
-            <Text style={styles.headerAction}>Edit</Text>
-          </AnimatedPressable>
-        }
-      />
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Photo hero */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
-          {mediaItems.length > 0 ? (
-            <View style={styles.hero}>
-              <CachedImage
-                uri={coverUri}
-                style={styles.heroImage}
-                contentFit="cover"
-              />
-              {mediaItems.length > 1 && (
-                <View style={styles.photoCounter}>
-                  <Caption color={Colors.background}>{mediaItems.length} media</Caption>
-                </View>
-              )}
-              {hasVideo && (
-                <View style={[styles.photoCounter, { right: 'auto', left: Space.sm }]}>
-                  <Ionicons name="play-circle" size={16} color="#fff" />
-                  <Caption color={Colors.background} style={{ marginLeft: 4 }}>Video</Caption>
-                </View>
-              )}
-            </View>
+    <View style={styles.container}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* ── 1. EDGE-TO-EDGE MEDIA HERO ── */}
+        <View style={styles.heroWrap}>
+          {photos.length > 0 ? (
+            <ImageViewer
+              images={photos}
+              height={HERO_HEIGHT}
+              onIndexChange={() => {}}
+            />
           ) : (
-            <View style={[styles.hero, styles.heroEmpty]}>
+            <View style={[styles.heroWrap, styles.heroEmpty]}>
               <Ionicons name="image-outline" size={48} color={Colors.textMuted} />
-              <Caption color={Colors.textMuted}>No photos added</Caption>
+              <Text style={styles.heroEmptyText}>No photos added</Text>
             </View>
           )}
-        </Reanimated.View>
 
-        {/* Title & Price */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.card}>
-          <BodyEmphasis style={styles.title}>{preview.title || 'Untitled listing'}</BodyEmphasis>
-          {preview.price !== undefined && (
-            <Text style={styles.price}>
-              {formatFromFiat(preview.price, 'GBP', { displayMode: 'fiat' })}
-            </Text>
-          )}
-          {preview.originalPrice !== undefined && preview.originalPrice > (preview.price ?? 0) && (
-            <Text style={styles.originalPrice}>
-              RRP {formatFromFiat(preview.originalPrice, 'GBP', { displayMode: 'fiat' })}
-            </Text>
-          )}
-          <View style={styles.metaRow}>
-            {preview.brand && (
-              <PremiumStatusPill tone="paid" label={preview.brand} icon="pricetag-outline" />
-            )}
-            <PremiumStatusPill tone="neutral" label={modeLabel} icon="pricetag-outline" />
+          {/* Top scrim + floating controls */}
+          <View style={styles.topScrim} />
+          <View style={[styles.floatingHeader, { paddingTop: Math.max(insets.top, 20) }]}>
+            <Pressable
+              style={styles.controlBtn}
+              onPress={handleBack}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </Pressable>
+            <Pressable
+              style={styles.controlBtn}
+              onPress={handleBack}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Edit"
+            >
+              <Text style={styles.editText}>Edit</Text>
+            </Pressable>
           </View>
-        </Reanimated.View>
 
-        {/* Details */}
-        {(preview.description || preview.size || preview.category) && (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.card}>
-            <Meta color={Colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
-            {preview.description ? (
-              <Text style={styles.description}>{preview.description}</Text>
-            ) : null}
-            <View style={styles.detailGrid}>
-              {preview.brand && (
-                <View style={styles.detailItem}>
-                  <Caption color={Colors.textMuted}>Brand</Caption>
-                  <Text style={styles.detailValue}>{preview.brand}</Text>
-                </View>
-              )}
-              {preview.category && (
-                <View style={styles.detailItem}>
-                  <Caption color={Colors.textMuted}>Category</Caption>
-                  <Text style={styles.detailValue}>{preview.category}</Text>
-                </View>
-              )}
-              {preview.size && (
-                <View style={styles.detailItem}>
-                  <Caption color={Colors.textMuted}>Size</Caption>
-                  <Text style={styles.detailValue}>{preview.size}</Text>
-                </View>
-              )}
-              {preview.condition && (
-                <View style={styles.detailItem}>
-                  <Caption color={Colors.textMuted}>Condition</Caption>
-                  <Text style={styles.detailValue}>{preview.condition}</Text>
-                </View>
-              )}
-              {preview.shippingMethod && (
-                <View style={styles.detailItem}>
-                  <Caption color={Colors.textMuted}>Shipping</Caption>
-                  <Text style={styles.detailValue}>
-                    {preview.shippingMethod} · {preview.shippingPayer === 'seller' ? 'Free' : 'Buyer pays'}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </Reanimated.View>
+          {/* PREVIEW indicator */}
+          <View style={styles.previewBadge}>
+            <Text style={styles.previewBadgeText}>PREVIEW</Text>
+          </View>
+        </View>
+
+        {/* ── 2. PRODUCT IDENTITY ── */}
+        <ListingIdentityBlock
+          brand={preview?.brand}
+          title={title}
+          price={priceText ?? '—'}
+          originalPrice={hasDiscount ? originalPriceText : null}
+          hasDiscount={hasDiscount}
+        />
+
+        {!hasRealTitle && (
+          <Text style={styles.authoringHint}>Untitled listing — add a title before publishing.</Text>
         )}
 
-        {/* Tags */}
-        {preview.tags && preview.tags.length > 0 && (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.card}>
-            <Meta color={Colors.textMuted} style={styles.sectionLabel}>TAGS</Meta>
-            <View style={styles.tagRow}>
-              {preview.tags.map((tag: string) => (
-                <View key={tag} style={styles.tagPill}>
-                  <Caption color={Colors.textSecondary}>{tag}</Caption>
+        {/* ── 3. PURCHASE CONTEXT ── */}
+        <View style={styles.contextRow}>
+          <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+          <Text style={styles.contextText}>
+            Payment and delivery options are confirmed at checkout.
+          </Text>
+        </View>
+
+        {/* ── 4. SPECIFICATIONS ── */}
+        {specs.length > 0 && (
+          <View style={styles.sectionGroup}>
+            <Text style={styles.sectionHeading}>Specifications</Text>
+            <View style={styles.specGrid}>
+              {specs.map((spec, i) => (
+                <View
+                  key={spec.label}
+                  style={[
+                    styles.specRow,
+                    i < specs.length - 1 && styles.specRowBorder,
+                  ]}
+                >
+                  <Text style={styles.specLabel}>{spec.label}</Text>
+                  <Text style={styles.specValue}>{spec.value}</Text>
                 </View>
               ))}
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
-        {/* Seller identity */}
-        {currentUser && (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.sellerRow}>
-            <View style={styles.sellerAvatarFallback}>
-              <Ionicons name="person" size={16} color={Colors.textMuted} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sellerName}>{currentUser.displayName || currentUser.username || 'You'}</Text>
-              <Caption color={Colors.textMuted}>Seller</Caption>
-            </View>
-          </Reanimated.View>
-        )}
+        {/* ── 5. DESCRIPTION ── */}
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionHeading}>Description</Text>
+          {description ? (
+            <Text style={styles.descriptionText}>{description}</Text>
+          ) : (
+            <Text style={styles.descriptionPlaceholder}>
+              No description added yet.
+            </Text>
+          )}
+        </View>
 
-        {/* Edit jumps */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(200)} style={styles.card}>
-          <Meta color={Colors.textMuted} style={styles.sectionLabel}>EDIT</Meta>
-          <View style={styles.editJumpRow}>
-            <AnimatedPressable style={styles.editJumpBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-              <Ionicons name="images-outline" size={16} color={Colors.textPrimary} />
-              <Caption color={Colors.textPrimary}>Media</Caption>
-            </AnimatedPressable>
-            <AnimatedPressable style={styles.editJumpBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-              <Ionicons name="document-text-outline" size={16} color={Colors.textPrimary} />
-              <Caption color={Colors.textPrimary}>Details</Caption>
-            </AnimatedPressable>
-            <AnimatedPressable style={styles.editJumpBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-              <Ionicons name="cash-outline" size={16} color={Colors.textPrimary} />
-              <Caption color={Colors.textPrimary}>Pricing</Caption>
-            </AnimatedPressable>
-            <AnimatedPressable style={styles.editJumpBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-              <Ionicons name="cube-outline" size={16} color={Colors.textPrimary} />
-              <Caption color={Colors.textPrimary}>Shipping</Caption>
-            </AnimatedPressable>
+        {/* ── 6. SELLER PREVIEW ── */}
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionHeading}>Seller</Text>
+          <View style={styles.sellerRow}>
+            {sellerAvatar ? (
+              <CachedImage
+                uri={sellerAvatar}
+                style={styles.sellerAvatar}
+                containerStyle={{ width: 40, height: 40, borderRadius: 20 }}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={[styles.sellerAvatar, styles.sellerAvatarFallback]}>
+                <Ionicons name="person" size={18} color={Colors.textMuted} />
+              </View>
+            )}
+            <View style={styles.sellerInfo}>
+              <Text style={styles.sellerName} numberOfLines={1}>{sellerName}</Text>
+              <Text style={styles.sellerSubtext}>Seller preview</Text>
+            </View>
           </View>
-        </Reanimated.View>
+        </View>
 
-        {/* Trust — neutral */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={styles.trustCard}>
-          <Ionicons name="shield-checkmark-outline" size={20} color={Colors.textMuted} />
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.trustTitle}>Secure payment & tracked delivery</Text>
-            <Caption color={Colors.textMuted}>
-              Payment and delivery options are confirmed at checkout.
-            </Caption>
+        {/* ── 7. SHIPPING & PAYMENT ── */}
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionHeading}>Shipping & Payment</Text>
+          <View style={styles.specGrid}>
+            <View style={[styles.specRow, styles.specRowBorder]}>
+              <Text style={styles.specLabel}>Shipping method</Text>
+              <Text style={styles.specValue}>
+                {preview?.shippingMethod
+                  ? preview.shippingMethod.charAt(0).toUpperCase() + preview.shippingMethod.slice(1)
+                  : 'Confirmed at checkout'}
+              </Text>
+            </View>
+            <View style={[styles.specRow, styles.specRowBorder]}>
+              <Text style={styles.specLabel}>Shipping cost</Text>
+              <Text style={styles.specValue}>
+                {preview?.shippingPayer === 'seller'
+                  ? 'Free shipping'
+                  : preview?.shippingPayer === 'buyer'
+                  ? 'Buyer pays'
+                  : 'Confirmed at checkout'}
+              </Text>
+            </View>
+            <View style={styles.specRow}>
+              <Text style={styles.specLabel}>Payment</Text>
+              <Text style={styles.specValue}>Through ThryftVerse checkout</Text>
+            </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* Bottom action bar — no direct publish from preview; defer to SellScreen orchestrator */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <AppButton
-          title="Back to editor"
-          variant="primary"
-          size="lg"
-          style={{ flex: 1 }}
-          onPress={handlePublish}
-          hapticFeedback="heavy"
-          icon={<Ionicons name="create-outline" size={16} color={Colors.background} />}
-        />
-        <AnimatedPressable
-          style={styles.draftBtn}
-          onPress={() => { haptic.light(); navigation.goBack(); }}
-          activeOpacity={0.8}
-          scaleValue={0.96}
-        >
-          <Ionicons name="save-outline" size={20} color={Colors.textPrimary} />
-          <Text style={styles.draftText}>Draft</Text>
-        </AnimatedPressable>
-      </View>
-    </SafeAreaView>
+      {/* ── 8. STICKY RETURN-TO-EDITOR FOOTER ── */}
+      <ListingPreviewFooter
+        origin={origin}
+        onBack={handleBack}
+        bottomInset={insets.bottom}
+      />
+    </View>
   );
 }
 
@@ -284,189 +248,174 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-    gap: Space.md,
+  scrollContent: {
+    paddingBottom: 0,
   },
-  headerAction: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  hero: {
-    width: width - Space.md * 2,
-    height: 280,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
+  heroWrap: {
+    width: SCREEN_W,
+    height: HERO_HEIGHT,
     backgroundColor: Colors.surfaceAlt,
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
+    overflow: 'hidden',
   },
   heroEmpty: {
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: Space.sm,
   },
-  photoCounter: {
-    position: 'absolute',
-    bottom: Space.sm,
-    right: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 4,
-  },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.lg,
-    ...Elevation.subtle,
-    gap: Space.sm,
-  },
-  title: {
-    fontSize: Type.title.size,
-    color: Colors.textPrimary,
-    lineHeight: Type.title.lineHeight,
-  },
-  price: {
-    fontSize: Type.priceLarge.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.priceLarge.letterSpacing,
-  },
-  originalPrice: {
-    fontSize: Type.body.size,
+  heroEmptyText: {
+    fontSize: 14,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    textDecorationLine: 'line-through',
   },
-  metaRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.xs,
-  },
-  sectionLabel: {
-    letterSpacing: 1.2,
-    marginBottom: Space.xs,
-  },
-  description: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    lineHeight: Type.body.lineHeight + 4,
-  },
-  detailGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.md,
-    marginTop: Space.sm,
-  },
-  detailItem: {
-    minWidth: 100,
-    gap: 4,
-  },
-  detailValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-  },
-  tagPill: {
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  editJumpRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.sm,
-  },
-  editJumpBtn: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  trustCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  trustTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.success,
-  },
-  bottomBar: {
+  topScrim: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  floatingHeader: {
+    position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    backgroundColor: Colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    zIndex: 10,
   },
-  draftBtn: {
-    width: 56,
-    height: 48,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
+  controlBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
+  },
+  previewBadge: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  previewBadgeText: {
+    fontSize: 11,
+    fontFamily: Typography.family.bold,
+    color: '#fff',
+    letterSpacing: 0.8,
+  },
+  authoringHint: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+  },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  contextText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  sectionGroup: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+  },
+  sectionHeading: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: Space.sm,
+  },
+  specGrid: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
-  draftText: {
-    fontSize: 10,
-    fontFamily: Typography.family.medium,
+  specRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    minHeight: 44,
+  },
+  specRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  specLabel: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
     color: Colors.textSecondary,
-    marginTop: 2,
+  },
+  specValue: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  descriptionText: {
+    fontSize: 15,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+    lineHeight: 22,
+  },
+  descriptionPlaceholder: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
   },
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    paddingVertical: Space.sm,
+  },
+  sellerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   sellerAvatarFallback: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sellerInfo: {
+    flex: 1,
+  },
   sellerName: {
-    fontSize: Type.body.size,
+    fontSize: 14,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
+  },
+  sellerSubtext: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
 });

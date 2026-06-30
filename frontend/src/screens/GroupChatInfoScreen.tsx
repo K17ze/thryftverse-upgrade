@@ -12,7 +12,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -146,7 +146,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <RowItem
             icon="create-outline"
             label="Edit group"
-            onPress={() => navigation.navigate({ name: 'EditGroup', params: { conversationId } })}
+            onPress={() => navigation.navigate('EditGroup', { conversationId })}
             showChevron
           />
         </Section>
@@ -293,7 +293,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
-    ...Elevation.subtle,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     borderRadius: Radius.xl,
@@ -402,7 +401,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     overflow: 'hidden',
-    ...Elevation.subtle,
   },
   sectionCardDanger: {
     borderColor: `${Colors.danger}30`,

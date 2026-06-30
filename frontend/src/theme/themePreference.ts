@@ -74,7 +74,10 @@ export function applyThemePreference(preference: ThemePreference): void {
     | ((scheme: 'light' | 'dark' | null) => void)
     | undefined;
 
-  if (typeof setColorScheme === 'function') {
+  // RN 0.85+ native AppearanceModule.setColorScheme has a non-nullable Kotlin
+  // parameter, so passing null crashes with NullPointerException. Only call
+  // it when we have a concrete scheme; skip for 'system' to let the OS decide.
+  if (typeof setColorScheme === 'function' && nextScheme !== null) {
     setColorScheme(nextScheme);
   }
 

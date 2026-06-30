@@ -1,16 +1,14 @@
 import React from 'react';
-import { View, StyleSheet, RefreshControl } from 'react-native';
+import { View, StyleSheet, RefreshControl, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
-import { getFreshPosters } from '../data/posters';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
-import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -24,7 +22,15 @@ import {
   getSuggestedBidDisplayAmount,
   sanitizeDecimalInput,
 } from '../utils/currencyAuthoringFlows';
-import { listAuctions, placeAuctionBid as placeAuctionBidRemote } from '../services/marketApi';
+import {
+  listAuctions,
+  placeAuctionBid as placeAuctionBidRemote,
+  addToWatchlist,
+  removeFromWatchlist,
+  type MarketAuction,
+  type AuctionSortMode,
+  type AuctionViewerState,
+} from '../services/marketApi';
 import { t } from '../i18n';
 import { Motion } from '../constants/motion';
 import { Space, Radius } from '../theme/designTokens';
@@ -38,99 +44,128 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
+import { createStableId } from '../utils/createStableId';
 
 type AuctionLifecycle = 'upcoming' | 'live' | 'ended';
 
-interface AuctionMarketItem {
+interface AuctionViewModel {
   id: string;
   listingId: string;
   sellerId: string;
+  sellerUsername: string;
+  sellerDisplayName: string | null;
+  sellerAvatarUrl: string | null;
   title: string;
   image: string;
+  brand: string | null;
+  category: string | null;
   startsAt: string;
   endsAt: string;
   startingBid: number;
   currentBid: number;
+  minimumNextBid: number;
   bidCount: number;
   buyNowPrice?: number;
-}
-
-interface AuctionViewModel extends AuctionMarketItem {
   lifecycle: AuctionLifecycle;
   msToStart: number;
   msToEnd: number;
   progress: number;
+  viewerState: AuctionViewerState;
+  isWatched: boolean;
 }
 
-function formatCompact(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return `${value}`;
-}
+type StatusFilter = 'all' | 'live' | 'scheduled' | 'ended';
 
 function formatCountdown(ms: number) {
-  if (ms <= 0) return '00:00:00';
+  if (ms <= 0) return 'Ended';
   const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600).toString().padStart(2, '0');
   const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
   const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
   return `${hours}:${minutes}:${seconds}`;
 }
 
 type NavT = StackNavigationProp<RootStackParamList>;
+
+const SORT_OPTIONS: { label: string; value: AuctionSortMode }[] = [
+  { label: 'Ending Soon', value: 'endingSoon' },
+  { label: 'Newest', value: 'newest' },
+  { label: 'Most Bids', value: 'mostBids' },
+  { label: 'Price: Low', value: 'priceLow' },
+  { label: 'Price: High', value: 'priceHigh' },
+];
+
+const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Live', value: 'live' },
+  { label: 'Scheduled', value: 'scheduled' },
+  { label: 'Ended', value: 'ended' },
+];
 
 export default function AuctionsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
-  const currentUser = useStore((state) => state.currentUser);
-  const customPosters = useStore((state) => state.customPosters);
-  const customAuctions = useStore((state) => state.customAuctions);
-  const auctionRuntime = useStore((state) => state.auctionRuntime);
-  const settleExpiredAuctions = useStore((state) => state.settleExpiredAuctions);
   const reducedMotionEnabled = useReducedMotion();
-
-  const actingUserId = currentUser?.id ?? 'u1';
 
   const [nowTs, setNowTs] = React.useState(Date.now());
   const [refreshing, setRefreshing] = React.useState(false);
   const [bidComposerVisible, setBidComposerVisible] = React.useState(false);
   const [selectedBidAuction, setSelectedBidAuction] = React.useState<AuctionViewModel | null>(null);
   const [bidInput, setBidInput] = React.useState('');
-  const [remoteAuctions, setRemoteAuctions] = React.useState<AuctionMarketItem[]>([]);
+  const [remoteAuctions, setRemoteAuctions] = React.useState<MarketAuction[]>([]);
   const [isSyncingAuctions, setIsSyncingAuctions] = React.useState(false);
   const [syncError, setSyncError] = React.useState<string | null>(null);
   const [isSubmittingBid, setIsSubmittingBid] = React.useState(false);
   const [buyNowAuctionId, setBuyNowAuctionId] = React.useState<string | null>(null);
-  const [watchedAuctionIds, setWatchedAuctionIds] = React.useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('all');
+  const [sortMode, setSortMode] = React.useState<AuctionSortMode>('endingSoon');
+  const [watchTogglingIds, setWatchTogglingIds] = React.useState<Set<string>>(new Set());
+  const [nextCursor, setNextCursor] = React.useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
   const syncAuctions = React.useCallback(async () => {
     setIsSyncingAuctions(true);
     try {
-      const items = await listAuctions({ limit: 120, sellerId: actingUserId });
-      const mapped: AuctionMarketItem[] = items.map((item) => ({
-        id: item.id,
-        listingId: item.listingId,
-        sellerId: item.sellerId,
-        title: item.title,
-        image: item.imageUrl ?? '',
-        startsAt: item.startsAt,
-        endsAt: item.endsAt,
-        startingBid: item.startingBidGbp,
-        currentBid: item.currentBidGbp,
-        bidCount: item.bidCount,
-        buyNowPrice: item.buyNowPriceGbp ?? undefined,
-      }));
-      setRemoteAuctions(mapped);
+      const result = await listAuctions({
+        status: statusFilter === 'all' ? 'all' : statusFilter,
+        sort: sortMode,
+        query: searchQuery.trim() || undefined,
+        limit: 30,
+      });
+      setRemoteAuctions(result.items);
+      setNextCursor(result.nextCursor);
       setSyncError(null);
     } catch (error) {
       setSyncError((error as Error).message || t('auctions.sync.unable'));
     } finally {
       setIsSyncingAuctions(false);
     }
-  }, [actingUserId]);
+  }, [statusFilter, sortMode, searchQuery]);
+
+  const loadMore = React.useCallback(async () => {
+    if (!nextCursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const result = await listAuctions({
+        status: statusFilter === 'all' ? 'all' : statusFilter,
+        sort: sortMode,
+        query: searchQuery.trim() || undefined,
+        cursor: nextCursor,
+        limit: 30,
+      });
+      setRemoteAuctions((prev) => [...prev, ...result.items]);
+      setNextCursor(result.nextCursor);
+    } catch {
+      // Silent fail on pagination
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [nextCursor, isLoadingMore, statusFilter, sortMode, searchQuery]);
 
   React.useEffect(() => {
     const intervalId = setInterval(() => setNowTs(Date.now()), 1000);
@@ -148,109 +183,103 @@ export default function AuctionsScreen() {
     setRefreshing(false);
   };
 
-  const baseAuctions = React.useMemo(() => {
-    const merged = new Map<string, AuctionMarketItem>();
-    for (const item of remoteAuctions) {
-      merged.set(item.id, item);
-    }
-    for (const item of customAuctions) {
-      if (item.sellerId !== actingUserId) continue;
-      merged.set(item.id, item);
-    }
-    return [...merged.values()];
-  }, [actingUserId, customAuctions, remoteAuctions]);
-
-  const marketAuctions = React.useMemo(() => {
+  const auctions = React.useMemo<AuctionViewModel[]>(() => {
     const WINDOW_6_HOURS_MS = 6 * 60 * 60 * 1000;
-    const lifecycleRank: Record<AuctionLifecycle, number> = { live: 0, upcoming: 1, ended: 2 };
-    return baseAuctions
-      .map<AuctionViewModel>((auction) => {
-        const startsAtMs = new Date(auction.startsAt).getTime();
-        const endsAtMs = new Date(auction.endsAt).getTime();
-        const msToStart = startsAtMs - nowTs;
-        const msToEnd = endsAtMs - nowTs;
-        let lifecycle: AuctionLifecycle = 'upcoming';
-        if (msToStart <= 0 && msToEnd > 0) lifecycle = 'live';
-        else if (msToEnd <= 0) lifecycle = 'ended';
-        const elapsedMs = Math.max(0, WINDOW_6_HOURS_MS - msToEnd);
-        const progress = Math.min(1, Math.max(0, elapsedMs / WINDOW_6_HOURS_MS));
-        return { ...auction, lifecycle, msToStart, msToEnd, progress };
-      })
-      .sort((a, b) => {
-        if (lifecycleRank[a.lifecycle] !== lifecycleRank[b.lifecycle]) {
-          return lifecycleRank[a.lifecycle] - lifecycleRank[b.lifecycle];
-        }
-        if (a.lifecycle === 'live') return a.msToEnd - b.msToEnd;
-        if (a.lifecycle === 'upcoming') return a.msToStart - b.msToStart;
-        return b.currentBid - a.currentBid;
-      });
-  }, [baseAuctions, nowTs]);
-
-  const auctions = React.useMemo(() => {
-    return marketAuctions.map((item) => {
-      const runtime = auctionRuntime[item.id];
-      if (!runtime) return item;
-      const isClosed = !!runtime.closedAtMs;
+    return remoteAuctions.map((item) => {
+      const startsAtMs = new Date(item.startsAt).getTime();
+      const endsAtMs = new Date(item.endsAt).getTime();
+      const msToStart = startsAtMs - nowTs;
+      const msToEnd = endsAtMs - nowTs;
+      let lifecycle: AuctionLifecycle = 'upcoming';
+      if (msToStart <= 0 && msToEnd > 0) lifecycle = 'live';
+      else if (msToEnd <= 0) lifecycle = 'ended';
+      const elapsedMs = Math.max(0, WINDOW_6_HOURS_MS - msToEnd);
+      const progress = Math.min(1, Math.max(0, elapsedMs / WINDOW_6_HOURS_MS));
       return {
-        ...item,
-        lifecycle: isClosed ? 'ended' : item.lifecycle,
-        msToEnd: isClosed ? 0 : item.msToEnd,
-        progress: isClosed ? 1 : item.progress,
-        currentBid: runtime.currentBid,
-        bidCount: runtime.bidCount,
+        id: item.id,
+        listingId: item.listingId,
+        sellerId: item.seller.id,
+        sellerUsername: item.seller.username,
+        sellerDisplayName: item.seller.displayName,
+        sellerAvatarUrl: item.seller.avatarUrl,
+        title: item.title,
+        image: item.imageUrl ?? '',
+        brand: item.brand,
+        category: item.category,
+        startsAt: item.startsAt,
+        endsAt: item.endsAt,
+        startingBid: item.startingBidGbp,
+        currentBid: item.currentBidGbp,
+        minimumNextBid: item.minimumNextBidGbp,
+        bidCount: item.bidCount,
+        buyNowPrice: item.buyNowPriceGbp ?? undefined,
+        lifecycle,
+        msToStart,
+        msToEnd,
+        progress,
+        viewerState: item.viewerState,
+        isWatched: item.isWatched,
       };
     });
-  }, [auctionRuntime, marketAuctions]);
-
-  React.useEffect(() => {
-    settleExpiredAuctions(auctions);
-  }, [auctions, settleExpiredAuctions]);
+  }, [remoteAuctions, nowTs]);
 
   const liveAuctions = React.useMemo(() => auctions.filter((item) => item.lifecycle === 'live'), [auctions]);
   const upcomingAuctions = React.useMemo(() => auctions.filter((item) => item.lifecycle === 'upcoming'), [auctions]);
+  const endedAuctions = React.useMemo(() => auctions.filter((item) => item.lifecycle === 'ended'), [auctions]);
 
   const totalLiveBids = React.useMemo(() => liveAuctions.reduce((sum, item) => sum + item.bidCount, 0), [liveAuctions]);
+  const watchlistCount = React.useMemo(() => auctions.filter((a) => a.isWatched).length, [auctions]);
 
-  const adPosters = React.useMemo(() => {
-    const upcomingListingIds = new Set(upcomingAuctions.map((item) => item.listingId));
-    return getFreshPosters(nowTs, 24, customPosters).filter((poster) => upcomingListingIds.has(poster.listingId));
-  }, [customPosters, nowTs, upcomingAuctions]);
+  const featuredAuction = React.useMemo(() => {
+    return liveAuctions.find((a) => a.viewerState === 'outbid')
+      ?? liveAuctions.find((a) => a.viewerState === 'leading')
+      ?? liveAuctions[0]
+      ?? null;
+  }, [liveAuctions]);
 
   const marketStatus = React.useMemo(() => {
     if (isSyncingAuctions) return { tone: 'syncing' as const, label: t('auctions.status.syncing') };
     if (syncError) return { tone: 'offline' as const, label: t('auctions.status.reconnecting') };
     if (remoteAuctions.length > 0) return { tone: 'live' as const, label: t('auctions.status.synced') };
-    if (auctions.length > 0) return { tone: 'offline' as const, label: t('auctions.status.localMode') };
     return { tone: 'offline' as const, label: t('auctions.status.none') };
-  }, [auctions.length, isSyncingAuctions, remoteAuctions.length, syncError]);
-
-  const filteredLiveAuctions = React.useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return liveAuctions;
-    return liveAuctions.filter((item) => item.title.toLowerCase().includes(q));
-  }, [liveAuctions, searchQuery]);
+  }, [remoteAuctions.length, isSyncingAuctions, syncError]);
 
   const openBidComposer = (auction: AuctionViewModel) => {
-    const suggestedDisplayBid = getSuggestedBidDisplayAmount(auction.currentBid, currencyCode, goldRates);
+    const suggestedDisplayBid = getSuggestedBidDisplayAmount(auction.minimumNextBid, currencyCode, goldRates);
     setSelectedBidAuction(auction);
     setBidInput(suggestedDisplayBid.toFixed(2));
     setBidComposerVisible(true);
   };
 
-  const handleToggleWatch = (auction: AuctionViewModel) => {
-    const isWatching = watchedAuctionIds.has(auction.id);
-    setWatchedAuctionIds((current) => {
-      const next = new Set(current);
-      if (next.has(auction.id)) next.delete(auction.id);
-      else next.add(auction.id);
-      return next;
-    });
-    show(
-      isWatching
-        ? t('auctions.watch.removed', { title: auction.title })
-        : t('auctions.watch.added', { title: auction.title }),
-      'info'
+  const handleToggleWatch = async (auction: AuctionViewModel) => {
+    if (watchTogglingIds.has(auction.id)) return;
+    setWatchTogglingIds((prev) => new Set(prev).add(auction.id));
+
+    const wasWatching = auction.isWatched;
+    setRemoteAuctions((prev) =>
+      prev.map((a) => (a.id === auction.id ? { ...a, isWatched: !wasWatching } : a))
     );
+
+    try {
+      if (wasWatching) {
+        await removeFromWatchlist(auction.id);
+        show('Removed from watchlist', 'info');
+      } else {
+        await addToWatchlist(auction.id);
+        show('Added to watchlist', 'info');
+      }
+    } catch {
+      setRemoteAuctions((prev) =>
+        prev.map((a) => (a.id === auction.id ? { ...a, isWatched: wasWatching } : a))
+      );
+      show('Failed to update watchlist', 'error');
+    } finally {
+      setWatchTogglingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(auction.id);
+        return next;
+      });
+    }
   };
 
   const closeBidComposer = () => {
@@ -283,22 +312,29 @@ export default function AuctionsScreen() {
       return;
     }
 
-    if (amountInGbp <= selectedBidAuction.currentBid) {
-      show(t('auctions.bid.error.mustBeAbove', { amount: formatFromFiat(selectedBidAuction.currentBid, 'GBP', { displayMode: 'fiat' }) }), 'error');
+    if (amountInGbp < selectedBidAuction.minimumNextBid) {
+      show(
+        `Bid must be at least ${formatFromFiat(selectedBidAuction.minimumNextBid, 'GBP', { displayMode: 'fiat' })}`,
+        'error'
+      );
       return;
     }
 
     const roundedAmount = Number(amountInGbp.toFixed(2));
+    const idempotencyKey = createStableId();
     setIsSubmittingBid(true);
 
     try {
       const remoteResult = await placeAuctionBidRemote(selectedBidAuction.id, {
-        bidderId: actingUserId,
         amountGbp: roundedAmount,
+        idempotencyKey,
       });
       await syncAuctions();
       setNowTs(Date.now());
-      show(t('auctions.bid.success.placed', { title: selectedBidAuction.title, amount: formatFromFiat(roundedAmount, 'GBP', { displayMode: 'fiat' }) }), 'success');
+      show(
+        t('auctions.bid.success.placed', { title: selectedBidAuction.title, amount: formatFromFiat(roundedAmount, 'GBP', { displayMode: 'fiat' }) }),
+        'success'
+      );
       if (remoteResult.aml?.alertId) show(t('auctions.bid.info.aml'), 'info');
       closeBidComposer();
     } catch (error) {
@@ -314,14 +350,17 @@ export default function AuctionsScreen() {
     setBuyNowAuctionId(auction.id);
 
     try {
+      const idempotencyKey = createStableId();
       const remoteResult = await placeAuctionBidRemote(auction.id, {
-        bidderId: actingUserId,
         amountGbp: Number(auction.buyNowPrice.toFixed(2)),
+        idempotencyKey,
       });
       await syncAuctions();
       show(t('auctions.buy.success.won', { title: auction.title }), 'success');
       if (remoteResult.aml?.alertId) show(t('auctions.buy.info.aml'), 'info');
-      navigation.navigate('Checkout', { itemId: auction.listingId });
+      if (remoteResult.auction.isBuyNow) {
+        navigation.navigate('Checkout', { itemId: auction.listingId });
+      }
     } catch (error) {
       const parsedError = parseApiError(error, t('auctions.buy.error.unableComplete'));
       show(parsedError.message, 'error');
@@ -330,13 +369,127 @@ export default function AuctionsScreen() {
     }
   };
 
+  const navigateToDetail = (auction: AuctionViewModel) => {
+    navigation.navigate('AuctionDetail', { auctionId: auction.id });
+  };
+
+  const renderSortBar = () => (
+    <View style={styles.sortBar}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortScrollContent}>
+        {SORT_OPTIONS.map((opt) => (
+          <AnimatedPressable
+            key={opt.value}
+            style={[styles.sortChip, sortMode === opt.value && styles.sortChipActive]}
+            activeOpacity={0.85}
+            onPress={() => setSortMode(opt.value)}
+            accessibilityRole="button"
+            accessibilityLabel={`Sort by ${opt.label}`}
+          >
+            <Meta style={[styles.sortChipText, sortMode === opt.value && styles.sortChipTextActive]}>
+              {opt.label}
+            </Meta>
+          </AnimatedPressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+
+  const renderStatusFilter = () => (
+    <View style={styles.statusFilterBar}>
+      {STATUS_OPTIONS.map((opt) => (
+        <AnimatedPressable
+          key={opt.value}
+          style={[styles.statusChip, statusFilter === opt.value && styles.statusChipActive]}
+          activeOpacity={0.85}
+          onPress={() => setStatusFilter(opt.value)}
+          accessibilityRole="button"
+          accessibilityLabel={`Filter by ${opt.label}`}
+        >
+          <Meta style={[styles.statusChipText, statusFilter === opt.value && styles.statusChipTextActive]}>
+            {opt.label}
+          </Meta>
+        </AnimatedPressable>
+      ))}
+    </View>
+  );
+
+  const renderFeaturedAuction = () => {
+    if (!featuredAuction) return null;
+    return (
+      <View style={styles.featuredWrap}>
+        <BodyEmphasis style={styles.featuredLabel}>Featured Auction</BodyEmphasis>
+        <AnimatedPressable
+          style={styles.featuredCard}
+          activeOpacity={0.92}
+          onPress={() => navigateToDetail(featuredAuction)}
+          accessibilityRole="button"
+          accessibilityLabel={`Featured auction: ${featuredAuction.title}`}
+        >
+          <View style={styles.featuredImageFrame}>
+            {featuredAuction.image ? (
+              <CachedImage
+                uri={featuredAuction.image}
+                style={styles.featuredImage}
+                containerStyle={styles.featuredImageContainer}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.featuredImagePlaceholder}>
+                <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
+              </View>
+            )}
+            <View style={styles.featuredOverlay}>
+              <View style={styles.featuredLivePill}>
+                <View style={styles.featuredLiveDot} />
+                <Meta style={styles.featuredLiveText}>LIVE</Meta>
+              </View>
+            </View>
+          </View>
+          <View style={styles.featuredMeta}>
+            <BodyEmphasis style={styles.featuredTitle} numberOfLines={1}>{featuredAuction.title}</BodyEmphasis>
+            <View style={styles.featuredStatsRow}>
+              <View>
+                <Meta style={styles.featuredStatLabel}>Current Bid</Meta>
+                <BodyEmphasis style={styles.featuredStatValue}>
+                  {formatFromFiat(featuredAuction.currentBid, 'GBP', { displayMode: 'fiat' })}
+                </BodyEmphasis>
+              </View>
+              <View>
+                <Meta style={styles.featuredStatLabel}>Bids</Meta>
+                <BodyEmphasis style={styles.featuredStatValue}>{featuredAuction.bidCount}</BodyEmphasis>
+              </View>
+              <View>
+                <Meta style={styles.featuredStatLabel}>Ends In</Meta>
+                <BodyEmphasis style={[styles.featuredStatValue, styles.featuredTimer]}>
+                  {formatCountdown(featuredAuction.msToEnd)}
+                </BodyEmphasis>
+              </View>
+            </View>
+            {featuredAuction.viewerState === 'outbid' && (
+              <View style={styles.outbidBanner}>
+                <Ionicons name="trending-down-outline" size={14} color="#ff4444" />
+                <Meta style={styles.outbidText}>You've been outbid</Meta>
+              </View>
+            )}
+            {featuredAuction.viewerState === 'leading' && (
+              <View style={styles.leadingBanner}>
+                <Ionicons name="trophy-outline" size={14} color={Colors.brand} />
+                <Meta style={styles.leadingText}>You're leading</Meta>
+              </View>
+            )}
+          </View>
+        </AnimatedPressable>
+      </View>
+    );
+  };
+
   const renderHeader = () => (
     <View>
       <MetricGrid
         metrics={[
-          { label: 'Live Auctions', value: String(liveAuctions.length) },
-          { label: 'Active Bids', value: String(totalLiveBids) },
-          { label: 'Watchlist', value: String(watchedAuctionIds.size) },
+          { label: 'Live', value: String(liveAuctions.length) },
+          { label: 'Bids', value: String(totalLiveBids) },
+          { label: 'Watching', value: String(watchlistCount) },
         ]}
         columns={3}
         style={{ marginTop: Space.sm }}
@@ -349,13 +502,18 @@ export default function AuctionsScreen() {
           placeholder="Search auctions..."
           prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
           accessibilityLabel="Search auctions"
+          returnKeyType="search"
+          onSubmitEditing={() => void syncAuctions()}
         />
       </View>
+
+      {renderStatusFilter()}
+      {renderSortBar()}
 
       <View style={styles.launchRow}>
         <View>
           <BodyEmphasis style={styles.launchTitle}>{t('auctions.cta.createAuction')}</BodyEmphasis>
-          <Meta style={styles.launchHint}>Schedule a 6-hour drop</Meta>
+          <Meta style={styles.launchHint}>Schedule a drop</Meta>
         </View>
         <View style={styles.actionBtnRow}>
           <AnimatedPressable
@@ -392,7 +550,9 @@ export default function AuctionsScreen() {
         />
       ) : null}
 
-      {upcomingAuctions.length > 0 && (
+      {renderFeaturedAuction()}
+
+      {upcomingAuctions.length > 0 && statusFilter === 'all' && (
         <View style={styles.sectionWrap}>
           <View style={styles.sectionTitleRow}>
             <BodyEmphasis style={styles.sectionTitle}>{t('auctions.section.startingSoon')}</BodyEmphasis>
@@ -407,7 +567,7 @@ export default function AuctionsScreen() {
               <AnimatedPressable
                 style={styles.upcomingCard}
                 activeOpacity={0.9}
-                onPress={() => navigation.push('ItemDetail', { itemId: item.listingId })}
+                onPress={() => navigateToDetail(item)}
                 accessibilityRole="button"
                 accessibilityLabel={`Open upcoming auction ${item.title}`}
               >
@@ -425,39 +585,16 @@ export default function AuctionsScreen() {
         </View>
       )}
 
-      {adPosters.length > 0 && (
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionTitleRow}>
-            <BodyEmphasis style={styles.sectionTitle}>{t('auctions.section.upcomingPosters')}</BodyEmphasis>
-          </View>
-          <FlashList
-            data={adPosters}
-            horizontal
-            keyExtractor={(item) => item.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalListContent}
-            renderItem={({ item }) => (
-              <AnimatedPressable
-                style={styles.posterCard}
-                activeOpacity={0.9}
-                onPress={() => navigation.navigate('PosterViewer', { posterId: item.id })}
-                accessibilityRole="button"
-              >
-                <CachedImage uri={item.image} style={styles.posterImage} containerStyle={styles.posterImageContainer} contentFit="cover" />
-                <View style={styles.posterOverlay}>
-                  <Meta style={styles.posterSeller} numberOfLines={1}>@{item.uploader?.username ?? t('auctions.poster.unknownSeller')}</Meta>
-                  <Body style={styles.posterTime}>{item.remainingHours}h</Body>
-                </View>
-              </AnimatedPressable>
-            )}
-          />
-        </View>
-      )}
-
-      {liveAuctions.length > 0 && (
+      {liveAuctions.length > 0 && (statusFilter === 'all' || statusFilter === 'live') && (
         <View style={styles.sectionTitleRow}>
           <BodyEmphasis style={styles.sectionTitle}>Live Auctions</BodyEmphasis>
           <SyncStatusPill tone={marketStatus.tone} label={marketStatus.label} compact />
+        </View>
+      )}
+
+      {endedAuctions.length > 0 && statusFilter === 'ended' && (
+        <View style={styles.sectionTitleRow}>
+          <BodyEmphasis style={styles.sectionTitle}>Ended Auctions</BodyEmphasis>
         </View>
       )}
     </View>
@@ -478,14 +615,20 @@ export default function AuctionsScreen() {
     </View>
   );
 
+  const displayAuctions = React.useMemo(() => {
+    if (statusFilter === 'live') return liveAuctions;
+    if (statusFilter === 'scheduled') return upcomingAuctions;
+    if (statusFilter === 'ended') return endedAuctions;
+    return auctions;
+  }, [auctions, liveAuctions, upcomingAuctions, endedAuctions, statusFilter]);
+
   return (
     <>
       <FlashList
-        data={filteredLiveAuctions}
+        data={displayAuctions}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => {
-          const isWatching = watchedAuctionIds.has(item.id);
-          const sellerLabel = `@${item.sellerId.slice(0, 12)}`;
+          const sellerLabel = item.sellerDisplayName ?? `@${item.sellerUsername}`;
           return (
             <Reanimated.View
               entering={
@@ -507,12 +650,13 @@ export default function AuctionsScreen() {
                 timeRemaining={formatCountdown(item.msToEnd ?? 0)}
                 progress={item.progress ?? 0}
                 isLive={item.lifecycle === 'live'}
-                isWatching={isWatching}
+                isWatching={item.isWatched}
+                viewerState={item.viewerState}
                 buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }) : undefined}
-                onPress={() => navigation.push('ItemDetail', { itemId: item.listingId })}
+                onPress={() => navigateToDetail(item)}
                 onBid={() => openBidComposer(item)}
                 onBuyNow={() => void handleBuyNow(item)}
-                onToggleWatch={() => handleToggleWatch(item)}
+                onToggleWatch={() => void handleToggleWatch(item)}
                 onPressSeller={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
                 onMessageSeller={() =>
                   navigation.navigate('Chat', {
@@ -536,6 +680,20 @@ export default function AuctionsScreen() {
             />
           )
         }
+        ListFooterComponent={
+          nextCursor ? (
+            <View style={styles.loadMoreWrap}>
+              <AppButton
+                title={isLoadingMore ? 'Loading...' : 'Load More'}
+                variant="secondary"
+                size="sm"
+                onPress={() => void loadMore()}
+                disabled={isLoadingMore}
+                style={styles.loadMoreBtn}
+              />
+            </View>
+          ) : null
+        }
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={{ height: Space.sm }} />}
@@ -553,6 +711,8 @@ export default function AuctionsScreen() {
       <BidComposer
         visible={bidComposerVisible}
         auctionTitle={selectedBidAuction?.title ?? ''}
+        currentBid={selectedBidAuction ? formatFromFiat(selectedBidAuction.currentBid, 'GBP', { displayMode: 'fiat' }) : undefined}
+        minimumNextBid={selectedBidAuction ? formatFromFiat(selectedBidAuction.minimumNextBid, 'GBP', { displayMode: 'fiat' }) : undefined}
         bidInput={bidInput}
         currencyCode={currencyCode}
         isSubmitting={isSubmittingBid}
@@ -573,6 +733,58 @@ const styles = StyleSheet.create({
   searchWrap: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
+  },
+  sortBar: {
+    marginBottom: Space.sm,
+  },
+  sortScrollContent: {
+    paddingHorizontal: Space.md,
+    gap: 6,
+  },
+  sortChip: {
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  sortChipActive: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
+  },
+  sortChipText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
+  sortChipTextActive: {
+    color: Colors.textInverse,
+  },
+  statusFilterBar: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
+    gap: 6,
+  },
+  statusChip: {
+    flex: 1,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingVertical: 7,
+    alignItems: 'center',
+  },
+  statusChipActive: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
+  },
+  statusChipText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
+  statusChipTextActive: {
+    color: Colors.textInverse,
   },
   launchRow: {
     marginHorizontal: Space.md,
@@ -618,6 +830,113 @@ const styles = StyleSheet.create({
   syncBanner: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
+  },
+  featuredWrap: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+  },
+  featuredLabel: {
+    marginBottom: Space.sm,
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  featuredCard: {
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    overflow: 'hidden',
+  },
+  featuredImageFrame: {
+    width: '100%',
+    height: 200,
+    position: 'relative',
+  },
+  featuredImageContainer: {
+    width: '100%',
+    height: 200,
+  },
+  featuredImage: {
+    width: '100%',
+    height: 200,
+  },
+  featuredImagePlaceholder: {
+    width: '100%',
+    height: 200,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featuredOverlay: {
+    position: 'absolute',
+    top: Space.sm,
+    left: Space.sm,
+  },
+  featuredLivePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  featuredLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ff4444',
+  },
+  featuredLiveText: {
+    color: '#fff',
+    fontSize: 10,
+  },
+  featuredMeta: {
+    padding: Space.md,
+  },
+  featuredTitle: {
+    marginBottom: Space.sm,
+    fontSize: 16,
+  },
+  featuredStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  featuredStatLabel: {
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  featuredStatValue: {
+    fontSize: 14,
+  },
+  featuredTimer: {
+    color: '#ff4444',
+  },
+  outbidBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Space.sm,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(255,68,68,0.1)',
+  },
+  outbidText: {
+    color: '#ff4444',
+  },
+  leadingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Space.sm,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  leadingText: {
+    color: Colors.brand,
   },
   sectionWrap: {
     marginBottom: Space.sm,
@@ -667,39 +986,6 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   upcomingBid: {},
-  posterCard: {
-    width: 96,
-    height: 126,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  posterImageContainer: {
-    width: '100%',
-    height: '100%',
-  },
-  posterImage: {
-    width: '100%',
-    height: '100%',
-  },
-  posterOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  posterSeller: {
-    color: '#fff',
-  },
-  posterTime: {
-    color: Colors.brand,
-    marginTop: 2,
-  },
   loadingWrap: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
@@ -711,5 +997,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     overflow: 'hidden',
     marginBottom: Space.sm,
+  },
+  loadMoreWrap: {
+    paddingVertical: Space.md,
+    alignItems: 'center',
+  },
+  loadMoreBtn: {
+    minWidth: 140,
   },
 });

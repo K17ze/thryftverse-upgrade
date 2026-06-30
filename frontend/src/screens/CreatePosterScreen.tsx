@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,314 +6,743 @@ import {
   Alert,
   Dimensions,
   StatusBar,
-  Image,
   TextInput,
   ActivityIndicator,
-  ScrollView,
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
-
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useToast } from '../context/ToastContext';
 import { uploadMedia } from '../services/mediaUpload';
-import { createPosterOnApi } from '../services/postersApi';
+import { createPosterStory } from '../services/postersApi';
+import { useStore } from '../store/useStore';
+import { PosterFrameStrip, ComposerFrame, FramePublishState } from '../components/poster/PosterFrameStrip';
+import { PosterFrameComposer } from '../components/poster/PosterFrameComposer';
+import { PosterFrameCanvas } from '../components/poster/PosterFrameCanvas';
+import { createStableId } from '../utils/createStableId';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const CANVAS_W = Math.min(SCREEN_W - 40, 360);
-const CANVAS_H = CANVAS_W * (16 / 9);
+const { width: SCREEN_W } = Dimensions.get('window');
+const POSTER_CANVAS_W = Math.min(SCREEN_W - 40, 360);
+const POSTER_CANVAS_H = POSTER_CANVAS_W * (16 / 9);
+const LOOK_CANVAS_W = Math.min(SCREEN_W - 40, 320);
+const LOOK_CANVAS_H = LOOK_CANVAS_W * (4 / 3);
 
 type Props = StackScreenProps<RootStackParamList, 'CreatePoster'>;
 
-const TEXT_COLORS = ['#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00', '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55'];
-const BG_COLORS = ['#1a1a1a', '#ffffff', '#ff3b30', '#ff9500', '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55', '#f2f2f2'];
-const ALIGNMENTS: Array<'left' | 'center' | 'right'> = ['left', 'center', 'right'];
+const MAX_FRAMES = 10;
+const DEFAULT_DURATION_MS = 5000;
 
-export default function CreatePosterScreen({ navigation }: Props) {
+type UploadedMediaCache = Record<string, string>;
+
+function createBlankFrame(): ComposerFrame {
+  return {
+    id: createStableId('frame'),
+    mediaType: 'text',
+    mediaUri: null,
+    backgroundColor: '#1a1a1a',
+    caption: '',
+    durationMs: DEFAULT_DURATION_MS,
+    stickers: [],
+  };
+}
+
+function validateFrames(frames: ComposerFrame[]): string | null {
+  if (frames.length < 1) return 'A story needs at least one frame';
+  if (frames.length > MAX_FRAMES) return `Maximum ${MAX_FRAMES} frames per story`;
+
+  for (let i = 0; i < frames.length; i++) {
+    const f = frames[i];
+    if (f.mediaType === 'text' && !f.mediaUri) {
+      if (!f.caption.trim() && f.stickers.length === 0) {
+        return `Frame ${i + 1} needs text or a sticker`;
+      }
+    }
+    if ((f.mediaType === 'image' || f.mediaType === 'video') && !f.mediaUri) {
+      return `Frame ${i + 1} is missing media`;
+    }
+    for (const s of f.stickers) {
+      if (s.x < 0 || s.x > 1 || s.y < 0 || s.y > 1) {
+        return `Frame ${i + 1} has a sticker with invalid position`;
+      }
+      if (s.scale < 0.4 || s.scale > 3) {
+        return `Frame ${i + 1} has a sticker with invalid scale`;
+      }
+      if (s.type === 'style_vote') {
+        const payload = s.payload as Record<string, unknown>;
+        const question = payload.question as string | undefined;
+        const options = payload.options as Array<{ id: string; label: string }> | undefined;
+        if (!question?.trim()) {
+          return `Frame ${i + 1} has a style vote with no question`;
+        }
+        if (!options || options.length !== 2) {
+          return `Frame ${i + 1} has a style vote needing exactly 2 options`;
+        }
+        if (!options[0].label.trim() || !options[1].label.trim()) {
+          return `Frame ${i + 1} has a style vote with empty options`;
+        }
+        if (options[0].id === options[1].id) {
+          return `Frame ${i + 1} has a style vote with duplicate option IDs`;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+export default function CreatePosterScreen({ navigation, route }: Props) {
   const { isDark } = useAppTheme();
   const { show } = useToast();
-  const [phase, setPhase] = useState<'landing' | 'editing' | 'preview'>('landing');
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [caption, setCaption] = useState('');
-  const [textColor, setTextColor] = useState('#ffffff');
-  const [bgColor, setBgColor] = useState<string | null>(null);
-  const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>('center');
-  const [hasChanges, setHasChanges] = useState(false);
+  const currentUser = useStore((state) => state.currentUser);
+
+  const posterMode = route.params?.mode ?? 'poster';
+  const isLookMode = posterMode === 'look';
+  const canvasAspect = isLookMode ? (4 / 3) : (16 / 9);
+
+  const [measuredWidth, setMeasuredWidth] = useState(0);
+  const canvasW = measuredWidth > 0 ? Math.min(measuredWidth - 40, isLookMode ? 320 : 360) : (isLookMode ? LOOK_CANVAS_W : POSTER_CANVAS_W);
+  const canvasH = Math.round(canvasW * canvasAspect);
+
+  const [phase, setPhase] = useState<'editing' | 'preview'>('editing');
+  const [frames, setFrames] = useState<ComposerFrame[]>([createBlankFrame()]);
+  const [activeFrameIndex, setActiveFrameIndex] = useState(0);
+  const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
+  const [audience, setAudience] = useState<'public' | 'private'>('public');
+  const [allowReplies, setAllowReplies] = useState(true);
+  const [allowReactions, setAllowReactions] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [showTextSheet, setShowTextSheet] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [publishStates, setPublishStates] = useState<Record<string, FramePublishState>>({});
+  const [publishProgress, setPublishProgress] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
-  const loadRecentPhotos = useCallback(async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') { show('Photo library access required', 'error'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: false,
-        selectionLimit: 1,
-        quality: 0.85,
+  const uploadCacheRef = useRef<UploadedMediaCache>({});
+  const publishInFlightRef = useRef(false);
+  const allowNavigationRef = useRef(false);
+  const initialCreatorStateRef = useRef(
+    JSON.stringify({ frames, audience, allowReplies, allowReactions })
+  );
+
+  const activeFrame = frames[activeFrameIndex];
+  const hasContent = useMemo(() =>
+    frames.some((f) => f.mediaUri || f.caption.trim() || f.stickers.length > 0),
+    [frames]
+  );
+
+  const isDirty = useMemo(() => {
+    return JSON.stringify({ frames, audience, allowReplies, allowReactions }) !== initialCreatorStateRef.current;
+  }, [frames, audience, allowReplies, allowReactions]);
+
+  // ── Frame operations ──
+
+  const updateFrame = useCallback((updates: Partial<ComposerFrame>) => {
+    // When media URI changes, reset publish state for that frame and clean up cache
+    if (updates.mediaUri !== undefined) {
+      setFrames((prev) => {
+        const oldFrame = prev[activeFrameIndex];
+        const oldUri = oldFrame?.mediaUri;
+        const newUri = updates.mediaUri;
+
+        // Reset publish state for this frame
+        if (oldUri !== newUri) {
+          setPublishStates((ps) => ({ ...ps, [oldFrame.id]: 'idle' }));
+
+          // Clean up upload cache for old URI if no other frame uses it
+          if (oldUri) {
+            const stillUsed = prev.some((f, i) => i !== activeFrameIndex && f.mediaUri === oldUri);
+            if (!stillUsed) {
+              delete uploadCacheRef.current[oldUri];
+            }
+          }
+        }
+
+        const next = [...prev];
+        next[activeFrameIndex] = { ...next[activeFrameIndex], ...updates };
+        return next;
       });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        setImageUri(result.assets[0].uri);
-        setPhase('editing');
-        setHasChanges(true);
-      }
-    } catch {
-      show('Could not open gallery.', 'error');
-    }
-  }, [show]);
-
-  const openCamera = useCallback(async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') { show('Camera permission required.', 'error'); return; }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.9,
+    } else {
+      setFrames((prev) => {
+        const next = [...prev];
+        next[activeFrameIndex] = { ...next[activeFrameIndex], ...updates };
+        return next;
       });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        setImageUri(result.assets[0].uri);
-        setPhase('editing');
-        setHasChanges(true);
-      }
-    } catch {
-      show('Could not open camera.', 'error');
     }
-  }, [show]);
+  }, [activeFrameIndex]);
 
-  const startBlank = useCallback(() => {
-    setImageUri(null);
-    setBgColor(BG_COLORS[0]);
-    setPhase('editing');
-    setHasChanges(true);
+  const addSticker = useCallback((sticker: ComposerFrame['stickers'][0]) => {
+    setFrames((prev) => {
+      const next = [...prev];
+      next[activeFrameIndex] = {
+        ...next[activeFrameIndex],
+        stickers: [...next[activeFrameIndex].stickers, sticker],
+      };
+      return next;
+    });
+  }, [activeFrameIndex]);
+
+  const updateSticker = useCallback((id: string, updates: Partial<ComposerFrame['stickers'][0]>) => {
+    setFrames((prev) => {
+      const next = [...prev];
+      next[activeFrameIndex] = {
+        ...next[activeFrameIndex],
+        stickers: next[activeFrameIndex].stickers.map((s) =>
+          s.id === id ? { ...s, ...updates } : s
+        ),
+      };
+      return next;
+    });
+  }, [activeFrameIndex]);
+
+  const removeSticker = useCallback((id: string) => {
+    setFrames((prev) => {
+      const next = [...prev];
+      next[activeFrameIndex] = {
+        ...next[activeFrameIndex],
+        stickers: next[activeFrameIndex].stickers.filter((s) => s.id !== id),
+      };
+      return next;
+    });
+    setSelectedStickerId(null);
+  }, [activeFrameIndex]);
+
+  const addFrame = useCallback(() => {
+    if (frames.length >= MAX_FRAMES) {
+      show(`Maximum ${MAX_FRAMES} frames per story`, 'info');
+      return;
+    }
+    const newFrame = createBlankFrame();
+    setFrames((prev) => [...prev, newFrame]);
+    setActiveFrameIndex(frames.length);
+    setSelectedStickerId(null);
+  }, [frames.length, show]);
+
+  const removeFrame = useCallback((index: number) => {
+    if (frames.length <= 1) {
+      show('A story needs at least one frame', 'info');
+      return;
+    }
+    const removedFrame = frames[index];
+    const mediaUri = removedFrame.mediaUri;
+    setFrames((prev) => prev.filter((_, i) => i !== index));
+    setActiveFrameIndex((prev) => {
+      if (prev === index) {
+        return Math.max(0, index < frames.length - 1 ? index : index - 1);
+      }
+      return prev > index ? prev - 1 : prev;
+    });
+    setSelectedStickerId(null);
+
+    if (mediaUri) {
+      const stillUsed = frames.some((f, i) => i !== index && f.mediaUri === mediaUri);
+      if (!stillUsed) {
+        delete uploadCacheRef.current[mediaUri];
+      }
+    }
+  }, [frames, show]);
+
+  const moveFrame = useCallback((fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= frames.length) return;
+    setFrames((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+    setActiveFrameIndex(toIndex);
+  }, [frames.length]);
+
+  const duplicateFrame = useCallback((index: number) => {
+    if (frames.length >= MAX_FRAMES) {
+      show(`Maximum ${MAX_FRAMES} frames per story`, 'info');
+      return;
+    }
+    const source = frames[index];
+    const newFrame: ComposerFrame = {
+      ...source,
+      id: createStableId('frame'),
+      stickers: source.stickers.map((s) => ({
+        ...s,
+        id: createStableId('sticker'),
+      })),
+    };
+    setFrames((prev) => {
+      const next = [...prev];
+      next.splice(index + 1, 0, newFrame);
+      return next;
+    });
+    setActiveFrameIndex(index + 1);
+    setSelectedStickerId(null);
+  }, [frames, show]);
+
+  // ── Selection management ──
+
+  const handleSelectSticker = useCallback((id: string | null) => {
+    setSelectedStickerId(id);
   }, []);
 
+  // Clear selection when switching frames
+  useEffect(() => {
+    setSelectedStickerId(null);
+  }, [activeFrameIndex]);
+
+  // ── Unsaved-change guard ──
+
+  const proceedWithNavigation = useCallback((action: Parameters<typeof navigation.dispatch>[0]) => {
+    allowNavigationRef.current = true;
+    navigation.dispatch(action);
+  }, [navigation]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event: { preventDefault: () => void; data: { action: Parameters<typeof navigation.dispatch>[0] } }) => {
+      if (allowNavigationRef.current || !isDirty) {
+        return;
+      }
+      event.preventDefault();
+      Alert.alert(
+        isLookMode ? 'Discard this Look?' : 'Discard this Poster?',
+        isLookMode ? 'Your Look has not been shared.' : 'Your Story has not been shared.',
+        [
+          { text: 'Keep editing', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => proceedWithNavigation(event.data.action),
+          },
+        ]
+      );
+    });
+    return unsubscribe;
+  }, [navigation, isDirty, proceedWithNavigation]);
+
+  // ── URI-wide publish state helper ──
+
+  const setPublishStateForUri = useCallback(
+    (uri: string, state: FramePublishState) => {
+      setFrames((prevFrames) => {
+        const matchingIds = prevFrames
+          .filter((f) => f.mediaUri === uri)
+          .map((f) => f.id);
+        if (matchingIds.length > 0) {
+          setPublishStates((ps) => {
+            const updated = { ...ps };
+            for (const id of matchingIds) {
+              updated[id] = state;
+            }
+            return updated;
+          });
+        }
+        return prevFrames;
+      });
+    },
+    []
+  );
+
+  // ── Publishing ──
+
+  const handlePublish = async () => {
+    if (publishInFlightRef.current) return;
+    publishInFlightRef.current = true;
+
+    const validationError = validateFrames(frames);
+    if (validationError) {
+      show(validationError, 'error');
+      const errorFrameIndex = frames.findIndex((f, i) => {
+        if (f.mediaType === 'text' && !f.mediaUri && (!f.caption.trim() && f.stickers.length === 0)) return true;
+        if ((f.mediaType === 'image' || f.mediaType === 'video') && !f.mediaUri) return true;
+        return false;
+      });
+      if (errorFrameIndex >= 0) setActiveFrameIndex(errorFrameIndex);
+      setPhase('editing');
+      publishInFlightRef.current = false;
+      return;
+    }
+
+    if (!currentUser) {
+      show('Sign in to publish your story', 'error');
+      navigation.navigate('Login');
+      publishInFlightRef.current = false;
+      return;
+    }
+
+    setIsPublishing(true);
+
+    let failedFrameIdx = -1;
+
+    try {
+      const cache = uploadCacheRef.current;
+      const framesToUpload = frames.filter((f) => f.mediaUri);
+      const uniqueUris = [...new Set(framesToUpload.map((f) => f.mediaUri!))];
+
+      // Mark already-cached media frames as uploaded
+      for (const uri of uniqueUris) {
+        if (cache[uri]) {
+          setPublishStateForUri(uri, 'uploaded');
+        }
+      }
+
+      // Mark text frames (no media) as uploaded/ready
+      for (const f of frames) {
+        if (!f.mediaUri) {
+          setPublishStates((prev) => ({ ...prev, [f.id]: 'uploaded' }));
+        }
+      }
+
+      const uncachedUris = uniqueUris.filter((uri) => !cache[uri]);
+
+      // Upload uncached media one by one
+      for (let i = 0; i < uncachedUris.length; i++) {
+        const uri = uncachedUris[i];
+        setPublishStateForUri(uri, 'uploading');
+        setPublishProgress(`Uploading ${i + 1} of ${uncachedUris.length}`);
+        try {
+          const url = await uploadMedia(uri, 'posters');
+          cache[uri] = url;
+          setPublishStateForUri(uri, 'uploaded');
+        } catch {
+          setPublishStateForUri(uri, 'failed');
+          failedFrameIdx = frames.findIndex((f) => f.mediaUri === uri);
+          const failedFrameNumber = failedFrameIdx >= 0 ? failedFrameIdx + 1 : 0;
+          throw new Error(
+            failedFrameNumber > 0
+              ? `Frame ${failedFrameNumber} could not be uploaded.`
+              : 'Could not upload media.'
+          );
+        }
+      }
+
+      setPublishProgress('Publishing Poster…');
+
+      const storyId = createStableId('story');
+
+      const uploadedFrames = frames.map((frame, index) => {
+        let mediaUrl: string | undefined;
+        if (frame.mediaUri) {
+          mediaUrl = cache[frame.mediaUri];
+        }
+        return {
+          id: frame.id,
+          mediaType: frame.mediaType,
+          mediaUrl,
+          backgroundColor: frame.backgroundColor ?? undefined,
+          caption: frame.caption.trim() || undefined,
+          durationMs: frame.durationMs,
+          sortOrder: index,
+          stickers: frame.stickers.map((s, sIdx) => ({
+            id: s.id,
+            type: s.type,
+            x: s.x,
+            y: s.y,
+            scale: s.scale,
+            rotation: s.rotation,
+            payload: s.payload as Record<string, unknown>,
+            sortOrder: sIdx,
+          })),
+        };
+      });
+
+      const result = await createPosterStory({
+        id: storyId,
+        audience,
+        allowReplies,
+        allowReactions,
+        expiresInHours: 24,
+        posterMode,
+        frames: uploadedFrames,
+      });
+
+      const confirmedStoryId = result.storyId;
+
+      // Clear upload cache on success
+      uploadCacheRef.current = {};
+
+      show('Poster story published', 'success');
+
+      // Set one-use navigation bypass
+      allowNavigationRef.current = true;
+      navigation.replace('PosterViewer', {
+        storyId: confirmedStoryId,
+      });
+    } catch (e) {
+      const msg = typeof e === 'object' && e && 'message' in e ? String((e as Error).message) : 'Failed to publish story';
+      show(msg, 'error');
+      // Focus the failed frame and return to editing mode
+      if (failedFrameIdx >= 0) {
+        setActiveFrameIndex(failedFrameIdx);
+      }
+      setPhase('editing');
+      // Retain cache for retry — don't clear on failure
+    } finally {
+      setIsPublishing(false);
+      setPublishProgress(null);
+      publishInFlightRef.current = false;
+    }
+  };
+
   const handleClose = () => {
-    if (hasChanges) {
-      Alert.alert('Discard changes?', 'Your poster will not be saved.', [
+    if (isDirty) {
+      Alert.alert('Discard this Poster?', 'Your Story has not been shared.', [
         { text: 'Keep editing', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+        { text: 'Discard', style: 'destructive', onPress: () => {
+          allowNavigationRef.current = true;
+          navigation.goBack();
+        }},
       ]);
     } else {
       navigation.goBack();
     }
   };
 
-  const handlePublish = async (status: 'draft' | 'published') => {
-    if (!imageUri && !bgColor) {
-      show('Add a photo or choose a background to continue.', 'error');
-      return;
-    }
-    setIsPublishing(true);
-    try {
-      let mediaUrl: string | null = null;
-      if (imageUri) {
-        mediaUrl = await uploadMedia(imageUri, 'posters');
-      }
-      const posterId = `poster_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-      await createPosterOnApi({
-        id: posterId,
-        mediaUrl: mediaUrl ?? '',
-        caption: caption.trim(),
-        textOverlay: caption.trim()
-          ? { text: caption.trim(), color: textColor, position: 'bottom', alignment }
-          : undefined,
-        backgroundColor: bgColor ?? undefined,
-        layout: imageUri ? 'single' : 'blank',
-        status,
-        expiryHours: 24,
-      });
-      show(status === 'published' ? 'Poster published' : 'Draft saved', 'success');
-      navigation.goBack();
-    } catch (e) {
-      show(typeof e === 'object' && e && 'message' in e ? String((e as Error).message) : 'Failed to save poster', 'error');
-    } finally {
-      setIsPublishing(false);
-    }
-  };
+  // ── Preview navigation ──
 
-  const renderCanvas = () => (
-    <View style={[styles.canvas, { width: CANVAS_W, height: CANVAS_H, backgroundColor: bgColor ?? Colors.surfaceAlt }]}>
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-      ) : (
-        <View style={StyleSheet.absoluteFill} />
-      )}
-      {caption ? (
-        <View style={[styles.captionOverlay, { justifyContent: 'flex-end' }]}>
-          <Text style={[styles.captionText, { color: textColor, textAlign: alignment }]}>{caption}</Text>
-        </View>
-      ) : null}
-    </View>
-  );
+  const handlePreviewNext = useCallback(() => {
+    setPreviewIndex((prev) => Math.min(prev + 1, frames.length - 1));
+  }, [frames.length]);
 
-  if (phase === 'landing') {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <View style={styles.topBar}>
-          <AnimatedPressable onPress={handleClose} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
-            <Ionicons name="close" size={26} color={Colors.textPrimary} />
+  const handlePreviewPrev = useCallback(() => {
+    setPreviewIndex((prev) => Math.max(prev - 1, 0));
+  }, []);
+
+  const previewFrame = frames[previewIndex];
+
+  return (
+    <SafeAreaView
+      style={styles.container}
+      edges={['top']}
+      onLayout={(e) => setMeasuredWidth(e.nativeEvent.layout.width)}
+    >
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+      <View style={styles.topBar}>
+        <AnimatedPressable
+          onPress={handleClose}
+          style={styles.iconBtn}
+          activeOpacity={0.7}
+          scaleValue={0.9}
+          hapticFeedback="light"
+        >
+          <Ionicons name="close" size={26} color={Colors.textPrimary} />
+        </AnimatedPressable>
+
+        <Text style={styles.topTitle}>
+          {phase === 'editing' ? (isLookMode ? 'Create Look' : 'Create Story') : 'Preview'}
+        </Text>
+
+        {phase === 'editing' ? (
+          <AnimatedPressable
+            onPress={() => {
+              setPreviewIndex(activeFrameIndex);
+              setPhase('preview');
+            }}
+            style={styles.topBarAction}
+            activeOpacity={0.7}
+            scaleValue={0.9}
+            hapticFeedback="light"
+            disabled={!hasContent}
+          >
+            <Text style={[styles.topBarActionText, !hasContent && styles.topBarActionTextDisabled]}>Next</Text>
           </AnimatedPressable>
-          <Text style={styles.topTitle}>Create poster</Text>
-          <View style={styles.iconBtn} />
-        </View>
-        <View style={styles.landingBody}>
-          <View style={[styles.canvasPlaceholder, { width: CANVAS_W, height: CANVAS_H }]}>
-            <Ionicons name="image-outline" size={48} color={Colors.textMuted} />
-            <Text style={styles.canvasTitle}>Start creating</Text>
-            <Text style={styles.canvasSubtitle}>Choose a photo, camera, or blank canvas</Text>
-          </View>
-          <View style={styles.actionsRow}>
-            <ActionButton icon="images-outline" label="Gallery" onPress={loadRecentPhotos} />
-            <ActionButton icon="camera-outline" label="Camera" onPress={openCamera} />
-            <ActionButton icon="color-wand-outline" label="Blank" onPress={startBlank} />
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (phase === 'editing') {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <View style={styles.topBar}>
-          <AnimatedPressable onPress={handleClose} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
-            <Ionicons name="close" size={26} color={Colors.textPrimary} />
+        ) : (
+          <AnimatedPressable
+            onPress={() => setShowSettings(!showSettings)}
+            style={styles.iconBtn}
+            activeOpacity={0.7}
+            scaleValue={0.9}
+            hapticFeedback="light"
+          >
+            <Ionicons name="settings-outline" size={24} color={Colors.textPrimary} />
           </AnimatedPressable>
-          <Text style={styles.topTitle}>Edit</Text>
-          <AnimatedPressable onPress={() => setPhase('preview')} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
-            <Text style={styles.nextText}>Preview</Text>
-          </AnimatedPressable>
-        </View>
+        )}
+      </View>
 
+      {phase === 'editing' ? (
         <View style={styles.editorBody}>
-          {renderCanvas()}
-        </View>
+          {activeFrame && (
+            <PosterFrameComposer
+              frame={activeFrame}
+              onUpdateFrame={updateFrame}
+              onAddSticker={addSticker}
+              onUpdateSticker={updateSticker}
+              onRemoveSticker={removeSticker}
+              selectedStickerId={selectedStickerId}
+              onSelectSticker={handleSelectSticker}
+              canvasWidth={canvasW}
+              canvasHeight={canvasH}
+              posterMode={posterMode}
+            />
+          )}
 
-        <View style={styles.toolbar}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Space.sm }}>
-            <ToolButton icon="text-outline" label="Text" onPress={() => setShowTextSheet(true)} />
-            {!imageUri && <ToolButton icon="color-palette-outline" label="Background" onPress={() => setShowTextSheet(true)} />}
-            <ToolButton icon="refresh-outline" label="Replace" onPress={loadRecentPhotos} />
-          </ScrollView>
-        </View>
-
-        {showTextSheet && (
-          <View style={styles.textSheet}>
-            <View style={styles.sheetHandle} />
+          {activeFrame?.mediaType === 'text' && !activeFrame.mediaUri && (
             <TextInput
-              style={styles.textInput}
-              placeholder="Type your caption..."
+              style={styles.captionInput}
+              placeholder="Type caption or text..."
               placeholderTextColor={Colors.textMuted}
-              value={caption}
-              onChangeText={setCaption}
+              value={activeFrame.caption}
+              onChangeText={(text) => updateFrame({ caption: text })}
               multiline
               maxLength={200}
-              autoFocus
+              accessibilityLabel="Frame caption text"
             />
-            <Text style={styles.charCount}>{caption.length}/200</Text>
-            <View style={styles.colorRow}>
-              <Text style={styles.sheetLabel}>Color</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {TEXT_COLORS.map((c) => (
-                  <Pressable key={c} onPress={() => setTextColor(c)} style={[styles.colorDot, { backgroundColor: c }, textColor === c && styles.colorDotActive]} />
-                ))}
-              </ScrollView>
-            </View>
-            <View style={styles.colorRow}>
-              <Text style={styles.sheetLabel}>Align</Text>
-              <View style={styles.alignRow}>
-                {ALIGNMENTS.map((a) => (
-                  <Pressable key={a} onPress={() => setAlignment(a)} style={[styles.alignBtn, alignment === a && styles.alignBtnActive]}>
-                    <Ionicons name={`text-${a}` as any} size={18} color={alignment === a ? '#fff' : Colors.textSecondary} />
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-            {!imageUri && (
-              <View style={styles.colorRow}>
-                <Text style={styles.sheetLabel}>Bg</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {BG_COLORS.map((c) => (
-                    <Pressable key={c} onPress={() => setBgColor(c)} style={[styles.colorDot, { backgroundColor: c }, bgColor === c && styles.colorDotActive]} />
+          )}
+
+          {activeFrame?.mediaUri && (
+            <TextInput
+              style={styles.captionInput}
+              placeholder="Add a caption (optional)..."
+              placeholderTextColor={Colors.textMuted}
+              value={activeFrame.caption}
+              onChangeText={(text) => updateFrame({ caption: text })}
+              multiline
+              maxLength={200}
+              accessibilityLabel="Frame caption text"
+            />
+          )}
+        </View>
+      ) : (
+        <View style={styles.previewBody}>
+          {previewFrame && (
+            <View style={styles.previewCanvasWrap}>
+              <PosterFrameCanvas
+                frame={previewFrame}
+                mode="preview"
+                width={canvasW}
+                height={canvasH}
+              />
+
+              {/* Progress segments */}
+              {frames.length > 1 && (
+                <View style={styles.progressSegments}>
+                  {frames.map((_, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.segment,
+                        i === previewIndex && styles.segmentActive,
+                      ]}
+                    />
                   ))}
-                </ScrollView>
-              </View>
-            )}
-            <AnimatedPressable style={styles.doneBtn} onPress={() => setShowTextSheet(false)} activeOpacity={0.85}>
-              <Text style={styles.doneBtnText}>Done</Text>
-            </AnimatedPressable>
+                </View>
+              )}
+
+              {/* Prev/next controls */}
+              {frames.length > 1 && (
+                <View style={styles.previewNav}>
+                  <Pressable
+                    onPress={handlePreviewPrev}
+                    disabled={previewIndex === 0}
+                    style={[styles.navBtn, previewIndex === 0 && styles.navBtnDisabled]}
+                    accessibilityLabel="Previous frame"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="chevron-back" size={24} color="#fff" />
+                  </Pressable>
+                  <Pressable
+                    onPress={handlePreviewNext}
+                    disabled={previewIndex === frames.length - 1}
+                    style={[styles.navBtn, previewIndex === frames.length - 1 && styles.navBtnDisabled]}
+                    accessibilityLabel="Next frame"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="chevron-forward" size={24} color="#fff" />
+                  </Pressable>
+                </View>
+              )}
+
+              {/* Frame position */}
+              <Text style={styles.framePosition}>
+                {previewIndex + 1} / {frames.length}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      <PosterFrameStrip
+        frames={frames}
+        activeIndex={phase === 'editing' ? activeFrameIndex : previewIndex}
+        onSelectIndex={phase === 'editing' ? setActiveFrameIndex : setPreviewIndex}
+        onAddFrame={addFrame}
+        onRemoveFrame={removeFrame}
+        onMoveFrame={moveFrame}
+        onDuplicateFrame={duplicateFrame}
+        maxFrames={MAX_FRAMES}
+        publishStates={publishStates}
+        posterMode={posterMode}
+      />
+
+      {showSettings && phase === 'preview' && (
+        <View style={styles.settingsSheet}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>Story settings</Text>
+
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Audience</Text>
+            <View style={styles.toggleRow}>
+              <Pressable
+                onPress={() => setAudience('public')}
+                style={[styles.toggleBtn, audience === 'public' && styles.toggleBtnActive]}
+              >
+                <Text style={[styles.toggleText, audience === 'public' && styles.toggleTextActive]}>Public</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setAudience('private')}
+                style={[styles.toggleBtn, audience === 'private' && styles.toggleBtnActive]}
+              >
+                <Text style={[styles.toggleText, audience === 'private' && styles.toggleTextActive]}>Private</Text>
+              </Pressable>
+            </View>
           </View>
-        )}
-      </SafeAreaView>
-    );
-  }
 
-  // preview
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <View style={styles.topBar}>
-        <AnimatedPressable onPress={() => setPhase('editing')} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.topTitle}>Preview</Text>
-        <View style={styles.iconBtn} />
-      </View>
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Allow replies</Text>
+            <Pressable
+              onPress={() => setAllowReplies(!allowReplies)}
+              style={[styles.switch, allowReplies && styles.switchOn]}
+              accessibilityLabel={`Allow replies: ${allowReplies ? 'on' : 'off'}`}
+              accessibilityRole="switch"
+            >
+              <View style={[styles.switchThumb, allowReplies && styles.switchThumbOn]} />
+            </Pressable>
+          </View>
 
-      <View style={styles.previewBody}>
-        {renderCanvas()}
-      </View>
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Allow reactions</Text>
+            <Pressable
+              onPress={() => setAllowReactions(!allowReactions)}
+              style={[styles.switch, allowReactions && styles.switchOn]}
+              accessibilityLabel={`Allow reactions: ${allowReactions ? 'on' : 'off'}`}
+              accessibilityRole="switch"
+            >
+              <View style={[styles.switchThumb, allowReactions && styles.switchThumbOn]} />
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       <View style={styles.publishBar}>
-        <AnimatedPressable
-          style={[styles.publishBtn, styles.publishBtnSecondary]}
-          onPress={() => handlePublish('draft')}
-          activeOpacity={0.85}
-          disabled={isPublishing}
-        >
-          {isPublishing ? <ActivityIndicator size="small" color={Colors.textSecondary} /> : <Text style={styles.publishBtnSecondaryText}>Save Draft</Text>}
-        </AnimatedPressable>
-        <AnimatedPressable
-          style={styles.publishBtn}
-          onPress={() => handlePublish('published')}
-          activeOpacity={0.85}
-          disabled={isPublishing}
-        >
-          {isPublishing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.publishBtnText}>Publish</Text>}
-        </AnimatedPressable>
+        {publishProgress && (
+          <Text style={styles.publishProgress}>{publishProgress}</Text>
+        )}
+        {phase === 'editing' ? null : (
+          <AnimatedPressable
+            style={[styles.publishBtn, !hasContent && styles.publishBtnDisabled]}
+            onPress={handlePublish}
+            activeOpacity={0.85}
+            disabled={isPublishing || !hasContent}
+          >
+            {isPublishing ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.publishBtnText}>{isLookMode ? 'Publish Look' : 'Publish Story'}</Text>
+            )}
+          </AnimatedPressable>
+        )}
       </View>
     </SafeAreaView>
-  );
-}
-
-function ActionButton({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
-  return (
-    <AnimatedPressable style={styles.actionBtn} onPress={onPress} activeOpacity={0.7} scaleValue={0.95} hapticFeedback="light">
-      <View style={styles.actionCircle}>
-        <Ionicons name={icon as any} size={28} color={Colors.textPrimary} />
-      </View>
-      <Text style={styles.actionLabel}>{label}</Text>
-    </AnimatedPressable>
-  );
-}
-
-function ToolButton({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
-  return (
-    <AnimatedPressable style={styles.toolBtn} onPress={onPress} activeOpacity={0.7} scaleValue={0.95} hapticFeedback="light">
-      <View style={styles.toolCircle}>
-        <Ionicons name={icon as any} size={22} color={Colors.textPrimary} />
-      </View>
-      <Text style={styles.toolLabel}>{label}</Text>
-    </AnimatedPressable>
   );
 }
 
@@ -342,139 +771,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  nextText: {
+  topBarAction: {
+    paddingHorizontal: Space.md,
+    height: 36,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topBarActionText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-  },
-  nextTextPrimary: {
     color: Colors.brand,
   },
-  landingBody: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.lg,
-    gap: Space.xl,
-  },
-  canvasPlaceholder: {
-    width: CANVAS_W,
-    height: CANVAS_H,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-  },
-  canvasTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
-  },
-  canvasSubtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+  topBarActionTextDisabled: {
     color: Colors.textMuted,
-    textAlign: 'center',
-    paddingHorizontal: Space.lg,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: Space.lg,
-  },
-  actionBtn: {
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  actionCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
   },
   editorBody: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: Space.md,
+    gap: Space.md,
   },
-  canvas: {
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-  },
-  emptyCanvas: {
+  captionInput: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  captionOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  captionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textInverse,
-    textAlign: 'center',
-  },
-  toolbar: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    gap: Space.sm,
-  },
-  toolBtn: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  toolCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  toolLabel: {
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-  },
-  textSheet: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.surface,
-    gap: Space.sm,
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginBottom: Space.sm,
-  },
-  textInput: {
+    width: '100%',
+    maxWidth: 360,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: Colors.textPrimary,
@@ -485,98 +807,156 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     backgroundColor: Colors.surfaceAlt,
-  },
-  charCount: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'right',
-  },
-  colorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  sheetLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    width: 40,
-  },
-  colorDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    marginRight: 6,
-  },
-  colorDotActive: {
-    borderColor: Colors.textPrimary,
-  },
-  alignRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-  },
-  alignBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  alignBtnActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-  },
-  doneBtn: {
-    backgroundColor: Colors.brand,
-    borderRadius: Radius.lg,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: Space.sm,
-  },
-  doneBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
-  },
-  publishBar: {
-    flexDirection: 'row',
-    gap: Space.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  publishBtn: {
-    flex: 1,
-    backgroundColor: Colors.brand,
-    borderRadius: Radius.lg,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  publishBtnSecondary: {
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  publishBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
-  },
-  publishBtnSecondaryText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    textAlignVertical: 'top',
   },
   previewBody: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  previewCanvasWrap: {
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  progressSegments: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: Space.sm,
+  },
+  segment: {
+    width: 24,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: Colors.border,
+  },
+  segmentActive: {
+    backgroundColor: Colors.brand,
+  },
+  previewNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    maxWidth: 360,
+    marginTop: Space.sm,
+  },
+  navBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navBtnDisabled: {
+    opacity: 0.3,
+  },
+  framePosition: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+  },
+  settingsSheet: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.surface,
+    gap: Space.md,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+  },
+  sheetTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: Space.xs,
+  },
+  toggleBtn: {
+    paddingHorizontal: Space.md,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  toggleBtnActive: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
+  },
+  toggleText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+  },
+  toggleTextActive: {
+    color: '#fff',
+  },
+  switch: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Colors.border,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  switchOn: {
+    backgroundColor: Colors.brand,
+  },
+  switchThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+  },
+  switchThumbOn: {
+    transform: [{ translateX: 18 }],
+  },
+  publishBar: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  publishProgress: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: Space.xs,
+  },
+  publishBtn: {
+    backgroundColor: Colors.brand,
+    borderRadius: Radius.lg,
+    paddingVertical: 14,
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  publishBtnDisabled: {
+    opacity: 0.5,
+  },
+  publishBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
   },
 });

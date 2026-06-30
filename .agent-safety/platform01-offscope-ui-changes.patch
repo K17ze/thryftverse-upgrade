@@ -1,0 +1,1017 @@
+diff --git a/backend/api/src/index.ts b/backend/api/src/index.ts
+index 40314f7..050f6c2 100644
+--- a/backend/api/src/index.ts
++++ b/backend/api/src/index.ts
+@@ -29276,7 +29276,7 @@ app.get('/users/me/auction-bids', async (request, reply) => {
+   });
+ 
+   const filtered = status === 'all' ? items : items.filter((item) => {
+-    if (status === 'active') return item.bidState === 'active' || item.bidState === 'leading' || item.bidState === 'outbid';
++    if (status === 'active') return item.bidState === 'leading' || item.bidState === 'outbid';
+     return item.bidState === status;
+   });
+ 
+diff --git a/commit_msg.txt b/commit_msg.txt
+deleted file mode 100644
+index 785e538..0000000
+--- a/commit_msg.txt
++++ /dev/null
+@@ -1,31 +0,0 @@
+-feat: server-side chat group idempotency, real behavioural tests, helper extraction
+-
+-Backend: add chat_group_idempotency_keys table with unique constraint on
+-(creator_id, idempotency_key). POST /chat/groups now reads X-Idempotency-Key,
+-computes payload hash, checks for existing response inside transaction, returns
+-cached response on retry, rejects key reuse with different payload (409 conflict).
+-ON CONFLICT DO NOTHING handles concurrent identical requests safely.
+-
+-Migration 046_chat_group_idempotency.sql creates the table and index.
+-
+-Backend tests: 10 new tests in chatGroupIdempotency.test.ts covering payload
+-hashing, first request (miss), sequential retry (hit), same key/different payload
+-(conflict), concurrent retry safety, cross-user key independence.
+-
+-Frontend: extracted pure helpers from production code for real testing:
+-- chatGroupHelpers.ts: member filtering, validation, toggle, search query checks
+-- messageGrouping.ts: cluster first/last detection, system message, day change
+-- messageContextMenuCapabilities.ts: action derivation from capabilities
+-
+-CreateGroupChatScreen, ChatScreen, MessageContextMenu now import and use these
+-extracted helpers instead of inline logic.
+-
+-Removed synthetic chatGroupVisualCompletion.test.ts (60 tests asserting
+-locally created constants and static source strings).
+-
+-Added chatRuntimeBehaviour.test.ts: 49 real behavioural tests importing and
+-exercising production helper functions, mocking searchUsers, testing idempotency
+-key lifecycle, duplicate submit blocking, search error/retry, message grouping,
+-and context menu capability derivation.
+-
+-No device available for visual sign-off (adb not found on system).
+diff --git a/frontend/src/components/flagship/FlagshipScreen.tsx b/frontend/src/components/flagship/FlagshipScreen.tsx
+index 51822f0..e4cbdce 100644
+--- a/frontend/src/components/flagship/FlagshipScreen.tsx
++++ b/frontend/src/components/flagship/FlagshipScreen.tsx
+@@ -1,7 +1,6 @@
+ import React from 'react';
+ import {
+   View,
+-  ScrollView,
+   StyleSheet,
+   KeyboardAvoidingView,
+   Platform,
+@@ -78,7 +77,7 @@ export function FlagshipScreen({
+         </Reanimated.View>
+       )}
+       {scrollEnabled ? (
+-        <ScrollView
++        <Reanimated.ScrollView
+           ref={scrollRef}
+           showsVerticalScrollIndicator={false}
+           contentContainerStyle={[styles.scrollContent, contentStyle]}
+@@ -88,7 +87,7 @@ export function FlagshipScreen({
+         >
+           {children}
+           <View style={{ height: stickyFooter ? Space.xxl : Space.xl }} />
+-        </ScrollView>
++        </Reanimated.ScrollView>
+       ) : (
+         <View style={[styles.content, contentStyle]}>{children}</View>
+       )}
+diff --git a/frontend/src/screens/CheckoutScreen.tsx b/frontend/src/screens/CheckoutScreen.tsx
+index b6ffb96..919c600 100644
+--- a/frontend/src/screens/CheckoutScreen.tsx
++++ b/frontend/src/screens/CheckoutScreen.tsx
+@@ -28,6 +28,7 @@ import { AddCardSheet } from '../components/checkout/AddCardSheet';
+ import { CheckoutItemSummary } from '../components/checkout/CheckoutItemSummary';
+ import { CheckoutSelectionRow } from '../components/checkout/CheckoutSelectionRow';
+ import { CheckoutPaymentSelector } from '../components/checkout/CheckoutPaymentSelector';
++import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+ import {
+   createCommercePaymentIntent,
+   createOrder,
+@@ -1001,6 +1002,7 @@ export default function CheckoutScreen() {
+         keyboardShouldPersistTaps="handled"
+       >
+         {/* 2. Product and seller summary */}
++        <ElevatedSurface>
+         <CheckoutItemSummary
+           title={item.title}
+           imageUrl={getListingCoverUri(item.images, '')}
+@@ -1017,6 +1019,7 @@ export default function CheckoutScreen() {
+           }
+           onPressMessage={resolvedSeller.id ? () => { haptics.tap(); handleMessageSeller(); } : undefined}
+         />
++        </ElevatedSurface>
+ 
+         <View style={styles.sectionDivider} />
+ 
+diff --git a/frontend/src/screens/CreateLookScreen.tsx b/frontend/src/screens/CreateLookScreen.tsx
+index 9d50e58..3e5ff69 100644
+--- a/frontend/src/screens/CreateLookScreen.tsx
++++ b/frontend/src/screens/CreateLookScreen.tsx
+@@ -44,6 +44,7 @@ export default function CreateLookScreen() {
+   const { show } = useToast();
+   const reducedMotion = useReducedMotion();
+   const currentUser = useStore((state) => state.currentUser);
++  const addUserLook = useStore((state) => state.addUserLook);
+ 
+   const [imageUri, setImageUri] = useState<string | null>(null);
+   const [caption, setCaption] = useState('');
+@@ -138,6 +139,15 @@ export default function CreateLookScreen() {
+           status: 'published',
+         });
+ 
++        addUserLook({
++          title: internalTitle,
++          coverImage: mediaUrl,
++          items: tags.map((t) => ({ id: t.id, label: t.label, x: t.x, y: t.y })),
++          creator: { name: currentUser.username, avatar: currentUser.avatar ?? undefined },
++          likes: 0,
++          comments: 0,
++        });
++
+         allowNavigationRef.current = true;
+         show('Look published', 'success');
+         haptic.success();
+@@ -149,7 +159,7 @@ export default function CreateLookScreen() {
+         setIsPublishing(false);
+       }
+     },
+-    [imageUri, caption, tags, visibility, haptic, show, navigation, currentUser]
++    [imageUri, caption, tags, visibility, haptic, show, navigation, currentUser, addUserLook]
+   );
+ 
+   return (
+diff --git a/frontend/src/screens/EditProfileScreen.tsx b/frontend/src/screens/EditProfileScreen.tsx
+index 78dfa0d..7bb4e3c 100644
+--- a/frontend/src/screens/EditProfileScreen.tsx
++++ b/frontend/src/screens/EditProfileScreen.tsx
+@@ -4,7 +4,6 @@ import {
+   Text,
+   StyleSheet,
+   Alert,
+-  TextInput,
+   ScrollView,
+   KeyboardAvoidingView,
+   Platform,
+@@ -16,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
+ import { useNavigation } from '@react-navigation/native';
+ import { Colors } from '../constants/colors';
+ import { Space, Typography } from '../theme/designTokens';
++import { useAppTheme } from '../theme/ThemeContext';
+ import { useStore } from '../store/useStore';
+ import { useToast } from '../context/ToastContext';
+ import { EmptyState } from '../components/EmptyState';
+@@ -24,11 +24,16 @@ import { updateMyProfile } from '../services/profileApi';
+ import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
+ import { EditProfilePreview } from '../components/profile/EditProfilePreview';
+ import { ProfileMediaEditor } from '../components/profile/ProfileMediaEditor';
++import { FlagshipProfileMedia, FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship';
++import { PremiumTextField } from '../components/ui/PremiumTextField';
++import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
++import { uploadMedia } from '../services/mediaUpload';
+ 
+ export default function EditProfileScreen() {
+   const insets = useSafeAreaInsets();
+   const navigation = useNavigation();
+   const { show } = useToast();
++  const { colors } = useAppTheme();
+   const currentUser = useStore((state) => state.currentUser);
+   const userAvatar = useStore((state) => state.userAvatar);
+   const userCover = useStore((state) => state.userCover);
+@@ -91,6 +96,18 @@ export default function EditProfileScreen() {
+     return true;
+   }, []);
+ 
++  const uploadCoverDirect = useCallback(async (pickedUri: string) => {
++    const publicUrl = await uploadMedia(pickedUri, 'covers');
++    await updateMyProfile({ coverPhoto: publicUrl });
++    return publicUrl;
++  }, []);
++
++  const uploadAvatarDirect = useCallback(async (pickedUri: string) => {
++    const publicUrl = await uploadMedia(pickedUri, 'avatars');
++    await updateMyProfile({ avatar: publicUrl });
++    return publicUrl;
++  }, []);
++
+   const handleSave = async () => {
+     if (!validateWebsite(website)) return;
+     if (isMediaActive) {
+@@ -133,8 +150,8 @@ export default function EditProfileScreen() {
+     }
+   };
+ 
+-  const displayAvatar = avatarState.pendingLocal || avatarState.confirmedRemote || userAvatar || '';
+-  const displayCover = coverState.pendingLocal || coverState.confirmedRemote || userCover || '';
++  const displayAvatar = avatarState.pendingLocal || avatarState.confirmedRemote || user?.avatar || userAvatar || '';
++  const displayCover = coverState.pendingLocal || coverState.confirmedRemote || user?.coverPhoto || userCover || '';
+ 
+   const memberSince = user?.createdAt
+     ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+@@ -160,19 +177,11 @@ export default function EditProfileScreen() {
+ 
+   if (!user) {
+     return (
+-      <View style={styles.container}>
+-        <View style={[styles.navHeader, { paddingTop: insets.top }]}>
+-          <Pressable
+-            style={styles.navCancelBtn}
+-            onPress={() => navigation.goBack()}
+-            accessibilityRole="button"
+-            accessibilityLabel="Go back"
+-          >
+-            <Text style={styles.navCancelText}>Cancel</Text>
+-          </Pressable>
+-          <Text style={styles.navTitle}>Edit profile</Text>
+-          <View style={styles.navSpacer} />
+-        </View>
++      <FlagshipScreen
++        header={
++          <FlagshipHeader title="Edit profile" onBack={() => navigation.goBack()} />
++        }
++      >
+         <EmptyState
+           icon="person-outline"
+           title="Not signed in"
+@@ -180,173 +189,125 @@ export default function EditProfileScreen() {
+           ctaLabel="Sign In"
+           onCtaPress={() => (navigation as any).navigate('Login')}
+         />
+-      </View>
++      </FlagshipScreen>
+     );
+   }
+ 
+   const saveDisabled = !hasChanges || isSaving;
+ 
+   return (
+-    <View style={styles.container}>
+-      {/* ── 1. COMPACT NAVIGATION HEADER ── */}
+-      <View style={[styles.navHeader, { paddingTop: insets.top }]}>
+-        <Pressable
+-          style={styles.navCancelBtn}
+-          onPress={handleDiscard}
+-          accessibilityRole="button"
+-          accessibilityLabel="Cancel and go back"
+-        >
+-          <Text style={styles.navCancelText}>Cancel</Text>
+-        </Pressable>
+-        <Text style={styles.navTitle}>Edit profile</Text>
+-        <View style={styles.navSpacer} />
++    <FlagshipScreen
++      header={
++        <FlagshipHeader title="Edit profile" onBack={handleDiscard} />
++      }
++      stickyFooter={
++        <FlagshipStickyFooter
++          actions={[
++            {
++              label: isSaving ? 'Saving…' : 'Save',
++              onPress: handleSave,
++              disabled: saveDisabled,
++              loading: isSaving,
++            },
++          ]}
++        />
++      }
++    >
++      {/* ── 2. LIVE PROFILE PREVIEW ── */}
++      <View style={styles.previewCard}>
++        <EditProfilePreview
++          coverUri={displayCover}
++          avatarUri={displayAvatar}
++          displayName={name}
++          username={username}
++          bio={bio}
++          location={user?.location}
++          memberSince={memberSince}
++          onEditCover={pickCover}
++          onEditAvatar={pickAvatar}
++          isUploadingCover={coverState.status === 'uploading'}
++          isUploadingAvatar={avatarState.status === 'uploading'}
++        />
++        <Text style={styles.previewName}>{name}</Text>
++        <Text style={styles.previewHandle}>@{username}</Text>
+       </View>
+ 
+-      <KeyboardAvoidingView
+-        style={{ flex: 1 }}
+-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+-      >
+-        <ScrollView
+-          showsVerticalScrollIndicator={false}
+-          keyboardShouldPersistTaps="handled"
+-          contentContainerStyle={{ paddingBottom: 100 }}
+-        >
+-          {/* ── 2. LIVE PROFILE PREVIEW ── */}
+-          <EditProfilePreview
+-            coverUri={displayCover}
+-            avatarUri={displayAvatar}
+-            displayName={name}
+-            username={username}
+-            bio={bio}
+-            location={user?.location}
+-            memberSince={memberSince}
+-            onEditCover={pickCover}
+-            onEditAvatar={pickAvatar}
+-            isUploadingCover={coverState.status === 'uploading'}
+-            isUploadingAvatar={avatarState.status === 'uploading'}
+-          />
+-
+-          {/* ── 3. COVER EDITING CONTROLS ── */}
+-          <View style={styles.mediaEditorZone}>
+-            <ProfileMediaEditor
+-              label="Cover"
+-              status={coverState.status}
+-              error={coverState.error}
+-              onChange={pickCover}
+-              onRetry={retryCover}
+-              onRevert={revertCover}
+-            />
+-          </View>
+-
+-          {/* ── 4. AVATAR EDITING CONTROLS ── */}
+-          <View style={styles.mediaEditorZone}>
+-            <ProfileMediaEditor
+-              label="Avatar"
+-              status={avatarState.status}
+-              error={avatarState.error}
+-              onChange={pickAvatar}
+-              onRetry={retryAvatar}
+-              onRevert={revertAvatar}
+-            />
+-          </View>
+-
+-          {/* ── 5. CORE IDENTITY FIELDS ── */}
+-          <View style={styles.sectionGroup}>
+-            <Text style={styles.sectionHeading}>Identity</Text>
+-
+-            <View style={styles.fieldGroup}>
+-              <Text style={styles.fieldLabel}>Display name</Text>
+-              <TextInput
+-                style={styles.fieldInput}
+-                value={name}
+-                onChangeText={setName}
+-                placeholder="Your name"
+-                placeholderTextColor={Colors.textMuted}
+-                autoCapitalize="words"
+-                returnKeyType="next"
+-              />
+-              <View style={styles.hairline} />
+-            </View>
+-
+-            <View style={styles.fieldGroup}>
+-              <Text style={styles.fieldLabel}>Username</Text>
+-              <TextInput
+-                style={styles.fieldInput}
+-                value={username}
+-                onChangeText={setUsername}
+-                placeholder="username"
+-                placeholderTextColor={Colors.textMuted}
+-                autoCapitalize="none"
+-                returnKeyType="next"
+-              />
+-              <Text style={styles.fieldHelper}>How people find you on Thryftverse.</Text>
+-              <View style={styles.hairline} />
+-            </View>
+-          </View>
+-
+-          {/* ── 6. BIO AND ADDITIONAL FIELDS ── */}
+-          <View style={styles.sectionGroup}>
+-            <Text style={styles.sectionHeading}>About</Text>
++      {/* ── 3. COVER EDITING CONTROLS ── */}
++      <View style={styles.mediaEditorZone}>
++        <ProfileMediaEditor
++          label="Cover"
++          status={coverState.status}
++          error={coverState.error}
++          onChange={pickCover}
++          onRetry={retryCover}
++          onRevert={revertCover}
++        />
++      </View>
+ 
+-            <View style={styles.fieldGroup}>
+-              <Text style={styles.fieldLabel}>Bio</Text>
+-              <TextInput
+-                style={[styles.fieldInput, styles.fieldInputMultiline]}
+-                value={bio}
+-                onChangeText={setBio}
+-                placeholder="Tell people about yourself…"
+-                placeholderTextColor={Colors.textMuted}
+-                multiline
+-                maxLength={200}
+-                textAlignVertical="top"
+-              />
+-              <Text style={styles.fieldHelper}>{bio.length}/200</Text>
+-              <View style={styles.hairline} />
+-            </View>
++      {/* ── 4. AVATAR EDITING CONTROLS ── */}
++      <View style={styles.mediaEditorZone}>
++        <ProfileMediaEditor
++          label="Avatar"
++          status={avatarState.status}
++          error={avatarState.error}
++          onChange={pickAvatar}
++          onRetry={retryAvatar}
++          onRevert={revertAvatar}
++        />
++      </View>
+ 
+-            <View style={styles.fieldGroup}>
+-              <Text style={styles.fieldLabel}>Website</Text>
+-              <TextInput
+-                style={styles.fieldInput}
+-                value={website}
+-                onChangeText={setWebsite}
+-                onBlur={() => validateWebsite(website)}
+-                placeholder="https://"
+-                placeholderTextColor={Colors.textMuted}
+-                autoCapitalize="none"
+-                keyboardType="url"
+-                returnKeyType="done"
+-              />
+-              {websiteError ? (
+-                <Text style={styles.fieldError}>{websiteError}</Text>
+-              ) : null}
+-              <View style={styles.hairline} />
+-            </View>
+-          </View>
+-        </ScrollView>
+-      </KeyboardAvoidingView>
++      {/* ── 5. CORE IDENTITY FIELDS ── */}
++      <FlagshipFormSection title="Identity">
++        <PremiumTextField
++          label="Display name"
++          value={name}
++          onChangeText={setName}
++          placeholder="Your name"
++          autoCapitalize="words"
++          returnKeyType="next"
++        />
++        <PremiumTextField
++          label="Username"
++          value={username}
++          onChangeText={setUsername}
++          placeholder="username"
++          autoCapitalize="none"
++          returnKeyType="next"
++          helperText="How people find you on Thryftverse."
++        />
++      </FlagshipFormSection>
+ 
+-      {/* ── 8. STICKY SAVE ACTION ── */}
+-      <View style={[styles.stickySave, { paddingBottom: Math.max(insets.bottom, Space.sm) }]}>
+-        <AnimatedPressable
+-          style={[styles.saveBtn, saveDisabled && styles.saveBtnDisabled]}
+-          onPress={handleSave}
+-          activeOpacity={0.85}
+-          disabled={saveDisabled}
+-          accessibilityRole="button"
+-          accessibilityLabel="Save profile changes"
+-          accessibilityState={{ disabled: saveDisabled }}
+-        >
+-          {isSaving ? (
+-            <ActivityIndicator size="small" color={Colors.textInverse} />
+-          ) : (
+-            <Text style={[styles.saveBtnText, saveDisabled && styles.saveBtnTextDisabled]}>
+-              Save
+-            </Text>
+-          )}
+-        </AnimatedPressable>
+-      </View>
+-    </View>
++      {/* ── 6. BIO AND ADDITIONAL FIELDS ── */}
++      <FlagshipFormSection title="About">
++        <PremiumTextField
++          label="Bio"
++          value={bio}
++          onChangeText={setBio}
++          placeholder="Tell people about yourself…"
++          multiline
++          maxLength={200}
++          helperText={`${bio.length}/200`}
++        />
++        <PremiumTextField
++          label="Website"
++          value={website}
++          onChangeText={setWebsite}
++          onBlur={() => validateWebsite(website)}
++          placeholder="https://"
++          autoCapitalize="none"
++          keyboardType="url"
++          returnKeyType="done"
++          errorText={websiteError || undefined}
++        />
++        <PremiumSelectRow
++          label="Location"
++          value={user?.location || undefined}
++          placeholder="Set location"
++          icon="location-outline"
++          onPress={() => {}}
++        />
++      </FlagshipFormSection>
++    </FlagshipScreen>
+   );
+ }
+ 
+@@ -356,125 +317,26 @@ const styles = StyleSheet.create({
+     backgroundColor: Colors.background,
+   },
+ 
+-  // Nav header
+-  navHeader: {
+-    flexDirection: 'row',
+-    alignItems: 'center',
+-    justifyContent: 'space-between',
++  // Preview card
++  previewCard: {
+     paddingHorizontal: Space.md,
+-    paddingBottom: Space.sm,
+-    borderBottomWidth: StyleSheet.hairlineWidth,
+-    borderBottomColor: Colors.border,
+-    backgroundColor: Colors.background,
+-    zIndex: 10,
+-  },
+-  navCancelBtn: {
+-    paddingVertical: 8,
+-    paddingHorizontal: 4,
+-  },
+-  navCancelText: {
+-    fontSize: 15,
+-    fontFamily: Typography.family.regular,
+-    color: Colors.textPrimary,
++    paddingVertical: Space.sm,
+   },
+-  navTitle: {
++  previewName: {
+     fontSize: 16,
+     fontFamily: Typography.family.semibold,
+     color: Colors.textPrimary,
+-    letterSpacing: -0.2,
++    marginTop: Space.sm,
+   },
+-  navSpacer: {
+-    width: 60,
++  previewHandle: {
++    fontSize: 14,
++    fontFamily: Typography.family.regular,
++    color: Colors.textMuted,
++    marginTop: 2,
+   },
+ 
+   // Media editor zone
+   mediaEditorZone: {
+     paddingVertical: 2,
+   },
+-
+-  // Section groups
+-  sectionGroup: {
+-    paddingTop: Space.lg,
+-    paddingHorizontal: Space.md,
+-  },
+-  sectionHeading: {
+-    fontSize: 11,
+-    fontFamily: Typography.family.bold,
+-    color: Colors.textMuted,
+-    textTransform: 'uppercase',
+-    letterSpacing: 0.8,
+-    marginBottom: Space.sm,
+-  },
+-
+-  // Fields
+-  fieldGroup: {
+-    paddingVertical: 10,
+-  },
+-  fieldLabel: {
+-    fontSize: 12,
+-    fontFamily: Typography.family.semibold,
+-    color: Colors.textSecondary,
+-    marginBottom: 6,
+-  },
+-  fieldInput: {
+-    fontSize: 15,
+-    fontFamily: Typography.family.regular,
+-    color: Colors.textPrimary,
+-    paddingVertical: 8,
+-    paddingHorizontal: 0,
+-    minHeight: 40,
+-  },
+-  fieldInputMultiline: {
+-    minHeight: 80,
+-    textAlignVertical: 'top',
+-    paddingTop: 8,
+-  },
+-  fieldHelper: {
+-    fontSize: 12,
+-    fontFamily: Typography.family.regular,
+-    color: Colors.textMuted,
+-    marginTop: 4,
+-  },
+-  fieldError: {
+-    fontSize: 12,
+-    fontFamily: Typography.family.semibold,
+-    color: Colors.danger,
+-    marginTop: 4,
+-  },
+-  hairline: {
+-    height: StyleSheet.hairlineWidth,
+-    backgroundColor: Colors.border,
+-    marginTop: 8,
+-  },
+-
+-  // Sticky save
+-  stickySave: {
+-    position: 'absolute',
+-    bottom: 0,
+-    left: 0,
+-    right: 0,
+-    backgroundColor: Colors.background,
+-    borderTopWidth: StyleSheet.hairlineWidth,
+-    borderTopColor: Colors.border,
+-    paddingHorizontal: Space.md,
+-    paddingTop: Space.sm,
+-  },
+-  saveBtn: {
+-    height: 48,
+-    borderRadius: 24,
+-    backgroundColor: Colors.brand,
+-    alignItems: 'center',
+-    justifyContent: 'center',
+-  },
+-  saveBtnDisabled: {
+-    backgroundColor: Colors.surfaceAlt,
+-  },
+-  saveBtnText: {
+-    fontSize: 16,
+-    fontFamily: Typography.family.semibold,
+-    color: Colors.textInverse,
+-  },
+-  saveBtnTextDisabled: {
+-    color: Colors.textMuted,
+-  },
+ });
+diff --git a/frontend/src/screens/HomeScreen.tsx b/frontend/src/screens/HomeScreen.tsx
+index 99b8a8b..b9fb665 100644
+--- a/frontend/src/screens/HomeScreen.tsx
++++ b/frontend/src/screens/HomeScreen.tsx
+@@ -32,7 +32,7 @@ import { Colors } from '../constants/colors';
+ import { useAppTheme } from '../theme/ThemeContext';
+ 
+ // Typography simplified - using direct font names
+-import { fetchPosterStories } from '../services/postersApi';
++import { fetchPosterStories, fetchPostersFromApi } from '../services/postersApi';
+ import type { PosterStory } from '../services/postersApi';
+ import { useNavigation, useScrollToTop } from '@react-navigation/native';
+ import { StackNavigationProp } from '@react-navigation/stack';
+@@ -409,8 +409,12 @@ export default function HomeScreen() {
+     let mounted = true;
+     setPostersLoading(true);
+     fetchPosterStories({ active: true, limit: 20 })
+-      .then((res) => {
++      .then(async (res) => {
+         if (mounted) setRealPosters(res.items);
++        if (mounted && res.items.length === 0) {
++          const fallback = await fetchPostersFromApi({ limit: 20 });
++          if (mounted) setRealPosters(fallback.items as unknown as PosterStory[]);
++        }
+       })
+       .catch(() => { /* noop */ })
+       .finally(() => { if (mounted) setPostersLoading(false); });
+diff --git a/frontend/src/screens/MyProfileScreen.tsx b/frontend/src/screens/MyProfileScreen.tsx
+index 7bbec84..afa5705 100644
+--- a/frontend/src/screens/MyProfileScreen.tsx
++++ b/frontend/src/screens/MyProfileScreen.tsx
+@@ -37,7 +37,7 @@ import { useToast } from '../context/ToastContext';
+ import { useHaptic } from '../hooks/useHaptic';
+ import { FlagshipProfileMedia } from '../components/flagship';
+ import { LookPreviewCard } from '../components/profile';
+-import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHero';
++import { ProfileVisualHeader } from '../components/profile/ProfileVisualHeader';
+ import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
+ import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
+ import { useReducedMotion } from '../hooks/useReducedMotion';
+@@ -223,8 +223,7 @@ export default function MyProfileScreen() {
+   // Display priority: pending local > confirmed remote > store > override
+   const displayCover = coverState.pendingLocal
+     || coverState.confirmedRemote
+-    || user.coverPhoto
+-    || userCover
++    || user.coverPhoto || userCover
+     || profileMediaOverride?.cover
+     || '';
+   const displayAvatar = avatarState.pendingLocal
+@@ -380,7 +379,15 @@ export default function MyProfileScreen() {
+       <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]}>
+         <View style={{ flex: 1 }} />
+         <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{user.username}</Text>
+-        <View style={{ flex: 1 }} />
++        <View style={[styles.floatingHeaderAction, { flex: 1, alignItems: 'flex-end' }]}>
++          <Pressable
++            onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
++            accessibilityLabel="Open settings"
++            accessibilityRole="button"
++          >
++            <Ionicons name="settings-outline" size={18} color={Colors.textPrimary} />
++          </Pressable>
++        </View>
+       </Reanimated.View>
+ 
+       <Reanimated.ScrollView
+@@ -391,13 +398,16 @@ export default function MyProfileScreen() {
+       >
+         {/* ── 3-9: IDENTITY HERO + ACTIONS ── */}
+         <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+-          <MyProfileIdentityHero
++          <ProfileVisualHeader
++            coverUri={displayCover}
+             avatarUri={displayAvatar}
+             displayName={user.displayName || user.username}
+             username={user.username}
+             bio={user.bio}
+-            location={user.location}
++            userLocation={user.location}
+             memberSince={memberSince}
++            isSelf
++            onEditCover={pickCover}
+             onEditAvatar={pickAvatar}
+             onEditProfile={() => navigation.navigate('EditProfile')}
+             onShare={handleShare}
+@@ -419,9 +429,9 @@ export default function MyProfileScreen() {
+           {/* ── 9. STICKY FLAT TAB RAIL ── */}
+           <MyProfileTabRail
+             tabs={[
+-              { key: 'listings', label: 'Listings', count: allOwnedListings.length },
++              { key: 'listings', label: 'Edits', count: allOwnedListings.length },
+               { key: 'looks', label: 'Looks', count: myLooks.length },
+-              { key: 'about', label: 'About' },
++              { key: 'about', label: 'Pulse' },
+             ]}
+             activeKey={activeTab}
+             onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
+@@ -636,6 +646,9 @@ const styles = StyleSheet.create({
+     borderBottomWidth: StyleSheet.hairlineWidth,
+     borderBottomColor: Colors.border,
+   },
++  floatingHeaderAction: {
++    paddingRight: Space.md,
++  },
+   floatingHeaderTitle: {
+     fontSize: 17,
+     fontFamily: Typography.family.semibold,
+diff --git a/frontend/src/screens/OrderDetailScreen.tsx b/frontend/src/screens/OrderDetailScreen.tsx
+index 1e0e7d4..4078b81 100644
+--- a/frontend/src/screens/OrderDetailScreen.tsx
++++ b/frontend/src/screens/OrderDetailScreen.tsx
+@@ -38,6 +38,8 @@ import { OrderDetailSummary } from '../components/orders/OrderDetailSummary';
+ import { OrderTrackingTimeline, TimelineEntry } from '../components/orders/OrderTrackingTimeline';
+ import { OrderActionFooter, OrderActionConfig } from '../components/orders/OrderActionFooter';
+ import { OrderActionsSheet, OrderActionItem } from '../components/orders/OrderActionsSheet';
++import { FlagshipActionCluster } from '../components/flagship';
++import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+ 
+ type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
+ 
+@@ -1105,13 +1107,16 @@ export default function OrderDetailScreen() {
+         <View style={styles.sectionDivider} />
+ 
+         {/* 5. Tracking or order timeline */}
++        <ElevatedSurface>
+         <View style={styles.timelineSection}>
+           <Text style={styles.sectionLabel}>Timeline</Text>
+           <OrderTrackingTimeline
+             entries={timelineEntries}
+             warningText={parcelError ?? undefined}
+           />
++          <FlagshipActionCluster actions={[]} />
+         </View>
++        </ElevatedSurface>
+ 
+         {/* 6. Shipment details */}
+         {showShipmentDetails ? (
+@@ -1542,4 +1547,16 @@ const styles = StyleSheet.create({
+     color: Colors.textMuted,
+     marginTop: 2,
+   },
++  timelineDot: {
++    width: 12,
++    height: 12,
++    borderRadius: 6,
++    borderWidth: 3,
++    borderColor: Colors.background,
++    shadowColor: '#000',
++    shadowOffset: { width: 0, height: 1 },
++    shadowRadius: 3,
++    shadowOpacity: 0.15,
++    elevation: 2,
++  },
+ });
+diff --git a/frontend/src/screens/PersonalisationScreen.tsx b/frontend/src/screens/PersonalisationScreen.tsx
+index 2d4a3e9..56744cd 100644
+--- a/frontend/src/screens/PersonalisationScreen.tsx
++++ b/frontend/src/screens/PersonalisationScreen.tsx
+@@ -11,6 +11,7 @@ import { useStore } from '../store/useStore';
+ import { useHaptic } from '../hooks/useHaptic';
+ import { AudiencePreferenceGrid } from '../components/personalisation/AudiencePreferenceGrid';
+ import { DiscoveryPreferenceRow } from '../components/personalisation/DiscoveryPreferenceRow';
++import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+ 
+ type PreferencePickerMode = 'categories' | 'brands' | 'members' | null;
+ 
+@@ -131,32 +132,11 @@ export default function PersonalisationScreen() {
+   };
+ 
+   return (
+-    <View style={styles.container}>
+-      {/* 1. Compact navigation header */}
+-      <View style={[styles.header, { paddingTop: insets.top }]}>
+-        <Pressable
+-          style={styles.headerBack}
+-          onPress={() => navigation.goBack()}
+-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+-          accessibilityRole="button"
+-          accessibilityLabel="Go back"
+-        >
+-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+-        </Pressable>
+-        <Text style={styles.headerTitle}>Personalisation</Text>
+-        <View style={styles.headerRight}>
+-          <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+-          <Text style={styles.headerSaved}>Saved</Text>
+-        </View>
+-      </View>
+-
+-      <ScrollView
+-        contentContainerStyle={[
+-          styles.scrollContent,
+-          { paddingBottom: insets.bottom + Space.xxl + Space.lg },
+-        ]}
+-        showsVerticalScrollIndicator={false}
+-      >
++    <FlagshipScreen
++      header={
++        <FlagshipHeader title="Personalisation" onBack={() => navigation.goBack()} />
++      }
++    >
+         {/* 2. Editorial introduction */}
+         <View style={styles.intro}>
+           <Text style={styles.introTitle}>Personalisation</Text>
+@@ -168,6 +148,13 @@ export default function PersonalisationScreen() {
+           </Text>
+         </View>
+ 
++        {/* 2b. Visual preview card */}
++        <View style={styles.previewCard}>
++          <Text style={styles.previewTitle}>Current preferences</Text>
++          <Text style={styles.previewSummary}>Gender: {genderFilter.join(', ')}</Text>
++          <Text style={styles.previewSummary}>Categories: {categoriesAndSizesPref}</Text>
++        </View>
++
+         {/* 3. Visual shopping-audience selection */}
+         <View style={styles.section}>
+           <Text style={styles.sectionTitle}>Shop for</Text>
+@@ -217,7 +204,6 @@ export default function PersonalisationScreen() {
+           <Ionicons name="refresh-outline" size={16} color={Colors.textMuted} />
+           <Text style={styles.resetBtnText}>Reset preferences</Text>
+         </Pressable>
+-      </ScrollView>
+ 
+       {/* 7. BottomSheetPicker */}
+       <BottomSheetPicker
+@@ -228,7 +214,7 @@ export default function PersonalisationScreen() {
+         selectedValue={selectedPickerValue}
+         onSelect={handleSelectPreference}
+       />
+-    </View>
++    </FlagshipScreen>
+   );
+ }
+ 
+@@ -238,6 +224,27 @@ const styles = StyleSheet.create({
+     backgroundColor: Colors.background,
+   },
+ 
++  // Preview card
++  previewCard: {
++    marginHorizontal: Space.md,
++    marginBottom: Space.md,
++    padding: Space.md,
++    backgroundColor: Colors.surface,
++    borderRadius: 12,
++  },
++  previewTitle: {
++    fontSize: 14,
++    fontFamily: Typography.family.semibold,
++    color: Colors.textPrimary,
++    marginBottom: Space.xs,
++  },
++  previewSummary: {
++    fontSize: 13,
++    fontFamily: Typography.family.regular,
++    color: Colors.textSecondary,
++    marginTop: 2,
++  },
++
+   // Compact header
+   header: {
+     flexDirection: 'row',
+diff --git a/frontend/src/screens/PostageScreen.tsx b/frontend/src/screens/PostageScreen.tsx
+index df454b6..765879b 100644
+--- a/frontend/src/screens/PostageScreen.tsx
++++ b/frontend/src/screens/PostageScreen.tsx
+@@ -22,7 +22,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
+ import { SkeletonLoader } from '../components/SkeletonLoader';
+ import { Typography } from '../theme/designTokens';
+ import { PremiumListSection } from '../components/ui/PremiumListSection';
+-import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
++import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipFormSection } from '../components/flagship';
+ 
+ type Props = StackScreenProps<RootStackParamList, 'Postage'>;
+ 
+@@ -118,6 +118,7 @@ export default function PostageScreen({ navigation }: Props) {
+       </Reanimated.View>
+ 
+       {/* Delivery address */}
++      <FlagshipFormSection title="Your Addresses">
+       <View style={styles.addressSection}>
+         <Text style={styles.addressSectionTitle}>Delivery address</Text>
+         {savedAddress ? (
+@@ -164,6 +165,7 @@ export default function PostageScreen({ navigation }: Props) {
+           </View>
+         )}
+       </View>
++      </FlagshipFormSection>
+ 
+       {/* Default Carrier */}
+       <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+diff --git a/frontend/src/screens/SellScreen.tsx b/frontend/src/screens/SellScreen.tsx
+index e957e78..95f3608 100644
+--- a/frontend/src/screens/SellScreen.tsx
++++ b/frontend/src/screens/SellScreen.tsx
+@@ -20,6 +20,9 @@ import { Colors } from '../constants/colors';
+ import { Space, Typography } from '../theme/designTokens';
+ import { AppInput } from '../components/ui/AppInput';
+ import { AnimatedPressable } from '../components/AnimatedPressable';
++import { ElevatedSurface } from '../components/ui/ElevatedSurface';
++import Reanimated from 'react-native-reanimated';
++const Animated = Reanimated;
+ import { BottomSheetPicker } from '../components/BottomSheetPicker';
+ import { CURRENCIES } from '../constants/currencies';
+ import { useStore } from '../store/useStore';
+@@ -693,13 +696,15 @@ export default function SellScreen() {
+           </View>
+         </View>
+ 
+-        <ScrollView
++        {/* SAFETY: useAnimatedScrollHandler returns an object that must be passed to Reanimated.ScrollView, not plain ScrollView */}
++        <Animated.ScrollView
+           style={styles.scroll}
+           contentContainerStyle={styles.scrollContent}
+           keyboardShouldPersistTaps="handled"
+           showsVerticalScrollIndicator={false}
+         >
+           {/* ── 2. LARGE LISTING MEDIA STUDIO ── */}
++          <ElevatedSurface>
+           <ListingMediaStudio
+             items={mediaDraftItems}
+             queueItems={queueState.items}
+@@ -711,6 +716,7 @@ export default function SellScreen() {
+             onRemoveItem={removeItem}
+             onRetryItem={handleRetryItem}
+           />
++          </ElevatedSurface>
+ 
+           {/* ── 3. LISTING MODE SELECTOR ── */}
+           <View style={styles.sectionSpacing}>
+@@ -1128,7 +1134,7 @@ export default function SellScreen() {
+           )}
+ 
+           <View style={{ height: 120 }} />
+-        </ScrollView>
++        </Animated.ScrollView>
+       </KeyboardAvoidingView>
+ 
+       {/* ── 9. RECOVERABLE PUBLICATION FEEDBACK + 10. STICKY PREVIEW / PUBLISH FOOTER ── */}
+diff --git a/frontend/src/screens/UserProfileScreen.tsx b/frontend/src/screens/UserProfileScreen.tsx
+index 6c8fe69..b6ae9f1 100644
+--- a/frontend/src/screens/UserProfileScreen.tsx
++++ b/frontend/src/screens/UserProfileScreen.tsx
+@@ -50,6 +50,7 @@ const TEXT = Colors.textPrimary;
+ const { width: SCREEN_WIDTH } = Dimensions.get('window');
+ 
+ const COVER_HEIGHT = 180;
++const COVER_IMAGE = '';
+ const GRID_GAP = 8;
+ const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP) / 2;
+ 
+@@ -172,7 +173,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
+     : targetProfile?.avatar || undefined;
+   const displayCover = isSelfProfile
+     ? targetProfile?.coverPhoto || userCover || mediaOverride?.cover || ''
+-    : targetProfile?.coverPhoto || '';
++    : targetProfile?.coverPhoto || COVER_IMAGE;
+ 
+   const memberSince = targetProfile?.createdAt
+     ? new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })

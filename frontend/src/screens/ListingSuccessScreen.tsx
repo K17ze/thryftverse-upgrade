@@ -91,7 +91,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
   }, [listingId, listingTitle]);
 
   const handleCreateAnother = React.useCallback(() => {
-    navigation.replace('MainTabs', { screen: 'Sell' } as any);
+    navigation.navigate('Sell' as any);
   }, [navigation]);
 
   const handleViewListing = React.useCallback(() => {

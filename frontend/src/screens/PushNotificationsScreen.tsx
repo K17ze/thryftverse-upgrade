@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, ActivityIndicator, Linking, Platform } from 're
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
@@ -13,7 +12,7 @@ import { useToast } from '../context/ToastContext';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
-import { deactivateNotificationDevice, registerNotificationDevice } from '../services/notificationsApi';
+import { deactivateNotificationDevice, registerNotificationDevice, getNotificationPreferences, updateNotificationPreferences, listNotificationDevices } from '../services/notificationsApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Typography } from '../theme/designTokens';
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -46,6 +45,32 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       .catch(() => setPushPermissionStatus(null));
   }, []);
 
+  React.useEffect(() => {
+    void (async () => {
+      try {
+        const serverPrefs = await getNotificationPreferences();
+        for (const [key, enabled] of Object.entries(serverPrefs)) {
+          if (toggles[key] !== undefined && toggles[key] !== enabled) {
+            setPushNotificationToggle(key, enabled);
+          }
+        }
+      } catch {
+        // best-effort
+      }
+      try {
+        const devices = await listNotificationDevices();
+        const activeDevice = devices.find((d) => d.isActive);
+        if (activeDevice) {
+          setRegisteredToken(activeDevice.token);
+          setIsDeviceRegistered(true);
+        }
+      } catch {
+        // best-effort
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const resolvePushPlatform = React.useCallback((): 'ios' | 'android' | 'web' => {
     if (Platform.OS === 'ios') return 'ios';
     if (Platform.OS === 'android') return 'android';
@@ -60,10 +85,6 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   }, []);
 
   const ensureDeviceRegistration = React.useCallback(async () => {
-    if (!currentUser?.id) {
-      show('Please sign in to enable push notifications.', 'error');
-      return;
-    }
     setIsSyncingDevice(true);
     try {
       const permission = await Notifications.getPermissionsAsync();
@@ -82,7 +103,6 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         : await Notifications.getExpoPushTokenAsync();
       const token = tokenResponse.data;
       await registerNotificationDevice({
-        userId: currentUser.id,
         token,
         platform: resolvePushPlatform(),
         appVersion: (Constants.expoConfig as { version?: string } | null)?.version,
@@ -97,7 +117,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     } finally {
       setIsSyncingDevice(false);
     }
-  }, [currentUser?.id, enabledCount, resolveProjectId, resolvePushPlatform, show]);
+  }, [enabledCount, resolveProjectId, resolvePushPlatform, show]);
 
   const disableDeviceRegistration = React.useCallback(async () => {
     if (!registeredToken) {
@@ -122,6 +142,13 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const toggle = async (key: string) => {
     const nextEnabled = !toggles[key];
     setPushNotificationToggle(key, nextEnabled);
+    try {
+      await updateNotificationPreferences({ [key]: nextEnabled });
+    } catch {
+      setPushNotificationToggle(key, !nextEnabled);
+      show('Failed to update push preference. Please try again.', 'error');
+      return;
+    }
     const nextCount = nextEnabled ? enabledCount + 1 : enabledCount - 1;
     if (nextCount === 1 && nextEnabled && !isDeviceRegistered) {
       await ensureDeviceRegistration();
@@ -133,7 +160,21 @@ export default function PushNotificationsScreen({ navigation }: Props) {
 
   const handleToggleAll = React.useCallback(async () => {
     const shouldEnableAll = enabledCount !== pushTotalCount;
+    const previousToggles = { ...toggles };
     setAllPushNotificationToggles(shouldEnableAll);
+    try {
+      const allPrefs: Record<string, boolean> = {};
+      for (const item of NOTIFICATIONS) {
+        allPrefs[item.key] = shouldEnableAll;
+      }
+      await updateNotificationPreferences(allPrefs);
+    } catch {
+      for (const [key, value] of Object.entries(previousToggles)) {
+        setPushNotificationToggle(key, value);
+      }
+      show('Failed to update push preferences. Please try again.', 'error');
+      return;
+    }
     if (shouldEnableAll && !isDeviceRegistered) {
       await ensureDeviceRegistration();
     }
@@ -177,7 +218,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   );
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Push Notifications" subtitle="Manage your alert preferences" onBack={() => navigation.goBack()} rightAction={rightAction} />}>
+    <FlagshipScreen header={<FlagshipHeader title="Notifications" onBack={() => navigation.goBack()} rightAction={rightAction} />}>
       {pushPermissionStatus?.status === 'denied' && (
         <View style={styles.permissionBanner}>
           <Ionicons name="notifications-off-outline" size={18} color={Colors.danger} />
@@ -196,57 +237,44 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         </View>
       )}
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <View style={[styles.notificationTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-          <Ionicons name="notifications-outline" size={18} color={Colors.brand} />
-          <Text style={[styles.notificationTrustText, { color: Colors.textSecondary }]}>
-            Choose which alerts you receive. You can change these at any time.
-          </Text>
-        </View>
-      </Reanimated.View>
-
-      {/* Progress indicator */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <View style={styles.progressRow}>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%` },
-              ]}
-            />
-          </View>
-          <Text style={styles.progressLabel}>
-            {enabledCount}/{pushTotalCount} enabled
-          </Text>
-        </View>
-      </Reanimated.View>
-
-      {/* Notification types */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-        <SettingsSection title="Notification Types" noCard>
-          <View style={styles.card}>
-            {NOTIFICATIONS.map((item, idx) => (
-              <SettingsRow
-                key={item.key}
-                title={item.label}
-                subtitle={item.subtitle}
-                toggleValue={toggles[item.key]}
-                onToggle={() => void toggle(item.key)}
-                isFirst={idx === 0}
-                isLast={idx === NOTIFICATIONS.length - 1}
-              />
-            ))}
-          </View>
-        </SettingsSection>
-      </Reanimated.View>
-
-      {/* Footer note */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
-        <Text style={styles.footerNote}>
-          You can also manage push notifications from your device Settings app.
+      <View style={[styles.notificationTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+        <Ionicons name="notifications-outline" size={18} color={Colors.brand} />
+        <Text style={[styles.notificationTrustText, { color: Colors.textSecondary }]}>
+          Choose which alerts you receive. You can change these at any time.
         </Text>
-      </Reanimated.View>
+      </View>
+
+      <View style={styles.progressRow}>
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%` },
+            ]}
+          />
+        </View>
+        <Text style={styles.progressLabel}>
+          {enabledCount}/{pushTotalCount} enabled
+        </Text>
+      </View>
+
+      <SettingsSection title="Categories" noCard>
+        {NOTIFICATIONS.map((item, idx) => (
+          <SettingsRow
+            key={item.key}
+            title={item.label}
+            subtitle={item.subtitle}
+            toggleValue={toggles[item.key]}
+            onToggle={() => void toggle(item.key)}
+            isFirst={idx === 0}
+            isLast={idx === NOTIFICATIONS.length - 1}
+          />
+        ))}
+      </SettingsSection>
+
+      <Text style={styles.footerNote}>
+        You can also manage push notifications from your device Settings app.
+      </Text>
     </FlagshipScreen>
   );
 }
@@ -288,17 +316,6 @@ const styles = StyleSheet.create({
     letterSpacing: Type.caption.letterSpacing,
     minWidth: 60,
     textAlign: 'right',
-  },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginHorizontal: Space.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
   },
   footerNote: {
     fontSize: Type.caption.size,

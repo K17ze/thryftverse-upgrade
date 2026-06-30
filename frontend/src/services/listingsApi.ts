@@ -23,12 +23,14 @@ interface ApiListingRow {
 
 interface ApiListingsResponse {
   items: ApiListingRow[];
+  nextCursor?: string;
 }
 
 export interface ListingsSyncResult {
   listings: Listing[];
   source: 'api' | 'mock';
   error?: string;
+  nextCursor?: string;
 }
 
 function deriveBrand(title: string) {
@@ -45,7 +47,6 @@ function getFallbackImage(_id: string) {
 
 function mapApiListingToApp(row: ApiListingRow): Listing {
   const price = Number(row.priceGbp ?? 0);
-  const protectionFee = Number((price * 0.05 + 0.7).toFixed(2));
   const resolvedImages = row.images?.length
     ? row.images
     : row.imageUrl
@@ -59,7 +60,6 @@ function mapApiListingToApp(row: ApiListingRow): Listing {
     size: row.size || 'One size',
     condition: (row.condition as Listing['condition']) || 'Very good',
     price,
-    priceWithProtection: Number((price + protectionFee).toFixed(2)),
     images: resolvedImages,
     likes: 0,
     isSold: row.status === 'sold',
@@ -69,18 +69,21 @@ function mapApiListingToApp(row: ApiListingRow): Listing {
     subcategory: 'Clothing',
     description: row.description || 'No description provided.',
     createdAt: row.createdAt,
+    originalPrice: row.originalPriceGbp != null ? Number(row.originalPriceGbp) : undefined,
   };
 }
 
-export async function fetchListingsFromApi(): Promise<ListingsSyncResult> {
+export async function fetchListingsFromApi(cursor?: string): Promise<ListingsSyncResult> {
   try {
-    const payload = await fetchJson<ApiListingsResponse>('/listings');
+    const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    const payload = await fetchJson<ApiListingsResponse>(`/listings${qs}`);
     const rows = Array.isArray(payload.items) ? payload.items : [];
 
     return {
       listings: rows.map((row) => mapApiListingToApp(row)),
       source: 'api',
       error: rows.length === 0 ? 'API returned zero listings.' : undefined,
+      nextCursor: payload.nextCursor,
     };
   } catch (error) {
     return {
@@ -89,6 +92,33 @@ export async function fetchListingsFromApi(): Promise<ListingsSyncResult> {
       error: (error as Error).message,
     };
   }
+}
+
+export interface ListingSearchResult {
+  id: string;
+  sellerId: string;
+  title: string;
+  description: string;
+  priceGbp: number;
+  imageUrl: string | null;
+  rank: number;
+  createdAt: string;
+  seller: ListingSeller | null;
+}
+
+export async function searchListingsFromApi(query: string, limit?: number): Promise<{ items: ListingSearchResult[]; fallback: boolean }> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return { items: [], fallback: false };
+  const params = new URLSearchParams();
+  params.set('q', trimmed);
+  if (limit) params.set('limit', String(Math.min(limit, 100)));
+  const payload = await fetchJson<{ ok: boolean; query: string; items: ListingSearchResult[]; fallback?: boolean }>(
+    `/search/listings?${params.toString()}`
+  );
+  return {
+    items: Array.isArray(payload.items) ? payload.items : [],
+    fallback: payload.fallback === true,
+  };
 }
 
 export async function fetchFilteredListings(options?: {
@@ -100,6 +130,7 @@ export async function fetchFilteredListings(options?: {
   maxPrice?: number;
   sort?: 'newest' | 'price_asc' | 'price_desc';
   limit?: number;
+  cursor?: string;
 }): Promise<ListingsSyncResult> {
   const params = new URLSearchParams();
   if (options?.category) params.set('category', options.category);
@@ -110,6 +141,7 @@ export async function fetchFilteredListings(options?: {
   if (options?.maxPrice !== undefined) params.set('maxPrice', String(options.maxPrice));
   if (options?.sort) params.set('sort', options.sort);
   if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.cursor) params.set('cursor', options.cursor);
   const qs = params.toString();
 
   try {
@@ -120,6 +152,7 @@ export async function fetchFilteredListings(options?: {
       listings: rows.map((row) => mapApiListingToApp(row)),
       source: 'api',
       error: rows.length === 0 ? 'No listings match your filters.' : undefined,
+      nextCursor: payload.nextCursor,
     };
   } catch (error) {
     return {
@@ -169,9 +202,33 @@ export interface ListingApiItem {
   seller?: ListingSeller | null;
 }
 
+export interface ListingCommerceServerContext {
+  itemPrice: number;
+  buyerProtectionFee: number;
+  estimatedTotal: number;
+  currency: string;
+  shippingMethod: string | null;
+  shippingPayer: string | null;
+  protectionPolicy: {
+    available: boolean;
+    label: string;
+    summary: string;
+  } | null;
+  returnPolicy: {
+    accepted: boolean;
+    windowDays?: number;
+    conditions?: string;
+  } | null;
+  authenticity: {
+    status: 'not_offered' | 'eligible' | 'verified';
+    label?: string;
+  } | null;
+}
+
 export interface ListingSingleResponse {
   ok: boolean;
   listing?: ListingApiItem;
+  commerce?: ListingCommerceServerContext;
   error?: string;
 }
 

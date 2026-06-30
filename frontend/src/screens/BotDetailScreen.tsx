@@ -172,7 +172,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         rightAction={
           isCustomBot ? (
             <AnimatedPressable
-              onPress={() => navigation.navigate({ name: 'BotBuilder', params: { botId: bot.id } })}
+              onPress={() => navigation.navigate('BotBuilder', { botId: bot.id })}
               activeOpacity={0.7}
               scaleValue={0.92}
               hapticFeedback="light"

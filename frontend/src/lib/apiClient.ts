@@ -142,10 +142,24 @@ export interface ParsedApiError {
   code: string | null;
   status: number | undefined;
   isNetworkError: boolean;
+  structuredDetails?: {
+    buyNowPriceGbp?: number;
+    currentBuyNowPriceGbp?: number;
+    minimumNextBidGbp?: number;
+  } | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function extractStructuredDetails(details: unknown): ParsedApiError['structuredDetails'] {
+  if (!isRecord(details)) return null;
+  const result: NonNullable<ParsedApiError['structuredDetails']> = {};
+  if (typeof details.buyNowPriceGbp === 'number') result.buyNowPriceGbp = details.buyNowPriceGbp;
+  if (typeof details.currentBuyNowPriceGbp === 'number') result.currentBuyNowPriceGbp = details.currentBuyNowPriceGbp;
+  if (typeof details.minimumNextBidGbp === 'number') result.minimumNextBidGbp = details.minimumNextBidGbp;
+  return Object.keys(result).length > 0 ? result : null;
 }
 
 export function parseApiError(error: unknown, fallback = 'Request failed'): ParsedApiError {
@@ -165,6 +179,7 @@ export function parseApiError(error: unknown, fallback = 'Request failed'): Pars
         code: codeFromPayload,
         status: error.status,
         isNetworkError: error.status === undefined,
+        structuredDetails: extractStructuredDetails(details),
       };
     }
 
@@ -174,6 +189,7 @@ export function parseApiError(error: unknown, fallback = 'Request failed'): Pars
         code: null,
         status: error.status,
         isNetworkError: error.status === undefined,
+        structuredDetails: null,
       };
     }
 
@@ -182,6 +198,7 @@ export function parseApiError(error: unknown, fallback = 'Request failed'): Pars
       code: null,
       status: error.status,
       isNetworkError: error.status === undefined,
+      structuredDetails: null,
     };
   }
 

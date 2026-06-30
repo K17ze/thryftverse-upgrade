@@ -7,11 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "bundleIdentifier": "com.thryftverse.app",
       "supportsTablet": true
@@ -26,14 +21,10 @@
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.ACCESS_MEDIA_LOCATION",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.READ_MEDIA_AUDIO"
+        "android.permission.READ_MEDIA_VIDEO"
       ]
     },
     "web": {
@@ -48,9 +39,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to capture photos and videos for posters.",
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for video posters.",
-          "recordAudioAndroid": true
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to capture photos and videos for posters."
         }
       ],
       [
@@ -61,13 +50,32 @@
           "isAccessMediaLocationEnabled": true
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-image",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-status-bar",
+      "expo-updates",
+      "@sentry/react-native"
     ],
     "extra": {
       "eas": {
         "projectId": "e94afae8-2794-4230-a184-785eb8d7ad36"
       }
     },
-    "owner": "kha1ze"
+    "owner": "kha1ze",
+    "updates": {
+      "url": "https://u.expo.dev/e94afae8-2794-4230-a184-785eb8d7ad36",
+      "checkAutomatically": "ON_LOAD"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    }
   }
 }

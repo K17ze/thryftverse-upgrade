@@ -1,10 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ViewStyle, ActivityIndicator, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Video, ResizeMode } from '../compat/Video';
@@ -23,6 +22,10 @@ interface FlagshipProfileMediaProps {
   style?: ViewStyle;
   cacheBuster?: string;
   coverOnly?: boolean;
+  coverHeight?: number;
+  coverError?: string | null;
+  onRetryCover?: () => void;
+  onRevertCover?: () => void;
 }
 
 export function FlagshipProfileMedia({
@@ -37,18 +40,23 @@ export function FlagshipProfileMedia({
   style,
   cacheBuster,
   coverOnly = false,
+  coverHeight = 220,
+  coverError = null,
+  onRetryCover,
+  onRevertCover,
 }: FlagshipProfileMediaProps) {
   const effectiveCover = coverVideoUri || coverUri;
   const hasCover = Boolean(effectiveCover);
+  const showCoverError = coverError != null && !isUploadingCover;
 
   return (
     <View style={[styles.root, style]}>
       {/* Cover */}
-      <View style={styles.coverWrap}>
+      <View style={[styles.coverWrap, { height: coverHeight }]}>
         {coverVideoUri ? (
           <Video
             source={{ uri: coverVideoUri }}
-            style={styles.coverImage}
+            style={[styles.coverImage, { height: coverHeight }]}
             resizeMode={ResizeMode.COVER}
             shouldPlay
             isLooping
@@ -57,13 +65,13 @@ export function FlagshipProfileMedia({
         ) : hasCover ? (
           <CachedImage
             uri={effectiveCover!}
-            style={styles.coverImage}
+            style={[styles.coverImage, { height: coverHeight }]}
             contentFit="cover"
             transition={400}
             cacheBuster={cacheBuster}
           />
         ) : (
-          <View style={[styles.coverImage, styles.coverFallback]} />
+          <View style={[styles.coverImage, { height: coverHeight }, styles.coverFallback]} />
         )}
 
         {/* Bottom gradient for text legibility */}
@@ -72,22 +80,60 @@ export function FlagshipProfileMedia({
           style={styles.coverGradient}
         />
 
-        {/* Edit cover button */}
-        {isSelf && onEditCover && (
+        {/* Edit cover control — discoverable, inside visible bounds */}
+        {isSelf && onEditCover && !showCoverError && (
           <AnimatedPressable
             style={styles.editCoverBtn}
             onPress={onEditCover}
             activeOpacity={0.85}
             hapticFeedback="light"
+            disabled={isUploadingCover}
+            accessibilityLabel="Change profile cover"
+            accessibilityRole="button"
           >
             {isUploadingCover ? (
-              <Reanimated.View entering={FadeIn}>
-                <Ionicons name="sync" size={18} color="#fff" />
-              </Reanimated.View>
+              <>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.editCoverLabel}>Uploading…</Text>
+              </>
             ) : (
-              <Ionicons name="camera" size={18} color="#fff" />
+              <>
+                <Ionicons name="camera" size={16} color="#fff" />
+                <Text style={styles.editCoverLabel}>Change cover</Text>
+              </>
             )}
           </AnimatedPressable>
+        )}
+
+        {/* Cover upload failure controls */}
+        {isSelf && showCoverError && (
+          <View style={styles.coverErrorRow}>
+            <Text style={styles.coverErrorText} numberOfLines={1}>Cover upload failed</Text>
+            <View style={styles.coverErrorActions}>
+              {onRetryCover && (
+                <Pressable
+                  style={styles.coverErrorBtn}
+                  onPress={onRetryCover}
+                  hitSlop={8}
+                  accessibilityLabel="Retry cover upload"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.coverErrorBtnText}>Retry</Text>
+                </Pressable>
+              )}
+              {onRevertCover && (
+                <Pressable
+                  style={styles.coverErrorBtn}
+                  onPress={onRevertCover}
+                  hitSlop={8}
+                  accessibilityLabel="Revert cover"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.coverErrorBtnText}>Revert</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
         )}
       </View>
 
@@ -115,11 +161,12 @@ export function FlagshipProfileMedia({
                 onPress={onEditAvatar}
                 activeOpacity={0.85}
                 hapticFeedback="light"
+                disabled={isUploadingAvatar}
+                accessibilityLabel="Change profile avatar"
+                accessibilityRole="button"
               >
                 {isUploadingAvatar ? (
-                  <Reanimated.View entering={FadeIn}>
-                    <Ionicons name="sync" size={14} color="#fff" />
-                  </Reanimated.View>
+                  <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Ionicons name="camera" size={14} color="#fff" />
                 )}
@@ -132,7 +179,7 @@ export function FlagshipProfileMedia({
   );
 }
 
-const COVER_H = 220;
+const DEFAULT_COVER_H = 220;
 const AVATAR_SIZE = 104;
 
 const styles = StyleSheet.create({
@@ -141,13 +188,13 @@ const styles = StyleSheet.create({
   },
   coverWrap: {
     width: SCREEN_W,
-    height: COVER_H,
+    height: DEFAULT_COVER_H,
     position: 'relative',
     overflow: 'hidden',
   },
   coverImage: {
     width: SCREEN_W,
-    height: COVER_H,
+    height: DEFAULT_COVER_H,
   },
   coverFallback: {
     backgroundColor: Colors.surfaceAlt,
@@ -161,16 +208,57 @@ const styles = StyleSheet.create({
   },
   editCoverBtn: {
     position: 'absolute',
-    right: Space.md,
-    bottom: Space.md,
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    right: 16,
+    bottom: 14,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  editCoverLabel: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
+  },
+  coverErrorRow: {
+    position: 'absolute',
+    right: 16,
+    bottom: 14,
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  coverErrorText: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: '#ff6b6b',
+  },
+  coverErrorActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  coverErrorBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  coverErrorBtnText: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
   },
   avatarRow: {
     flexDirection: 'row',

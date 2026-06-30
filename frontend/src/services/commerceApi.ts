@@ -154,9 +154,10 @@ export interface CommerceUserOrder {
   buyerId: string;
   sellerId: string;
   listingId: string;
-  listingTitle: string;
+  listingTitle: string | null;
   listingImageUrl: string | null;
   status: string;
+  subtotalGbp: number;
   postageFeeGbp: number;
   totalGbp: number;
   trackingNumber: string | null;
@@ -164,6 +165,8 @@ export interface CommerceUserOrder {
   shippedAt: string | null;
   deliveredAt: string | null;
   createdAt: string;
+  buyerUsername: string | null;
+  sellerUsername: string | null;
 }
 
 export interface OrderParcelEvent {
@@ -187,6 +190,22 @@ export interface OrderParcelEvent {
 interface ListOrdersResponse {
   ok: true;
   items: CommerceUserOrder[];
+  nextCursor: string | null;
+}
+
+export interface ListUserOrdersParams {
+  role?: 'buyer' | 'seller' | 'all';
+  status?: string;
+  classification?: 'needs_action' | 'active' | 'completed' | 'cancelled';
+  query?: string;
+  year?: number;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface ListUserOrdersResult {
+  items: CommerceUserOrder[];
+  nextCursor: string | null;
 }
 
 interface ListOrderParcelEventsResponse {
@@ -401,13 +420,24 @@ export async function payOrder(orderId: string): Promise<PayOrderResponse> {
 
 export async function listUserOrders(
   userId: string,
-  role: 'buyer' | 'seller' | 'all' = 'all',
-  limit = 50
-): Promise<ListOrdersResponse['items']> {
+  params: ListUserOrdersParams = {}
+): Promise<ListUserOrdersResult> {
+  const searchParams = new URLSearchParams();
+  if (params.role) searchParams.set('role', params.role);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.classification) searchParams.set('classification', params.classification);
+  if (params.query) searchParams.set('query', params.query);
+  if (params.year) searchParams.set('year', String(params.year));
+  if (params.cursor) searchParams.set('cursor', params.cursor);
+  searchParams.set('limit', String(params.limit ?? 20));
+
   const payload = await fetchJson<ListOrdersResponse>(
-    `/users/${encodeURIComponent(userId)}/orders?role=${encodeURIComponent(role)}&limit=${limit}`
+    `/users/${encodeURIComponent(userId)}/orders?${searchParams.toString()}`
   );
-  return payload.items;
+  return {
+    items: payload.items,
+    nextCursor: payload.nextCursor ?? null,
+  };
 }
 
 export async function cancelOrder(orderId: string) {

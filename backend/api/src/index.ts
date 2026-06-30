@@ -10,6 +10,7 @@ import Razorpay from 'razorpay';
 import Stripe from 'stripe';
 import { z } from 'zod';
 import { config } from './config.js';
+import { hashGroupCreatePayload as chatGroupHashPayload } from './lib/chatGroupIdempotency.js';
 
 // Shared Stripe instance for Connect operations
 const stripe = config.stripeSecretKey
@@ -461,6 +462,153 @@ function calculateWalletTopupFeeBreakdown(grossFiatAmount: number): {
   };
 }
 
+// ── Canonical auction lifecycle resolver ──
+// Precedence: cancelled_at > settled_at > winner terminal (Buy Now) > scheduled end > scheduled start > live
+
+export type CanonicalLifecycle =
+  | 'cancelled'
+  | 'settled'
+  | 'ended'
+  | 'live'
+  | 'upcoming';
+
+export type TerminalReason =
+  | 'cancelled'
+  | 'settled'
+  | 'buy_now'
+  | 'scheduled_end'
+  | null;
+
+export interface CanonicalLifecycleInput {
+  cancelledAt: string | null;
+  settledAt: string | null;
+  winnerBidderId: string | null;
+  startsAt: string | Date;
+  endsAt: string | Date;
+  now?: Date;
+}
+
+export interface CanonicalLifecycleResult {
+  lifecycle: CanonicalLifecycle;
+  terminalReason: TerminalReason;
+}
+
+export function resolveCanonicalLifecycle(input: CanonicalLifecycleInput): CanonicalLifecycleResult {
+  const now = (input.now ?? new Date()).getTime();
+  const startsAt = new Date(input.startsAt).getTime();
+  const endsAt = new Date(input.endsAt).getTime();
+
+  // 1. Cancelled — highest precedence, overrides everything
+  if (input.cancelledAt) {
+    return { lifecycle: 'cancelled', terminalReason: 'cancelled' };
+  }
+
+  // 2. Settled — explicit settlement overrides date-based status
+  if (input.settledAt) {
+    return { lifecycle: 'settled', terminalReason: 'settled' };
+  }
+
+  // 3. Winner set (Buy Now terminal) — auction is ended regardless of dates
+  if (input.winnerBidderId) {
+    return { lifecycle: 'ended', terminalReason: 'buy_now' };
+  }
+
+  // 4. Scheduled end time passed
+  if (endsAt <= now) {
+    return { lifecycle: 'ended', terminalReason: 'scheduled_end' };
+  }
+
+  // 5. Not yet started
+  if (startsAt > now) {
+    return { lifecycle: 'upcoming', terminalReason: null };
+  }
+
+  // 6. Live
+  return { lifecycle: 'live', terminalReason: null };
+}
+
+// ── Atomic idempotency claims ──
+
+function computeRequestHash(payload: Record<string, unknown>): string {
+  const canonical = JSON.stringify(payload, Object.keys(payload).sort());
+  return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+interface IdempotencyClaimResult {
+  claimed: boolean;
+  existing?: {
+    responseStatus: number;
+    responseBody: Record<string, unknown>;
+    requestHash: string;
+  };
+}
+
+async function claimIdempotency(
+  client: { query: <T = any>(text: string, values?: any[]) => Promise<{ rows: T[] }> },
+  opts: {
+    idempotencyKey: string;
+    operationType: 'bid' | 'buy_now';
+    auctionId: string;
+    userId: string;
+    requestHash: string;
+  }
+): Promise<IdempotencyClaimResult> {
+  // Attempt atomic insert. If the key already exists, ON CONFLICT returns the existing row.
+  const result = await client.query<{
+    id: number;
+    response_status: number;
+    response_body: Record<string, unknown>;
+    request_hash: string;
+  }>(
+    `
+      INSERT INTO auction_transaction_idempotency (idempotency_key, operation_type, auction_id, user_id, request_hash, response_status, response_body)
+      VALUES ($1, $2, $3, $4, $5, 200, '{}'::jsonb)
+      ON CONFLICT (auction_id, user_id, idempotency_key)
+      DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
+      RETURNING id, response_status, response_body, request_hash
+    `,
+    [opts.idempotencyKey, opts.operationType, opts.auctionId, opts.userId, opts.requestHash]
+  );
+
+  const row = result.rows[0];
+  // If response_body is empty, this is a fresh claim (we just inserted)
+  const isEmptyBody = !row.response_body || Object.keys(row.response_body).length === 0;
+  if (isEmptyBody) {
+    return { claimed: true };
+  }
+  // Existing claim with a stored response — replay it
+  return {
+    claimed: false,
+    existing: {
+      responseStatus: row.response_status,
+      responseBody: row.response_body,
+      requestHash: row.request_hash,
+    },
+  };
+}
+
+async function storeIdempotencyResponse(
+  client: { query: <T = any>(text: string, values?: any[]) => Promise<{ rows: T[] }> },
+  opts: {
+    idempotencyKey: string;
+    operationType: 'bid' | 'buy_now';
+    auctionId: string;
+    userId: string;
+    responseStatus: number;
+    responseBody: Record<string, unknown>;
+  }
+): Promise<void> {
+  await client.query(
+    `
+      UPDATE auction_transaction_idempotency
+      SET response_status = $3, response_body = $4
+      WHERE idempotency_key = $1 AND auction_id = $5 AND user_id = $6
+    `,
+    [opts.idempotencyKey, opts.operationType, opts.responseStatus, JSON.stringify(opts.responseBody), opts.auctionId, opts.userId]
+  );
+}
+
+// Legacy alias for backward compatibility in non-auction contexts
 function resolveAuctionStatus(startsAt: Date, endsAt: Date): 'upcoming' | 'live' | 'ended' {
   const now = Date.now();
   const start = startsAt.getTime();
@@ -678,6 +826,18 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && /^\/sellers\/[^/]+$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && (path === '/poster-stories' || path.startsWith('/poster-stories/'))) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/users\/[^/]+\/poster-highlights$/.test(path)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -765,6 +925,30 @@ function statusCodeForApiError(code: string): number {
 
   if (code === 'FORBIDDEN_USER_CONTEXT') {
     return 403;
+  }
+
+  if (code === 'ORDER_ACCESS_DENIED' || code === 'REFUND_REQUIRES_OPERATOR') {
+    return 403;
+  }
+
+  if (code === 'ORDER_ACTION_NOT_ALLOWED' || code === 'RESOLUTION_ALREADY_OPEN' || code === 'REVIEW_ALREADY_EXISTS') {
+    return 409;
+  }
+
+  if (code === 'IDEMPOTENCY_KEY_REUSED') {
+    return 409;
+  }
+
+  if (code === 'NOTIFICATION_ACCESS_DENIED') {
+    return 403;
+  }
+
+  if (code === 'NOTIFICATION_NOT_FOUND') {
+    return 404;
+  }
+
+  if (code === 'INVALID_NOTIFICATION_CURSOR' || code === 'INVALID_PREFERENCE_CATEGORY') {
+    return 400;
   }
 
   if (code.endsWith('_NOT_FOUND') || code === 'USER_NOT_FOUND') {
@@ -2103,6 +2287,80 @@ async function saveWalletIdempotentResponse(
       input.operation,
       input.idempotencyKey,
       input.requestHash,
+      toJsonString(input.responsePayload),
+    ]
+  );
+}
+
+export function hashGroupCreatePayload(payload: unknown): string {
+  return chatGroupHashPayload(payload);
+}
+
+async function getChatGroupIdempotentResponse(
+  client: DbQueryable,
+  input: {
+    creatorId: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }
+): Promise<Record<string, unknown> | null> {
+  const result = await client.query<{
+    request_hash: string;
+    response_payload: Record<string, unknown>;
+  }>(
+    `
+      SELECT request_hash, response_payload
+      FROM chat_group_idempotency_keys
+      WHERE creator_id = $1
+        AND idempotency_key = $2
+      LIMIT 1
+    `,
+    [input.creatorId, input.idempotencyKey]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  if (row.request_hash !== input.requestHash) {
+    throw createApiError(
+      'IDEMPOTENCY_KEY_REUSED',
+      'Idempotency key was already used with a different request payload'
+    );
+  }
+
+  return row.response_payload;
+}
+
+async function saveChatGroupIdempotentResponse(
+  client: DbQueryable,
+  input: {
+    creatorId: string;
+    idempotencyKey: string;
+    requestHash: string;
+    conversationId: string;
+    responsePayload: Record<string, unknown>;
+  }
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO chat_group_idempotency_keys (
+        creator_id,
+        idempotency_key,
+        request_hash,
+        conversation_id,
+        response_payload
+      )
+      VALUES ($1, $2, $3, $4, $5::jsonb)
+      ON CONFLICT (creator_id, idempotency_key)
+      DO NOTHING
+    `,
+    [
+      input.creatorId,
+      input.idempotencyKey,
+      input.requestHash,
+      input.conversationId,
       toJsonString(input.responsePayload),
     ]
   );
@@ -6489,28 +6747,58 @@ const recommendationPayloadSchema = z.object({
   ),
 });
 
+const NOTIFICATION_EVENT_TYPES = [
+  'order_created', 'order_paid', 'order_cancelled', 'order_dispatched',
+  'order_in_transit', 'order_out_for_delivery', 'order_delivered',
+  'order_refunded', 'resolution_opened', 'resolution_status_changed',
+  'review_received', 'chat_message', 'payout_processed', 'refund_completed',
+  'generic',
+] as const;
+type NotificationEventType = typeof NOTIFICATION_EVENT_TYPES[number];
+
+const NOTIFICATION_PUSH_CATEGORIES = [
+  'messages', 'offers', 'wishlist', 'followers', 'orderUpdates', 'priceDrops', 'news',
+] as const;
+type NotificationPushCategory = typeof NOTIFICATION_PUSH_CATEGORIES[number];
+
+function mapEventToPushCategory(eventType: string): NotificationPushCategory | null {
+  if (eventType === 'chat_message') return 'messages';
+  if (eventType.startsWith('order_')) return 'orderUpdates';
+  if (eventType === 'review_received') return 'orderUpdates';
+  if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orderUpdates';
+  if (eventType === 'payout_processed' || eventType === 'refund_completed') return 'orderUpdates';
+  return null;
+}
+
 async function queueUserNotification(input: {
   userId: string;
   title: string;
   body: string;
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
-}): Promise<string> {
+  eventType?: string;
+  actorUserId?: string;
+  imageUrl?: string;
+  route?: Record<string, unknown>;
+  idempotencyKey?: string;
+}): Promise<string | null> {
+  const eventType = input.eventType ?? 'generic';
+  const idempotencyKey = input.idempotencyKey ?? null;
   const eventId = createRuntimeId('notif');
 
-  await db.query(
+  // Atomic idempotent insertion: INSERT ... ON CONFLICT ... RETURNING
+  // Determines whether this invocation actually inserted a new event.
+  const insertResult = await db.query<{ id: string }>(
     `
       INSERT INTO notification_events (
-        id,
-        user_id,
-        channel,
-        title,
-        body,
-        payload,
-        status,
-        metadata
+        id, user_id, channel, title, body, payload, status, metadata,
+        event_type, actor_user_id, image_url, route, idempotency_key
       )
-      VALUES ($1, $2, 'push', $3, $4, $5::jsonb, 'queued', $6::jsonb)
+      VALUES ($1, $2, 'push', $3, $4, $5::jsonb, 'queued', $6::jsonb, $7, $8, $9, $10::jsonb, $11)
+      ON CONFLICT (user_id, idempotency_key)
+      WHERE idempotency_key IS NOT NULL
+      DO NOTHING
+      RETURNING id
     `,
     [
       eventId,
@@ -6519,16 +6807,54 @@ async function queueUserNotification(input: {
       input.body,
       toJsonString(input.payload ?? {}),
       toJsonString(input.metadata ?? {}),
+      eventType,
+      input.actorUserId ?? null,
+      input.imageUrl ?? null,
+      toJsonString(input.route ?? {}),
+      idempotencyKey,
     ]
   );
 
-  await enqueuePushNotificationJob({
-    eventId,
-    userId: input.userId,
-    title: input.title,
-    body: input.body,
-    payload: input.payload,
-  });
+  // If no row was returned, a concurrent insert won the race.
+  // Return the existing event ID without enqueuing push or publishing realtime.
+  if (!insertResult.rowCount) {
+    if (idempotencyKey) {
+      const existing = await db.query<{ id: string }>(
+        `SELECT id FROM notification_events WHERE user_id = $1 AND idempotency_key = $2 LIMIT 1`,
+        [input.userId, idempotencyKey]
+      );
+      return existing.rows[0]?.id ?? null;
+    }
+    return null;
+  }
+
+  const insertedEventId = insertResult.rows[0].id;
+
+  // Push preference check
+  const pushCategory = mapEventToPushCategory(eventType);
+  let shouldPush = true;
+  if (pushCategory) {
+    const prefResult = await db.query<{ enabled: boolean }>(
+      `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+      [input.userId, pushCategory]
+    );
+    if (prefResult.rowCount && !prefResult.rows[0].enabled) {
+      shouldPush = false;
+    }
+  }
+
+  if (shouldPush) {
+    await enqueuePushNotificationJob({
+      eventId: insertedEventId,
+      userId: input.userId,
+      title: input.title,
+      body: input.body,
+      payload: input.payload,
+      eventType,
+      actorUserId: input.actorUserId ?? null,
+      route: input.route ?? null,
+    });
+  }
 
   recordPushDelivery({
     provider: 'expo',
@@ -6540,14 +6866,18 @@ async function queueUserNotification(input: {
     type: 'notification.queued',
     userId: input.userId,
     payload: {
-      id: eventId,
+      id: insertedEventId,
       title: input.title,
       body: input.body,
+      eventType,
+      actorUserId: input.actorUserId ?? null,
+      imageUrl: input.imageUrl ?? null,
+      route: input.route ?? null,
       ...input.payload,
     },
   });
 
-  return eventId;
+  return insertedEventId;
 }
 
 function formatGbpAmount(amountGbp: number): string {
@@ -6594,10 +6924,13 @@ async function queueCommercePaymentNotifications(input: {
       userId: order.buyer_id,
       title: 'Payment confirmed',
       body: `Payment confirmed for ${listingTitle}`,
+      eventType: 'order_paid',
       payload: {
         event: 'order_payment_succeeded',
         orderId: order.id,
       },
+      route: { screen: 'OrderDetail', params: { orderId: order.id } },
+      idempotencyKey: `order_paid_buyer_${order.id}`,
       metadata: {
         source: input.source,
       },
@@ -6611,11 +6944,15 @@ async function queueCommercePaymentNotifications(input: {
       userId: order.seller_id,
       title: 'New order',
       body: 'New order! Print the shipping label',
+      eventType: 'order_created',
+      actorUserId: order.buyer_id,
       payload: {
         event: 'order_payment_succeeded_seller',
         orderId: order.id,
         shippingLabelUrl: order.shipping_label_url,
       },
+      route: { screen: 'OrderDetail', params: { orderId: order.id } },
+      idempotencyKey: `order_created_seller_${order.id}`,
       metadata: {
         source: input.source,
       },
@@ -6630,11 +6967,15 @@ async function queueCommercePaymentNotifications(input: {
         userId: order.buyer_id,
         title: 'Shipment created',
         body: 'Your order is on its way!',
+        eventType: 'order_dispatched',
+        actorUserId: order.seller_id,
         payload: {
           event: 'order_shipment_created',
           orderId: order.id,
           trackingNumber: order.tracking_number,
         },
+        route: { screen: 'OrderDetail', params: { orderId: order.id } },
+        idempotencyKey: `order_dispatched_buyer_${order.id}`,
         metadata: {
           source: input.source,
         },
@@ -6661,12 +7002,15 @@ async function queueCommerceParcelSettlementNotifications(input: {
         userId: input.buyerId,
         title: 'Order delivered',
         body: 'Your order has been delivered',
+        eventType: 'order_delivered',
         payload: {
           event: 'order_delivered',
           orderId: input.orderId,
           provider: input.provider,
           eventType: input.eventType,
         },
+        route: { screen: 'OrderDetail', params: { orderId: input.orderId } },
+        idempotencyKey: `order_delivered_buyer_${input.orderId}`,
         metadata: {
           source: input.source,
         },
@@ -6682,6 +7026,7 @@ async function queueCommerceParcelSettlementNotifications(input: {
         userId: input.sellerId,
         title: 'Escrow released',
         body: `${formatGbpAmount(input.sellerPayableReleasedGbp)} released to your balance`,
+        eventType: 'payout_processed',
         payload: {
           event: 'order_escrow_released',
           orderId: input.orderId,
@@ -6689,6 +7034,8 @@ async function queueCommerceParcelSettlementNotifications(input: {
           provider: input.provider,
           eventType: input.eventType,
         },
+        route: { screen: 'Wallet' },
+        idempotencyKey: `escrow_released_seller_${input.orderId}`,
         metadata: {
           source: input.source,
         },
@@ -6712,11 +7059,14 @@ async function queuePayoutProcessedNotification(input: {
       userId: input.payoutRequest.userId,
       title: 'Payout processed',
       body: `${formatGbpAmount(input.payoutRequest.amountGbp)} sent to your bank`,
+      eventType: 'payout_processed',
       payload: {
         event: 'payout_processed',
         payoutRequestId: input.payoutRequest.id,
         amountGbp: input.payoutRequest.amountGbp,
       },
+      route: { screen: 'BalanceHistory' },
+      idempotencyKey: `payout_processed_${input.payoutRequest.id}`,
       metadata: {
         source: input.source,
       },
@@ -6740,11 +7090,14 @@ async function queueRefundCompletedNotification(input: {
       userId: input.userId,
       title: 'Refund completed',
       body: `${formatGbpAmount(input.amountGbp)} refunded`,
+      eventType: 'refund_completed',
       payload: {
         event: 'refund_completed',
         amountGbp: roundTo(input.amountGbp, 2),
         orderId: input.orderId ?? null,
       },
+      route: input.orderId ? { screen: 'OrderDetail', params: { orderId: input.orderId } } : undefined,
+      idempotencyKey: input.orderId ? `refund_completed_${input.userId}_${input.orderId}` : undefined,
       metadata: {
         source: input.source,
       },
@@ -6760,6 +7113,9 @@ async function processPushQueueJob(job: {
   title: string;
   body: string;
   payload?: Record<string, unknown>;
+  eventType?: string;
+  actorUserId?: string | null;
+  route?: Record<string, unknown> | null;
 }): Promise<void> {
   const devicesResult = await db.query<{
     token: string;
@@ -6812,6 +7168,9 @@ async function processPushQueueJob(job: {
           data: {
             ...(job.payload ?? {}),
             eventId: job.eventId,
+            eventType: job.eventType ?? 'generic',
+            actorUserId: job.actorUserId ?? null,
+            route: job.route ?? null,
           },
         }),
       });
@@ -11573,6 +11932,114 @@ app.patch('/users/me', async (request, reply) => {
   };
 });
 
+app.get('/sellers/:sellerId', async (request, reply) => {
+  const paramsSchema = z.object({ sellerId: z.string().min(2) });
+  const { sellerId } = paramsSchema.parse(request.params);
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const userResult = await readDb.query<{
+    id: string;
+    username: string;
+    avatar: string | null;
+    location: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, username, avatar, location, created_at FROM users WHERE id = $1 LIMIT 1`,
+    [sellerId]
+  );
+
+  const user = userResult.rows[0];
+  if (!user) {
+    reply.code(404);
+    return { ok: false, error: 'Seller not found' };
+  }
+
+  const reviewStats = await readDb.query<{
+    avg_rating: string | null;
+    review_count: string;
+  }>(
+    `SELECT AVG(rating)::numeric(3,2) AS avg_rating, COUNT(*)::text AS review_count FROM order_reviews WHERE seller_id = $1`,
+    [sellerId]
+  );
+
+  const salesResult = await readDb.query<{ completed_sales: string }>(
+    `SELECT COUNT(*)::text AS completed_sales FROM orders WHERE seller_id = $1 AND status = 'completed'`,
+    [sellerId]
+  );
+
+  const activeListingsResult = await readDb.query<{ active_count: string }>(
+    `SELECT COUNT(*)::text AS active_count FROM listings WHERE seller_id = $1 AND status = 'active'`,
+    [sellerId]
+  );
+
+  let isFollowing = false;
+  if (viewerUserId) {
+    const followResult = await readDb.query<{ id: string }>(
+      `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
+      [viewerUserId, sellerId]
+    );
+    isFollowing = followResult.rowCount > 0;
+  }
+
+  const avgRating = reviewStats.rows[0]?.avg_rating ? Number(reviewStats.rows[0].avg_rating) : null;
+  const reviewCount = reviewStats.rows[0]?.review_count ? Number(reviewStats.rows[0].review_count) : 0;
+  const completedSales = salesResult.rows[0]?.completed_sales ? Number(salesResult.rows[0].completed_sales) : 0;
+  const activeListingCount = activeListingsResult.rows[0]?.active_count ? Number(activeListingsResult.rows[0].active_count) : 0;
+
+  return {
+    ok: true,
+    seller: {
+      id: user.id,
+      username: user.username,
+      avatar: user.avatar,
+      location: user.location,
+      rating: avgRating,
+      reviewCount,
+      completedSales,
+      activeListingCount,
+      memberSince: user.created_at,
+      isFollowing,
+    },
+  };
+});
+
+app.post('/sellers/:sellerId/follow', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ sellerId: z.string().min(2) });
+  const { sellerId } = paramsSchema.parse(request.params);
+  const userId = request.authUser.userId;
+
+  if (userId === sellerId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot follow yourself' };
+  }
+
+  const existing = await readDb.query<{ id: string }>(
+    `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
+    [userId, sellerId]
+  );
+
+  if (existing.rowCount > 0) {
+    await db.query(
+      `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
+      [userId, sellerId]
+    );
+    return { ok: true, isFollowing: false };
+  }
+
+  const followId = `follow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await db.query(
+    `INSERT INTO user_follows (id, follower_id, following_id, created_at) VALUES ($1, $2, $3, NOW())`,
+    [followId, userId, sellerId]
+  );
+
+  return { ok: true, isFollowing: true };
+});
+
 app.get('/users/:userId/profile', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -11600,6 +12067,40 @@ app.get('/users/:userId/profile', async (request, reply) => {
   return {
     ok: true,
     user: toPublicProfilePayload(user),
+  };
+});
+
+app.get('/users/search', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const querySchema = z.object({
+    q: z.string().trim().min(2).max(50),
+    limit: z.coerce.number().int().min(1).max(20).default(20),
+  });
+  const { q, limit } = querySchema.parse(request.query ?? {});
+
+  const result = await db.query<{ id: string; username: string; display_name: string | null; avatar: string | null }>(
+    `
+      SELECT id, username, display_name, avatar
+      FROM users
+      WHERE username ILIKE $1
+      ORDER BY username ASC
+      LIMIT $2
+    `,
+    [`%${q}%`, limit]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      avatar: row.avatar,
+    })),
   };
 });
 
@@ -13268,6 +13769,7 @@ app.get('/listings', async (request) => {
     maxPrice: z.coerce.number().nonnegative().optional(),
     sort: z.enum(['newest', 'price_asc', 'price_desc']).optional().default('newest'),
     limit: z.coerce.number().int().min(1).max(200).optional().default(100),
+    cursor: z.string().optional(),
   });
   const params = querySchema.parse(request.query ?? {});
 
@@ -13299,12 +13801,37 @@ app.get('/listings', async (request) => {
     args.push(params.maxPrice);
   }
 
+  let cursorData: { sortValue: string | number; id: string } | null = null;
+  if (params.cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(params.cursor, 'base64').toString('utf-8'));
+      cursorData = { sortValue: decoded.sortValue, id: decoded.id };
+    } catch {
+      // Invalid cursor — ignore it, start from beginning
+    }
+  }
+
   const orderBy =
     params.sort === 'price_asc'
-      ? 'price_gbp ASC'
+      ? 'price_gbp ASC, l.id ASC'
       : params.sort === 'price_desc'
-        ? 'price_gbp DESC'
-        : 'created_at DESC';
+        ? 'price_gbp DESC, l.id DESC'
+        : 'l.created_at DESC, l.id DESC';
+
+  if (cursorData) {
+    if (params.sort === 'price_asc') {
+      conditions.push(`(price_gbp, l.id) > ($${args.length + 1}, $${args.length + 2})`);
+      args.push(cursorData.sortValue, cursorData.id);
+    } else if (params.sort === 'price_desc') {
+      conditions.push(`(price_gbp, l.id) < ($${args.length + 1}, $${args.length + 2})`);
+      args.push(cursorData.sortValue, cursorData.id);
+    } else {
+      conditions.push(`(l.created_at, l.id) < ($${args.length + 1}, $${args.length + 2})`);
+      args.push(cursorData.sortValue, cursorData.id);
+    }
+  }
+
+  const fetchLimit = params.limit + 1;
 
   const result = await readDb.query<{
     id: string;
@@ -13333,10 +13860,13 @@ app.get('/listings', async (request) => {
       ORDER BY ${orderBy}
       LIMIT $${args.length + 1}
     `,
-    [...args, params.limit]
+    [...args, fetchLimit]
   );
 
-  const listingIds = result.rows.map((r) => r.id);
+  const hasMore = result.rows.length > params.limit;
+  const pageRows = hasMore ? result.rows.slice(0, params.limit) : result.rows;
+
+  const listingIds = pageRows.map((r) => r.id);
   const imagesResult = listingIds.length
     ? await readDb.query<{
         listing_id: string;
@@ -13355,8 +13885,18 @@ app.get('/listings', async (request) => {
     imagesByListing.set(img.listing_id, arr);
   }
 
+  const lastRow = pageRows[pageRows.length - 1];
+  const nextCursor = hasMore && lastRow
+    ? Buffer.from(JSON.stringify({
+        sortValue: params.sort === 'price_asc' || params.sort === 'price_desc'
+          ? Number(lastRow.price_gbp)
+          : lastRow.created_at,
+        id: lastRow.id,
+      })).toString('base64')
+    : undefined;
+
   return {
-    items: result.rows.map((row) => ({
+    items: pageRows.map((row) => ({
       id: row.id,
       sellerId: row.seller_id,
       title: row.title,
@@ -13382,6 +13922,7 @@ app.get('/listings', async (request) => {
           }
         : null,
     })),
+    nextCursor,
   };
 });
 
@@ -13873,12 +14414,174 @@ app.delete('/posters/:posterId', async (request, reply) => {
 
 // ── Looks API ──────────────────────────────────────────────────────
 
+async function enrichLooks(
+  lookRows: Array<{
+    id: string;
+    creator_id: string;
+    title: string;
+    caption: string;
+    media_url: string;
+    status: string;
+    visibility: string;
+    created_at: string;
+    updated_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
+  }>,
+  viewerUserId: string | null
+): Promise<Array<Record<string, unknown>>> {
+  const lookIds = lookRows.map((r) => r.id);
+
+  const tagsResult = lookIds.length
+    ? await db.query<{
+        look_id: string;
+        id: string;
+        listing_id: string | null;
+        label: string;
+        x: string;
+        y: string;
+      }>(
+        `SELECT look_id, id, listing_id, label, x, y FROM look_tags WHERE look_id = ANY($1)`,
+        [lookIds]
+      )
+    : { rows: [] };
+
+  const tagsByLook = new Map<string, Array<Record<string, unknown>>>();
+  for (const t of tagsResult.rows) {
+    const arr = tagsByLook.get(t.look_id) ?? [];
+    arr.push({
+      id: t.id,
+      listingId: t.listing_id,
+      label: t.label,
+      x: Number(t.x),
+      y: Number(t.y),
+    });
+    tagsByLook.set(t.look_id, arr);
+  }
+
+  const likeCountsResult = lookIds.length
+    ? await db.query<{ look_id: string; count: string }>(
+        `SELECT look_id, COUNT(*)::text AS count FROM look_likes WHERE look_id = ANY($1) GROUP BY look_id`,
+        [lookIds]
+      )
+    : { rows: [] };
+  const likeCountMap = new Map<string, number>();
+  for (const r of likeCountsResult.rows) {
+    likeCountMap.set(r.look_id, Number(r.count));
+  }
+
+  const commentCountsResult = lookIds.length
+    ? await db.query<{ look_id: string; count: string }>(
+        `SELECT look_id, COUNT(*)::text AS count FROM look_comments WHERE look_id = ANY($1) GROUP BY look_id`,
+        [lookIds]
+      )
+    : { rows: [] };
+  const commentCountMap = new Map<string, number>();
+  for (const r of commentCountsResult.rows) {
+    commentCountMap.set(r.look_id, Number(r.count));
+  }
+
+  const saveCountsResult = lookIds.length
+    ? await db.query<{ look_id: string; count: string }>(
+        `SELECT look_id, COUNT(*)::text AS count FROM look_saves WHERE look_id = ANY($1) GROUP BY look_id`,
+        [lookIds]
+      )
+    : { rows: [] };
+  const saveCountMap = new Map<string, number>();
+  for (const r of saveCountsResult.rows) {
+    saveCountMap.set(r.look_id, Number(r.count));
+  }
+
+  let viewerLikesSet = new Set<string>();
+  let viewerSavesSet = new Set<string>();
+  if (viewerUserId && lookIds.length) {
+    const viewerLikesResult = await db.query<{ look_id: string }>(
+      `SELECT look_id FROM look_likes WHERE user_id = $1 AND look_id = ANY($2)`,
+      [viewerUserId, lookIds]
+    );
+    viewerLikesSet = new Set(viewerLikesResult.rows.map((r) => r.look_id));
+
+    const viewerSavesResult = await db.query<{ look_id: string }>(
+      `SELECT look_id FROM look_saves WHERE user_id = $1 AND look_id = ANY($2)`,
+      [viewerUserId, lookIds]
+    );
+    viewerSavesSet = new Set(viewerSavesResult.rows.map((r) => r.look_id));
+  }
+
+  return lookRows.map((row) => ({
+    id: row.id,
+    creatorId: row.creator_id,
+    creator: {
+      id: row.creator_id,
+      username: row.creator_username,
+      avatar: row.creator_avatar,
+    },
+    title: row.title,
+    caption: row.caption,
+    mediaUrl: row.media_url,
+    visibility: row.visibility,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    tags: tagsByLook.get(row.id) ?? [],
+    likeCount: likeCountMap.get(row.id) ?? 0,
+    commentCount: commentCountMap.get(row.id) ?? 0,
+    saveCount: saveCountMap.get(row.id) ?? 0,
+    likedByViewer: viewerLikesSet.has(row.id),
+    savedByViewer: viewerSavesSet.has(row.id),
+  }));
+}
+
+const LOOK_SELECT_COLUMNS = `
+  l.id, l.creator_id, l.title, l.caption, l.media_url, l.status, l.visibility,
+  l.created_at, l.updated_at,
+  u.username AS creator_username,
+  u.avatar AS creator_avatar
+`;
+
+// ── Look access control ────────────────────────────────────────────
+
+type LookAccessRow = {
+  id: string;
+  creator_id: string;
+  status: 'draft' | 'published' | 'archived';
+  visibility: 'public' | 'followers' | 'private';
+};
+
+function canViewerAccessLook(
+  look: LookAccessRow,
+  viewerUserId: string | null
+): boolean {
+  if (viewerUserId && look.creator_id === viewerUserId) {
+    return true;
+  }
+  return look.status === 'published' && look.visibility === 'public';
+}
+
+async function getAccessibleLook(
+  lookId: string,
+  viewerUserId: string | null
+): Promise<LookAccessRow | null> {
+  const result = await db.query<LookAccessRow>(
+    `SELECT id, creator_id, status, visibility FROM looks WHERE id = $1 LIMIT 1`,
+    [lookId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  if (!canViewerAccessLook(row, viewerUserId)) return null;
+  return row;
+}
+
+// ── Looks routes ───────────────────────────────────────────────────
+
 app.post('/looks', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const bodySchema = z.object({
     id: z.string().min(2).max(120),
-    title: z.string().min(1).max(120),
+    title: z.string().max(120).default(''),
+    caption: z.string().max(500).default(''),
     mediaUrl: z.string().url().min(3),
+    visibility: z.enum(['public', 'followers', 'private']).default('public'),
     tags: z.array(
       z.object({
         id: z.string().min(2).max(120),
@@ -13896,33 +14599,34 @@ app.post('/looks', async (request, reply) => {
   try {
     await client.query('BEGIN');
 
-    await client.query(
-      `
-        INSERT INTO looks (id, creator_id, title, media_url, status)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (id) DO UPDATE
-        SET title = EXCLUDED.title,
-            media_url = EXCLUDED.media_url,
-            status = EXCLUDED.status
-      `,
-      [payload.id, actorUserId, payload.title, payload.mediaUrl, payload.status]
+    const existing = await client.query<{ creator_id: string }>(
+      `SELECT creator_id FROM looks WHERE id = $1 LIMIT 1`,
+      [payload.id]
     );
 
-    await client.query(`DELETE FROM look_tags WHERE look_id = $1`, [payload.id]);
+    if (existing.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Look ID already exists' };
+    }
+
+    await client.query(
+      `INSERT INTO looks (id, creator_id, title, caption, media_url, status, visibility)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [payload.id, actorUserId, payload.title, payload.caption, payload.mediaUrl, payload.status, payload.visibility]
+    );
 
     for (const tag of payload.tags) {
       const tagId = `${payload.id}_${tag.id}`;
       await client.query(
-        `
-          INSERT INTO look_tags (id, look_id, listing_id, label, x, y)
-          VALUES ($1, $2, $3, $4, $5, $6)
-          ON CONFLICT (id) DO UPDATE
-          SET look_id = EXCLUDED.look_id,
-              listing_id = EXCLUDED.listing_id,
-              label = EXCLUDED.label,
-              x = EXCLUDED.x,
-              y = EXCLUDED.y
-        `,
+        `INSERT INTO look_tags (id, look_id, listing_id, label, x, y)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE
+         SET look_id = EXCLUDED.look_id,
+             listing_id = EXCLUDED.listing_id,
+             label = EXCLUDED.label,
+             x = EXCLUDED.x,
+             y = EXCLUDED.y`,
         [tagId, payload.id, tag.listingId ?? null, tag.label, tag.x, tag.y]
       );
     }
@@ -13946,6 +14650,7 @@ app.get('/looks', async (request) => {
     limit: z.coerce.number().int().min(1).max(120).default(40),
   });
   const params = querySchema.parse(request.query ?? {});
+  const viewerUserId = request.authUser?.userId ?? null;
 
   const conditions: string[] = ['1 = 1'];
   const args: unknown[] = [];
@@ -13954,87 +14659,83 @@ app.get('/looks', async (request) => {
     conditions.push(`l.creator_id = $${args.length + 1}`);
     args.push(params.creatorId);
   }
-  if (params.status) {
+
+  if (params.status && params.status !== 'published') {
+    if (!viewerUserId) {
+      return { items: [] };
+    }
     conditions.push(`l.status = $${args.length + 1}`);
     args.push(params.status);
+    conditions.push(`l.creator_id = $${args.length + 1}`);
+    args.push(viewerUserId);
+  } else {
+    conditions.push(`l.status = 'published'`);
+    if (viewerUserId) {
+      conditions.push(`(l.visibility = 'public' OR l.creator_id = $${args.length + 1})`);
+      args.push(viewerUserId);
+    } else {
+      conditions.push(`l.visibility = 'public'`);
+    }
+  }
+
+  if (params.creatorId && viewerUserId && params.creatorId !== viewerUserId && params.status && params.status !== 'published') {
+    return { items: [] };
   }
 
   const looksResult = await db.query<{
     id: string;
     creator_id: string;
     title: string;
+    caption: string;
     media_url: string;
     status: string;
+    visibility: string;
     created_at: string;
+    updated_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
   }>(
     `
-      SELECT id, creator_id, title, media_url, status, created_at
+      SELECT ${LOOK_SELECT_COLUMNS}
       FROM looks l
+      LEFT JOIN users u ON u.id = l.creator_id
       WHERE ${conditions.join(' AND ')}
-      ORDER BY created_at DESC
+      ORDER BY l.created_at DESC
       LIMIT $${args.length + 1}
     `,
     [...args, params.limit]
   );
 
-  const lookIds = looksResult.rows.map((r) => r.id);
-  const tagsResult = lookIds.length
-    ? await db.query<{
-        look_id: string;
-        id: string;
-        listing_id: string | null;
-        label: string;
-        x: string;
-        y: string;
-      }>(
-        `
-          SELECT look_id, id, listing_id, label, x, y
-          FROM look_tags
-          WHERE look_id = ANY($1)
-        `,
-        [lookIds]
-      )
-    : { rows: [] };
+  const items = await enrichLooks(looksResult.rows, viewerUserId);
 
-  const tagsByLook = new Map<string, Array<Record<string, unknown>>>();
-  for (const t of tagsResult.rows) {
-    const arr = tagsByLook.get(t.look_id) ?? [];
-    arr.push({
-      id: t.id,
-      listingId: t.listing_id,
-      label: t.label,
-      x: Number(t.x),
-      y: Number(t.y),
-    });
-    tagsByLook.set(t.look_id, arr);
-  }
-
-  return {
-    items: looksResult.rows.map((row) => ({
-      id: row.id,
-      creatorId: row.creator_id,
-      title: row.title,
-      mediaUrl: row.media_url,
-      status: row.status,
-      createdAt: row.created_at,
-      tags: tagsByLook.get(row.id) ?? [],
-    })),
-  };
+  return { items };
 });
 
 app.get('/looks/:lookId', async (request, reply) => {
   const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
   const { lookId } = paramsSchema.parse(request.params);
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const accessRow = await getAccessibleLook(lookId, viewerUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
 
   const lookResult = await db.query<{
     id: string;
     creator_id: string;
     title: string;
+    caption: string;
     media_url: string;
     status: string;
+    visibility: string;
     created_at: string;
+    updated_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
   }>(
-    `SELECT id, creator_id, title, media_url, status, created_at FROM looks WHERE id = $1 LIMIT 1`,
+    `SELECT ${LOOK_SELECT_COLUMNS} FROM looks l LEFT JOIN users u ON u.id = l.creator_id WHERE l.id = $1 LIMIT 1`,
     [lookId]
   );
 
@@ -14043,37 +14744,9 @@ app.get('/looks/:lookId', async (request, reply) => {
     return { ok: false, error: 'Look not found' };
   }
 
-  const look = lookResult.rows[0];
+  const enriched = (await enrichLooks([lookResult.rows[0]], viewerUserId))[0];
 
-  const tagsResult = await db.query<{
-    id: string;
-    listing_id: string | null;
-    label: string;
-    x: string;
-    y: string;
-  }>(
-    `SELECT id, listing_id, label, x, y FROM look_tags WHERE look_id = $1`,
-    [lookId]
-  );
-
-  return {
-    ok: true,
-    look: {
-      id: look.id,
-      creatorId: look.creator_id,
-      title: look.title,
-      mediaUrl: look.media_url,
-      status: look.status,
-      createdAt: look.created_at,
-      tags: tagsResult.rows.map((t) => ({
-        id: t.id,
-        listingId: t.listing_id,
-        label: t.label,
-        x: Number(t.x),
-        y: Number(t.y),
-      })),
-    },
-  };
+  return { ok: true, look: enriched };
 });
 
 app.delete('/looks/:lookId', async (request, reply) => {
@@ -14098,6 +14771,260 @@ app.delete('/looks/:lookId', async (request, reply) => {
   }
 
   await db.query(`DELETE FROM looks WHERE id = $1`, [lookId]);
+  return { ok: true };
+});
+
+// ── Look likes ─────────────────────────────────────────────────────
+
+app.post('/looks/:lookId/like', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  await db.query(
+    `INSERT INTO look_likes (look_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [lookId, actorUserId]
+  );
+
+  const countResult = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM look_likes WHERE look_id = $1`,
+    [lookId]
+  );
+
+  return { ok: true, likeCount: Number(countResult.rows[0]?.count ?? 0), likedByViewer: true };
+});
+
+app.delete('/looks/:lookId/like', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  await db.query(
+    `DELETE FROM look_likes WHERE look_id = $1 AND user_id = $2`,
+    [lookId, actorUserId]
+  );
+
+  const countResult = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM look_likes WHERE look_id = $1`,
+    [lookId]
+  );
+
+  return { ok: true, likeCount: Number(countResult.rows[0]?.count ?? 0), likedByViewer: false };
+});
+
+// ── Look saves ─────────────────────────────────────────────────────
+
+app.post('/looks/:lookId/save', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  await db.query(
+    `INSERT INTO look_saves (look_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [lookId, actorUserId]
+  );
+
+  const countResult = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM look_saves WHERE look_id = $1`,
+    [lookId]
+  );
+
+  return { ok: true, saveCount: Number(countResult.rows[0]?.count ?? 0), savedByViewer: true };
+});
+
+app.delete('/looks/:lookId/save', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  await db.query(
+    `DELETE FROM look_saves WHERE look_id = $1 AND user_id = $2`,
+    [lookId, actorUserId]
+  );
+
+  const countResult = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM look_saves WHERE look_id = $1`,
+    [lookId]
+  );
+
+  return { ok: true, saveCount: Number(countResult.rows[0]?.count ?? 0), savedByViewer: false };
+});
+
+// ── Look comments ──────────────────────────────────────────────────
+
+app.get('/looks/:lookId/comments', async (request, reply) => {
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const accessRow = await getAccessibleLook(lookId, viewerUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  const commentsResult = await db.query<{
+    id: string;
+    look_id: string;
+    author_id: string;
+    body: string;
+    created_at: string;
+    updated_at: string;
+    author_username: string | null;
+    author_avatar: string | null;
+  }>(
+    `
+      SELECT c.id, c.look_id, c.author_id, c.body, c.created_at, c.updated_at,
+        u.username AS author_username,
+        u.avatar AS author_avatar
+      FROM look_comments c
+      LEFT JOIN users u ON u.id = c.author_id
+      WHERE c.look_id = $1
+      ORDER BY c.created_at ASC
+      LIMIT 200
+    `,
+    [lookId]
+  );
+
+  return {
+    items: commentsResult.rows.map((row) => ({
+      id: row.id,
+      lookId: row.look_id,
+      authorId: row.author_id,
+      author: {
+        id: row.author_id,
+        username: row.author_username,
+        avatar: row.author_avatar,
+      },
+      body: row.body,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  };
+});
+
+app.post('/looks/:lookId/comments', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120),
+    body: z.string().trim().min(1).max(1000),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  await db.query(
+    `INSERT INTO look_comments (id, look_id, author_id, body) VALUES ($1, $2, $3, $4)`,
+    [payload.id, lookId, actorUserId, payload.body]
+  );
+
+  const commentResult = await db.query<{
+    id: string;
+    author_id: string;
+    body: string;
+    created_at: string;
+    updated_at: string;
+    author_username: string | null;
+    author_avatar: string | null;
+  }>(
+    `
+      SELECT c.id, c.author_id, c.body, c.created_at, c.updated_at,
+        u.username AS author_username,
+        u.avatar AS author_avatar
+      FROM look_comments c
+      LEFT JOIN users u ON u.id = c.author_id
+      WHERE c.id = $1 LIMIT 1
+    `,
+    [payload.id]
+  );
+
+  const row = commentResult.rows[0];
+  if (!row) {
+    reply.code(500);
+    return { ok: false, error: 'Failed to create comment' };
+  }
+
+  reply.code(201);
+  return {
+    ok: true,
+    comment: {
+      id: row.id,
+      lookId,
+      authorId: row.author_id,
+      author: {
+        id: row.author_id,
+        username: row.author_username,
+        avatar: row.author_avatar,
+      },
+      body: row.body,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    },
+  };
+});
+
+app.delete('/looks/:lookId/comments/:commentId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({
+    lookId: z.string().min(2).max(120),
+    commentId: z.string().min(2).max(120),
+  });
+  const { lookId, commentId } = paramsSchema.parse(request.params);
+
+  const accessRow = await getAccessibleLook(lookId, actorUserId);
+  if (!accessRow) {
+    reply.code(404);
+    return { ok: false, error: 'Look not found' };
+  }
+
+  const commentResult = await db.query<{ author_id: string }>(
+    `SELECT author_id FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
+    [commentId, lookId]
+  );
+
+  const comment = commentResult.rows[0];
+  if (!comment) {
+    reply.code(404);
+    return { ok: false, error: 'Comment not found' };
+  }
+
+  if (comment.author_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(`DELETE FROM look_comments WHERE id = $1`, [commentId]);
   return { ok: true };
 });
 
@@ -14220,6 +15147,13 @@ app.get('/listings/:listingId', async (request, reply) => {
     [listingId]
   );
 
+  const itemPrice = Number(row.price_gbp);
+  const buyerProtectionFee = Number(Math.max(
+    itemPrice * 0.05 + 0.7,
+    itemPrice * 0.02
+  ).toFixed(2));
+  const estimatedTotal = Number((itemPrice + buyerProtectionFee).toFixed(2));
+
   return {
     ok: true,
     listing: {
@@ -14227,7 +15161,7 @@ app.get('/listings/:listingId', async (request, reply) => {
       sellerId: row.seller_id,
       title: row.title,
       description: row.description,
-      priceGbp: Number(row.price_gbp),
+      priceGbp: itemPrice,
       imageUrl: row.image_url,
       images: imagesResult.rows.map((r) => r.image_url),
       status: row.status,
@@ -14249,6 +15183,28 @@ app.get('/listings/:listingId', async (request, reply) => {
             location: null,
           }
         : null,
+    },
+    commerce: {
+      itemPrice,
+      buyerProtectionFee,
+      estimatedTotal,
+      currency: 'GBP',
+      shippingMethod: row.shipping_method,
+      shippingPayer: row.shipping_payer,
+      protectionPolicy: {
+        available: true,
+        label: 'Buyer Protection',
+        summary:
+          'Items covered by Thryftverse Buyer Protection. If your item doesn\u2019t arrive or doesn\u2019t match the description, you may be eligible for a refund.',
+      },
+      returnPolicy: {
+        accepted: true,
+        windowDays: 14,
+        conditions: 'Item must be returned in the same condition as received.',
+      },
+      authenticity: {
+        status: 'not_offered' as const,
+      },
     },
   };
 });
@@ -14347,6 +15303,515 @@ app.get('/listings/:listingId/related', async (request, reply) => {
           }
         : null,
     })),
+  };
+});
+
+// ── Sectioned recommendations ─────────────────────────────────────
+
+const COMPLEMENTARY_CATEGORY_MAP: Record<string, string[]> = {
+  tops: ['bottoms', 'outerwear', 'shoes', 'bags'],
+  bottoms: ['tops', 'shoes', 'bags', 'outerwear'],
+  dresses: ['shoes', 'bags', 'accessories', 'outerwear'],
+  shoes: ['bottoms', 'dresses', 'bags'],
+  bags: ['tops', 'bottoms', 'shoes', 'accessories'],
+  outerwear: ['tops', 'bottoms', 'shoes', 'bags'],
+  accessories: ['tops', 'dresses', 'bags'],
+  jewellery: ['dresses', 'tops', 'bags'],
+};
+
+function getComplementaryCategories(category: string | null): string[] {
+  if (!category) return [];
+  return COMPLEMENTARY_CATEGORY_MAP[category.toLowerCase().trim()] ?? [];
+}
+
+function scoreListing(
+  candidate: {
+    id: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    price_gbp: number | string;
+    seller_id: string;
+    created_at: string;
+  },
+  source: {
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    price_gbp: number | string;
+    seller_id: string;
+  }
+): number {
+  let score = 0;
+  if (candidate.category && source.category && candidate.category === source.category) score += 30;
+  if (candidate.brand && source.brand && candidate.brand.toLowerCase() === source.brand.toLowerCase()) score += 25;
+  if (candidate.size && source.size && candidate.size.toLowerCase() === source.size.toLowerCase()) score += 20;
+  if (candidate.condition && source.condition && candidate.condition.toLowerCase() === source.condition.toLowerCase()) score += 15;
+  const candidatePrice = Number(candidate.price_gbp);
+  const sourcePrice = Number(source.price_gbp);
+  if (sourcePrice > 0) {
+    const priceDiff = Math.abs(candidatePrice - sourcePrice) / sourcePrice;
+    if (priceDiff < 0.2) score += 15;
+    else if (priceDiff < 0.5) score += 8;
+  }
+  const ageDays = (Date.now() - new Date(candidate.created_at).getTime()) / (1000 * 60 * 60 * 24);
+  if (ageDays < 7) score += 5;
+  else if (ageDays < 30) score += 2;
+  return score;
+}
+
+app.get('/listings/:listingId/recommendations', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const querySchema = z.object({
+    sections: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(24).optional().default(8),
+    cursor: z.string().optional(),
+    sessionId: z.string().optional(),
+  });
+  const { listingId } = paramsSchema.parse(request.params);
+  const { sections: sectionsParam, limit, cursor } = querySchema.parse(request.query ?? {});
+
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const sourceResult = await readDb.query<{
+    id: string;
+    seller_id: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    price_gbp: number | string;
+    status: string;
+  }>(
+    `SELECT id, seller_id, category, brand, size, condition, price_gbp, status FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId]
+  );
+
+  const source = sourceResult.rows[0];
+  if (!source) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  const requestedSections = sectionsParam
+    ? (sectionsParam.split(',') as string[])
+    : null;
+
+  type CandidateRow = {
+    id: string;
+    seller_id: string;
+    title: string;
+    description: string;
+    price_gbp: number | string;
+    image_url: string | null;
+    status: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    original_price_gbp: number | string | null;
+    created_at: string;
+    seller_username: string | null;
+  };
+
+  const fetchCandidates = async (whereClause: string, args: unknown[], limitCount: number) => {
+    const result = await readDb.query<CandidateRow>(
+      `
+        SELECT
+          l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+          l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
+          u.username AS seller_username
+        FROM listings l
+        LEFT JOIN users u ON u.id = l.seller_id
+        WHERE ${whereClause}
+        ORDER BY l.created_at DESC
+        LIMIT $${args.length + 1}
+      `,
+      [...args, limitCount]
+    );
+
+    const listingIds = result.rows.map((r) => r.id);
+    const imagesResult = listingIds.length
+      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
+          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
+          [listingIds]
+        )
+      : { rows: [] };
+
+    const imagesByListing = new Map<string, string[]>();
+    for (const img of imagesResult.rows) {
+      const arr = imagesByListing.get(img.listing_id) ?? [];
+      arr.push(img.image_url);
+      imagesByListing.set(img.listing_id, arr);
+    }
+
+    return result.rows.map((row) => ({
+      row,
+      images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+    }));
+  };
+
+  const mapToListingItem = (candidate: { row: CandidateRow; images: string[] }) => ({
+    id: candidate.row.id,
+    sellerId: candidate.row.seller_id,
+    title: candidate.row.title,
+    description: candidate.row.description,
+    priceGbp: Number(candidate.row.price_gbp),
+    imageUrl: candidate.row.image_url,
+    images: candidate.images,
+    status: candidate.row.status,
+    category: candidate.row.category,
+    brand: candidate.row.brand,
+    size: candidate.row.size,
+    condition: candidate.row.condition,
+    originalPriceGbp: candidate.row.original_price_gbp === null ? null : Number(candidate.row.original_price_gbp),
+    createdAt: candidate.row.created_at,
+    seller: candidate.row.seller_username
+      ? {
+          id: candidate.row.seller_id,
+          username: candidate.row.seller_username,
+          avatar: null,
+          rating: null,
+          reviewCount: null,
+          location: null,
+        }
+      : null,
+  });
+
+  const sections: Array<{
+    key: string;
+    title: string;
+    subtitle?: string;
+    reason?: string;
+    personalised: boolean;
+    items: ReturnType<typeof mapToListingItem>[];
+    nextCursor?: string;
+  }> = [];
+
+  const shouldInclude = (key: string) => !requestedSections || requestedSections.includes(key);
+
+  const usedListingIds = new Set<string>();
+
+  const dedupeAndMap = (
+    candidates: Array<{ row: CandidateRow; images: string[] }>,
+    opts?: { scoreBy?: (c: { row: CandidateRow; images: string[] }) => number }
+  ) => {
+    const filtered = candidates.filter((c) => !usedListingIds.has(c.row.id));
+    if (opts?.scoreBy) {
+      filtered.sort((a, b) => (opts.scoreBy!(b) ?? 0) - (opts.scoreBy!(a) ?? 0));
+    }
+    for (const c of filtered) usedListingIds.add(c.row.id);
+    return filtered.map(mapToListingItem);
+  };
+
+  // 1. Similar style
+  if (shouldInclude('similar_style')) {
+    const candidates = await fetchCandidates(
+      `l.id != $1 AND l.status = 'active' AND l.category = $2`,
+      [listingId, source.category ?? ''],
+      limit + 4
+    );
+    const scored = candidates
+      .map((c) => ({ c, score: scoreListing(c.row, source) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((x) => x.c);
+    if (scored.length > 0) {
+      const items = dedupeAndMap(scored);
+      if (items.length > 0) {
+        sections.push({
+          key: 'similar_style',
+          title: 'Similar in style',
+          subtitle: source.category ? `More in ${source.category}` : undefined,
+          reason: 'Same category and visual style',
+          personalised: false,
+          items,
+        });
+      }
+    }
+  }
+
+  // 2. Same brand
+  if (shouldInclude('same_brand') && source.brand) {
+    const candidates = await fetchCandidates(
+      `l.id != $1 AND l.status = 'active' AND l.brand ILIKE $2`,
+      [listingId, `%${source.brand}%`],
+      limit
+    );
+    const items = dedupeAndMap(candidates, {
+      scoreBy: (c) => scoreListing(c.row, source),
+    });
+    if (items.length > 0) {
+      sections.push({
+        key: 'same_brand',
+        title: `More from ${source.brand}`,
+        reason: 'Same brand',
+        personalised: false,
+        items,
+      });
+    }
+  }
+
+  // 3. Same size and condition
+  if (shouldInclude('same_size_condition') && source.size && source.condition) {
+    const candidates = await fetchCandidates(
+      `l.id != $1 AND l.status = 'active' AND l.size ILIKE $2 AND l.condition ILIKE $3`,
+      [listingId, `%${source.size}%`, `%${source.condition}%`],
+      limit
+    );
+    const items = dedupeAndMap(candidates, {
+      scoreBy: (c) => scoreListing(c.row, source),
+    });
+    if (items.length > 0) {
+      sections.push({
+        key: 'same_size_condition',
+        title: 'Your size and condition',
+        subtitle: `Size ${source.size} · ${source.condition}`,
+        reason: 'Same size and condition',
+        personalised: false,
+        items,
+      });
+    }
+  }
+
+  // 4. Better price
+  if (shouldInclude('better_price')) {
+    const sourcePrice = Number(source.price_gbp);
+    if (sourcePrice > 0) {
+      const candidates = await fetchCandidates(
+        `l.id != $1 AND l.status = 'active' AND l.category = $2 AND l.price_gbp < $3`,
+        [listingId, source.category ?? '', sourcePrice],
+        limit
+      );
+      const items = dedupeAndMap(candidates, {
+        scoreBy: (c) => {
+          const priceDiff = sourcePrice - Number(c.row.price_gbp);
+          return -priceDiff;
+        },
+      });
+      if (items.length > 0) {
+        sections.push({
+          key: 'better_price',
+          title: 'Better price alternatives',
+          subtitle: 'Similar items for less',
+          reason: 'Lower price alternatives',
+          personalised: false,
+          items,
+        });
+      }
+    }
+  }
+
+  // 5. More from seller
+  if (shouldInclude('more_from_seller')) {
+    const candidates = await fetchCandidates(
+      `l.id != $1 AND l.status = 'active' AND l.seller_id = $2`,
+      [listingId, source.seller_id],
+      limit
+    );
+    const items = dedupeAndMap(candidates, {
+      scoreBy: (c) => scoreListing(c.row, source),
+    });
+    if (items.length > 0) {
+      sections.push({
+        key: 'more_from_seller',
+        title: 'More from this seller',
+        subtitle: 'Bundle and save on shipping',
+        reason: 'From the same seller',
+        personalised: false,
+        items,
+      });
+    }
+  }
+
+  // 6. Complete the look (complementary categories)
+  if (shouldInclude('complete_the_look')) {
+    const complementaryCats = getComplementaryCategories(source.category);
+    if (complementaryCats.length > 0) {
+      const placeholders = complementaryCats.map((_, i) => `$${i + 2}`).join(', ');
+      const candidates = await fetchCandidates(
+        `l.id != $1 AND l.status = 'active' AND l.category IN (${placeholders})`,
+        [listingId, ...complementaryCats],
+        limit
+      );
+      const items = dedupeAndMap(candidates, {
+        scoreBy: (c) => scoreListing(c.row, source),
+      });
+      if (items.length > 0) {
+        sections.push({
+          key: 'complete_the_look',
+          title: 'Complete the look',
+          subtitle: 'Pieces that go well together',
+          reason: 'Complementary categories',
+          personalised: false,
+          items,
+        });
+      }
+    }
+  }
+
+  // 7. Seen in looks
+  if (shouldInclude('seen_in_looks')) {
+    const looksResult = await readDb.query<{
+      look_id: string;
+      look_title: string;
+      media_url: string;
+      creator_id: string;
+      creator_username: string | null;
+    }>(
+      `
+        SELECT lt.look_id, l.title AS look_title, l.media_url, l.creator_id, u.username AS creator_username
+        FROM look_tags lt
+        JOIN looks l ON l.id = lt.look_id
+        LEFT JOIN users u ON u.id = l.creator_id
+        WHERE lt.listing_id = $1 AND l.status = 'published'
+        LIMIT 12
+      `,
+      [listingId]
+    );
+    if (looksResult.rows.length > 0) {
+      const lookItems = looksResult.rows.map((row) => ({
+        id: row.look_id,
+        type: 'look' as const,
+        title: row.look_title,
+        coverImage: row.media_url,
+        creatorId: row.creator_id,
+        creatorUsername: row.creator_username,
+      }));
+      sections.push({
+        key: 'seen_in_looks',
+        title: 'Seen in Looks',
+        subtitle: 'Styled by the community',
+        reason: 'Tagged in community Looks',
+        personalised: false,
+        items: lookItems,
+      });
+    }
+  }
+
+  // 8. Inspired by saves (personalised)
+  if (shouldInclude('inspired_by_saves') && viewerUserId) {
+    const savesResult = await readDb.query<{ listing_id: string }>(
+      `SELECT listing_id FROM interactions WHERE user_id = $1 AND action = 'wishlist' ORDER BY created_at DESC LIMIT 20`,
+      [viewerUserId]
+    );
+    if (savesResult.rows.length > 0) {
+      const savedListingIds = savesResult.rows.map((r) => r.listing_id);
+      const savedListingsResult = await readDb.query<{ category: string | null; brand: string | null }>(
+        `SELECT category, brand FROM listings WHERE id = ANY($1)`,
+        [savedListingIds]
+      );
+      const savedCategories = new Set(savedListingsResult.rows.map((r) => r.category).filter(Boolean) as string[]);
+      const savedBrands = new Set(savedListingsResult.rows.map((r) => r.brand).filter(Boolean) as string[]);
+
+      if (savedCategories.size > 0 || savedBrands.size > 0) {
+        const catPlaceholders = Array.from(savedCategories).map((_, i) => `$${i + 2}`).join(', ');
+        const catArgs = [listingId, ...Array.from(savedCategories)];
+        const candidates = await fetchCandidates(
+          `l.id != $1 AND l.status = 'active' AND l.category IN (${catPlaceholders})`,
+          catArgs,
+          limit
+        );
+        const items = dedupeAndMap(candidates, {
+          scoreBy: (c) => scoreListing(c.row, source),
+        });
+        if (items.length > 0) {
+          sections.push({
+            key: 'inspired_by_saves',
+            title: 'Inspired by your saves',
+            subtitle: 'Based on items you\u2019ve saved',
+            reason: 'Based on your saves',
+            personalised: true,
+            items,
+          });
+        }
+      }
+    }
+  }
+
+  // 9. Continue exploring
+  if (shouldInclude('continue_exploring')) {
+    let cursorCreatedAt: string | null = null;
+    let cursorId: string | null = null;
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
+        cursorCreatedAt = decoded.createdAt ?? null;
+        cursorId = decoded.id ?? null;
+      } catch {
+        reply.code(400);
+        return { ok: false, error: 'Invalid cursor' };
+      }
+    }
+
+    const candidates = await readDb.query<CandidateRow>(
+      `
+        SELECT
+          l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+          l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
+          u.username AS seller_username
+        FROM listings l
+        LEFT JOIN users u ON u.id = l.seller_id
+        WHERE l.id != $1 AND l.status = 'active'
+          ${cursorCreatedAt && cursorId ? 'AND (l.created_at, l.id) < ($2, $3)' : ''}
+        ORDER BY l.created_at DESC, l.id DESC
+        LIMIT $${cursorCreatedAt && cursorId ? 4 : 2}
+      `,
+      cursorCreatedAt && cursorId
+        ? [listingId, cursorCreatedAt, cursorId, limit + 1]
+        : [listingId, limit + 1]
+    );
+
+    const listingIds = candidates.rows.map((r) => r.id);
+    const imagesResult = listingIds.length
+      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
+          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
+          [listingIds]
+        )
+      : { rows: [] };
+
+    const imagesByListing = new Map<string, string[]>();
+    for (const img of imagesResult.rows) {
+      const arr = imagesByListing.get(img.listing_id) ?? [];
+      arr.push(img.image_url);
+      imagesByListing.set(img.listing_id, arr);
+    }
+
+    const mapped = candidates.rows
+      .filter((row) => !usedListingIds.has(row.id))
+      .map((row) => ({
+        row,
+        images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      }))
+      .slice(0, limit);
+
+    const hasMore = candidates.rows.length > limit;
+    const lastItem = mapped[mapped.length - 1];
+    const nextCursor = hasMore && lastItem
+      ? Buffer.from(JSON.stringify({
+          createdAt: lastItem.row.created_at,
+          id: lastItem.row.id,
+        })).toString('base64')
+      : undefined;
+
+    if (mapped.length > 0) {
+      sections.push({
+        key: 'continue_exploring',
+        title: 'Explore more',
+        subtitle: 'Keep discovering',
+        reason: 'Recently viewed and trending',
+        personalised: false,
+        items: mapped.map(mapToListingItem),
+        nextCursor,
+      });
+    }
+  }
+
+  return {
+    listingId,
+    sections,
   };
 });
 
@@ -14702,8 +16167,13 @@ app.get('/realtime/stream', async (request, reply) => {
 });
 
 app.post('/notifications/devices/register', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
   const bodySchema = z.object({
-    userId: z.string().min(2),
     token: z.string().min(16).max(4096),
     provider: z.enum(['expo']).default('expo'),
     platform: z.enum(['ios', 'android', 'web']),
@@ -14712,7 +16182,6 @@ app.post('/notifications/devices/register', async (request, reply) => {
   });
 
   const payload = bodySchema.parse(request.body ?? {});
-  await ensureUserExists(payload.userId);
 
   const result = await db.query<{
     id: number;
@@ -14750,7 +16219,7 @@ app.post('/notifications/devices/register', async (request, reply) => {
       RETURNING id, user_id, provider, platform, token, is_active, app_version, created_at, last_seen_at
     `,
     [
-      payload.userId,
+      authUserId,
       payload.provider,
       payload.platform,
       payload.token,
@@ -14773,6 +16242,43 @@ app.post('/notifications/devices/register', async (request, reply) => {
       createdAt: result.rows[0].created_at,
       lastSeenAt: result.rows[0].last_seen_at,
     },
+  };
+});
+
+app.get('/notifications/devices', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const result = await db.query<{
+    id: number;
+    provider: string;
+    platform: string;
+    token: string;
+    is_active: boolean;
+    app_version: string | null;
+    created_at: string;
+    last_seen_at: string;
+  }>(
+    `SELECT id, provider, platform, token, is_active, app_version, created_at, last_seen_at
+     FROM notification_devices WHERE user_id = $1 ORDER BY last_seen_at DESC`,
+    [authUserId]
+  );
+
+  return {
+    ok: true,
+    devices: result.rows.map((row) => ({
+      id: row.id,
+      provider: row.provider,
+      platform: row.platform,
+      token: row.token,
+      isActive: row.is_active,
+      appVersion: row.app_version,
+      createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at,
+    })),
   };
 });
 
@@ -14813,13 +16319,32 @@ app.delete('/notifications/devices/:token', async (request, reply) => {
   };
 });
 
-app.get('/notifications/events', async (request) => {
+app.get('/notifications/events', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
   const querySchema = z.object({
-    userId: z.string().min(2),
     limit: z.coerce.number().int().min(1).max(120).default(30),
+    cursor: z.string().optional(),
   });
 
-  const { userId, limit } = querySchema.parse(request.query);
+  const { limit, cursor } = querySchema.parse(request.query);
+
+  let cursorCondition = '';
+  const params: (string | number)[] = [authUserId, limit];
+  if (cursor) {
+    const decoded = Buffer.from(cursor, 'base64').toString('utf-8');
+    const [cursorTs, cursorId] = decoded.split('|');
+    if (!cursorTs || !cursorId) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid cursor format', code: 'INVALID_NOTIFICATION_CURSOR' };
+    }
+    cursorCondition = `AND (created_at, id) < ($3::timestamptz, $4)`;
+    params.push(cursorTs, cursorId);
+  }
 
   const result = await db.query<{
     id: string;
@@ -14833,59 +16358,208 @@ app.get('/notifications/events', async (request) => {
     provider_error: string | null;
     created_at: string;
     sent_at: string | null;
+    event_type: string;
+    actor_user_id: string | null;
+    read_at: string | null;
+    image_url: string | null;
+    route: Record<string, unknown> | null;
+    actor_username: string | null;
+    actor_display_name: string | null;
+    actor_avatar: string | null;
   }>(
     `
       SELECT
-        id,
-        user_id,
-        channel,
-        title,
-        body,
-        payload,
-        status,
-        provider_message_id,
-        provider_error,
-        created_at::text,
-        sent_at::text
-      FROM notification_events
-      WHERE user_id = $1
-      ORDER BY created_at DESC
+        ne.id,
+        ne.user_id,
+        ne.channel,
+        ne.title,
+        ne.body,
+        ne.payload,
+        ne.status,
+        ne.provider_message_id,
+        ne.provider_error,
+        ne.created_at::text,
+        ne.sent_at::text,
+        ne.event_type,
+        ne.actor_user_id,
+        ne.read_at::text,
+        ne.image_url,
+        ne.route,
+        u.username AS actor_username,
+        u.display_name AS actor_display_name,
+        u.avatar AS actor_avatar
+      FROM notification_events ne
+      LEFT JOIN users u ON u.id = ne.actor_user_id
+      WHERE ne.user_id = $1
+      ${cursorCondition}
+      ORDER BY ne.created_at DESC, ne.id DESC
       LIMIT $2
     `,
-    [userId, limit]
+    params
+  );
+
+  const items = result.rows.map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    channel: row.channel,
+    title: row.title,
+    body: row.body,
+    payload: row.payload,
+    status: row.status,
+    providerMessageId: row.provider_message_id,
+    providerError: row.provider_error,
+    createdAt: row.created_at,
+    sentAt: row.sent_at,
+    eventType: row.event_type,
+    actorUserId: row.actor_user_id,
+    actorUsername: row.actor_username,
+    actorDisplayName: row.actor_display_name,
+    actorAvatar: row.actor_avatar,
+    readAt: row.read_at,
+    imageUrl: row.image_url,
+    route: row.route,
+  }));
+
+  let nextCursor: string | null = null;
+  if (items.length === limit && items.length > 0) {
+    const last = items[items.length - 1];
+    nextCursor = Buffer.from(`${last.createdAt}|${last.id}`).toString('base64');
+  }
+
+  return {
+    ok: true,
+    items,
+    nextCursor,
+  };
+});
+
+app.get('/notifications/unread-count', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const result = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM notification_events WHERE user_id = $1 AND read_at IS NULL`,
+    [authUserId]
   );
 
   return {
     ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      userId: row.user_id,
-      channel: row.channel,
-      title: row.title,
-      body: row.body,
-      payload: row.payload,
-      status: row.status,
-      providerMessageId: row.provider_message_id,
-      providerError: row.provider_error,
-      createdAt: row.created_at,
-      sentAt: row.sent_at,
-    })),
+    unreadCount: parseInt(result.rows[0].count, 10) || 0,
   };
 });
 
-app.post('/notifications/push/test', async (request, reply) => {
+app.post('/notifications/events/:eventId/read', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const paramsSchema = z.object({ eventId: z.string().min(4).max(128) });
+  const { eventId } = paramsSchema.parse(request.params);
+
+  const updated = await db.query(
+    `UPDATE notification_events SET read_at = NOW() WHERE id = $1 AND user_id = $2 AND read_at IS NULL RETURNING id`,
+    [eventId, authUserId]
+  );
+
+  if (!updated.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Notification not found or already read', code: 'NOTIFICATION_NOT_FOUND' };
+  }
+
+  return { ok: true };
+});
+
+app.post('/notifications/read-all', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  await db.query(
+    `UPDATE notification_events SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL`,
+    [authUserId]
+  );
+
+  return { ok: true };
+});
+
+app.get('/notifications/preferences', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const result = await db.query<{ category: string; enabled: boolean }>(
+    `SELECT category, enabled FROM notification_preferences WHERE user_id = $1 ORDER BY category`,
+    [authUserId]
+  );
+
+  const preferences: Record<string, boolean> = {};
+  for (const cat of NOTIFICATION_PUSH_CATEGORIES) {
+    const row = result.rows.find((r) => r.category === cat);
+    preferences[cat] = row ? row.enabled : true;
+  }
+
+  return { ok: true, preferences };
+});
+
+app.put('/notifications/preferences', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
   const bodySchema = z.object({
-    userId: z.string().min(2),
+    preferences: z.record(z.boolean()),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  for (const [category, enabled] of Object.entries(payload.preferences)) {
+    if (!NOTIFICATION_PUSH_CATEGORIES.includes(category as NotificationPushCategory)) {
+      reply.code(400);
+      return { ok: false, error: `Invalid category: ${category}`, code: 'INVALID_PREFERENCE_CATEGORY' };
+    }
+
+    await db.query(
+      `
+        INSERT INTO notification_preferences (user_id, category, enabled, updated_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (user_id, category)
+        DO UPDATE SET enabled = $3, updated_at = NOW()
+      `,
+      [authUserId, category, enabled]
+    );
+  }
+
+  return { ok: true };
+});
+
+app.post('/notifications/push/test', async (request, reply) => {
+  const authUserId = (request as any).authUser?.userId;
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const bodySchema = z.object({
     title: z.string().min(2).max(160),
     body: z.string().min(2).max(500),
     payload: z.record(z.unknown()).optional(),
   });
 
   const payload = bodySchema.parse(request.body ?? {});
-  await ensureUserExists(payload.userId);
 
   const eventId = await queueUserNotification({
-    userId: payload.userId,
+    userId: authUserId,
     title: payload.title,
     body: payload.body,
     payload: payload.payload,
@@ -15052,11 +16726,16 @@ app.post('/chat/groups', async (request, reply) => {
     title: z.string().trim().min(2).max(80),
     memberIds: z.array(z.string().trim().min(2)).max(48).default([]),
     itemId: z.string().trim().min(2).max(120).optional(),
+    description: z.string().trim().max(280).optional(),
+    avatar: z.string().trim().max(512).optional(),
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const payload = bodySchema.parse(request.body ?? {});
   const title = payload.title.trim();
+
+  const idempotencyKey = resolveHeaderString(request.headers['x-idempotency-key']);
+  const requestHash = hashGroupCreatePayload(payload);
 
   const normalizedMemberIds = [...new Set([actorUserId, ...payload.memberIds.map((value) => value.trim())])]
     .filter((value) => value.length > 0);
@@ -15084,9 +16763,24 @@ app.post('/chat/groups', async (request, reply) => {
   const conversationId = createRuntimeId('chatgrp');
   const client = await db.connect();
   let createdMessage: { id: string; createdAt: string } | null = null;
+  let cachedResponse: Record<string, unknown> | null = null;
 
   try {
     await client.query('BEGIN');
+
+    if (idempotencyKey) {
+      cachedResponse = await getChatGroupIdempotentResponse(client, {
+        creatorId: actorUserId,
+        idempotencyKey,
+        requestHash,
+      });
+
+      if (cachedResponse) {
+        await client.query('COMMIT');
+        reply.code(201);
+        return cachedResponse;
+      }
+    }
 
     await client.query(
       `
@@ -15107,6 +16801,8 @@ app.post('/chat/groups', async (request, reply) => {
         payload.itemId ?? null,
         toJsonString({
           createdVia: 'chat_groups_api',
+          ...(payload.description ? { description: payload.description } : {}),
+          ...(payload.avatar ? { avatar: payload.avatar } : {}),
         }),
       ]
     );
@@ -15139,6 +16835,46 @@ app.post('/chat/groups', async (request, reply) => {
       `,
       [conversationId]
     );
+
+    const responsePayload = {
+      ok: true,
+      conversation: {
+        id: conversationId,
+        type: 'group' as const,
+        title,
+        itemId: payload.itemId ?? null,
+        ownerId: actorUserId,
+        participantIds: normalizedMemberIds,
+        botIds: [] as string[],
+        lastMessage: createdMessage?.createdAt ? `${title} was created.` : 'Group created',
+        lastMessageTime: createdMessage?.createdAt ?? new Date().toISOString(),
+        unread: false,
+      },
+      initialMessage: createdMessage
+        ? {
+            id: createdMessage.id,
+            senderType: 'system' as const,
+            senderUserId: null,
+            senderBotId: null,
+            body: `${title} was created.`,
+            metadata: {
+              event: 'group_created',
+              actorUserId,
+            },
+            createdAt: createdMessage.createdAt,
+          }
+        : null,
+    };
+
+    if (idempotencyKey) {
+      await saveChatGroupIdempotentResponse(client, {
+        creatorId: actorUserId,
+        idempotencyKey,
+        requestHash,
+        conversationId,
+        responsePayload,
+      });
+    }
 
     await client.query('COMMIT');
   } catch (error) {
@@ -17091,6 +18827,8 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
   });
   const bodySchema = z.object({
     title: z.string().trim().min(2).max(80).optional(),
+    description: z.string().trim().max(280).optional(),
+    avatar: z.string().trim().max(512).optional(),
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
@@ -17105,10 +18843,31 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
     );
   }
 
+  if (payload.description !== undefined || payload.avatar !== undefined) {
+    const currentMeta = await db.query<{ metadata: unknown }>(
+      `SELECT metadata FROM chat_conversations WHERE id = $1 LIMIT 1`,
+      [conversationId]
+    );
+    const existingMeta = (currentMeta.rows[0]?.metadata ?? {}) as Record<string, unknown>;
+    const updatedMeta = {
+      ...existingMeta,
+      ...(payload.description !== undefined ? { description: payload.description } : {}),
+      ...(payload.avatar !== undefined ? { avatar: payload.avatar } : {}),
+    };
+    await db.query(
+      `UPDATE chat_conversations SET metadata = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(updatedMeta), conversationId]
+    );
+  }
+
   return {
     ok: true,
     conversationId,
-    updated: payload.title !== undefined ? { title: payload.title } : {},
+    updated: {
+      ...(payload.title !== undefined ? { title: payload.title } : {}),
+      ...(payload.description !== undefined ? { description: payload.description } : {}),
+      ...(payload.avatar !== undefined ? { avatar: payload.avatar } : {}),
+    },
   };
 });
 
@@ -17156,6 +18915,7 @@ app.post('/wallets/:userId/snapshot', async (request, reply) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
   await ensureUserExists(userId);
 
@@ -17193,6 +18953,7 @@ app.post('/wallets/:userId/snapshot', async (request, reply) => {
 app.get('/wallets/:userId/snapshot', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   const result = await db.query<{
     id: number;
@@ -20839,6 +22600,7 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const { fiatCurrency } = querySchema.parse(request.query);
 
   if (!(await onezeTablesAvailable(db))) {
@@ -21095,6 +22857,35 @@ app.post('/interactions', async (request, reply) => {
   return { ok: true };
 });
 
+app.post('/analytics/events', async (request, reply) => {
+  const bodySchema = z.object({
+    event: z.string().min(1).max(100),
+    listingId: z.string().optional(),
+    sectionKey: z.string().optional(),
+    position: z.number().int().optional(),
+    reasonCode: z.string().optional(),
+    personalised: z.boolean().optional(),
+    sessionId: z.string().optional(),
+  });
+
+  const payload = bodySchema.parse(request.body);
+  const userId = request.authUser?.userId ?? null;
+
+  const eventKey = `analytics:${payload.event}`;
+  await redis.lpush(
+    eventKey,
+    JSON.stringify({
+      ...payload,
+      userId,
+      ts: new Date().toISOString(),
+    })
+  );
+  await redis.ltrim(eventKey, 0, 999);
+
+  reply.code(202);
+  return { ok: true };
+});
+
 app.get('/recommendations/:userId', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -21202,6 +22993,7 @@ app.get('/recommendations/:userId', async (request, reply) => {
 app.get('/users/:userId/addresses', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   const result = await db.query<{
     id: number;
@@ -21250,6 +23042,7 @@ app.post('/users/:userId/addresses', async (request, reply) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
 
   await ensureUserExists(userId);
@@ -21307,6 +23100,7 @@ app.delete('/users/:userId/addresses/:addressId', async (request, reply) => {
   });
 
   const { userId, addressId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   const deleted = await db.query(
     `
@@ -21354,6 +23148,7 @@ app.delete('/users/:userId/addresses/:addressId', async (request, reply) => {
 app.get('/users/:userId/payment-methods', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   const result = await db.query<{
     id: number;
@@ -21399,6 +23194,7 @@ app.post('/users/:userId/payment-methods', async (request, reply) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
 
   await ensureUserExists(userId);
@@ -21470,6 +23266,7 @@ app.delete('/users/:userId/payment-methods/:paymentMethodId', async (request, re
   });
 
   const { userId, paymentMethodId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   const deleted = await db.query(
     `
@@ -21616,7 +23413,12 @@ app.get('/payments/gateways', async (request) => {
   };
 });
 
-app.get('/payments/platform/summary', async () => {
+app.get('/payments/platform/summary', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
   if (!(await ledgerTablesAvailable(db))) {
     return {
       ok: true,
@@ -21647,6 +23449,7 @@ app.get('/payments/platform/summary', async () => {
 app.get('/users/:userId/ledger/balances', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   if (!(await ledgerTablesAvailable(db))) {
     return {
@@ -21693,6 +23496,7 @@ app.get('/users/:userId/ledger/balances', async (request) => {
 app.get('/users/:userId/payout-accounts', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   if (!(await paymentTablesAvailable(db))) {
     reply.code(503);
@@ -21757,11 +23561,12 @@ app.post('/users/:userId/payout-accounts', async (request, reply) => {
     providerAccountRef: z.string().min(3).max(140).optional(),
     countryCode: z.string().min(2).max(3).optional(),
     currency: z.string().length(3).optional(),
-    status: z.enum(['pending', 'active', 'disabled']).default('active'),
+    status: z.enum(['pending', 'active', 'disabled']).default('pending'),
     metadata: z.record(z.unknown()).optional(),
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
 
   if (!(await paymentTablesAvailable(db))) {
@@ -22114,6 +23919,7 @@ app.get('/users/:userId/payout-requests', async (request, reply) => {
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const { limit } = querySchema.parse(request.query);
 
   if (!(await paymentTablesAvailable(db))) {
@@ -22159,6 +23965,7 @@ app.get('/users/:userId/payout-requests/:requestId', async (request, reply) => {
   });
 
   const { userId, requestId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
 
   if (!(await paymentTablesAvailable(db))) {
     reply.code(503);
@@ -22212,10 +24019,12 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
     amountGbp: z.number().positive().optional(),
     amount: z.number().positive().optional(),
     amountCurrency: z.string().length(3).optional(),
+    idempotencyKey: z.string().min(8).max(140).optional(),
     metadata: z.record(z.unknown()).optional(),
   });
 
   const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
 
   if (!(await paymentTablesAvailable(db))) {
@@ -22246,6 +24055,40 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
   try {
     await client.query('BEGIN');
     await ensureUserExists(userId);
+
+    if (payload.idempotencyKey) {
+      const existing = await client.query<PayoutRequestRow>(
+        `
+          SELECT
+            id,
+            user_id,
+            payout_account_id,
+            amount_gbp,
+            amount_currency,
+            status,
+            provider_payout_ref,
+            failure_reason,
+            metadata,
+            created_at,
+            updated_at
+          FROM payout_requests
+          WHERE user_id = $1
+            AND idempotency_key = $2
+          LIMIT 1
+        `,
+        [userId, payload.idempotencyKey]
+      );
+
+      if (existing.rows[0]) {
+        await client.query('ROLLBACK');
+        reply.code(200);
+        return {
+          ok: true,
+          idempotent: true,
+          payoutRequest: toPayoutRequestPayload(existing.rows[0]),
+        };
+      }
+    }
 
     const payoutAccount = await client.query<{
       id: number;
@@ -22455,9 +24298,10 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
           amount_gbp,
           amount_currency,
           status,
+          idempotency_key,
           metadata
         )
-        VALUES ($1, $2, $3, $4, $5, 'requested', $6::jsonb)
+        VALUES ($1, $2, $3, $4, $5, 'requested', $6, $7::jsonb)
         RETURNING
           id,
           user_id,
@@ -22477,6 +24321,7 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
         payload.payoutAccountId,
         amountGbp,
         payoutCurrency,
+        payload.idempotencyKey ?? null,
         toJsonString(payoutRequestMetadata),
       ]
     );
@@ -24309,6 +26154,11 @@ app.get('/payments/intents/:intentId/refunds', async (request, reply) => {
 });
 
 app.get('/payments/disputes', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
   const querySchema = z.object({
     status: z.enum(['open', 'warning', 'needs_response', 'won', 'lost', 'closed']).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(80),
@@ -26210,6 +28060,14 @@ app.get('/orders/:orderId', async (request, reply) => {
   const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
   const { orderId } = paramsSchema.parse(request.params);
 
+  const authUserId = (request as any).authUser?.userId as string | undefined;
+  const authRole = (request as any).authUser?.role as string | undefined;
+
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
   const result = await db.query<{
     id: string;
     buyer_id: string;
@@ -26277,6 +28135,12 @@ app.get('/orders/:orderId', async (request, reply) => {
   }
 
   const row = result.rows[0];
+
+  if (authRole !== 'admin' && row.buyer_id !== authUserId && row.seller_id !== authUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: you do not have access to this order' };
+  }
+
   const platformChargeGbp = Number(row.buyer_protection_fee_gbp);
   return {
     ok: true,
@@ -26312,25 +28176,115 @@ app.get('/users/:userId/orders', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const querySchema = z.object({
     role: z.enum(['buyer', 'seller', 'all']).default('all'),
-    limit: z.coerce.number().int().min(1).max(200).default(50),
+    status: z.string().optional(),
+    classification: z.enum(['needs_action', 'active', 'completed', 'cancelled']).optional(),
+    query: z.string().min(1).max(100).optional(),
+    year: z.coerce.number().int().min(2000).max(2100).optional(),
+    createdBefore: z.string().datetime().optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
   });
 
   const { userId } = paramsSchema.parse(request.params);
-  const { role, limit } = querySchema.parse(request.query);
+  resolveAuthenticatedUserId(request, userId);
+  const {
+    role,
+    status: statusFilter,
+    classification,
+    query: searchQuery,
+    year,
+    createdBefore,
+    cursor,
+    limit,
+  } = querySchema.parse(request.query);
 
-  const whereClause =
-    role === 'buyer'
-      ? 'o.buyer_id = $1'
-      : role === 'seller'
-        ? 'o.seller_id = $1'
-        : '(o.buyer_id = $1 OR o.seller_id = $1)';
+  // Build WHERE conditions dynamically
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  let paramIdx = 1;
 
+  // Role filter
+  if (role === 'buyer') {
+    conditions.push(`o.buyer_id = $${paramIdx++}`);
+    params.push(userId);
+  } else if (role === 'seller') {
+    conditions.push(`o.seller_id = $${paramIdx++}`);
+    params.push(userId);
+  } else {
+    conditions.push(`(o.buyer_id = $${paramIdx++} OR o.seller_id = $${paramIdx++})`);
+    params.push(userId);
+    params.push(userId);
+  }
+
+  // Status filter (comma-separated list)
+  if (statusFilter) {
+    const statusList = statusFilter.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+    if (statusList.length > 0) {
+      const placeholders = statusList.map((_s: string, i: number) => `$${paramIdx + i}`).join(', ');
+      paramIdx += statusList.length;
+      conditions.push(`LOWER(o.status) IN (${placeholders})`);
+      for (const s of statusList) {
+        params.push(s);
+      }
+    }
+  }
+
+  // Classification filter
+  if (classification) {
+    const classificationSets: Record<string, string[]> = {
+      needs_action: ['created', 'paid'],
+      active: ['created', 'paid', 'shipped'],
+      completed: ['delivered', 'completed'],
+      cancelled: ['cancelled', 'refunded'],
+    };
+    const set = classificationSets[classification];
+    if (set && set.length > 0) {
+      const placeholders = set.map((_s: string, i: number) => `$${paramIdx + i}`).join(', ');
+      paramIdx += set.length;
+      conditions.push(`LOWER(o.status) IN (${placeholders})`);
+      for (const s of set) {
+        params.push(s);
+      }
+    }
+  }
+
+  // Year filter
+  if (year) {
+    conditions.push(`EXTRACT(YEAR FROM o.created_at) = $${paramIdx++}`);
+    params.push(year);
+  }
+
+  // Search query — match order ID, listing title, buyer/seller username, tracking number
+  if (searchQuery) {
+    const searchPattern = `%${searchQuery}%`;
+    conditions.push(`(
+      o.id ILIKE $${paramIdx}
+      OR l.title ILIKE $${paramIdx}
+      OR bu.username ILIKE $${paramIdx}
+      OR su.username ILIKE $${paramIdx}
+      OR o.tracking_number ILIKE $${paramIdx}
+    )`);
+    paramIdx++;
+    params.push(searchPattern);
+  }
+
+  // Cursor pagination — createdBefore or cursor (ISO timestamp)
+  const cursorDate = cursor ?? createdBefore;
+  if (cursorDate) {
+    conditions.push(`o.created_at < $${paramIdx++}`);
+    params.push(cursorDate);
+  }
+
+  const whereClause = conditions.join(' AND ');
+
+  // Use LEFT JOIN on listings so deleted listings don't break history
   const result = await db.query<{
     id: string;
     buyer_id: string;
     seller_id: string;
     listing_id: string;
     status: string;
+    subtotal_gbp: number | string;
     postage_fee_gbp: number | string;
     total_gbp: number | string;
     tracking_number: string | null;
@@ -26338,8 +28292,10 @@ app.get('/users/:userId/orders', async (request) => {
     shipped_at: string | null;
     delivered_at: string | null;
     created_at: string;
-    listing_title: string;
+    listing_title: string | null;
     listing_image_url: string | null;
+    buyer_username: string | null;
+    seller_username: string | null;
   }>(
     `
       SELECT
@@ -26348,6 +28304,7 @@ app.get('/users/:userId/orders', async (request) => {
         o.seller_id,
         o.listing_id,
         o.status,
+        o.subtotal_gbp,
         o.postage_fee_gbp,
         o.total_gbp,
         o.tracking_number,
@@ -26356,19 +28313,29 @@ app.get('/users/:userId/orders', async (request) => {
         o.delivered_at::text,
         o.created_at,
         l.title AS listing_title,
-        l.image_url AS listing_image_url
+        l.image_url AS listing_image_url,
+        bu.username AS buyer_username,
+        su.username AS seller_username
       FROM orders o
-      INNER JOIN listings l ON l.id = o.listing_id
+      LEFT JOIN listings l ON l.id = o.listing_id
+      LEFT JOIN users bu ON bu.id = o.buyer_id
+      LEFT JOIN users su ON su.id = o.seller_id
       WHERE ${whereClause}
       ORDER BY o.created_at DESC
-      LIMIT $2
+      LIMIT $${paramIdx}
     `,
-    [userId, limit]
+    [...params, limit + 1]
   );
+
+  const hasMore = result.rows.length > limit;
+  const items = hasMore ? result.rows.slice(0, limit) : result.rows;
+  const nextCursor = hasMore && items.length > 0
+    ? items[items.length - 1].created_at
+    : null;
 
   return {
     ok: true,
-    items: result.rows.map((row) => ({
+    items: items.map((row) => ({
       id: row.id,
       buyerId: row.buyer_id,
       sellerId: row.seller_id,
@@ -26376,6 +28343,7 @@ app.get('/users/:userId/orders', async (request) => {
       listingTitle: row.listing_title,
       listingImageUrl: row.listing_image_url,
       status: row.status,
+      subtotalGbp: Number(row.subtotal_gbp),
       postageFeeGbp: Number(row.postage_fee_gbp),
       totalGbp: Number(row.total_gbp),
       trackingNumber: row.tracking_number,
@@ -26383,7 +28351,10 @@ app.get('/users/:userId/orders', async (request) => {
       shippedAt: row.shipped_at,
       deliveredAt: row.delivered_at,
       createdAt: row.created_at,
+      buyerUsername: row.buyer_username,
+      sellerUsername: row.seller_username,
     })),
+    nextCursor,
   };
 });
 
@@ -26582,11 +28553,16 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
   });
   const { orderId } = paramsSchema.parse(request.params);
   const body = bodySchema.parse(request.body);
-  const userId = (request as any).authUser?.userId as string | undefined;
+  const authUser = (request as any).authUser;
 
-  if (!userId) {
+  if (!authUser?.userId) {
     reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  if (authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Refund execution requires operator or admin authority', code: 'REFUND_REQUIRES_OPERATOR' };
   }
 
   const client = await db.connect();
@@ -26606,24 +28582,19 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
     const order = orderResult.rows[0];
     if (!order) {
       reply.code(404);
-      return { ok: false, error: 'Order not found' };
-    }
-
-    if (order.buyer_id !== userId) {
-      reply.code(403);
-      return { ok: false, error: 'Only the buyer can request a refund' };
+      return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
     }
 
     if (order.status !== 'paid' && order.status !== 'shipped') {
       reply.code(409);
-      return { ok: false, error: `Cannot request refund for order in status: ${order.status}` };
+      return { ok: false, error: `Cannot refund order in status: ${order.status}`, code: 'ORDER_ACTION_NOT_ALLOWED' };
     }
 
-    await postCommerceOrderRefundLedgerReversal(client, orderId, userId, Number(order.total_gbp));
-    await client.query(`UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`, [orderId]);
+    await postCommerceOrderRefundLedgerReversal(client, orderId, authUser.userId, Number(order.total_gbp));
+    await client.query(`UPDATE orders SET status = 'refunded', updated_at = NOW() WHERE id = $1`, [orderId]);
 
     await client.query('COMMIT');
-    return { ok: true, orderId, status: 'cancelled', refunded: true, reason: body.reason ?? null };
+    return { ok: true, orderId, status: 'refunded', refunded: true, reason: body.reason ?? null };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -26840,25 +28811,126 @@ app.get('/users/:userId/market-history', async (request, reply) => {
   };
 });
 
-app.get('/auctions', async (request) => {
+app.get('/auctions', async (request, reply) => {
   const querySchema = z.object({
-    status: z.enum(['upcoming', 'live', 'ended']).optional(),
-    sellerId: z.string().min(2).max(128).optional(),
-    limit: z.coerce.number().int().min(1).max(200).default(60),
+    status: z.enum(['live', 'scheduled', 'ended', 'all']).default('all'),
+    query: z.string().min(1).max(200).optional(),
+    category: z.string().min(1).max(80).optional(),
+    sort: z.enum(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh']).default('endingSoon'),
+    watchedOnly: z.coerce.boolean().default(false),
+    seller: z.enum(['me']).optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(60).default(30),
   });
-  const { status, sellerId, limit } = querySchema.parse(request.query);
 
-  const whereConditions: string[] = [];
-  const whereParams: Array<string | number> = [];
+  const { status, query: searchQuery, category, sort, watchedOnly, seller, cursor, limit } = querySchema.parse(request.query);
 
-  if (sellerId) {
-    whereParams.push(sellerId);
-    whereConditions.push(`a.seller_id = $${whereParams.length}`);
+  const viewerUserId = request.authUser?.userId ?? null;
+  const sellerMe = seller === 'me' && viewerUserId;
+
+  if ((watchedOnly || sellerMe) && !viewerUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
   }
 
-  whereParams.push(limit);
-  const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-  const limitPlaceholder = `$${whereParams.length}`;
+  const whereConditions: string[] = ['a.cancelled_at IS NULL'];
+  const whereParams: Array<string | number | boolean> = [];
+  let paramIdx = 0;
+
+  if (sellerMe) {
+    whereParams.push(viewerUserId!);
+    paramIdx++;
+    whereConditions.push(`a.seller_id = $${paramIdx}`);
+  }
+
+  if (watchedOnly && viewerUserId) {
+    whereParams.push(viewerUserId);
+    paramIdx++;
+    whereConditions.push(`EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $${paramIdx})`);
+  }
+
+  if (searchQuery) {
+    paramIdx++;
+    whereParams.push(`%${searchQuery}%`);
+    whereConditions.push(`(COALESCE(l.title, '') ILIKE $${paramIdx} OR COALESCE(l.brand, '') ILIKE $${paramIdx})`);
+  }
+
+  if (category) {
+    paramIdx++;
+    whereParams.push(category);
+    whereConditions.push(`COALESCE(l.category, '') = $${paramIdx}`);
+  }
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  if (status === 'live') {
+    whereConditions.push(`a.starts_at <= NOW() AND a.ends_at > NOW()`);
+  } else if (status === 'scheduled') {
+    whereConditions.push(`a.starts_at > NOW()`);
+  } else if (status === 'ended') {
+    whereConditions.push(`a.ends_at <= NOW()`);
+  }
+
+  let orderBy: string;
+  let cursorColumn: string;
+  switch (sort) {
+    case 'newest':
+      orderBy = 'a.created_at DESC, a.id DESC';
+      cursorColumn = 'created_at';
+      break;
+    case 'mostBids':
+      orderBy = 'a.bid_count DESC, a.id DESC';
+      cursorColumn = 'bid_count';
+      break;
+    case 'priceLow':
+      orderBy = 'a.current_bid_gbp ASC, a.id ASC';
+      cursorColumn = 'current_bid_gbp';
+      break;
+    case 'priceHigh':
+      orderBy = 'a.current_bid_gbp DESC, a.id DESC';
+      cursorColumn = 'current_bid_gbp';
+      break;
+    case 'endingSoon':
+    default:
+      orderBy = 'a.ends_at ASC, a.id ASC';
+      cursorColumn = 'ends_at';
+      break;
+  }
+
+  let cursorCondition = '';
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+      if (decoded.ts && decoded.id) {
+        paramIdx++;
+        const cursorTsParam = paramIdx;
+        paramIdx++;
+        const cursorIdParam = paramIdx;
+        whereParams.push(decoded.ts, decoded.id);
+        const direction = sort === 'priceLow' ? '>' : '<';
+        if (sort === 'mostBids') {
+          cursorCondition = ` AND (a.bid_count ${direction} $${cursorTsParam} OR (a.bid_count = $${cursorTsParam} AND a.id < $${cursorIdParam}))`;
+        } else if (sort === 'priceHigh') {
+          cursorCondition = ` AND (a.current_bid_gbp ${direction} $${cursorTsParam} OR (a.current_bid_gbp = $${cursorTsParam} AND a.id < $${cursorIdParam}))`;
+        } else if (sort === 'priceLow') {
+          cursorCondition = ` AND (a.current_bid_gbp ${direction} $${cursorTsParam} OR (a.current_bid_gbp = $${cursorTsParam} AND a.id > $${cursorIdParam}))`;
+        } else if (sort === 'newest') {
+          cursorCondition = ` AND (a.created_at < $${cursorTsParam} OR (a.created_at = $${cursorTsParam} AND a.id < $${cursorIdParam}))`;
+        } else {
+          cursorCondition = ` AND (a.ends_at > $${cursorTsParam} OR (a.ends_at = $${cursorTsParam} AND a.id > $${cursorIdParam}))`;
+        }
+      }
+    } catch {
+      // Invalid cursor — ignore
+    }
+  }
+
+  paramIdx++;
+  const limitParam = paramIdx;
+  whereParams.push(limit + 1);
+
+  const whereClause = `WHERE ${whereConditions.join(' AND ')}${cursorCondition}`;
 
   const result = await db.query<{
     id: string;
@@ -26869,10 +28941,23 @@ app.get('/auctions', async (request) => {
     starting_bid_gbp: number | string;
     current_bid_gbp: number | string;
     buy_now_price_gbp: number | string | null;
+    min_increment_gbp: number | string;
     bid_count: number;
-    status: 'upcoming' | 'live' | 'ended';
-    title: string;
+    status: string;
+    cancelled_at: string | null;
+    settled_at: string | null;
+    title: string | null;
     image_url: string | null;
+    brand: string | null;
+    category: string | null;
+    condition_label: string | null;
+    seller_username: string | null;
+    seller_avatar: string | null;
+    seller_display_name: string | null;
+    is_watched: boolean | null;
+    viewer_highest_bid: string | null;
+    auction_winner_id: string | null;
+    created_at: string;
   }>(
     `
       SELECT
@@ -26884,60 +28969,193 @@ app.get('/auctions', async (request) => {
         a.starting_bid_gbp,
         a.current_bid_gbp,
         a.buy_now_price_gbp,
+        a.min_increment_gbp,
         a.bid_count,
         a.status,
+        a.cancelled_at,
+        a.settled_at,
+        a.winner_bidder_id AS auction_winner_id,
+        a.created_at,
         l.title,
-        l.image_url
+        l.image_url,
+        l.brand,
+        l.category,
+        l.condition_label,
+        u.username AS seller_username,
+        u.avatar_url AS seller_avatar,
+        u.display_name AS seller_display_name,
+        ${viewerUserId ? `(SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}' LIMIT 1)::boolean` : 'false::boolean'} AS is_watched,
+        ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = '${viewerUserId.replace(/'/g, "''")}')` : 'NULL::text'} AS viewer_highest_bid
       FROM auctions a
-      INNER JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN users u ON u.id = a.seller_id
       ${whereClause}
-      ORDER BY a.starts_at DESC
-      LIMIT ${limitPlaceholder}
+      ORDER BY ${orderBy}
+      LIMIT $${limitParam}
     `,
     whereParams
   );
 
-  const now = Date.now();
-  const items = result.rows
-    .map((row) => {
-      const startsAt = new Date(row.starts_at);
-      const endsAt = new Date(row.ends_at);
-      const computedStatus = resolveAuctionStatus(startsAt, endsAt);
+  const hasMore = result.rows.length > limit;
+  const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
-      return {
-        id: row.id,
-        listingId: row.listing_id,
-        sellerId: row.seller_id,
-        title: row.title,
-        imageUrl: row.image_url,
-        startsAt: row.starts_at,
-        endsAt: row.ends_at,
-        msToStart: startsAt.getTime() - now,
-        msToEnd: endsAt.getTime() - now,
-        startingBidGbp: Number(row.starting_bid_gbp),
-        currentBidGbp: Number(row.current_bid_gbp),
-        buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
-        bidCount: row.bid_count,
-        status: computedStatus,
-      };
-    })
-    .filter((item) => (status ? item.status === status : true));
+  const items = pageRows.map((row) => {
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      winnerBidderId: row.auction_winner_id,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+    });
+    const computedStatus = canonical.lifecycle;
+    const currentBid = Number(row.current_bid_gbp);
+    const minIncrement = Number(row.min_increment_gbp) || 0.01;
+    const minimumNextBid = roundTo(currentBid + minIncrement, 2);
 
-  return { ok: true, items };
+    let viewerState: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller' = 'not_participating';
+    const isWatched = !!row.is_watched;
+    const viewerHighestBid = row.viewer_highest_bid ? Number(row.viewer_highest_bid) : null;
+
+    if (viewerUserId && row.seller_id === viewerUserId) {
+      viewerState = 'seller';
+    } else if (computedStatus === 'ended' || computedStatus === 'cancelled' || computedStatus === 'settled') {
+      if (row.auction_winner_id && row.auction_winner_id === viewerUserId) {
+        viewerState = 'won';
+      } else if (viewerHighestBid !== null) {
+        viewerState = 'lost';
+      } else if (isWatched) {
+        viewerState = 'watching';
+      }
+    } else if (viewerHighestBid !== null) {
+      viewerState = viewerHighestBid >= currentBid ? 'leading' : 'outbid';
+    } else if (isWatched) {
+      viewerState = 'watching';
+    }
+
+    return {
+      id: row.id,
+      listingId: row.listing_id,
+      seller: {
+        id: row.seller_id,
+        username: row.seller_username ?? 'unknown',
+        displayName: row.seller_display_name ?? null,
+        avatarUrl: row.seller_avatar ?? null,
+      },
+      title: row.title ?? 'Untitled',
+      imageUrl: row.image_url ?? null,
+      brand: row.brand ?? null,
+      category: row.category ?? null,
+      conditionLabel: row.condition_label ?? null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      startingBidGbp: Number(row.starting_bid_gbp),
+      currentBidGbp: currentBid,
+      minimumNextBidGbp: minimumNextBid,
+      buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      bidCount: row.bid_count,
+      lifecycle: computedStatus,
+      terminalReason: canonical.terminalReason,
+      viewerState,
+      isWatched,
+      winnerBidderId: row.auction_winner_id,
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      createdAt: row.created_at,
+    };
+  });
+
+  let nextCursor: string | null = null;
+  if (hasMore && pageRows.length > 0) {
+    const last = pageRows[pageRows.length - 1];
+    let cursorTs: string;
+    switch (sort) {
+      case 'newest':
+        cursorTs = last.created_at;
+        break;
+      case 'mostBids':
+        cursorTs = String(last.bid_count);
+        break;
+      case 'priceLow':
+      case 'priceHigh':
+        cursorTs = String(last.current_bid_gbp);
+        break;
+      case 'endingSoon':
+      default:
+        cursorTs = last.ends_at;
+        break;
+    }
+    nextCursor = Buffer.from(JSON.stringify({ ts: cursorTs, id: last.id }), 'utf-8').toString('base64url');
+  }
+
+  return {
+    ok: true,
+    items,
+    nextCursor,
+    serverNow: nowIso,
+  };
 });
 
 app.post('/auctions', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
   const bodySchema = z.object({
-    id: z.string().min(4).max(64).optional(),
     listingId: z.string().min(2),
-    sellerId: z.string().min(2).optional(),
     startsAt: z.string().datetime(),
     endsAt: z.string().datetime(),
     startingBidGbp: z.number().min(0),
     buyNowPriceGbp: z.number().min(0).optional(),
+    minIncrementGbp: z.number().min(0).max(1000).optional(),
+    idempotencyKey: z.string().min(4).max(140).optional(),
   });
 
   const payload = bodySchema.parse(request.body);
+  const sellerId = request.authUser.userId;
+
+  const idempotencyKey = payload.idempotencyKey;
+
+  if (idempotencyKey) {
+    const existing = await db.query<{ id: string }>(
+      `SELECT id FROM auctions WHERE seller_id = $1 AND idempotency_key = $2 LIMIT 1`,
+      [sellerId, idempotencyKey]
+    );
+    if (existing.rows[0]) {
+      const existingAuction = await db.query<{
+        id: string;
+        listing_id: string;
+        seller_id: string;
+        starts_at: string;
+        ends_at: string;
+        starting_bid_gbp: number | string;
+        current_bid_gbp: number | string;
+        buy_now_price_gbp: number | string | null;
+        bid_count: number;
+        status: string;
+      }>(
+        `SELECT id, listing_id, seller_id, starts_at, ends_at, starting_bid_gbp, current_bid_gbp, buy_now_price_gbp, bid_count, status FROM auctions WHERE id = $1 LIMIT 1`,
+        [existing.rows[0].id]
+      );
+      const row = existingAuction.rows[0];
+      return {
+        ok: true,
+        idempotent: true,
+        auction: {
+          id: row.id,
+          listingId: row.listing_id,
+          sellerId: row.seller_id,
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          startingBidGbp: Number(row.starting_bid_gbp),
+          currentBidGbp: Number(row.current_bid_gbp),
+          buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+          bidCount: row.bid_count,
+          status: row.status,
+        },
+      };
+    }
+  }
 
   const listingResult = await db.query<{
     id: string;
@@ -26951,8 +29169,10 @@ app.post('/auctions', async (request, reply) => {
     return { ok: false, error: 'Listing not found' };
   }
 
-  const sellerId = payload.sellerId ?? listing.seller_id;
-  await ensureUserExists(sellerId);
+  if (listing.seller_id !== sellerId && request.authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: you can only create auctions for your own listings' };
+  }
 
   const startsAt = new Date(payload.startsAt);
   const endsAt = new Date(payload.endsAt);
@@ -26962,10 +29182,16 @@ app.post('/auctions', async (request, reply) => {
   }
 
   const status = resolveAuctionStatus(startsAt, endsAt);
-  const auctionId = payload.id ?? `a_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+  const auctionId = `a_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
   const startingBidGbp = roundTo(payload.startingBidGbp, 2);
   const buyNowPriceGbp =
     payload.buyNowPriceGbp === undefined ? null : roundTo(payload.buyNowPriceGbp, 2);
+  const minIncrementGbp = payload.minIncrementGbp !== undefined ? roundTo(payload.minIncrementGbp, 2) : 0.01;
+
+  if (buyNowPriceGbp !== null && buyNowPriceGbp <= startingBidGbp) {
+    reply.code(400);
+    return { ok: false, error: 'Buy now price must be greater than starting bid' };
+  }
 
   const result = await db.query<{
     id: string;
@@ -26989,10 +29215,12 @@ app.post('/auctions', async (request, reply) => {
         starting_bid_gbp,
         current_bid_gbp,
         buy_now_price_gbp,
+        min_increment_gbp,
         bid_count,
-        status
+        status,
+        idempotency_key
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $6, $7, 0, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, 0, $9, $10)
       RETURNING
         id,
         listing_id,
@@ -27013,13 +29241,27 @@ app.post('/auctions', async (request, reply) => {
       endsAt.toISOString(),
       startingBidGbp,
       buyNowPriceGbp,
+      minIncrementGbp,
       status,
+      idempotencyKey ?? null,
     ]
   );
+
+  publishRealtimeEvent({
+    topic: 'auctions.market',
+    type: 'auction.created',
+    payload: {
+      auctionId: result.rows[0].id,
+      listingId: result.rows[0].listing_id,
+      sellerId: result.rows[0].seller_id,
+      status: result.rows[0].status,
+    },
+  });
 
   reply.code(201);
   return {
     ok: true,
+    idempotent: false,
     auction: {
       id: result.rows[0].id,
       listingId: result.rows[0].listing_id,
@@ -27080,20 +29322,51 @@ app.get('/auctions/:auctionId/bids', async (request, reply) => {
 });
 
 app.post('/auctions/:auctionId/bids', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
   const paramsSchema = z.object({ auctionId: z.string().min(2) });
   const bodySchema = z.object({
-    bidderId: z.string().min(2),
     amountGbp: z.number().positive(),
+    idempotencyKey: z.string().min(4).max(140).optional(),
   });
 
   const { auctionId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body);
-  await ensureUserExists(payload.bidderId);
+  const bidderId = request.authUser.userId;
+
+  const idempotencyKey = payload.idempotencyKey;
+  const scopedKey = idempotencyKey ? `bid:${idempotencyKey}` : null;
+  const requestHash = computeRequestHash({ auctionId, bidderId, amountGbp: payload.amountGbp, operation: 'bid' });
 
   const client = await db.connect();
   let amlAlert: { alertId: string; status: string } | null = null;
   try {
     await client.query('BEGIN');
+
+    // Atomic idempotency claim — prevents TOCTOU race
+    if (scopedKey) {
+      const claim = await claimIdempotency(client, {
+        idempotencyKey: scopedKey,
+        operationType: 'bid',
+        auctionId,
+        userId: bidderId,
+        requestHash,
+      });
+      if (!claim.claimed && claim.existing) {
+        if (claim.existing.requestHash !== requestHash) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return { ok: false, error: 'Idempotency key already used with a different payload.', code: 'IDEMPOTENCY_KEY_REUSED' };
+        }
+        // Same hash — replay the original response
+        await client.query('ROLLBACK');
+        reply.code(claim.existing.responseStatus);
+        return claim.existing.responseBody as any;
+      }
+    }
 
     const auctionResult = await client.query<{
       id: string;
@@ -27101,10 +29374,16 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       starts_at: string;
       ends_at: string;
       current_bid_gbp: number | string;
+      min_increment_gbp: number | string;
       bid_count: number;
+      buy_now_price_gbp: number | string | null;
+      cancelled_at: string | null;
+      settled_at: string | null;
+      winner_bidder_id: string | null;
+      winner_bid_id: number | null;
     }>(
       `
-        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, bid_count
+        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at, winner_bidder_id, winner_bid_id
         FROM auctions
         WHERE id = $1
         FOR UPDATE
@@ -27119,31 +29398,69 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       return { ok: false, error: 'Auction not found' };
     }
 
-    if (auction.seller_id === payload.bidderId) {
+    if (auction.seller_id === bidderId) {
       await client.query('ROLLBACK');
-      reply.code(400);
-      return { ok: false, error: 'Seller cannot bid on their own auction' };
+      reply.code(403);
+      return { ok: false, error: 'Seller cannot bid on their own auction', code: 'SELLER_RESTRICTED' };
     }
 
-    const status = resolveAuctionStatus(new Date(auction.starts_at), new Date(auction.ends_at));
-    await client.query('UPDATE auctions SET status = $2, updated_at = NOW() WHERE id = $1', [auctionId, status]);
-
-    if (status !== 'live') {
+    if (auction.cancelled_at) {
       await client.query('ROLLBACK');
       reply.code(409);
-      return { ok: false, error: `Auction is ${status}; bidding is closed` };
+      return { ok: false, error: 'This auction has been cancelled.', code: 'AUCTION_CANCELLED' };
+    }
+
+    if (auction.settled_at) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has been settled.', code: 'AUCTION_SETTLED' };
+    }
+
+    // Winner already set — auction is terminally ended via Buy Now
+    if (auction.winner_bidder_id) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has already been won via Buy Now.', code: 'AUCTION_ALREADY_WON' };
+    }
+
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: auction.cancelled_at,
+      settledAt: auction.settled_at,
+      winnerBidderId: auction.winner_bidder_id,
+      startsAt: auction.starts_at,
+      endsAt: auction.ends_at,
+    });
+
+    if (canonical.lifecycle === 'upcoming') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has not started yet.', code: 'AUCTION_NOT_STARTED' };
+    }
+
+    if (canonical.lifecycle === 'ended') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has ended. Bidding is no longer available.', code: 'AUCTION_ENDED' };
     }
 
     const currentBid = Number(auction.current_bid_gbp);
+    const minIncrement = Number(auction.min_increment_gbp) || 0.01;
     const amountGbp = roundTo(payload.amountGbp, 2);
-    if (amountGbp <= currentBid) {
+    const minimumNextBid = roundTo(currentBid + minIncrement, 2);
+
+    if (amountGbp < minimumNextBid) {
       await client.query('ROLLBACK');
       reply.code(400);
-      return { ok: false, error: `Bid must be greater than current bid (${currentBid.toFixed(2)} GBP)` };
+      return {
+        ok: false,
+        error: `Bid must be at least ${minimumNextBid.toFixed(2)} GBP (current bid ${currentBid.toFixed(2)} GBP + min increment ${minIncrement.toFixed(2)} GBP)`,
+        code: 'BID_BELOW_MINIMUM',
+        minimumNextBidGbp: minimumNextBid,
+      };
     }
 
     const eligibility = await evaluateMarketEligibility(client, {
-      userId: payload.bidderId,
+      userId: bidderId,
       market: 'auctions',
       orderNotionalGbp: amountGbp,
     });
@@ -27153,7 +29470,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
 
       await appendComplianceAuditSafe(request, {
         eventType: 'auction.bid.blocked.eligibility',
-        subjectUserId: payload.bidderId,
+        subjectUserId: bidderId,
         payload: {
           auctionId,
           amountGbp,
@@ -27171,7 +29488,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
     }
 
     const amlAssessment = await evaluateAmlRisk(client, {
-      userId: payload.bidderId,
+      userId: bidderId,
       market: 'auctions',
       amountGbp,
       counterpartyUserId: auction.seller_id,
@@ -27182,7 +29499,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
 
       if (amlAssessment.shouldCreateAlert) {
         amlAlert = await createAmlAlert(db, {
-          userId: payload.bidderId,
+          userId: bidderId,
           relatedUserId: auction.seller_id,
           market: 'auctions',
           eventType: 'bid',
@@ -27192,7 +29509,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
           notes: 'Auction bid blocked by AML pre-trade evaluation',
           context: {
             auctionId,
-            bidderId: payload.bidderId,
+            bidderId,
             sellerId: auction.seller_id,
           },
           assessment: amlAssessment,
@@ -27201,7 +29518,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
 
       await appendComplianceAuditSafe(request, {
         eventType: 'auction.bid.blocked.aml',
-        subjectUserId: payload.bidderId,
+        subjectUserId: bidderId,
         payload: {
           auctionId,
           amountGbp,
@@ -27221,19 +29538,32 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       };
     }
 
+    // Reject bids that meet or exceed the Buy Now price — user must use the dedicated Buy Now flow
+    if (auction.buy_now_price_gbp !== null && amountGbp >= Number(auction.buy_now_price_gbp)) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Your bid meets or exceeds the Buy Now price. Use Buy Now to purchase this item immediately.',
+        code: 'BUY_NOW_REVIEW_REQUIRED',
+        buyNowPriceGbp: Number(auction.buy_now_price_gbp),
+      };
+    }
+
     const bidResult = await client.query<{
       id: number;
       created_at: string;
     }>(
       `
-        INSERT INTO auction_bids (auction_id, bidder_id, amount_gbp)
-        VALUES ($1, $2, $3)
+        INSERT INTO auction_bids (auction_id, bidder_id, amount_gbp, idempotency_key)
+        VALUES ($1, $2, $3, $4)
         RETURNING id, created_at
       `,
-      [auctionId, payload.bidderId, amountGbp]
+      [auctionId, bidderId, amountGbp, scopedKey ?? null]
     );
 
     const nextBidCount = auction.bid_count + 1;
+
     await client.query(
       `
         UPDATE auctions
@@ -27247,7 +29577,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
 
     if (amlAssessment.shouldCreateAlert) {
       amlAlert = await createAmlAlert(client, {
-        userId: payload.bidderId,
+        userId: bidderId,
         relatedUserId: auction.seller_id,
         market: 'auctions',
         eventType: 'bid',
@@ -27257,10 +29587,40 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         notes: 'Auction bid generated elevated AML risk score',
         context: {
           auctionId,
-          bidderId: payload.bidderId,
+          bidderId,
           sellerId: auction.seller_id,
         },
         assessment: amlAssessment,
+      });
+    }
+
+    // Store idempotency response before commit so it persists with the transaction
+    if (scopedKey) {
+      await storeIdempotencyResponse(client, {
+        idempotencyKey: scopedKey,
+        operationType: 'bid',
+        auctionId,
+        userId: bidderId,
+        responseStatus: 201,
+        responseBody: {
+          ok: true,
+          bid: {
+            id: bidResult.rows[0].id,
+            auctionId,
+            bidderId,
+            amountGbp,
+            createdAt: bidResult.rows[0].created_at,
+          },
+          auction: {
+            id: auctionId,
+            currentBidGbp: amountGbp,
+            bidCount: nextBidCount,
+            isBuyNow: false,
+          },
+          aml: amlAlert
+            ? { alertId: amlAlert.alertId, status: amlAlert.status }
+            : null,
+        },
       });
     }
 
@@ -27271,9 +29631,10 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       type: 'auction.bid.created',
       payload: {
         auctionId,
-        bidderId: payload.bidderId,
+        bidderId,
         amountGbp,
         bidCount: nextBidCount,
+        isBuyNow: false,
       },
     });
 
@@ -27284,33 +29645,32 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         auctionId,
         currentBidGbp: amountGbp,
         bidCount: nextBidCount,
+        isBuyNow: false,
       },
     });
 
-    if (auction.seller_id !== payload.bidderId) {
-      try {
-        await queueUserNotification({
-          userId: auction.seller_id,
-          title: 'New auction bid',
-          body: `A new bid was placed on auction ${auctionId}.`,
-          payload: {
-            auctionId,
-            bidderId: payload.bidderId,
-            amountGbp,
-            event: 'auction_bid',
-          },
-          metadata: {
-            source: 'auction_bid_route',
-          },
-        });
-      } catch (error) {
-        request.log.error({ err: error, auctionId }, 'Failed to queue seller bid notification');
-      }
+    try {
+      await queueUserNotification({
+        userId: auction.seller_id,
+        title: 'New auction bid',
+        body: `A new bid of ${amountGbp.toFixed(2)} GBP was placed on auction ${auctionId}.`,
+        payload: {
+          auctionId,
+          bidderId,
+          amountGbp,
+          event: 'auction_bid',
+        },
+        metadata: {
+          source: 'auction_bid_route',
+        },
+      });
+    } catch (error) {
+      request.log.error({ err: error, auctionId }, 'Failed to queue seller bid notification');
     }
 
     await appendComplianceAuditSafe(request, {
       eventType: 'auction.bid.created',
-      subjectUserId: payload.bidderId,
+      subjectUserId: bidderId,
       payload: {
         auctionId,
         amountGbp,
@@ -27325,7 +29685,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       bid: {
         id: bidResult.rows[0].id,
         auctionId,
-        bidderId: payload.bidderId,
+        bidderId,
         amountGbp,
         createdAt: bidResult.rows[0].created_at,
       },
@@ -27333,6 +29693,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         id: auctionId,
         currentBidGbp: amountGbp,
         bidCount: nextBidCount,
+        isBuyNow: false,
       },
       aml: amlAlert
         ? {
@@ -27351,6 +29712,938 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
   } finally {
     client.release();
   }
+});
+
+// ── Dedicated Buy Now endpoint — atomic fixed-price purchase ──
+app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ auctionId: z.string().min(2) });
+  const bodySchema = z.object({
+    idempotencyKey: z.string().min(4).max(140),
+    expectedPriceGbp: z.number().positive(),
+  });
+
+  const { auctionId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+  const buyerId = request.authUser.userId;
+  const idempotencyKey = payload.idempotencyKey;
+  const scopedKey = `buy_now:${idempotencyKey}`;
+  const requestHash = computeRequestHash({ auctionId, buyerId, expectedPriceGbp: payload.expectedPriceGbp, operation: 'buy_now' });
+
+  const client = await db.connect();
+  let amlAlert: { alertId: string; status: string } | null = null;
+  try {
+    await client.query('BEGIN');
+
+    // Atomic idempotency claim — prevents TOCTOU race
+    const claim = await claimIdempotency(client, {
+      idempotencyKey: scopedKey,
+      operationType: 'buy_now',
+      auctionId,
+      userId: buyerId,
+      requestHash,
+    });
+    if (!claim.claimed && claim.existing) {
+      if (claim.existing.requestHash !== requestHash) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return { ok: false, error: 'Idempotency key already used with a different payload.', code: 'IDEMPOTENCY_KEY_REUSED' };
+      }
+      // Same hash — replay the original response
+      await client.query('ROLLBACK');
+      reply.code(claim.existing.responseStatus);
+      return claim.existing.responseBody as any;
+    }
+
+    const auctionResult = await client.query<{
+      id: string;
+      seller_id: string;
+      starts_at: string;
+      ends_at: string;
+      current_bid_gbp: number | string;
+      min_increment_gbp: number | string;
+      bid_count: number;
+      buy_now_price_gbp: number | string | null;
+      cancelled_at: string | null;
+      settled_at: string | null;
+      winner_bidder_id: string | null;
+      winner_bid_id: number | null;
+    }>(
+      `
+        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at, winner_bidder_id, winner_bid_id
+        FROM auctions
+        WHERE id = $1
+        FOR UPDATE
+      `,
+      [auctionId]
+    );
+
+    const auction = auctionResult.rows[0];
+    if (!auction) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Auction not found' };
+    }
+
+    if (auction.seller_id === buyerId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Seller cannot purchase their own auction', code: 'SELLER_RESTRICTED' };
+    }
+
+    if (auction.cancelled_at) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has been cancelled.', code: 'AUCTION_CANCELLED' };
+    }
+
+    if (auction.settled_at) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has been settled.', code: 'AUCTION_SETTLED' };
+    }
+
+    // Winner already set — auction is terminally ended
+    if (auction.winner_bidder_id) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has already been won.', code: 'AUCTION_ALREADY_WON' };
+    }
+
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: auction.cancelled_at,
+      settledAt: auction.settled_at,
+      winnerBidderId: auction.winner_bidder_id,
+      startsAt: auction.starts_at,
+      endsAt: auction.ends_at,
+    });
+
+    if (canonical.lifecycle === 'upcoming') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has not started yet.', code: 'AUCTION_NOT_STARTED' };
+    }
+
+    if (canonical.lifecycle === 'ended') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has ended. Buy Now is no longer available.', code: 'AUCTION_ENDED' };
+    }
+
+    const buyNowPriceGbp = auction.buy_now_price_gbp !== null ? Number(auction.buy_now_price_gbp) : null;
+    if (!buyNowPriceGbp || buyNowPriceGbp <= 0) {
+      await client.query('ROLLBACK');
+      reply.code(400);
+      return { ok: false, error: 'This auction does not have a Buy Now price.', code: 'BUY_NOW_UNAVAILABLE' };
+    }
+
+    // Verify the client's expected price matches the authoritative stored price
+    const expectedPrice = roundTo(payload.expectedPriceGbp, 2);
+    if (expectedPrice !== buyNowPriceGbp) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'The Buy Now price has changed. Please review the updated price.',
+        code: 'BUY_NOW_PRICE_CHANGED',
+        currentBuyNowPriceGbp: buyNowPriceGbp,
+      };
+    }
+
+    // Use the authoritative server price as the transaction amount
+    const transactionAmountGbp = buyNowPriceGbp;
+
+    const eligibility = await evaluateMarketEligibility(client, {
+      userId: buyerId,
+      market: 'auctions',
+      orderNotionalGbp: transactionAmountGbp,
+    });
+
+    if (!eligibility.allowed) {
+      await client.query('ROLLBACK');
+
+      await appendComplianceAuditSafe(request, {
+        eventType: 'auction.buy_now.blocked.eligibility',
+        subjectUserId: buyerId,
+        payload: {
+          auctionId,
+          amountGbp: transactionAmountGbp,
+          code: eligibility.code,
+          message: eligibility.message,
+        },
+      });
+
+      reply.code(403);
+      return {
+        ok: false,
+        error: eligibility.message,
+        code: eligibility.code,
+      };
+    }
+
+    const amlAssessment = await evaluateAmlRisk(client, {
+      userId: buyerId,
+      market: 'auctions',
+      amountGbp: transactionAmountGbp,
+      counterpartyUserId: auction.seller_id,
+    });
+
+    if (amlAssessment.shouldBlock) {
+      await client.query('ROLLBACK');
+
+      if (amlAssessment.shouldCreateAlert) {
+        amlAlert = await createAmlAlert(db, {
+          userId: buyerId,
+          relatedUserId: auction.seller_id,
+          market: 'auctions',
+          eventType: 'buy_now',
+          amountGbp: transactionAmountGbp,
+          referenceId: auctionId,
+          ruleCode: 'AML_PRE_TRADE_BLOCK',
+          notes: 'Auction Buy Now blocked by AML pre-trade evaluation',
+          context: {
+            auctionId,
+            buyerId,
+            sellerId: auction.seller_id,
+          },
+          assessment: amlAssessment,
+        });
+      }
+
+      await appendComplianceAuditSafe(request, {
+        eventType: 'auction.buy_now.blocked.aml',
+        subjectUserId: buyerId,
+        payload: {
+          auctionId,
+          amountGbp: transactionAmountGbp,
+          riskScore: amlAssessment.riskScore,
+          riskLevel: amlAssessment.riskLevel,
+          alertId: amlAlert?.alertId ?? null,
+        },
+      });
+
+      reply.code(403);
+      return {
+        ok: false,
+        error: 'Buy Now blocked by AML controls. Please contact support for manual review.',
+        code: 'AML_BLOCKED',
+        riskLevel: amlAssessment.riskLevel,
+        alertId: amlAlert?.alertId ?? null,
+      };
+    }
+
+    // Insert exactly one transaction/bid record
+    const bidResult = await client.query<{
+      id: number;
+      created_at: string;
+    }>(
+      `
+        INSERT INTO auction_bids (auction_id, bidder_id, amount_gbp, idempotency_key)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, created_at
+      `,
+      [auctionId, buyerId, transactionAmountGbp, scopedKey]
+    );
+
+    const nextBidCount = auction.bid_count + 1;
+
+    // Mark the auction ended and set winner fields atomically
+    await client.query(
+      `
+        UPDATE auctions
+        SET current_bid_gbp = $2,
+            bid_count = $3,
+            winner_bidder_id = $4,
+            winner_bid_id = $5,
+            status = 'ended',
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [auctionId, transactionAmountGbp, nextBidCount, buyerId, bidResult.rows[0].id]
+    );
+
+    if (amlAssessment.shouldCreateAlert) {
+      amlAlert = await createAmlAlert(client, {
+        userId: buyerId,
+        relatedUserId: auction.seller_id,
+        market: 'auctions',
+        eventType: 'buy_now',
+        amountGbp: transactionAmountGbp,
+        referenceId: auctionId,
+        ruleCode: 'AML_POST_BUY_NOW_MONITOR',
+        notes: 'Auction Buy Now generated elevated AML risk score',
+        context: {
+          auctionId,
+          buyerId,
+          sellerId: auction.seller_id,
+        },
+        assessment: amlAssessment,
+      });
+    }
+
+    // Store idempotency response before commit so it persists with the transaction
+    await storeIdempotencyResponse(client, {
+      idempotencyKey: scopedKey,
+      operationType: 'buy_now',
+      auctionId,
+      userId: buyerId,
+      responseStatus: 201,
+      responseBody: {
+        ok: true,
+        isBuyNow: true,
+        bid: {
+          id: bidResult.rows[0].id,
+          auctionId,
+          bidderId: buyerId,
+          amountGbp: transactionAmountGbp,
+          createdAt: bidResult.rows[0].created_at,
+        },
+        auction: {
+          id: auctionId,
+          currentBidGbp: transactionAmountGbp,
+          bidCount: nextBidCount,
+          isBuyNow: true,
+          status: 'ended',
+          winnerBidderId: buyerId,
+        },
+        aml: amlAlert
+          ? { alertId: amlAlert.alertId, status: amlAlert.status }
+          : null,
+      },
+    });
+
+    await client.query('COMMIT');
+
+    publishRealtimeEvent({
+      topic: `auction:${auctionId}`,
+      type: 'auction.buy_now.completed',
+      payload: {
+        auctionId,
+        buyerId,
+        amountGbp: transactionAmountGbp,
+        bidCount: nextBidCount,
+        isBuyNow: true,
+      },
+    });
+
+    publishRealtimeEvent({
+      topic: 'auctions.market',
+      type: 'auction.buy_now.completed',
+      payload: {
+        auctionId,
+        currentBidGbp: transactionAmountGbp,
+        bidCount: nextBidCount,
+        isBuyNow: true,
+      },
+    });
+
+    try {
+      await queueUserNotification({
+        userId: auction.seller_id,
+        title: 'Auction won via Buy Now',
+        body: `Your auction was won via Buy Now for ${transactionAmountGbp.toFixed(2)} GBP.`,
+        payload: {
+          auctionId,
+          buyerId,
+          amountGbp: transactionAmountGbp,
+          event: 'auction_buy_now',
+        },
+        metadata: {
+          source: 'auction_buy_now_route',
+        },
+      });
+    } catch (error) {
+      request.log.error({ err: error, auctionId }, 'Failed to queue seller Buy Now notification');
+    }
+
+    await appendComplianceAuditSafe(request, {
+      eventType: 'auction.buy_now.completed',
+      subjectUserId: buyerId,
+      payload: {
+        auctionId,
+        amountGbp: transactionAmountGbp,
+        bidCount: nextBidCount,
+        amlAlertId: amlAlert?.alertId ?? null,
+      },
+    });
+
+    reply.code(201);
+    return {
+      ok: true,
+      isBuyNow: true,
+      bid: {
+        id: bidResult.rows[0].id,
+        auctionId,
+        bidderId: buyerId,
+        amountGbp: transactionAmountGbp,
+        createdAt: bidResult.rows[0].created_at,
+      },
+      auction: {
+        id: auctionId,
+        currentBidGbp: transactionAmountGbp,
+        bidCount: nextBidCount,
+        isBuyNow: true,
+        status: 'ended',
+        winnerBidderId: buyerId,
+      },
+      aml: amlAlert
+        ? {
+          alertId: amlAlert.alertId,
+          status: amlAlert.status,
+        }
+        : null,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    reply.code(500);
+    return {
+      ok: false,
+      error: `Unable to complete Buy Now: ${(error as Error).message}`,
+    };
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/auctions/:auctionId', async (request, reply) => {
+  const paramsSchema = z.object({ auctionId: z.string().min(2) });
+  const { auctionId } = paramsSchema.parse(request.params);
+
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const result = await db.query<{
+    id: string;
+    listing_id: string;
+    seller_id: string;
+    starts_at: string;
+    ends_at: string;
+    starting_bid_gbp: number | string;
+    current_bid_gbp: number | string;
+    buy_now_price_gbp: number | string | null;
+    min_increment_gbp: number | string;
+    bid_count: number;
+    status: string;
+    winner_bidder_id: string | null;
+    settled_at: string | null;
+    cancelled_at: string | null;
+    created_at: string;
+    title: string | null;
+    image_url: string | null;
+    brand: string | null;
+    category: string | null;
+    condition_label: string | null;
+    description: string | null;
+    price_gbp: number | string | null;
+    seller_username: string | null;
+    seller_avatar: string | null;
+    seller_display_name: string | null;
+    is_watched: boolean | null;
+    viewer_highest_bid: string | null;
+  }>(
+    `
+      SELECT
+        a.id,
+        a.listing_id,
+        a.seller_id,
+        a.starts_at,
+        a.ends_at,
+        a.starting_bid_gbp,
+        a.current_bid_gbp,
+        a.buy_now_price_gbp,
+        a.min_increment_gbp,
+        a.bid_count,
+        a.status,
+        a.winner_bidder_id,
+        a.settled_at,
+        a.cancelled_at,
+        a.created_at,
+        l.title,
+        l.image_url,
+        l.brand,
+        l.category,
+        l.condition_label,
+        l.description,
+        l.price_gbp,
+        u.username AS seller_username,
+        u.avatar_url AS seller_avatar,
+        u.display_name AS seller_display_name,
+        ${viewerUserId ? `(SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}' LIMIT 1)::boolean` : 'false::boolean'} AS is_watched,
+        ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = '${viewerUserId.replace(/'/g, "''")}')` : 'NULL::text'} AS viewer_highest_bid
+      FROM auctions a
+      LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN users u ON u.id = a.seller_id
+      WHERE a.id = $1
+      LIMIT 1
+    `,
+    [auctionId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'Auction not found' };
+  }
+
+  const startsAt = new Date(row.starts_at);
+  const endsAt = new Date(row.ends_at);
+  const canonical = resolveCanonicalLifecycle({
+    cancelledAt: row.cancelled_at,
+    settledAt: row.settled_at,
+    winnerBidderId: row.winner_bidder_id,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+  });
+  const computedStatus = canonical.lifecycle;
+  const currentBid = Number(row.current_bid_gbp);
+  const minIncrement = Number(row.min_increment_gbp) || 0.01;
+  const minimumNextBid = roundTo(currentBid + minIncrement, 2);
+
+  let viewerState: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller' = 'not_participating';
+  const isWatched = !!row.is_watched;
+  const viewerHighestBid = row.viewer_highest_bid ? Number(row.viewer_highest_bid) : null;
+
+  if (viewerUserId && row.seller_id === viewerUserId) {
+    viewerState = 'seller';
+  } else if (computedStatus === 'ended' || computedStatus === 'cancelled' || computedStatus === 'settled') {
+    if (row.winner_bidder_id && row.winner_bidder_id === viewerUserId) {
+      viewerState = 'won';
+    } else if (viewerHighestBid !== null) {
+      viewerState = 'lost';
+    } else if (isWatched) {
+      viewerState = 'watching';
+    }
+  } else if (viewerHighestBid !== null) {
+    viewerState = viewerHighestBid >= currentBid ? 'leading' : 'outbid';
+  } else if (isWatched) {
+    viewerState = 'watching';
+  }
+
+  const bidsResult = await db.query<{
+    id: number;
+    bidder_id: string;
+    amount_gbp: number | string;
+    created_at: string;
+    bidder_username: string | null;
+  }>(
+    `
+      SELECT ab.id, ab.bidder_id, ab.amount_gbp, ab.created_at, u.username AS bidder_username
+      FROM auction_bids ab
+      LEFT JOIN users u ON u.id = ab.bidder_id
+      WHERE ab.auction_id = $1
+      ORDER BY ab.amount_gbp DESC, ab.created_at ASC
+      LIMIT 20
+    `,
+    [auctionId]
+  );
+
+  return {
+    ok: true,
+    auction: {
+      id: row.id,
+      listingId: row.listing_id,
+      seller: {
+        id: row.seller_id,
+        username: row.seller_username ?? 'unknown',
+        displayName: row.seller_display_name ?? null,
+        avatarUrl: row.seller_avatar ?? null,
+      },
+      title: row.title ?? 'Untitled',
+      imageUrl: row.image_url ?? null,
+      brand: row.brand ?? null,
+      category: row.category ?? null,
+      conditionLabel: row.condition_label ?? null,
+      description: row.description ?? null,
+      listingPriceGbp: row.price_gbp !== null ? Number(row.price_gbp) : null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      startingBidGbp: Number(row.starting_bid_gbp),
+      currentBidGbp: currentBid,
+      minimumNextBidGbp: minimumNextBid,
+      buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      bidCount: row.bid_count,
+      lifecycle: computedStatus,
+      terminalReason: canonical.terminalReason,
+      viewerState,
+      isWatched,
+      winnerBidderId: row.winner_bidder_id,
+      settledAt: row.settled_at,
+      cancelledAt: row.cancelled_at,
+      createdAt: row.created_at,
+    },
+    bidActivity: bidsResult.rows.map((b) => ({
+      id: b.id,
+      bidderId: b.bidder_id,
+      bidderUsername: b.bidder_username ?? 'unknown',
+      amountGbp: Number(b.amount_gbp),
+      createdAt: b.created_at,
+      isViewer: viewerUserId === b.bidder_id,
+    })),
+    serverNow: new Date().toISOString(),
+  };
+});
+
+app.get('/auctions/watchlist', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const viewerUserId = request.authUser.userId;
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(60).default(30),
+    cursor: z.string().optional(),
+  });
+  const { limit, cursor } = querySchema.parse(request.query);
+
+  let cursorCondition = '';
+  const params: Array<string | number> = [viewerUserId];
+  let paramIdx = 1;
+
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+      if (decoded.ts && decoded.id) {
+        paramIdx++;
+        const cursorTsParam = paramIdx;
+        paramIdx++;
+        const cursorIdParam = paramIdx;
+        params.push(decoded.ts, decoded.id);
+        cursorCondition = ` AND (aw.created_at < $${cursorTsParam} OR (aw.created_at = $${cursorTsParam} AND aw.id < $${cursorIdParam}))`;
+      }
+    } catch {
+      // Invalid cursor
+    }
+  }
+
+  paramIdx++;
+  const limitParam = paramIdx;
+  params.push(limit + 1);
+
+  const result = await db.query<{
+    id: string;
+    listing_id: string;
+    seller_id: string;
+    starts_at: string;
+    ends_at: string;
+    starting_bid_gbp: number | string;
+    current_bid_gbp: number | string;
+    buy_now_price_gbp: number | string | null;
+    min_increment_gbp: number | string;
+    bid_count: number;
+    status: string;
+    winner_bidder_id: string | null;
+    settled_at: string | null;
+    cancelled_at: string | null;
+    created_at: string;
+    title: string | null;
+    image_url: string | null;
+    brand: string | null;
+    category: string | null;
+    seller_username: string | null;
+    seller_display_name: string | null;
+    seller_avatar: string | null;
+    watched_at: string;
+    aw_id: number;
+  }>(
+    `
+      SELECT
+        a.id,
+        a.listing_id,
+        a.seller_id,
+        a.starts_at,
+        a.ends_at,
+        a.starting_bid_gbp,
+        a.current_bid_gbp,
+        a.buy_now_price_gbp,
+        a.min_increment_gbp,
+        a.bid_count,
+        a.status,
+        a.winner_bidder_id,
+        a.settled_at,
+        a.cancelled_at,
+        a.created_at,
+        l.title,
+        l.image_url,
+        l.brand,
+        l.category,
+        u.username AS seller_username,
+        u.display_name AS seller_display_name,
+        u.avatar_url AS seller_avatar,
+        aw.created_at AS watched_at,
+        aw.id AS aw_id
+      FROM auction_watchlist aw
+      INNER JOIN auctions a ON a.id = aw.auction_id
+      LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN users u ON u.id = a.seller_id
+      WHERE aw.user_id = $1 AND a.cancelled_at IS NULL${cursorCondition}
+      ORDER BY aw.created_at DESC, aw.id DESC
+      LIMIT $${limitParam}
+    `,
+    params
+  );
+
+  const hasMore = result.rows.length > limit;
+  const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
+
+  const items = pageRows.map((row) => {
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      winnerBidderId: row.winner_bidder_id,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+    });
+    const computedStatus = canonical.lifecycle;
+    const currentBid = Number(row.current_bid_gbp);
+    const minIncrement = Number(row.min_increment_gbp) || 0.01;
+
+    let viewerState: 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller' = 'watching';
+    const viewerHighestBid = row.winner_bidder_id === viewerUserId ? currentBid : null;
+
+    if (viewerUserId && row.seller_id === viewerUserId) {
+      viewerState = 'seller';
+    } else if (computedStatus === 'ended' || computedStatus === 'settled') {
+      if (row.winner_bidder_id === viewerUserId) {
+        viewerState = 'won';
+      } else if (viewerHighestBid !== null) {
+        viewerState = 'lost';
+      }
+    }
+
+    return {
+      id: row.id,
+      listingId: row.listing_id,
+      seller: {
+        id: row.seller_id,
+        username: row.seller_username ?? 'unknown',
+        displayName: row.seller_display_name ?? null,
+        avatarUrl: row.seller_avatar ?? null,
+      },
+      title: row.title ?? 'Untitled',
+      imageUrl: row.image_url ?? null,
+      brand: row.brand ?? null,
+      category: row.category ?? null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      startingBidGbp: Number(row.starting_bid_gbp),
+      currentBidGbp: currentBid,
+      minimumNextBidGbp: roundTo(currentBid + minIncrement, 2),
+      buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      bidCount: row.bid_count,
+      lifecycle: computedStatus,
+      terminalReason: canonical.terminalReason,
+      viewerState,
+      isWatched: true,
+      winnerBidderId: row.winner_bidder_id,
+      watchedAt: row.watched_at,
+      createdAt: row.created_at,
+    };
+  });
+
+  let nextCursor: string | null = null;
+  if (hasMore && pageRows.length > 0) {
+    const last = pageRows[pageRows.length - 1];
+    nextCursor = Buffer.from(JSON.stringify({ ts: last.watched_at, id: String(last.aw_id) }), 'utf-8').toString('base64url');
+  }
+
+  return { ok: true, items, nextCursor };
+});
+
+app.post('/auctions/:auctionId/watch', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ auctionId: z.string().min(2) });
+  const { auctionId } = paramsSchema.parse(request.params);
+  const userId = request.authUser.userId;
+
+  const auctionExists = await db.query('SELECT id FROM auctions WHERE id = $1 AND cancelled_at IS NULL LIMIT 1', [auctionId]);
+  if (!auctionExists.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Auction not found' };
+  }
+
+  try {
+    await db.query(
+      `INSERT INTO auction_watchlist (user_id, auction_id) VALUES ($1, $2) ON CONFLICT (user_id, auction_id) DO NOTHING`,
+      [userId, auctionId]
+    );
+  } catch {
+    // Auction may have been deleted — safe ignore
+  }
+
+  return { ok: true, isWatched: true };
+});
+
+app.delete('/auctions/:auctionId/watch', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ auctionId: z.string().min(2) });
+  const { auctionId } = paramsSchema.parse(request.params);
+  const userId = request.authUser.userId;
+
+  await db.query(
+    `DELETE FROM auction_watchlist WHERE user_id = $1 AND auction_id = $2`,
+    [userId, auctionId]
+  );
+
+  return { ok: true, isWatched: false };
+});
+
+app.get('/users/me/auction-bids', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bidderId = request.authUser.userId;
+  const querySchema = z.object({
+    status: z.enum(['active', 'won', 'lost', 'all']).default('all'),
+    limit: z.coerce.number().int().min(1).max(60).default(30),
+    cursor: z.string().optional(),
+  });
+  const { status, limit, cursor } = querySchema.parse(request.query);
+
+  let cursorCondition = '';
+  const params: Array<string | number> = [bidderId];
+  let paramIdx = 1;
+
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+      if (decoded.ts && decoded.id) {
+        paramIdx++;
+        const cursorTsParam = paramIdx;
+        paramIdx++;
+        const cursorIdParam = paramIdx;
+        params.push(decoded.ts, decoded.id);
+        cursorCondition = ` AND (ab.created_at < $${cursorTsParam} OR (ab.created_at = $${cursorTsParam} AND ab.id < $${cursorIdParam}))`;
+      }
+    } catch {
+      // Invalid cursor
+    }
+  }
+
+  paramIdx++;
+  const limitParam = paramIdx;
+  params.push(limit + 1);
+
+  const result = await db.query<{
+    id: number;
+    auction_id: string;
+    amount_gbp: number | string;
+    created_at: string;
+    starts_at: string;
+    ends_at: string;
+    current_bid_gbp: number | string;
+    bid_count: number;
+    winner_bidder_id: string | null;
+    settled_at: string | null;
+    cancelled_at: string | null;
+    title: string | null;
+    image_url: string | null;
+    seller_id: string;
+    seller_username: string | null;
+  }>(
+    `
+      SELECT
+        ab.id,
+        ab.auction_id,
+        ab.amount_gbp,
+        ab.created_at,
+        a.starts_at,
+        a.ends_at,
+        a.current_bid_gbp,
+        a.bid_count,
+        a.winner_bidder_id,
+        a.settled_at,
+        a.cancelled_at,
+        l.title,
+        l.image_url,
+        a.seller_id,
+        u.username AS seller_username
+      FROM auction_bids ab
+      INNER JOIN auctions a ON a.id = ab.auction_id
+      LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN users u ON u.id = a.seller_id
+      WHERE ab.bidder_id = $1${cursorCondition}
+      ORDER BY ab.created_at DESC, ab.id DESC
+      LIMIT $${limitParam}
+    `,
+    params
+  );
+
+  const hasMore = result.rows.length > limit;
+  const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
+
+  const items = pageRows.map((row) => {
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      winnerBidderId: row.winner_bidder_id,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+    });
+    const computedStatus = canonical.lifecycle;
+    const currentBid = Number(row.current_bid_gbp);
+    const myBid = Number(row.amount_gbp);
+
+    let bidState: 'active' | 'leading' | 'outbid' | 'won' | 'lost' = 'active';
+    if (computedStatus === 'ended' || computedStatus === 'settled' || computedStatus === 'cancelled') {
+      if (row.winner_bidder_id === bidderId) {
+        bidState = 'won';
+      } else {
+        bidState = 'lost';
+      }
+    } else if (myBid >= currentBid) {
+      bidState = 'leading';
+    } else {
+      bidState = 'outbid';
+    }
+
+    return {
+      id: row.id,
+      auctionId: row.auction_id,
+      amountGbp: myBid,
+      createdAt: row.created_at,
+      bidState,
+      auction: {
+        id: row.auction_id,
+        title: row.title ?? 'Untitled',
+        imageUrl: row.image_url ?? null,
+        currentBidGbp: currentBid,
+        bidCount: row.bid_count,
+        lifecycle: computedStatus,
+        terminalReason: canonical.terminalReason,
+        winnerBidderId: row.winner_bidder_id,
+        sellerId: row.seller_id,
+        sellerUsername: row.seller_username ?? 'unknown',
+        endsAt: row.ends_at,
+      },
+    };
+  });
+
+  const filtered = status === 'all' ? items : items.filter((item) => {
+    if (status === 'active') return item.bidState === 'leading' || item.bidState === 'outbid';
+    return item.bidState === status;
+  });
+
+  let nextCursor: string | null = null;
+  if (hasMore && pageRows.length > 0) {
+    const last = pageRows[pageRows.length - 1];
+    nextCursor = Buffer.from(JSON.stringify({ ts: last.created_at, id: String(last.id) }), 'utf-8').toString('base64url');
+  }
+
+  return { ok: true, items: filtered, nextCursor };
 });
 
 app.get('/co-own/assets', async (request) => {
@@ -29471,6 +32764,7 @@ app.post('/support/tickets', async (request, reply) => {
     topicId: z.string().min(1).max(64),
     topicLabel: z.string().min(1).max(120),
     details: z.string().min(1).max(2000),
+    evidenceMediaUrls: z.array(z.string().url()).max(5).optional(),
   });
 
   const payload = bodySchema.parse(request.body);
@@ -29478,7 +32772,7 @@ app.post('/support/tickets', async (request, reply) => {
 
   if (!userId) {
     reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
   }
 
   const orderResult = await db.query<{ id: string }>(
@@ -29488,18 +32782,54 @@ app.post('/support/tickets', async (request, reply) => {
 
   if (!orderResult.rowCount) {
     reply.code(403);
-    return { ok: false, error: 'Order not found or not accessible' };
+    return { ok: false, error: 'Order not found or not accessible', code: 'ORDER_ACCESS_DENIED' };
+  }
+
+  const existingOpen = await db.query<{ id: string }>(
+    `SELECT id FROM support_tickets WHERE user_id = $1 AND order_id = $2 AND status = 'open' LIMIT 1`,
+    [userId, payload.orderId]
+  );
+
+  if (existingOpen.rowCount) {
+    reply.code(409);
+    return { ok: false, error: 'You already have an open request for this order. Please close it before creating a new one.', code: 'RESOLUTION_ALREADY_OPEN' };
   }
 
   const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const evidenceUrls = payload.evidenceMediaUrls ?? [];
 
   await db.query(
     `
-      INSERT INTO support_tickets (id, user_id, order_id, topic_id, topic_label, details, status, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, 'open', NOW(), NOW())
+      INSERT INTO support_tickets (id, user_id, order_id, topic_id, topic_label, details, status, evidence_media_urls, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, NOW(), NOW())
     `,
-    [ticketId, userId, payload.orderId, payload.topicId, payload.topicLabel, payload.details]
+    [ticketId, userId, payload.orderId, payload.topicId, payload.topicLabel, payload.details, evidenceUrls]
   );
+
+  const orderParties = await db.query<{ buyer_id: string; seller_id: string }>(
+    'SELECT buyer_id, seller_id FROM orders WHERE id = $1 LIMIT 1',
+    [payload.orderId]
+  );
+  if (orderParties.rows[0]) {
+    const otherPartyId = orderParties.rows[0].buyer_id === userId
+      ? orderParties.rows[0].seller_id
+      : orderParties.rows[0].buyer_id;
+    try {
+      await queueUserNotification({
+        userId: otherPartyId,
+        title: 'Support request opened',
+        body: `A support request was opened for order: ${payload.topicLabel}`,
+        eventType: 'resolution_opened',
+        actorUserId: userId,
+        payload: { ticketId, orderId: payload.orderId, topicLabel: payload.topicLabel },
+        route: { screen: 'SupportTicketDetail', params: { ticketId } },
+        idempotencyKey: `resolution_opened_${ticketId}`,
+        metadata: { source: 'support_ticket' },
+      });
+    } catch (notifErr) {
+      app.log.error({ err: notifErr, ticketId }, 'Failed to queue resolution_opened notification');
+    }
+  }
 
   reply.code(201);
   return {
@@ -29511,6 +32841,7 @@ app.post('/support/tickets', async (request, reply) => {
       topicLabel: payload.topicLabel,
       details: payload.details,
       status: 'open',
+      evidenceMediaUrls: evidenceUrls,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -29530,11 +32861,12 @@ app.get('/support/tickets', async (request) => {
     topic_label: string;
     details: string;
     status: string;
+    evidence_media_urls: string[] | null;
     created_at: string;
     updated_at: string;
   }>(
     `
-      SELECT id, order_id, topic_id, topic_label, details, status, created_at, updated_at
+      SELECT id, order_id, topic_id, topic_label, details, status, evidence_media_urls, created_at, updated_at
       FROM support_tickets
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -29551,6 +32883,7 @@ app.get('/support/tickets', async (request) => {
       topicLabel: row.topic_label,
       details: row.details,
       status: row.status,
+      evidenceMediaUrls: row.evidence_media_urls ?? [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     })),
@@ -29572,11 +32905,12 @@ app.get('/support/tickets/order/:orderId', async (request) => {
     topic_label: string;
     details: string;
     status: string;
+    evidence_media_urls: string[] | null;
     created_at: string;
     updated_at: string;
   }>(
     `
-      SELECT id, order_id, topic_id, topic_label, details, status, created_at, updated_at
+      SELECT id, order_id, topic_id, topic_label, details, status, evidence_media_urls, created_at, updated_at
       FROM support_tickets
       WHERE user_id = $1 AND order_id = $2
       ORDER BY created_at DESC
@@ -29593,6 +32927,7 @@ app.get('/support/tickets/order/:orderId', async (request) => {
       topicLabel: row.topic_label,
       details: row.details,
       status: row.status,
+      evidenceMediaUrls: row.evidence_media_urls ?? [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     })),
@@ -29629,7 +32964,174 @@ app.patch('/support/tickets/:ticketId/status', async (request, reply) => {
     return { ok: false, error: 'Ticket not found' };
   }
 
+  const ticketInfo = await db.query<{ user_id: string; order_id: string }>(
+    'SELECT user_id, order_id FROM support_tickets WHERE id = $1 LIMIT 1',
+    [ticketId]
+  );
+  if (ticketInfo.rows[0] && ticketInfo.rows[0].user_id !== userId) {
+    try {
+      await queueUserNotification({
+        userId: ticketInfo.rows[0].user_id,
+        title: 'Support request updated',
+        body: `Your support request status changed to: ${body.status}`,
+        eventType: 'resolution_status_changed',
+        actorUserId: userId,
+        payload: { ticketId, orderId: ticketInfo.rows[0].order_id, status: body.status },
+        route: { screen: 'SupportTicketDetail', params: { ticketId } },
+        idempotencyKey: `resolution_status_${ticketId}_${body.status}`,
+        metadata: { source: 'support_ticket' },
+      });
+    } catch (notifErr) {
+      app.log.error({ err: notifErr, ticketId }, 'Failed to queue resolution_status_changed notification');
+    }
+  }
+
   return { ok: true, ticketId, status: body.status };
+});
+
+// ── Order reviews ────────────────────────────────────────────────────
+
+app.get('/orders/:orderId/review', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const orderResult = await db.query<{ buyer_id: string; seller_id: string }>(
+    'SELECT buyer_id, seller_id FROM orders WHERE id = $1 LIMIT 1',
+    [orderId]
+  );
+
+  if (!orderResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
+  }
+
+  const order = orderResult.rows[0];
+  if (order.buyer_id !== userId && order.seller_id !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Order not accessible', code: 'ORDER_ACCESS_DENIED' };
+  }
+
+  const reviewResult = await db.query<{
+    id: string;
+    rating: number;
+    comment: string | null;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `SELECT id, rating, comment, created_at, updated_at FROM order_reviews WHERE order_id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  if (!reviewResult.rowCount) {
+    return { ok: true, review: null };
+  }
+
+  const row = reviewResult.rows[0];
+  return {
+    ok: true,
+    review: {
+      id: row.id,
+      orderId,
+      rating: row.rating,
+      comment: row.comment,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    },
+  };
+});
+
+app.post('/orders/:orderId/review', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    rating: z.number().int().min(1).max(5),
+    comment: z.string().min(1).max(2000).optional(),
+  });
+
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const orderResult = await db.query<{ buyer_id: string; seller_id: string; status: string }>(
+    'SELECT buyer_id, seller_id, status FROM orders WHERE id = $1 LIMIT 1',
+    [orderId]
+  );
+
+  if (!orderResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
+  }
+
+  const order = orderResult.rows[0];
+
+  if (order.buyer_id !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the buyer can review this order', code: 'ORDER_ACCESS_DENIED' };
+  }
+
+  if (order.status !== 'delivered' && order.status !== 'completed') {
+    reply.code(409);
+    return { ok: false, error: 'Reviews are only allowed after delivery', code: 'ORDER_ACTION_NOT_ALLOWED' };
+  }
+
+  const existingReview = await db.query<{ id: string }>(
+    'SELECT id FROM order_reviews WHERE order_id = $1 LIMIT 1',
+    [orderId]
+  );
+
+  if (existingReview.rowCount) {
+    reply.code(409);
+    return { ok: false, error: 'A review already exists for this order', code: 'REVIEW_ALREADY_EXISTS' };
+  }
+
+  const reviewId = `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  await db.query(
+    `INSERT INTO order_reviews (id, order_id, reviewer_id, seller_id, rating, comment, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+    [reviewId, orderId, userId, order.seller_id, body.rating, body.comment ?? null]
+  );
+
+  try {
+    await queueUserNotification({
+      userId: order.seller_id,
+      title: 'New review received',
+      body: body.comment
+        ? `You received a ${body.rating}-star review: "${body.comment.slice(0, 80)}"`
+        : `You received a ${body.rating}-star review`,
+      eventType: 'review_received',
+      actorUserId: userId,
+      payload: { reviewId, orderId, rating: body.rating },
+      route: { screen: 'OrderDetail', params: { orderId } },
+      idempotencyKey: `review_received_${orderId}`,
+      metadata: { source: 'order_review' },
+    });
+  } catch (notifErr) {
+    app.log.error({ err: notifErr, reviewId }, 'Failed to queue review_received notification');
+  }
+
+  reply.code(201);
+  return {
+    ok: true,
+    review: {
+      id: reviewId,
+      orderId,
+      rating: body.rating,
+      comment: body.comment ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  };
 });
 
 // ── Collections ──────────────────────────────────────────────────────
@@ -29935,6 +33437,1568 @@ app.delete('/collections/:collectionId', async (request, reply) => {
   await db.query('DELETE FROM collections WHERE id = $1 AND user_id = $2', [collectionId, userId]);
 
   return { ok: true, collectionId };
+});
+
+// ── Poster Stories Access Helpers ───────────────────────────────────
+
+type PosterStoryAccessRow = {
+  id: string;
+  creator_id: string;
+  audience: 'public' | 'private';
+  status: 'active' | 'archived' | 'deleted';
+  expires_at: string;
+};
+
+function canViewerAccessPosterStory(
+  story: PosterStoryAccessRow,
+  viewerUserId: string | null,
+  options?: { includeExpiredForOwner?: boolean }
+): boolean {
+  if (story.status === 'deleted') return false;
+
+  if (viewerUserId && story.creator_id === viewerUserId) {
+    if (options?.includeExpiredForOwner) return true;
+    return true;
+  }
+
+  if (story.status !== 'active') return false;
+  if (story.audience !== 'public') return false;
+
+  const now = Date.now();
+  const expiresAtMs = new Date(story.expires_at).getTime();
+  if (expiresAtMs <= now) return false;
+
+  return true;
+}
+
+async function getAccessiblePosterStory(
+  storyId: string,
+  viewerUserId: string | null,
+  options?: { includeExpiredForOwner?: boolean }
+): Promise<PosterStoryAccessRow | null> {
+  const result = await db.query<PosterStoryAccessRow>(
+    `SELECT id, creator_id, audience, status, expires_at FROM poster_stories WHERE id = $1 LIMIT 1`,
+    [storyId]
+  );
+  if (!result.rowCount) return null;
+  const story = result.rows[0];
+  if (!canViewerAccessPosterStory(story, viewerUserId, options)) return null;
+  return story;
+}
+
+async function getAccessiblePosterFrame(
+  frameId: string,
+  viewerUserId: string | null
+): Promise<{ frame: Record<string, unknown>; story: PosterStoryAccessRow } | null> {
+  const frameResult = await db.query<{
+    id: string;
+    story_id: string | null;
+    creator_id: string;
+    media_url: string;
+    caption: string;
+    poster_caption: string;
+    media_type: string;
+    sort_order: number;
+    duration_ms: number;
+    background_color: string | null;
+    text_overlay: string | null;
+  }>(
+    `SELECT id, story_id, creator_id, media_url, caption, poster_caption, media_type, sort_order, duration_ms, background_color, text_overlay
+     FROM posters WHERE id = $1 LIMIT 1`,
+    [frameId]
+  );
+  if (!frameResult.rowCount) return null;
+  const frame = frameResult.rows[0];
+  if (!frame.story_id) return null;
+
+  const story = await getAccessiblePosterStory(frame.story_id, viewerUserId);
+  if (!story) return null;
+
+  return { frame: frame as unknown as Record<string, unknown>, story };
+}
+
+async function enrichPosterFrames(
+  storyId: string,
+  viewerUserId: string | null
+): Promise<Array<Record<string, unknown>>> {
+  const framesResult = await db.query<{
+    id: string;
+    media_url: string;
+    caption: string;
+    poster_caption: string;
+    media_type: string;
+    sort_order: number;
+    duration_ms: number;
+    background_color: string | null;
+    text_overlay: string | null;
+  }>(
+    `SELECT id, media_url, caption, poster_caption, media_type, sort_order, duration_ms, background_color, text_overlay
+     FROM posters WHERE story_id = $1 ORDER BY sort_order ASC`,
+    [storyId]
+  );
+
+  const frameIds = framesResult.rows.map((r) => r.id);
+
+  const stickersResult = frameIds.length
+    ? await db.query<{
+        id: string;
+        frame_id: string;
+        type: string;
+        x: string;
+        y: string;
+        scale: string;
+        rotation: string;
+        payload: string;
+        sort_order: number;
+      }>(
+        `SELECT id, frame_id, type, x, y, scale, rotation, payload, sort_order
+         FROM poster_stickers WHERE frame_id = ANY($1) ORDER BY sort_order ASC`,
+        [frameIds]
+      )
+    : { rows: [] };
+
+  const stickersByFrame = new Map<string, Array<Record<string, unknown>>>();
+  for (const s of stickersResult.rows) {
+    const arr = stickersByFrame.get(s.frame_id) ?? [];
+    arr.push({
+      id: s.id,
+      type: s.type,
+      x: Number(s.x),
+      y: Number(s.y),
+      scale: Number(s.scale),
+      rotation: Number(s.rotation),
+      payload: typeof s.payload === 'string' ? JSON.parse(s.payload) : s.payload,
+      sortOrder: s.sort_order,
+    });
+    stickersByFrame.set(s.frame_id, arr);
+  }
+
+  const viewsResult = frameIds.length
+    ? await db.query<{ frame_id: string; count: string }>(
+        `SELECT frame_id, COUNT(*)::text AS count FROM poster_views WHERE frame_id = ANY($1) GROUP BY frame_id`,
+        [frameIds]
+      )
+    : { rows: [] };
+  const viewCountMap = new Map<string, number>();
+  for (const v of viewsResult.rows) {
+    viewCountMap.set(v.frame_id, Number(v.count));
+  }
+
+  const reactionsResult = frameIds.length
+    ? await db.query<{ frame_id: string; reaction: string; count: string }>(
+        `SELECT frame_id, reaction, COUNT(*)::text AS count FROM poster_reactions WHERE frame_id = ANY($1) GROUP BY frame_id, reaction`,
+        [frameIds]
+      )
+    : { rows: [] };
+  const reactionCountMap = new Map<string, Record<string, number>>();
+  for (const r of reactionsResult.rows) {
+    const m = reactionCountMap.get(r.frame_id) ?? {};
+    m[r.reaction] = Number(r.count);
+    reactionCountMap.set(r.frame_id, m);
+  }
+
+  const viewerReactionMap = new Map<string, string | null>();
+  if (viewerUserId && frameIds.length) {
+    const viewerReactions = await db.query<{ frame_id: string; reaction: string }>(
+      `SELECT frame_id, reaction FROM poster_reactions WHERE frame_id = ANY($1) AND user_id = $2`,
+      [frameIds, viewerUserId]
+    );
+    for (const r of viewerReactions.rows) {
+      viewerReactionMap.set(r.frame_id, r.reaction);
+    }
+  }
+
+  const viewerViewedSet = new Set<string>();
+  if (viewerUserId && frameIds.length) {
+    const viewerViews = await db.query<{ frame_id: string }>(
+      `SELECT frame_id FROM poster_views WHERE frame_id = ANY($1) AND viewer_id = $2`,
+      [frameIds, viewerUserId]
+    );
+    for (const v of viewerViews.rows) {
+      viewerViewedSet.add(v.frame_id);
+    }
+  }
+
+  return framesResult.rows.map((row) => ({
+    id: row.id,
+    mediaUrl: row.media_url,
+    caption: row.poster_caption || row.caption,
+    mediaType: row.media_type,
+    sortOrder: row.sort_order,
+    durationMs: row.duration_ms,
+    backgroundColor: row.background_color,
+    textOverlay: row.text_overlay
+      ? (typeof row.text_overlay === 'string' ? JSON.parse(row.text_overlay) : row.text_overlay)
+      : null,
+    stickers: stickersByFrame.get(row.id) ?? [],
+    viewCount: viewCountMap.get(row.id) ?? 0,
+    reactions: reactionCountMap.get(row.id) ?? {},
+    viewerReaction: viewerReactionMap.get(row.id) ?? null,
+    seenByViewer: viewerViewedSet.has(row.id),
+  }));
+}
+
+async function enrichPosterStory(
+  storyRow: PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+  viewerUserId: string | null
+): Promise<Record<string, unknown>> {
+  const frames = await enrichPosterFrames(storyRow.id, viewerUserId);
+  const viewedFrameCount = frames.filter((f) => f.seenByViewer).length;
+  const isCreator = viewerUserId === storyRow.creator_id;
+
+  let uniqueViewerCount: number | undefined;
+  if (isCreator) {
+    const totalViews = await db.query<{ count: string }>(
+      `SELECT COUNT(DISTINCT viewer_id)::text AS count FROM poster_views pv
+       JOIN posters p ON p.id = pv.frame_id
+       WHERE p.story_id = $1`,
+      [storyRow.id]
+    );
+    uniqueViewerCount = Number(totalViews.rows[0]?.count ?? 0);
+  }
+
+  return {
+    id: storyRow.id,
+    creatorId: storyRow.creator_id,
+    creator: {
+      id: storyRow.creator_id,
+      username: storyRow.creator_username,
+      avatar: storyRow.creator_avatar,
+    },
+    audience: storyRow.audience,
+    allowReplies: storyRow.allow_replies,
+    allowReactions: storyRow.allow_reactions,
+    status: storyRow.status,
+    expiresAt: storyRow.expires_at,
+    createdAt: storyRow.created_at,
+    frames,
+    seenByViewer: viewedFrameCount > 0,
+    viewedFrameCount,
+    totalFrameCount: frames.length,
+    uniqueViewerCount,
+  };
+}
+
+// ── Poster Stories API ──────────────────────────────────────────────
+
+// POST /poster-stories — create story with frames and stickers in one transaction
+app.post('/poster-stories', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+
+  const stickerPayloadSchema = z.object({
+    text: z.string().max(500).optional(),
+    textStyle: z.enum(['editorial', 'minimal', 'label', 'outline']).optional(),
+    textColor: z.string().max(30).optional(),
+    backgroundColor: z.string().max(30).optional(),
+    alignment: z.enum(['left', 'center', 'right']).optional(),
+    userId: z.string().min(2).max(120).optional(),
+    username: z.string().max(120).optional(),
+    listingId: z.string().min(2).max(120).optional(),
+    snapshotTitle: z.string().max(200).optional(),
+    snapshotImageUrl: z.string().url().optional(),
+    snapshotPriceGbp: z.number().optional(),
+    lookId: z.string().min(2).max(120).optional(),
+    snapshotCaption: z.string().max(500).optional(),
+    question: z.string().max(200).optional(),
+    options: z.array(z.object({ id: z.string().min(1).max(60), label: z.string().min(1).max(80) })).length(2).optional(),
+  });
+
+  const stickerSchema = z.object({
+    id: z.string().min(2).max(120),
+    type: z.enum(['text', 'mention', 'listing', 'look', 'style_vote']),
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    scale: z.number().min(0.4).max(3).default(1),
+    rotation: z.number().default(0),
+    payload: stickerPayloadSchema,
+    sortOrder: z.number().int().default(0),
+  });
+
+  const frameSchema = z.object({
+    id: z.string().min(2).max(120),
+    mediaType: z.enum(['image', 'video', 'text']),
+    mediaUrl: z.string().url().optional(),
+    backgroundColor: z.string().max(30).optional(),
+    caption: z.string().max(500).default(''),
+    durationMs: z.number().int().min(1000).max(30000).default(5000),
+    sortOrder: z.number().int().default(0),
+    stickers: z.array(stickerSchema).default([]),
+  });
+
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120),
+    audience: z.enum(['public', 'private']).default('public'),
+    allowReplies: z.boolean().default(true),
+    allowReactions: z.boolean().default(true),
+    expiresInHours: z.number().int().min(1).max(168).default(24),
+    frames: z.array(frameSchema).min(1).max(10),
+  });
+
+  const payload = bodySchema.parse(request.body);
+
+  // Validate frame IDs unique
+  const frameIds = payload.frames.map((f) => f.id);
+  if (new Set(frameIds).size !== frameIds.length) {
+    reply.code(409);
+    return { ok: false, error: 'Duplicate frame IDs' };
+  }
+
+  // Validate media requirements
+  for (const frame of payload.frames) {
+    if ((frame.mediaType === 'image' || frame.mediaType === 'video') && !frame.mediaUrl) {
+      reply.code(400);
+      return { ok: false, error: `Frame ${frame.id}: ${frame.mediaType} requires mediaUrl` };
+    }
+    // Validate sticker payloads per type
+    for (const sticker of frame.stickers) {
+      if (sticker.type === 'text' && !sticker.payload.text) {
+        reply.code(400);
+        return { ok: false, error: `Text sticker requires text payload` };
+      }
+      if (sticker.type === 'mention' && (!sticker.payload.userId || !sticker.payload.username)) {
+        reply.code(400);
+        return { ok: false, error: `Mention sticker requires userId and username` };
+      }
+      if (sticker.type === 'listing' && !sticker.payload.listingId) {
+        reply.code(400);
+        return { ok: false, error: `Listing sticker requires listingId` };
+      }
+      if (sticker.type === 'look' && (!sticker.payload.lookId || !sticker.payload.snapshotImageUrl)) {
+        reply.code(400);
+        return { ok: false, error: `Look sticker requires lookId and snapshotImageUrl` };
+      }
+      if (sticker.type === 'style_vote' && (!sticker.payload.question || !sticker.payload.options)) {
+        reply.code(400);
+        return { ok: false, error: `Style vote sticker requires question and two options` };
+      }
+    }
+  }
+
+  // Check for duplicate story ID
+  const existing = await db.query(`SELECT id FROM poster_stories WHERE id = $1`, [payload.id]);
+  if (existing.rowCount) {
+    reply.code(409);
+    return { ok: false, error: 'Story ID already exists' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const expiresAt = new Date(Date.now() + payload.expiresInHours * 60 * 60 * 1000);
+
+    await client.query(
+      `INSERT INTO poster_stories (id, creator_id, audience, allow_replies, allow_reactions, status, expires_at)
+       VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
+      [payload.id, actorUserId, payload.audience, payload.allowReplies, payload.allowReactions, expiresAt]
+    );
+
+    for (const frame of payload.frames) {
+      await client.query(
+        `INSERT INTO posters (id, creator_id, media_url, caption, poster_caption, background_color, layout, status, expiry_hours, story_id, media_type, sort_order, duration_ms)
+         VALUES ($1, $2, $3, $4, $4, $5, 'single', 'published', $6, $7, $8, $9, $10)`,
+        [
+          frame.id,
+          actorUserId,
+          frame.mediaUrl ?? '',
+          frame.caption,
+          frame.backgroundColor ?? null,
+          payload.expiresInHours,
+          payload.id,
+          frame.mediaType,
+          frame.sortOrder,
+          frame.durationMs,
+        ]
+      );
+
+      for (const sticker of frame.stickers) {
+        await client.query(
+          `INSERT INTO poster_stickers (id, frame_id, type, x, y, scale, rotation, payload, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            sticker.id,
+            frame.id,
+            sticker.type,
+            sticker.x,
+            sticker.y,
+            sticker.scale,
+            sticker.rotation,
+            JSON.stringify(sticker.payload),
+            sticker.sortOrder,
+          ]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    client.release();
+    throw error;
+  }
+  client.release();
+
+  reply.code(201);
+  return { ok: true, storyId: payload.id };
+});
+
+// GET /poster-stories — active story feed
+app.get('/poster-stories', async (request) => {
+  const querySchema = z.object({
+    creatorId: z.string().optional(),
+    active: z.coerce.boolean().default(true),
+    limit: z.coerce.number().int().min(1).max(120).default(40),
+  });
+  const params = querySchema.parse(request.query ?? {});
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const conditions: string[] = [`ps.status = 'active'`];
+  const args: unknown[] = [];
+
+  if (params.creatorId) {
+    conditions.push(`ps.creator_id = $${args.length + 1}`);
+    args.push(params.creatorId);
+  }
+
+  // Non-creator viewers only see public, non-expired
+  if (!params.creatorId || params.creatorId !== viewerUserId) {
+    conditions.push(`ps.audience = 'public'`);
+    conditions.push(`ps.expires_at > NOW()`);
+  }
+
+  const result = await db.query<{
+    id: string;
+    creator_id: string;
+    audience: string;
+    allow_replies: boolean;
+    allow_reactions: boolean;
+    status: string;
+    expires_at: string;
+    created_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
+  }>(
+    `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       u.username AS creator_username, u.avatar AS creator_avatar
+     FROM poster_stories ps
+     LEFT JOIN users u ON u.id = ps.creator_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY ps.created_at DESC
+     LIMIT $${args.length + 1}`,
+    [...args, params.limit]
+  );
+
+  const stories: Array<Record<string, unknown>> = [];
+  for (const row of result.rows) {
+    const storyRow: PosterStoryAccessRow = {
+      id: row.id,
+      creator_id: row.creator_id,
+      audience: row.audience as 'public' | 'private',
+      status: row.status as 'active' | 'archived' | 'deleted',
+      expires_at: row.expires_at,
+    };
+    if (!canViewerAccessPosterStory(storyRow, viewerUserId)) continue;
+    const enriched = await enrichPosterStory(
+      { ...row, allow_replies: row.allow_replies, allow_reactions: row.allow_reactions } as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+      viewerUserId
+    );
+    stories.push(enriched);
+  }
+
+  // Sort: unseen first, then newest
+  stories.sort((a, b) => {
+    const aSeen = a.seenByViewer as boolean;
+    const bSeen = b.seenByViewer as boolean;
+    if (aSeen !== bSeen) return aSeen ? 1 : -1;
+    return new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime();
+  });
+
+  return { items: stories };
+});
+
+// GET /poster-stories/:storyId — story detail
+app.get('/poster-stories/:storyId', async (request, reply) => {
+  const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
+  const { storyId } = paramsSchema.parse(request.params);
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const story = await getAccessiblePosterStory(storyId, viewerUserId);
+  if (!story) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+
+  const row = await db.query<{
+    id: string;
+    creator_id: string;
+    audience: string;
+    allow_replies: boolean;
+    allow_reactions: boolean;
+    status: string;
+    expires_at: string;
+    created_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
+  }>(
+    `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       u.username AS creator_username, u.avatar AS creator_avatar
+     FROM poster_stories ps
+     LEFT JOIN users u ON u.id = ps.creator_id
+     WHERE ps.id = $1 LIMIT 1`,
+    [storyId]
+  );
+
+  if (!row.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+
+  const enriched = await enrichPosterStory(
+    row.rows[0] as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+    viewerUserId
+  );
+  return enriched;
+});
+
+// POST /poster-frames/:frameId/view — record view
+app.post('/poster-frames/:frameId/view', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
+  const { frameId } = paramsSchema.parse(request.params);
+
+  const accessible = await getAccessiblePosterFrame(frameId, actorUserId);
+  if (!accessible) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+
+  // Don't count creator self-view
+  if (accessible.story.creator_id === actorUserId) {
+    return { ok: true };
+  }
+
+  await db.query(
+    `INSERT INTO poster_views (frame_id, viewer_id, viewed_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (frame_id, viewer_id) DO UPDATE SET viewed_at = NOW()`,
+    [frameId, actorUserId]
+  );
+
+  const countResult = await db.query<{ count: string }>(
+    `SELECT COUNT(DISTINCT viewer_id)::text AS count FROM poster_views WHERE frame_id = $1`,
+    [frameId]
+  );
+
+  const isCreator = accessible.story.creator_id === actorUserId;
+  return {
+    ok: true,
+    uniqueViewerCount: isCreator ? Number(countResult.rows[0]?.count ?? 0) : undefined,
+  };
+});
+
+// POST /poster-frames/:frameId/reaction — react
+app.post('/poster-frames/:frameId/reaction', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
+  const { frameId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({
+    reaction: z.enum(['love', 'fire', 'style', 'want', 'wow', 'laugh']),
+  });
+  const { reaction } = bodySchema.parse(request.body);
+
+  const accessible = await getAccessiblePosterFrame(frameId, actorUserId);
+  if (!accessible) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+
+  // Check story allows reactions
+  if (!accessible.story.audience) {
+    reply.code(400);
+    return { ok: false, error: 'Reactions not available' };
+  }
+
+  const storyRow = await db.query<{ allow_reactions: boolean }>(
+    `SELECT allow_reactions FROM poster_stories WHERE id = $1 LIMIT 1`,
+    [accessible.story.id]
+  );
+  if (!storyRow.rows[0]?.allow_reactions) {
+    reply.code(400);
+    return { ok: false, error: 'Reactions are disabled for this story' };
+  }
+
+  // Creator reacting to own story
+  if (accessible.story.creator_id === actorUserId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot react to your own story' };
+  }
+
+  await db.query(
+    `INSERT INTO poster_reactions (frame_id, user_id, reaction)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (frame_id, user_id) DO UPDATE SET reaction = EXCLUDED.reaction, updated_at = NOW()`,
+    [frameId, actorUserId, reaction]
+  );
+
+  const countsResult = await db.query<{ reaction: string; count: string }>(
+    `SELECT reaction, COUNT(*)::text AS count FROM poster_reactions WHERE frame_id = $1 GROUP BY reaction`,
+    [frameId]
+  );
+  const reactionCounts: Record<string, number> = {};
+  for (const r of countsResult.rows) {
+    reactionCounts[r.reaction] = Number(r.count);
+  }
+
+  return { ok: true, reactionCounts, viewerReaction: reaction };
+});
+
+// DELETE /poster-frames/:frameId/reaction — remove reaction
+app.delete('/poster-frames/:frameId/reaction', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
+  const { frameId } = paramsSchema.parse(request.params);
+
+  const accessible = await getAccessiblePosterFrame(frameId, actorUserId);
+  if (!accessible) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+
+  await db.query(
+    `DELETE FROM poster_reactions WHERE frame_id = $1 AND user_id = $2`,
+    [frameId, actorUserId]
+  );
+
+  return { ok: true };
+});
+
+// POST /poster-frames/:frameId/replies — private reply
+app.post('/poster-frames/:frameId/replies', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
+  const { frameId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120),
+    body: z.string().trim().min(1).max(1000),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  const accessible = await getAccessiblePosterFrame(frameId, actorUserId);
+  if (!accessible) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+
+  const storyRow = await db.query<{ allow_replies: boolean; creator_id: string }>(
+    `SELECT allow_replies, creator_id FROM poster_stories WHERE id = $1 LIMIT 1`,
+    [accessible.story.id]
+  );
+  if (!storyRow.rows[0]?.allow_replies) {
+    reply.code(400);
+    return { ok: false, error: 'Replies are disabled for this story' };
+  }
+
+  const creatorId = storyRow.rows[0].creator_id;
+  if (creatorId === actorUserId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot reply to your own story' };
+  }
+
+  await db.query(
+    `INSERT INTO poster_replies (id, frame_id, story_id, author_id, creator_id, body)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [payload.id, frameId, accessible.story.id, actorUserId, creatorId, payload.body]
+  );
+
+  reply.code(201);
+  return { ok: true, replyId: payload.id };
+});
+
+// GET /poster-stories/:storyId/replies — creator sees all replies
+app.get('/poster-stories/:storyId/replies', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
+  const { storyId } = paramsSchema.parse(request.params);
+
+  const story = await getAccessiblePosterStory(storyId, actorUserId, { includeExpiredForOwner: true });
+  if (!story) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+
+  if (story.creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const result = await db.query<{
+    id: string;
+    frame_id: string;
+    author_id: string;
+    body: string;
+    created_at: string;
+    author_username: string | null;
+    author_avatar: string | null;
+  }>(
+    `SELECT pr.id, pr.frame_id, pr.author_id, pr.body, pr.created_at,
+       u.username AS author_username, u.avatar AS author_avatar
+     FROM poster_replies pr
+     LEFT JOIN users u ON u.id = pr.author_id
+     WHERE pr.story_id = $1
+     ORDER BY pr.created_at DESC`,
+    [storyId]
+  );
+
+  return {
+    items: result.rows.map((r) => ({
+      id: r.id,
+      frameId: r.frame_id,
+      authorId: r.author_id,
+      authorUsername: r.author_username,
+      authorAvatar: r.author_avatar,
+      body: r.body,
+      createdAt: r.created_at,
+    })),
+  };
+});
+
+// POST /poster-stickers/:stickerId/vote — style vote
+app.post('/poster-stickers/:stickerId/vote', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ stickerId: z.string().min(2).max(120) });
+  const { stickerId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({ optionId: z.string().min(1).max(60) });
+  const { optionId } = bodySchema.parse(request.body);
+
+  const stickerResult = await db.query<{
+    id: string;
+    frame_id: string;
+    type: string;
+    payload: string;
+  }>(
+    `SELECT id, frame_id, type, payload FROM poster_stickers WHERE id = $1 LIMIT 1`,
+    [stickerId]
+  );
+  if (!stickerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Sticker not found' };
+  }
+  const sticker = stickerResult.rows[0];
+  if (sticker.type !== 'style_vote') {
+    reply.code(400);
+    return { ok: false, error: 'Sticker is not a style vote' };
+  }
+
+  const accessible = await getAccessiblePosterFrame(sticker.frame_id, actorUserId);
+  if (!accessible) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+
+  const payload = typeof sticker.payload === 'string' ? JSON.parse(sticker.payload) : sticker.payload;
+  const options = payload?.options as Array<{ id: string; label: string }> | undefined;
+  if (!options || !options.some((o) => o.id === optionId)) {
+    reply.code(400);
+    return { ok: false, error: 'Invalid option' };
+  }
+
+  await db.query(
+    `INSERT INTO poster_style_votes (sticker_id, user_id, option_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (sticker_id, user_id) DO UPDATE SET option_id = EXCLUDED.option_id`,
+    [stickerId, actorUserId, optionId]
+  );
+
+  const votesResult = await db.query<{ option_id: string; count: string }>(
+    `SELECT option_id, COUNT(*)::text AS count FROM poster_style_votes WHERE sticker_id = $1 GROUP BY option_id`,
+    [stickerId]
+  );
+  const voteCounts = new Map<string, number>();
+  let totalVotes = 0;
+  for (const v of votesResult.rows) {
+    voteCounts.set(v.option_id, Number(v.count));
+    totalVotes += Number(v.count);
+  }
+
+  const optionResults = (options ?? []).map((o) => ({
+    id: o.id,
+    label: o.label,
+    voteCount: voteCounts.get(o.id) ?? 0,
+    percentage: totalVotes > 0 ? Math.round(((voteCounts.get(o.id) ?? 0) / totalVotes) * 100) : 0,
+  }));
+
+  return {
+    selectedOptionId: optionId,
+    options: optionResults,
+    totalVotes,
+  };
+});
+
+// GET /poster-stories/:storyId/activity — creator activity
+app.get('/poster-stories/:storyId/activity', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
+  const { storyId } = paramsSchema.parse(request.params);
+
+  const story = await getAccessiblePosterStory(storyId, actorUserId, { includeExpiredForOwner: true });
+  if (!story) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+
+  if (story.creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const viewersResult = await db.query<{
+    viewer_id: string;
+    username: string | null;
+    avatar: string | null;
+    frame_count: string;
+    latest_viewed: string;
+  }>(
+    `SELECT pv.viewer_id, u.username, u.avatar,
+       COUNT(DISTINCT pv.frame_id)::text AS frame_count,
+       MAX(pv.viewed_at)::text AS latest_viewed
+     FROM poster_views pv
+     JOIN posters p ON p.id = pv.frame_id
+     LEFT JOIN users u ON u.id = pv.viewer_id
+     WHERE p.story_id = $1
+     GROUP BY pv.viewer_id, u.username, u.avatar
+     ORDER BY latest_viewed DESC`,
+    [storyId]
+  );
+
+  const reactionsResult = await db.query<{
+    user_id: string;
+    username: string | null;
+    avatar: string | null;
+    frame_id: string;
+    reaction: string;
+    created_at: string;
+  }>(
+    `SELECT pr.user_id, u.username, u.avatar, pr.frame_id, pr.reaction, pr.created_at
+     FROM poster_reactions pr
+     JOIN posters p ON p.id = pr.frame_id
+     LEFT JOIN users u ON u.id = pr.user_id
+     WHERE p.story_id = $1
+     ORDER BY pr.created_at DESC`,
+    [storyId]
+  );
+
+  const repliesResult = await db.query<{
+    id: string;
+    author_id: string;
+    author_username: string | null;
+    author_avatar: string | null;
+    frame_id: string;
+    body: string;
+    created_at: string;
+  }>(
+    `SELECT pr.id, pr.author_id, u.username AS author_username, u.avatar AS author_avatar,
+       pr.frame_id, pr.body, pr.created_at
+     FROM poster_replies pr
+     LEFT JOIN users u ON u.id = pr.author_id
+     WHERE pr.story_id = $1
+     ORDER BY pr.created_at DESC`,
+    [storyId]
+  );
+
+  const styleVotesResult = await db.query<{
+    sticker_id: string;
+    user_id: string;
+    username: string | null;
+    option_id: string;
+    created_at: string;
+  }>(
+    `SELECT psv.sticker_id, psv.user_id, u.username, psv.option_id, psv.created_at
+     FROM poster_style_votes psv
+     JOIN poster_stickers ps ON ps.id = psv.sticker_id
+     JOIN posters p ON p.id = ps.frame_id
+     LEFT JOIN users u ON u.id = psv.user_id
+     WHERE p.story_id = $1
+     ORDER BY psv.created_at DESC`,
+    [storyId]
+  );
+
+  return {
+    storyId,
+    viewers: viewersResult.rows.map((r) => ({
+      userId: r.viewer_id,
+      username: r.username,
+      avatar: r.avatar,
+      viewedFrameCount: Number(r.frame_count),
+      latestViewedAt: r.latest_viewed,
+    })),
+    reactions: reactionsResult.rows.map((r) => ({
+      userId: r.user_id,
+      username: r.username,
+      avatar: r.avatar,
+      frameId: r.frame_id,
+      reaction: r.reaction,
+      createdAt: r.created_at,
+    })),
+    replies: repliesResult.rows.map((r) => ({
+      id: r.id,
+      authorId: r.author_id,
+      authorUsername: r.author_username,
+      authorAvatar: r.author_avatar,
+      frameId: r.frame_id,
+      body: r.body,
+      createdAt: r.created_at,
+    })),
+    styleVotes: styleVotesResult.rows.map((r) => ({
+      stickerId: r.sticker_id,
+      userId: r.user_id,
+      username: r.username,
+      optionId: r.option_id,
+      createdAt: r.created_at,
+    })),
+  };
+});
+
+// GET /poster-stories/archive — owner archive
+app.get('/poster-stories/archive', async (request) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const querySchema = z.object({
+    includeActive: z.coerce.boolean().default(false),
+  });
+  const { includeActive } = querySchema.parse(request.query ?? {});
+
+  const conditions = [`ps.creator_id = $1`];
+  if (!includeActive) {
+    conditions.push(`(ps.status = 'archived' OR ps.expires_at <= NOW())`);
+  }
+
+  const result = await db.query<{
+    id: string;
+    creator_id: string;
+    audience: string;
+    allow_replies: boolean;
+    allow_reactions: boolean;
+    status: string;
+    expires_at: string;
+    created_at: string;
+    creator_username: string | null;
+    creator_avatar: string | null;
+  }>(
+    `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       u.username AS creator_username, u.avatar AS creator_avatar
+     FROM poster_stories ps
+     LEFT JOIN users u ON u.id = ps.creator_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY ps.created_at DESC`,
+    [actorUserId]
+  );
+
+  const stories: Array<Record<string, unknown>> = [];
+  for (const row of result.rows) {
+    const enriched = await enrichPosterStory(
+      row as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+      actorUserId
+    );
+    stories.push(enriched);
+  }
+
+  return { items: stories };
+});
+
+// POST /poster-stories/:storyId/archive — manual archive
+app.post('/poster-stories/:storyId/archive', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
+  const { storyId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_stories WHERE id = $1 LIMIT 1`,
+    [storyId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(
+    `UPDATE poster_stories SET status = 'archived', archived_at = NOW() WHERE id = $1`,
+    [storyId]
+  );
+
+  return { ok: true };
+});
+
+// DELETE /poster-stories/:storyId — delete story
+app.delete('/poster-stories/:storyId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
+  const { storyId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_stories WHERE id = $1 LIMIT 1`,
+    [storyId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Story not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(`DELETE FROM poster_stories WHERE id = $1`, [storyId]);
+  return { ok: true };
+});
+
+// DELETE /poster-frames/:frameId — delete single frame
+app.delete('/poster-frames/:frameId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
+  const { frameId } = paramsSchema.parse(request.params);
+
+  const frameResult = await db.query<{ creator_id: string; story_id: string | null }>(
+    `SELECT creator_id, story_id FROM posters WHERE id = $1 LIMIT 1`,
+    [frameId]
+  );
+  if (!frameResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Frame not found' };
+  }
+  const frame = frameResult.rows[0];
+  if (frame.creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const storyId = frame.story_id;
+  await db.query(`DELETE FROM posters WHERE id = $1`, [frameId]);
+
+  // Check if any frames remain
+  if (storyId) {
+    const remaining = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM posters WHERE story_id = $1`,
+      [storyId]
+    );
+    if (Number(remaining.rows[0]?.count ?? 0) === 0) {
+      await db.query(`DELETE FROM poster_stories WHERE id = $1`, [storyId]);
+    } else {
+      // Reorder remaining frames
+      const remainingFrames = await db.query<{ id: string }>(
+        `SELECT id FROM posters WHERE story_id = $1 ORDER BY sort_order ASC`,
+        [storyId]
+      );
+      for (let i = 0; i < remainingFrames.rows.length; i++) {
+        await db.query(`UPDATE posters SET sort_order = $1 WHERE id = $2`, [i, remainingFrames.rows[i].id]);
+      }
+    }
+  }
+
+  return { ok: true };
+});
+
+// ── Poster Highlights API ───────────────────────────────────────────
+
+// GET /users/:userId/poster-highlights — public
+app.get('/users/:userId/poster-highlights', async (request) => {
+  const paramsSchema = z.object({ userId: z.string().min(2).max(120) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    id: string;
+    title: string;
+    cover_frame_id: string | null;
+    sort_order: number;
+    created_at: string;
+  }>(
+    `SELECT id, title, cover_frame_id, sort_order, created_at
+     FROM poster_highlights WHERE creator_id = $1
+     ORDER BY sort_order ASC`,
+    [userId]
+  );
+
+  const highlights: Array<Record<string, unknown>> = [];
+  for (const h of result.rows) {
+    const itemsResult = await db.query<{
+      frame_id: string;
+      sort_order: number;
+      media_url: string;
+      media_type: string;
+      poster_caption: string;
+      caption: string;
+      background_color: string | null;
+    }>(
+      `SELECT phi.frame_id, phi.sort_order, p.media_url, p.media_type, p.poster_caption, p.caption, p.background_color
+       FROM poster_highlight_items phi
+       JOIN posters p ON p.id = phi.frame_id
+       WHERE phi.highlight_id = $1
+       ORDER BY phi.sort_order ASC`,
+      [h.id]
+    );
+
+    let coverUrl: string | null = null;
+    if (h.cover_frame_id) {
+      const coverResult = await db.query<{ media_url: string }>(
+        `SELECT media_url FROM posters WHERE id = $1 LIMIT 1`,
+        [h.cover_frame_id]
+      );
+      coverUrl = coverResult.rows[0]?.media_url ?? null;
+    }
+
+    highlights.push({
+      id: h.id,
+      title: h.title,
+      coverFrameId: h.cover_frame_id,
+      coverUrl,
+      sortOrder: h.sort_order,
+      createdAt: h.created_at,
+      frames: itemsResult.rows.map((r) => ({
+        frameId: r.frame_id,
+        sortOrder: r.sort_order,
+        mediaUrl: r.media_url,
+        mediaType: r.media_type,
+        caption: r.poster_caption || r.caption,
+        backgroundColor: r.background_color,
+      })),
+    });
+  }
+
+  return { items: highlights };
+});
+
+// POST /poster-highlights — create highlight
+app.post('/poster-highlights', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120),
+    title: z.string().trim().min(1).max(40),
+    coverFrameId: z.string().min(2).max(120).optional(),
+    frameIds: z.array(z.string().min(2).max(120)).min(1),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  // Verify all frames belong to the creator
+  for (const fid of payload.frameIds) {
+    const ownerResult = await db.query<{ creator_id: string }>(
+      `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
+      [fid]
+    );
+    if (!ownerResult.rowCount || ownerResult.rows[0].creator_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: `Frame ${fid} not owned by creator` };
+    }
+  }
+
+  if (payload.coverFrameId) {
+    const coverOwner = await db.query<{ creator_id: string }>(
+      `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
+      [payload.coverFrameId]
+    );
+    if (!coverOwner.rowCount || coverOwner.rows[0].creator_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Cover frame not owned by creator' };
+    }
+  }
+
+  await db.query(
+    `INSERT INTO poster_highlights (id, creator_id, title, cover_frame_id, sort_order)
+     VALUES ($1, $2, $3, $4, 0)`,
+    [payload.id, actorUserId, payload.title, payload.coverFrameId ?? null]
+  );
+
+  for (let i = 0; i < payload.frameIds.length; i++) {
+    await db.query(
+      `INSERT INTO poster_highlight_items (highlight_id, frame_id, sort_order)
+       VALUES ($1, $2, $3)`,
+      [payload.id, payload.frameIds[i], i]
+    );
+  }
+
+  reply.code(201);
+  return { ok: true, highlightId: payload.id };
+});
+
+// PATCH /poster-highlights/:highlightId — update
+app.patch('/poster-highlights/:highlightId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ highlightId: z.string().min(2).max(120) });
+  const { highlightId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({
+    title: z.string().trim().min(1).max(40).optional(),
+    coverFrameId: z.string().min(2).max(120).optional(),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_highlights WHERE id = $1 LIMIT 1`,
+    [highlightId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Highlight not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const updates: string[] = [];
+  const values: unknown[] = [];
+  let idx = 1;
+  if (payload.title !== undefined) {
+    updates.push(`title = $${idx++}`);
+    values.push(payload.title);
+  }
+  if (payload.coverFrameId !== undefined) {
+    updates.push(`cover_frame_id = $${idx++}`);
+    values.push(payload.coverFrameId);
+  }
+  if (updates.length) {
+    values.push(highlightId);
+    await db.query(`UPDATE poster_highlights SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+  }
+
+  return { ok: true };
+});
+
+// DELETE /poster-highlights/:highlightId — delete
+app.delete('/poster-highlights/:highlightId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ highlightId: z.string().min(2).max(120) });
+  const { highlightId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_highlights WHERE id = $1 LIMIT 1`,
+    [highlightId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Highlight not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(`DELETE FROM poster_highlights WHERE id = $1`, [highlightId]);
+  return { ok: true };
+});
+
+// POST /poster-highlights/:highlightId/frames — add frame
+app.post('/poster-highlights/:highlightId/frames', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ highlightId: z.string().min(2).max(120) });
+  const { highlightId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({
+    frameId: z.string().min(2).max(120),
+  });
+  const { frameId } = bodySchema.parse(request.body);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_highlights WHERE id = $1 LIMIT 1`,
+    [highlightId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Highlight not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const frameOwner = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
+    [frameId]
+  );
+  if (!frameOwner.rowCount || frameOwner.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Frame not owned by creator' };
+  }
+
+  const maxOrder = await db.query<{ max_order: number | null }>(
+    `SELECT MAX(sort_order) AS max_order FROM poster_highlight_items WHERE highlight_id = $1`,
+    [highlightId]
+  );
+  const nextOrder = (maxOrder.rows[0]?.max_order ?? -1) + 1;
+
+  await db.query(
+    `INSERT INTO poster_highlight_items (highlight_id, frame_id, sort_order)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (highlight_id, frame_id) DO NOTHING`,
+    [highlightId, frameId, nextOrder]
+  );
+
+  return { ok: true };
+});
+
+// DELETE /poster-highlights/:highlightId/frames/:frameId — remove frame
+app.delete('/poster-highlights/:highlightId/frames/:frameId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({
+    highlightId: z.string().min(2).max(120),
+    frameId: z.string().min(2).max(120),
+  });
+  const { highlightId, frameId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM poster_highlights WHERE id = $1 LIMIT 1`,
+    [highlightId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Highlight not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(
+    `DELETE FROM poster_highlight_items WHERE highlight_id = $1 AND frame_id = $2`,
+    [highlightId, frameId]
+  );
+
+  return { ok: true };
+});
+
+// ── Creator document routes (server-side draft persistence) ───────────────────
+
+const creatorDocumentBodySchema = z.object({
+  id: z.string().min(2).max(120),
+  type: z.enum(['look', 'poster']),
+  version: z.number().int().min(1).max(10),
+  canvas: z.object({
+    aspectRatio: z.number().min(0.3).max(3),
+    background: z.object({
+      type: z.enum(['color', 'gradient', 'image']),
+      value: z.string().max(500),
+    }),
+  }),
+  pages: z.array(
+    z.object({
+      id: z.string().min(1).max(120),
+      layers: z.array(z.record(z.unknown())),
+      durationMs: z.number().int().min(500).max(60000).optional(),
+    })
+  ).min(1).max(10),
+  metadata: z.object({
+    title: z.string().max(120).default(''),
+    caption: z.string().max(500).default(''),
+    visibility: z.enum(['public', 'private']).default('public'),
+    allowReplies: z.boolean().default(true),
+    allowReactions: z.boolean().default(true),
+    expiresInHours: z.number().int().min(1).max(168).optional(),
+    accessibilityDescription: z.string().max(300).optional(),
+    allowRemix: z.boolean().default(false),
+    sourceDocumentId: z.string().max(120).optional(),
+    sourceCreatorId: z.string().max(120).optional(),
+  }),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+// POST /creator/documents — create or replace a draft document
+app.post('/creator/documents', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const payload = creatorDocumentBodySchema.parse(request.body);
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Check if document already exists and belongs to this user
+    const existing = await client.query<{ creator_id: string }>(
+      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
+      [payload.id]
+    );
+
+    if (existing.rowCount && existing.rows[0].creator_id !== actorUserId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Document belongs to another user' };
+    }
+
+    // Idempotent upsert
+    await client.query(
+      `INSERT INTO creator_documents (id, creator_id, type, version, document_json, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (id) DO UPDATE
+       SET type = EXCLUDED.type,
+           version = EXCLUDED.version,
+           document_json = EXCLUDED.document_json,
+           updated_at = NOW()
+       WHERE creator_documents.creator_id = $2`,
+      [payload.id, actorUserId, payload.type, payload.version, JSON.stringify(payload)]
+    );
+
+    await client.query('COMMIT');
+    return { ok: true, documentId: payload.id };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    app.log.error({ err: error }, 'Failed to save creator document');
+    reply.code(500);
+    return { ok: false, error: 'Failed to save document' };
+  } finally {
+    client.release();
+  }
+});
+
+// GET /creator/documents — list current user's draft documents
+app.get('/creator/documents', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+
+  const result = await db.query<{
+    id: string;
+    type: string;
+    document_json: string;
+    updated_at: string;
+  }>(
+    `SELECT id, type, document_json, updated_at
+     FROM creator_documents
+     WHERE creator_id = $1
+     ORDER BY updated_at DESC
+     LIMIT 100`,
+    [actorUserId]
+  );
+
+  const documents = result.rows.map((row) => ({
+    ...JSON.parse(row.document_json),
+    serverUpdatedAt: row.updated_at,
+  }));
+
+  return { ok: true, documents };
+});
+
+// GET /creator/documents/:documentId — get a single draft document
+app.get('/creator/documents/:documentId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ documentId: z.string().min(2).max(120) });
+  const { documentId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    id: string;
+    creator_id: string;
+    document_json: string;
+    updated_at: string;
+  }>(
+    `SELECT id, creator_id, document_json, updated_at
+     FROM creator_documents
+     WHERE id = $1 LIMIT 1`,
+    [documentId]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Document not found' };
+  }
+
+  if (result.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
+  return {
+    ok: true,
+    document: {
+      ...JSON.parse(result.rows[0].document_json),
+      serverUpdatedAt: result.rows[0].updated_at,
+    },
+  };
+});
+
+// DELETE /creator/documents/:documentId — delete a draft document
+app.delete('/creator/documents/:documentId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ documentId: z.string().min(2).max(120) });
+  const { documentId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
+    [documentId]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Document not found' };
+  }
+
+  if (result.rows[0].creator_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
+  await db.query(`DELETE FROM creator_documents WHERE id = $1`, [documentId]);
+  return { ok: true };
+});
+
+// POST /creator/documents/:documentId/remix — create a remix of a document
+app.post('/creator/documents/:documentId/remix', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ documentId: z.string().min(2).max(120) });
+  const { documentId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({
+    newDocumentId: z.string().min(2).max(120),
+  });
+  const { newDocumentId } = bodySchema.parse(request.body);
+
+  const result = await db.query<{
+    creator_id: string;
+    document_json: string;
+  }>(
+    `SELECT creator_id, document_json FROM creator_documents WHERE id = $1 LIMIT 1`,
+    [documentId]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Source document not found' };
+  }
+
+  const sourceDoc = JSON.parse(result.rows[0].document_json);
+
+  // Check if remix is allowed
+  if (!sourceDoc.metadata?.allowRemix) {
+    reply.code(403);
+    return { ok: false, error: 'Remix not allowed for this document' };
+  }
+
+  // Create remixed document
+  const remixedDoc = {
+    ...sourceDoc,
+    id: newDocumentId,
+    metadata: {
+      ...sourceDoc.metadata,
+      sourceDocumentId: documentId,
+      sourceCreatorId: result.rows[0].creator_id,
+      allowRemix: false,
+      title: `Remix of ${sourceDoc.metadata?.title || 'Untitled'}`,
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO creator_documents (id, creator_id, type, version, document_json, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [newDocumentId, actorUserId, remixedDoc.type, remixedDoc.version, JSON.stringify(remixedDoc)]
+    );
+    await client.query('COMMIT');
+    return { ok: true, document: remixedDoc };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    app.log.error({ err: error }, 'Failed to create remix');
+    reply.code(500);
+    return { ok: false, error: 'Failed to create remix' };
+  } finally {
+    client.release();
+  }
 });
 
 const shutdown = async () => {

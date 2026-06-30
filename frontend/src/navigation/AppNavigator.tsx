@@ -14,9 +14,14 @@ import ItemDetailScreen from '../screens/ItemDetailScreen';
 import ClosetScreen from '../screens/ClosetScreen';
 import CollectionDetailScreen from '../screens/CollectionDetailScreen';
 import PosterViewerScreen from '../screens/PosterViewerScreen';
-import CreatePosterScreen from '../screens/CreatePosterScreen';
+import PosterStoryActivityScreen from '../screens/PosterStoryActivityScreen';
+import PosterArchiveScreen from '../screens/PosterArchiveScreen';
 
+import SellScreen from '../screens/SellScreen';
+import TradeHubScreen from '../screens/TradeHubScreen';
+import AuctionHomeScreen from '../screens/AuctionHomeScreen';
 import CreateAuctionScreen from '../screens/CreateAuctionScreen';
+import AuctionDetailScreen from '../screens/AuctionDetailScreen';
 import CreateCoOwnScreen from '../screens/CreateSyndicateScreen';
 import MarketLedgerScreen from '../screens/MarketLedgerScreen';
 import CoOwnHubScreen from '../screens/SyndicateHubScreen';
@@ -64,9 +69,12 @@ import HelpSupportScreen from '../screens/HelpSupportScreen';
 
 // Phase 18 new screens
 import OrderDetailScreen from '../screens/OrderDetailScreen';
+import SellerFulfilmentScreen from '../screens/SellerFulfilmentScreen';
+import OrderReceiptScreen from '../screens/OrderReceiptScreen';
 
 // Phase 19 new screens
 import CheckoutScreen from '../screens/CheckoutScreen';
+import AddressFormScreen from '../screens/AddressFormScreen';
 import SuccessScreen from '../screens/SuccessScreen';
 import ManageListingScreen from '../screens/ManageListingScreen';
 import WithdrawScreen from '../screens/WithdrawScreen';
@@ -93,6 +101,10 @@ import EditListingScreen from '../screens/EditListingScreen';
 
 // Explore / Creator screens
 import CreateLookScreen from '../screens/CreateLookScreen';
+import { CreateLookRedirect } from '../screens/CreateLookRedirect';
+import { CreatePosterRedirect } from '../screens/CreatePosterRedirect';
+import { CreatorStudioScreen } from '../creator';
+import { CreatorDraftListScreen } from '../creator/CreatorDraftListScreen';
 import OutfitBuilderScreen from '../screens/OutfitBuilderScreen';
 import CoOwnIssueScreen from '../screens/CoOwnIssueScreen';
 // UI-22R.6B — Experience elevation
@@ -123,6 +135,9 @@ import ActiveSessionsScreen from '../screens/ActiveSessionsScreen';
 import BlockedUsersScreen from '../screens/BlockedUsersScreen';
 import PrivacySettingsScreen from '../screens/PrivacySettingsScreen';
 import AboutScreen from '../screens/AboutScreen';
+import MutedConversationsScreen from '../screens/MutedConversationsScreen';
+import ArchivedConversationsScreen from '../screens/ArchivedConversationsScreen';
+import ManageQuickRepliesScreen from '../screens/ManageQuickRepliesScreen';
 
 // Diagnostic — dev only
 import RuntimeSmokeTestScreen from '../screens/RuntimeSmokeTestScreen';
@@ -203,9 +218,15 @@ export default function AppNavigator() {
       <Stack.Screen name="Closet" component={ClosetScreen} />
       <Stack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
       <Stack.Screen name="PosterViewer" component={PosterViewerScreen} options={modalScreenOptions} />
-      <Stack.Screen name="CreatePoster" component={CreatePosterScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreatePoster" component={CreatePosterRedirect} options={modalScreenOptions} />
+      <Stack.Screen name="PosterStoryActivity" component={PosterStoryActivityScreen} options={modalScreenOptions} />
+      <Stack.Screen name="PosterArchive" component={PosterArchiveScreen} options={modalScreenOptions} />
 
+      <Stack.Screen name="Sell" component={SellScreen} options={modalScreenOptions} />
+      <Stack.Screen name="TradeHub" component={TradeHubScreen} />
+      <Stack.Screen name="AuctionHome" component={AuctionHomeScreen} />
       <Stack.Screen name="CreateAuction" component={CreateAuctionScreen} options={modalScreenOptions} />
+      <Stack.Screen name="AuctionDetail" component={AuctionDetailScreen} />
       <Stack.Screen name="CreateCoOwn" component={CreateCoOwnScreen} options={modalScreenOptions} />
       <Stack.Screen name="MarketLedger" component={MarketLedgerScreen} />
       <Stack.Screen name="CoOwnHub" component={CoOwnHubScreen} />
@@ -252,9 +273,12 @@ export default function AppNavigator() {
 
       {/* Phase 18 new screens */}
       <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+      <Stack.Screen name="SellerFulfilment" component={SellerFulfilmentScreen} />
+      <Stack.Screen name="OrderReceipt" component={OrderReceiptScreen} />
 
       {/* Phase 19 new screens */}
       <Stack.Screen name="Checkout" component={CheckoutScreen} />
+      <Stack.Screen name="AddressForm" component={AddressFormScreen} />
       <Stack.Screen name="Success" component={SuccessScreen} />
       <Stack.Screen name="ManageListing" component={ManageListingScreen} />
       <Stack.Screen name="Withdraw" component={WithdrawScreen} />
@@ -281,7 +305,9 @@ export default function AppNavigator() {
       <Stack.Screen name="VisualSearch" component={VisualSearchScreen} />
 
       {/* Explore / Creator screens */}
-      <Stack.Screen name="CreateLook" component={CreateLookScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreateLook" component={CreateLookRedirect} options={modalScreenOptions} />
+      <Stack.Screen name="CreatorStudio" component={CreatorStudioScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreatorDraftList" component={CreatorDraftListScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" component={OutfitBuilderScreen} options={modalScreenOptions} />
       <Stack.Screen name="CoOwnIssue" component={CoOwnIssueScreen} options={modalScreenOptions} />
       {/* UI-22R.6B — Experience elevation */}
@@ -296,6 +322,9 @@ export default function AppNavigator() {
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
       <Stack.Screen name="PrivacySettings" component={PrivacySettingsScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
+      <Stack.Screen name="MutedConversations" component={MutedConversationsScreen} />
+      <Stack.Screen name="ArchivedConversations" component={ArchivedConversationsScreen} />
+      <Stack.Screen name="ManageQuickReplies" component={ManageQuickRepliesScreen} />
 
       {/* VISUAL-15 — UI Architecture + Feature Depth */}
       <Stack.Screen name="ConversationInfo" component={ConversationInfoScreen} />

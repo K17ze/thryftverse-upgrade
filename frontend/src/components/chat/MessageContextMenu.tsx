@@ -11,8 +11,10 @@ import { Colors } from '../../constants/colors';
 import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
+import { deriveMessageActions } from '../../utils/messageContextMenuCapabilities';
+import type { ActionDef } from '../../utils/messageContextMenuCapabilities';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'select';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'retry' | 'report';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -20,15 +22,8 @@ interface MessageContextMenuProps {
   onAction: (action: MessageAction) => void;
   messageText?: string;
   isOwnMessage?: boolean;
+  isFailed?: boolean;
 }
-
-type ActionDef = {
-  id: MessageAction;
-  label: string;
-  icon: string;
-  color?: string;
-  destructive?: boolean;
-};
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -38,25 +33,15 @@ export function MessageContextMenu({
   onAction,
   messageText,
   isOwnMessage,
+  isFailed,
 }: MessageContextMenuProps) {
   const actions = React.useMemo<ActionDef[]>(() => {
-    const list: ActionDef[] = [
-      { id: 'select', label: 'Select', icon: 'checkbox-outline' },
-      { id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' },
-      { id: 'react', label: 'React', icon: 'happy-outline' },
-    ];
-    if (messageText && messageText.trim().length > 0) {
-      list.push({ id: 'copy', label: 'Copy', icon: 'copy-outline' });
-    }
-    list.push({
-      id: 'delete',
-      label: isOwnMessage ? 'Delete message' : 'Delete for me',
-      icon: 'trash-outline',
-      color: Colors.danger,
-      destructive: true,
+    return deriveMessageActions({
+      isOwnMessage: Boolean(isOwnMessage),
+      isFailed: Boolean(isFailed),
+      messageText,
     });
-    return list;
-  }, [messageText, isOwnMessage]);
+  }, [messageText, isOwnMessage, isFailed]);
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -167,7 +152,7 @@ export function MessageContextMenu({
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
@@ -175,12 +160,17 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
     paddingTop: Space.sm + 4,
     paddingBottom: Space.xl + 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 12,
   },
   handle: {
     width: 40,

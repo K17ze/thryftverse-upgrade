@@ -7,6 +7,7 @@ export interface SupportTicket {
   topicLabel: string;
   details: string;
   status: 'open' | 'resolved' | 'closed';
+  evidenceMediaUrls?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -31,11 +32,12 @@ export async function createSupportTicket(
   orderId: string,
   topicId: string,
   topicLabel: string,
-  details: string
+  details: string,
+  evidenceMediaUrls?: string[]
 ): Promise<SupportTicket> {
   const res = await fetchJson<CreateSupportTicketResponse>('/support/tickets', {
     method: 'POST',
-    body: JSON.stringify({ orderId, topicId, topicLabel, details }),
+    body: JSON.stringify({ orderId, topicId, topicLabel, details, evidenceMediaUrls }),
   });
   return res.ticket;
 }

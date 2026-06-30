@@ -3,9 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
@@ -21,7 +22,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../theme/designTokens';
 import { PremiumListSection } from '../components/ui/PremiumListSection';
-import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipFormSection } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'Postage'>;
 
@@ -107,7 +108,7 @@ export default function PostageScreen({ navigation }: Props) {
         />
       }
     >
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <View style={[styles.deliveryTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
           <Ionicons name="cube-outline" size={18} color={Colors.brand} />
           <Text style={[styles.deliveryTrustText, { color: Colors.textSecondary }]}>
@@ -116,63 +117,56 @@ export default function PostageScreen({ navigation }: Props) {
         </View>
       </Reanimated.View>
 
-      {/* Addresses */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
-        <FlagshipFormSection title="Your Addresses" description="Add a default delivery address for faster checkout.">
-          {savedAddress ? (
-            <View style={{ padding: Space.md }}>
-              <View style={[styles.addressCard, { backgroundColor: Colors.surfaceAlt }]}>
-                <View style={styles.addressCardHeader}>
-                  <View style={styles.addressCardIdentity}>
-                    <View style={[styles.addressIconCircle, { backgroundColor: `${Colors.brand}15` }]}>
-                      <Ionicons name="location" size={18} color={Colors.brand} />
-                    </View>
-                    <View>
-                      <Text style={[styles.addressLabel, { color: Colors.textPrimary }]}>
-                        {savedAddress.name}
-                      </Text>
-                      <View style={styles.defaultBadge}>
-                        <Ionicons name="checkmark-circle" size={10} color={Colors.success} />
-                        <Text style={styles.defaultBadgeText}>Default delivery</Text>
-                      </View>
-                    </View>
-                  </View>
-                  <AnimatedPressable
-                    onPress={() => show('Address editing coming soon', 'info')}
-                    scaleValue={0.92}
-                    hapticFeedback="light"
-                    accessibilityRole="button"
-                    accessibilityLabel="Edit address"
-                  >
-                    <Text style={[styles.addressAction, { color: Colors.brand }]}>Edit</Text>
-                  </AnimatedPressable>
-                </View>
-                <Text style={[styles.addressDetail, { color: Colors.textSecondary }]}>
-                  {savedAddress.streetAddress}
-                </Text>
-                <Text style={[styles.addressDetail, { color: Colors.textSecondary }]}>
-                  {savedAddress.city}{savedAddress.postalCode ? `, ${savedAddress.postalCode}` : ''}
-                </Text>
-                <Text style={[styles.addressDetail, { color: Colors.textSecondary }]}>
-                  {savedAddress.country}
-                </Text>
-              </View>
+      {/* Delivery address */}
+      <View style={styles.addressSection}>
+        <Text style={styles.addressSectionTitle}>Delivery address</Text>
+        {savedAddress ? (
+          <View style={styles.addressBlock}>
+            <View style={styles.addressHeaderRow}>
+              <Text style={styles.defaultLabel}>DEFAULT</Text>
+              <Pressable
+                onPress={() => navigation.navigate('AddressForm', { mode: 'edit', source: 'postage' })}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Edit delivery address"
+              >
+                <Text style={styles.editAction}>Edit</Text>
+              </Pressable>
             </View>
-          ) : (
-            <FlagshipState
-              variant="empty"
-              title="No addresses saved"
-              subtitle="Add a delivery address to speed up checkout and returns."
-              actionLabel="Add Address"
-              onAction={() => show('Address management coming soon', 'info')}
-              icon="location-outline"
-            />
-          )}
-        </FlagshipFormSection>
-      </Reanimated.View>
+            <Text style={styles.addressName}>{savedAddress.name}</Text>
+            <Text style={styles.addressLine}>{savedAddress.streetAddress}</Text>
+            {savedAddress.apartment ? (
+              <Text style={styles.addressLine}>{savedAddress.apartment}</Text>
+            ) : null}
+            <Text style={styles.addressLine}>
+              {savedAddress.city}
+              {savedAddress.region ? `, ${savedAddress.region}` : ''}
+              {savedAddress.postalCode ? ` ${savedAddress.postalCode}` : ''}
+            </Text>
+            <Text style={styles.addressLine}>{savedAddress.country}</Text>
+          </View>
+        ) : (
+          <View style={styles.addressEmpty}>
+            <Ionicons name="location-outline" size={24} color={Colors.textMuted} />
+            <Text style={styles.addressEmptyTitle}>No delivery address</Text>
+            <Text style={styles.addressEmptyBody}>
+              Add an address for checkout and delivery.
+            </Text>
+            <Pressable
+              style={styles.addressAddBtn}
+              onPress={() => navigation.navigate('AddressForm', { mode: 'add', source: 'postage' })}
+              hitSlop={{ top: 8, bottom: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Add delivery address"
+            >
+              <Text style={styles.addressAddBtnText}>Add address</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
 
       {/* Default Carrier */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <PremiumListSection title="Default Carrier" subtitle={carrierScopeLabel ? `Region policy: ${carrierScopeLabel}` : undefined}>
           {isHydrating ? (
             <FlagshipState variant="loading" />
@@ -203,7 +197,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Shipping Options */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <PremiumListSection title="Shipping Options">
           <SettingsCell
             icon="gift-outline"
@@ -229,7 +223,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Footer note */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <Text style={styles.footerNote}>
           These are your default settings. You can override postage for individual items when
           listing.
@@ -243,56 +237,79 @@ const styles = StyleSheet.create({
   skeletonWrap: {
     marginBottom: Space.md,
   },
-  addressCard: {
-    borderRadius: Radius.lg,
-    padding: Space.lg,
-    gap: Space.xs,
+  addressSection: {
+    paddingHorizontal: Space.md,
+    marginBottom: Space.lg,
   },
-  addressCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  addressSectionTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
     marginBottom: Space.sm,
   },
-  addressCardIdentity: {
+  addressBlock: {
+    gap: 2,
+  },
+  addressHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    justifyContent: 'space-between',
+    marginBottom: 6,
   },
-  addressIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  defaultBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  defaultBadgeText: {
-    fontSize: Type.meta.size,
+  defaultLabel: {
+    fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
-    letterSpacing: Type.meta.letterSpacing,
+    color: Colors.textMuted,
+    letterSpacing: 0.8,
   },
-  addressLabel: {
-    fontSize: Type.body.size,
+  editAction: {
+    fontSize: 15,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    color: Colors.textPrimary,
   },
-  addressDetail: {
-    fontSize: Type.caption.size,
+  addressName: {
+    fontSize: 16,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  addressLine: {
+    fontSize: 14,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
+    color: Colors.textSecondary,
+    lineHeight: 19,
   },
-  addressAction: {
-    fontSize: Type.body.size,
+  addressEmpty: {
+    alignItems: 'flex-start',
+    gap: Space.xs,
+  },
+  addressEmptyTitle: {
+    fontSize: 16,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    color: Colors.textPrimary,
+    marginTop: Space.xs,
+  },
+  addressEmptyBody: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    lineHeight: 19,
+  },
+  addressAddBtn: {
+    marginTop: Space.sm,
+    paddingVertical: 12,
+    paddingHorizontal: Space.md,
+    backgroundColor: Colors.brand,
+    borderRadius: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addressAddBtnText: {
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
   },
   carrierRow: {
     flexDirection: 'row',

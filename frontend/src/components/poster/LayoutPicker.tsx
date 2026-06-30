@@ -106,9 +106,9 @@ export default function LayoutPicker({ visible, currentLayout, onSelect, onClose
   }, [visible]);
 
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents={visible ? 'auto' : 'none'}>
+    <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
       <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} pointerEvents={visible ? 'auto' : 'none'}>
-        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
 
       <Animated.View style={[styles.drawer, { transform: [{ translateY }] }]}>
@@ -147,7 +147,7 @@ export default function LayoutPicker({ visible, currentLayout, onSelect, onClose
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   drawer: {

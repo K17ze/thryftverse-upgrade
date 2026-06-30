@@ -75,16 +75,16 @@ export default function FilterStrip({ activeFilter, onFilterChange, visible, pre
             >
               <View style={[styles.thumbWrap, isActive && styles.thumbWrapActive]}>
                 {previewUri ? (
-                  <View style={StyleSheet.absoluteFillObject}>
+                  <View style={StyleSheet.absoluteFill}>
                     <Image
                       source={{ uri: previewUri }}
-                      style={StyleSheet.absoluteFillObject}
+                      style={StyleSheet.absoluteFill}
                       resizeMode="cover"
                     />
                     {filter.overlayColor && (
                       <View
                         style={[
-                          StyleSheet.absoluteFillObject,
+                          StyleSheet.absoluteFill,
                           {
                             backgroundColor: filter.overlayColor,
                             opacity: filter.overlayOpacity ?? 0.15,
@@ -94,9 +94,9 @@ export default function FilterStrip({ activeFilter, onFilterChange, visible, pre
                     )}
                   </View>
                 ) : (
-                  <View style={[StyleSheet.absoluteFillObject, { backgroundColor: filter.overlayColor || '#333' }]}>
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: filter.overlayColor || '#333' }]}>
                     {filter.name === 'normal' && (
-                      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#444' }]} />
+                      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#444' }]} />
                     )}
                   </View>
                 )}

@@ -1,14 +1,13 @@
-import React from 'react';
-import { Alert, View } from 'react-native';
+import React, { useState } from 'react';
+import { View } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { BottomSheetPicker } from '../components/BottomSheetPicker';
 
 type Props = StackScreenProps<RootStackParamList, 'ChatSettings'>;
 
@@ -28,202 +27,146 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   const enabledBotIds = useStore((s) => s.enabledBotIds);
   const bots = useStore((s) => s.availableChatBots);
   const messageRequests = useStore((s) => s.messageRequests);
-  const reducedMotionEnabled = useReducedMotion();
+
+  const [showAllowSheet, setShowAllowSheet] = useState(false);
 
   const mutedCount = mutedIds.length;
   const archivedCount = archivedIds.length;
   const enabledBots = bots.filter((b) => enabledBotIds.includes(b.id));
 
+  const allowOptions = ['Everyone', 'People I follow', 'No one'];
   const allowLabel: Record<string, string> = {
     everyone: 'Everyone',
     following: 'People I follow',
     nobody: 'No one',
   };
 
-  const handleAllowPress = () => {
-    Alert.alert(
-      'Who can message me',
-      'Choose who can start conversations with you.',
-      [
-        { text: 'Everyone', onPress: () => setAllowFrom('everyone') },
-        { text: 'People I follow', onPress: () => setAllowFrom('following') },
-        { text: 'No one', onPress: () => setAllowFrom('nobody') },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  };
-
-  const handleClearArchived = () => {
-    Alert.alert(
-      'Clear archived chats?',
-      'This will remove all chats from your archive list locally.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: () => {
-            show('Archived chats cleared locally', 'success');
-          },
-        },
-      ]
-    );
+  const handleAllowSelect = (value: string) => {
+    const key = value === 'Everyone' ? 'everyone' : value === 'People I follow' ? 'following' : 'nobody';
+    setAllowFrom(key as any);
+    setShowAllowSheet(false);
   };
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Chat Privacy" subtitle="Messaging controls and preferences" onBack={() => navigation.goBack()} />}>
-      {/* Privacy */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
-        <SettingsSection title="Privacy" noCard>
-          <SettingsRow
-            icon="lock-closed-outline"
-            title="Who can message me"
-            value={allowLabel[allowFrom]}
-            onPress={handleAllowPress}
-            isFirst
-          />
-          <SettingsRow
-            icon="eye-outline"
-            title="Read receipts"
-            subtitle="Let others know when you've seen their messages"
-            toggleValue={readReceipts}
-            onToggle={setReadReceipts}
-          />
-          <SettingsRow
-            icon="people-circle-outline"
-            title="Blocked users"
-            value={blockedCount > 0 ? `${blockedCount}` : 'None'}
-            onPress={() => navigation.navigate('BlockedUsers')}
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+    <FlagshipScreen header={<FlagshipHeader title="Chat privacy" onBack={() => navigation.goBack()} />}>
+      <SettingsSection title="Who can reach you" noCard>
+        <SettingsRow
+          title="Who can message me"
+          value={allowLabel[allowFrom]}
+          onPress={() => setShowAllowSheet(true)}
+          isFirst
+        />
+        <SettingsRow
+          title="Read receipts"
+          subtitle="Let others know when you've seen their messages"
+          toggleValue={readReceipts}
+          onToggle={setReadReceipts}
+        />
+        <SettingsRow
+          title="Blocked users"
+          subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None blocked'}
+          onPress={() => navigation.navigate('BlockedUsers')}
+          isLast
+        />
+      </SettingsSection>
 
-      {/* Conversations */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
-        <SettingsSection title="Conversations" noCard>
-          <SettingsRow
-            icon="volume-mute-outline"
-            title="Muted conversations"
-            value={mutedCount > 0 ? `${mutedCount}` : 'None'}
-            onPress={() => {
-              if (mutedCount === 0) { show('No muted conversations', 'info'); return; }
-              show(`${mutedCount} conversation${mutedCount === 1 ? '' : 's'} muted`, 'info');
-            }}
-            isFirst
-          />
-          <SettingsRow
-            icon="archive-outline"
-            title="Archived conversations"
-            value={archivedCount > 0 ? `${archivedCount}` : 'None'}
-            onPress={() => {
-              if (archivedCount === 0) { show('No archived conversations', 'info'); return; }
-              show(`${archivedCount} conversation${archivedCount === 1 ? '' : 's'} archived`, 'info');
-            }}
-          />
-          <SettingsRow
-            icon="trash-outline"
-            title="Clear archived chats"
-            subtitle="Remove all archived conversations from this list"
-            onPress={handleClearArchived}
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Conversations" noCard>
+        <SettingsRow
+          title="Muted conversations"
+          subtitle={mutedCount > 0 ? `${mutedCount} muted` : 'None muted'}
+          onPress={() => navigation.navigate('MutedConversations')}
+          isFirst
+        />
+        <SettingsRow
+          title="Archived conversations"
+          subtitle={archivedCount > 0 ? `${archivedCount} archived` : 'None archived'}
+          onPress={() => navigation.navigate('ArchivedConversations')}
+          isLast
+        />
+      </SettingsSection>
 
-      {/* Marketplace chat */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
-        <SettingsSection title="Marketplace Chat" noCard>
-          <SettingsRow
-            icon="pricetag-outline"
-            title="Offers in chat"
-            subtitle="Show offer cards inside transaction conversations"
-            toggleValue={offersInChat}
-            onToggle={setOffersInChat}
-            isFirst
-          />
-          <SettingsRow
-            icon="cube-outline"
-            title="Order updates in chat"
-            subtitle="Display shipping and delivery status cards"
-            toggleValue={orderUpdatesInChat}
-            onToggle={setOrderUpdatesInChat}
-          />
-          <SettingsRow
-            icon="shield-checkmark-outline"
-            title="Transaction safety notes"
-            subtitle="Tips on staying safe during marketplace deals"
-            onPress={() => navigation.navigate('HelpSupport')}
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Marketplace" noCard>
+        <SettingsRow
+          title="Offers in chat"
+          subtitle="Show offer cards inside transaction conversations"
+          toggleValue={offersInChat}
+          onToggle={setOffersInChat}
+          isFirst
+        />
+        <SettingsRow
+          title="Order updates in chat"
+          subtitle="Display shipping and delivery status cards"
+          toggleValue={orderUpdatesInChat}
+          onToggle={setOrderUpdatesInChat}
+        />
+        <SettingsRow
+          title="Transaction safety notes"
+          subtitle="Tips on staying safe during marketplace deals"
+          onPress={() => navigation.navigate('HelpSupport')}
+          isLast
+        />
+      </SettingsSection>
 
-      {/* Bots */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
-        <SettingsSection title="Bots & Automation" noCard>
-          <SettingsRow
-            icon="hardware-chip-outline"
-            title="Bot directory"
-            subtitle="Browse and manage marketplace bots"
-            onPress={() => navigation.navigate('BotDirectory')}
-            isFirst
-          />
-          <SettingsRow
-            icon="toggle-outline"
-            title="Enabled bots"
-            value={enabledBots.length > 0 ? `${enabledBots.length}` : 'None'}
-            onPress={() => {
-              if (enabledBots.length === 0) {
-                show('No bots enabled. Visit Bot Directory to enable one.', 'info');
-                return;
-              }
-              navigation.navigate('BotDirectory');
-            }}
-          />
-          <SettingsRow
-            icon="lock-closed-outline"
-            title="Bot permissions"
-            subtitle="Review what data each bot can access"
-            onPress={() => navigation.navigate('BotDirectory')}
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Message requests" noCard>
+        <SettingsRow
+          title="Pending requests"
+          subtitle={messageRequests.length > 0 ? `${messageRequests.length} pending` : 'None pending'}
+          onPress={() => {
+            if (messageRequests.length === 0) {
+              show('No pending message requests', 'info');
+              return;
+            }
+            navigation.navigate('MessageRequests');
+          }}
+          isFirst
+          isLast
+        />
+      </SettingsSection>
 
-      {/* Message requests */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
-        <SettingsSection title="Message Requests" noCard>
-          <SettingsRow
-            icon="mail-unread-outline"
-            title="Pending requests"
-            value={messageRequests.length > 0 ? `${messageRequests.length}` : 'None'}
-            onPress={() => {
-              if (messageRequests.length === 0) {
-                show('No pending message requests', 'info');
-                return;
-              }
-              navigation.navigate('MainTabs', { screen: 'Inbox' } as any);
-            }}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Bots & automation" noCard>
+        <SettingsRow
+          title="Bot directory"
+          subtitle="Browse and manage marketplace bots"
+          onPress={() => navigation.navigate('BotDirectory')}
+          isFirst
+        />
+        <SettingsRow
+          title="Enabled bots"
+          subtitle={enabledBots.length > 0 ? `${enabledBots.length} active` : 'None active'}
+          onPress={() => {
+            if (enabledBots.length === 0) {
+              show('No bots enabled. Visit Bot Directory to enable one.', 'info');
+              return;
+            }
+            navigation.navigate('BotDirectory');
+          }}
+        />
+        <SettingsRow
+          title="Bot permissions"
+          subtitle="Review what data each bot can access"
+          onPress={() => navigation.navigate('BotDirectory')}
+          isLast
+        />
+      </SettingsSection>
 
-      {/* Notifications */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
-        <SettingsSection title="Notifications" noCard>
-          <SettingsRow
-            icon="notifications-outline"
-            title="Chat notifications"
-            subtitle="Customise push and in-app alerts for messages"
-            onPress={() => navigation.navigate('PushNotifications')}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
-      </Reanimated.View>
+      <SettingsSection title="Notifications" noCard>
+        <SettingsRow
+          title="Chat notifications"
+          subtitle="Customise push and in-app alerts for messages"
+          onPress={() => navigation.navigate('PushNotifications')}
+          isFirst
+          isLast
+        />
+      </SettingsSection>
+
+      <BottomSheetPicker
+        visible={showAllowSheet}
+        onClose={() => setShowAllowSheet(false)}
+        title="Who can message me"
+        options={allowOptions}
+        selectedValue={allowLabel[allowFrom]}
+        onSelect={handleAllowSelect}
+      />
     </FlagshipScreen>
   );
 }

@@ -23,7 +23,9 @@ import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
 import { ToastContainer } from './src/components/Toast';
-import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { AppErrorBoundary, initSentry } from './src/platform/monitoring';
+import { KeyboardProvider } from './src/platform/keyboard';
+import { ServerStateProvider, useMobileQueryLifecycle } from './src/platform/server';
 import { BrandedSplash } from './src/components/BrandedSplash';
 import { Typography } from './src/theme/designTokens';
 import { ThemeProvider } from './src/theme/ThemeContext';
@@ -41,10 +43,14 @@ import { getStoredProfileMedia } from './src/preferences/profileMediaPreferences
 import { getStoredAuthSnapshot } from './src/preferences/authSnapshot';
 import type { RootStackParamList } from './src/navigation/types';
 import { extractGroupInviteToken } from './src/utils/groupInviteLink';
+import { usePushNotificationTap, setNavigationReady } from './src/hooks/usePushNotificationTap';
+import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCount';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Keep app startup resilient even if splash API rejects.
 });
+
+initSentry();
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -79,6 +85,7 @@ function applyGlobalTypographyDefaults(useInterFonts: boolean) {
 }
 
 export default function App() {
+  useMobileQueryLifecycle();
   const [showBrandedSplash, setShowBrandedSplash] = React.useState(true);
   const [bootTimedOut, setBootTimedOut] = React.useState(false);
   const [themeInitialized, setThemeInitialized] = React.useState(false);
@@ -89,6 +96,9 @@ export default function App() {
   const [, setThemeTick] = React.useState(0);
   const isAuthenticated = useStore((state) => state.isAuthenticated);
   const upsertConversation = useStore((state) => state.upsertConversation);
+
+  usePushNotificationTap();
+  useUnreadNotificationCount();
 
   const [fontsLoaded, fontLoadError] = useFonts({
     Inter_300Light,
@@ -370,9 +380,11 @@ export default function App() {
   }
 
   return (
-    <ErrorBoundary>
+    <AppErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
+          <KeyboardProvider>
+          <ServerStateProvider>
           <ThemeProvider>
             <ToastProvider>
               <BackendDataProvider>
@@ -383,6 +395,8 @@ export default function App() {
                         ref={navigationRef}
                         theme={premiumNavigationTheme}
                         onReady={() => {
+                          setNavigationReady(true);
+
                           if (!queuedConversationId) {
                             return;
                           }
@@ -393,7 +407,7 @@ export default function App() {
                           setQueuedConversationId(null);
                         }}
                       >
-                        <StatusBar style={ActiveTheme === 'light' ? 'dark' : 'light'} backgroundColor={Colors.background} />
+                        <StatusBar style={ActiveTheme === 'light' ? 'dark' : 'light'} />
                         {ThemeReadyNavigator ? <ThemeReadyNavigator /> : null}
                       </NavigationContainer>
                     </TabScrollProvider>
@@ -403,8 +417,10 @@ export default function App() {
               <ToastContainer />
             </ToastProvider>
           </ThemeProvider>
+          </ServerStateProvider>
+          </KeyboardProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
-    </ErrorBoundary>
+    </AppErrorBoundary>
   );
 }

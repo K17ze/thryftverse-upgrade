@@ -19,6 +19,7 @@ import Reanimated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Colors } from '../constants/colors';
 import { Motion } from '../constants/motion';
 
@@ -47,29 +48,40 @@ export function BottomSheet({
 }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const sheetHeight = SCREEN_HEIGHT * snapPoint;
   const translateY = useSharedValue(sheetHeight);
   const backdropOpacity = useSharedValue(0);
   const contextY = useSharedValue(0);
 
   const open = useCallback(() => {
-    translateY.value = withSpring(0, {
-      damping: springDamping,
-      stiffness: 260,
-    });
-    backdropOpacity.value = withTiming(1, { duration: 250 });
-  }, [translateY, backdropOpacity, springDamping]);
+    if (reducedMotion) {
+      translateY.value = 0;
+      backdropOpacity.value = 1;
+    } else {
+      translateY.value = withSpring(0, {
+        damping: springDamping,
+        stiffness: 260,
+      });
+      backdropOpacity.value = withTiming(1, { duration: 250 });
+    }
+  }, [translateY, backdropOpacity, springDamping, reducedMotion]);
 
   const close = useCallback(() => {
-    translateY.value = withSpring(sheetHeight, {
-      damping: springDamping,
-      stiffness: 260,
-    });
-    backdropOpacity.value = withTiming(0, { duration: 200 });
-    // Call onDismiss after close animation
-    const t = setTimeout(() => runOnJS(onDismiss)(), 280);
-    return () => clearTimeout(t);
-  }, [translateY, backdropOpacity, sheetHeight, onDismiss, springDamping]);
+    if (reducedMotion) {
+      translateY.value = sheetHeight;
+      backdropOpacity.value = 0;
+      runOnJS(onDismiss)();
+    } else {
+      translateY.value = withSpring(sheetHeight, {
+        damping: springDamping,
+        stiffness: 260,
+      });
+      backdropOpacity.value = withTiming(0, { duration: 200 });
+      const t = setTimeout(() => runOnJS(onDismiss)(), 280);
+      return () => clearTimeout(t);
+    }
+  }, [translateY, backdropOpacity, sheetHeight, onDismiss, springDamping, reducedMotion]);
 
   useEffect(() => {
     if (visible) {
@@ -163,7 +175,7 @@ export function BottomSheet({
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.15)',
   },
   sheet: {

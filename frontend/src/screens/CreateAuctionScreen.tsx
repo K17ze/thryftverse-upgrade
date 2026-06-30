@@ -26,6 +26,7 @@ import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
 import { createAuction } from '../services/marketApi';
+import { createStableId } from '../utils/createStableId';
 import { EmptyState } from '../components/EmptyState';
 
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -132,18 +133,19 @@ export default function CreateAuctionScreen() {
     const startsAtMs = now + startInMinutes * 60 * 1000;
     const endsAtMs = startsAtMs + AUCTION_WINDOW_HOURS * 60 * 60 * 1000;
 
+    const idempotencyKey = createStableId();
     setIsSubmitting(true);
     try {
-      await createAuction({
+      const result = await createAuction({
         listingId: selectedListing.id,
-        sellerId: sellerId ?? undefined,
         startsAt: new Date(startsAtMs).toISOString(),
         endsAt: new Date(endsAtMs).toISOString(),
         startingBidGbp: startingBid,
+        idempotencyKey,
         ...(buyNowPriceGbp ? { buyNowPriceGbp } : {}),
       });
       show(startInMinutes > 0 ? 'Auction scheduled successfully' : 'Auction is now live', 'success');
-      navigation.goBack();
+      navigation.replace('AuctionDetail', { auctionId: result.id });
     } catch (e) {
       show('Failed to launch auction. Please try again.', 'error');
     } finally {

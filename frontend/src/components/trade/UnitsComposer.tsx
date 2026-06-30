@@ -155,13 +155,13 @@ export function UnitsComposer({
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 300,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   dismissLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   card: {
     backgroundColor: Colors.surface,

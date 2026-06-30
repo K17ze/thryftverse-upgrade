@@ -191,9 +191,9 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
   };
 
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* Touch capture surface for dragging */}
-      <View style={StyleSheet.absoluteFillObject} {...panResponder.panHandlers} pointerEvents="auto" />
+      <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} pointerEvents="auto" />
 
       {/* Rendered text layers */}
       {layers.map((layer) => {

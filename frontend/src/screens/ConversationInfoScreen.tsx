@@ -8,17 +8,17 @@ import {
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { CachedImage } from '../components/CachedImage';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { useBackendData } from '../context/BackendDataContext';
 
 type Props = StackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
@@ -36,6 +36,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const participantNameLookup = useStore((state) => (state as any).participantNameLookup as Map<string, string> | undefined);
+  const { listings } = useBackendData();
 
   const conversation = useMemo(
     () => conversations.find((c) => c.id === conversationId),
@@ -114,11 +115,10 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const handle = counterpartyId ? `@${counterpartyId.slice(0, 12)}` : 'Direct message';
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Conversation Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
-
+    <FlagshipScreen header={<FlagshipHeader title="Chat details" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Partner Identity */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+        <View>
           <AnimatedPressable
             style={styles.identityCardV2}
             onPress={handleViewProfile}
@@ -141,10 +141,10 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             <BodyEmphasis style={styles.identityName} numberOfLines={1}>{displayName}</BodyEmphasis>
             <Caption color={Colors.textMuted}>{handle}</Caption>
           </AnimatedPressable>
-        </Reanimated.View>
+        </View>
 
         {/* Profile */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <View>
           <Section title="Profile">
             <RowItem
               icon="person-outline"
@@ -153,11 +153,11 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               showChevron
             />
           </Section>
-        </Reanimated.View>
+        </View>
 
         {/* Media & shared */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
-          <Section title="Media & shared">
+        <View>
+          <Section title="Shared">
             <RowItem
               icon="images-outline"
               label="Photos & videos"
@@ -168,46 +168,66 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
                 return count > 0 ? `${count}` : undefined;
               })()}
             />
+            {(() => {
+              const linkCount = conversation.messages?.filter((m) => m.text && /https?:\/\//.test(m.text)).length ?? 0;
+              return linkCount > 0 ? (
+                <RowItem
+                  icon="link-outline"
+                  label="Links"
+                  detail={`${linkCount}`}
+                />
+              ) : null;
+            })()}
+            {(() => {
+              const offerCount = conversation.messages?.filter((m) => m.type === 'offer').length ?? 0;
+              return offerCount > 0 ? (
+                <RowItem
+                  icon="cash-outline"
+                  label="Offers"
+                  detail={`${offerCount}`}
+                />
+              ) : null;
+            })()}
           </Section>
-        </Reanimated.View>
+        </View>
 
         {/* Marketplace context */}
-        {conversation.itemId && (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(140)}>
-            <Section title="Context">
-              <RowItem
-                icon="pricetag-outline"
-                label="View linked listing"
-                onPress={() => {
-                if (conversation.itemId) {
-                  navigation.navigate('ItemDetail', { itemId: conversation.itemId });
-                }
-              }}
-                showChevron
-              />
-            </Section>
-          </Reanimated.View>
-        )}
+        {conversation.itemId && (() => {
+          const listing = listings.find((l) => l.id === conversation.itemId);
+          return (
+            <View>
+              <Section title="Listing">
+                <RowItem
+                  icon="pricetag-outline"
+                  label={listing?.title ?? 'View linked listing'}
+                  detail={listing ? `£${listing.price.toFixed(2)}` : undefined}
+                  onPress={() => navigation.navigate('ItemDetail', { itemId: conversation.itemId! })}
+                  showChevron
+                />
+              </Section>
+            </View>
+          );
+        })()}
 
         {/* Actions */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+        <View>
           <Section title="Actions">
             <RowItem
               icon={isMuted ? 'volume-mute-outline' : 'volume-high-outline'}
-              label={isMuted ? 'Unmute notifications' : 'Mute notifications'}
+              label={isMuted ? 'Unmute' : 'Mute'}
               onPress={handleToggleMute}
             />
             <RowItem
               icon="archive-outline"
-              label="Archive chat"
+              label="Archive"
               onPress={handleArchive}
             />
           </Section>
-        </Reanimated.View>
+        </View>
 
         {/* Danger zone */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
-          <Section title="Danger zone" danger>
+        <View>
+          <Section title="Danger" danger>
             <RowItem
               icon={isBlocked ? 'person-add-outline' : 'person-remove-outline'}
               label={isBlocked ? 'Unblock user' : 'Block user'}
@@ -221,7 +241,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               danger
             />
           </Section>
-        </Reanimated.View>
+        </View>
       </ScrollView>
     </FlagshipScreen>
   );
@@ -320,7 +340,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.lg,
     gap: Space.sm,
-    ...Elevation.subtle,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     borderRadius: Radius.xl,
@@ -342,7 +361,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Elevation.subtle,
   },
   avatarImage: {
     width: 76,
@@ -412,7 +430,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     overflow: 'hidden',
-    ...Elevation.subtle,
   },
   sectionCardDanger: {
     borderColor: `${Colors.danger}30`,

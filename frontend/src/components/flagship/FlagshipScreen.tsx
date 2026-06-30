@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   View,
-  ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -78,7 +77,7 @@ export function FlagshipScreen({
         </Reanimated.View>
       )}
       {scrollEnabled ? (
-        <ScrollView
+        <Reanimated.ScrollView
           ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.scrollContent, contentStyle]}
@@ -88,7 +87,7 @@ export function FlagshipScreen({
         >
           {children}
           <View style={{ height: stickyFooter ? Space.xxl : Space.xl }} />
-        </ScrollView>
+        </Reanimated.ScrollView>
       ) : (
         <View style={[styles.content, contentStyle]}>{children}</View>
       )}

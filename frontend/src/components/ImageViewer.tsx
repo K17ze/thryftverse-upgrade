@@ -155,14 +155,14 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
   );
 }
 
-function VideoPage({ uri }: { uri: string }) {
+function VideoPage({ uri, shouldPlay }: { uri: string; shouldPlay: boolean }) {
   return (
     <View style={styles.page}>
       <Video
         source={{ uri }}
         style={styles.image}
         resizeMode={ResizeMode.COVER}
-        shouldPlay
+        shouldPlay={shouldPlay}
         isMuted
         isLooping
         useNativeControls
@@ -205,11 +205,18 @@ interface Props {
 export function ImageViewer({ images, height = W, onDoubleTap, itemId, onIndexChange }: Props) {
   const [activeIndex, setActiveIndex] = React.useState(0);
 
+  React.useEffect(() => {
+    if (images.length > 0 && activeIndex >= images.length) {
+      setActiveIndex(0);
+      onIndexChange?.(0);
+    }
+  }, [images.length, activeIndex, onIndexChange]);
+
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
-      const idx = viewableItems[0].index ?? 0;
-      setActiveIndex(idx);
-      onIndexChange?.(idx);
+      const next = viewableItems[0].index ?? 0;
+      setActiveIndex(next);
+      if (onIndexChange) onIndexChange(next);
     }
   }, [onIndexChange]);
 
@@ -227,7 +234,7 @@ export function ImageViewer({ images, height = W, onDoubleTap, itemId, onIndexCh
         viewabilityConfig={viewabilityConfig.current}
         renderItem={({ item, index }) => (
           isVideoUri(item) ? (
-            <VideoPage uri={item} />
+            <VideoPage uri={item} shouldPlay={index === activeIndex} />
           ) : (
             <ImagePage
               uri={item}

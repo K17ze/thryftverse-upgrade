@@ -8,14 +8,29 @@ export interface LookTagApiItem {
   y: number;
 }
 
+export interface LookCreator {
+  id: string;
+  username: string | null;
+  avatar: string | null;
+}
+
 export interface LookApiItem {
   id: string;
   creatorId: string;
+  creator: LookCreator;
   title: string;
+  caption: string;
   mediaUrl: string;
+  visibility: 'public' | 'private';
   status: 'draft' | 'published' | 'archived';
   createdAt: string;
+  updatedAt?: string;
   tags: LookTagApiItem[];
+  likeCount: number;
+  commentCount: number;
+  saveCount: number;
+  likedByViewer: boolean;
+  savedByViewer: boolean;
 }
 
 export interface LookApiResponse {
@@ -39,9 +54,12 @@ export interface LookCreateTag {
 export interface LookCreateBody {
   id: string;
   title: string;
+  caption?: string;
   mediaUrl: string;
+  visibility?: 'public' | 'private';
   tags?: LookCreateTag[];
   status?: 'draft' | 'published' | 'archived';
+  compositionDocument?: unknown;
 }
 
 export async function createLookOnApi(body: LookCreateBody): Promise<{ ok: boolean; lookId: string }> {
@@ -67,4 +85,72 @@ export async function fetchLookByIdFromApi(lookId: string): Promise<LookSingleRe
 
 export async function deleteLookOnApi(lookId: string): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>(`/looks/${lookId}`, { method: 'DELETE' });
+}
+
+// ── Like ──
+
+export async function likeLookOnApi(lookId: string): Promise<{ ok: boolean; likeCount: number; likedByViewer: boolean }> {
+  return fetchJson<{ ok: boolean; likeCount: number; likedByViewer: boolean }>(`/looks/${lookId}/like`, {
+    method: 'POST',
+  });
+}
+
+export async function unlikeLookOnApi(lookId: string): Promise<{ ok: boolean; likeCount: number; likedByViewer: boolean }> {
+  return fetchJson<{ ok: boolean; likeCount: number; likedByViewer: boolean }>(`/looks/${lookId}/like`, {
+    method: 'DELETE',
+  });
+}
+
+// ── Save ──
+
+export async function saveLookOnApi(lookId: string): Promise<{ ok: boolean; saveCount: number; savedByViewer: boolean }> {
+  return fetchJson<{ ok: boolean; saveCount: number; savedByViewer: boolean }>(`/looks/${lookId}/save`, {
+    method: 'POST',
+  });
+}
+
+export async function unsaveLookOnApi(lookId: string): Promise<{ ok: boolean; saveCount: number; savedByViewer: boolean }> {
+  return fetchJson<{ ok: boolean; saveCount: number; savedByViewer: boolean }>(`/looks/${lookId}/save`, {
+    method: 'DELETE',
+  });
+}
+
+// ── Comments ──
+
+export interface LookCommentApiItem {
+  id: string;
+  lookId: string;
+  authorId: string;
+  author: LookCreator;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LookCommentsResponse {
+  items: LookCommentApiItem[];
+}
+
+export async function fetchLookCommentsFromApi(lookId: string): Promise<LookCommentsResponse> {
+  return fetchJson<LookCommentsResponse>(`/looks/${lookId}/comments`);
+}
+
+export async function createLookCommentOnApi(
+  lookId: string,
+  body: { id: string; body: string }
+): Promise<{ ok: boolean; comment: LookCommentApiItem }> {
+  return fetchJson<{ ok: boolean; comment: LookCommentApiItem }>(`/looks/${lookId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteLookCommentOnApi(
+  lookId: string,
+  commentId: string
+): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/looks/${lookId}/comments/${commentId}`, {
+    method: 'DELETE',
+  });
 }

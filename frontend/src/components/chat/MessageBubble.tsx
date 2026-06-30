@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Type, TypeStyles, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 interface Reaction {
@@ -60,9 +60,9 @@ export function MessageBubble({
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
 
-  const bubbleBg = isMe ? Colors.textPrimary : Colors.surface;
-  const bubbleText = isMe ? Colors.background : Colors.textPrimary;
-  const metaColor = isMe ? `${Colors.background}99` : Colors.textMuted;
+  const bubbleBg = isMe ? Colors.brand : Colors.surfaceAlt;
+  const bubbleText = isMe ? Colors.textInverse : Colors.textPrimary;
+  const metaColor = isMe ? `${Colors.textInverse}99` : Colors.textMuted;
 
   const isStandalone = isFirstInCluster && isLastInCluster;
   const isTop = isFirstInCluster && !isLastInCluster;
@@ -75,9 +75,7 @@ export function MessageBubble({
     ? { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.lg }
     : isBottom
     ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.sm }
-    : isMiddle
-    ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.lg }
-    : { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.lg };
+    : { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.sm };
 
   const themRadius = isStandalone
     ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg }
@@ -85,9 +83,7 @@ export function MessageBubble({
     ? { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.lg }
     : isBottom
     ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.sm }
-    : isMiddle
-    ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg }
-    : { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg };
+    : { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.sm };
 
   return (
     <View style={[styles.row, isMe && styles.rowRight]}>
@@ -116,7 +112,7 @@ export function MessageBubble({
           ]}
         >
           {replyTo ? (
-            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${Colors.background}40` : Colors.border }]}>
+            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${Colors.textInverse}40` : Colors.border }]}>
               <Text style={[styles.replyName, { color: metaColor }]}>
                 {replyTo.senderName}
               </Text>
@@ -158,7 +154,7 @@ export function MessageBubble({
                 {isUploading ? (
                   <Ionicons name="time-outline" size={10} color={metaColor} />
                 ) : hasFailed ? (
-                  <Ionicons name="alert-circle" size={10} color={isMe ? Colors.background : Colors.danger} />
+                  <Ionicons name="alert-circle" size={10} color={isMe ? Colors.textInverse : Colors.danger} />
                 ) : (
                   <Ionicons name="checkmark" size={10} color={metaColor} />
                 )}
@@ -207,8 +203,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   avatarText: {
     fontSize: Type.meta.size,
@@ -220,7 +214,7 @@ const styles = StyleSheet.create({
   },
   bubbleColumn: {
     maxWidth: '78%',
-    gap: 4,
+    gap: 3,
   },
   senderName: {
     fontSize: Type.caption.size,
@@ -230,23 +224,20 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   bubble: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    gap: 4,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm,
+    gap: 3,
   },
   bubbleMe: {
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: Colors.brand,
     alignSelf: 'flex-end',
   },
   bubbleThem: {
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     alignSelf: 'flex-start',
   },
   bubbleFailed: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.danger,
+    backgroundColor: `${Colors.danger}15`,
   },
   replyBlock: {
     borderLeftWidth: 3,
@@ -273,11 +264,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 4,
-    marginTop: 2,
+    gap: 3,
+    marginTop: 1,
   },
   metaRowMe: {
-    opacity: 0.85,
+    opacity: 0.7,
   },
   timestamp: {
     fontSize: Type.meta.size,
@@ -314,7 +305,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   uploadOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -358,17 +349,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     minHeight: 28,
   },
   reactionChipActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}18`,
+    backgroundColor: `${Colors.brand}15`,
   },
   reactionEmoji: {
     fontSize: 13,

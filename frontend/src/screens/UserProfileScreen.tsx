@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,9 @@ import {
   StatusBar,
   Dimensions,
   Share,
+  Pressable,
+  ActivityIndicator,
 } from 'react-native';
-import { Video, ResizeMode } from '../components/compat/Video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -26,40 +27,31 @@ import { ActiveTheme, Colors } from '../constants/colors';
 import { Listing } from '../data/mockData';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
-import { Space, Radius } from '../theme/designTokens';
-import { useToast } from '../context/ToastContext';
-import { Typography } from '../theme/designTokens';
-import { AppButton } from '../components/ui/AppButton';
+import { Space, Typography } from '../theme/designTokens';
 import { FlagshipProfileMedia } from '../components/flagship';
-import { ProfileVisualHeader, ProfileTabRail } from '../components/profile';
-import { fetchPublicProfile, type PublicProfileUser } from '../services/profileApi';
+import { type PublicProfileUser } from '../services/profileApi';
+import { usePublicProfileQuery } from '../platform/server';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { isVideoUri } from '../utils/media';
+import { PublicProfileIdentityHero } from '../components/profile/PublicProfileIdentityHero';
+import { PublicProfileActionRow } from '../components/profile/PublicProfileActionRow';
+import { PublicProfileTabRail } from '../components/profile/PublicProfileTabRail';
+import { ProfileLooksGrid } from '../components/profile/ProfileLooksGrid';
+import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
 
 type Props = StackScreenProps<RootStackParamList, 'UserProfile'>;
 
-const ACCENT = Colors.brand;
 const BG = Colors.background;
-const CARD = Colors.surface;
-const CARD_ALT = Colors.surfaceAlt;
 const BORDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
-const { width } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const GRID_SPACING = 16;
-const ITEM_SIZE = (width - 40 - GRID_SPACING) / 2;
-const COVER_HEIGHT = 200;
-const AVATAR_SIZE = 108;
-const COVER_IMAGE = '';
+const COVER_HEIGHT = 180;
+const GRID_GAP = 8;
+const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP) / 2;
 
-type Tab = 'Listings' | 'About';
-
-const TAB_OPTIONS: Array<{ value: Tab; label: string; accessibilityLabel: string }> = [
-  { value: 'Listings', label: 'Listings', accessibilityLabel: 'Show listings tab' },
-  { value: 'About', label: 'About', accessibilityLabel: 'Show about tab' },
-];
-
+type Tab = 'Listings' | 'Looks' | 'About';
 
 export default function UserProfileScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
@@ -67,49 +59,64 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const userAvatar = useStore(state => state.userAvatar);
   const userCover = useStore(state => state.userCover);
   const profileMediaOverrides = useStore(state => state.profileMediaOverrides);
-  const { show } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('Listings');
-  
-  const [publicProfile, setPublicProfile] = useState<PublicProfileUser | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const { formatFromFiat } = useFormattedPrice();
-  const { listings } = useBackendData();
 
   const isMe = route.params?.isMe ?? false;
   const userId = route.params?.userId;
 
-  const isSelfProfile =
-    isMe ||
-    userId === currentUser?.id;
+  const isSelfProfile = isMe || userId === currentUser?.id;
+
+  const publicProfileQuery = usePublicProfileQuery(isSelfProfile ? null : userId);
+  const publicProfile = publicProfileQuery.data ?? null;
+  const isLoadingProfile = publicProfileQuery.isLoading;
+  const profileError = publicProfileQuery.error ? 'Unable to load profile. Tap to retry.' : null;
+  const [moreMenuVisible, setMoreMenuVisible] = useState(false);
+  const [profileLooks, setProfileLooks] = useState<LookApiItem[]>([]);
+  const [isLoadingLooks, setIsLoadingLooks] = useState(false);
+  const [looksError, setLooksError] = useState<string | null>(null);
+  const { formatFromFiat } = useFormattedPrice();
+  const { listings } = useBackendData();
+
+  const targetUserId = isSelfProfile ? currentUser?.id : userId;
 
   const profileListings = React.useMemo(() => {
     const targetId = isMe ? currentUser?.id : userId;
     return targetId ? listings.filter((l) => l.sellerId === targetId) : [];
   }, [listings, isMe, userId, currentUser?.id]);
 
-  React.useEffect(() => {
-    if (isSelfProfile || !userId) return;
-    let canceled = false;
-    setIsLoadingProfile(true);
-    setProfileError(null);
-    fetchPublicProfile(userId)
-      .then((profile) => {
-        if (!canceled) setPublicProfile(profile);
-      })
-      .catch((err) => {
-        if (!canceled) {
-          setPublicProfile(null);
-          setProfileError('Unable to load profile. Tap to retry.');
-        }
-      })
-      .finally(() => {
-        if (!canceled) setIsLoadingProfile(false);
-      });
-    return () => { canceled = true; };
-  }, [userId, isSelfProfile]);
+  const loadProfileLooks = useCallback(async () => {
+    if (!targetUserId) return;
+    setIsLoadingLooks(true);
+    setLooksError(null);
+    try {
+      const res = await fetchLooksFromApi({ creatorId: targetUserId, status: 'published' });
+      setProfileLooks(res.items ?? []);
+    } catch {
+      setLooksError('Looks could not be loaded.');
+    } finally {
+      setIsLoadingLooks(false);
+    }
+  }, [targetUserId]);
 
-  const hasRealUserData = isSelfProfile && currentUser != null;
+  useEffect(() => {
+    let canceled = false;
+    if (targetUserId) {
+      setIsLoadingLooks(true);
+      setLooksError(null);
+      fetchLooksFromApi({ creatorId: targetUserId, status: 'published' })
+        .then((res) => {
+          if (!canceled) setProfileLooks(res.items ?? []);
+        })
+        .catch(() => {
+          if (!canceled) setLooksError('Looks could not be loaded.');
+        })
+        .finally(() => {
+          if (!canceled) setIsLoadingLooks(false);
+        });
+    }
+    return () => { canceled = true; };
+  }, [targetUserId]);
+
 
   const mediaOverride =
     (userId ? profileMediaOverrides[userId] : undefined)
@@ -123,8 +130,12 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     ? targetProfile?.avatar || userAvatar || mediaOverride?.avatar || undefined
     : targetProfile?.avatar || undefined;
   const displayCover = isSelfProfile
-    ? targetProfile?.coverPhoto || userCover || mediaOverride?.cover || COVER_IMAGE
-    : targetProfile?.coverPhoto || COVER_IMAGE;
+    ? targetProfile?.coverPhoto || userCover || mediaOverride?.cover || ''
+    : targetProfile?.coverPhoto || '';
+
+  const memberSince = targetProfile?.createdAt
+    ? new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+    : undefined;
 
   const handleShare = React.useCallback(async () => {
     try {
@@ -134,7 +145,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     }
   }, [displayHandle]);
 
-  
   const handleMessageProfile = React.useCallback(() => {
     const targetId = isSelfProfile ? currentUser?.id : userId;
     if (!targetId) return;
@@ -143,6 +153,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       preselectedDisplayName: displayUsername,
     });
   }, [displayUsername, navigation, isSelfProfile, currentUser?.id, userId]);
+
+  const handleMore = React.useCallback(() => {
+    setMoreMenuVisible(true);
+  }, []);
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -158,76 +172,71 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return { transform: [{ translateY }, { scale }] };
   });
 
+  const topUtilityStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(scrollY.value, [0, 80], [1, 0], Extrapolation.CLAMP);
+    const translateY = interpolate(scrollY.value, [0, 80], [0, -8], Extrapolation.CLAMP);
+    return { opacity, transform: [{ translateY }] };
+  });
+
   const headerOpacityStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [COVER_HEIGHT - 60, COVER_HEIGHT - 10], [0, 1], Extrapolation.CLAMP);
     return { opacity, backgroundColor: BG };
   });
 
-  const renderItem = (item: Listing) => (
-    <AnimatedPressable
-      key={item.id}
-      style={styles.gridItem}
-      activeOpacity={0.9}
-      onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
-      accessibilityRole="button"
-      accessibilityLabel={`Open listing ${item.title}`}
-      accessibilityHint="Opens listing details"
-    >
-      <View style={styles.gridImageWrap}>
-        <SharedTransitionView
-          style={styles.gridSharedImage}
-          sharedTransitionTag={`image-${item.id}-0`}
-        >
-          <CachedImage
-            uri={item.images?.[0] || ''}
-            style={styles.gridImage}
-            contentFit="cover"
-          />
-        </SharedTransitionView>
-        <View style={styles.likeBtnPill}>
-          <Ionicons name="heart-outline" size={14} color="#fff" />
+  // ── Loading state ──
+  if (isLoadingProfile && !targetProfile) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+        <View style={[styles.coverPlaceholder, { height: COVER_HEIGHT }]} />
+        <View style={styles.stateContainer}>
+          <ActivityIndicator size="large" color={Colors.brand} />
+          <Text style={styles.stateText}>Loading profile…</Text>
         </View>
       </View>
-      <View style={styles.gridInfo}>
-        <Text style={styles.gridPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
-        <Text style={styles.gridBrand} numberOfLines={1} ellipsizeMode="tail">{item.brand}</Text>
-        <Text style={styles.gridSizeCondition}>{item.size} | {item.condition}</Text>
-      </View>
-    </AnimatedPressable>
-  );
+    );
+  }
 
-  const groupedListings = [];
-  for (let i = 0; i < profileListings.length; i += 2) {
-    groupedListings.push([profileListings[i], profileListings[i+1]]);
+  // ── Error state ──
+  if (profileError && !targetProfile) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+        <View style={[styles.coverPlaceholder, { height: COVER_HEIGHT }]} />
+        <Pressable
+          style={styles.stateContainer}
+          onPress={() => publicProfileQuery.refetch()}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading profile"
+        >
+          <Ionicons name="cloud-offline-outline" size={40} color={MUTED} />
+          <Text style={styles.stateText}>Unable to load profile</Text>
+          <Text style={styles.stateSubtext}>Tap to retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // ── Unavailable state ──
+  if (!targetProfile && !isSelfProfile) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+        <View style={[styles.coverPlaceholder, { height: COVER_HEIGHT }]} />
+        <View style={styles.stateContainer}>
+          <Ionicons name="person-outline" size={40} color={MUTED} />
+          <Text style={styles.stateText}>Profile unavailable</Text>
+          <Text style={styles.stateSubtext}>This account may no longer be active.</Text>
+        </View>
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
-      {/* Floating Translucent Header Layer */}
-      <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]}>
-         <View style={{ flex: 1 }} />
-        <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{displayUsername}</Text>
-         <View style={{ flex: 1 }} />
-      </Reanimated.View>
-
-      <View style={[styles.floatingHeaderActions, { top: insets.top }]}>
-        <AnimatedPressable
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to previous screen"
-        >
-          <View style={styles.iconBackdrop}>
-             <Ionicons name="arrow-back" size={24} color="#fff" />
-          </View>
-        </AnimatedPressable>
-        
-      </View>
-
-      {/* Cover photo with parallax - supports images, GIFs and videos */}
+      {/* ── 1. FULL-WIDTH SELLER COVER ── */}
       <Reanimated.View style={[styles.coverWrap, coverStyle]}>
         <FlagshipProfileMedia
           coverUri={displayCover}
@@ -238,119 +247,235 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         />
       </Reanimated.View>
 
-      {/* Main Content Area */}
+      {/* ── 2. FLOATING BACK / SHARE / MORE ── */}
+      <View pointerEvents="box-none" style={styles.coverActionLayer}>
+        <Reanimated.View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}>
+          <AnimatedPressable
+            style={styles.topUtilityIconBtn}
+            activeOpacity={0.9}
+            onPress={() => navigation.goBack()}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+            accessibilityHint="Returns to previous screen"
+          >
+            <Ionicons name="arrow-back" size={18} color="#fff" />
+          </AnimatedPressable>
+
+          <View style={styles.topUtilityRight}>
+            <AnimatedPressable
+              style={styles.topUtilityIconBtn}
+              activeOpacity={0.9}
+              onPress={handleShare}
+              accessibilityLabel="Share profile"
+              accessibilityRole="button"
+            >
+              <Ionicons name="share-outline" size={18} color="#fff" />
+            </AnimatedPressable>
+            {!isSelfProfile && (
+              <AnimatedPressable
+                style={styles.topUtilityIconBtn}
+                activeOpacity={0.9}
+                onPress={handleMore}
+                accessibilityLabel="More options"
+                accessibilityRole="button"
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color="#fff" />
+              </AnimatedPressable>
+            )}
+          </View>
+        </Reanimated.View>
+      </View>
+
+      {/* ── COLLAPSED SCROLL HEADER ── */}
+      <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]}>
+        <View style={{ flex: 1 }} />
+        <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{displayUsername}</Text>
+        <View style={{ flex: 1 }} />
+      </Reanimated.View>
+
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: COVER_HEIGHT - 60 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: COVER_HEIGHT - 50 }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        stickyHeaderIndices={[1]} /* Target the Tab Bar index! */
+        stickyHeaderIndices={[1]}
       >
-        {/* Profile Visual Identity */}
-        <ProfileVisualHeader
-          coverUri={displayCover}
-          avatarUri={displayAvatar}
-          displayName={displayUsername}
-          username={targetProfile?.username}
-          bio={targetProfile?.bio}
-          userLocation={targetProfile?.location}
-          memberSince={targetProfile?.createdAt ? new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }) : undefined}
-          isSelf={isSelfProfile}
-          onEditProfile={isSelfProfile ? () => navigation.navigate('EditProfile') : undefined}
-          onShare={handleShare}
-          onMessage={!isSelfProfile ? handleMessageProfile : undefined}
-          hideCover
-          stats={[
-            { label: 'Listings', value: profileListings.length },
-          ]}
-        />
+        {/* ── 3-6: IDENTITY HERO ── */}
+        <View>
+          <PublicProfileIdentityHero
+            avatarUri={displayAvatar ?? null}
+            displayName={targetProfile?.displayName || displayUsername}
+            username={targetProfile?.username ?? 'Thryft user'}
+            bio={targetProfile?.bio}
+            location={targetProfile?.location}
+            memberSince={memberSince}
+            listingCount={profileListings.length}
+          />
 
-        {/* Seller context — real data only */}
-        {!isSelfProfile && targetProfile && (
-          <View style={styles.sellerContextBar}>
-            <View style={styles.sellerContextInner}>
-              {targetProfile.createdAt && (
-                <View style={styles.sellerContextItem}>
-                  <Ionicons name="calendar-outline" size={14} color={Colors.textMuted} />
-                  <Text style={styles.sellerContextText}>
-                    Member since {new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
-                  </Text>
-                </View>
-              )}
-              {targetProfile.location && (
-                <View style={styles.sellerContextItem}>
-                  <Ionicons name="location-outline" size={14} color={Colors.textMuted} />
-                  <Text style={styles.sellerContextText}>{targetProfile.location}</Text>
-                </View>
-              )}
-              <View style={styles.sellerContextItem}>
-                <Ionicons name="shirt-outline" size={14} color={Colors.textMuted} />
-                <Text style={styles.sellerContextText}>{profileListings.length} listing{profileListings.length !== 1 ? 's' : ''}</Text>
-              </View>
+          {/* ── 7-8: RELATIONSHIP ACTIONS ── */}
+          {!isSelfProfile && (
+            <PublicProfileActionRow
+              onMessage={handleMessageProfile}
+              onShare={handleShare}
+              onMore={handleMore}
+            />
+          )}
+
+          {isSelfProfile && (
+            <View style={styles.selfActionRow}>
+              <AnimatedPressable
+                style={styles.selfShareBtn}
+                onPress={handleShare}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Share profile"
+              >
+                <Ionicons name="share-outline" size={16} color={TEXT} />
+                <Text style={styles.selfShareBtnText}>Share</Text>
+              </AnimatedPressable>
             </View>
+          )}
+        </View>
+
+        {/* ── 9. FLAT TAB RAIL (sticky) ── */}
+        <View style={styles.stickyTabWrapper}>
+          <PublicProfileTabRail
+            tabs={[
+              { key: 'Listings', label: 'Listings', count: profileListings.length },
+              { key: 'Looks', label: 'Looks', count: isLoadingLooks ? undefined : profileLooks.length },
+              { key: 'About', label: 'About' },
+            ]}
+            activeKey={activeTab}
+            onChange={(k) => setActiveTab(k as Tab)}
+          />
+        </View>
+
+        {/* ── 10. SELLER PORTFOLIO CONTENT ── */}
+
+        {/* LISTINGS TAB — two-column seller grid */}
+        {activeTab === 'Listings' && (
+          <View style={{ backgroundColor: BG, paddingBottom: 120, paddingTop: Space.md }}>
+            {profileListings.length === 0 ? (
+              <View style={styles.listingsEmpty}>
+                <Ionicons name="shirt-outline" size={32} color={MUTED} />
+                <Text style={styles.listingsEmptyTitle}>No active listings</Text>
+              </View>
+            ) : (
+              <View style={styles.grid}>
+                {profileListings.map((item) => (
+                  <AnimatedPressable
+                    key={item.id}
+                    style={[styles.gridCard, { width: CARD_WIDTH }]}
+                    activeOpacity={0.9}
+                    onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open listing ${item.title}`}
+                    accessibilityHint="Opens listing details"
+                  >
+                    <SharedTransitionView
+                      style={[styles.gridImageWrap, { width: CARD_WIDTH, height: CARD_WIDTH * 1.25 }]}
+                      sharedTransitionTag={`image-${item.id}-0`}
+                    >
+                      <CachedImage
+                        uri={item.images?.[0] ?? ''}
+                        style={styles.gridImage}
+                        containerStyle={{ width: '100%', height: '100%', borderRadius: 6 }}
+                        contentFit="cover"
+                      />
+                      {item.isSold ? (
+                        <View style={styles.soldOverlay}>
+                          <Text style={styles.soldText}>SOLD</Text>
+                        </View>
+                      ) : null}
+                    </SharedTransitionView>
+                    <Text style={styles.gridPrice} numberOfLines={1}>
+                      {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                    </Text>
+                    {item.brand ? (
+                      <Text style={styles.gridBrand} numberOfLines={1}>{item.brand}</Text>
+                    ) : null}
+                    {(item.size || item.condition) ? (
+                      <Text style={styles.gridMeta} numberOfLines={1}>
+                        {[item.size, item.condition].filter(Boolean).join(' · ')}
+                      </Text>
+                    ) : null}
+                  </AnimatedPressable>
+                ))}
+              </View>
+            )}
           </View>
         )}
 
-        {/* Index 1: Sticky Tabs */}
-        <View style={styles.stickyTabWrapper}>
-          <ProfileTabRail
-          tabs={[
-            { key: 'Listings', label: 'Listings', icon: 'shirt-outline', count: profileListings.length },
-            { key: 'About', label: 'About', icon: 'person-outline' },
-          ]}
-          activeKey={activeTab}
-          onChange={(k) => setActiveTab(k as Tab)}
-        />
-        </View>
+        {/* LOOKS TAB — profile looks grid */}
+        {activeTab === 'Looks' && (
+          <View style={{ backgroundColor: BG, paddingBottom: 120, paddingTop: Space.md }}>
+            <ProfileLooksGrid
+              looks={profileLooks}
+              isLoading={isLoadingLooks}
+              error={looksError}
+              isSelfProfile={isSelfProfile}
+              onRetry={loadProfileLooks}
+              onCreateLook={() => navigation.navigate('CreatorStudio', { type: 'look' })}
+              navigation={navigation}
+            />
+          </View>
+        )}
 
-        {/* Index 2: Tab Content */}
-        <View style={styles.tabContentArea}>
-          {activeTab === 'Listings' && (
-            <View style={styles.gridListContent}>
-              {groupedListings.map((pair, rowIndex) => (
-                <View key={rowIndex} style={styles.rowWrapper}>
-                  {pair[0] && renderItem(pair[0])}
-                  {pair[1] && renderItem(pair[1])}
-                </View>
-              ))}
-            </View>
-          )}
-
-          {activeTab === 'About' && (
-            <View style={styles.aboutContent}>
+        {/* ABOUT TAB — flat editorial rows */}
+        {activeTab === 'About' && (
+          <View style={{ backgroundColor: BG, paddingBottom: 120, paddingTop: Space.md }}>
+            <View style={styles.aboutContainer}>
               {targetProfile?.bio ? (
-                <View style={styles.aboutBlock}>
+                <View style={styles.aboutRow}>
                   <Text style={styles.aboutLabel}>Bio</Text>
-                  <Text style={styles.aboutText}>{targetProfile.bio}</Text>
+                  <Text style={styles.aboutValue}>{targetProfile.bio}</Text>
                 </View>
               ) : null}
               {targetProfile?.location ? (
-                <View style={styles.aboutBlock}>
+                <View style={styles.aboutRow}>
                   <Text style={styles.aboutLabel}>Location</Text>
-                  <Text style={styles.aboutText}>{targetProfile.location}</Text>
+                  <Text style={styles.aboutValue}>{targetProfile.location}</Text>
                 </View>
               ) : null}
               {targetProfile?.website ? (
-                <View style={styles.aboutBlock}>
+                <View style={styles.aboutRow}>
                   <Text style={styles.aboutLabel}>Website</Text>
-                  <Text style={styles.aboutText}>{targetProfile.website}</Text>
+                  <Text style={styles.aboutValue}>{targetProfile.website}</Text>
                 </View>
               ) : null}
-              {targetProfile?.createdAt ? (
-                <View style={styles.aboutBlock}>
+              {memberSince ? (
+                <View style={[styles.aboutRow, styles.aboutRowLast]}>
                   <Text style={styles.aboutLabel}>Member Since</Text>
-                  <Text style={styles.aboutText}>{new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</Text>
+                  <Text style={styles.aboutValue}>{memberSince}</Text>
                 </View>
               ) : null}
-              {!targetProfile?.bio && !targetProfile?.location && !targetProfile?.website && !targetProfile?.createdAt && (
-                <Text style={{ color: MUTED, textAlign: 'center', marginTop: 40 }}>No additional info.</Text>
+              {!targetProfile?.bio && !targetProfile?.location && !targetProfile?.website && !memberSince && (
+                <Text style={styles.aboutEmpty}>No additional profile information.</Text>
               )}
             </View>
-          )}
-        </View>
+          </View>
+        )}
       </Reanimated.ScrollView>
 
-      
+      {/* More options menu */}
+      {moreMenuVisible && !isSelfProfile && (
+        <Pressable
+          style={styles.moreOverlay}
+          onPress={() => setMoreMenuVisible(false)}
+        >
+          <View style={styles.moreMenu}>
+            <Pressable
+              style={styles.moreItem}
+              onPress={() => { setMoreMenuVisible(false); handleShare(); }}
+              accessibilityRole="button"
+              accessibilityLabel="Share profile"
+            >
+              <Ionicons name="share-outline" size={18} color={TEXT} />
+              <Text style={styles.moreItemText}>Share profile</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -358,386 +483,249 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
 
+  // Cover
+  coverWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: COVER_HEIGHT,
+    zIndex: 0,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
+  },
+  coverPlaceholder: {
+    backgroundColor: Colors.surfaceAlt,
+  },
+  coverActionLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: COVER_HEIGHT,
+    zIndex: 8,
+  },
+  topUtilityRow: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  topUtilityRight: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  topUtilityIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Collapsed header
   floatingHeader: {
-    position: 'absolute', top: 0, left: 0, right: 0,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
     paddingBottom: 16,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
   },
-  floatingHeaderTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: TEXT, textTransform: 'uppercase', letterSpacing: 1 },
-
-  floatingHeaderActions: {
-    position: 'absolute', left: 0, right: 0,
-    zIndex: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingTop: 4,
-  },
-  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  iconBackdrop: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center', alignItems: 'center'
-  },
-
-  coverWrap: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    height: COVER_HEIGHT,
-    zIndex: 0,
-    overflow: 'hidden',
-  },
-  coverImage: { width: '100%', height: '100%' },
-  coverGradient: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+  floatingHeaderTitle: {
+    fontSize: 17,
+    fontFamily: Typography.family.semibold,
+    color: TEXT,
+    letterSpacing: -0.3,
   },
 
   scrollContent: {
     minHeight: '100%',
   },
 
-  profileHeader: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    backgroundColor: BG,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 24,
+  // Self action row (when viewing own profile from public route)
+  selfActionRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
   },
-  heroRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 24 },
-  avatarContainer: {
-    marginTop: -(AVATAR_SIZE / 2 + 10),
-    paddingHorizontal: 20,
-    zIndex: 10,
+  selfShareBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 44,
+    paddingHorizontal: 24,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
+    backgroundColor: BG,
   },
-  avatarWrapLinkedIn: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: Colors.background,
-    borderWidth: 4,
-    borderColor: Colors.background,
+  selfShareBtnText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: TEXT,
+  },
+
+  // Sticky tab wrapper
+  stickyTabWrapper: {
+    backgroundColor: BG,
+  },
+
+  // Listings grid
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Space.md,
+    gap: GRID_GAP,
+  },
+  gridCard: {
+    marginBottom: 12,
+  },
+  gridImageWrap: {
+    borderRadius: 6,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
+    position: 'relative',
   },
-  heroAvatarLinkedIn: {
+  gridImage: {
     width: '100%',
     height: '100%',
   },
-  heroInfoLinkedIn: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+  soldOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
-  },
-  statsRow: {
-    flexDirection: 'row',
     justifyContent: 'center',
-    gap: 32,
-    marginTop: 16,
-    marginBottom: 20,
   },
-  actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    marginBottom: 24,
-  },
-  followBtn: {
-    backgroundColor: Colors.brand,
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  followBtnText: {
+  soldText: {
     color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  messageBtn: {
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  messageBtnText: {
-    color: Colors.textPrimary,
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  avatarLarge: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: CARD_ALT,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  heroInfo: { flex: 1 },
-  heroNameLinkedIn: {
-    fontSize: 18,
-    fontFamily: Typography.family.bold,
-    color: TEXT,
-    letterSpacing: -0.3,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  heroHandleLinkedIn: {
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
-    color: MUTED,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  heroBio: {
     fontSize: 14,
-    fontFamily: Typography.family.medium,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 1,
+  },
+  gridPrice: {
+    fontSize: 14,
+    fontFamily: Typography.family.bold,
+    color: TEXT,
+    marginTop: 6,
+  },
+  gridBrand: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  gridMeta: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
     color: MUTED,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-    paddingHorizontal: 24,
+    marginTop: 1,
   },
-  heroRatingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroReviewCount: { fontSize: 14, fontFamily: Typography.family.medium, color: MUTED },
 
-  statsCard: {
-    flexDirection: 'row',
-    backgroundColor: CARD,
-    borderRadius: 24,
-    paddingVertical: 18,
-    marginBottom: 28,
-    shadowColor: Colors.textPrimary,
-    shadowOpacity: 0.04,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  statCol: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: Typography.size.title, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 2 },
-  statLabel: { fontSize: Typography.size.caption, fontFamily: Typography.family.medium, color: MUTED },
-  statDivider: { width: 6, backgroundColor: 'transparent' },
-
-  heroActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  heroActionPrimary: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 14,
-  },
-  heroActionPrimaryActive: {
-    backgroundColor: 'transparent',
-  },
-  heroActionPrimaryText: {
-    fontSize: 13,
-    fontFamily: Typography.family.bold,
-    color: Colors.background,
-    letterSpacing: 0.15,
-  },
-  heroActionPrimaryTextActive: {
-    color: TEXT,
-  },
-  heroActionSecondary: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 14,
-  },
-  heroActionSecondaryText: {
-    fontSize: 13,
-    fontFamily: Typography.family.bold,
-    color: TEXT,
-    letterSpacing: 0.15,
-  },
-  heroActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: CARD,
+  // Listings empty
+  listingsEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: Space.xl * 2,
+    gap: 10,
   },
-  stickyTabWrapper: {
-    backgroundColor: BG,
-    paddingBottom: Space.md,
-    borderBottomWidth: 1,
+  listingsEmptyTitle: {
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: MUTED,
+  },
+
+  // About — flat editorial rows
+  aboutContainer: {
+    paddingHorizontal: Space.md,
+  },
+  aboutRow: {
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
   },
-  tabBarContainer: {
-    paddingHorizontal: Space.lg,
-    gap: Space.sm,
+  aboutRowLast: {
+    borderBottomWidth: 0,
   },
-  tabPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: Radius.lg,
-    backgroundColor: CARD_ALT,
-    alignItems: 'center',
-    minWidth: 80,
+  aboutLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: MUTED,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+    marginBottom: 4,
   },
-  tabPillActive: { backgroundColor: Colors.brand },
-  tabText: { fontSize: Typography.size.body, fontFamily: Typography.family.medium, color: MUTED },
-  tabTextActive: { color: Colors.background, fontFamily: Typography.family.bold },
-
-  tabContentArea: {
-    backgroundColor: BG,
-    minHeight: width,
-    paddingTop: 16,
-    paddingBottom: 100,
+  aboutValue: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: TEXT,
+    lineHeight: 20,
   },
-
-  // Grid / Listings
-  gridListContent: { paddingHorizontal: 20 },
-  rowWrapper: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 22 },
-  gridItem: { width: ITEM_SIZE },
-  gridImageWrap: {
-    width: ITEM_SIZE,
-    height: ITEM_SIZE * 1.3,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    backgroundColor: CARD,
-    marginBottom: Space.sm,
-  },
-  gridSharedImage: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  gridImage: { width: '100%', height: '100%' },
-  likeBtnPill: {
-    position: 'absolute', top: Space.sm, right: Space.sm,
-    width: 32, height: 32, borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  gridInfo: { paddingHorizontal: 4, minHeight: 56 },
-  gridPrice: { color: TEXT, fontSize: Typography.size.bodyLarge, fontFamily: Typography.family.bold, marginBottom: 2 },
-  gridBrand: { color: Colors.textSecondary, fontSize: Typography.size.caption - 1, fontFamily: Typography.family.bold, textTransform: 'uppercase', letterSpacing: Typography.tracking.caps, marginBottom: 3 },
-  gridSizeCondition: { color: MUTED, fontSize: Typography.size.caption + 1, fontFamily: Typography.family.medium },
-
-  // Reviews Tab
-  reviewsContent: { paddingHorizontal: 0 },
-  ratingHero: { alignItems: 'center', paddingVertical: 40 },
-  ratingBigNumber: { fontSize: Typography.size.giant, fontFamily: Typography.family.bold, color: TEXT, letterSpacing: -2, lineHeight: 80 },
-  ratingTotalText: { fontSize: Typography.size.body, fontFamily: Typography.family.medium, color: MUTED, marginTop: 12 },
-
-  reviewsFilterRow: { paddingHorizontal: 20, marginBottom: 24 },
-  reviewsFilterStrip: { gap: 10 },
-  filterChip: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, backgroundColor: CARD_ALT },
-  filterChipActive: { backgroundColor: Colors.brand },
-  filterChipText: { fontSize: Typography.size.body, fontFamily: Typography.family.medium, color: MUTED },
-  filterChipTextActive: { color: Colors.background, fontFamily: Typography.family.bold },
-
-  reviewsList: { paddingHorizontal: 20 },
-  reviewBlock: {
-    flexDirection: 'row',
-    backgroundColor: CARD,
-    borderRadius: 24,
-    padding: 24,
-    gap: 16,
-    shadowColor: Colors.textPrimary,
-    shadowOpacity: 0.03,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  reviewerAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: CARD_ALT, alignItems: 'center', justifyContent: 'center' },
-  reviewerAvatarAuto: { width: 44, height: 44, borderRadius: 22, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' },
-  reviewerAvatarAutoText: { fontSize: Typography.size.bodyLarge, fontFamily: Typography.family.bold, color: Colors.background },
-  reviewBlockInfo: { flex: 1 },
-  reviewSenderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  reviewSenderName: { fontSize: Typography.size.body, fontFamily: Typography.family.bold, color: TEXT },
-  reviewTime: { fontSize: Typography.size.caption + 1, fontFamily: Typography.family.regular, color: MUTED },
-  reviewBody: { fontSize: Typography.size.body, fontFamily: Typography.family.regular, color: TEXT, marginTop: 8, lineHeight: 22 },
-
-  // About Tab
-  aboutContent: { paddingHorizontal: 20 },
-  aboutBannerImage: {
-    height: 200,
-    backgroundColor: CARD,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
-  },
-  aboutBigName: { fontSize: Typography.size.heading, fontFamily: Typography.family.bold, color: TEXT, letterSpacing: -1, marginBottom: 32 },
-
-  aboutInfoCard: {
-    backgroundColor: CARD,
-    borderRadius: 24,
-    padding: 28,
-    marginBottom: 20,
-    shadowColor: Colors.textPrimary,
-    shadowOpacity: 0.03,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  aboutSectionHeading: { fontSize: Typography.size.caption + 1, fontFamily: Typography.family.bold, color: MUTED, textTransform: 'uppercase', letterSpacing: Typography.tracking.caps, marginBottom: 20 },
-  aboutRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
-  honestNote: {
-    fontSize: 13,
+  aboutEmpty: {
+    fontSize: 14,
     fontFamily: Typography.family.regular,
     color: MUTED,
     textAlign: 'center',
-    marginTop: 8,
-    paddingHorizontal: 24,
+    paddingVertical: Space.xl,
   },
-  aboutRowText: { fontSize: Typography.size.body, fontFamily: Typography.family.medium, color: TEXT },
-  aboutBlock: {
-    backgroundColor: CARD,
-    borderRadius: Radius.lg,
-    padding: Space.lg,
-    marginBottom: Space.md,
+
+  // State containers (loading, error, unavailable)
+  stateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: Space.md,
   },
-  aboutLabel: {
-    fontSize: Typography.size.caption,
-    fontFamily: Typography.family.bold,
+  stateText: {
+    fontSize: 16,
+    fontFamily: Typography.family.semibold,
+    color: TEXT,
+  },
+  stateSubtext: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
     color: MUTED,
-    textTransform: 'uppercase',
-    letterSpacing: Typography.tracking.caps,
-    marginBottom: Space.sm,
   },
-  aboutText: {
-    fontSize: Typography.size.body,
+
+  // More menu
+  moreOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    zIndex: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  moreMenu: {
+    backgroundColor: BG,
+    borderRadius: 14,
+    paddingVertical: 8,
+    minWidth: 200,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  moreItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  moreItemText: {
+    fontSize: 15,
     fontFamily: Typography.family.regular,
     color: TEXT,
-    lineHeight: 22,
-  },
-  sellerContextBar: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-  },
-  sellerContextInner: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: Space.sm,
-    padding: Space.md,
-  },
-  sellerContextItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  sellerContextText: {
-    fontSize: Typography.size.caption,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    letterSpacing: Typography.tracking.normal,
-    lineHeight: 18,
   },
 });
-

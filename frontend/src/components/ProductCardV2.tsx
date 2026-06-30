@@ -4,7 +4,7 @@
  * Price-first hierarchy like Vinted/Depop
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Dimensions, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
@@ -23,7 +23,7 @@ import { Typography } from '../theme/designTokens';
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { PressPresets } from '../hooks/usePremiumPressFeedback';
 
-const ASPECT_RATIOS = [0.75, 1.0, 1.25, 1.5]; // Masonry varied heights
+const DEFAULT_ASPECT_RATIO = 0.8; // 4:5 portrait — common for fashion product photos
 
 interface ProductCardV2Props {
   item: Listing;
@@ -44,8 +44,8 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
 
-  // Deterministic aspect ratio based on item id
-  const aspectRatio = ASPECT_RATIOS[item.id.charCodeAt(0) % ASPECT_RATIOS.length];
+  const [imageAspect, setImageAspect] = useState<number | null>(null);
+  const aspectRatio = imageAspect ?? DEFAULT_ASPECT_RATIO;
   const hasVideo = item.images.some((uri) => isVideoUri(uri));
   const hasMultiple = item.images.length > 1;
 
@@ -78,6 +78,12 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
           style={[styles.image, { aspectRatio }]}
           contentFit="cover"
           transition={300}
+          onLoad={(e: { source: { width: number; height: number } }) => {
+            const { width, height } = e.source;
+            if (width && height && width > 0 && height > 0) {
+              setImageAspect(width / height);
+            }
+          }}
         />
 
         {/* Sold overlay */}
@@ -157,6 +163,18 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
           </View>
 
           {item.size ? <T.Caption numberOfLines={1} style={{ marginTop: 1 }}>{item.size}</T.Caption> : null}
+          {item.seller?.username ? (
+            <View style={styles.sellerRow}>
+              {item.seller.avatar ? (
+                <CachedImage
+                  uri={item.seller.avatar}
+                  style={styles.sellerAvatar}
+                  contentFit="cover"
+                />
+              ) : null}
+              <Text style={styles.sellerName} numberOfLines={1}>@{item.seller.username}</Text>
+            </View>
+          ) : null}
         </View>
       )}
     </View>
@@ -167,7 +185,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
   }
 
   return (
-    <StaggeredItem index={index} animation="fadeDown" staggerMs={40}>
+    <StaggeredItem index={index} animation="fade" staggerMs={40}>
       {cardContent}
     </StaggeredItem>
   );
@@ -191,7 +209,7 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
   const heights = Array.from({ length: numColumns }, () => 0);
 
   items.forEach((item, index) => {
-    const aspect = ASPECT_RATIOS[item.id.charCodeAt(0) % ASPECT_RATIOS.length];
+    const aspect = DEFAULT_ASPECT_RATIO;
     const imgHeight = 160 / aspect; // approximate; actual width varies
     const infoHeight = visualOnly ? 0 : 42;
     const itemHeight = imgHeight + infoHeight + Space.sm;
@@ -252,7 +270,7 @@ const styles = StyleSheet.create({
 
   // Overlays
   soldOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(255,255,255,0.82)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -326,6 +344,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
+  },
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  sellerAvatar: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  sellerName: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+    flex: 1,
   },
   // Condition & price-drop badges
   conditionBadge: {

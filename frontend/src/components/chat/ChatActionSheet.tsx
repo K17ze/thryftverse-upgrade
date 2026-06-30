@@ -111,9 +111,9 @@ const styles = StyleSheet.create({
     gap: Space.md,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 12,
   },
   handle: {
     width: 36,

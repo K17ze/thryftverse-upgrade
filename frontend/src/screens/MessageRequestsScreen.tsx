@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -14,8 +13,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, TypeStyles, Elevation } from '../theme/designTokens';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarRing } from '../components/chat/AvatarRing';
@@ -23,6 +21,7 @@ import { CachedImage } from '../components/CachedImage';
 import { Caption, BodyEmphasis } from '../components/ui/Text';
 import { EmptyState } from '../components/EmptyState';
 import { useBackendData } from '../context/BackendDataContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -37,6 +36,9 @@ export default function MessageRequestsScreen() {
   const declineMessageRequest = useStore((state) => state.declineMessageRequest);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const currentUser = useStore((state) => state.currentUser);
+  const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const requestConversations = useMemo(() => {
     return conversations.filter((c) => messageRequests.includes(c.id));
@@ -68,6 +70,50 @@ export default function MessageRequestsScreen() {
     );
   };
 
+  const handleBlock = (id: string, name: string) => {
+    Alert.alert(
+      `Block ${name}?`,
+      'They will not be able to message you or see your profile.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: () => {
+            haptic.heavy();
+            declineMessageRequest(id);
+            const counterpartyId = conversations.find((c) => c.id === id)?.participantIds?.find(
+              (pid) => pid !== 'me' && pid !== currentUser?.id
+            );
+            if (counterpartyId) {
+              toggleBlockedUser(counterpartyId);
+            }
+            show(`${name} blocked`, 'info');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReport = (id: string, name: string) => {
+    Alert.alert(
+      `Report ${name}?`,
+      'Report this user for suspicious or inappropriate behaviour. They will be declined automatically.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report',
+          style: 'destructive',
+          onPress: () => {
+            haptic.heavy();
+            declineMessageRequest(id);
+            show('Report submitted. Request declined.', 'info');
+          },
+        },
+      ]
+    );
+  };
+
   const { listings } = useBackendData();
 
   const renderItem = ({ item, index }: { item: typeof requestConversations[0]; index: number }) => {
@@ -77,8 +123,9 @@ export default function MessageRequestsScreen() {
     const listing = item.itemId ? listings.find((l) => l.id === item.itemId) : undefined;
 
     return (
-      <Reanimated.View entering={FadeInDown.duration(300).delay(index * 60)}>
+      <View>
         <View style={styles.requestRow}>
+          {/* Identity section */}
           <View style={styles.requestIdentity}>
             <AvatarRing
               uri={avatarUri}
@@ -96,21 +143,42 @@ export default function MessageRequestsScreen() {
               <Caption color={Colors.textMuted} numberOfLines={2} style={styles.requestPreview}>
                 {item.lastMessage ?? 'Wants to message you'}
               </Caption>
-              {listing && (
-                <View style={styles.requestListingContext}>
-                  {listing.images?.[0] ? (
-                    <CachedImage uri={listing.images[0]} style={styles.requestListingThumb} contentFit="cover" />
-                  ) : (
-                    <View style={styles.requestListingThumbPlaceholder}>
-                      <Ionicons name="pricetag-outline" size={12} color={Colors.textMuted} />
-                    </View>
-                  )}
-                  <Caption color={Colors.textSecondary} numberOfLines={1} style={styles.requestListingTitle}>{listing.title}</Caption>
-                </View>
-              )}
             </View>
           </View>
 
+          {/* Listing context card */}
+          {listing && (
+            <View style={styles.listingCard}>
+              {listing.images?.[0] ? (
+                <CachedImage uri={listing.images[0]} style={styles.listingThumb} contentFit="cover" />
+              ) : (
+                <View style={styles.listingThumbPlaceholder}>
+                  <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
+                </View>
+              )}
+              <View style={styles.listingInfo}>
+                <Caption color={Colors.textSecondary} numberOfLines={1} style={styles.listingTitle}>{listing.title}</Caption>
+                {listing.price != null && (
+                  <Text style={styles.listingPrice}>
+                    £{listing.price.toFixed(2)}
+                  </Text>
+                )}
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+            </View>
+          )}
+
+          {/* Safety note — only for non-marketplace requests */}
+          {!listing && (
+            <View style={styles.safetyNote}>
+              <Ionicons name="shield-outline" size={12} color={Colors.textMuted} />
+              <Text style={styles.safetyNoteText}>
+                If this seems suspicious, decline and block.
+              </Text>
+            </View>
+          )}
+
+          {/* Actions */}
           <View style={styles.requestActions}>
             <AnimatedPressable
               style={styles.requestDecline}
@@ -135,14 +203,91 @@ export default function MessageRequestsScreen() {
               <Text style={styles.requestAcceptText}>Accept</Text>
             </AnimatedPressable>
           </View>
+
+          {/* Progressive disclosure: expanded actions */}
+          {expandedId === item.id ? (
+            <View style={styles.expandedActions}>
+              <AnimatedPressable
+                onPress={() => handleBlock(item.id, displayTitle)}
+                activeOpacity={0.85}
+                scaleValue={0.96}
+                hapticFeedback="medium"
+                accessibilityRole="button"
+                accessibilityLabel={`Block ${displayTitle}`}
+                style={styles.expandedBtn}
+              >
+                <Ionicons name="ban-outline" size={14} color={Colors.danger} />
+                <Text style={styles.expandedBtnTextDanger}>Block</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => handleReport(item.id, displayTitle)}
+                activeOpacity={0.85}
+                scaleValue={0.96}
+                hapticFeedback="medium"
+                accessibilityRole="button"
+                accessibilityLabel={`Report ${displayTitle}`}
+                style={styles.expandedBtn}
+              >
+                <Ionicons name="flag-outline" size={14} color={Colors.danger} />
+                <Text style={styles.expandedBtnTextDanger}>Report</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => setExpandedId(null)}
+                activeOpacity={0.85}
+                scaleValue={0.96}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Hide options"
+                style={styles.expandedBtn}
+              >
+                <Ionicons name="chevron-up-outline" size={14} color={Colors.textMuted} />
+                <Text style={styles.expandedBtnTextMuted}>Less</Text>
+              </AnimatedPressable>
+            </View>
+          ) : (
+            <AnimatedPressable
+              onPress={() => setExpandedId(item.id)}
+              activeOpacity={0.85}
+              scaleValue={0.96}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Show more options"
+              style={styles.moreBtn}
+            >
+              <Text style={styles.moreBtnText}>Block or report</Text>
+              <Ionicons name="chevron-down-outline" size={12} color={Colors.textMuted} />
+            </AnimatedPressable>
+          )}
         </View>
         <View style={styles.requestSeparator} />
-      </Reanimated.View>
+      </View>
     );
   };
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Message Requests" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
+    <SafeAreaView edges={['top']} style={styles.screenRoot}>
+      <View style={styles.compactHeader}>
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          scaleValue={0.92}
+          hapticFeedback="light"
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          style={styles.backBtn}
+        >
+          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+        </AnimatedPressable>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>Requests</Text>
+          <Text style={styles.headerSubtitle}>
+            {requestConversations.length > 0
+              ? `${requestConversations.length} pending · Accept to chat`
+              : 'People you don\'t follow'}
+          </Text>
+        </View>
+        <View style={styles.backBtn} />
+      </View>
       {requestConversations.length === 0 ? (
         <EmptyState
           icon="mail-outline"
@@ -160,117 +305,55 @@ export default function MessageRequestsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </FlagshipScreen>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  compactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  headerTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
+  },
+  headerSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
+  },
   listContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xxl,
   },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    marginBottom: Space.sm,
-    ...Elevation.subtle,
-    gap: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm + 6,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  nameText: {
-    flex: 1,
-  },
-  cardText: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 2,
-  },
-  previewText: {
-    lineHeight: Type.caption.lineHeight + 2,
-    marginTop: 2,
-  },
-  listingContext: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    marginTop: Space.xs,
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  listingThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.sm,
-  },
-  listingThumbPlaceholder: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listingTitle: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    maxWidth: 180,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-  },
-  declineBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    ...Elevation.subtle,
-  },
-  declineText: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
-  },
-  acceptBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.textPrimary,
-    ...Elevation.subtle,
-  },
-  acceptText: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textInverse,
-  },
   requestRow: {
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    gap: Space.md,
+    gap: Space.sm,
   },
   requestIdentity: {
     flexDirection: 'row',
@@ -295,40 +378,55 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight + 2,
     marginTop: 2,
   },
-  requestListingContext: {
+  listingCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-    marginTop: Space.xs,
-    alignSelf: 'flex-start',
+    gap: Space.sm,
     backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
     borderRadius: Radius.md,
+    padding: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
   },
-  requestListingThumb: {
-    width: 20,
-    height: 20,
+  listingThumb: {
+    width: 40,
+    height: 40,
     borderRadius: Radius.sm,
   },
-  requestListingThumbPlaceholder: {
-    width: 20,
-    height: 20,
+  listingThumbPlaceholder: {
+    width: 40,
+    height: 40,
     borderRadius: Radius.sm,
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  requestListingTitle: {
+  listingInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  listingTitle: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    maxWidth: 180,
+  },
+  listingPrice: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textPrimary,
+  },
+  safetyNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.xs,
+  },
+  safetyNoteText: {
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
   },
   requestActions: {
     flexDirection: 'row',
     gap: Space.sm,
-    paddingLeft: 56 + Space.sm + 6,
   },
   requestDecline: {
     flex: 1,
@@ -361,7 +459,46 @@ const styles = StyleSheet.create({
   requestSeparator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
-    marginLeft: 56 + Space.sm + 6 + Space.md,
+    marginLeft: Space.md,
     marginRight: Space.md,
+  },
+  expandedActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingTop: Space.xs,
+  },
+  expandedBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  expandedBtnTextDanger: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.danger,
+  },
+  expandedBtnTextMuted: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textMuted,
+  },
+  moreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+  },
+  moreBtnText: {
+    fontSize: Type.meta.size,
+    fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
   },
 });

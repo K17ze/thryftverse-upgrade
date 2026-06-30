@@ -1,21 +1,12 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Reanimated, {
-  cancelAnimation,
-  FadeInDown,
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  withSpring,
-  Easing,
+  FadeIn,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { Typography , Elevation  } from '../theme/designTokens';
+import { Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface SuggestedAction {
   label: string;
@@ -35,77 +26,25 @@ interface Props {
   graphic?: React.ReactNode;
 }
 export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor = Colors.brand, graphic }: Props) {
-  const reducedMotionEnabled = useReducedMotion();
-
-  // Floating animation on the icon ring
-  const translateY = useSharedValue(0);
-  const iconScale = useSharedValue(0.8);
-
-  useEffect(() => {
-    if (reducedMotionEnabled) {
-      cancelAnimation(translateY);
-      cancelAnimation(iconScale);
-      translateY.value = 0;
-      iconScale.value = 1;
-      return;
-    }
-
-    // Gentle float up/down
-    translateY.value = withRepeat(
-      withSequence(
-        withTiming(-8, { duration: 1600, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 1600, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
-    );
-
-    // Spring entrance on mount
-    iconScale.value = withSpring(1, { damping: 12, stiffness: 150 });
-
-    return () => {
-      cancelAnimation(translateY);
-      cancelAnimation(iconScale);
-    };
-  }, [iconScale, reducedMotionEnabled, translateY]);
-
-  const floatStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value },
-      { scale: iconScale.value },
-    ],
-  }));
-
-  const iconEnterAnimation = reducedMotionEnabled
-    ? undefined
-    : FadeInDown.delay(100).duration(500).springify();
-  const titleEnterAnimation = reducedMotionEnabled
-    ? undefined
-    : FadeInDown.delay(200).duration(400);
-  const subtitleEnterAnimation = reducedMotionEnabled
-    ? undefined
-    : FadeInDown.delay(300).duration(400);
-  const ctaEnterAnimation = reducedMotionEnabled
-    ? undefined
-    : FadeInDown.delay(400).duration(400);
+  const enter = FadeIn.duration(300);
 
   return (
     <View style={styles.container}>
       {graphic ? (
-        <Reanimated.View entering={iconEnterAnimation}>
+        <Reanimated.View entering={enter}>
           {graphic}
         </Reanimated.View>
       ) : (
         <Reanimated.View
-          entering={iconEnterAnimation}
-          style={[styles.iconRing, { borderColor: iconColor + '25' }, floatStyle]}
+          entering={enter}
+          style={styles.iconRing}
         >
           <Ionicons name={icon ?? 'cube-outline'} size={38} color={iconColor} />
         </Reanimated.View>
       )}
 
       <Reanimated.Text
-        entering={titleEnterAnimation}
+        entering={enter}
         style={styles.title}
       >
         {title}
@@ -113,7 +52,7 @@ export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, second
 
       {subtitle && (
         <Reanimated.Text
-          entering={subtitleEnterAnimation}
+          entering={enter}
           style={styles.subtitle}
         >
           {subtitle}
@@ -121,7 +60,7 @@ export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, second
       )}
 
       {ctaLabel && onCtaPress && (
-        <Reanimated.View entering={ctaEnterAnimation}>
+        <Reanimated.View entering={enter}>
           <AnimatedPressable style={styles.cta} onPress={onCtaPress} activeOpacity={0.8} hapticFeedback="selection">
             <Text style={styles.ctaText}>{ctaLabel}</Text>
           </AnimatedPressable>
@@ -129,7 +68,7 @@ export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, second
       )}
 
       {secondaryCtaLabel && onSecondaryCtaPress && (
-        <Reanimated.View entering={ctaEnterAnimation}>
+        <Reanimated.View entering={enter}>
           <AnimatedPressable style={styles.ctaSecondary} onPress={onSecondaryCtaPress} activeOpacity={0.8} hapticFeedback="light">
             <Text style={styles.ctaSecondaryText}>{secondaryCtaLabel}</Text>
           </AnimatedPressable>
@@ -137,7 +76,7 @@ export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, second
       )}
 
       {suggestedActions && suggestedActions.length > 0 && (
-        <Reanimated.View entering={ctaEnterAnimation} style={styles.suggestedWrap}>
+        <Reanimated.View entering={enter} style={styles.suggestedWrap}>
           <Text style={styles.suggestedLabel}>Suggested</Text>
           <View style={styles.chipRow}>
             {suggestedActions.map((action, i) => (
@@ -177,7 +116,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
-    ...Elevation.card,
   },
   title: {
     fontSize: 20,
@@ -201,7 +139,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 24,
-    ...Elevation.floating,
   },
   ctaText: {
     fontSize: 15,

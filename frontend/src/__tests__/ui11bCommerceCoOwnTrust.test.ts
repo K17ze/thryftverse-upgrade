@@ -27,9 +27,9 @@ describe('UI-11B commerce + co-own trust UI rebuild', () => {
   });
 
   // 3. MyOrders does not use fake product fallback
-  it('MyOrdersScreen uses real backend data and FlagshipOrderCard', () => {
+  it('MyOrdersScreen uses real backend data and OrderLedgerRow', () => {
     const src = readSrc('screens/MyOrdersScreen.tsx');
-    expect(src).toContain('FlagshipOrderCard');
+    expect(src).toContain('OrderLedgerRow');
     expect(src).toContain('listUserOrders');
     expect(src).not.toContain('MOCK_ORDERS');
     expect(src).not.toContain('picsum.photos');

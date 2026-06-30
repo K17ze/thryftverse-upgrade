@@ -11,23 +11,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
-import AuctionsScreen from './AuctionsScreen';
+import { EmptyState } from '../components/EmptyState';
 import CoOwnScreen from './SyndicateScreen';
 import { RootStackParamList } from '../navigation/types';
 import { AppButton } from '../components/ui/AppButton';
 import { t } from '../i18n';
-import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
+import { Meta, BodyEmphasis } from '../components/ui/Text';
 
 type TradeHubTab = 'AUCTIONS' | 'CO-OWN';
 type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function TradeHubScreen() {
   const navigation = useNavigation<NavT>();
-  const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
   const [activeTab, setActiveTab] = React.useState<TradeHubTab>('AUCTIONS');
 
@@ -61,15 +60,14 @@ export default function TradeHubScreen() {
     if (activeTab === 'AUCTIONS') {
       return [
         { key: 'create-auction', label: 'Create Auction', icon: 'hammer-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreateAuction'); } },
-        { key: 'auction-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreatePoster'); } },
+        { key: 'my-bids', label: 'My Bids', icon: 'list-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('MyBids'); } },
       ];
     }
     return [
       { key: 'create-coown', label: 'Create Co-Own', icon: 'people-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
-      { key: 'coown-posters', label: 'Promote Drop', icon: 'megaphone-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('CreatePoster'); } },
       { key: 'open-portfolio', label: 'Portfolio', icon: 'wallet-outline' as const, onPress: () => { haptics.tap(); navigation.navigate('Portfolio'); } },
     ];
-  }, [activeTab, navigation, show]);
+  }, [activeTab, navigation]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -101,6 +99,19 @@ export default function TradeHubScreen() {
         </View>
       </Reanimated.View>
 
+      {/* Header label */}
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)}
+        style={styles.headerLabelWrap}
+      >
+        <BodyEmphasis style={styles.headerLabel}>
+          {activeTab === 'AUCTIONS' ? 'Live Auctions' : 'Co-Own Market'}
+        </BodyEmphasis>
+        <Meta style={styles.headerSublabel}>
+          {activeTab === 'AUCTIONS' ? 'Bid on curated drops' : 'Trade fractional shares'}
+        </Meta>
+      </Reanimated.View>
+
       {/* Tab-specific quick actions */}
       <Reanimated.View
         entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)}
@@ -128,7 +139,28 @@ export default function TradeHubScreen() {
         style={styles.tabContent}
         entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)}
       >
-        {activeTab === 'AUCTIONS' ? <AuctionsScreen /> : <CoOwnScreen />}
+        {activeTab === 'AUCTIONS' ? (
+          <View style={styles.gatewayWrap}>
+            <AnimatedPressable
+              style={styles.gatewayCard}
+              onPress={() => { haptics.tap(); navigation.navigate('AuctionHome'); }}
+              activeOpacity={0.92}
+              scaleValue={0.985}
+              accessibilityRole="button"
+              accessibilityLabel="Browse auctions"
+              accessibilityHint="Opens the full auction discovery screen"
+            >
+              <View style={styles.gatewayIconWrap}>
+                <Ionicons name="storefront-outline" size={28} color={Colors.brand} />
+              </View>
+              <View style={styles.gatewayBody}>
+                <BodyEmphasis style={styles.gatewayTitle}>Browse Auctions</BodyEmphasis>
+                <Meta style={styles.gatewaySubtitle}>Discover live, upcoming and ending auctions</Meta>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+            </AnimatedPressable>
+          </View>
+        ) : <CoOwnScreen />}
       </Reanimated.View>
     </SafeAreaView>
   );
@@ -177,6 +209,17 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: Colors.textInverse,
   },
+  headerLabelWrap: {
+    paddingHorizontal: Space.md,
+    marginBottom: Space.xs,
+  },
+  headerLabel: {
+    fontSize: 22,
+  },
+  headerSublabel: {
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
   quickActionsWrap: {
     flexDirection: 'row',
     gap: Space.sm,
@@ -199,5 +242,38 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     flex: 1,
+  },
+  gatewayWrap: {
+    flex: 1,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+  },
+  gatewayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Space.md,
+    gap: Space.md,
+  },
+  gatewayIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gatewayBody: {
+    flex: 1,
+  },
+  gatewayTitle: {
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  gatewaySubtitle: {
+    color: Colors.textMuted,
   },
 });

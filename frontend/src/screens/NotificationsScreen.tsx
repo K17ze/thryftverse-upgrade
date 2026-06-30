@@ -7,6 +7,7 @@ import {
   StyleSheet,
   StatusBar,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,7 +23,14 @@ import { AvatarRing } from '../components/chat/AvatarRing';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
-import { NotificationEvent, listNotificationEvents } from '../services/notificationsApi';
+import {
+  NotificationEvent,
+  NotificationEventType,
+  listNotificationEvents,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from '../services/notificationsApi';
+import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { Space, Radius, Type } from '../theme/designTokens';
@@ -30,7 +38,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
-type NotificationCardType = 'new_item' | 'like' | 'review' | 'order' | 'price' | 'generic';
+type NotificationCardType = 'new_item' | 'like' | 'review' | 'order' | 'price' | 'resolution' | 'generic';
 
 type NotificationCard = {
   id: string;
@@ -41,6 +49,12 @@ type NotificationCard = {
   read: boolean;
   createdAt: string;
   payload: Record<string, unknown>;
+  eventType: NotificationEventType;
+  actorUserId: string | null;
+  actorUsername: string | null;
+  actorDisplayName: string | null;
+  actorAvatar: string | null;
+  route: { screen: string; params?: Record<string, unknown> } | null;
 };
 
 const PANEL_BG = Colors.surface;
@@ -53,13 +67,15 @@ function getNotifIcon(type: NotificationCardType): { name: string; color: string
     case 'new_item':
       return { name: 'shirt-outline', color: Colors.textSecondary, bg: Colors.surfaceAlt };
     case 'like':
-      return { name: 'heart', color: '#e74c3c', bg: Colors.surfaceAlt };
+      return { name: 'heart', color: Colors.danger, bg: Colors.surfaceAlt };
     case 'review':
-      return { name: 'star', color: Colors.textSecondary, bg: Colors.surfaceAlt };
+      return { name: 'star', color: Colors.success, bg: Colors.surfaceAlt };
     case 'order':
       return { name: 'cube-outline', color: Colors.success, bg: Colors.surfaceAlt };
     case 'price':
       return { name: 'pricetag-outline', color: BRAND, bg: Colors.surfaceAlt };
+    case 'resolution':
+      return { name: 'headset-outline', color: Colors.textSecondary, bg: Colors.surfaceAlt };
     default:
       return { name: 'notifications-outline', color: Colors.textMuted, bg: PANEL_ALT };
   }
@@ -82,28 +98,21 @@ function getPayloadString(payload: Record<string, unknown>, keys: string[]): str
 }
 
 function deriveCardType(event: NotificationEvent): NotificationCardType {
+  const eventType = event.eventType;
+  if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'resolution';
+  if (eventType === 'review_received') return 'review';
+  if (eventType.startsWith('order_') || eventType === 'refund_completed' || eventType === 'payout_processed') return 'order';
+
   const payloadEvent = parsePayloadEvent(event.payload);
   const mergedText = `${event.title} ${event.body}`.toLowerCase();
 
   if (payloadEvent.includes('shipment') || payloadEvent.includes('order') || payloadEvent.includes('deliver')) {
     return 'order';
   }
-
-  if (payloadEvent.includes('review') || mergedText.includes('review')) {
-    return 'review';
-  }
-
-  if (payloadEvent.includes('price') || mergedText.includes('price')) {
-    return 'price';
-  }
-
-  if (payloadEvent.includes('like') || mergedText.includes('like')) {
-    return 'like';
-  }
-
-  if (mergedText.includes('listing') || mergedText.includes('new item')) {
-    return 'new_item';
-  }
+  if (payloadEvent.includes('review') || mergedText.includes('review')) return 'review';
+  if (payloadEvent.includes('price') || mergedText.includes('price')) return 'price';
+  if (payloadEvent.includes('like') || mergedText.includes('like')) return 'like';
+  if (mergedText.includes('listing') || mergedText.includes('new item')) return 'new_item';
 
   return 'generic';
 }
@@ -140,24 +149,22 @@ function formatRelativeTime(value: string): string {
   });
 }
 
-function buildNotificationImage(event: NotificationEvent, index: number): string {
-  return '';
-}
-
-function mapEventToCard(
-  event: NotificationEvent,
-  index: number,
-  readIds: Set<string>
-): NotificationCard {
+function mapEventToCard(event: NotificationEvent): NotificationCard {
   return {
     id: event.id,
-    itemImage: buildNotificationImage(event, index),
+    itemImage: event.imageUrl ?? '',
     text: `${event.title} ${event.body}`.trim(),
     time: formatRelativeTime(event.createdAt),
     type: deriveCardType(event),
-    read: readIds.has(event.id),
+    read: !!event.readAt,
     createdAt: event.createdAt,
     payload: event.payload,
+    eventType: event.eventType,
+    actorUserId: event.actorUserId,
+    actorUsername: event.actorUsername,
+    actorDisplayName: event.actorDisplayName,
+    actorAvatar: event.actorAvatar,
+    route: event.route,
   };
 }
 
@@ -209,28 +216,24 @@ export default function NotificationsScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const [notifications, setNotifications] = React.useState<NotificationCard[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+  const [cursor, setCursor] = React.useState<string | null>(null);
+  const [hasMore, setHasMore] = React.useState(false);
   const hasShownSyncErrorRef = React.useRef(false);
 
   const syncNotifications = React.useCallback(
     async (options?: { silent?: boolean }) => {
-      if (!currentUser?.id) {
-        setNotifications([]);
-        return;
-      }
-
       if (!options?.silent) {
         setIsLoading(true);
       }
 
       try {
-        const events = await listNotificationEvents(currentUser.id, 80);
-        setNotifications((previous) => {
-          const readIds = new Set(previous.filter((item) => item.read).map((item) => item.id));
-          return events.map((event, index) => mapEventToCard(event, index, readIds));
-        });
+        const { items, nextCursor } = await listNotificationEvents({ limit: 30 });
+        setNotifications(items.map(mapEventToCard));
+        setCursor(nextCursor);
+        setHasMore(!!nextCursor);
         hasShownSyncErrorRef.current = false;
       } catch {
-        // Silently fail - no user-facing error for sync issues
         hasShownSyncErrorRef.current = true;
       } finally {
         if (!options?.silent) {
@@ -238,51 +241,98 @@ export default function NotificationsScreen() {
         }
       }
     },
-    [currentUser?.id, show]
+    [show]
+  );
+
+  const loadMore = React.useCallback(
+    async () => {
+      if (!hasMore || isLoadingMore || !cursor) return;
+      setIsLoadingMore(true);
+      try {
+        const { items, nextCursor } = await listNotificationEvents({ limit: 30, cursor });
+        setNotifications((prev) => {
+          const existingIds = new Set(prev.map((n) => n.id));
+          const newItems = items.map(mapEventToCard).filter((n) => !existingIds.has(n.id));
+          return [...prev, ...newItems];
+        });
+        setCursor(nextCursor);
+        setHasMore(!!nextCursor);
+      } catch {
+        // silently fail
+      } finally {
+        setIsLoadingMore(false);
+      }
+    },
+    [cursor, hasMore, isLoadingMore]
   );
 
   useFocusEffect(
     React.useCallback(() => {
       void syncNotifications();
-
-      const refreshInterval = setInterval(() => {
-        void syncNotifications({ silent: true });
-      }, 30_000);
-
-      return () => {
-        clearInterval(refreshInterval);
-      };
     }, [syncNotifications])
   );
+
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const { items, nextCursor } = await listNotificationEvents({ limit: 30 });
+      setNotifications(items.map(mapEventToCard));
+      setCursor(nextCursor);
+      setHasMore(!!nextCursor);
+      hasShownSyncErrorRef.current = false;
+    } catch {
+      hasShownSyncErrorRef.current = true;
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
 
   const sections = React.useMemo(() => groupNotifications(notifications), [notifications]);
   const hasUnread = React.useMemo(() => notifications.some((item) => !item.read), [notifications]);
 
-  const handleMarkAllAsRead = React.useCallback(() => {
+  const handleMarkAllAsRead = React.useCallback(async () => {
     if (!hasUnread) {
       show('You are all caught up', 'info');
       return;
     }
 
+    const previousNotifications = notifications;
     setNotifications((previous) => previous.map((item) => ({ ...item, read: true })));
-    show('Marked all notifications as read', 'success');
-  }, [hasUnread, show]);
+    try {
+      await markAllNotificationsRead();
+      show('Marked all notifications as read', 'success');
+    } catch {
+      setNotifications(previousNotifications);
+      show('Failed to mark all as read', 'error');
+    }
+  }, [hasUnread, notifications, show]);
 
   const handleOpenNotification = React.useCallback(
-    (notification: NotificationCard) => {
-      setNotifications((previous) =>
-        previous.map((item) => (item.id === notification.id ? { ...item, read: true } : item))
-      );
-
-      const orderId = typeof notification.payload.orderId === 'string' ? notification.payload.orderId : null;
-      if (orderId) {
-        navigation.navigate('OrderDetail', { orderId });
-        return;
+    async (notification: NotificationCard) => {
+      if (!notification.read) {
+        const previousRead = notification.read;
+        setNotifications((previous) =>
+          previous.map((item) => (item.id === notification.id ? { ...item, read: true } : item))
+        );
+        try {
+          await markNotificationRead(notification.id);
+        } catch {
+          setNotifications((previous) =>
+            previous.map((item) => (item.id === notification.id ? { ...item, read: previousRead } : item))
+          );
+        }
       }
 
-      const listingId = typeof notification.payload.listingId === 'string' ? notification.payload.listingId : null;
-      if (listingId) {
-        navigation.push('ItemDetail', { itemId: listingId });
+      const route = resolveNotificationRoute(notification.route, notification.payload);
+      if (route) {
+        const params = 'params' in route ? route.params : undefined;
+        if (params) {
+          (navigation as any).navigate(route.screen, params);
+        } else {
+          (navigation as any).navigate(route.screen);
+        }
         return;
       }
 
@@ -311,15 +361,24 @@ export default function NotificationsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         stickySectionHeadersEnabled={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.brand}
+            colors={[Colors.brand]}
+          />
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
         renderSectionHeader={({ section: { title } }) => (
           <Text style={styles.sectionTitle}>{title}</Text>
         )}
         renderItem={({ item, index }) => {
           const icon = getNotifIcon(item.type);
           const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
-          const actorUserId = getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
-          const actorUser = null as any;
-          const actorHandle = actorUser?.username ?? actorUserId;
+          const actorUserId = item.actorUserId ?? getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
+          const actorHandle = item.actorUsername ?? actorUserId ?? null;
 
           return (
             <Reanimated.View
@@ -374,7 +433,7 @@ export default function NotificationsScreen() {
                       accessibilityHint="Shows sender profile details"
                     >
                       <AvatarRing
-                        uri={actorUser?.avatar}
+                        uri={item.actorAvatar ?? undefined}
                         size={28}
                         isUnread={!item.read}
                       />
@@ -416,6 +475,13 @@ export default function NotificationsScreen() {
               iconColor={Colors.textMuted}
             />
           )
+        }
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator color={Colors.brand} size="small" />
+            </View>
+          ) : null
         }
       />
     </SafeAreaView>
@@ -475,7 +541,7 @@ const styles = StyleSheet.create({
     borderColor: PANEL_BORDER,
   },
   notifImageShared: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   notifImage: { width: '100%', height: '100%' },
 

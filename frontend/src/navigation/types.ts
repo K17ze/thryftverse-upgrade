@@ -14,9 +14,13 @@ export type RootStackParamList = {
   };
   ItemDetail: { itemId: string };
   Closet: undefined;
-  PosterViewer: { posterId: string };
-  CreatePoster: undefined;
+  PosterViewer: { storyId: string; startFrameIndex?: number };
+  CreatePoster: { mode?: 'poster' | 'look' } | undefined;
+  PosterStoryActivity: { storyId: string };
+  PosterArchive: undefined;
+  AuctionHome: undefined;
   CreateAuction: { listingId?: string } | undefined;
+  AuctionDetail: { auctionId: string };
   CreateCoOwn:
     | {
         listingId?: string;
@@ -72,8 +76,16 @@ export type RootStackParamList = {
   HelpSupport: undefined;
   // Phase 18 new screens
   OrderDetail: { orderId: string };
+  SellerFulfilment: { orderId: string };
+  OrderReceipt: { orderId: string };
   // Phase 19 new screens
   Checkout: { itemId: string };
+  AddressForm:
+    | {
+        mode: 'add' | 'edit';
+        source?: 'postage' | 'checkout';
+      }
+    | undefined;
   Success: { orderId: string };
   ManageListing: { itemId: string };
   EditListing: { itemId: string };
@@ -113,6 +125,13 @@ export type RootStackParamList = {
   MyListings: { type?: 'coown' | 'auction' | 'standard' } | undefined;
   // Explore / Creator screens
   CreateLook: undefined;
+  CreatorStudio: {
+    type: 'look' | 'poster';
+    draftId?: string;
+    templateId?: string;
+    sourceDocumentId?: string;
+  };
+  CreatorDraftList: undefined;
   CoOwnIssue: { assetId?: string };
   OutfitBuilder: undefined;
   // UI-22R.6B — Experience elevation
@@ -136,6 +155,9 @@ export type RootStackParamList = {
   BlockedUsers: undefined;
   PrivacySettings: undefined;
   About: undefined;
+  MutedConversations: undefined;
+  ArchivedConversations: undefined;
+  ManageQuickReplies: { role: 'seller' | 'buyer' };
   // VISUAL-15 — UI Architecture + Feature Depth
   ConversationInfo: { conversationId: string };
   MessageRequests: undefined;
@@ -153,7 +175,7 @@ export type RootStackParamList = {
   // UI-19 — Sell / Co-own / Chat marketplace UX
   ListingPreview: {
     preview: {
-      title: string;
+      title?: string;
       price?: number;
       originalPrice?: number;
       brand?: string;
@@ -162,12 +184,11 @@ export type RootStackParamList = {
       size?: string;
       description?: string;
       photos: string[];
-      mediaDraftItems?: import('../utils/mediaUploadAsset').ListingMediaDraftItem[];
-      tags?: string[];
       shippingMethod?: string;
       shippingPayer?: string;
       listingMode?: 'sell_now' | 'auction' | 'co_own';
     };
+    origin?: 'sell' | 'edit';
   };
   TradeConfirm: {
     assetId: string;
@@ -181,13 +202,14 @@ export type RootStackParamList = {
   };
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
+  Sell: undefined;
+  TradeHub: undefined;
 };
 
 export type TabParamList = {
   Home: undefined;
-  TradeHub: undefined;
-  Search: undefined;
-  Sell: undefined;
+  Explore: undefined;
+  Create: undefined;
   Inbox: undefined;
   Profile: undefined;
 };
