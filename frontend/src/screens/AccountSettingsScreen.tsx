@@ -272,7 +272,7 @@ export default function AccountSettingsScreen() {
             <Text style={[styles.identityMeta, { color: Colors.textMuted }]}>@{user?.username ?? '—'}</Text>
           </View>
           <AnimatedPressable
-            onPress={() => navigation.navigate('EditProfile')}
+            onPress={() => (navigation as any).navigate('EditProfile')}
             scaleValue={0.92}
             hapticFeedback="light"
           >

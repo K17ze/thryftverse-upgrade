@@ -120,8 +120,8 @@ export async function executePublication(
         itemsToUpload.map((m) => ({
           id: m.id,
           uri: m.uri,
-          fileName: m.fileName,
-          mimeType: m.mimeType,
+          fileName: m.fileName ?? 'unknown',
+          mimeType: m.mimeType ?? 'image/jpeg',
           kind: m.kind,
           fileSize: m.fileSize,
           width: m.width,

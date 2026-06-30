@@ -37,13 +37,8 @@ interface Props {
   reorderEnabled?: boolean;
 }
 
-interface Props {
-  items: MediaStripItem[];
-  onReorder: (newOrder: MediaStripItem[]) => void;
-  onAddPhoto: () => void;
-  onRemoveItem?: (id: string) => void;
-  onRetryItem?: (id: string) => void;
-}
+// Helper to get object values sorted by key (not needed strictly if we map properly)
+// We will just manage an array of IDs sorted.
 
 export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, renderItem, showAddButton = true, reorderEnabled = true }: Props) {
   const ids = itemIds ?? photos;
@@ -55,7 +50,7 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, ren
         contentContainerStyle={{ paddingHorizontal: 20 }}
       >
         <View style={{ flexDirection: 'row', position: 'relative', height: ITEM_SIZE }}>
-          {items.map((item, index) => (
+          {photos.map((photo, index) => (
             <SortableItem
               key={ids[index] ?? photo}
               id={photo}
@@ -112,6 +107,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
   const zIndex = useSharedValue(0);
   const orderArray = itemIds ?? photos;
 
+  // When props update (like after drop), update position gently
   useAnimatedReaction(
     () => index,
     (currIndex) => {
@@ -280,41 +276,6 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: 10,
     fontFamily: Typography.family.bold,
-  },
-  statusBadge: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 9,
-    fontFamily: Typography.family.bold,
-  },
-  retryBtn: {
-    position: 'absolute',
-    top: 6,
-    right: 28,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  removeBtn: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   hintText: {
     color: Colors.textMuted,

@@ -394,7 +394,7 @@ export default function MyProfileScreen() {
             location={user.location}
             memberSince={memberSince}
             onEditAvatar={pickAvatar}
-            onEditProfile={() => navigation.navigate('EditProfile')}
+            onEditProfile={() => (navigation as any).navigate('EditProfile')}
             onShare={handleShare}
           />
 

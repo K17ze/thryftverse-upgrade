@@ -207,8 +207,8 @@ export interface ListingMediaDraftItem {
   uri: string;
   kind: 'image' | 'video';
   source: 'local' | 'remote';
-  fileName: string;
-  mimeType: string;
+  fileName?: string;
+  mimeType?: string;
   fileSize?: number;
   width?: number;
   height?: number;

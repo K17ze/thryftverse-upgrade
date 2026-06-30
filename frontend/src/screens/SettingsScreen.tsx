@@ -209,7 +209,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </Text>
         </View>
         <AnimatedPressable
-          onPress={() => navigation.navigate('EditProfile')}
+          onPress={() => (navigation as any).navigate('EditProfile')}
           activeOpacity={0.7}
           scaleValue={0.96}
           hapticFeedback="light"
@@ -263,7 +263,7 @@ export default function SettingsScreen({ navigation }: Props) {
             <SettingsRow
               title="Public profile"
               subtitle="Avatar, name, bio, username"
-              onPress={() => navigation.navigate('EditProfile')}
+              onPress={() => (navigation as any).navigate('EditProfile')}
               isFirst
             />
             <SettingsRow
