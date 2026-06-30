@@ -32,6 +32,7 @@ interface CachedImageProps {
     emptyLabel?: string;
   emptyIcon?: keyof typeof Ionicons.glyphMap;
   onError?: () => void;
+  onLoad?: (event: { source: { width: number; height: number } }) => void;
 }
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
@@ -50,6 +51,7 @@ export function CachedImage({
     emptyLabel,
   emptyIcon,
   onError,
+  onLoad,
 }: CachedImageProps) {
   // Honest placeholder for missing images — no blank rectangles
   if (!uri) {
@@ -132,11 +134,14 @@ export function CachedImage({
     }
   }, [contentFit]);
 
-  const handleLoad = React.useCallback(() => {
+  const handleLoad = React.useCallback((e?: any) => {
     setLoaded(true);
     imageOpacity.value = withTiming(1, { duration: reducedMotionEnabled ? 0 : 200 });
     previewOpacity.value = withTiming(0, { duration: reducedMotionEnabled ? 0 : 180 });
-  }, [imageOpacity, previewOpacity, reducedMotionEnabled]);
+    if (onLoad && e?.source) {
+      onLoad({ source: { width: e.source.width, height: e.source.height } });
+    }
+  }, [imageOpacity, previewOpacity, reducedMotionEnabled, onLoad]);
 
     const handleError = React.useCallback(() => {
     setLoaded(true);

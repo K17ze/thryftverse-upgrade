@@ -789,8 +789,7 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.feedContent, { paddingTop: headerCollapsedHeight + 2 }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        onEndReached={() => { if (hasMore && !isLoadingMore) void loadMoreListings(); }}
-        onEndReachedThreshold={0.5}
+        {...({ onEndReached: () => { if (hasMore && !isLoadingMore) void loadMoreListings(); }, onEndReachedThreshold: 0.5 } as any)}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

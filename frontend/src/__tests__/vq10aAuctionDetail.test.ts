@@ -39,6 +39,8 @@ function makeAuction(overrides: Partial<AuctionDetailInput> = {}): AuctionDetail
     cancelledAt: null,
     settledAt: null,
     winnerBidderId: null,
+    lifecycle: 'live',
+    terminalReason: null,
     ...overrides,
   };
 }
@@ -650,7 +652,9 @@ describe('PASS 4.12: Static guardrails (source inspection)', () => {
   it('does not describe Buy Now as maximum bid or instant bid', () => {
     expect(screenSrc).not.toMatch(/maximum bid/i);
     expect(screenSrc).not.toMatch(/instant bid/i);
-    expect(screenSrc).not.toMatch(/winning bid/i);
+    // "Winning bid" is valid in terminal result-state context (lost viewer)
+    // but must not appear in BuyNowSheet description
+    expect(buyNowSheetSrc).not.toMatch(/winning bid/i);
   });
 
   it('does not expose Edit, Cancel or Relist for seller', () => {
@@ -915,7 +919,7 @@ describe('PASS 4.1: Seller and messaging parity', () => {
   it('hides Message Seller when viewer is seller', () => {
     const sellerSection = screenSrc.substring(
       screenSrc.indexOf('sellerSection'),
-      screenSrc.indexOf('Bid activity')
+      screenSrc.indexOf('Bid history')
     );
     expect(sellerSection).toContain('!isSeller');
     expect(sellerSection).toContain('sellerMessageBtn');
@@ -1687,7 +1691,7 @@ describe('PASS 5: BuyNowSheet static guardrails', () => {
 
   it('has success stage', () => {
     expect(buyNowSheetSrc).toContain('success');
-    expect(buyNowSheetSrc).toContain('Buy Now accepted');
+    expect(buyNowSheetSrc).toContain('Purchase confirmed');
   });
 
   it('has error stage', () => {
@@ -2053,9 +2057,9 @@ describe('PASS 5.2: applyQuickIncrement — fallback uses minimum, not current b
   });
 
   it('converts fallback from GBP to display currency for non-GBP', () => {
-    const result = applyQuickIncrement('', 0.05, 51, 'IZE', gbpRates);
-    // 51 GBP * 10 IZE/GBP = 510 IZE, then * 1.05 = 535.50
-    expect(Number(result)).toBeCloseTo(535.5, 2);
+    const result = applyQuickIncrement('', 0.05, 51, 'USD', gbpRates);
+    // 51 GBP * 1.25 USD/GBP = 63.75 USD, then * 1.05 = 66.94
+    expect(Number(result)).toBeCloseTo(66.94, 2);
   });
 });
 

@@ -67,7 +67,7 @@ export default function ExploreCollectionScreen() {
       return () => { cancelled = true; };
     }
     setBackendListings(null);
-  }, [source.type, source.categoryId, source.brand]);
+  }, [source.type, source.type === 'category' ? source.categoryId : undefined, source.type === 'brand' ? source.brand : undefined]);
 
   const filteredListings = useMemo(() => {
     const baseList = backendListings ?? listings;

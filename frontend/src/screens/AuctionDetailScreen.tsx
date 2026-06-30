@@ -258,6 +258,8 @@ export default function AuctionDetailScreen() {
       cancelledAt: auction.cancelledAt,
       settledAt: auction.settledAt,
       winnerBidderId: auction.winnerBidderId,
+      lifecycle: auction.lifecycle,
+      terminalReason: auction.terminalReason,
     };
   }, [auction]);
 
@@ -312,7 +314,8 @@ export default function AuctionDetailScreen() {
   const isCancelled = effectiveState === 'cancelled';
   const isSettled = effectiveState === 'settled';
   const isTerminal = isEnded || isCancelled || isSettled;
-  const isSeller = auction?.viewerState === 'seller';
+  const viewerState = auction?.viewerState ?? 'not_participating';
+  const isSeller = viewerState === 'seller';
   const buyNowAvailable = detailInput ? isBuyNowAvailable(detailInput, effectiveState ?? 'upcoming') : false;
   const showBidControls = !isTerminal && !isSeller;
   const treatmentStyle = stateAction?.viewerTreatment ?? 'none';
@@ -442,7 +445,39 @@ export default function AuctionDetailScreen() {
           </View>
         </Reanimated.View>
 
-        {/* ── 2-4. Auction state header ── */}
+        {/* ── 2. Viewer state banner (active states only — terminal states use body transformation) ── */}
+        {viewerContext && !isTerminal && (
+          <View style={[styles.viewerMessage, stylesViewerTreatment[treatmentStyle] ?? null]}>
+            <Ionicons
+              name={
+                viewerContext.treatment === 'warning' ? 'trending-up'
+                : viewerContext.treatment === 'calm' ? 'trophy-outline'
+                : viewerContext.treatment === 'result' ? 'ribbon'
+                : viewerContext.treatment === 'seller' ? 'storefront-outline'
+                : viewerContext.treatment === 'subdued' ? 'close-circle-outline'
+                : 'eye-outline'
+              }
+              size={14}
+              color={
+                viewerContext.treatment === 'warning' ? Colors.danger
+                : viewerContext.treatment === 'calm' || viewerContext.treatment === 'result' ? Colors.success
+                : viewerContext.treatment === 'seller' ? Colors.brand
+                : viewerContext.treatment === 'subdued' ? Colors.textMuted
+                : Colors.textSecondary
+              }
+            />
+            <View style={styles.viewerMessageContent}>
+              <Text style={[styles.viewerMessageTitle, stylesViewerTitle[treatmentStyle] ?? null]}>
+                {viewerContext.title}
+              </Text>
+              {viewerContext.subtitle && (
+                <Meta style={styles.viewerMessageSubtitle}>{viewerContext.subtitle}</Meta>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* ── 3. Current price ── */}
         <View style={styles.stateHeader}>
           <View style={styles.priceRow}>
             <View style={styles.pricePrimary}>
@@ -454,6 +489,17 @@ export default function AuctionDetailScreen() {
               >
                 {priceText}
               </Text>
+              {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
+                <View style={styles.outbidHint}>
+                  <Ionicons name="trending-up" size={14} color={Colors.danger} />
+                  <Text style={styles.outbidHintText}>
+                    You've been outbid — minimum bid:{' '}
+                    <Text style={styles.outbidHintAmount}>
+                      {formatFromFiat(auction.minimumNextBidGbp, 'GBP', { displayMode: 'fiat' })}
+                    </Text>
+                  </Text>
+                </View>
+              )}
             </View>
             <View style={styles.priceSecondary}>
               <View style={styles.bidCountBadge}>
@@ -465,6 +511,7 @@ export default function AuctionDetailScreen() {
             </View>
           </View>
 
+          {/* ── 4. Time and bid activity ── */}
           <View style={styles.timeRow}>
             <Ionicons
               name={
@@ -494,37 +541,6 @@ export default function AuctionDetailScreen() {
             </Text>
           </View>
 
-          {viewerContext && (
-            <View style={[styles.viewerMessage, stylesViewerTreatment[treatmentStyle] ?? null]}>
-              <Ionicons
-                name={
-                  viewerContext.treatment === 'warning' ? 'trending-up'
-                  : viewerContext.treatment === 'calm' ? 'trophy-outline'
-                  : viewerContext.treatment === 'result' ? 'ribbon'
-                  : viewerContext.treatment === 'seller' ? 'storefront-outline'
-                  : viewerContext.treatment === 'subdued' ? 'close-circle-outline'
-                  : 'eye-outline'
-                }
-                size={14}
-                color={
-                  viewerContext.treatment === 'warning' ? Colors.danger
-                  : viewerContext.treatment === 'calm' || viewerContext.treatment === 'result' ? Colors.success
-                  : viewerContext.treatment === 'seller' ? Colors.brand
-                  : viewerContext.treatment === 'subdued' ? Colors.textMuted
-                  : Colors.textSecondary
-                }
-              />
-              <View style={styles.viewerMessageContent}>
-                <Text style={[styles.viewerMessageTitle, stylesViewerTitle[treatmentStyle] ?? null]}>
-                  {viewerContext.title}
-                </Text>
-                {viewerContext.subtitle && (
-                  <Meta style={styles.viewerMessageSubtitle}>{viewerContext.subtitle}</Meta>
-                )}
-              </View>
-            </View>
-          )}
-
           {resyncFailed && !error && (
             <View style={styles.resyncBanner}>
               <Ionicons name="sync-circle-outline" size={14} color={Colors.textMuted} />
@@ -533,7 +549,84 @@ export default function AuctionDetailScreen() {
           )}
         </View>
 
-        {/* ── 5. Item and seller trust ── */}
+        {/* ── Terminal body transformation — editorial, no bordered cards ── */}
+        {isTerminal && !isCancelled && (
+          <View style={styles.terminalBodySection}>
+            {viewerState === 'won' && (
+              <View style={styles.terminalResultBlock}>
+                <Ionicons name="trophy" size={28} color={Colors.success} />
+                <Text style={styles.terminalResultTitle}>You won</Text>
+                <Text style={styles.terminalResultPrice}>
+                  {formatFromFiat(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', { displayMode: 'fiat' })}
+                </Text>
+                <Meta style={styles.terminalResultDetail}>{auction.title}</Meta>
+                <Meta style={styles.terminalResultNote}>
+                  Transaction fulfilment is not yet available for this auction result.
+                </Meta>
+              </View>
+            )}
+            {viewerState === 'lost' && (
+              <View style={styles.terminalResultBlock}>
+                <Ionicons name="checkmark-done-outline" size={28} color={Colors.textMuted} />
+                <Text style={styles.terminalResultTitle}>Auction ended</Text>
+                <Text style={styles.terminalResultPrice}>
+                  {formatFromFiat(auction.currentBidGbp, 'GBP', { displayMode: 'fiat' })}
+                </Text>
+                <Meta style={styles.terminalResultDetail}>
+                  {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'} were placed
+                </Meta>
+                <Pressable
+                  style={styles.discoverLinkInline}
+                  onPress={() => navigation.navigate('AuctionHome')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Discover similar auctions"
+                >
+                  <Ionicons name="search-outline" size={14} color={Colors.brand} />
+                  <Text style={styles.discoverLinkInlineText}>Discover similar</Text>
+                  <Ionicons name="chevron-forward" size={12} color={Colors.brand} />
+                </Pressable>
+              </View>
+            )}
+            {viewerState === 'seller' && auction.bidCount > 0 && (
+              <View style={styles.terminalResultBlock}>
+                <Ionicons name="checkmark-circle" size={28} color={Colors.success} />
+                <Text style={styles.terminalResultTitle}>Sold</Text>
+                <Text style={styles.terminalResultPrice}>
+                  {formatFromFiat(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', { displayMode: 'fiat' })}
+                </Text>
+                <Meta style={styles.terminalResultDetail}>
+                  {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
+                </Meta>
+                <Meta style={styles.terminalResultNote}>
+                  Transaction fulfilment is not yet available for this auction result.
+                </Meta>
+              </View>
+            )}
+            {viewerState === 'seller' && auction.bidCount === 0 && (
+              <View style={styles.terminalResultBlock}>
+                <Ionicons name="close-circle-outline" size={28} color={Colors.textMuted} />
+                <Text style={styles.terminalResultTitle}>Ended without bids</Text>
+                <Meta style={styles.terminalResultDetail}>
+                  No bids were placed on this auction
+                </Meta>
+              </View>
+            )}
+            {viewerState === 'not_participating' && (
+              <View style={styles.terminalResultBlock}>
+                <Ionicons name="checkmark-done-outline" size={28} color={Colors.textMuted} />
+                <Text style={styles.terminalResultTitle}>Auction ended</Text>
+                <Text style={styles.terminalResultPrice}>
+                  {formatFromFiat(auction.currentBidGbp, 'GBP', { displayMode: 'fiat' })}
+                </Text>
+                <Meta style={styles.terminalResultDetail}>
+                  {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
+                </Meta>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ── 6. Item identity and condition ── */}
         <View style={styles.titleSection}>
           {auction.brand && <Meta style={styles.brandLabel}>{auction.brand}</Meta>}
           <Headline style={styles.title} numberOfLines={2}>{auction.title}</Headline>
@@ -542,6 +635,7 @@ export default function AuctionDetailScreen() {
           )}
         </View>
 
+        {/* ── 7. Seller confidence ── */}
         <View style={styles.sellerSection}>
           <AnimatedPressable
             style={styles.sellerInfo}
@@ -586,10 +680,19 @@ export default function AuctionDetailScreen() {
           )}
         </View>
 
-        {/* ── 7. Bid activity ── */}
+        {/* ── 8. Transaction truth (terminal states only) ── */}
+        {isTerminal && !isCancelled && viewerState !== 'lost' && (
+          <View style={styles.transactionTruthSection}>
+            <Meta style={styles.transactionTruthText}>
+              Transaction fulfilment is not yet available for this auction result.
+            </Meta>
+          </View>
+        )}
+
+        {/* ── 9. Bid history ── */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <BodyEmphasis style={styles.sectionTitle}>Bid activity</BodyEmphasis>
+            <BodyEmphasis style={styles.sectionTitle}>Bid history</BodyEmphasis>
             {auction.bidCount > 0 && (
               <Meta style={styles.bidCountTotal}>{auction.bidCount} total</Meta>
             )}
@@ -625,12 +728,12 @@ export default function AuctionDetailScreen() {
             </View>
           ) : bidActivityError ? (
             <View style={styles.subSectionError}>
-              <Meta style={styles.subSectionErrorText}>Bid activity unavailable</Meta>
+              <Meta style={styles.subSectionErrorText}>Bid history unavailable</Meta>
               <Pressable
                 onPress={() => void fetchDetail()}
                 hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel="Retry loading bid activity"
+                accessibilityLabel="Retry loading bid history"
               >
                 <Text style={styles.retryText}>Retry</Text>
               </Pressable>
@@ -640,7 +743,7 @@ export default function AuctionDetailScreen() {
           )}
         </View>
 
-        {/* ── 8. Description and item information ── */}
+        {/* ── 10. Description and item details ── */}
         {auction.description && (
           <View style={styles.section}>
             <BodyEmphasis style={styles.sectionTitle}>Description</BodyEmphasis>
@@ -674,26 +777,7 @@ export default function AuctionDetailScreen() {
           </View>
         )}
 
-        {/* ── 9. Delivery / buyer protection ── */}
-        <View style={styles.section}>
-          <BodyEmphasis style={styles.sectionTitle}>Delivery & protection</BodyEmphasis>
-          <View style={styles.infoList}>
-            <View style={styles.infoRow}>
-              <Ionicons name="cube-outline" size={16} color={Colors.textSecondary} />
-              <Body style={styles.infoText}>Postage and delivery costs shown at checkout</Body>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="shield-checkmark-outline" size={16} color={Colors.textSecondary} />
-              <Body style={styles.infoText}>Buyer protection included on all purchases</Body>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="card-outline" size={16} color={Colors.textSecondary} />
-              <Body style={styles.infoText}>Payment required to confirm your bid</Body>
-            </View>
-          </View>
-        </View>
-
-        {/* ── 10. Auction rules ── */}
+        {/* ── 11. Auction rules ── */}
         <View style={styles.section}>
           <BodyEmphasis style={styles.sectionTitle}>Auction rules</BodyEmphasis>
           <View style={styles.infoList}>
@@ -773,9 +857,37 @@ export default function AuctionDetailScreen() {
 
       {isTerminal && (
         <View style={[styles.terminalDock, { paddingBottom: insets.bottom + Space.sm }]}>
-          <Text style={styles.terminalDockText}>
-            {isCancelled ? 'Auction cancelled' : isSettled ? 'Auction settled' : 'Auction ended'}
-          </Text>
+          {isCancelled ? (
+            <View style={styles.terminalDockRow}>
+              <Ionicons name="close-circle-outline" size={16} color={Colors.textMuted} />
+              <Text style={styles.terminalDockText}>Auction cancelled</Text>
+            </View>
+          ) : viewerState === 'won' ? (
+            <View style={styles.terminalDockRow}>
+              <Ionicons name="trophy-outline" size={16} color={Colors.success} />
+              <Text style={[styles.terminalDockText, { color: Colors.success }]}>You won this auction</Text>
+            </View>
+          ) : viewerState === 'lost' ? (
+            <View style={styles.terminalDockRow}>
+              <Ionicons name="close-circle-outline" size={16} color={Colors.textMuted} />
+              <Text style={styles.terminalDockText}>Auction ended — you did not win</Text>
+            </View>
+          ) : isSeller && auction.bidCount > 0 ? (
+            <View style={styles.terminalDockRow}>
+              <Ionicons name="checkmark-circle-outline" size={16} color={Colors.brand} />
+              <Text style={[styles.terminalDockText, { color: Colors.brand }]}>Sold — {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}</Text>
+            </View>
+          ) : isSeller ? (
+            <View style={styles.terminalDockRow}>
+              <Ionicons name="close-circle-outline" size={16} color={Colors.textMuted} />
+              <Text style={styles.terminalDockText}>Ended without bids</Text>
+            </View>
+          ) : (
+            <View style={styles.terminalDockRow}>
+              <Ionicons name="checkmark-done-outline" size={16} color={Colors.textMuted} />
+              <Text style={styles.terminalDockText}>Auction ended</Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -837,12 +949,24 @@ function resolveEffectiveState(
   auction: AuctionDetailType,
   clockMs: number,
 ): 'cancelled' | 'settled' | 'upcoming' | 'live' | 'ended' {
+  // 1. Cancelled — highest precedence
   if (auction.cancelledAt) return 'cancelled';
+  // 2. Settled — explicit settlement
   if (auction.settledAt) return 'settled';
+  // 3. Winner set or Buy Now terminal — ended regardless of dates
+  if (auction.winnerBidderId) return 'ended';
+  if (auction.terminalReason === 'buy_now') return 'ended';
+  // 4. Authoritative lifecycle from backend
+  if (auction.lifecycle === 'ended') return 'ended';
+  if (auction.lifecycle === 'cancelled') return 'cancelled';
+  if (auction.lifecycle === 'settled') return 'settled';
+  // 5. Scheduled end according to server clock
   const endsMs = new Date(auction.endsAt).getTime();
   const startsMs = new Date(auction.startsAt).getTime();
   if (clockMs >= endsMs) return 'ended';
+  // 6. Live
   if (clockMs >= startsMs) return 'live';
+  // 7. Upcoming
   return 'upcoming';
 }
 
@@ -906,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   heroOverlayRow: {
     position: 'absolute',
-    top: Space.sm,
+    bottom: Space.sm,
     left: Space.sm,
     flexDirection: 'row',
     gap: 6,
@@ -986,7 +1110,7 @@ const styles = StyleSheet.create({
   backBtnFloating: {
     position: 'absolute',
     top: Space.sm,
-    right: Space.sm,
+    left: Space.sm,
     width: 44,
     height: 44,
     borderRadius: Radius.full,
@@ -997,7 +1121,7 @@ const styles = StyleSheet.create({
   watchBtnFloating: {
     position: 'absolute',
     top: Space.sm,
-    right: Space.sm + 44 + 8,
+    right: Space.sm,
     width: 44,
     height: 44,
     borderRadius: Radius.full,
@@ -1047,6 +1171,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textMuted,
     marginTop: 1,
+  },
+  outbidHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  outbidHintText: {
+    fontSize: 13,
+    color: Colors.danger,
+    fontFamily: 'Inter_500Medium',
+  },
+  outbidHintAmount: {
+    fontFamily: 'Inter_700Bold',
   },
   timeRow: {
     flexDirection: 'row',
@@ -1344,9 +1482,79 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.md,
   },
+  terminalDockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   terminalDockText: {
     fontSize: 14,
     color: Colors.textMuted,
     fontFamily: 'Inter_500Medium',
+  },
+  terminalBodySection: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+  },
+  terminalResultBlock: {
+    alignItems: 'center',
+    paddingVertical: Space.md,
+    gap: 4,
+  },
+  terminalResultTitle: {
+    fontSize: 22,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+    marginTop: Space.xs,
+  },
+  terminalResultPrice: {
+    fontSize: 20,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.brand,
+  },
+  terminalResultDetail: {
+    color: Colors.textSecondary,
+    textAlign: 'center',
+  },
+  terminalResultNote: {
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: Space.xs,
+    fontSize: 13,
+  },
+  discoverLinkInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Space.sm,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignSelf: 'center',
+  },
+  discoverLinkInlineText: {
+    color: Colors.brand,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+  },
+  transactionTruthSection: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  transactionTruthText: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  discoverLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: Space.sm,
+  },
+  discoverLinkText: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.brand,
+    fontFamily: 'Inter_600SemiBold',
   },
 });

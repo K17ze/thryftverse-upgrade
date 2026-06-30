@@ -9,7 +9,7 @@ import type { GoldRates } from './currency';
 
 // ── Types ──
 
-export type BidSheetStage = 'entry' | 'review' | 'submitting' | 'success' | 'error';
+export type BidSheetStage = 'entry' | 'review' | 'submitting' | 'success' | 'recoverable_conflict' | 'error';
 
 export interface BidSheetState {
   stage: BidSheetStage;
@@ -34,6 +34,7 @@ export type TransactionErrorKind =
   | 'buy_now_price_changed'
   | 'buy_now_review_required'
   | 'auction_already_won'
+  | 'idempotency_key_reused'
   | 'network_failure'
   | 'unknown_backend';
 
@@ -217,6 +218,12 @@ export function applyQuickIncrement(
 
 // ── Error mapping from API — PASS 7: correct auth copy, ambiguous classification ──
 
+export interface AuctionErrorDetails {
+  buyNowPriceGbp?: number;
+  currentBuyNowPriceGbp?: number;
+  minimumNextBidGbp?: number;
+}
+
 export function mapApiErrorToTransactionError(
   error: unknown,
   fallbackMessage: string,
@@ -224,6 +231,7 @@ export function mapApiErrorToTransactionError(
   parsedStatus: number | undefined,
   parsedMessage: string,
   isNetworkError: boolean,
+  structuredDetails?: AuctionErrorDetails | null,
 ): TransactionError {
   // Network/timeout — ambiguous: commit status unknown
   if (isNetworkError) {
@@ -282,8 +290,8 @@ export function mapApiErrorToTransactionError(
     }
     // Minimum changed — definitive rejection, no transaction occurred
     if (parsedMessage.toLowerCase().includes('minimum') || parsedMessage.toLowerCase().includes('at least')) {
-      const minMatch = parsedMessage.match(/£?([\d.]+)/);
-      const updatedMin = minMatch ? Number(minMatch[1]) : undefined;
+      const updatedMin = structuredDetails?.minimumNextBidGbp
+        ?? (parsedMessage.match(/£?([\d.]+)/)?.[1] ? Number(parsedMessage.match(/£?([\d.]+)/)![1]) : undefined);
       return {
         kind: 'minimum_changed',
         message: updatedMin
@@ -319,8 +327,8 @@ export function mapApiErrorToTransactionError(
   if (parsedStatus === 409) {
     // Buy Now review required — bid meets/exceeds Buy Now price; user should use Buy Now instead
     if (parsedCode === 'BUY_NOW_REVIEW_REQUIRED') {
-      const priceMatch = parsedMessage.match(/£?([\d.]+)/);
-      const buyNowPrice = priceMatch ? Number(priceMatch[1]) : undefined;
+      const buyNowPrice = structuredDetails?.buyNowPriceGbp
+        ?? (parsedMessage.match(/\(([\d.]+)\)/)?.[1] ? Number(parsedMessage.match(/\(([\d.]+)\)/)![1]) : undefined);
       return {
         kind: 'buy_now_review_required',
         message: 'Your bid meets or exceeds the Buy Now price. Use Buy Now to purchase this item immediately.',
@@ -342,12 +350,22 @@ export function mapApiErrorToTransactionError(
     }
     // Buy Now price changed — definitive rejection
     if (parsedCode === 'BUY_NOW_PRICE_CHANGED') {
-      const priceMatch = parsedMessage.match(/£?([\d.]+)/);
-      const updatedPrice = priceMatch ? Number(priceMatch[1]) : undefined;
+      const updatedPrice = structuredDetails?.currentBuyNowPriceGbp
+        ?? (parsedMessage.match(/([\d.]+)/)?.[1] ? Number(parsedMessage.match(/([\d.]+)/)![1]) : undefined);
       return {
         kind: 'buy_now_price_changed',
         message: 'The Buy Now price has changed. Please review the updated price.',
         currentBuyNowPriceGbp: updatedPrice,
+        canRetry: true,
+        transactionPossible: true,
+        isAmbiguous: false,
+      };
+    }
+    // Idempotency key reused with different payload — definitive rejection, must retry with new key
+    if (parsedCode === 'IDEMPOTENCY_KEY_REUSED') {
+      return {
+        kind: 'idempotency_key_reused',
+        message: 'This action was already submitted with different details. Please try again.',
         canRetry: true,
         transactionPossible: true,
         isAmbiguous: false,

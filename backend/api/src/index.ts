@@ -527,6 +527,87 @@ export function resolveCanonicalLifecycle(input: CanonicalLifecycleInput): Canon
   return { lifecycle: 'live', terminalReason: null };
 }
 
+// ── Atomic idempotency claims ──
+
+function computeRequestHash(payload: Record<string, unknown>): string {
+  const canonical = JSON.stringify(payload, Object.keys(payload).sort());
+  return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+interface IdempotencyClaimResult {
+  claimed: boolean;
+  existing?: {
+    responseStatus: number;
+    responseBody: Record<string, unknown>;
+    requestHash: string;
+  };
+}
+
+async function claimIdempotency(
+  client: { query: <T = any>(text: string, values?: any[]) => Promise<{ rows: T[] }> },
+  opts: {
+    idempotencyKey: string;
+    operationType: 'bid' | 'buy_now';
+    auctionId: string;
+    userId: string;
+    requestHash: string;
+  }
+): Promise<IdempotencyClaimResult> {
+  // Attempt atomic insert. If the key already exists, ON CONFLICT returns the existing row.
+  const result = await client.query<{
+    id: number;
+    response_status: number;
+    response_body: Record<string, unknown>;
+    request_hash: string;
+  }>(
+    `
+      INSERT INTO auction_transaction_idempotency (idempotency_key, operation_type, auction_id, user_id, request_hash, response_status, response_body)
+      VALUES ($1, $2, $3, $4, $5, 200, '{}'::jsonb)
+      ON CONFLICT (auction_id, user_id, idempotency_key)
+      DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
+      RETURNING id, response_status, response_body, request_hash
+    `,
+    [opts.idempotencyKey, opts.operationType, opts.auctionId, opts.userId, opts.requestHash]
+  );
+
+  const row = result.rows[0];
+  // If response_body is empty, this is a fresh claim (we just inserted)
+  const isEmptyBody = !row.response_body || Object.keys(row.response_body).length === 0;
+  if (isEmptyBody) {
+    return { claimed: true };
+  }
+  // Existing claim with a stored response — replay it
+  return {
+    claimed: false,
+    existing: {
+      responseStatus: row.response_status,
+      responseBody: row.response_body,
+      requestHash: row.request_hash,
+    },
+  };
+}
+
+async function storeIdempotencyResponse(
+  client: { query: <T = any>(text: string, values?: any[]) => Promise<{ rows: T[] }> },
+  opts: {
+    idempotencyKey: string;
+    operationType: 'bid' | 'buy_now';
+    auctionId: string;
+    userId: string;
+    responseStatus: number;
+    responseBody: Record<string, unknown>;
+  }
+): Promise<void> {
+  await client.query(
+    `
+      UPDATE auction_transaction_idempotency
+      SET response_status = $3, response_body = $4
+      WHERE idempotency_key = $1 AND auction_id = $5 AND user_id = $6
+    `,
+    [opts.idempotencyKey, opts.operationType, opts.responseStatus, JSON.stringify(opts.responseBody), opts.auctionId, opts.userId]
+  );
+}
+
 // Legacy alias for backward compatibility in non-auction contexts
 function resolveAuctionStatus(startsAt: Date, endsAt: Date): 'upcoming' | 'live' | 'ended' {
   const now = Date.now();
@@ -28976,6 +29057,7 @@ app.get('/auctions', async (request, reply) => {
       terminalReason: canonical.terminalReason,
       viewerState,
       isWatched,
+      winnerBidderId: row.auction_winner_id,
       cancelledAt: row.cancelled_at,
       settledAt: row.settled_at,
       createdAt: row.created_at,
@@ -29257,43 +29339,34 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
 
   const idempotencyKey = payload.idempotencyKey;
   const scopedKey = idempotencyKey ? `bid:${idempotencyKey}` : null;
-
-  if (scopedKey) {
-    const existingBid = await db.query<{ id: number; amount_gbp: number | string; created_at: string }>(
-      `SELECT id, amount_gbp, created_at FROM auction_bids WHERE auction_id = $1 AND bidder_id = $2 AND idempotency_key = $3 LIMIT 1`,
-      [auctionId, bidderId, scopedKey]
-    );
-    if (existingBid.rows[0]) {
-      const auctionState = await db.query<{ current_bid_gbp: number | string; bid_count: number }>(
-        'SELECT current_bid_gbp, bid_count FROM auctions WHERE id = $1 LIMIT 1',
-        [auctionId]
-      );
-      const aRow = auctionState.rows[0];
-      return {
-        ok: true,
-        idempotent: true,
-        bid: {
-          id: existingBid.rows[0].id,
-          auctionId,
-          bidderId,
-          amountGbp: Number(existingBid.rows[0].amount_gbp),
-          createdAt: existingBid.rows[0].created_at,
-        },
-        auction: {
-          id: auctionId,
-          currentBidGbp: aRow ? Number(aRow.current_bid_gbp) : Number(existingBid.rows[0].amount_gbp),
-          bidCount: aRow?.bid_count ?? 1,
-          isBuyNow: false,
-        },
-        aml: null,
-      };
-    }
-  }
+  const requestHash = computeRequestHash({ auctionId, bidderId, amountGbp: payload.amountGbp, operation: 'bid' });
 
   const client = await db.connect();
   let amlAlert: { alertId: string; status: string } | null = null;
   try {
     await client.query('BEGIN');
+
+    // Atomic idempotency claim — prevents TOCTOU race
+    if (scopedKey) {
+      const claim = await claimIdempotency(client, {
+        idempotencyKey: scopedKey,
+        operationType: 'bid',
+        auctionId,
+        userId: bidderId,
+        requestHash,
+      });
+      if (!claim.claimed && claim.existing) {
+        if (claim.existing.requestHash !== requestHash) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return { ok: false, error: 'Idempotency key already used with a different payload.', code: 'IDEMPOTENCY_KEY_REUSED' };
+        }
+        // Same hash — replay the original response
+        await client.query('ROLLBACK');
+        reply.code(claim.existing.responseStatus);
+        return claim.existing.responseBody as any;
+      }
+    }
 
     const auctionResult = await client.query<{
       id: string;
@@ -29381,6 +29454,8 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       return {
         ok: false,
         error: `Bid must be at least ${minimumNextBid.toFixed(2)} GBP (current bid ${currentBid.toFixed(2)} GBP + min increment ${minIncrement.toFixed(2)} GBP)`,
+        code: 'BID_BELOW_MINIMUM',
+        minimumNextBidGbp: minimumNextBid,
       };
     }
 
@@ -29519,6 +29594,36 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       });
     }
 
+    // Store idempotency response before commit so it persists with the transaction
+    if (scopedKey) {
+      await storeIdempotencyResponse(client, {
+        idempotencyKey: scopedKey,
+        operationType: 'bid',
+        auctionId,
+        userId: bidderId,
+        responseStatus: 201,
+        responseBody: {
+          ok: true,
+          bid: {
+            id: bidResult.rows[0].id,
+            auctionId,
+            bidderId,
+            amountGbp,
+            createdAt: bidResult.rows[0].created_at,
+          },
+          auction: {
+            id: auctionId,
+            currentBidGbp: amountGbp,
+            bidCount: nextBidCount,
+            isBuyNow: false,
+          },
+          aml: amlAlert
+            ? { alertId: amlAlert.alertId, status: amlAlert.status }
+            : null,
+        },
+      });
+    }
+
     await client.query('COMMIT');
 
     publishRealtimeEvent({
@@ -29627,45 +29732,32 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
   const buyerId = request.authUser.userId;
   const idempotencyKey = payload.idempotencyKey;
   const scopedKey = `buy_now:${idempotencyKey}`;
-
-  // Idempotency check — replay returns original Buy Now result
-  const existingBuyNow = await db.query<{ id: number; amount_gbp: number | string; created_at: string }>(
-    `SELECT id, amount_gbp, created_at FROM auction_bids WHERE auction_id = $1 AND bidder_id = $2 AND idempotency_key = $3 LIMIT 1`,
-    [auctionId, buyerId, scopedKey]
-  );
-  if (existingBuyNow.rows[0]) {
-    const auctionState = await db.query<{ current_bid_gbp: number | string; bid_count: number; status: string; winner_bidder_id: string | null }>(
-      'SELECT current_bid_gbp, bid_count, status, winner_bidder_id FROM auctions WHERE id = $1 LIMIT 1',
-      [auctionId]
-    );
-    const aRow = auctionState.rows[0];
-    return {
-      ok: true,
-      idempotent: true,
-      isBuyNow: true,
-      bid: {
-        id: existingBuyNow.rows[0].id,
-        auctionId,
-        bidderId: buyerId,
-        amountGbp: Number(existingBuyNow.rows[0].amount_gbp),
-        createdAt: existingBuyNow.rows[0].created_at,
-      },
-      auction: {
-        id: auctionId,
-        currentBidGbp: aRow ? Number(aRow.current_bid_gbp) : Number(existingBuyNow.rows[0].amount_gbp),
-        bidCount: aRow?.bid_count ?? 1,
-        isBuyNow: true,
-        status: aRow?.status ?? 'ended',
-        winnerBidderId: aRow?.winner_bidder_id ?? buyerId,
-      },
-      aml: null,
-    };
-  }
+  const requestHash = computeRequestHash({ auctionId, buyerId, expectedPriceGbp: payload.expectedPriceGbp, operation: 'buy_now' });
 
   const client = await db.connect();
   let amlAlert: { alertId: string; status: string } | null = null;
   try {
     await client.query('BEGIN');
+
+    // Atomic idempotency claim — prevents TOCTOU race
+    const claim = await claimIdempotency(client, {
+      idempotencyKey: scopedKey,
+      operationType: 'buy_now',
+      auctionId,
+      userId: buyerId,
+      requestHash,
+    });
+    if (!claim.claimed && claim.existing) {
+      if (claim.existing.requestHash !== requestHash) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return { ok: false, error: 'Idempotency key already used with a different payload.', code: 'IDEMPOTENCY_KEY_REUSED' };
+      }
+      // Same hash — replay the original response
+      await client.query('ROLLBACK');
+      reply.code(claim.existing.responseStatus);
+      return claim.existing.responseBody as any;
+    }
 
     const auctionResult = await client.query<{
       id: string;
@@ -29892,6 +29984,37 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
         assessment: amlAssessment,
       });
     }
+
+    // Store idempotency response before commit so it persists with the transaction
+    await storeIdempotencyResponse(client, {
+      idempotencyKey: scopedKey,
+      operationType: 'buy_now',
+      auctionId,
+      userId: buyerId,
+      responseStatus: 201,
+      responseBody: {
+        ok: true,
+        isBuyNow: true,
+        bid: {
+          id: bidResult.rows[0].id,
+          auctionId,
+          bidderId: buyerId,
+          amountGbp: transactionAmountGbp,
+          createdAt: bidResult.rows[0].created_at,
+        },
+        auction: {
+          id: auctionId,
+          currentBidGbp: transactionAmountGbp,
+          bidCount: nextBidCount,
+          isBuyNow: true,
+          status: 'ended',
+          winnerBidderId: buyerId,
+        },
+        aml: amlAlert
+          ? { alertId: amlAlert.alertId, status: amlAlert.status }
+          : null,
+      },
+    });
 
     await client.query('COMMIT');
 
@@ -30315,6 +30438,7 @@ app.get('/auctions/watchlist', async (request, reply) => {
       terminalReason: canonical.terminalReason,
       viewerState,
       isWatched: true,
+      winnerBidderId: row.winner_bidder_id,
       watchedAt: row.watched_at,
       createdAt: row.created_at,
     };
@@ -30500,6 +30624,7 @@ app.get('/users/me/auction-bids', async (request, reply) => {
         bidCount: row.bid_count,
         lifecycle: computedStatus,
         terminalReason: canonical.terminalReason,
+        winnerBidderId: row.winner_bidder_id,
         sellerId: row.seller_id,
         sellerUsername: row.seller_username ?? 'unknown',
         endsAt: row.ends_at,

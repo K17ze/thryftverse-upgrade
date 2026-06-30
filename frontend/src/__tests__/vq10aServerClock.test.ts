@@ -45,6 +45,9 @@ interface AuctionHomeItem {
   isWatched: boolean;
   cancelledAt: string | null;
   settledAt: string | null;
+  winnerBidderId: string | null;
+  lifecycle: string;
+  terminalReason: string | null;
 }
 
 const NOW = new Date('2025-06-15T12:00:00Z').getTime();
@@ -83,6 +86,9 @@ function makeItem(
     isWatched: false,
     cancelledAt: null,
     settledAt: null,
+    winnerBidderId: null,
+    lifecycle: 'live',
+    terminalReason: null,
     ...overrides,
   };
 }
@@ -548,6 +554,9 @@ describe('PASS 3.2: Price label resolver', () => {
       isWatched: false,
       cancelledAt: null,
       settledAt: null,
+      winnerBidderId: null,
+      lifecycle: 'live',
+      terminalReason: null,
       ...overrides,
     };
   }
@@ -760,6 +769,9 @@ describe('PASS 3.0C: Attention deduplication via canonical map', () => {
       isWatched: false,
       cancelledAt: null,
       settledAt: null,
+      winnerBidderId: null,
+      lifecycle: 'live',
+      terminalReason: null,
     };
   }
 
@@ -893,14 +905,14 @@ describe('PASS 3.0F: Least-data exposure (static guardrails)', () => {
     'utf-8'
   );
 
-  it('AuctionHomeItem does not contain winnerBidderId', () => {
+  it('AuctionHomeItem contains winnerBidderId', () => {
     const logicSrc = require('fs').readFileSync(
       require('path').resolve(__dirname, '../utils/auctionHomeLogic.ts'),
       'utf-8'
     );
     const itemMatch = logicSrc.match(/export interface AuctionHomeItem \{[\s\S]*?\}/);
     expect(itemMatch).toBeTruthy();
-    expect(itemMatch![0]).not.toContain('winnerBidderId');
+    expect(itemMatch![0]).toContain('winnerBidderId');
   });
 });
 

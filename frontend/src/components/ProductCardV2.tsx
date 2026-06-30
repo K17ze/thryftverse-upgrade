@@ -78,7 +78,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
           style={[styles.image, { aspectRatio }]}
           contentFit="cover"
           transition={300}
-          onLoad={(e) => {
+          onLoad={(e: { source: { width: number; height: number } }) => {
             const { width, height } = e.source;
             if (width && height && width > 0 && height > 0) {
               setImageAspect(width / height);

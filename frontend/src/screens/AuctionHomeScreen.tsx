@@ -94,8 +94,11 @@ function toViewModel(api: MarketAuction): AuctionHomeItem {
     buyNowPriceGbp: api.buyNowPriceGbp,
     viewerState: api.viewerState,
     isWatched: api.isWatched,
+    winnerBidderId: api.winnerBidderId ?? null,
     cancelledAt: api.cancelledAt ?? null,
     settledAt: api.settledAt ?? null,
+    lifecycle: api.lifecycle,
+    terminalReason: api.terminalReason,
   };
 }
 
@@ -671,16 +674,45 @@ export default function AuctionHomeScreen() {
     const usedIds = new Set<string>();
     const result: Section[] = [];
 
-    // 1. Needs your attention — uses canonical map, not raw collections
-    const attentionItems: AuctionHomeItem[] = [];
+    // 1a. You're leading — live auctions where viewer is leading
+    const leadingItems: AuctionHomeItem[] = [];
     for (const item of canonicalMap.values()) {
-      if (isAttentionItem(item, minuteClock)) {
-        attentionItems.push(item);
+      const timing = resolveAuctionTiming(item, minuteClock);
+      if (timing.effectiveState === 'live' && item.viewerState === 'leading') {
+        leadingItems.push(item);
         usedIds.add(item.id);
       }
     }
-    if (attentionItems.length > 0) {
-      result.push({ kind: 'attention', title: 'Needs your attention', items: attentionItems });
+    if (leadingItems.length > 0) {
+      result.push({ kind: 'attention', title: "You're leading", items: leadingItems });
+    }
+
+    // 1b. You've been outbid — live auctions where viewer is outbid
+    const outbidItems: AuctionHomeItem[] = [];
+    for (const item of canonicalMap.values()) {
+      if (usedIds.has(item.id)) continue;
+      const timing = resolveAuctionTiming(item, minuteClock);
+      if (timing.effectiveState === 'live' && item.viewerState === 'outbid') {
+        outbidItems.push(item);
+        usedIds.add(item.id);
+      }
+    }
+    if (outbidItems.length > 0) {
+      result.push({ kind: 'attention', title: "You've been outbid", items: outbidItems });
+    }
+
+    // 1c. You won — ended auctions where viewer won (needs attention for payment)
+    const wonItems: AuctionHomeItem[] = [];
+    for (const item of canonicalMap.values()) {
+      if (usedIds.has(item.id)) continue;
+      const timing = resolveAuctionTiming(item, minuteClock);
+      if (timing.effectiveState === 'ended' && item.viewerState === 'won') {
+        wonItems.push(item);
+        usedIds.add(item.id);
+      }
+    }
+    if (wonItems.length > 0) {
+      result.push({ kind: 'attention', title: 'You won', items: wonItems });
     }
 
     // 2. Ending soon
@@ -712,7 +744,7 @@ export default function AuctionHomeScreen() {
     });
     if (upcomingItems.length > 0) {
       upcomingItems.forEach((a) => usedIds.add(a.id));
-      result.push({ kind: 'upcoming', title: 'Upcoming', items: upcomingItems });
+      result.push({ kind: 'upcoming', title: 'Starting soon', items: upcomingItems });
     }
 
     // 5. Watchlist
@@ -1043,7 +1075,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 20,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: -0.3,
   },
   headerActionBtn: {
     width: HEADER_HEIGHT,
@@ -1119,7 +1153,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 17,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: -0.2,
   },
   horizontalListContent: {
     paddingHorizontal: Space.md,
@@ -1258,7 +1294,7 @@ const styles = StyleSheet.create({
   },
   feedCardImageContainer: {
     width: '100%',
-    height: 140,
+    height: 180,
   },
   feedCardImage: {
     width: '100%',
@@ -1266,7 +1302,7 @@ const styles = StyleSheet.create({
   },
   feedCardImagePlaceholder: {
     width: '100%',
-    height: 140,
+    height: 180,
     backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1343,7 +1379,7 @@ const styles = StyleSheet.create({
   },
   compactCardImageContainer: {
     width: '100%',
-    height: 100,
+    height: 120,
   },
   compactCardImage: {
     width: '100%',
@@ -1351,7 +1387,7 @@ const styles = StyleSheet.create({
   },
   compactCardImagePlaceholder: {
     width: '100%',
-    height: 100,
+    height: 120,
     backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',

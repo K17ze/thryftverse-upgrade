@@ -1,7 +1,8 @@
 import { fetchJson } from '../lib/apiClient';
 
-export type AuctionLifecycle = 'upcoming' | 'live' | 'ended';
+export type AuctionLifecycle = 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
 export type AuctionStatus = AuctionLifecycle;
+export type AuctionTerminalReason = 'cancelled' | 'settled' | 'buy_now' | 'scheduled_end' | null;
 export type AuctionViewerState = 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
 export type AuctionSortMode = 'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh';
 
@@ -29,8 +30,10 @@ export interface MarketAuction {
   buyNowPriceGbp: number | null;
   bidCount: number;
   lifecycle: AuctionLifecycle;
+  terminalReason: AuctionTerminalReason;
   viewerState: AuctionViewerState;
   isWatched: boolean;
+  winnerBidderId: string | null;
   cancelledAt: string | null;
   settledAt: string | null;
   createdAt: string;
@@ -64,6 +67,7 @@ export interface AuctionDetail {
   buyNowPriceGbp: number | null;
   bidCount: number;
   lifecycle: AuctionLifecycle;
+  terminalReason: AuctionTerminalReason;
   viewerState: AuctionViewerState;
   isWatched: boolean;
   winnerBidderId: string | null;
@@ -92,6 +96,8 @@ export interface MyAuctionBid {
     currentBidGbp: number;
     bidCount: number;
     lifecycle: AuctionLifecycle;
+    terminalReason: AuctionTerminalReason;
+    winnerBidderId: string | null;
     sellerId: string;
     sellerUsername: string;
     endsAt: string;

@@ -59,6 +59,7 @@ export function BuyNowSheet({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isPreflighting, setIsPreflighting] = React.useState(false);
   const [sheetOpenedAtMs, setSheetOpenedAtMs] = React.useState(0);
+  const [authoritativePrice, setAuthoritativePrice] = React.useState<number | null>(null);
   const idempotencyKeyRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
@@ -68,9 +69,10 @@ export function BuyNowSheet({
       setIsSubmitting(false);
       setIsPreflighting(false);
       setSheetOpenedAtMs(Date.now());
+      setAuthoritativePrice(auction.buyNowPriceGbp);
       idempotencyKeyRef.current = null;
     }
-  }, [visible]);
+  }, [visible, auction.buyNowPriceGbp]);
 
   React.useEffect(() => {
     if (visible && shouldCloseSheetDueToLifecycle(auction.effectiveState)) {
@@ -100,7 +102,7 @@ export function BuyNowSheet({
     if (!canBuyNow || !auction.buyNowPriceGbp) return;
 
     // PASS 4: Authoritative preflight when stale
-    let authoritativePrice = auction.buyNowPriceGbp;
+    let effectivePrice = authoritativePrice ?? auction.buyNowPriceGbp;
     let authoritativeState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled' = auction.effectiveState;
 
     setIsPreflighting(true);
@@ -118,7 +120,8 @@ export function BuyNowSheet({
           setStage('error');
           return;
         }
-        authoritativePrice = snapshot.auction.buyNowPriceGbp ?? auction.buyNowPriceGbp;
+        effectivePrice = snapshot.auction.buyNowPriceGbp ?? auction.buyNowPriceGbp;
+        setAuthoritativePrice(effectivePrice);
         authoritativeState = (snapshot.auction.lifecycle as 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled') ?? auction.effectiveState;
         if (snapshot.auction.cancelledAt) authoritativeState = 'cancelled';
         if (snapshot.auction.settledAt) authoritativeState = 'settled';
@@ -138,8 +141,8 @@ export function BuyNowSheet({
           return;
         }
 
-        const expectedPrice = Number(auction.buyNowPriceGbp.toFixed(2));
-        const serverPrice = Number(authoritativePrice.toFixed(2));
+        const expectedPrice = Number((authoritativePrice ?? auction.buyNowPriceGbp).toFixed(2));
+        const serverPrice = Number(effectivePrice.toFixed(2));
         if (expectedPrice !== serverPrice) {
           setError({
             kind: 'buy_now_price_changed',
@@ -163,7 +166,7 @@ export function BuyNowSheet({
     }
 
     // Use the authoritative server price as the transaction amount
-    const transactionAmount = Number(authoritativePrice.toFixed(2));
+    const transactionAmount = Number(effectivePrice.toFixed(2));
 
     setIsSubmitting(true);
     setStage('submitting');
@@ -184,12 +187,29 @@ export function BuyNowSheet({
         parsed.status,
         parsed.message,
         parsed.isNetworkError,
+        parsed.structuredDetails,
       );
       setError(txError);
 
       if (txError.isAmbiguous) {
         // Ambiguous failure — preserve the same idempotency key for replay
         setStage('error');
+      } else if (txError.kind === 'buy_now_price_changed') {
+        // Price changed — use structured price from error, refresh once, retain sheet, clear old key
+        if (txError.currentBuyNowPriceGbp) {
+          setAuthoritativePrice(txError.currentBuyNowPriceGbp);
+        }
+        // Attempt one reconciliation refresh; if it fails, the structured price above is authoritative
+        const snapshot = await onRefreshDetail();
+        if (snapshot) {
+          const refreshedPrice = snapshot.auction.buyNowPriceGbp;
+          if (refreshedPrice && refreshedPrice > 0) {
+            setAuthoritativePrice(refreshedPrice);
+          }
+        }
+        // Clear old idempotency attempt — require fresh explicit confirmation
+        idempotencyKeyRef.current = null;
+        setStage('review');
       } else if (txError.transactionPossible) {
         // Definitive rejection with retry possible — refresh and reset key
         await onRefreshDetail();
@@ -221,12 +241,14 @@ export function BuyNowSheet({
     }
   };
 
-  const priceText = auction.buyNowPriceGbp
-    ? formatFromFiat(auction.buyNowPriceGbp, 'GBP', { displayMode: 'fiat' })
+  const displayPriceGbp = authoritativePrice ?? auction.buyNowPriceGbp;
+
+  const priceText = displayPriceGbp
+    ? formatFromFiat(displayPriceGbp, 'GBP', { displayMode: 'fiat' })
     : '—';
 
-  const displayPriceText = auction.buyNowPriceGbp && currencyCode !== 'GBP'
-    ? formatFromFiat(auction.buyNowPriceGbp, currencyCode, { displayMode: 'fiat' })
+  const displayPriceText = displayPriceGbp && currencyCode !== 'GBP'
+    ? formatFromFiat(displayPriceGbp, currencyCode, { displayMode: 'fiat' })
     : null;
 
   return (
@@ -328,7 +350,11 @@ export function BuyNowSheet({
         {/* ── Submitting stage ── */}
         {stage === 'submitting' && (
           <View style={styles.centerStage}>
-            <Text style={styles.submittingText}>Processing...</Text>
+            <View style={styles.submittingSpinnerWrap}>
+              <Ionicons name="hourglass-outline" size={40} color={Colors.brand} />
+            </View>
+            <Text style={styles.submittingText}>Processing your purchase...</Text>
+            <Text style={styles.submittingDetail}>This may take a moment.</Text>
           </View>
         )}
 
@@ -336,11 +362,11 @@ export function BuyNowSheet({
         {stage === 'success' && (
           <View style={styles.centerStage}>
             <View style={styles.successIcon}>
-              <Ionicons name="checkmark-circle" size={48} color={Colors.brand} />
+              <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
             </View>
-            <Text style={styles.successTitle}>Buy Now accepted</Text>
+            <Text style={styles.successTitle}>Purchase confirmed</Text>
             <Text style={styles.successDetail}>
-              The auction has ended. Result is being refreshed.
+              You bought this item for {priceText}.{'\n'}The auction has ended and is being refreshed.
             </Text>
             <AppButton
               style={styles.doneBtn}
@@ -356,33 +382,33 @@ export function BuyNowSheet({
 
         {/* ── Error stage ── */}
         {stage === 'error' && error && (
-          <View style={styles.centerStage}>
-            <View style={styles.errorIcon}>
-              <Ionicons name="close-circle" size={48} color={Colors.danger} />
+          <View style={styles.stageContent}>
+            <View style={styles.errorIconSmall}>
+              <Ionicons name="alert-circle-outline" size={24} color={Colors.danger} />
             </View>
             <Text style={styles.errorTitle}>{error.message}</Text>
-            {!error.transactionPossible && (
+            <View style={styles.actions}>
+              {error.canRetry && (
+                <AppButton
+                  style={[styles.actionBtn, styles.primaryBtn]}
+                  onPress={handleRetry}
+                  variant="primary"
+                  size="md"
+                  align="center"
+                  title="Try again"
+                  accessibilityLabel="Retry Buy Now"
+                />
+              )}
               <AppButton
-                style={styles.doneBtn}
+                style={styles.actionBtn}
                 onPress={handleDismiss}
-                variant="primary"
+                variant="secondary"
                 size="md"
                 align="center"
                 title="Close"
                 accessibilityLabel="Close Buy Now sheet"
               />
-            )}
-            {error.canRetry && (
-              <AppButton
-                style={styles.doneBtn}
-                onPress={handleRetry}
-                variant="primary"
-                size="md"
-                align="center"
-                title="Try again"
-                accessibilityLabel="Retry Buy Now"
-              />
-            )}
+            </View>
           </View>
         )}
       </View>
@@ -511,6 +537,14 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
   },
+  submittingSpinnerWrap: {
+    marginBottom: Space.xs,
+  },
+  submittingDetail: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+  },
   successIcon: {
     marginBottom: Space.xs,
   },
@@ -531,6 +565,9 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   errorIcon: {
+    marginBottom: Space.xs,
+  },
+  errorIconSmall: {
     marginBottom: Space.xs,
   },
   errorTitle: {

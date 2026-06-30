@@ -3,15 +3,21 @@ import { AppState, AppStateStatus } from 'react-native';
 
 export type AuctionEffectiveState = 'cancelled' | 'settled' | 'upcoming' | 'live' | 'ended';
 
+export type AuctionTerminalReason = 'cancelled' | 'settled' | 'buy_now' | 'scheduled_end' | null;
+
 export interface AuctionTimingInput {
   startsAt: string;
   endsAt: string;
   cancelledAt?: string | null;
   settledAt?: string | null;
+  winnerBidderId?: string | null;
+  lifecycle?: string;
+  terminalReason?: string | null;
 }
 
 export interface AuctionTimingOutput {
   effectiveState: AuctionEffectiveState;
+  terminalReason: AuctionTerminalReason;
   msToStart: number;
   msToEnd: number;
   progress: number;
@@ -28,13 +34,20 @@ export function resolveAuctionTiming(
   const settledAtMs = input.settledAt ? new Date(input.settledAt).getTime() : null;
 
   let effectiveState: AuctionEffectiveState;
+  let terminalReason: AuctionTerminalReason = null;
 
   if (cancelledAtMs !== null) {
     effectiveState = 'cancelled';
+    terminalReason = 'cancelled';
   } else if (settledAtMs !== null) {
     effectiveState = 'settled';
-  } else if (serverNowMs >= endsAtMs) {
+    terminalReason = 'settled';
+  } else if (input.winnerBidderId || input.terminalReason === 'buy_now') {
     effectiveState = 'ended';
+    terminalReason = 'buy_now';
+  } else if (input.lifecycle === 'ended' || serverNowMs >= endsAtMs) {
+    effectiveState = 'ended';
+    terminalReason = 'scheduled_end';
   } else if (serverNowMs >= startsAtMs) {
     effectiveState = 'live';
   } else {
@@ -50,7 +63,7 @@ export function resolveAuctionTiming(
     ? Math.min(1, Math.max(0, elapsed / totalDuration))
     : 0;
 
-  return { effectiveState, msToStart, msToEnd, progress };
+  return { effectiveState, terminalReason, msToStart, msToEnd, progress };
 }
 
 export function formatCountdown(ms: number): string {

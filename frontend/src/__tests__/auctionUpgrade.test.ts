@@ -34,6 +34,8 @@ describe('auction contract types', () => {
       buyNowPriceGbp: null,
       bidCount: 3,
       lifecycle: 'live',
+      terminalReason: null,
+      winnerBidderId: null,
       viewerState: 'leading',
       isWatched: false,
       cancelledAt: null,
@@ -61,8 +63,8 @@ describe('auction contract types', () => {
   });
 
   it('AuctionLifecycle covers all lifecycle phases', () => {
-    const phases: AuctionLifecycle[] = ['upcoming', 'live', 'ended'];
-    expect(phases).toHaveLength(3);
+    const phases: AuctionLifecycle[] = ['upcoming', 'live', 'ended', 'cancelled', 'settled'];
+    expect(phases).toHaveLength(5);
   });
 
   it('AuctionSortMode covers all sort options', () => {
@@ -90,6 +92,7 @@ describe('auction contract types', () => {
       buyNowPriceGbp: 100,
       bidCount: 5,
       lifecycle: 'ended',
+      terminalReason: 'scheduled_end',
       viewerState: 'won',
       isWatched: true,
       winnerBidderId: 'bidder_1',
@@ -117,6 +120,8 @@ describe('auction contract types', () => {
         currentBidGbp: 25,
         bidCount: 3,
         lifecycle: 'live',
+        terminalReason: null,
+        winnerBidderId: null,
         sellerId: 's1',
         sellerUsername: 'seller',
         endsAt: '2025-01-01T06:00:00Z',

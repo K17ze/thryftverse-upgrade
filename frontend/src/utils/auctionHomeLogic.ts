@@ -21,8 +21,11 @@ export interface AuctionHomeItem {
   buyNowPriceGbp: number | null;
   viewerState: AuctionViewerState;
   isWatched: boolean;
+  winnerBidderId: string | null;
   cancelledAt: string | null;
   settledAt: string | null;
+  lifecycle: string;
+  terminalReason: string | null;
 }
 
 // ── Urgency thresholds (defined once) ──

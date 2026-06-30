@@ -252,6 +252,7 @@ export function BidSheet({
         parsed.status,
         parsed.message,
         parsed.isNetworkError,
+        parsed.structuredDetails,
       );
       setError(txError);
 
@@ -259,6 +260,13 @@ export function BidSheet({
         // Ambiguous failure — preserve the same idempotency key for replay
         // Do NOT reset the key. User retries with the same key.
         setStage('error');
+      } else if (txError.kind === 'buy_now_review_required') {
+        // Recoverable conflict — refresh detail once to get authoritative Buy Now price
+        await onRefreshDetail();
+        // Preserve the entered bid so user can return to it
+        // Do NOT reset idempotency key — this was a definitive rejection, not a transaction
+        idempotencyKeyRef.current = null;
+        setStage('recoverable_conflict');
       } else if (txError.transactionPossible) {
         // Definitive rejection with retry possible — refresh and reset key for new attempt
         await onRefreshDetail();
@@ -500,7 +508,11 @@ export function BidSheet({
         {/* ── Submitting stage ── */}
         {stage === 'submitting' && (
           <View style={styles.centerStage}>
+            <View style={styles.submittingSpinnerWrap}>
+              <Ionicons name="hourglass-outline" size={40} color={Colors.brand} />
+            </View>
             <Text style={styles.submittingText}>Submitting your bid...</Text>
+            <Text style={styles.submittingDetail}>This may take a moment.</Text>
           </View>
         )}
 
@@ -508,11 +520,11 @@ export function BidSheet({
         {stage === 'success' && (
           <View style={styles.centerStage}>
             <View style={styles.successIcon}>
-              <Ionicons name="checkmark-circle" size={48} color={Colors.brand} />
+              <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
             </View>
             <Text style={styles.successTitle}>Bid placed</Text>
             <Text style={styles.successDetail}>
-              {formatFromFiat(gbpAmount ?? 0, 'GBP', { displayMode: 'fiat' })}
+              Your bid of {formatFromFiat(gbpAmount ?? 0, 'GBP', { displayMode: 'fiat' })} has been submitted
             </Text>
             <AppButton
               style={styles.doneBtn}
@@ -526,46 +538,75 @@ export function BidSheet({
           </View>
         )}
 
-        {/* ── Error (terminal) stage ── */}
-        {stage === 'error' && error && (
-          <View style={styles.centerStage}>
-            <View style={styles.errorIcon}>
-              <Ionicons name="close-circle" size={48} color={Colors.danger} />
+        {/* ── Recoverable conflict stage ── */}
+        {stage === 'recoverable_conflict' && error && error.kind === 'buy_now_review_required' && (
+          <View style={styles.stageContent}>
+            <View style={styles.conflictIconRow}>
+              <Ionicons name="information-circle-outline" size={28} color={Colors.brand} />
             </View>
-            <Text style={styles.errorTitle}>{error.message}</Text>
-            {!error.transactionPossible && (
+            <Text style={styles.conflictHeading}>Consider Buy Now</Text>
+            <Text style={styles.conflictExplanation}>{error.message}</Text>
+            {error.buyNowPriceGbp && (
+              <View style={styles.conflictPriceRow}>
+                <Meta style={styles.conflictPriceLabel}>Buy Now price</Meta>
+                <Text style={styles.conflictPriceValue}>
+                  {formatFromFiat(error.buyNowPriceGbp, 'GBP', { displayMode: 'fiat' })}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.actions}>
               <AppButton
-                style={styles.doneBtn}
-                onPress={handleDismiss}
-                variant="primary"
+                style={styles.actionBtn}
+                onPress={handleEditFromReview}
+                variant="secondary"
                 size="md"
                 align="center"
-                title="Close"
-                accessibilityLabel="Close bid sheet"
+                title="Edit bid"
+                accessibilityLabel="Edit your bid amount"
               />
-            )}
-            {error.canRetry && (
               <AppButton
-                style={styles.doneBtn}
-                onPress={handleRetry}
-                variant="primary"
-                size="md"
-                align="center"
-                title="Try again"
-                accessibilityLabel="Retry bid"
-              />
-            )}
-            {error.kind === 'buy_now_review_required' && onReviewBuyNow && (
-              <AppButton
-                style={styles.doneBtn}
+                style={[styles.actionBtn, styles.primaryBtn]}
                 onPress={onReviewBuyNow}
                 variant="primary"
                 size="md"
                 align="center"
                 title="Review Buy Now"
-                accessibilityLabel="Review Buy Now"
+                accessibilityLabel="Review Buy Now to purchase this item immediately"
               />
-            )}
+            </View>
+          </View>
+        )}
+
+        {/* ── Error (terminal) stage ── */}
+        {stage === 'error' && error && (
+          <View style={styles.stageContent}>
+            <View style={styles.errorIconSmall}>
+              <Ionicons name="alert-circle-outline" size={24} color={Colors.danger} />
+            </View>
+            <Text style={styles.errorTitle}>{error.message}</Text>
+            <View style={styles.actions}>
+              {error.canRetry && (
+                <AppButton
+                  style={[styles.actionBtn, styles.primaryBtn]}
+                  onPress={handleRetry}
+                  variant="primary"
+                  size="md"
+                  align="center"
+                  title="Try again"
+                  accessibilityLabel="Retry bid"
+                />
+              )}
+              <AppButton
+                style={styles.actionBtn}
+                onPress={handleDismiss}
+                variant="secondary"
+                size="md"
+                align="center"
+                title="Close"
+                accessibilityLabel="Close bid sheet"
+              />
+            </View>
           </View>
         )}
       </View>
@@ -775,6 +816,14 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
   },
+  submittingSpinnerWrap: {
+    marginBottom: Space.xs,
+  },
+  submittingDetail: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+  },
   successIcon: {
     marginBottom: Space.xs,
   },
@@ -795,11 +844,52 @@ const styles = StyleSheet.create({
   errorIcon: {
     marginBottom: Space.xs,
   },
+  errorIconSmall: {
+    marginBottom: Space.xs,
+  },
   errorTitle: {
     fontSize: 16,
     fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
     textAlign: 'center',
     paddingHorizontal: Space.md,
+  },
+  conflictIconRow: {
+    alignItems: 'center',
+    marginBottom: Space.xs,
+  },
+  conflictHeading: {
+    fontSize: 20,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: Space.xs,
+  },
+  conflictExplanation: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    textAlign: 'center',
+    paddingHorizontal: Space.sm,
+    marginBottom: Space.md,
+  },
+  conflictPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    marginBottom: Space.md,
+  },
+  conflictPriceLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  conflictPriceValue: {
+    fontSize: 18,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
 });

@@ -29,6 +29,8 @@ export interface AuctionDetailInput {
   cancelledAt: string | null;
   settledAt: string | null;
   winnerBidderId: string | null;
+  lifecycle: string;
+  terminalReason: string | null;
 }
 
 // ── CTA action types ──
