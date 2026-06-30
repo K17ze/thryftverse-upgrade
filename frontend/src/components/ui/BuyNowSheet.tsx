@@ -107,44 +107,50 @@ export function BuyNowSheet({
     try {
       if (isSheetStateStale(sheetOpenedAtMs, Date.now())) {
         const snapshot = await onRefreshDetail();
-        if (snapshot) {
-          authoritativePrice = snapshot.auction.buyNowPriceGbp ?? auction.buyNowPriceGbp;
-          authoritativeState = (snapshot.auction.lifecycle as 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled') ?? auction.effectiveState;
-          // Also check terminal state fields from snapshot
-          if (snapshot.auction.cancelledAt) authoritativeState = 'cancelled';
-          if (snapshot.auction.settledAt) authoritativeState = 'settled';
-          setSheetOpenedAtMs(Date.now());
+        if (!snapshot) {
+          setError({
+            kind: 'network_failure',
+            message: 'Unable to verify current auction state. Check your connection and try again.',
+            canRetry: true,
+            transactionPossible: true,
+            isAmbiguous: true,
+          });
+          setStage('error');
+          return;
+        }
+        authoritativePrice = snapshot.auction.buyNowPriceGbp ?? auction.buyNowPriceGbp;
+        authoritativeState = (snapshot.auction.lifecycle as 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled') ?? auction.effectiveState;
+        if (snapshot.auction.cancelledAt) authoritativeState = 'cancelled';
+        if (snapshot.auction.settledAt) authoritativeState = 'settled';
+        setSheetOpenedAtMs(Date.now());
 
-          // Verify auction is still live
-          if (authoritativeState !== 'live') {
-            setError({
-              kind: authoritativeState === 'cancelled' ? 'auction_cancelled'
-                : authoritativeState === 'settled' ? 'auction_settled'
-                : 'auction_ended',
-              message: 'This auction is no longer live. Buy Now is unavailable.',
-              canRetry: false,
-              transactionPossible: false,
-              isAmbiguous: false,
-            });
-            setStage('error');
-            return;
-          }
+        if (authoritativeState !== 'live') {
+          setError({
+            kind: authoritativeState === 'cancelled' ? 'auction_cancelled'
+              : authoritativeState === 'settled' ? 'auction_settled'
+              : 'auction_ended',
+            message: 'This auction is no longer live. Buy Now is unavailable.',
+            canRetry: false,
+            transactionPossible: false,
+            isAmbiguous: false,
+          });
+          setStage('error');
+          return;
+        }
 
-          // Verify displayed price matches authoritative price
-          const expectedPrice = Number(auction.buyNowPriceGbp.toFixed(2));
-          const serverPrice = Number(authoritativePrice.toFixed(2));
-          if (expectedPrice !== serverPrice) {
-            setError({
-              kind: 'buy_now_price_changed',
-              message: 'The Buy Now price has changed. Please review the updated price.',
-              currentBuyNowPriceGbp: serverPrice,
-              canRetry: true,
-              transactionPossible: true,
-              isAmbiguous: false,
-            });
-            setStage('review');
-            return;
-          }
+        const expectedPrice = Number(auction.buyNowPriceGbp.toFixed(2));
+        const serverPrice = Number(authoritativePrice.toFixed(2));
+        if (expectedPrice !== serverPrice) {
+          setError({
+            kind: 'buy_now_price_changed',
+            message: 'The Buy Now price has changed. Please review the updated price.',
+            currentBuyNowPriceGbp: serverPrice,
+            canRetry: true,
+            transactionPossible: true,
+            isAmbiguous: false,
+          });
+          setStage('review');
+          return;
         }
       }
     } finally {

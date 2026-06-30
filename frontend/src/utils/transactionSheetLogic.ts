@@ -33,6 +33,7 @@ export type TransactionErrorKind =
   | 'aml_blocked'
   | 'buy_now_price_changed'
   | 'buy_now_review_required'
+  | 'auction_already_won'
   | 'network_failure'
   | 'unknown_backend';
 
@@ -41,6 +42,7 @@ export interface TransactionError {
   message: string;
   updatedMinimumGbp?: number;
   currentBuyNowPriceGbp?: number;
+  buyNowPriceGbp?: number;
   canRetry: boolean;
   transactionPossible: boolean;
   isAmbiguous: boolean;
@@ -197,7 +199,7 @@ export function validateBidEntry(
 export function applyQuickIncrement(
   currentInput: string,
   pct: number,
-  fallbackCurrentBidGbp: number,
+  fallbackMinimumGbp: number,
   currencyCode: SupportedCurrencyCode = 'GBP',
   goldRates: Partial<GoldRates> = {},
 ): string {
@@ -206,9 +208,9 @@ export function applyQuickIncrement(
     const nextValue = Number((base * (1 + pct)).toFixed(2));
     return nextValue.toFixed(2);
   }
-  // Empty/invalid input — convert fallback bid from GBP to display currency, then apply increment
+  // Empty/invalid input — convert fallback minimum from GBP to display currency, then apply increment
   // Do NOT use getSuggestedBidDisplayAmount which adds its own 3% step
-  const displayBase = convertGbpToDisplayAmount(fallbackCurrentBidGbp, currencyCode, goldRates);
+  const displayBase = convertGbpToDisplayAmount(fallbackMinimumGbp, currencyCode, goldRates);
   const nextValue = Number((displayBase * (1 + pct)).toFixed(2));
   return nextValue.toFixed(2);
 }
@@ -279,15 +281,6 @@ export function mapApiErrorToTransactionError(
       };
     }
     // Minimum changed — definitive rejection, no transaction occurred
-    if (parsedCode === 'BUY_NOW_REVIEW_REQUIRED' || parsedMessage.toLowerCase().includes('buy now')) {
-      return {
-        kind: 'buy_now_review_required',
-        message: 'Your bid meets or exceeds the Buy Now price. Use Buy Now to purchase this item immediately.',
-        canRetry: false,
-        transactionPossible: false,
-        isAmbiguous: false,
-      };
-    }
     if (parsedMessage.toLowerCase().includes('minimum') || parsedMessage.toLowerCase().includes('at least')) {
       const minMatch = parsedMessage.match(/£?([\d.]+)/);
       const updatedMin = minMatch ? Number(minMatch[1]) : undefined;
@@ -324,6 +317,29 @@ export function mapApiErrorToTransactionError(
   }
 
   if (parsedStatus === 409) {
+    // Buy Now review required — bid meets/exceeds Buy Now price; user should use Buy Now instead
+    if (parsedCode === 'BUY_NOW_REVIEW_REQUIRED') {
+      const priceMatch = parsedMessage.match(/£?([\d.]+)/);
+      const buyNowPrice = priceMatch ? Number(priceMatch[1]) : undefined;
+      return {
+        kind: 'buy_now_review_required',
+        message: 'Your bid meets or exceeds the Buy Now price. Use Buy Now to purchase this item immediately.',
+        buyNowPriceGbp: buyNowPrice,
+        canRetry: true,
+        transactionPossible: true,
+        isAmbiguous: false,
+      };
+    }
+    // Auction already won via Buy Now — terminal, no further transactions
+    if (parsedCode === 'AUCTION_ALREADY_WON' || parsedMessage.toLowerCase().includes('already been won')) {
+      return {
+        kind: 'auction_already_won',
+        message: 'This auction has already been won via Buy Now.',
+        canRetry: false,
+        transactionPossible: false,
+        isAmbiguous: false,
+      };
+    }
     // Buy Now price changed — definitive rejection
     if (parsedCode === 'BUY_NOW_PRICE_CHANGED') {
       const priceMatch = parsedMessage.match(/£?([\d.]+)/);

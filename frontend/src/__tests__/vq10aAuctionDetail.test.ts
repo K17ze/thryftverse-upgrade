@@ -1407,17 +1407,20 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
     expect(result.kind).toBe('seller_restricted');
   });
 
-  it('maps BUY_NOW_REVIEW_REQUIRED code', () => {
+  it('maps BUY_NOW_REVIEW_REQUIRED code as 409 with canRetry and transactionPossible', () => {
     const result = mapApiErrorToTransactionError(
       new Error('buy now'),
       'fallback',
       'BUY_NOW_REVIEW_REQUIRED',
-      400,
-      'Bid meets or exceeds Buy Now price',
+      409,
+      'Your bid meets or exceeds the Buy Now price (100.00). Use Buy Now to purchase this item immediately.',
       false,
     );
     expect(result.kind).toBe('buy_now_review_required');
     expect(result.isAmbiguous).toBe(false);
+    expect(result.canRetry).toBe(true);
+    expect(result.transactionPossible).toBe(true);
+    expect(result.buyNowPriceGbp).toBe(100);
   });
 
   it('maps 400 with ended message to auction_ended', () => {
@@ -1867,12 +1870,12 @@ describe('PASS 5.1: Idempotency state machine — ambiguous vs definitive', () =
       new Error('buy now'),
       'fallback',
       'BUY_NOW_REVIEW_REQUIRED',
-      400,
+      409,
       'Use Buy Now',
       false,
     );
     expect(txError.isAmbiguous).toBe(false);
-    expect(txError.transactionPossible).toBe(false);
+    expect(txError.transactionPossible).toBe(true);
   });
 
   it('minimum_changed is definitive (reset key)', () => {
@@ -1963,8 +1966,8 @@ describe('PASS 5.1: Buy Now response verification', () => {
 
 describe('PASS 5.1: BidSheet preflight and stale state', () => {
   it('BidSheet uses snapshot from refresh for validation (source inspection)', () => {
+    expect(bidSheetSrc).toContain('getAuthoritativeSnapshot');
     expect(bidSheetSrc).toContain('snapshot');
-    expect(bidSheetSrc).toContain('minForValidation');
   });
 
   it('BidSheet uses local validatedGbpAmount for submission (source inspection)', () => {
@@ -1982,7 +1985,7 @@ describe('PASS 5.1: BidSheet preflight and stale state', () => {
   });
 
   it('BidSheet passes currencyCode and goldRates to applyQuickIncrement (source inspection)', () => {
-    expect(bidSheetSrc).toContain('applyQuickIncrement(bidInput, pct, auction.currentBidGbp, currencyCode, goldRates)');
+    expect(bidSheetSrc).toContain('applyQuickIncrement(bidInput, pct, currentMinimum, currencyCode, goldRates)');
   });
 });
 
@@ -1996,5 +1999,120 @@ describe('PASS 5.1: BottomSheet reduced motion', () => {
     );
     expect(bottomSheetSrc).toContain('useReducedMotion');
     expect(bottomSheetSrc).toContain('reducedMotion');
+  });
+});
+
+// ── PASS 5.2: New error kinds and quick-increment fallback ──
+
+describe('PASS 5.2: mapApiErrorToTransactionError — AUCTION_ALREADY_WON', () => {
+  it('maps 409 with AUCTION_ALREADY_WON code as terminal', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('already won'),
+      'fallback',
+      'AUCTION_ALREADY_WON',
+      409,
+      'This auction has already been won via Buy Now.',
+      false,
+    );
+    expect(result.kind).toBe('auction_already_won');
+    expect(result.isAmbiguous).toBe(false);
+    expect(result.canRetry).toBe(false);
+    expect(result.transactionPossible).toBe(false);
+  });
+
+  it('maps 409 with "already been won" message as auction_already_won', () => {
+    const result = mapApiErrorToTransactionError(
+      new Error('won'),
+      'fallback',
+      null,
+      409,
+      'This auction has already been won via Buy Now.',
+      false,
+    );
+    expect(result.kind).toBe('auction_already_won');
+    expect(result.canRetry).toBe(false);
+  });
+});
+
+describe('PASS 5.2: applyQuickIncrement — fallback uses minimum, not current bid', () => {
+  const gbpRates = { GBP: 1, IZE: 10, USD: 1.25 };
+
+  it('uses fallbackMinimumGbp when input is empty', () => {
+    const result = applyQuickIncrement('', 0.05, 51, 'GBP', gbpRates);
+    expect(Number(result)).toBeCloseTo(53.55, 2);
+  });
+
+  it('uses fallbackMinimumGbp when input is invalid', () => {
+    const result = applyQuickIncrement('abc', 0.1, 51, 'GBP', gbpRates);
+    expect(Number(result)).toBeCloseTo(56.1, 2);
+  });
+
+  it('applies increment to existing valid input, ignoring fallback', () => {
+    const result = applyQuickIncrement('100.00', 0.05, 51, 'GBP', gbpRates);
+    expect(Number(result)).toBeCloseTo(105.0, 2);
+  });
+
+  it('converts fallback from GBP to display currency for non-GBP', () => {
+    const result = applyQuickIncrement('', 0.05, 51, 'IZE', gbpRates);
+    // 51 GBP * 10 IZE/GBP = 510 IZE, then * 1.05 = 535.50
+    expect(Number(result)).toBeCloseTo(535.5, 2);
+  });
+});
+
+describe('PASS 5.2: BidSheet onReviewBuyNow prop (source inspection)', () => {
+  it('BidSheet has onReviewBuyNow optional prop', () => {
+    expect(bidSheetSrc).toContain('onReviewBuyNow');
+  });
+
+  it('BidSheet renders Review Buy Now button for buy_now_review_required error', () => {
+    expect(bidSheetSrc).toContain("error.kind === 'buy_now_review_required'");
+    expect(bidSheetSrc).toContain('Review Buy Now');
+  });
+
+  it('AuctionDetailScreen wires onReviewBuyNow to open Buy Now sheet', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const screenSrc = fs.readFileSync(
+      path.resolve(__dirname, '../screens/AuctionDetailScreen.tsx'),
+      'utf-8'
+    );
+    expect(screenSrc).toContain('onReviewBuyNow');
+    expect(screenSrc).toContain('setBuyNowSheetVisible(true)');
+  });
+});
+
+describe('PASS 5.2: BuyNowSheet null refresh handling (source inspection)', () => {
+  it('BuyNowSheet handles null snapshot with network_failure error', () => {
+    expect(buyNowSheetSrc).toContain('!snapshot');
+    expect(buyNowSheetSrc).toContain('Unable to verify current auction state');
+  });
+});
+
+describe('PASS 5.2: Single reconciliation owner (source inspection)', () => {
+  it('AuctionDetailScreen does not fetch detail on bid error', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const screenSrc = fs.readFileSync(
+      path.resolve(__dirname, '../screens/AuctionDetailScreen.tsx'),
+      'utf-8'
+    );
+    // The catch block should NOT contain void fetchDetail() — sheet owns refresh
+    const bidHandlerMatch = screenSrc.match(/handleSubmitBid[\s\S]*?finally\s*\{/);
+    expect(bidHandlerMatch).toBeTruthy();
+    const catchBlock = screenSrc.match(/handleSubmitBid[\s\S]*?catch\s*\([^)]*\)\s*\{([\s\S]*?)\}/);
+    expect(catchBlock).toBeTruthy();
+    expect(catchBlock![1]).not.toContain('fetchDetail');
+  });
+
+  it('AuctionDetailScreen does not fetch detail on Buy Now error', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const screenSrc = fs.readFileSync(
+      path.resolve(__dirname, '../screens/AuctionDetailScreen.tsx'),
+      'utf-8'
+    );
+    const catchBlock = screenSrc.match(/handleSubmitBuyNow[\s\S]*?catch\s*\([^)]*\)\s*\{([\s\S]*?)\}/);
+    expect(catchBlock).toBeTruthy();
+    expect(catchBlock![1]).not.toContain('fetchDetail');
   });
 });

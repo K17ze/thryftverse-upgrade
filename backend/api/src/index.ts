@@ -462,6 +462,72 @@ function calculateWalletTopupFeeBreakdown(grossFiatAmount: number): {
   };
 }
 
+// ── Canonical auction lifecycle resolver ──
+// Precedence: cancelled_at > settled_at > winner terminal (Buy Now) > scheduled end > scheduled start > live
+
+export type CanonicalLifecycle =
+  | 'cancelled'
+  | 'settled'
+  | 'ended'
+  | 'live'
+  | 'upcoming';
+
+export type TerminalReason =
+  | 'cancelled'
+  | 'settled'
+  | 'buy_now'
+  | 'scheduled_end'
+  | null;
+
+export interface CanonicalLifecycleInput {
+  cancelledAt: string | null;
+  settledAt: string | null;
+  winnerBidderId: string | null;
+  startsAt: string | Date;
+  endsAt: string | Date;
+  now?: Date;
+}
+
+export interface CanonicalLifecycleResult {
+  lifecycle: CanonicalLifecycle;
+  terminalReason: TerminalReason;
+}
+
+export function resolveCanonicalLifecycle(input: CanonicalLifecycleInput): CanonicalLifecycleResult {
+  const now = (input.now ?? new Date()).getTime();
+  const startsAt = new Date(input.startsAt).getTime();
+  const endsAt = new Date(input.endsAt).getTime();
+
+  // 1. Cancelled — highest precedence, overrides everything
+  if (input.cancelledAt) {
+    return { lifecycle: 'cancelled', terminalReason: 'cancelled' };
+  }
+
+  // 2. Settled — explicit settlement overrides date-based status
+  if (input.settledAt) {
+    return { lifecycle: 'settled', terminalReason: 'settled' };
+  }
+
+  // 3. Winner set (Buy Now terminal) — auction is ended regardless of dates
+  if (input.winnerBidderId) {
+    return { lifecycle: 'ended', terminalReason: 'buy_now' };
+  }
+
+  // 4. Scheduled end time passed
+  if (endsAt <= now) {
+    return { lifecycle: 'ended', terminalReason: 'scheduled_end' };
+  }
+
+  // 5. Not yet started
+  if (startsAt > now) {
+    return { lifecycle: 'upcoming', terminalReason: null };
+  }
+
+  // 6. Live
+  return { lifecycle: 'live', terminalReason: null };
+}
+
+// Legacy alias for backward compatibility in non-auction contexts
 function resolveAuctionStatus(startsAt: Date, endsAt: Date): 'upcoming' | 'live' | 'ended' {
   const now = Date.now();
   const start = startsAt.getTime();
@@ -28853,9 +28919,14 @@ app.get('/auctions', async (request, reply) => {
   const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
   const items = pageRows.map((row) => {
-    const startsAt = new Date(row.starts_at);
-    const endsAt = new Date(row.ends_at);
-    const computedStatus = resolveAuctionStatus(startsAt, endsAt);
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      winnerBidderId: row.auction_winner_id,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+    });
+    const computedStatus = canonical.lifecycle;
     const currentBid = Number(row.current_bid_gbp);
     const minIncrement = Number(row.min_increment_gbp) || 0.01;
     const minimumNextBid = roundTo(currentBid + minIncrement, 2);
@@ -28866,7 +28937,7 @@ app.get('/auctions', async (request, reply) => {
 
     if (viewerUserId && row.seller_id === viewerUserId) {
       viewerState = 'seller';
-    } else if (computedStatus === 'ended') {
+    } else if (computedStatus === 'ended' || computedStatus === 'cancelled' || computedStatus === 'settled') {
       if (row.auction_winner_id && row.auction_winner_id === viewerUserId) {
         viewerState = 'won';
       } else if (viewerHighestBid !== null) {
@@ -28902,6 +28973,7 @@ app.get('/auctions', async (request, reply) => {
       buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
       bidCount: row.bid_count,
       lifecycle: computedStatus,
+      terminalReason: canonical.terminalReason,
       viewerState,
       isWatched,
       cancelledAt: row.cancelled_at,
@@ -29184,11 +29256,12 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
   const bidderId = request.authUser.userId;
 
   const idempotencyKey = payload.idempotencyKey;
+  const scopedKey = idempotencyKey ? `bid:${idempotencyKey}` : null;
 
-  if (idempotencyKey) {
+  if (scopedKey) {
     const existingBid = await db.query<{ id: number; amount_gbp: number | string; created_at: string }>(
       `SELECT id, amount_gbp, created_at FROM auction_bids WHERE auction_id = $1 AND bidder_id = $2 AND idempotency_key = $3 LIMIT 1`,
-      [auctionId, bidderId, idempotencyKey]
+      [auctionId, bidderId, scopedKey]
     );
     if (existingBid.rows[0]) {
       const auctionState = await db.query<{ current_bid_gbp: number | string; bid_count: number }>(
@@ -29210,6 +29283,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
           id: auctionId,
           currentBidGbp: aRow ? Number(aRow.current_bid_gbp) : Number(existingBid.rows[0].amount_gbp),
           bidCount: aRow?.bid_count ?? 1,
+          isBuyNow: false,
         },
         aml: null,
       };
@@ -29232,9 +29306,11 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       buy_now_price_gbp: number | string | null;
       cancelled_at: string | null;
       settled_at: string | null;
+      winner_bidder_id: string | null;
+      winner_bid_id: number | null;
     }>(
       `
-        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at
+        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at, winner_bidder_id, winner_bid_id
         FROM auctions
         WHERE id = $1
         FOR UPDATE
@@ -29267,16 +29343,28 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
       return { ok: false, error: 'This auction has been settled.', code: 'AUCTION_SETTLED' };
     }
 
-    const status = resolveAuctionStatus(new Date(auction.starts_at), new Date(auction.ends_at));
-    await client.query('UPDATE auctions SET status = $2, updated_at = NOW() WHERE id = $1', [auctionId, status]);
+    // Winner already set — auction is terminally ended via Buy Now
+    if (auction.winner_bidder_id) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has already been won via Buy Now.', code: 'AUCTION_ALREADY_WON' };
+    }
 
-    if (status === 'upcoming') {
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: auction.cancelled_at,
+      settledAt: auction.settled_at,
+      winnerBidderId: auction.winner_bidder_id,
+      startsAt: auction.starts_at,
+      endsAt: auction.ends_at,
+    });
+
+    if (canonical.lifecycle === 'upcoming') {
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'This auction has not started yet.', code: 'AUCTION_NOT_STARTED' };
     }
 
-    if (status === 'ended') {
+    if (canonical.lifecycle === 'ended') {
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'This auction has ended. Bidding is no longer available.', code: 'AUCTION_ENDED' };
@@ -29396,7 +29484,7 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         VALUES ($1, $2, $3, $4)
         RETURNING id, created_at
       `,
-      [auctionId, bidderId, amountGbp, idempotencyKey ?? null]
+      [auctionId, bidderId, amountGbp, scopedKey ?? null]
     );
 
     const nextBidCount = auction.bid_count + 1;
@@ -29538,11 +29626,12 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
   const payload = bodySchema.parse(request.body);
   const buyerId = request.authUser.userId;
   const idempotencyKey = payload.idempotencyKey;
+  const scopedKey = `buy_now:${idempotencyKey}`;
 
   // Idempotency check — replay returns original Buy Now result
   const existingBuyNow = await db.query<{ id: number; amount_gbp: number | string; created_at: string }>(
     `SELECT id, amount_gbp, created_at FROM auction_bids WHERE auction_id = $1 AND bidder_id = $2 AND idempotency_key = $3 LIMIT 1`,
-    [auctionId, buyerId, idempotencyKey]
+    [auctionId, buyerId, scopedKey]
   );
   if (existingBuyNow.rows[0]) {
     const auctionState = await db.query<{ current_bid_gbp: number | string; bid_count: number; status: string; winner_bidder_id: string | null }>(
@@ -29589,9 +29678,11 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
       buy_now_price_gbp: number | string | null;
       cancelled_at: string | null;
       settled_at: string | null;
+      winner_bidder_id: string | null;
+      winner_bid_id: number | null;
     }>(
       `
-        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at
+        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at, winner_bidder_id, winner_bid_id
         FROM auctions
         WHERE id = $1
         FOR UPDATE
@@ -29624,16 +29715,28 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
       return { ok: false, error: 'This auction has been settled.', code: 'AUCTION_SETTLED' };
     }
 
-    const status = resolveAuctionStatus(new Date(auction.starts_at), new Date(auction.ends_at));
-    await client.query('UPDATE auctions SET status = $2, updated_at = NOW() WHERE id = $1', [auctionId, status]);
+    // Winner already set — auction is terminally ended
+    if (auction.winner_bidder_id) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This auction has already been won.', code: 'AUCTION_ALREADY_WON' };
+    }
 
-    if (status === 'upcoming') {
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: auction.cancelled_at,
+      settledAt: auction.settled_at,
+      winnerBidderId: auction.winner_bidder_id,
+      startsAt: auction.starts_at,
+      endsAt: auction.ends_at,
+    });
+
+    if (canonical.lifecycle === 'upcoming') {
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'This auction has not started yet.', code: 'AUCTION_NOT_STARTED' };
     }
 
-    if (status === 'ended') {
+    if (canonical.lifecycle === 'ended') {
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'This auction has ended. Buy Now is no longer available.', code: 'AUCTION_ENDED' };
@@ -29751,7 +29854,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
         VALUES ($1, $2, $3, $4)
         RETURNING id, created_at
       `,
-      [auctionId, buyerId, transactionAmountGbp, idempotencyKey]
+      [auctionId, buyerId, transactionAmountGbp, scopedKey]
     );
 
     const nextBidCount = auction.bid_count + 1;
@@ -29964,7 +30067,14 @@ app.get('/auctions/:auctionId', async (request, reply) => {
 
   const startsAt = new Date(row.starts_at);
   const endsAt = new Date(row.ends_at);
-  const computedStatus = resolveAuctionStatus(startsAt, endsAt);
+  const canonical = resolveCanonicalLifecycle({
+    cancelledAt: row.cancelled_at,
+    settledAt: row.settled_at,
+    winnerBidderId: row.winner_bidder_id,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+  });
+  const computedStatus = canonical.lifecycle;
   const currentBid = Number(row.current_bid_gbp);
   const minIncrement = Number(row.min_increment_gbp) || 0.01;
   const minimumNextBid = roundTo(currentBid + minIncrement, 2);
@@ -29975,7 +30085,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
 
   if (viewerUserId && row.seller_id === viewerUserId) {
     viewerState = 'seller';
-  } else if (computedStatus === 'ended') {
+  } else if (computedStatus === 'ended' || computedStatus === 'cancelled' || computedStatus === 'settled') {
     if (row.winner_bidder_id && row.winner_bidder_id === viewerUserId) {
       viewerState = 'won';
     } else if (viewerHighestBid !== null) {
@@ -30033,6 +30143,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
       bidCount: row.bid_count,
       lifecycle: computedStatus,
+      terminalReason: canonical.terminalReason,
       viewerState,
       isWatched,
       winnerBidderId: row.winner_bidder_id,
@@ -30102,6 +30213,8 @@ app.get('/auctions/watchlist', async (request, reply) => {
     bid_count: number;
     status: string;
     winner_bidder_id: string | null;
+    settled_at: string | null;
+    cancelled_at: string | null;
     created_at: string;
     title: string | null;
     image_url: string | null;
@@ -30127,6 +30240,8 @@ app.get('/auctions/watchlist', async (request, reply) => {
         a.bid_count,
         a.status,
         a.winner_bidder_id,
+        a.settled_at,
+        a.cancelled_at,
         a.created_at,
         l.title,
         l.image_url,
@@ -30152,9 +30267,14 @@ app.get('/auctions/watchlist', async (request, reply) => {
   const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
   const items = pageRows.map((row) => {
-    const startsAt = new Date(row.starts_at);
-    const endsAt = new Date(row.ends_at);
-    const computedStatus = resolveAuctionStatus(startsAt, endsAt);
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      winnerBidderId: row.winner_bidder_id,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+    });
+    const computedStatus = canonical.lifecycle;
     const currentBid = Number(row.current_bid_gbp);
     const minIncrement = Number(row.min_increment_gbp) || 0.01;
 
@@ -30163,7 +30283,7 @@ app.get('/auctions/watchlist', async (request, reply) => {
 
     if (viewerUserId && row.seller_id === viewerUserId) {
       viewerState = 'seller';
-    } else if (computedStatus === 'ended') {
+    } else if (computedStatus === 'ended' || computedStatus === 'settled') {
       if (row.winner_bidder_id === viewerUserId) {
         viewerState = 'won';
       } else if (viewerHighestBid !== null) {
@@ -30192,6 +30312,7 @@ app.get('/auctions/watchlist', async (request, reply) => {
       buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
       bidCount: row.bid_count,
       lifecycle: computedStatus,
+      terminalReason: canonical.terminalReason,
       viewerState,
       isWatched: true,
       watchedAt: row.watched_at,
@@ -30302,6 +30423,8 @@ app.get('/users/me/auction-bids', async (request, reply) => {
     current_bid_gbp: number | string;
     bid_count: number;
     winner_bidder_id: string | null;
+    settled_at: string | null;
+    cancelled_at: string | null;
     title: string | null;
     image_url: string | null;
     seller_id: string;
@@ -30318,6 +30441,8 @@ app.get('/users/me/auction-bids', async (request, reply) => {
         a.current_bid_gbp,
         a.bid_count,
         a.winner_bidder_id,
+        a.settled_at,
+        a.cancelled_at,
         l.title,
         l.image_url,
         a.seller_id,
@@ -30337,12 +30462,19 @@ app.get('/users/me/auction-bids', async (request, reply) => {
   const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
   const items = pageRows.map((row) => {
-    const computedStatus = resolveAuctionStatus(new Date(row.starts_at), new Date(row.ends_at));
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      winnerBidderId: row.winner_bidder_id,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+    });
+    const computedStatus = canonical.lifecycle;
     const currentBid = Number(row.current_bid_gbp);
     const myBid = Number(row.amount_gbp);
 
     let bidState: 'active' | 'leading' | 'outbid' | 'won' | 'lost' = 'active';
-    if (computedStatus === 'ended') {
+    if (computedStatus === 'ended' || computedStatus === 'settled' || computedStatus === 'cancelled') {
       if (row.winner_bidder_id === bidderId) {
         bidState = 'won';
       } else {
@@ -30367,6 +30499,7 @@ app.get('/users/me/auction-bids', async (request, reply) => {
         currentBidGbp: currentBid,
         bidCount: row.bid_count,
         lifecycle: computedStatus,
+        terminalReason: canonical.terminalReason,
         sellerId: row.seller_id,
         sellerUsername: row.seller_username ?? 'unknown',
         endsAt: row.ends_at,

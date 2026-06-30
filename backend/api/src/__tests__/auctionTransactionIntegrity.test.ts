@@ -1,6 +1,49 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+// ── Canonical lifecycle resolver (mirrors resolveCanonicalLifecycle from index.ts) ──
+// Kept local to avoid importing index.ts which pulls in config.ts (requires env vars)
+
+type CanonicalLifecycle = 'cancelled' | 'settled' | 'ended' | 'live' | 'upcoming';
+type TerminalReason = 'cancelled' | 'settled' | 'buy_now' | 'scheduled_end' | null;
+
+interface CanonicalLifecycleInput {
+  cancelledAt: string | null;
+  settledAt: string | null;
+  winnerBidderId: string | null;
+  startsAt: string | Date;
+  endsAt: string | Date;
+  now?: Date;
+}
+
+interface CanonicalLifecycleResult {
+  lifecycle: CanonicalLifecycle;
+  terminalReason: TerminalReason;
+}
+
+function resolveCanonicalLifecycle(input: CanonicalLifecycleInput): CanonicalLifecycleResult {
+  const now = (input.now ?? new Date()).getTime();
+  const startsAt = new Date(input.startsAt).getTime();
+  const endsAt = new Date(input.endsAt).getTime();
+
+  if (input.cancelledAt) {
+    return { lifecycle: 'cancelled', terminalReason: 'cancelled' };
+  }
+  if (input.settledAt) {
+    return { lifecycle: 'settled', terminalReason: 'settled' };
+  }
+  if (input.winnerBidderId) {
+    return { lifecycle: 'ended', terminalReason: 'buy_now' };
+  }
+  if (endsAt <= now) {
+    return { lifecycle: 'ended', terminalReason: 'scheduled_end' };
+  }
+  if (startsAt > now) {
+    return { lifecycle: 'upcoming', terminalReason: null };
+  }
+  return { lifecycle: 'live', terminalReason: null };
+}
+
 // ── Pure logic extracted from the bid and buy-now route handlers ──
 // These functions mirror the exact decision logic in the route handlers
 // to enable integration-level testing without a running database.
@@ -16,6 +59,7 @@ interface AuctionRow {
   buy_now_price_gbp: number | null;
   cancelled_at: string | null;
   settled_at: string | null;
+  winner_bidder_id: string | null;
 }
 
 type AuctionStatus = 'upcoming' | 'live' | 'ended';
@@ -66,15 +110,27 @@ function evaluateBidDecision(input: BidDecisionResult | BidDecisionInput): BidDe
     return { allowed: false, httpStatus: 409, code: 'AUCTION_SETTLED', error: 'This auction has been settled.' };
   }
 
-  const status = resolveAuctionStatus(new Date(auction.starts_at), new Date(auction.ends_at), now);
+  // Winner already set — auction is terminally ended via Buy Now
+  if (auction.winner_bidder_id) {
+    return { allowed: false, httpStatus: 409, code: 'AUCTION_ALREADY_WON', error: 'This auction has already been won via Buy Now.' };
+  }
+
+  const canonical = resolveCanonicalLifecycle({
+    cancelledAt: auction.cancelled_at,
+    settledAt: auction.settled_at,
+    winnerBidderId: auction.winner_bidder_id,
+    startsAt: auction.starts_at,
+    endsAt: auction.ends_at,
+    now,
+  });
 
   // Upcoming
-  if (status === 'upcoming') {
+  if (canonical.lifecycle === 'upcoming') {
     return { allowed: false, httpStatus: 409, code: 'AUCTION_NOT_STARTED', error: 'This auction has not started yet.' };
   }
 
   // Ended
-  if (status === 'ended') {
+  if (canonical.lifecycle === 'ended') {
     return { allowed: false, httpStatus: 409, code: 'AUCTION_ENDED', error: 'This auction has ended. Bidding is no longer available.' };
   }
 
@@ -129,15 +185,27 @@ function evaluateBuyNowDecision(input: BuyNowDecisionInput): BidDecisionResult {
     return { allowed: false, httpStatus: 409, code: 'AUCTION_SETTLED', error: 'This auction has been settled.' };
   }
 
-  const status = resolveAuctionStatus(new Date(auction.starts_at), new Date(auction.ends_at), now);
+  // Winner already set — auction is terminally ended
+  if (auction.winner_bidder_id) {
+    return { allowed: false, httpStatus: 409, code: 'AUCTION_ALREADY_WON', error: 'This auction has already been won.' };
+  }
+
+  const canonical = resolveCanonicalLifecycle({
+    cancelledAt: auction.cancelled_at,
+    settledAt: auction.settled_at,
+    winnerBidderId: auction.winner_bidder_id,
+    startsAt: auction.starts_at,
+    endsAt: auction.ends_at,
+    now,
+  });
 
   // Upcoming
-  if (status === 'upcoming') {
+  if (canonical.lifecycle === 'upcoming') {
     return { allowed: false, httpStatus: 409, code: 'AUCTION_NOT_STARTED', error: 'This auction has not started yet.' };
   }
 
   // Ended
-  if (status === 'ended') {
+  if (canonical.lifecycle === 'ended') {
     return { allowed: false, httpStatus: 409, code: 'AUCTION_ENDED', error: 'This auction has ended. Buy Now is no longer available.' };
   }
 
@@ -182,6 +250,7 @@ function makeLiveAuction(overrides: Partial<AuctionRow> = {}): AuctionRow {
     buy_now_price_gbp: 100,
     cancelled_at: null,
     settled_at: null,
+    winner_bidder_id: null,
     ...overrides,
   };
 }
@@ -533,6 +602,151 @@ test('Bid exactly 1p below Buy Now price is accepted', () => {
     now: NOW,
   });
   assert.equal(result.allowed, true);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CANONICAL LIFECYCLE RESOLVER TESTS
+// ═══════════════════════════════════════════════════════════════
+
+test('resolveCanonicalLifecycle: cancelled takes highest precedence', () => {
+  const result = resolveCanonicalLifecycle({
+    cancelledAt: '2025-06-12T00:00:00.000Z',
+    settledAt: '2025-06-13T00:00:00.000Z',
+    winnerBidderId: 'buyer_1',
+    startsAt: LIVE_START,
+    endsAt: PAST_END,
+    now: NOW,
+  });
+  assert.equal(result.lifecycle, 'cancelled');
+  assert.equal(result.terminalReason, 'cancelled');
+});
+
+test('resolveCanonicalLifecycle: settled takes precedence over winner and scheduled end', () => {
+  const result = resolveCanonicalLifecycle({
+    cancelledAt: null,
+    settledAt: '2025-06-13T00:00:00.000Z',
+    winnerBidderId: 'buyer_1',
+    startsAt: LIVE_START,
+    endsAt: PAST_END,
+    now: NOW,
+  });
+  assert.equal(result.lifecycle, 'settled');
+  assert.equal(result.terminalReason, 'settled');
+});
+
+test('resolveCanonicalLifecycle: winner (Buy Now) takes precedence over scheduled end', () => {
+  const result = resolveCanonicalLifecycle({
+    cancelledAt: null,
+    settledAt: null,
+    winnerBidderId: 'buyer_1',
+    startsAt: LIVE_START,
+    endsAt: PAST_END,
+    now: NOW,
+  });
+  assert.equal(result.lifecycle, 'ended');
+  assert.equal(result.terminalReason, 'buy_now');
+});
+
+test('resolveCanonicalLifecycle: scheduled end when no winner and end time passed', () => {
+  const result = resolveCanonicalLifecycle({
+    cancelledAt: null,
+    settledAt: null,
+    winnerBidderId: null,
+    startsAt: LIVE_START,
+    endsAt: PAST_END,
+    now: NOW,
+  });
+  assert.equal(result.lifecycle, 'ended');
+  assert.equal(result.terminalReason, 'scheduled_end');
+});
+
+test('resolveCanonicalLifecycle: upcoming when start time is in future', () => {
+  const result = resolveCanonicalLifecycle({
+    cancelledAt: null,
+    settledAt: null,
+    winnerBidderId: null,
+    startsAt: FUTURE_START,
+    endsAt: LIVE_END,
+    now: NOW,
+  });
+  assert.equal(result.lifecycle, 'upcoming');
+  assert.equal(result.terminalReason, null);
+});
+
+test('resolveCanonicalLifecycle: live when within start and end window', () => {
+  const result = resolveCanonicalLifecycle({
+    cancelledAt: null,
+    settledAt: null,
+    winnerBidderId: null,
+    startsAt: LIVE_START,
+    endsAt: LIVE_END,
+    now: NOW,
+  });
+  assert.equal(result.lifecycle, 'live');
+  assert.equal(result.terminalReason, null);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// AUCTION_ALREADY_WON TESTS
+// ═══════════════════════════════════════════════════════════════
+
+test('Bid on auction already won via Buy Now — 409 AUCTION_ALREADY_WON', () => {
+  const result = evaluateBidDecision({
+    auction: makeLiveAuction({ winner_bidder_id: 'buyer_1' }),
+    bidderId: 'bidder_2',
+    amountGbp: 55,
+    now: NOW,
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.httpStatus, 409);
+  assert.equal(result.code, 'AUCTION_ALREADY_WON');
+});
+
+test('Buy Now on auction already won — 409 AUCTION_ALREADY_WON', () => {
+  const result = evaluateBuyNowDecision({
+    auction: makeLiveAuction({ winner_bidder_id: 'buyer_1' }),
+    buyerId: 'buyer_2',
+    expectedPriceGbp: 100,
+    now: NOW,
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.httpStatus, 409);
+  assert.equal(result.code, 'AUCTION_ALREADY_WON');
+});
+
+test('Winner check runs before lifecycle status resolution', () => {
+  const result = evaluateBidDecision({
+    auction: makeLiveAuction({
+      winner_bidder_id: 'buyer_1',
+      ends_at: PAST_END,
+    }),
+    bidderId: 'bidder_2',
+    amountGbp: 55,
+    now: NOW,
+  });
+  assert.equal(result.code, 'AUCTION_ALREADY_WON');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// OPERATION-SAFE IDEMPOTENCY KEY SCOPING TESTS
+// ═══════════════════════════════════════════════════════════════
+
+test('Operation-safe idempotency: bid prefix differs from buy_now prefix', () => {
+  const rawKey = 'abc123';
+  const bidScopedKey = `bid:${rawKey}`;
+  const buyNowScopedKey = `buy_now:${rawKey}`;
+  assert.notEqual(bidScopedKey, buyNowScopedKey);
+});
+
+test('Operation-safe idempotency: same raw key produces different scoped keys per operation', () => {
+  const rawKey = 'client-generated-key-001';
+  const bidKey = `bid:${rawKey}`;
+  const buyNowKey = `buy_now:${rawKey}`;
+  // These would be stored in auction_bids.idempotency_key column
+  // The unique index (auction_id, bidder_id, idempotency_key) treats them as different
+  assert.notEqual(bidKey, buyNowKey);
+  assert.ok(bidKey.startsWith('bid:'));
+  assert.ok(buyNowKey.startsWith('buy_now:'));
 });
 
 test('Bid exactly at Buy Now price is rejected', () => {

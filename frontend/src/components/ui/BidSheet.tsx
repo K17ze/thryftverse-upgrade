@@ -56,6 +56,7 @@ interface BidSheetProps {
   formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: any) => string;
   onSubmitBid: (gbpAmount: number, idempotencyKey: string) => Promise<void>;
   onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
+  onReviewBuyNow?: () => void;
   serverClockMs: number;
 }
 
@@ -68,6 +69,7 @@ export function BidSheet({
   formatFromFiat,
   onSubmitBid,
   onRefreshDetail,
+  onReviewBuyNow,
   serverClockMs,
 }: BidSheetProps) {
   const [stage, setStage] = React.useState<BidSheetStage>('entry');
@@ -79,6 +81,31 @@ export function BidSheet({
   const [sheetOpenedAtMs, setSheetOpenedAtMs] = React.useState(0);
   const [currentMinimum, setCurrentMinimum] = React.useState(auction.minimumNextBidGbp);
   const idempotencyKeyRef = React.useRef<string | null>(null);
+
+  // Shared authoritative snapshot helper — returns refreshed state or null on failure
+  const getAuthoritativeSnapshot = async (): Promise<{
+    minimumNextBidGbp: number;
+    effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+  } | null> => {
+    if (!isSheetStateStale(sheetOpenedAtMs, Date.now())) {
+      return {
+        minimumNextBidGbp: currentMinimum,
+        effectiveState: auction.effectiveState,
+      };
+    }
+    const snapshot = await onRefreshDetail();
+    if (!snapshot) {
+      return null;
+    }
+    const minFromSnapshot = snapshot.auction.minimumNextBidGbp;
+    setCurrentMinimum(minFromSnapshot);
+    setSheetOpenedAtMs(Date.now());
+    const snapshotState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled' =
+      snapshot.auction.cancelledAt ? 'cancelled'
+      : snapshot.auction.settledAt ? 'settled'
+      : snapshot.auction.lifecycle;
+    return { minimumNextBidGbp: minFromSnapshot, effectiveState: snapshotState };
+  };
 
   // Reset on open
   React.useEffect(() => {
@@ -126,30 +153,29 @@ export function BidSheet({
   };
 
   const handleQuickIncrement = (pct: number) => {
-    setBidInput(applyQuickIncrement(bidInput, pct, auction.currentBidGbp, currencyCode, goldRates));
+    setBidInput(applyQuickIncrement(bidInput, pct, currentMinimum, currencyCode, goldRates));
     setError(null);
   };
 
   const handleProceedToReview = async () => {
     setIsPreflighting(true);
     try {
-      // Stale check — refresh if sheet has been open > 30s, use returned snapshot
-      let minForValidation = currentMinimum;
-      let stateForValidation = auction.effectiveState;
-      if (isSheetStateStale(sheetOpenedAtMs, Date.now())) {
-        const snapshot = await onRefreshDetail();
-        if (snapshot) {
-          minForValidation = snapshot.auction.minimumNextBidGbp;
-          setCurrentMinimum(minForValidation);
-          // Reset stale timestamp after successful refresh
-          setSheetOpenedAtMs(Date.now());
-        }
+      const snapshot = await getAuthoritativeSnapshot();
+      if (!snapshot) {
+        setError({
+          kind: 'network_failure',
+          message: 'Unable to verify current auction state. Check your connection and try again.',
+          canRetry: true,
+          transactionPossible: true,
+          isAmbiguous: true,
+        });
+        return;
       }
 
       const result = validateBidEntry(bidInput, currencyCode, goldRates, {
-        minimumNextBidGbp: minForValidation,
+        minimumNextBidGbp: snapshot.minimumNextBidGbp,
         isSeller: auction.isSeller,
-        effectiveState: stateForValidation,
+        effectiveState: snapshot.effectiveState,
         isSubmitting,
       });
 
@@ -158,7 +184,6 @@ export function BidSheet({
         return;
       }
 
-      // Use local variable for validated amount — do not rely on state after setGbpAmount
       const validatedGbpAmount = result.gbpAmount;
       setGbpAmount(validatedGbpAmount);
       setError(null);
@@ -175,34 +200,33 @@ export function BidSheet({
     let validatedGbpAmount = gbpAmount;
 
     try {
-      // Stale check — refresh if sheet has been open > 30s, use returned snapshot
-      if (isSheetStateStale(sheetOpenedAtMs, Date.now())) {
-        const snapshot = await onRefreshDetail();
-        if (snapshot) {
-          const minFromSnapshot = snapshot.auction.minimumNextBidGbp;
-          setCurrentMinimum(minFromSnapshot);
-          setSheetOpenedAtMs(Date.now());
-
-          // Re-validate after refresh using the returned snapshot values
-          const snapshotState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled' =
-            snapshot.auction.cancelledAt ? 'cancelled'
-            : snapshot.auction.settledAt ? 'settled'
-            : snapshot.auction.lifecycle;
-          const result = validateBidEntry(bidInput, currencyCode, goldRates, {
-            minimumNextBidGbp: minFromSnapshot,
-            isSeller: auction.isSeller,
-            effectiveState: snapshotState,
-            isSubmitting,
-          });
-          if (!result.valid || !result.gbpAmount) {
-            setError(result.error);
-            setStage('entry');
-            return;
-          }
-          validatedGbpAmount = result.gbpAmount;
-          setGbpAmount(validatedGbpAmount);
-        }
+      const snapshot = await getAuthoritativeSnapshot();
+      if (!snapshot) {
+        setError({
+          kind: 'network_failure',
+          message: 'Unable to verify current auction state. Check your connection and try again.',
+          canRetry: true,
+          transactionPossible: true,
+          isAmbiguous: true,
+        });
+        setStage('entry');
+        return;
       }
+
+      // Re-validate after refresh using the returned snapshot values
+      const result = validateBidEntry(bidInput, currencyCode, goldRates, {
+        minimumNextBidGbp: snapshot.minimumNextBidGbp,
+        isSeller: auction.isSeller,
+        effectiveState: snapshot.effectiveState,
+        isSubmitting,
+      });
+      if (!result.valid || !result.gbpAmount) {
+        setError(result.error);
+        setStage('entry');
+        return;
+      }
+      validatedGbpAmount = result.gbpAmount;
+      setGbpAmount(validatedGbpAmount);
     } finally {
       setIsPreflighting(false);
     }
@@ -529,6 +553,17 @@ export function BidSheet({
                 align="center"
                 title="Try again"
                 accessibilityLabel="Retry bid"
+              />
+            )}
+            {error.kind === 'buy_now_review_required' && onReviewBuyNow && (
+              <AppButton
+                style={styles.doneBtn}
+                onPress={onReviewBuyNow}
+                variant="primary"
+                size="md"
+                align="center"
+                title="Review Buy Now"
+                accessibilityLabel="Review Buy Now"
               />
             )}
           </View>

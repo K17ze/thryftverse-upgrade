@@ -188,8 +188,7 @@ export default function AuctionDetailScreen() {
       // Post-success refresh — do not convert to error if refresh fails
       await fetchDetail();
     } catch (err) {
-      // Single reconciliation fetch for conflict errors
-      void fetchDetail();
+      // Sheet owns reconciliation refresh — parent does not duplicate
       throw err;
     } finally {
       setIsSubmittingBid(false);
@@ -228,8 +227,7 @@ export default function AuctionDetailScreen() {
       }
       return result;
     } catch (err) {
-      // Single reconciliation fetch
-      void fetchDetail();
+      // Sheet owns reconciliation refresh — parent does not duplicate
       throw err;
     } finally {
       setIsBuyNowLoading(false);
@@ -803,6 +801,10 @@ export default function AuctionDetailScreen() {
           formatFromFiat={formatFromFiat}
           onSubmitBid={handleSubmitBid}
           onRefreshDetail={refreshDetailForTransaction}
+          onReviewBuyNow={() => {
+            setBidSheetVisible(false);
+            setBuyNowSheetVisible(true);
+          }}
           serverClockMs={minuteClock}
         />
       )}
