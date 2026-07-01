@@ -32,6 +32,9 @@ const VALID_SCREENS: ReadonlySet<string> = new Set<ScreenName>([
   'AuctionHome',
   'SellerAuctionCentre',
   'MyBids',
+  'CoOwnHub',
+  'Portfolio',
+  'CoOwnOrderHistory',
 ]);
 
 export function resolveNotificationRoute(
@@ -80,6 +83,12 @@ export function resolveNotificationRoute(
     }
     if (screen === 'MyBids') {
       return { screen: 'MyBids' };
+    }
+    if (screen === 'CoOwnHub') {
+      return { screen: 'CoOwnHub' };
+    }
+    if (screen === 'Portfolio') {
+      return { screen: 'Portfolio' };
     }
     if (VALID_SCREENS.has(screen)) {
       return { screen: screen as ScreenName, params };

@@ -26,6 +26,7 @@ export interface AuctionHomeItem {
   settledAt: string | null;
   lifecycle: string;
   terminalReason: string | null;
+  category?: string | null;
 }
 
 // ── Urgency thresholds (defined once) ──

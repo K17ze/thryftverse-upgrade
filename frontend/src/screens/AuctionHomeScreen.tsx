@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useRef } from 'react';
+import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -51,8 +51,11 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
+import { haptics } from '../utils/haptics';
 import { AppInput } from '../components/ui/AppInput';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
+import { toIze, formatIzeAmount, formatFiatAmount } from '../utils/currency';
+import { BottomSheet } from '../components/BottomSheet';
 import {
   listAuctions,
   getWatchlist,
@@ -101,6 +104,7 @@ function toViewModel(api: MarketAuction): AuctionHomeItem {
     settledAt: api.settledAt ?? null,
     lifecycle: api.lifecycle,
     terminalReason: api.terminalReason,
+    category: api.category,
   };
 }
 
@@ -171,15 +175,17 @@ const STATE_RAIL_CONFIG: Record<string, { label: string; icon: string; color: st
 
 const PersonalStateTile = memo(function PersonalStateTile({
   item,
+  clockMs,
   onPress,
   formatFromFiat,
 }: {
   item: AuctionHomeItem;
+  clockMs: number;
   onPress: () => void;
   formatFromFiat: FormatFromFiat;
 }) {
   const config = STATE_RAIL_CONFIG[item.viewerState] ?? STATE_RAIL_CONFIG.watching;
-  const timing = resolveAuctionTiming(item, 0);
+  const timing = resolveAuctionTiming(item, clockMs);
   const priceText = resolvePriceText(item, timing, resolvePriceLabel(item, timing), formatFromFiat);
 
   return (
@@ -233,10 +239,39 @@ const AuctionAttentionCard = memo(function AuctionAttentionCard({
   const priceText = resolvePriceText(item, timing, priceLabel, formatFromFiat);
   const timeLabel = resolveTimeLabel(timing);
   const urgency = resolveUrgency(timing);
-  const ctaText = item.viewerState === 'outbid' ? 'Bid again' : item.viewerState === 'won' ? 'View result' : 'View';
-  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText);
   const presentation = resolveViewerStatePresentation(item.viewerState);
   const stateColor = presentation ? getColorForKey(presentation.colorKey) : Colors.brand;
+  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText);
+
+  // Context-aware CTA and state text
+  const isOutbid = item.viewerState === 'outbid';
+  const isLeading = item.viewerState === 'leading';
+  const isWon = item.viewerState === 'won';
+  const isWatching = item.viewerState === 'watching';
+  const isNeutral = !isOutbid && !isLeading && !isWon && !isWatching;
+
+  const stateText = isOutbid ? "You've been outbid"
+    : isLeading ? 'You\u2019re leading'
+    : isWon ? 'You won'
+    : isWatching ? 'Watching'
+    : timing.effectiveState === 'live' ? 'Live'
+    : timing.effectiveState === 'upcoming' ? 'Starting soon'
+    : '';
+
+  const ctaText = isOutbid ? 'Bid again'
+    : isWon ? 'View result'
+    : isLeading ? 'View auction'
+    : isWatching ? 'View auction'
+    : isNeutral ? 'View Auction'
+    : 'View';
+
+  const subtitleText = isOutbid && item.minimumNextBidGbp
+    ? `Min to lead: ${formatFromFiat(item.minimumNextBidGbp, 'GBP')}`
+    : isLeading || isWon
+    ? priceText
+    : isNeutral && item.bidCount > 0
+    ? `${item.bidCount} bids`
+    : '';
 
   return (
     <AnimatedPressable
@@ -279,13 +314,14 @@ const AuctionAttentionCard = memo(function AuctionAttentionCard({
         )}
       </View>
       <View style={styles.leadBottomStage}>
-        {presentation && (
-          <Text style={[styles.leadStateLine, { color: stateColor }]} numberOfLines={1}>
-            {presentation.text}
-          </Text>
-        )}
+        <Text style={[styles.leadStateLine, { color: stateColor }]} numberOfLines={1}>
+          {stateText}
+        </Text>
         <Text style={styles.leadPriceLabel}>{priceLabel}</Text>
         <Text style={styles.leadPriceValue} numberOfLines={1}>{priceText}</Text>
+        {subtitleText ? (
+          <Text style={styles.leadSubtitle} numberOfLines={1}>{subtitleText}</Text>
+        ) : null}
         <View style={styles.leadMetaRow}>
           <Text style={styles.leadTimeText}>{timeLabel}</Text>
           <View style={styles.leadCtaWrap}>
@@ -527,7 +563,7 @@ const EMPTY_SECTION_DATA: SectionData = {
 // ── Main screen ──
 export default function AuctionHomeScreen() {
   const navigation = useNavigation<NavT>();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode, displayMode, goldRates } = useFormattedPrice();
   const { isDark } = useAppTheme();
 
   const [sectionData, setSectionData] = React.useState<SectionData>(EMPTY_SECTION_DATA);
@@ -748,48 +784,16 @@ export default function AuctionHomeScreen() {
     const usedIds = new Set<string>();
     const result: Section[] = [];
 
-    // 1a. You're leading — live auctions where viewer is leading
-    const leadingItems: AuctionHomeItem[] = [];
+    // Dominant stage is rendered separately above the list, so we exclude
+    // personal-state items from the feed sections to avoid duplication.
+    // Mark all personal-state items as used so they don't appear in feed sections.
     for (const item of canonicalMap.values()) {
-      const timing = resolveAuctionTiming(item, minuteClock);
-      if (timing.effectiveState === 'live' && item.viewerState === 'leading') {
-        leadingItems.push(item);
+      if (item.viewerState === 'leading' || item.viewerState === 'outbid' || item.viewerState === 'won') {
         usedIds.add(item.id);
       }
     }
-    if (leadingItems.length > 0) {
-      result.push({ kind: 'attention', title: "You're leading", items: leadingItems });
-    }
 
-    // 1b. You've been outbid — live auctions where viewer is outbid
-    const outbidItems: AuctionHomeItem[] = [];
-    for (const item of canonicalMap.values()) {
-      if (usedIds.has(item.id)) continue;
-      const timing = resolveAuctionTiming(item, minuteClock);
-      if (timing.effectiveState === 'live' && item.viewerState === 'outbid') {
-        outbidItems.push(item);
-        usedIds.add(item.id);
-      }
-    }
-    if (outbidItems.length > 0) {
-      result.push({ kind: 'attention', title: "You've been outbid", items: outbidItems });
-    }
-
-    // 1c. You won — ended auctions where viewer won (needs attention for payment)
-    const wonItems: AuctionHomeItem[] = [];
-    for (const item of canonicalMap.values()) {
-      if (usedIds.has(item.id)) continue;
-      const timing = resolveAuctionTiming(item, minuteClock);
-      if (timing.effectiveState === 'ended' && item.viewerState === 'won') {
-        wonItems.push(item);
-        usedIds.add(item.id);
-      }
-    }
-    if (wonItems.length > 0) {
-      result.push({ kind: 'attention', title: 'You won', items: wonItems });
-    }
-
-    // 2. Ending soon
+    // 1. Ending soon
     const endingSoonItems = sectionData.live.filter((item) => {
       if (usedIds.has(item.id)) return false;
       return isEndingSoon(item, minuteClock);
@@ -799,7 +803,7 @@ export default function AuctionHomeScreen() {
       result.push({ kind: 'endingSoon', title: 'Ending soon', items: endingSoonItems });
     }
 
-    // 3. Live now
+    // 2. Live now
     const liveItems = sectionData.live.filter((item) => {
       if (usedIds.has(item.id)) return false;
       const timing = resolveAuctionTiming(item, minuteClock);
@@ -810,7 +814,7 @@ export default function AuctionHomeScreen() {
       result.push({ kind: 'live', title: 'Live now', items: liveItems });
     }
 
-    // 4. Upcoming
+    // 3. Starting soon
     const upcomingItems = sectionData.upcoming.filter((item) => {
       if (usedIds.has(item.id)) return false;
       const timing = resolveAuctionTiming(item, minuteClock);
@@ -821,7 +825,7 @@ export default function AuctionHomeScreen() {
       result.push({ kind: 'upcoming', title: 'Starting soon', items: upcomingItems });
     }
 
-    // 5. Watchlist
+    // 4. Watching
     const watchlistItems = sectionData.watchlist.filter((item) => {
       if (usedIds.has(item.id)) return false;
       const timing = resolveAuctionTiming(item, minuteClock);
@@ -832,7 +836,7 @@ export default function AuctionHomeScreen() {
       result.push({ kind: 'watchlist', title: 'Watching', items: watchlistItems });
     }
 
-    // 6. Recently ended
+    // 5. Recently ended
     const endedItems = sectionData.ended.filter((item) => {
       if (usedIds.has(item.id)) return false;
       const timing = resolveAuctionTiming(item, minuteClock);
@@ -843,7 +847,7 @@ export default function AuctionHomeScreen() {
       result.push({ kind: 'recentlyEnded', title: 'Recently ended', items: endedItems });
     }
 
-    // 7. Seller tools
+    // 6. Your auctions (seller)
     const sellerItems = sectionData.seller.filter((item) => {
       if (usedIds.has(item.id)) return false;
       return item.viewerState === 'seller';
@@ -996,7 +1000,10 @@ export default function AuctionHomeScreen() {
     </View>
   ), []);
 
-  const personalStateItems = useMemo(() => {
+  const isSearching = searchState.status !== 'idle';
+
+  // ── Dominant stage selector: one personal auction at top priority ──
+  const dominantStage = useMemo(() => {
     const all = [
       ...sectionData.live,
       ...sectionData.upcoming,
@@ -1004,30 +1011,126 @@ export default function AuctionHomeScreen() {
       ...sectionData.watchlist,
     ];
     const seen = new Set<string>();
-    const result: AuctionHomeItem[] = [];
-    const priority: Record<string, number> = { outbid: 0, leading: 1, won: 2, watching: 3 };
+    const priority: Record<string, number> = {
+      won: 0, outbid: 1, leading: 2, watching: 3, seller: 4,
+    };
+    const candidates = all.filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return item.viewerState !== 'not_participating';
+    });
+    candidates.sort((a, b) => (priority[a.viewerState] ?? 99) - (priority[b.viewerState] ?? 99));
+    if (candidates.length > 0) return candidates[0];
+    // Fallback: strongest ending-soon market auction
+    const endingSoonLive = sectionData.live.filter((item) => isEndingSoon(item, minuteClock));
+    if (endingSoonLive.length > 0) return endingSoonLive[0];
+    // Fallback: first live
+    if (sectionData.live.length > 0) return sectionData.live[0];
+    // Fallback: first upcoming
+    if (sectionData.upcoming.length > 0) return sectionData.upcoming[0];
+    return null;
+  }, [sectionData, minuteClock]);
+
+  // ── Activity summary counts ──
+  const activityCounts = useMemo(() => {
+    const all = [
+      ...sectionData.live,
+      ...sectionData.upcoming,
+      ...sectionData.ended,
+      ...sectionData.watchlist,
+    ];
+    const seen = new Set<string>();
+    const counts = { leading: 0, outbid: 0, won: 0, watching: 0 };
     for (const item of all) {
       if (seen.has(item.id)) continue;
-      if (item.viewerState === 'outbid' || item.viewerState === 'leading' || item.viewerState === 'won' || item.viewerState === 'watching') {
-        seen.add(item.id);
-        result.push(item);
-      }
+      seen.add(item.id);
+      if (item.viewerState === 'leading') counts.leading++;
+      else if (item.viewerState === 'outbid') counts.outbid++;
+      else if (item.viewerState === 'won') counts.won++;
+      else if (item.viewerState === 'watching') counts.watching++;
     }
-    result.sort((a, b) => (priority[a.viewerState] ?? 99) - (priority[b.viewerState] ?? 99));
-    return result.slice(0, 8);
+    return counts;
   }, [sectionData]);
 
-  const isSearching = searchState.status !== 'idle';
+  const hasActivity = activityCounts.leading + activityCounts.outbid + activityCounts.won + activityCounts.watching > 0;
+
+  // ── Seller capability signal ──
+  const hasSellerAuctions = sectionData.seller.length > 0;
+
+  // ── Filter state ──
+  const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'scheduled' | 'ended'>('all');
+  const [filterSort, setFilterSort] = useState<'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh'>('endingSoon');
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
+
+  const activeFilterCount = (filterStatus !== 'all' ? 1 : 0) + (filterCategory ? 1 : 0) + (filterSort !== 'endingSoon' ? 1 : 0);
+
+  // ── Category discovery from real data ──
+  const categories = useMemo(() => {
+    const catSet = new Set<string>();
+    for (const item of [...sectionData.live, ...sectionData.upcoming, ...sectionData.ended]) {
+      if (item.category) catSet.add(item.category);
+    }
+    return Array.from(catSet).sort();
+  }, [sectionData]);
+
+  // ── 1ZE + local semantic display ──
+  const formatPriceDual = useCallback((amountGbp: number) => {
+    const izeAmount = toIze(amountGbp, 'GBP', goldRates);
+    const izeText = formatIzeAmount(izeAmount, 4);
+    const fiatValue = izeAmount * (goldRates?.[currencyCode] ?? 1);
+    const fiatText = formatFiatAmount(fiatValue, currencyCode, 2);
+    if (displayMode === 'ize') return { primary: izeText, secondary: null };
+    if (displayMode === 'fiat') return { primary: fiatText, secondary: izeText };
+    return { primary: izeText, secondary: fiatText };
+  }, [goldRates, currencyCode, displayMode]);
+
+  // ── Filtered sections for display ──
+  const filteredSections = useMemo(() => {
+    if (searchState.status !== 'idle') return [];
+    // If filters are active, we need to fetch with filters — for now, filter client-side from existing data
+    // This is a bridge until the filter fetch is implemented
+    if (filterStatus === 'all' && !filterCategory && filterSort === 'endingSoon') return sections;
+    // Client-side filter
+    const filterFn = (item: AuctionHomeItem) => {
+      const timing = resolveAuctionTiming(item, minuteClock);
+      if (filterStatus === 'live' && timing.effectiveState !== 'live') return false;
+      if (filterStatus === 'scheduled' && timing.effectiveState !== 'upcoming') return false;
+      if (filterStatus === 'ended' && timing.effectiveState !== 'ended') return false;
+      return true;
+    };
+    const sortFn = (a: AuctionHomeItem, b: AuctionHomeItem) => {
+      if (filterSort === 'newest') return 0; // preserve order
+      if (filterSort === 'mostBids') return b.bidCount - a.bidCount;
+      if (filterSort === 'priceLow') return a.currentBidGbp - b.currentBidGbp;
+      if (filterSort === 'priceHigh') return b.currentBidGbp - a.currentBidGbp;
+      // endingSoon: sort by msToEnd ascending
+      const ta = resolveAuctionTiming(a, minuteClock);
+      const tb = resolveAuctionTiming(b, minuteClock);
+      return (ta.msToEnd ?? Infinity) - (tb.msToEnd ?? Infinity);
+    };
+    const all = [...sectionData.live, ...sectionData.upcoming, ...sectionData.ended].filter(filterFn);
+    // Dedupe
+    const seen = new Set<string>();
+    const unique = all.filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+    unique.sort(sortFn);
+    return [{ kind: 'live' as SectionKind, title: 'Results', items: unique }];
+  }, [sections, sectionData, minuteClock, searchState.status, filterStatus, filterCategory, filterSort]);
+
+  const displaySections = (filterStatus !== 'all' || filterCategory || filterSort !== 'endingSoon') ? filteredSections : sections;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* PASS 3.0E: Use theme for StatusBar */}
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={Colors.background}
       />
 
-      {/* ── Editorial header — left-aligned, not centered navigation ── */}
+      {/* ── Editorial header ── */}
       <View style={styles.editorialHeader}>
         <View style={styles.editorialHeaderTop}>
           <Pressable
@@ -1045,43 +1148,100 @@ export default function AuctionHomeScreen() {
               {sectionData.live.length > 0
                 ? `${sectionData.live.length} live now`
                 : loading ? 'Loading market…'
-                : 'Discover live auctions'}
+                : 'Live, upcoming and ending soon'}
             </Text>
           </View>
-          <Pressable
-            onPress={() => navigation.navigate('MyBids')}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="My auction activity"
-            style={styles.headerActionBtn}
-          >
-            <Ionicons name="list-outline" size={22} color={Colors.textPrimary} />
-          </Pressable>
-        </View>
-
-        {/* Integrated search */}
-        <View style={styles.searchWrap}>
-          <AppInput
-            value={searchQuery}
-            onChangeText={handleSearchChange}
-            placeholder="Search auctions..."
-            prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
-            accessibilityLabel="Search auctions"
-            returnKeyType="search"
-            onSubmitEditing={() => setDebouncedQuery(searchQuery)}
-          />
-          {searchQuery.length > 0 && (
+          {hasActivity ? (
             <Pressable
-              style={styles.clearSearchBtn}
-              onPress={handleClearSearch}
-              hitSlop={8}
+              onPress={() => { haptics.tap(); navigation.navigate('MyBids'); }}
+              hitSlop={12}
               accessibilityRole="button"
-              accessibilityLabel="Clear search"
+              accessibilityLabel={`Activity: ${activityCounts.leading} leading, ${activityCounts.outbid} outbid, ${activityCounts.won} won, ${activityCounts.watching} watching`}
+              style={styles.headerActivityBtn}
             >
-              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+              <View style={styles.headerActivityPill}>
+                <Text style={styles.headerActivityText}>
+                  {activityCounts.leading + activityCounts.outbid + activityCounts.won + activityCounts.watching}
+                </Text>
+              </View>
+              <Text style={styles.headerActivityLabel}>Activity</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => { haptics.tap(); navigation.navigate('MyBids'); }}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="My auction activity"
+              style={styles.headerActionBtn}
+            >
+              <Ionicons name="list-outline" size={22} color={Colors.textMuted} />
             </Pressable>
           )}
         </View>
+
+        {/* Search + Filter row */}
+        <View style={styles.searchFilterRow}>
+          <View style={styles.searchWrapFlex}>
+            <AppInput
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              placeholder="Search auctions"
+              prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
+              accessibilityLabel="Search auctions"
+              returnKeyType="search"
+              onSubmitEditing={() => setDebouncedQuery(searchQuery)}
+            />
+            {searchQuery.length > 0 && (
+              <Pressable
+                style={styles.clearSearchBtn}
+                onPress={handleClearSearch}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
+                <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+              </Pressable>
+            )}
+          </View>
+          <Pressable
+            style={[styles.filterBtn, activeFilterCount > 0 && styles.filterBtnActive]}
+            onPress={() => { haptics.tap(); setFilterSheetVisible(true); }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter and sort${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''}`}
+          >
+            <Ionicons name="options-outline" size={18} color={activeFilterCount > 0 ? Colors.brand : Colors.textSecondary} />
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
+
+        {/* Active filter chips */}
+        {activeFilterCount > 0 && !isSearching && (
+          <View style={styles.activeFilterChips}>
+            {filterStatus !== 'all' && (
+              <Pressable
+                style={styles.filterChip}
+                onPress={() => { haptics.tap(); setFilterStatus('all'); }}
+              >
+                <Text style={styles.filterChipText}>{filterStatus === 'live' ? 'Live' : filterStatus === 'scheduled' ? 'Starting soon' : 'Ended'}</Text>
+                <Ionicons name="close" size={12} color={Colors.textMuted} />
+              </Pressable>
+            )}
+            {filterSort !== 'endingSoon' && (
+              <Pressable
+                style={styles.filterChip}
+                onPress={() => { haptics.tap(); setFilterSort('endingSoon'); }}
+              >
+                <Text style={styles.filterChipText}>{filterSort === 'newest' ? 'Newest' : filterSort === 'mostBids' ? 'Most bids' : filterSort === 'priceLow' ? 'Price: low to high' : 'Price: high to low'}</Text>
+                <Ionicons name="close" size={12} color={Colors.textMuted} />
+              </Pressable>
+            )}
+          </View>
+        )}
 
         {(error || resyncFailed) && (
           <View style={styles.errorBanner}>
@@ -1091,23 +1251,56 @@ export default function AuctionHomeScreen() {
         )}
       </View>
 
-      {/* ── Personal state rail ── */}
-      {!isSearching && personalStateItems.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.stateRailScroll}
-          style={styles.stateRail}
-        >
-          {personalStateItems.map((item) => (
-            <PersonalStateTile
-              key={item.id}
-              item={item}
-              onPress={() => navigation.navigate('AuctionDetail', { auctionId: item.id })}
-              formatFromFiat={formatFromFiat}
-            />
-          ))}
-        </ScrollView>
+      {/* ── Dominant auction stage ── */}
+      {!isSearching && dominantStage && (
+        <AuctionAttentionCard
+          item={dominantStage}
+          clockMs={secondClock}
+          onPress={() => navigateToDetail(dominantStage.id)}
+          formatFromFiat={formatFromFiat}
+        />
+      )}
+
+      {/* ── Seller contextual area ── */}
+      {!isSearching && hasSellerAuctions && (
+        <View style={styles.sellerContextBar}>
+          <Pressable
+            style={styles.sellerContextBtn}
+            onPress={() => { haptics.tap(); navigation.navigate('SellerAuctionCentre'); }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Seller Centre — manage your auctions"
+          >
+            <Ionicons name="storefront-outline" size={16} color={Colors.brand} />
+            <Text style={styles.sellerContextText}>Seller Centre</Text>
+            <Text style={styles.sellerContextCount}>{sectionData.seller.length}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.sellerCreateBtn}
+            onPress={() => { haptics.tap(); navigation.navigate('CreateAuction'); }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Create auction"
+          >
+            <Text style={styles.sellerCreateText}>Create Auction</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ── No seller: restrained create control ── */}
+      {!isSearching && !hasSellerAuctions && !loading && (
+        <View style={styles.createBar}>
+          <Pressable
+            style={styles.createLink}
+            onPress={() => { haptics.tap(); navigation.navigate('CreateAuction'); }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Create auction"
+          >
+            <Ionicons name="add-outline" size={14} color={Colors.brand} />
+            <Text style={styles.createLinkText}>Create Auction</Text>
+          </Pressable>
+        </View>
       )}
 
       {isSearching ? (
@@ -1156,7 +1349,7 @@ export default function AuctionHomeScreen() {
         />
       ) : (
         <FlashList
-          data={sections}
+          data={displaySections}
           keyExtractor={(item) => item.kind}
           renderItem={({ item }) => renderSection(item)}
           ListHeaderComponent={renderHeader}
@@ -1164,8 +1357,10 @@ export default function AuctionHomeScreen() {
             loading ? renderLoadingState() : (
               <EmptyState
                 icon="hammer-outline"
-                title="No auctions yet"
-                subtitle="Check back later for live auctions."
+                title="No live auctions right now"
+                subtitle="Check back soon or explore upcoming auctions."
+                ctaLabel="Create Auction"
+                onCtaPress={() => { haptics.tap(); navigation.navigate('CreateAuction'); }}
               />
             )
           }
@@ -1182,6 +1377,61 @@ export default function AuctionHomeScreen() {
           }
         />
       )}
+
+      {/* ── Filter sheet ── */}
+      <BottomSheet
+        visible={filterSheetVisible}
+        onDismiss={() => setFilterSheetVisible(false)}
+      >
+        <View style={styles.filterSheetContent}>
+          <Text style={styles.filterSheetTitle}>Filter & Sort</Text>
+
+          <Text style={styles.filterSectionLabel}>Status</Text>
+          <View style={styles.filterOptionRow}>
+            {(['all', 'live', 'scheduled', 'ended'] as const).map((opt) => (
+              <Pressable
+                key={opt}
+                style={[styles.filterOption, filterStatus === opt && styles.filterOptionActive]}
+                onPress={() => { haptics.tap(); setFilterStatus(opt); }}
+              >
+                <Text style={[styles.filterOptionText, filterStatus === opt && styles.filterOptionTextActive]}>
+                  {opt === 'all' ? 'All' : opt === 'live' ? 'Live' : opt === 'scheduled' ? 'Starting soon' : 'Ended'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.filterSectionLabel}>Sort</Text>
+          <View style={styles.filterOptionRow}>
+            {(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh'] as const).map((opt) => (
+              <Pressable
+                key={opt}
+                style={[styles.filterOption, filterSort === opt && styles.filterOptionActive]}
+                onPress={() => { haptics.tap(); setFilterSort(opt); }}
+              >
+                <Text style={[styles.filterOptionText, filterSort === opt && styles.filterOptionTextActive]}>
+                  {opt === 'endingSoon' ? 'Ending soon' : opt === 'newest' ? 'Newest' : opt === 'mostBids' ? 'Most bids' : opt === 'priceLow' ? 'Price: low' : 'Price: high'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={styles.filterSheetActions}>
+            <Pressable
+              style={styles.filterResetBtn}
+              onPress={() => { haptics.tap(); setFilterStatus('all'); setFilterSort('endingSoon'); setFilterCategory(null); }}
+            >
+              <Text style={styles.filterResetText}>Reset</Text>
+            </Pressable>
+            <Pressable
+              style={styles.filterApplyBtn}
+              onPress={() => { haptics.tap(); setFilterSheetVisible(false); }}
+            >
+              <Text style={styles.filterApplyText}>Apply</Text>
+            </Pressable>
+          </View>
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
@@ -1320,6 +1570,35 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: Colors.textMuted,
+  },
+  // ── Utility rail ──
+  utilityRail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    gap: Space.md,
+  },
+  utilityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  utilityLabel: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+  utilityCreate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 'auto',
+  },
+  utilityCreateLabel: {
+    fontSize: 13,
+    color: Colors.brand,
+    fontFamily: 'Inter_600SemiBold',
   },
   sectionErrorBanner: {
     flexDirection: 'row',
@@ -1530,6 +1809,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     color: '#FFFFFF',
     fontFamily: 'Inter_700Bold',
+  },
+  leadSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    fontFamily: 'Inter_500Medium',
+    marginTop: 2,
   },
   leadMetaRow: {
     flexDirection: 'row',
@@ -1807,5 +2092,223 @@ const styles = StyleSheet.create({
   paginationErrorText: {
     color: Colors.danger,
     fontSize: 12,
+  },
+  // ── Header activity ──
+  headerActivityBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  headerActivityPill: {
+    backgroundColor: Colors.brand,
+    borderRadius: Radius.full,
+    minWidth: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  headerActivityText: {
+    color: Colors.textInverse,
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+  },
+  headerActivityLabel: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  // ── Search + filter row ──
+  searchFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingTop: Space.sm,
+    marginBottom: Space.sm,
+  },
+  searchWrapFlex: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBtnActive: {
+    borderColor: Colors.brand,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  filterBadgeText: {
+    color: Colors.textInverse,
+    fontSize: 9,
+    fontFamily: Typography.family.semibold,
+  },
+  // ── Active filter chips ──
+  activeFilterChips: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    marginBottom: Space.sm,
+    flexWrap: 'wrap',
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  filterChipText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.medium,
+  },
+  // ── Seller context bar ──
+  sellerContextBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    gap: Space.sm,
+  },
+  sellerContextBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sellerContextText: {
+    fontSize: 13,
+    color: Colors.brand,
+    fontFamily: Typography.family.semibold,
+  },
+  sellerContextCount: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.medium,
+  },
+  sellerCreateBtn: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  sellerCreateText: {
+    fontSize: 12,
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+  },
+  // ── Create bar (no seller) ──
+  createBar: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+  },
+  createLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  createLinkText: {
+    fontSize: 12,
+    color: Colors.brand,
+    fontFamily: Typography.family.semibold,
+  },
+  // ── Filter sheet ──
+  filterSheetContent: {
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
+  },
+  filterSheetTitle: {
+    fontSize: 18,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    marginBottom: Space.md,
+  },
+  filterSectionLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: Space.xs,
+    marginTop: Space.sm,
+  },
+  filterOptionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs,
+  },
+  filterOption: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  filterOptionActive: {
+    borderColor: Colors.brand,
+    backgroundColor: Colors.surface,
+  },
+  filterOptionText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.medium,
+  },
+  filterOptionTextActive: {
+    color: Colors.brand,
+  },
+  filterSheetActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: Space.lg,
+    gap: Space.md,
+  },
+  filterResetBtn: {
+    flex: 1,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+  },
+  filterResetText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.semibold,
+  },
+  filterApplyBtn: {
+    flex: 1,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+  },
+  filterApplyText: {
+    fontSize: 14,
+    color: Colors.textInverse,
+    fontFamily: Typography.family.semibold,
   },
 });
