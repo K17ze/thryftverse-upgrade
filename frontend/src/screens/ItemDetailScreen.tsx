@@ -16,7 +16,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { Typography, Space } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Listing } from '../data/mockData';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,16 +24,14 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { toIze, formatIzeAmount } from '../utils/currency';
 import { Motion } from '../constants/motion';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
-import { FlagshipEmptyGraphic } from '../components/flagship';
-import { AnimatedPressable } from '../components/AnimatedPressable';
 
 import {
-  ProductMediaGallery,
   ProductDetailHeader,
   ProductIdentitySummary,
   ProductAttributeChips,
@@ -48,6 +46,13 @@ import {
   ProductErrorState,
   FullscreenMediaViewer,
 } from '../components/product';
+import {
+  CommerceMediaStage,
+  CommerceStickyDock,
+  CommerceStateCanvas,
+  CategoryEvidence,
+} from '../components/commerce';
+import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 
 import {
   useListingDetail,
@@ -137,7 +142,7 @@ export default function ItemDetailScreen() {
     }
   }, [item?.id]);
 
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, goldRates, displayMode } = useFormattedPrice();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -196,29 +201,23 @@ export default function ItemDetailScreen() {
     return (
       <View style={styles.container}>
         <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <ProductErrorState onRetry={() => refetchListing()} />
+        <CommerceStateCanvas
+          state="error"
+          onRetry={() => refetchListing()}
+        />
       </View>
     );
   }
 
   if (!item) {
     return (
-      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.xl }]}>
+      <View style={styles.container}>
         <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <FlagshipEmptyGraphic variant="box" size={140} />
-        <Text style={{ marginTop: Space.md, fontSize: 16, fontFamily: Typography.family.medium, color: Colors.textSecondary, textAlign: 'center' }}>
-          Item not found
-        </Text>
-        <Text style={{ marginTop: Space.sm, fontSize: 13, color: Colors.textMuted, textAlign: 'center' }}>
-          This listing may have been removed or is no longer available.
-        </Text>
-        <AnimatedPressable
-          style={{ marginTop: Space.lg, paddingHorizontal: Space.lg, paddingVertical: Space.md, backgroundColor: Colors.brand, borderRadius: Radius.lg }}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.85}
-        >
-          <Text style={{ color: Colors.textInverse, fontFamily: Typography.family.semibold }}>Go back</Text>
-        </AnimatedPressable>
+        <CommerceStateCanvas
+          state="unavailable"
+          title="Item not found"
+          message="This listing may have been removed or is no longer available."
+        />
       </View>
     );
   }
@@ -230,6 +229,9 @@ export default function ItemDetailScreen() {
     : null;
   const formattedProtectionTotal = serverCommerce?.estimatedTotal != null
     ? formatFromFiat(serverCommerce.estimatedTotal, 'GBP', { displayMode: 'fiat' })
+    : null;
+  const priceIzeText = goldRates && displayMode !== 'fiat'
+    ? formatIzeAmount(toIze(item.price, 'GBP', goldRates))
     : null;
 
   const capabilities = buildCapabilities(item, currentUser?.id);
@@ -298,9 +300,9 @@ export default function ItemDetailScreen() {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
-        <ProductMediaGallery
+        <CommerceMediaStage
           images={item.images}
-          itemId={item.id}
+          objectId={item.id}
           isFav={isFav}
           isSaved={isItemSavedAnywhere(item.id)}
           isSold={!!item.isSold}
@@ -325,6 +327,7 @@ export default function ItemDetailScreen() {
             originalPrice={formattedOriginal}
             hasDiscount={hasDiscount}
             protectionTotal={formattedProtectionTotal}
+            izeText={priceIzeText}
           />
 
           <ProductAttributeChips
@@ -332,6 +335,20 @@ export default function ItemDetailScreen() {
             condition={item.condition}
             category={item.category}
           />
+
+          {(() => {
+            const evidenceGroups = resolveEvidenceGroups({
+              category: item.category,
+              subcategory: item.subcategory,
+              brand: item.brand,
+              size: item.size,
+              condition: item.condition,
+              description: item.description,
+            });
+            return evidenceGroups.length > 0 ? (
+              <CategoryEvidence groups={evidenceGroups} />
+            ) : null;
+          })()}
 
           <ProductDescription description={item.description} />
 
@@ -424,7 +441,7 @@ export default function ItemDetailScreen() {
         </Reanimated.View>
       </Reanimated.ScrollView>
 
-      <View style={[styles.actionBarWrap, { paddingBottom: Math.max(insets.bottom, Space.sm) }]}>
+      <CommerceStickyDock bottomInset={insets.bottom}>
         <ProductActionBar
           capabilities={capabilities}
           formattedPrice={formattedPrice}
@@ -445,7 +462,7 @@ export default function ItemDetailScreen() {
           }}
           onManage={() => navigation.navigate('ManageListing', { itemId: item.id })}
         />
-      </View>
+      </CommerceStickyDock>
 
       <FullscreenMediaViewer
         images={item.images}
@@ -511,14 +528,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-  },
-  actionBarWrap: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
 });

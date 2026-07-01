@@ -113,11 +113,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    backgroundColor: Colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
     gap: Space.md,
   },
   priceSection: {
@@ -151,16 +146,17 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   buyBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: Space.lg,
+    paddingVertical: 14,
+    paddingHorizontal: Space.xl,
     backgroundColor: Colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 120,
   },
   buyText: {
-    fontSize: 15,
-    fontFamily: Typography.family.semibold,
+    fontSize: 16,
+    fontFamily: Typography.family.bold,
     color: Colors.textInverse,
   },
   messageBtn: {

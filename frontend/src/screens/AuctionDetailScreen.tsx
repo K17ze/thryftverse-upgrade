@@ -47,6 +47,8 @@ import { BottomSheet } from '../components/BottomSheet';
 import { BidSheet } from '../components/ui/BidSheet';
 import { BuyNowSheet } from '../components/ui/BuyNowSheet';
 import { FullscreenMediaViewer } from '../components/product/FullscreenMediaViewer';
+import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommercePartyStrip } from '../components/commerce';
+import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import { useBucketedServerClock, resolveAuctionTiming, type AuctionEffectiveState } from '../hooks/useServerClock';
 import {
   resolveStateAction,
@@ -71,7 +73,7 @@ export default function AuctionDetailScreen() {
   const { auctionId } = route.params;
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, goldRates, displayMode } = useCurrencyContext();
   const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
 
@@ -358,33 +360,22 @@ export default function AuctionDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScrollView contentContainerStyle={styles.loadingContainer}>
-          <SkeletonLoader width="100%" height={Math.min(Dimensions.get('window').height * 0.65, 600)} borderRadius={0} />
-          <View style={{ padding: Space.md }}>
-            <SkeletonLoader width="60%" height={28} borderRadius={8} style={{ marginBottom: Space.sm }} />
-            <SkeletonLoader width="40%" height={16} borderRadius={6} style={{ marginBottom: Space.md }} />
-            <SkeletonLoader width="100%" height={80} borderRadius={12} style={{ marginBottom: Space.sm }} />
-            <SkeletonLoader width="100%" height={50} borderRadius={12} />
-          </View>
-        </ScrollView>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <CommerceStateCanvas state="loading" />
+      </View>
     );
   }
 
   if (error || !auction) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.errorContainer}>
-          <EmptyState icon="alert-circle-outline" title={error ?? 'Auction not found'} />
-          <AppButton
-            title="Go Back"
-            variant="secondary"
-            onPress={() => navigation.goBack()}
-            style={styles.backBtn}
-          />
-        </View>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <CommerceStateCanvas
+          state="error"
+          title={error ?? 'Auction not found'}
+          onRetry={() => navigation.goBack()}
+          retryLabel="Go back"
+        />
+      </View>
     );
   }
 
@@ -534,6 +525,7 @@ export default function AuctionDetailScreen() {
                         ? auction.currentBidGbp
                         : auction.startingBidGbp;
                     if (amount <= 0) return null;
+                    if (displayMode === 'fiat') return null;
                     return (
                       <Text style={styles.priceStageIze}>
                         {formatIzeAmount(toIze(amount, 'GBP', goldRates))}
@@ -727,79 +719,37 @@ export default function AuctionDetailScreen() {
           )}
         </View>
 
-        {/* ── Item details — factual seller-declared information ── */}
-        <View style={styles.objectConfidenceSection}>
-          <Meta style={styles.objectConfidenceLabel}>ITEM DETAILS</Meta>
-          <View style={styles.confidenceRow}>
-            {auction.brand && (
-              <View style={styles.confidenceItem}>
-                <Ionicons name="pricetag-outline" size={16} color={Colors.textSecondary} />
-                <Text style={styles.confidenceItemText}>Brand: {auction.brand}</Text>
-              </View>
-            )}
-            {auction.conditionLabel && (
-              <View style={styles.confidenceItem}>
-                <Ionicons name="document-text-outline" size={16} color={Colors.textSecondary} />
-                <Text style={styles.confidenceItemText}>Condition declared by seller: {auction.conditionLabel}</Text>
-              </View>
-            )}
-            {auction.category && (
-              <View style={styles.confidenceItem}>
-                <Ionicons name="folder-open-outline" size={16} color={Colors.textSecondary} />
-                <Text style={styles.confidenceItemText}>Category: {auction.category}</Text>
-              </View>
-            )}
-            <View style={styles.confidenceItem}>
-              <Ionicons name="images-outline" size={16} color={Colors.textSecondary} />
-              <Text style={styles.confidenceItemText}>Seller-provided images</Text>
-            </View>
-          </View>
-        </View>
+        {/* ── Category evidence — editorial product details ── */}
+        {(() => {
+          const evidenceGroups = resolveEvidenceGroups({
+            category: auction.category,
+            brand: auction.brand,
+            condition: auction.conditionLabel,
+            description: auction.description,
+          });
+          return evidenceGroups.length > 0 ? (
+            <CategoryEvidence groups={evidenceGroups} />
+          ) : null;
+        })()}
 
         {/* ── 7. Seller confidence ── */}
-        <View style={styles.sellerSection}>
-          <AnimatedPressable
-            style={styles.sellerInfo}
-            onPress={() => navigation.navigate('UserProfile', { userId: auction.seller.id })}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`View ${auction.seller.username} profile`}
-          >
-            {auction.seller.avatarUrl ? (
-              <CachedImage
-                uri={auction.seller.avatarUrl}
-                style={styles.sellerAvatar}
-                containerStyle={styles.sellerAvatarContainer}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={styles.sellerAvatarPlaceholder}>
-                <Ionicons name="person" size={16} color={Colors.textMuted} />
-              </View>
-            )}
-            <View style={styles.sellerTextCol}>
-              <BodyEmphasis style={styles.sellerName} numberOfLines={1}>
-                {auction.seller.displayName ?? `@${auction.seller.username}`}
-              </BodyEmphasis>
-              <Meta style={styles.sellerHandle}>@{auction.seller.username}</Meta>
-            </View>
-          </AnimatedPressable>
-          {!isSeller && (
-            <Pressable
-              style={styles.sellerMessageBtn}
-              onPress={() =>
-                navigation.navigate('NewMessage', {
-                  preselectedUserId: auction.seller.id,
-                  preselectedDisplayName: auction.seller.username,
-                })
-              }
-              accessibilityRole="button"
-              accessibilityLabel={`Message ${auction.seller.username}`}
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.textPrimary} />
-            </Pressable>
-          )}
-        </View>
+        <CommercePartyStrip
+          party={{
+            id: auction.seller.id,
+            username: auction.seller.username,
+            displayName: auction.seller.displayName ?? `@${auction.seller.username}`,
+            avatar: auction.seller.avatarUrl ?? null,
+            roleLabel: 'Seller',
+          }}
+          onOpenProfile={() => navigation.navigate('UserProfile', { userId: auction.seller.id })}
+          onMessage={!isSeller ? () =>
+            navigation.navigate('NewMessage', {
+              preselectedUserId: auction.seller.id,
+              preselectedDisplayName: auction.seller.username,
+            })
+          : undefined}
+          messageLabel="Message"
+        />
 
         {/* ── 8. Transaction truth (terminal states only) ── */}
         {isTerminal && !isCancelled && viewerState !== 'lost' && (
@@ -849,69 +799,35 @@ export default function AuctionDetailScreen() {
 
         {/* ── Related auction discovery ── */}
         {relatedAuctions.length > 0 && (
-          <View style={styles.relatedSection}>
-            <Meta style={styles.relatedSectionLabel}>MORE FROM THIS CATEGORY</Meta>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.relatedListContent}
-            >
-              {relatedAuctions.map((rel) => {
-                const relTiming = resolveAuctionTiming(rel, secondClock);
-                const relPrice = rel.bidCount > 0 ? rel.currentBidGbp : rel.startingBidGbp;
-                const relStateLabel = relTiming.effectiveState === 'live' ? 'LIVE'
-                  : relTiming.effectiveState === 'upcoming' ? 'SOON'
-                  : relTiming.effectiveState === 'cancelled' ? 'CANCELLED'
-                  : relTiming.effectiveState === 'settled' ? 'SETTLED'
-                  : 'ENDED';
-                const relTimeLabel = relTiming.effectiveState === 'live'
-                  ? `${Math.floor(relTiming.msToEnd / 60000)}m left`
-                  : relTiming.effectiveState === 'upcoming'
-                  ? `in ${Math.floor(relTiming.msToStart / 60000)}m`
-                  : '';
-                return (
-                <Pressable
-                  key={rel.id}
-                  style={styles.relatedCard}
-                  onPress={() => navigation.push('AuctionDetail', { auctionId: rel.id })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Related auction: ${rel.title}, ${relStateLabel}, ${formatFromFiat(relPrice, 'GBP')}`}
-                >
-                  {rel.imageUrl ? (
-                    <CachedImage
-                      uri={rel.imageUrl}
-                      style={styles.relatedCardImage}
-                      containerStyle={styles.relatedCardImageContainer}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={styles.relatedCardImagePlaceholder}>
-                      <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
-                    </View>
-                  )}
-                  <View style={styles.relatedCardStateBadge}>
-                    <Text style={[
-                      styles.relatedCardStateText,
-                      relTiming.effectiveState === 'live' && styles.relatedCardStateTextLive,
-                    ]}>{relStateLabel}</Text>
-                  </View>
-                  <View style={styles.relatedCardBody}>
-                    <Text style={styles.relatedCardTitle} numberOfLines={1}>{rel.title}</Text>
-                    <Text style={styles.relatedCardPrice}>
-                      {formatFromFiat(relPrice, 'GBP')}
-                    </Text>
-                    <Text style={styles.relatedCardIze}>
-                      {formatIzeAmount(toIze(relPrice, 'GBP', goldRates))}
-                    </Text>
-                    {relTimeLabel ? (
-                      <Text style={styles.relatedCardTime}>{relTimeLabel}</Text>
-                    ) : null}
-                  </View>
-                </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
+          <CommerceRelatedRail
+            label="More from this category"
+            items={relatedAuctions.map((rel) => {
+              const relTiming = resolveAuctionTiming(rel, secondClock);
+              const relPrice = rel.bidCount > 0 ? rel.currentBidGbp : rel.startingBidGbp;
+              const relStateLabel = relTiming.effectiveState === 'live' ? 'LIVE'
+                : relTiming.effectiveState === 'upcoming' ? 'SOON'
+                : relTiming.effectiveState === 'cancelled' ? 'CANCELLED'
+                : relTiming.effectiveState === 'settled' ? 'SETTLED'
+                : 'ENDED';
+              const relTimeLabel = relTiming.effectiveState === 'live'
+                ? `${Math.floor(relTiming.msToEnd / 60000)}m left`
+                : relTiming.effectiveState === 'upcoming'
+                ? `in ${Math.floor(relTiming.msToStart / 60000)}m`
+                : '';
+              return {
+                id: rel.id,
+                title: rel.title,
+                imageUrl: rel.imageUrl,
+                priceText: formatFromFiat(relPrice, 'GBP'),
+                izeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, 'GBP', goldRates)) : undefined,
+                badgeText: relStateLabel,
+                mode: 'auction' as const,
+                stateText: relStateLabel,
+                countdownText: relTimeLabel || undefined,
+              };
+            })}
+            onPressItem={(id) => navigation.push('AuctionDetail', { auctionId: id })}
+          />
         )}
 
         <View style={{ height: 100 + insets.bottom }} />
@@ -919,7 +835,7 @@ export default function AuctionDetailScreen() {
 
       {/* ── Sticky bottom action dock ── */}
       {showBidControls && stateAction && stateAction.primary.type !== 'none' && (
-        <View style={[styles.actionDock, { paddingBottom: insets.bottom + Space.sm }]}>
+        <CommerceStickyDock bottomInset={insets.bottom}>
           <AppButton
             style={styles.actionDockFull}
             onPress={() => {
@@ -951,22 +867,22 @@ export default function AuctionDetailScreen() {
               </Text>
             </Pressable>
           )}
-        </View>
+        </CommerceStickyDock>
       )}
 
       {isSeller && !isTerminal && stateAction && stateAction.primary.type !== 'none' && (
-        <View style={[styles.actionDock, { paddingBottom: insets.bottom + Space.sm }]}>
+        <CommerceStickyDock bottomInset={insets.bottom}>
           <View style={styles.sellerDockInfo}>
             <Ionicons name="storefront-outline" size={16} color={Colors.brand} />
             <Text style={styles.sellerDockText}>
               {isUpcoming ? 'Your auction is scheduled' : `${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'} so far`}
             </Text>
           </View>
-        </View>
+        </CommerceStickyDock>
       )}
 
       {isTerminal && (
-        <View style={[styles.terminalDock, { paddingBottom: insets.bottom + Space.sm }]}>
+        <CommerceStickyDock bottomInset={insets.bottom}>
           {isCancelled ? (
             <View style={styles.terminalDockRow}>
               <Ionicons name="close-circle-outline" size={16} color={Colors.textMuted} />
@@ -998,7 +914,7 @@ export default function AuctionDetailScreen() {
               <Text style={styles.terminalDockText}>Auction ended</Text>
             </View>
           )}
-        </View>
+        </CommerceStickyDock>
       )}
 
       {/* ── Bid transaction sheet ── */}
@@ -1677,59 +1593,6 @@ const styles = StyleSheet.create({
   conditionLabel: {
     color: Colors.textMuted,
   },
-  sellerSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    marginTop: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  sellerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    flex: 1,
-  },
-  sellerAvatarContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  sellerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  sellerAvatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sellerTextCol: {
-    flex: 1,
-  },
-  sellerName: {
-    fontSize: 14,
-  },
-  sellerHandle: {
-    color: Colors.textMuted,
-  },
-  sellerMessageBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   expandableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2111,115 +1974,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontFamily: 'Inter_400Regular',
-  },
-  // ── Object confidence ──
-  objectConfidenceSection: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.xs,
-  },
-  objectConfidenceLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-  },
-  confidenceRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-    marginTop: Space.xs,
-  },
-  confidenceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  confidenceItemText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
-  },
-  // ── Related auctions ──
-  relatedSection: {
-    paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
-  relatedSectionLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-    paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
-  relatedListContent: {
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
-  relatedCard: {
-    width: 140,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  relatedCardImageContainer: {
-    width: '100%',
-    height: 120,
-  },
-  relatedCardImage: {
-    width: '100%',
-    height: 120,
-  },
-  relatedCardImagePlaceholder: {
-    width: '100%',
-    height: 120,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  relatedCardBody: {
-    padding: Space.xs,
-  },
-  relatedCardStateBadge: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  relatedCardStateText: {
-    color: '#fff',
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  relatedCardStateTextLive: {
-    color: '#fca5a5',
-  },
-  relatedCardIze: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
-    marginTop: 1,
-  },
-  relatedCardTime: {
-    fontSize: 10,
-    color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 2,
-  },
-  relatedCardTitle: {
-    fontSize: 12,
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-    marginBottom: 2,
-  },
-  relatedCardPrice: {
-    fontSize: 13,
-    color: Colors.brand,
-    fontFamily: 'Inter_700Bold',
   },
 });

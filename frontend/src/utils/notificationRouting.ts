@@ -92,11 +92,6 @@ export function resolveNotificationRoute(
       return { screen: 'OrderDetail', params: { orderId } };
     }
 
-    const listingId = typeof payload.listingId === 'string' ? payload.listingId : null;
-    if (listingId) {
-      return { screen: 'ItemDetail', params: { itemId: listingId } };
-    }
-
     const ticketId = typeof payload.ticketId === 'string' ? payload.ticketId : null;
     if (ticketId) {
       return { screen: 'SupportTicketDetail', params: { ticketId } };
@@ -105,6 +100,16 @@ export function resolveNotificationRoute(
     const auctionId = typeof payload.auctionId === 'string' ? payload.auctionId : null;
     if (auctionId) {
       return { screen: 'AuctionDetail', params: { auctionId } };
+    }
+
+    const assetId = typeof payload.assetId === 'string' ? payload.assetId : null;
+    if (assetId) {
+      return { screen: 'AssetDetail', params: { assetId } };
+    }
+
+    const listingId = typeof payload.listingId === 'string' ? payload.listingId : null;
+    if (listingId) {
+      return { screen: 'ItemDetail', params: { itemId: listingId } };
     }
   }
 
