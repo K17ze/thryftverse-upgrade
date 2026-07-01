@@ -6,9 +6,11 @@ import {
   Pressable,
   StatusBar,
   Text,
+  ScrollView,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -159,7 +161,62 @@ function LivePill() {
   );
 }
 
-// ── PASS 3.1: AuctionAttentionCard — prominent full-width row ──
+// ── Personal state rail — compact image-led tiles ──
+const STATE_RAIL_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
+  outbid: { label: 'Outbid', icon: 'trending-down-outline', color: Colors.danger },
+  leading: { label: 'Leading', icon: 'trending-up-outline', color: Colors.success },
+  won: { label: 'Won', icon: 'trophy-outline', color: Colors.brand },
+  watching: { label: 'Watching', icon: 'eye-outline', color: Colors.textSecondary },
+};
+
+const PersonalStateTile = memo(function PersonalStateTile({
+  item,
+  onPress,
+  formatFromFiat,
+}: {
+  item: AuctionHomeItem;
+  onPress: () => void;
+  formatFromFiat: FormatFromFiat;
+}) {
+  const config = STATE_RAIL_CONFIG[item.viewerState] ?? STATE_RAIL_CONFIG.watching;
+  const timing = resolveAuctionTiming(item, 0);
+  const priceText = resolvePriceText(item, timing, resolvePriceLabel(item, timing), formatFromFiat);
+
+  return (
+    <AnimatedPressable
+      style={styles.stateTile}
+      onPress={onPress}
+      activeOpacity={0.9}
+      scaleValue={0.97}
+      accessibilityRole="button"
+      accessibilityLabel={`${config.label}: ${item.title}, ${priceText}`}
+      accessibilityHint="Opens auction details"
+    >
+      <View style={styles.stateTileImageWrap}>
+        {item.imageUrl ? (
+          <CachedImage
+            uri={item.imageUrl}
+            style={styles.stateTileImage}
+            containerStyle={styles.stateTileImageContainer}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={styles.stateTilePlaceholder}>
+            <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
+          </View>
+        )}
+        <View style={[styles.stateTileAccent, { backgroundColor: config.color }]} />
+      </View>
+      <Text style={[styles.stateTileLabel, { color: config.color }]} numberOfLines={1}>
+        {config.label}
+      </Text>
+      <Text style={styles.stateTileTitle} numberOfLines={1}>{item.title}</Text>
+      <Text style={styles.stateTilePrice} numberOfLines={1}>{priceText}</Text>
+    </AnimatedPressable>
+  );
+});
+
+// ── PASS 3.1: AuctionAttentionCard — dominant image-led auction stage ──
 const AuctionAttentionCard = memo(function AuctionAttentionCard({
   item,
   clockMs,
@@ -175,48 +232,65 @@ const AuctionAttentionCard = memo(function AuctionAttentionCard({
   const priceLabel = resolvePriceLabel(item, timing);
   const priceText = resolvePriceText(item, timing, priceLabel, formatFromFiat);
   const timeLabel = resolveTimeLabel(timing);
+  const urgency = resolveUrgency(timing);
   const ctaText = item.viewerState === 'outbid' ? 'Bid again' : item.viewerState === 'won' ? 'View result' : 'View';
   const a11yLabel = buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText);
+  const presentation = resolveViewerStatePresentation(item.viewerState);
+  const stateColor = presentation ? getColorForKey(presentation.colorKey) : Colors.brand;
 
   return (
     <AnimatedPressable
-      style={styles.attentionCard}
+      style={styles.leadStage}
       onPress={onPress}
       activeOpacity={0.92}
-      scaleValue={0.985}
+      scaleValue={0.98}
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
       accessibilityHint="Opens auction details"
     >
-      <View style={styles.attentionImageWrap}>
+      <View style={styles.leadImageWrap}>
         {item.imageUrl ? (
           <CachedImage
             uri={item.imageUrl}
-            style={styles.attentionImage}
-            containerStyle={styles.attentionImageContainer}
+            style={styles.leadImage}
+            containerStyle={styles.leadImageContainer}
             contentFit="cover"
           />
         ) : (
-          <View style={styles.attentionImagePlaceholder}>
-            <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+          <View style={styles.leadImagePlaceholder}>
+            <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
           </View>
         )}
-        <ViewerStateBadge item={item} style={styles.attentionViewerBadge} />
-      </View>
-      <View style={styles.attentionBody}>
-        <BodyEmphasis style={styles.attentionTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-        <Meta style={styles.attentionReason}>
-          {item.viewerState === 'outbid' && 'You have been outbid'}
-          {item.viewerState === 'won' && 'You won this auction'}
-        </Meta>
-        <View style={styles.attentionRow}>
-          <View style={styles.attentionPriceCol}>
-            <Meta style={styles.attentionPriceLabel}>{priceLabel}</Meta>
-            <Body style={styles.attentionBid}>{priceText}</Body>
+        <LinearGradient
+          colors={['transparent', 'transparent', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.9)']}
+          locations={[0, 0.3, 0.65, 1]}
+          style={styles.leadGradient}
+        />
+        {timing.effectiveState === 'live' && (
+          <View style={styles.leadLivePill}>
+            <View style={[styles.leadLiveDot, { backgroundColor: Colors.danger }]} />
+            <Text style={styles.leadLiveText}>LIVE</Text>
           </View>
-          <View style={styles.attentionCtaWrap}>
-            <Text style={styles.attentionCtaLabel}>{ctaText}</Text>
-            <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+        )}
+        {urgency === 'finalMinutes' && (
+          <View style={styles.leadUrgencyPill}>
+            <Text style={styles.leadUrgencyText}>{formatFinalMinutesCountdown(timing.msToEnd)}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.leadBottomStage}>
+        {presentation && (
+          <Text style={[styles.leadStateLine, { color: stateColor }]} numberOfLines={1}>
+            {presentation.text}
+          </Text>
+        )}
+        <Text style={styles.leadPriceLabel}>{priceLabel}</Text>
+        <Text style={styles.leadPriceValue} numberOfLines={1}>{priceText}</Text>
+        <View style={styles.leadMetaRow}>
+          <Text style={styles.leadTimeText}>{timeLabel}</Text>
+          <View style={styles.leadCtaWrap}>
+            <Text style={styles.leadCtaText}>{ctaText}</Text>
+            <Ionicons name="chevron-forward" size={13} color={Colors.brand} />
           </View>
         </View>
       </View>
@@ -868,7 +942,22 @@ export default function AuctionHomeScreen() {
 
     return (
       <View key={section.kind} style={styles.sectionWrap}>
-        <SectionHeader title={section.title} />
+        <View style={styles.sectionHeaderRow}>
+          <SectionHeader title={section.title} />
+          {section.kind === 'sellerTools' && (
+            <Pressable
+              onPress={() => navigation.navigate('SellerAuctionCentre')}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="View all your auctions in Seller Centre"
+            >
+              <View style={styles.sectionLinkRow}>
+                <Text style={styles.sectionLinkText}>Seller Centre</Text>
+                <Ionicons name="chevron-forward" size={12} color={Colors.brand} />
+              </View>
+            </Pressable>
+          )}
+        </View>
         {isHorizontal ? (
           <FlashList
             data={section.items}
@@ -891,46 +980,7 @@ export default function AuctionHomeScreen() {
     );
   }, [renderAttentionItem, renderFeedItem, renderCompactItem, renderEndedItem, sectionData.sectionStates, fetchSections]);
 
-  const renderHeader = useCallback(() => (
-    <View>
-      <View style={styles.searchWrap}>
-        <AppInput
-          value={searchQuery}
-          onChangeText={handleSearchChange}
-          placeholder="Search auctions..."
-          prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
-          accessibilityLabel="Search auctions"
-          returnKeyType="search"
-          onSubmitEditing={() => setDebouncedQuery(searchQuery)}
-        />
-        {searchQuery.length > 0 && (
-          <Pressable
-            style={styles.clearSearchBtn}
-            onPress={handleClearSearch}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Clear search"
-          >
-            <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
-          </Pressable>
-        )}
-      </View>
-
-      {error && (
-        <View style={styles.errorBanner}>
-          <Ionicons name="cloud-offline-outline" size={16} color={Colors.textMuted} />
-          <Meta style={styles.errorText}>{error}</Meta>
-        </View>
-      )}
-
-      {resyncFailed && !error && (
-        <View style={styles.errorBanner}>
-          <Ionicons name="sync-outline" size={16} color={Colors.textMuted} />
-          <Meta style={styles.errorText}>Clock sync failed — pull to refresh</Meta>
-        </View>
-      )}
-    </View>
-  ), [searchQuery, handleSearchChange, handleClearSearch, error, resyncFailed]);
+  const renderHeader = useCallback(() => null, []);
 
   const renderLoadingState = useCallback(() => (
     <View style={styles.loadingWrap}>
@@ -946,6 +996,27 @@ export default function AuctionHomeScreen() {
     </View>
   ), []);
 
+  const personalStateItems = useMemo(() => {
+    const all = [
+      ...sectionData.live,
+      ...sectionData.upcoming,
+      ...sectionData.ended,
+      ...sectionData.watchlist,
+    ];
+    const seen = new Set<string>();
+    const result: AuctionHomeItem[] = [];
+    const priority: Record<string, number> = { outbid: 0, leading: 1, won: 2, watching: 3 };
+    for (const item of all) {
+      if (seen.has(item.id)) continue;
+      if (item.viewerState === 'outbid' || item.viewerState === 'leading' || item.viewerState === 'won' || item.viewerState === 'watching') {
+        seen.add(item.id);
+        result.push(item);
+      }
+    }
+    result.sort((a, b) => (priority[a.viewerState] ?? 99) - (priority[b.viewerState] ?? 99));
+    return result.slice(0, 8);
+  }, [sectionData]);
+
   const isSearching = searchState.status !== 'idle';
 
   return (
@@ -956,27 +1027,88 @@ export default function AuctionHomeScreen() {
         backgroundColor={Colors.background}
       />
 
-      <View style={styles.headerBar}>
-        <Pressable
-          onPress={handleBack}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          style={styles.headerBackBtn}
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <BodyEmphasis style={styles.headerTitle}>Auctions</BodyEmphasis>
-        <Pressable
-          onPress={() => navigation.navigate('MyBids')}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="My auction activity"
-          style={styles.headerActionBtn}
-        >
-          <Ionicons name="list-outline" size={22} color={Colors.textPrimary} />
-        </Pressable>
+      {/* ── Editorial header — left-aligned, not centered navigation ── */}
+      <View style={styles.editorialHeader}>
+        <View style={styles.editorialHeaderTop}>
+          <Pressable
+            onPress={handleBack}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            style={styles.headerBackBtn}
+          >
+            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+          </Pressable>
+          <View style={styles.editorialTitleWrap}>
+            <Text style={styles.editorialTitle}>Auctions</Text>
+            <Text style={styles.editorialSubtitle}>
+              {sectionData.live.length > 0
+                ? `${sectionData.live.length} live now`
+                : loading ? 'Loading market…'
+                : 'Discover live auctions'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => navigation.navigate('MyBids')}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="My auction activity"
+            style={styles.headerActionBtn}
+          >
+            <Ionicons name="list-outline" size={22} color={Colors.textPrimary} />
+          </Pressable>
+        </View>
+
+        {/* Integrated search */}
+        <View style={styles.searchWrap}>
+          <AppInput
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            placeholder="Search auctions..."
+            prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
+            accessibilityLabel="Search auctions"
+            returnKeyType="search"
+            onSubmitEditing={() => setDebouncedQuery(searchQuery)}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable
+              style={styles.clearSearchBtn}
+              onPress={handleClearSearch}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
+
+        {(error || resyncFailed) && (
+          <View style={styles.errorBanner}>
+            <Ionicons name={error ? 'cloud-offline-outline' : 'sync-outline'} size={16} color={Colors.textMuted} />
+            <Meta style={styles.errorText}>{error ?? 'Clock sync failed — pull to refresh'}</Meta>
+          </View>
+        )}
       </View>
+
+      {/* ── Personal state rail ── */}
+      {!isSearching && personalStateItems.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.stateRailScroll}
+          style={styles.stateRail}
+        >
+          {personalStateItems.map((item) => (
+            <PersonalStateTile
+              key={item.id}
+              item={item}
+              onPress={() => navigation.navigate('AuctionDetail', { auctionId: item.id })}
+              formatFromFiat={formatFromFiat}
+            />
+          ))}
+        </ScrollView>
+      )}
 
       {isSearching ? (
         <FlashList
@@ -1061,27 +1193,103 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.sm,
-    height: HEADER_HEIGHT,
+  // ── Personal state rail ──
+  stateRail: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
   },
-  headerBackBtn: {
-    width: HEADER_HEIGHT,
-    height: HEADER_HEIGHT,
+  stateRailScroll: {
+    gap: Space.sm,
+  },
+  stateTile: {
+    width: 130,
+  },
+  stateTileImageWrap: {
+    width: 130,
+    height: 160,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  stateTileImage: {
+    width: 130,
+    height: 160,
+    borderRadius: Radius.md,
+  },
+  stateTileImageContainer: {
+    width: 130,
+    height: 160,
+    borderRadius: Radius.md,
+  },
+  stateTilePlaceholder: {
+    width: 130,
+    height: 160,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 20,
+  stateTileAccent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+  },
+  stateTileLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    marginTop: Space.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  stateTileTitle: {
+    fontSize: 13,
+    color: Colors.textPrimary,
+    fontFamily: 'Inter_500Medium',
+    marginTop: 2,
+  },
+  stateTilePrice: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 1,
+  },
+  // ── Editorial header ──
+  editorialHeader: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+  },
+  editorialHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  editorialTitleWrap: {
+    flex: 1,
+  },
+  editorialTitle: {
+    fontSize: 34,
     fontFamily: 'Inter_700Bold',
-    letterSpacing: -0.3,
+    letterSpacing: -1,
+    color: Colors.textPrimary,
+  },
+  editorialSubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 2,
+  },
+  headerBackBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerActionBtn: {
-    width: HEADER_HEIGHT,
-    height: HEADER_HEIGHT,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1091,13 +1299,12 @@ const styles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     marginBottom: Space.sm,
   },
   clearSearchBtn: {
     position: 'absolute',
-    right: Space.md + 8,
+    right: 8,
     top: Space.sm + 14,
   },
   errorBanner: {
@@ -1151,6 +1358,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
+  },
+  sectionLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  sectionLinkText: {
+    fontSize: 13,
+    color: Colors.brand,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   sectionTitle: {
     fontSize: 17,
@@ -1210,56 +1435,127 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 9,
   },
-  // ── Attention card ──
-  attentionCard: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
+  // ── Lead stage (dominant image-led auction) ──
+  leadStage: {
     marginHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    backgroundColor: Colors.surface,
   },
-  attentionImageWrap: {
+  leadImageWrap: {
     position: 'relative',
+    width: '100%',
+    height: 320,
   },
-  attentionImageContainer: {
-    width: 100,
-    height: 100,
+  leadImageContainer: {
+    width: '100%',
+    height: 320,
   },
-  attentionImage: {
-    width: 100,
-    height: 100,
+  leadImage: {
+    width: '100%',
+    height: 320,
   },
-  attentionImagePlaceholder: {
-    width: 100,
-    height: 100,
+  leadImagePlaceholder: {
+    width: '100%',
+    height: 320,
     backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  attentionViewerBadge: {
-    top: 4,
-    left: 4,
-    right: 'auto',
+  leadGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '60%',
   },
-  attentionBody: {
-    flex: 1,
-    padding: Space.sm,
+  leadLivePill: {
+    position: 'absolute',
+    top: Space.sm,
+    left: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  leadLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  leadLiveText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  leadUrgencyPill: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm,
+    backgroundColor: 'rgba(220,38,38,0.85)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  leadUrgencyText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+  },
+  leadBottomStage: {
+    position: 'absolute',
+    bottom: Space.md,
+    left: Space.md,
+    right: Space.md,
+    gap: 4,
+  },
+  leadStateLine: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  leadPriceLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'Inter_400Regular',
+  },
+  leadPriceValue: {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+  },
+  leadMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 4,
   },
-  attentionTitle: {
-    fontSize: 14,
-    marginBottom: 2,
+  leadTimeText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    fontFamily: 'Inter_500Medium',
+  },
+  leadCtaWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  leadCtaText: {
+    fontSize: 13,
+    color: Colors.brand,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   attentionReason: {
     color: Colors.textSecondary,
     marginBottom: Space.sm,
-  },
-  attentionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
   },
   attentionPriceCol: {},
   attentionPriceLabel: {

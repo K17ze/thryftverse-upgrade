@@ -19,6 +19,7 @@ export type RootStackParamList = {
   PosterStoryActivity: { storyId: string };
   PosterArchive: undefined;
   AuctionHome: undefined;
+  SellerAuctionCentre: undefined;
   CreateAuction: { listingId?: string } | undefined;
   AuctionDetail: { auctionId: string };
   CreateCoOwn:

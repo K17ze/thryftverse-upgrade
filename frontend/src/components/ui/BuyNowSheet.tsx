@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
@@ -20,6 +21,7 @@ import {
 } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
 import { createStableId } from '../../utils/createStableId';
+import { toIze, formatIzeAmount } from '../../utils/currency';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
 
@@ -244,11 +246,11 @@ export function BuyNowSheet({
   const displayPriceGbp = authoritativePrice ?? auction.buyNowPriceGbp;
 
   const priceText = displayPriceGbp
-    ? formatFromFiat(displayPriceGbp, 'GBP', { displayMode: 'fiat' })
+    ? formatFromFiat(displayPriceGbp, 'GBP')
     : '—';
 
   const displayPriceText = displayPriceGbp && currencyCode !== 'GBP'
-    ? formatFromFiat(displayPriceGbp, currencyCode, { displayMode: 'fiat' })
+    ? formatFromFiat(displayPriceGbp, currencyCode)
     : null;
 
   return (
@@ -281,40 +283,31 @@ export function BuyNowSheet({
 
         <View style={styles.divider} />
 
-        {/* ── Review stage ── */}
+        {/* ── Review stage — distinct fixed-price experience ── */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
-            <Text style={styles.reviewHeading}>Buy Now</Text>
+            <Text style={styles.fixedPriceLabel}>Fixed price</Text>
 
-            <View style={styles.priceBlock}>
-              <Text style={styles.priceValue}>{priceText}</Text>
+            {/* Large centered 1ZE value — dominates */}
+            <View style={styles.fixedPriceBlock}>
+              <Text style={styles.fixedPriceValue} numberOfLines={1}>{priceText}</Text>
+              {displayPriceGbp && (
+                <Text style={styles.fixedPriceIze}>
+                  {formatIzeAmount(toIze(displayPriceGbp, 'GBP'), 4)}
+                </Text>
+              )}
               {displayPriceText && (
-                <Text style={styles.priceEquivalent}>
-                  approximately {displayPriceText} {currencyCode}
+                <Text style={styles.fixedPriceEquivalent}>
+                  {displayPriceText} {currencyCode}
                 </Text>
               )}
             </View>
 
-            <View style={styles.infoBlock}>
-              <View style={styles.infoRow}>
-                <Ionicons name="flash-outline" size={14} color={Colors.textSecondary} />
-                <Body style={styles.infoText}>
-                  This is a fixed-price purchase, not a bid.
-                </Body>
-              </View>
-              <View style={styles.infoRow}>
-                <Ionicons name="close-circle-outline" size={14} color={Colors.textSecondary} />
-                <Body style={styles.infoText}>
-                  This will immediately end the auction.
-                </Body>
-              </View>
-              <View style={styles.infoRow}>
-                <Ionicons name="card-outline" size={14} color={Colors.textSecondary} />
-                <Body style={styles.infoText}>
-                  You are committing to purchase this item at the fixed price.
-                </Body>
-              </View>
-            </View>
+            {/* Calm fixed-price context — not form rows */}
+            <Text style={styles.fixedPriceContext}>
+              This is a fixed-price purchase, not a bid.{'\n'}
+              It ends the auction immediately.
+            </Text>
 
             {error && (
               <View style={styles.errorRow}>
@@ -323,27 +316,26 @@ export function BuyNowSheet({
               </View>
             )}
 
-            <View style={styles.actions}>
-              <AppButton
-                style={styles.actionBtn}
-                onPress={handleDismiss}
-                variant="secondary"
-                size="md"
-                align="center"
-                title="Cancel"
-                accessibilityLabel="Cancel Buy Now"
-              />
-              <AppButton
-                style={[styles.actionBtn, styles.primaryBtn]}
-                onPress={handleConfirm}
-                disabled={!canBuyNow || isPreflighting || isSubmitting}
-                variant="primary"
-                size="md"
-                align="center"
-                title={isPreflighting ? 'Checking...' : 'Confirm Buy Now'}
-                accessibilityLabel="Confirm Buy Now purchase"
-              />
-            </View>
+            {/* Single decisive action */}
+            <AppButton
+              style={styles.dominantAction}
+              onPress={handleConfirm}
+              disabled={!canBuyNow || isPreflighting || isSubmitting}
+              variant="primary"
+              size="md"
+              align="center"
+              title={isPreflighting ? 'Checking...' : 'Review purchase'}
+              accessibilityLabel="Review Buy Now purchase"
+            />
+            <Pressable
+              style={styles.dismissLink}
+              onPress={handleDismiss}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel Buy Now"
+            >
+              <Text style={styles.dismissLinkText}>Cancel</Text>
+            </Pressable>
           </View>
         )}
 
@@ -466,40 +458,60 @@ const styles = StyleSheet.create({
   stageContent: {
     gap: Space.sm,
   },
-  reviewHeading: {
-    fontSize: 17,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+  // ── Fixed-price experience ──
+  fixedPriceLabel: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.medium,
+    textAlign: 'center',
+    marginTop: Space.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  priceBlock: {
-    paddingVertical: Space.sm,
+  fixedPriceBlock: {
     alignItems: 'center',
+    paddingVertical: Space.md,
+    gap: 4,
   },
-  priceValue: {
-    fontSize: 28,
-    fontFamily: Typography.family.bold,
+  fixedPriceValue: {
+    fontSize: 36,
+    lineHeight: 42,
+    fontWeight: '700',
+    letterSpacing: -0.5,
     color: Colors.textPrimary,
+    fontFamily: Typography.family.bold,
   },
-  priceEquivalent: {
+  fixedPriceIze: {
+    fontSize: 14,
+    color: Colors.brand,
+    fontFamily: Typography.family.medium,
+  },
+  fixedPriceEquivalent: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+  },
+  fixedPriceContext: {
     fontSize: 14,
     color: Colors.textSecondary,
     fontFamily: Typography.family.regular,
-    marginTop: 4,
-  },
-  infoBlock: {
-    gap: Space.xs + 2,
+    textAlign: 'center',
+    lineHeight: 20,
     paddingVertical: Space.xs,
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
+  dominantAction: {
+    width: '100%',
+    marginTop: Space.xs,
   },
-  infoText: {
-    flex: 1,
+  dismissLink: {
+    alignItems: 'center',
+    paddingVertical: Space.sm,
+    marginTop: Space.xs,
+  },
+  dismissLinkText: {
     fontSize: 14,
-    color: Colors.textSecondary,
-    lineHeight: 20,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
   },
   errorRow: {
     flexDirection: 'row',

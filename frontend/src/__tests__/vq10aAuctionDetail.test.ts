@@ -631,7 +631,7 @@ describe('PASS 4.12: Static guardrails (source inspection)', () => {
   });
 
   it('BidSheet shows minimum next bid', () => {
-    expect(bidSheetSrc).toContain('Minimum next bid');
+    expect(bidSheetSrc).toContain('Minimum to lead');
     expect(bidSheetSrc).toContain('minimumNextBidGbp');
   });
 
@@ -1116,7 +1116,7 @@ describe('PASS 4.1: UI/UX quality parity', () => {
   });
 
   it('minimum next bid is visible in BidSheet', () => {
-    expect(bidSheetSrc).toContain('Minimum next bid');
+    expect(bidSheetSrc).toContain('Minimum to lead');
     expect(bidSheetSrc).toContain('minimumNextBidGbp');
   });
 
@@ -1634,8 +1634,8 @@ describe('PASS 5: BidSheet static guardrails', () => {
   });
 
   it('has current bid and minimum next bid display', () => {
-    expect(bidSheetSrc).toContain('Current bid');
-    expect(bidSheetSrc).toContain('Minimum next bid');
+    expect(bidSheetSrc).toContain('Current value');
+    expect(bidSheetSrc).toContain('Minimum to lead');
   });
 
   it('has quick increment chips (+1%, +3%, +5%)', () => {
@@ -1686,7 +1686,7 @@ describe('PASS 5: BidSheet static guardrails', () => {
 describe('PASS 5: BuyNowSheet static guardrails', () => {
   it('has review stage with price display', () => {
     expect(buyNowSheetSrc).toContain('review');
-    expect(buyNowSheetSrc).toContain('priceValue');
+    expect(buyNowSheetSrc).toContain('fixedPriceValue');
   });
 
   it('has success stage', () => {
@@ -1714,7 +1714,7 @@ describe('PASS 5: BuyNowSheet static guardrails', () => {
   });
 
   it('states auction will end immediately', () => {
-    expect(buyNowSheetSrc).toContain('immediately end the auction');
+    expect(buyNowSheetSrc).toContain('ends the auction immediately');
   });
 
   it('has lifecycle guard', () => {

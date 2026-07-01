@@ -7344,6 +7344,7 @@ async function sweepExpiredAuctions(reason: 'interval' | 'manual'): Promise<numb
             listingId: auction.listing_id,
             event: 'auction_won',
           },
+          route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
           metadata: { reason },
         });
       }
@@ -7359,6 +7360,7 @@ async function sweepExpiredAuctions(reason: 'interval' | 'manual'): Promise<numb
           listingId: auction.listing_id,
           event: topBid?.bidder_id ? 'auction_sold' : 'auction_no_sale',
         },
+        route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
         metadata: { reason },
       });
     }
@@ -19183,6 +19185,53 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
   }
 });
 
+app.get('/auctions/1ze-rates', async (request, reply) => {
+  try {
+    if (!(await onezeTablesAvailable(db)) || !(await onezePricingTablesAvailable(db))) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: '1ze controlled pricing tables are unavailable.',
+      };
+    }
+
+    const quotes = await listCountryPricingQuotes(db);
+    const anchor = await getOnezeAnchorConfig(db);
+
+    const rates: Record<string, {
+      rate: number;
+      source: string;
+      updatedAt: string;
+      settlementSupported: boolean;
+    }> = {};
+
+    for (const quote of quotes) {
+      rates[quote.currency] = {
+        rate: quote.sellPrice,
+        source: quote.source,
+        updatedAt: quote.updatedAt,
+        settlementSupported: true,
+      };
+    }
+
+    return {
+      ok: true,
+      anchorCurrency: anchor.anchorCurrency,
+      anchorValue: anchor.anchorValue,
+      rates,
+      source: 'internal_pricing',
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    request.log.error({ err: error }, 'Failed to resolve 1ze display rates');
+    reply.code(500);
+    return {
+      ok: false,
+      error: 'Unable to resolve 1ze display rates',
+    };
+  }
+});
+
 app.get('/wallet/1ze/fx-quote', async (request, reply) => {
   const querySchema = z.object({
     fromCurrency: z.string().length(3),
@@ -29448,6 +29497,19 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
     const amountGbp = roundTo(payload.amountGbp, 2);
     const minimumNextBid = roundTo(currentBid + minIncrement, 2);
 
+    // Fetch previous top bidder to send outbid notification
+    const previousTopBidder = await client.query<{ bidder_id: string }>(
+      `
+        SELECT bidder_id
+        FROM auction_bids
+        WHERE auction_id = $1
+        ORDER BY amount_gbp DESC, created_at DESC
+        LIMIT 1
+      `,
+      [auctionId]
+    );
+    const previousTopBidderId = previousTopBidder.rows[0]?.bidder_id ?? null;
+
     if (amountGbp < minimumNextBid) {
       await client.query('ROLLBACK');
       reply.code(400);
@@ -29660,12 +29722,35 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
           amountGbp,
           event: 'auction_bid',
         },
+        route: { screen: 'AuctionDetail', params: { auctionId } },
         metadata: {
           source: 'auction_bid_route',
         },
       });
     } catch (error) {
       request.log.error({ err: error, auctionId }, 'Failed to queue seller bid notification');
+    }
+
+    // Notify the previous top bidder that they've been outbid
+    if (previousTopBidderId && previousTopBidderId !== bidderId) {
+      try {
+        await queueUserNotification({
+          userId: previousTopBidderId,
+          title: 'You\'ve been outbid',
+          body: `Someone outbid you with ${amountGbp.toFixed(2)} GBP. Place a new bid to reclaim the top spot.`,
+          payload: {
+            auctionId,
+            event: 'auction_outbid',
+            newBidAmountGbp: amountGbp,
+          },
+          route: { screen: 'AuctionDetail', params: { auctionId } },
+          metadata: {
+            source: 'auction_outbid_route',
+          },
+        });
+      } catch (error) {
+        request.log.error({ err: error, auctionId }, 'Failed to queue outbid notification');
+      }
     }
 
     await appendComplianceAuditSafe(request, {
@@ -30052,6 +30137,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
           amountGbp: transactionAmountGbp,
           event: 'auction_buy_now',
         },
+        route: { screen: 'AuctionDetail', params: { auctionId } },
         metadata: {
           source: 'auction_buy_now_route',
         },

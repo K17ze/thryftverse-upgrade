@@ -17,6 +17,7 @@ import { Space, Radius, Typography } from '../../theme/designTokens';
 import {
   sanitizeDecimalInput,
 } from '../../utils/currencyAuthoringFlows';
+import { toIze, formatIzeAmount } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { GoldRates } from '../../utils/currency';
@@ -341,45 +342,50 @@ export function BidSheet({
 
         <View style={styles.divider} />
 
-        {/* ── Entry stage ── */}
+        {/* ── Entry stage — large centered amount ── */}
         {stage === 'entry' && (
           <View style={styles.stageContent}>
-            <View style={styles.bidInfoRow}>
-              <View style={styles.bidInfoItem}>
-                <Meta style={styles.bidInfoLabel}>Current bid</Meta>
-                <Text style={styles.bidInfoValue}>
-                  {formatFromFiat(auction.currentBidGbp, 'GBP', { displayMode: 'fiat' })}
-                </Text>
-              </View>
-              <View style={styles.bidInfoDivider} />
-              <View style={styles.bidInfoItem}>
-                <Meta style={styles.bidInfoLabel}>Minimum next bid</Meta>
-                <Text style={styles.bidInfoValue}>
-                  {formatFromFiat(currentMinimum, 'GBP', { displayMode: 'fiat' })}
-                </Text>
-              </View>
-            </View>
+            <Text style={styles.entryHeading}>Enter your bid</Text>
 
-            <View style={styles.countdownRow}>
-              <Ionicons
-                name={auction.effectiveState === 'live' ? 'flash-outline' : 'time-outline'}
-                size={13}
-                color={auction.effectiveState === 'live' ? '#ff4444' : Colors.textSecondary}
+            {/* Large amount input — dominates the sheet */}
+            <View style={styles.amountContainer}>
+              <Text style={styles.amountCurrency}>{currencyCode}</Text>
+              <AppInput
+                value={bidInput}
+                onChangeText={handleInputChange}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                accessibilityLabel="Bid amount"
+                accessibilityHint={`Enter your bid in ${currencyCode}`}
+                containerStyle={styles.amountInput}
+                autoFocus
               />
-              <Text style={styles.countdownText}>{auction.countdownText}</Text>
             </View>
 
-            <AppInput
-              value={bidInput}
-              onChangeText={handleInputChange}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              prefix={currencyCode}
-              accessibilityLabel="Bid amount"
-              accessibilityHint={`Enter your bid in ${currencyCode}`}
-              containerStyle={styles.input}
-            />
+            {/* 1ZE equivalent — platform value */}
+            <Text style={styles.amountIzeEquivalent}>
+              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 4)}
+            </Text>
 
+            {/* Minimum and current — stacked, not columns */}
+            <View style={styles.bidContextStack}>
+              <View style={styles.bidContextRow}>
+                <Text style={styles.bidContextLabel}>Minimum to lead</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
+              </View>
+              <View style={styles.bidContextRow}>
+                <Text style={styles.bidContextLabel}>Current value</Text>
+                <Text style={styles.bidContextValueSecondary}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
+              </View>
+              <View style={styles.bidContextRow}>
+                <Text style={styles.bidContextLabel}>Time remaining</Text>
+                <Text style={[styles.bidContextValueSecondary, auction.effectiveState === 'live' && { color: Colors.danger }]}>
+                  {auction.countdownText}
+                </Text>
+              </View>
+            </View>
+
+            {/* Quick adjustments */}
             <View style={styles.incrementRow}>
               {[0.01, 0.03, 0.05].map((pct) => (
                 <Pressable
@@ -405,65 +411,64 @@ export function BidSheet({
               </View>
             )}
 
-            <View style={styles.actions}>
-              <AppButton
-                style={styles.actionBtn}
-                onPress={handleDismiss}
-                variant="secondary"
-                size="md"
-                align="center"
-                title="Cancel"
-                accessibilityLabel="Cancel bid"
-              />
-              <AppButton
-                style={[styles.actionBtn, styles.primaryBtn]}
-                onPress={handleProceedToReview}
-                variant="primary"
-                size="md"
-                align="center"
-                title={isPreflighting ? 'Checking...' : 'Review bid'}
-                disabled={isPreflighting || isSubmitting}
-                accessibilityLabel="Review your bid"
-              />
-            </View>
+            {/* Single dominant action */}
+            <AppButton
+              style={styles.dominantAction}
+              onPress={handleProceedToReview}
+              variant="primary"
+              size="md"
+              align="center"
+              title={isPreflighting ? 'Checking...' : 'Review bid'}
+              disabled={isPreflighting || isSubmitting}
+              accessibilityLabel="Review your bid"
+            />
+            <Pressable
+              style={styles.dismissLink}
+              onPress={handleDismiss}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel bid"
+            >
+              <Text style={styles.dismissLinkText}>Cancel</Text>
+            </Pressable>
           </View>
         )}
 
-        {/* ── Review stage ── */}
+        {/* ── Review stage — clean confirmation receipt ── */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
-            <Text style={styles.reviewHeading}>Review your bid</Text>
+            <Text style={styles.reviewHeading}>Confirm your bid</Text>
 
-            <View style={styles.reviewSummary}>
-              <View style={styles.reviewRow}>
-                <Meta style={styles.reviewLabel}>Your bid</Meta>
-                <Text style={styles.reviewValue}>
-                  {currencyCode} {bidInput}
-                </Text>
-              </View>
+            {/* Dominant bid amount */}
+            <View style={styles.reviewAmountBlock}>
+              <Text style={styles.reviewAmountValue} numberOfLines={1}>
+                {currencyCode} {bidInput}
+              </Text>
+              <Text style={styles.reviewAmountIze}>
+                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0, 4)}
+              </Text>
               {isNonGbp && gbpEquivalentText && (
-                <Text style={styles.gbpEquivalent}>{gbpEquivalentText}</Text>
+                <Text style={styles.reviewGbpEquivalent}>{gbpEquivalentText}</Text>
               )}
-              <View style={styles.reviewDivider} />
-              <View style={styles.reviewRow}>
-                <Meta style={styles.reviewLabel}>Current bid</Meta>
-                <Text style={styles.reviewValueSecondary}>
-                  {formatFromFiat(auction.currentBidGbp, 'GBP', { displayMode: 'fiat' })}
-                </Text>
+            </View>
+
+            {/* Receipt details */}
+            <View style={styles.reviewReceipt}>
+              <View style={styles.reviewReceiptRow}>
+                <Text style={styles.reviewReceiptLabel}>Current value</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
-              <View style={styles.reviewRow}>
-                <Meta style={styles.reviewLabel}>Minimum next bid</Meta>
-                <Text style={styles.reviewValueSecondary}>
-                  {formatFromFiat(currentMinimum, 'GBP', { displayMode: 'fiat' })}
-                </Text>
+              <View style={styles.reviewReceiptRow}>
+                <Text style={styles.reviewReceiptLabel}>Minimum</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
-              <View style={styles.reviewRow}>
-                <Meta style={styles.reviewLabel}>Auction ends</Meta>
-                <Text style={styles.reviewValueSecondary}>{auction.countdownText}</Text>
+              <View style={styles.reviewReceiptRow}>
+                <Text style={styles.reviewReceiptLabel}>Time remaining</Text>
+                <Text style={styles.reviewReceiptValue}>{auction.countdownText}</Text>
               </View>
-              <View style={styles.reviewRow}>
-                <Meta style={styles.reviewLabel}>Seller</Meta>
-                <Text style={styles.reviewValueSecondary}>{auction.sellerName}</Text>
+              <View style={styles.reviewReceiptRow}>
+                <Text style={styles.reviewReceiptLabel}>Seller</Text>
+                <Text style={styles.reviewReceiptValue}>{auction.sellerName}</Text>
               </View>
             </View>
 
@@ -481,27 +486,26 @@ export function BidSheet({
               </View>
             )}
 
-            <View style={styles.actions}>
-              <AppButton
-                style={styles.actionBtn}
-                onPress={handleEditFromReview}
-                variant="secondary"
-                size="md"
-                align="center"
-                title="Edit"
-                accessibilityLabel="Edit your bid"
-              />
-              <AppButton
-                style={[styles.actionBtn, styles.primaryBtn]}
-                onPress={handleConfirmBid}
-                variant="primary"
-                size="md"
-                align="center"
-                title={isPreflighting ? 'Checking...' : 'Confirm bid'}
-                disabled={isPreflighting || isSubmitting}
-                accessibilityLabel="Confirm and submit your bid"
-              />
-            </View>
+            {/* Single dominant action + quiet edit */}
+            <AppButton
+              style={styles.dominantAction}
+              onPress={handleConfirmBid}
+              variant="primary"
+              size="md"
+              align="center"
+              title={isPreflighting ? 'Checking...' : 'Confirm bid'}
+              disabled={isPreflighting || isSubmitting}
+              accessibilityLabel="Confirm and submit your bid"
+            />
+            <Pressable
+              style={styles.dismissLink}
+              onPress={handleEditFromReview}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Edit your bid"
+            >
+              <Text style={styles.dismissLinkText}>Edit bid</Text>
+            </Pressable>
           </View>
         )}
 
@@ -524,7 +528,7 @@ export function BidSheet({
             </View>
             <Text style={styles.successTitle}>Bid placed</Text>
             <Text style={styles.successDetail}>
-              Your bid of {formatFromFiat(gbpAmount ?? 0, 'GBP', { displayMode: 'fiat' })} has been submitted
+              Your bid of {formatFromFiat(gbpAmount ?? 0, 'GBP')} has been submitted
             </Text>
             <AppButton
               style={styles.doneBtn}
@@ -550,7 +554,7 @@ export function BidSheet({
               <View style={styles.conflictPriceRow}>
                 <Meta style={styles.conflictPriceLabel}>Buy Now price</Meta>
                 <Text style={styles.conflictPriceValue}>
-                  {formatFromFiat(error.buyNowPriceGbp, 'GBP', { displayMode: 'fiat' })}
+                  {formatFromFiat(error.buyNowPriceGbp, 'GBP')}
                 </Text>
               </View>
             )}
@@ -664,34 +668,142 @@ const styles = StyleSheet.create({
   stageContent: {
     gap: Space.sm,
   },
-  bidInfoRow: {
+  // ── Entry stage — large centered amount ──
+  entryHeading: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.medium,
+    textAlign: 'center',
+    marginTop: Space.xs,
+  },
+  amountContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.sm,
+    justifyContent: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.md,
   },
-  bidInfoItem: {
+  amountCurrency: {
+    fontSize: 20,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.semibold,
+  },
+  amountInput: {
     flex: 1,
   },
-  bidInfoDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 32,
-    backgroundColor: Colors.border,
-    marginHorizontal: Space.sm,
+  amountIzeEquivalent: {
+    fontSize: 13,
+    color: Colors.brand,
+    fontFamily: Typography.family.medium,
+    textAlign: 'center',
+    marginBottom: Space.sm,
   },
-  bidInfoLabel: {
-    fontSize: 12,
+  bidContextStack: {
+    gap: Space.xs + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+    paddingVertical: Space.sm,
+  },
+  bidContextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bidContextLabel: {
+    fontSize: 13,
     color: Colors.textSecondary,
-    marginBottom: 4,
+    fontFamily: Typography.family.regular,
   },
-  bidInfoValue: {
-    fontSize: 18,
+  bidContextValue: {
+    fontSize: 15,
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+  },
+  bidContextValueSecondary: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.medium,
+  },
+  dominantAction: {
+    width: '100%',
+    marginTop: Space.xs,
+  },
+  dismissLink: {
+    alignItems: 'center',
+    paddingVertical: Space.sm,
+    marginTop: Space.xs,
+  },
+  dismissLinkText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+  },
+  // ── Review stage — receipt ──
+  reviewHeading: {
+    fontSize: 17,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: Space.sm,
+  },
+  reviewAmountBlock: {
+    alignItems: 'center',
+    paddingVertical: Space.md,
+    gap: 4,
+  },
+  reviewAmountValue: {
+    fontSize: 36,
+    lineHeight: 42,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.bold,
+  },
+  reviewAmountIze: {
+    fontSize: 14,
+    color: Colors.brand,
+    fontFamily: Typography.family.medium,
+  },
+  reviewGbpEquivalent: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+  },
+  reviewReceipt: {
+    gap: Space.xs + 2,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  reviewReceiptRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reviewReceiptLabel: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+  },
+  reviewReceiptValue: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.medium,
   },
   countdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginBottom: Space.xs,
+  },
+  izeEquivalentText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
     marginBottom: Space.xs,
   },
   countdownText: {
@@ -754,42 +866,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   primaryBtn: {},
-  reviewHeading: {
-    fontSize: 17,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginBottom: Space.sm,
-  },
-  reviewSummary: {
-    paddingVertical: Space.sm,
-    gap: Space.xs + 2,
-  },
-  reviewRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  reviewLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  reviewValue: {
-    fontSize: 20,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  reviewValueSecondary: {
-    fontSize: 15,
-    fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-  },
-  gbpEquivalent: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    marginTop: -4,
-    marginBottom: 4,
-  },
   reviewDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,

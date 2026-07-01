@@ -67,7 +67,7 @@ export function resolvePriceText(
 ): string {
   if (priceLabel === 'No bids') return 'No bids';
   const amount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
-  return formatFromFiat(amount, 'GBP', { displayMode: 'fiat' });
+  return formatFromFiat(amount, 'GBP');
 }
 
 export function resolvePriceDisplay(

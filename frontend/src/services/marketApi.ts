@@ -434,7 +434,7 @@ export async function removeFromWatchlist(auctionId: string): Promise<boolean> {
 }
 
 export async function getMyAuctionBids(
-  status?: 'active' | 'won' | 'lost' | 'all',
+  status?: 'active' | 'leading' | 'outbid' | 'won' | 'lost' | 'all',
   cursor?: string
 ): Promise<{ items: MyAuctionBid[]; nextCursor: string | null }> {
   const query = toQuery({ status, cursor });

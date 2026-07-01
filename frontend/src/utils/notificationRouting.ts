@@ -11,6 +11,7 @@ export type ResolvedRoute =
   | { screen: 'OrderDetail'; params: { orderId: string } }
   | { screen: 'ItemDetail'; params: { itemId: string } }
   | { screen: 'SupportTicketDetail'; params: { ticketId: string } }
+  | { screen: 'AuctionDetail'; params: { auctionId: string } }
   | { screen: 'Wallet' }
   | { screen: 'BalanceHistory' }
   | { screen: 'NotificationsList' }
@@ -28,6 +29,9 @@ const VALID_SCREENS: ReadonlySet<string> = new Set<ScreenName>([
   'PushNotifications',
   'Settings',
   'MainTabs',
+  'AuctionHome',
+  'SellerAuctionCentre',
+  'MyBids',
 ]);
 
 export function resolveNotificationRoute(
@@ -68,6 +72,15 @@ export function resolveNotificationRoute(
         },
       };
     }
+    if (screen === 'AuctionDetail' && typeof params.auctionId === 'string') {
+      return { screen: 'AuctionDetail', params: { auctionId: params.auctionId } };
+    }
+    if (screen === 'AuctionHome') {
+      return { screen: 'AuctionHome' };
+    }
+    if (screen === 'MyBids') {
+      return { screen: 'MyBids' };
+    }
     if (VALID_SCREENS.has(screen)) {
       return { screen: screen as ScreenName, params };
     }
@@ -87,6 +100,11 @@ export function resolveNotificationRoute(
     const ticketId = typeof payload.ticketId === 'string' ? payload.ticketId : null;
     if (ticketId) {
       return { screen: 'SupportTicketDetail', params: { ticketId } };
+    }
+
+    const auctionId = typeof payload.auctionId === 'string' ? payload.auctionId : null;
+    if (auctionId) {
+      return { screen: 'AuctionDetail', params: { auctionId } };
     }
   }
 
