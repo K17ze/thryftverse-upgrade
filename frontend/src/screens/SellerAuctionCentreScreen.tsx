@@ -345,7 +345,7 @@ export default function SellerAuctionCentreScreen() {
         <View style={styles.loadingWrap}>
           {[0, 1, 2].map((i) => (
             <View key={i} style={styles.loadingCard}>
-              <SkeletonLoader width="100%" height={140} borderRadius={Radius.lg} />
+              <SkeletonLoader width="100%" height={180} borderRadius={Radius.lg} />
               <View style={{ padding: Space.sm }}>
                 <SkeletonLoader width="70%" height={16} borderRadius={8} style={{ marginBottom: Space.xs }} />
                 <SkeletonLoader width="40%" height={12} borderRadius={6} />
@@ -598,6 +598,7 @@ const styles = StyleSheet.create({
   },
   tab: {
     minWidth: 60,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -655,15 +656,15 @@ const styles = StyleSheet.create({
   },
   cardImageContainer: {
     width: '100%',
-    height: 160,
+    height: 180,
   },
   cardImage: {
     width: '100%',
-    height: 160,
+    height: 180,
   },
   cardImagePlaceholder: {
     width: '100%',
-    height: 160,
+    height: 180,
     backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
@@ -755,8 +756,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardPriceLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.textMuted,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   cardPriceValue: {
     fontSize: 16,
