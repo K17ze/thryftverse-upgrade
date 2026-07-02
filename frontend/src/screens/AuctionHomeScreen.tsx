@@ -8,6 +8,7 @@ import {
   Text,
   ScrollView,
   TextInput,
+  FlatList,
   useWindowDimensions,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -1163,6 +1164,60 @@ export default function AuctionHomeScreen() {
 
     switch (activeSegment) {
       case 'live': {
+        // ── Horizontal discovery rail — swipe left for more live auctions ──
+        // Each card ~78% viewport with a deliberate peek of the next card.
+        // Built ON TOP of the existing asymmetric editorial composition below.
+        const railCardWidth = Math.round(width * 0.78);
+        const railImageHeight = Math.round(Math.min(400, width * 0.95));
+        const renderLiveRailItem = ({ item }: { item: AuctionHomeItem }) => {
+          const timing = resolveAuctionTiming(item, secondClock);
+          const urgency = resolveUrgency(timing);
+          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+          const timeLabel = urgency === 'finalMinutes'
+            ? formatFinalMinutesCountdown(timing.msToEnd)
+            : resolveTimeLabel(timing);
+          const personalAction = item.viewerState === 'outbid' ? 'Bid again'
+            : item.viewerState === 'won' ? 'View result'
+            : null;
+          return (
+            <AuctionRunwayCard
+              title={item.title}
+              imageUrl={item.imageUrl || null}
+              brand={item.brand ?? null}
+              izeText={valueLockup.izeText}
+              localText={valueLockup.localText}
+              valueState="current"
+              bidCount={item.bidCount}
+              countdownText={timeLabel}
+              urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+              state="live"
+              viewerState={item.viewerState}
+              onPress={() => navigateToDetail(item.id)}
+              cardWidth={railCardWidth}
+              imageHeight={railImageHeight}
+              metadataBelow
+              personalActionLabel={personalAction}
+              onPersonalAction={personalAction ? () => navigateToDetail(item.id) : undefined}
+            />
+          );
+        };
+        const liveRail = segmentItems.length > 0 ? (
+          <View style={styles.railWrap}>
+            <FlatList
+              data={segmentItems}
+              renderItem={renderLiveRailItem}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={railCardWidth + Space.sm}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              contentContainerStyle={styles.railContent}
+              ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
+            />
+          </View>
+        ) : null;
+
         // True asymmetric edit: featured left + 2 stacked supporting right
         if (segmentItems.length >= 3 && !isSmallWidth) {
           const [featured, ...rest] = segmentItems;
@@ -1178,6 +1233,8 @@ export default function AuctionHomeScreen() {
             : featured.viewerState === 'won' ? 'View result'
             : null;
           return (
+            <View>
+              {liveRail}
             <View style={styles.compositionWrap}>
               <View style={styles.asymmetricRow}>
                 <AuctionRunwayCard
@@ -1256,6 +1313,7 @@ export default function AuctionHomeScreen() {
                 </View>
               )}
             </View>
+            </View>
           );
         }
         // Small width or <3 items: featured wide + supporting row
@@ -1273,6 +1331,8 @@ export default function AuctionHomeScreen() {
             : featured.viewerState === 'won' ? 'View result'
             : null;
           return (
+            <View>
+              {liveRail}
             <View style={styles.compositionWrap}>
               <AuctionRunwayCard
                 title={featured.title}
@@ -1354,11 +1414,14 @@ export default function AuctionHomeScreen() {
                 </View>
               )}
             </View>
+            </View>
           );
         }
         // 2 items: balanced editorial columns
         if (segmentItems.length === 2) {
           return (
+            <View>
+              {liveRail}
             <View style={styles.compositionWrap}>
               <View style={styles.continuationGrid}>
                 {segmentItems.map((item) => {
@@ -1390,6 +1453,7 @@ export default function AuctionHomeScreen() {
                 })}
               </View>
             </View>
+            </View>
           );
         }
         // 1 item: feature + category continuation
@@ -1404,6 +1468,8 @@ export default function AuctionHomeScreen() {
           : featured.viewerState === 'won' ? 'View result'
           : null;
         return (
+          <View>
+            {liveRail}
           <View style={styles.compositionWrap}>
             <AuctionRunwayCard
               title={featured.title}
@@ -1424,6 +1490,7 @@ export default function AuctionHomeScreen() {
               personalActionLabel={featuredPersonalAction}
               onPersonalAction={featuredPersonalAction ? () => navigateToDetail(featured.id) : undefined}
             />
+          </View>
           </View>
         );
       }
@@ -1786,6 +1853,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     marginTop: Space.sm,
     marginBottom: Space.xs,
+  },
+
+  // ── Horizontal discovery rail ──
+  railWrap: {
+    marginTop: Space.sm,
+    marginBottom: Space.xs,
+  },
+  railContent: {
+    paddingHorizontal: Space.md,
   },
 
   // ── Composition ──
