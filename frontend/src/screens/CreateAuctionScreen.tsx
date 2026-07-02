@@ -632,9 +632,9 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   listingCard: {
-    width: 120,
+    width: 140,
     backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: 'hidden',
@@ -645,9 +645,9 @@ const styles = StyleSheet.create({
   },
   listingImageContainer: {
     width: '100%',
-    height: 140,
-    borderTopLeftRadius: Radius.md,
-    borderTopRightRadius: Radius.md,
+    height: 160,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
   },
   listingImage: {
     width: '100%',
@@ -677,8 +677,8 @@ const styles = StyleSheet.create({
   },
   previewImageContainer: {
     width: '100%',
-    height: 200,
-    borderRadius: Radius.md,
+    height: 240,
+    borderRadius: Radius.lg,
   },
   previewImage: {
     width: '100%',
@@ -707,8 +707,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
-    paddingVertical: 10,
-    minHeight: 40,
+    paddingVertical: 12,
+    minHeight: 44,
   },
   windowChipActive: {
     backgroundColor: Colors.brand,
@@ -837,6 +837,10 @@ const styles = StyleSheet.create({
   },
   termsLabel: {
     color: Colors.textMuted,
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   termsValue: {
     color: Colors.textPrimary,
@@ -893,8 +897,8 @@ const styles = StyleSheet.create({
   },
   resultImageContainer: {
     width: '100%',
-    height: 160,
-    borderRadius: Radius.md,
+    height: 180,
+    borderRadius: Radius.lg,
     marginBottom: Space.md,
   },
   resultImage: {
