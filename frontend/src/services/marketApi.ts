@@ -307,6 +307,56 @@ interface ListAuctionsOptions {
   limit?: number;
 }
 
+// ── Auction House home aggregate ──
+
+export type AttentionReason =
+  | 'won_action'
+  | 'outbid'
+  | 'leading_ending'
+  | 'leading'
+  | 'watching_ending'
+  | null;
+
+export interface AuctionHomeActivity {
+  activeCount: number;
+  needsAttentionCount: number;
+  leadingCount: number;
+  outbidCount: number;
+  watchingCount: number;
+  unresolvedWonCount: number;
+}
+
+export interface CategoryWorld {
+  categoryKey: string;
+  displayName: string;
+  representativeImageUrl: string | null;
+  availableCount?: number;
+}
+
+export interface SellerSummary {
+  liveCount: number;
+  scheduledCount: number;
+  completedCount: number;
+}
+
+export interface AuctionHomeResponse {
+  ok: true;
+  serverNow: string;
+  attention: {
+    item: MarketAuction | null;
+    reason: AttentionReason;
+  };
+  activity: AuctionHomeActivity;
+  closingSoon: MarketAuction[];
+  live: MarketAuction[];
+  upcoming: MarketAuction[];
+  categoryWorlds: CategoryWorld[];
+  recentlyClosed: MarketAuction[];
+  sellerSummary?: SellerSummary;
+  sellerAuctions: MarketAuction[];
+  watchlist: MarketAuction[];
+}
+
 interface ListAuctionBidsOptions {
   limit?: number;
 }
@@ -402,6 +452,10 @@ export async function listAuctions(options: ListAuctionsOptions = {}): Promise<{
   });
   const payload = await fetchJson<ListAuctionsResponse>(`/auctions${query}`);
   return { items: payload.items, nextCursor: payload.nextCursor, serverNow: payload.serverNow };
+}
+
+export async function getAuctionHome(): Promise<AuctionHomeResponse> {
+  return fetchJson<AuctionHomeResponse>('/auctions/home');
 }
 
 export async function getAuctionDetail(auctionId: string): Promise<AuctionDetailResponse> {

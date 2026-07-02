@@ -28860,6 +28860,254 @@ app.get('/users/:userId/market-history', async (request, reply) => {
   };
 });
 
+// ── Auction House home aggregate endpoint ──
+// Deterministic attention priority:
+// 1. unresolved won action  2. outbid live  3. leading ending within threshold
+// 4. leading live  5. watching ending within threshold  6. strongest closing-soon
+// 7. strongest live  8. nearest upcoming
+const ATTENTION_LEADING_THRESHOLD_MS = 30 * 60 * 1000; // 30 min
+const ATTENTION_WATCHING_THRESHOLD_MS = 60 * 60 * 1000; // 60 min
+const CLOSING_SOON_THRESHOLD_MS = 60 * 60 * 1000; // 60 min
+
+app.get('/auctions/home', async (request, reply) => {
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const nowMs = now.getTime();
+
+  // ── Fetch all auctions with viewer state in a single query ──
+  const baseSelect = `
+    SELECT
+      a.id, a.listing_id, a.seller_id, a.starts_at, a.ends_at,
+      a.starting_bid_gbp, a.current_bid_gbp, a.buy_now_price_gbp,
+      a.min_increment_gbp, a.bid_count, a.status, a.cancelled_at, a.settled_at,
+      a.winner_bidder_id AS auction_winner_id, a.created_at,
+      l.title, l.image_url, l.brand, l.category, l.condition_label,
+      u.username AS seller_username, u.avatar_url AS seller_avatar, u.display_name AS seller_display_name
+      ${viewerUserId ? `, (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}' LIMIT 1)::boolean AS is_watched, (SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = '${viewerUserId.replace(/'/g, "''")}') AS viewer_highest_bid` : `, false::boolean AS is_watched, NULL::text AS viewer_highest_bid`}
+    FROM auctions a
+    LEFT JOIN listings l ON l.id = a.listing_id
+    LEFT JOIN users u ON u.id = a.seller_id
+    WHERE a.cancelled_at IS NULL
+  `;
+
+  // Fetch live (including closing soon), upcoming, ended, seller, and watchlist in parallel
+  const [liveRes, upcomingRes, endedRes, sellerRes, watchlistRes, categoryRes] = await Promise.all([
+    db.query(baseSelect + ` AND a.starts_at <= NOW() AND a.ends_at > NOW() ORDER BY a.ends_at ASC LIMIT 30`),
+    db.query(baseSelect + ` AND a.starts_at > NOW() ORDER BY a.starts_at ASC LIMIT 20`),
+    db.query(baseSelect + ` AND a.ends_at <= NOW() ORDER BY a.ends_at DESC LIMIT 20`),
+    viewerUserId ? db.query(baseSelect + ` AND a.seller_id = '${viewerUserId.replace(/'/g, "''")}' ORDER BY a.ends_at DESC LIMIT 20`) : Promise.resolve({ rows: [] as any[] }),
+    viewerUserId ? db.query(baseSelect + ` AND EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}') ORDER BY a.ends_at ASC LIMIT 20`) : Promise.resolve({ rows: [] as any[] }),
+    db.query(`SELECT DISTINCT COALESCE(l.category, '') AS category FROM auctions a LEFT JOIN listings l ON l.id = a.listing_id WHERE a.cancelled_at IS NULL AND a.starts_at <= NOW() AND a.ends_at > NOW() AND COALESCE(l.category, '') != '' ORDER BY category ASC`),
+  ]);
+
+  // ── Row mapper (shared with /auctions list endpoint) ──
+  function mapRow(row: any) {
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      winnerBidderId: row.auction_winner_id,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+    });
+    const currentBid = Number(row.current_bid_gbp);
+    const minIncrement = Number(row.min_increment_gbp) || 0.01;
+    const minimumNextBid = roundTo(currentBid + minIncrement, 2);
+
+    let viewerState: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller' = 'not_participating';
+    const isWatched = !!row.is_watched;
+    const viewerHighestBid = row.viewer_highest_bid ? Number(row.viewer_highest_bid) : null;
+
+    if (viewerUserId && row.seller_id === viewerUserId) {
+      viewerState = 'seller';
+    } else if (canonical.lifecycle === 'ended' || canonical.lifecycle === 'cancelled' || canonical.lifecycle === 'settled') {
+      if (row.auction_winner_id && row.auction_winner_id === viewerUserId) {
+        viewerState = 'won';
+      } else if (viewerHighestBid !== null) {
+        viewerState = 'lost';
+      } else if (isWatched) {
+        viewerState = 'watching';
+      }
+    } else if (viewerHighestBid !== null) {
+      viewerState = viewerHighestBid >= currentBid ? 'leading' : 'outbid';
+    } else if (isWatched) {
+      viewerState = 'watching';
+    }
+
+    return {
+      id: row.id,
+      listingId: row.listing_id,
+      seller: {
+        id: row.seller_id,
+        username: row.seller_username ?? 'unknown',
+        displayName: row.seller_display_name ?? null,
+        avatarUrl: row.seller_avatar ?? null,
+      },
+      title: row.title ?? 'Untitled',
+      imageUrl: row.image_url ?? null,
+      brand: row.brand ?? null,
+      category: row.category ?? null,
+      conditionLabel: row.condition_label ?? null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      startingBidGbp: Number(row.starting_bid_gbp),
+      currentBidGbp: currentBid,
+      minimumNextBidGbp: minimumNextBid,
+      buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      bidCount: row.bid_count,
+      lifecycle: canonical.lifecycle,
+      terminalReason: canonical.terminalReason,
+      viewerState,
+      isWatched,
+      winnerBidderId: row.auction_winner_id,
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      createdAt: row.created_at,
+    };
+  }
+
+  const liveItems = liveRes.rows.map(mapRow);
+  const upcomingItems = upcomingRes.rows.map(mapRow);
+  const endedItems = endedRes.rows.map(mapRow);
+  const sellerItems = sellerRes.rows.map(mapRow);
+  const watchlistItems = watchlistRes.rows.map(mapRow);
+
+  // ── Activity counts ──
+  const activity = {
+    activeCount: 0,
+    needsAttentionCount: 0,
+    leadingCount: 0,
+    outbidCount: 0,
+    watchingCount: 0,
+    unresolvedWonCount: 0,
+  };
+
+  for (const item of [...liveItems, ...endedItems, ...watchlistItems]) {
+    if (item.viewerState === 'outbid') { activity.outbidCount++; activity.needsAttentionCount++; activity.activeCount++; }
+    else if (item.viewerState === 'leading') { activity.leadingCount++; activity.activeCount++; }
+    else if (item.viewerState === 'watching') { activity.watchingCount++; activity.activeCount++; }
+    else if (item.viewerState === 'won') { activity.unresolvedWonCount++; activity.needsAttentionCount++; }
+  }
+
+  // ── Deterministic attention priority ──
+  // 1. unresolved won action (won with ended/settled lifecycle and no settled_at = needs action)
+  const wonAction = [...endedItems, ...liveItems].find(
+    (i) => i.viewerState === 'won' && !i.settledAt
+  );
+  // 2. outbid live
+  const outbidLive = liveItems.find((i) => i.viewerState === 'outbid');
+  // 3. leading ending within threshold
+  const leadingEnding = liveItems.find((i) => {
+    if (i.viewerState !== 'leading') return false;
+    const msToEnd = new Date(i.endsAt).getTime() - nowMs;
+    return msToEnd > 0 && msToEnd <= ATTENTION_LEADING_THRESHOLD_MS;
+  });
+  // 4. leading live
+  const leadingLive = liveItems.find((i) => i.viewerState === 'leading');
+  // 5. watching ending within threshold
+  const watchingEnding = liveItems.find((i) => {
+    if (i.viewerState !== 'watching') return false;
+    const msToEnd = new Date(i.endsAt).getTime() - nowMs;
+    return msToEnd > 0 && msToEnd <= ATTENTION_WATCHING_THRESHOLD_MS;
+  });
+  // 6. strongest closing-soon market auction
+  const closingSoonLive = liveItems.find((i) => {
+    const msToEnd = new Date(i.endsAt).getTime() - nowMs;
+    return msToEnd > 0 && msToEnd <= CLOSING_SOON_THRESHOLD_MS;
+  });
+  // 7. strongest live
+  const strongestLive = liveItems[0] ?? null;
+  // 8. nearest upcoming
+  const nearestUpcoming = upcomingItems[0] ?? null;
+
+  let attentionItem: typeof wonAction | null = null;
+  let attentionReason: string | null = null;
+  if (wonAction) { attentionItem = wonAction; attentionReason = 'won_action'; }
+  else if (outbidLive) { attentionItem = outbidLive; attentionReason = 'outbid'; }
+  else if (leadingEnding) { attentionItem = leadingEnding; attentionReason = 'leading_ending'; }
+  else if (leadingLive) { attentionItem = leadingLive; attentionReason = 'leading'; }
+  else if (watchingEnding) { attentionItem = watchingEnding; attentionReason = 'watching_ending'; }
+
+  // Fallback to market auction if no personal attention
+  if (!attentionItem) {
+    if (closingSoonLive) { attentionItem = closingSoonLive; attentionReason = null; }
+    else if (strongestLive) { attentionItem = strongestLive; attentionReason = null; }
+    else if (nearestUpcoming) { attentionItem = nearestUpcoming; attentionReason = null; }
+  }
+
+  // ── Closing soon programme (live items ending within 60 min, excluding attention item) ──
+  const closingSoon = liveItems.filter((i) => {
+    if (attentionItem && i.id === attentionItem.id) return false;
+    const msToEnd = new Date(i.endsAt).getTime() - nowMs;
+    return msToEnd > 0 && msToEnd <= CLOSING_SOON_THRESHOLD_MS;
+  });
+
+  // ── Live auction floor (live items not in closing soon or attention) ──
+  const excludeIds = new Set<string>();
+  if (attentionItem) excludeIds.add(attentionItem.id);
+  closingSoon.forEach((i) => excludeIds.add(i.id));
+  const liveFloor = liveItems.filter((i) => !excludeIds.has(i.id));
+
+  // ── Category worlds ──
+  const categoryRows = categoryRes.rows as { category: string }[];
+  const categoryWorlds: Array<{
+    categoryKey: string;
+    displayName: string;
+    representativeImageUrl: string | null;
+    availableCount?: number;
+  }> = [];
+
+  for (const catRow of categoryRows) {
+    const cat = catRow.category;
+    // Find a representative image from live items
+    const repItem = liveItems.find((i) => i.category === cat && i.imageUrl);
+    categoryWorlds.push({
+      categoryKey: cat,
+      displayName: cat,
+      representativeImageUrl: repItem?.imageUrl ?? null,
+      availableCount: liveItems.filter((i) => i.category === cat).length || undefined,
+    });
+  }
+
+  // ── Recently closed ──
+  const recentlyClosed = endedItems.filter((i) => {
+    if (attentionItem && i.id === attentionItem.id) return false;
+    return true;
+  });
+
+  // ── Seller summary ──
+  let sellerSummary: { liveCount: number; scheduledCount: number; completedCount: number } | undefined;
+  if (sellerItems.length > 0) {
+    sellerSummary = {
+      liveCount: sellerItems.filter((i) => i.lifecycle === 'live').length,
+      scheduledCount: sellerItems.filter((i) => i.lifecycle === 'upcoming').length,
+      completedCount: sellerItems.filter((i) => i.lifecycle === 'ended' || i.lifecycle === 'settled').length,
+    };
+  }
+
+  return {
+    ok: true,
+    serverNow: nowIso,
+    attention: {
+      item: attentionItem ?? null,
+      reason: attentionReason,
+    },
+    activity,
+    closingSoon,
+    live: liveFloor,
+    upcoming: upcomingItems,
+    categoryWorlds,
+    recentlyClosed,
+    sellerSummary,
+    sellerAuctions: sellerItems,
+    watchlist: watchlistItems.filter((i) => {
+      if (attentionItem && i.id === attentionItem.id) return false;
+      return true;
+    }),
+  };
+});
+
 app.get('/auctions', async (request, reply) => {
   const querySchema = z.object({
     status: z.enum(['live', 'scheduled', 'ended', 'all']).default('all'),
