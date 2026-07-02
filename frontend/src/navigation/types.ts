@@ -19,6 +19,7 @@ export type RootStackParamList = {
   PosterStoryActivity: { storyId: string };
   PosterArchive: undefined;
   AuctionHome: undefined;
+  SellerAuctionCentre: undefined;
   CreateAuction: { listingId?: string } | undefined;
   AuctionDetail: { auctionId: string };
   CreateCoOwn:
@@ -64,6 +65,8 @@ export type RootStackParamList = {
   Settings: undefined;
   EditProfile: { focus?: 'avatar' | 'cover' };
   AccountSettings: undefined;
+  AccountControl: undefined;
+  SavedAddresses: undefined;
   Payments: undefined;
   // Phase 16 new screens
   MakeOffer: { itemId: string; price: number; title: string };
@@ -192,6 +195,8 @@ export type RootStackParamList = {
   };
   TradeConfirm: {
     assetId: string;
+    assetTitle?: string;
+    assetImageUrl?: string | null;
     side: 'buy' | 'sell';
     quantity: number;
     totalValue: number;
@@ -203,7 +208,7 @@ export type RootStackParamList = {
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
   Sell: undefined;
-  TradeHub: undefined;
+  TradeHub: { destination?: 'auction' | 'co_own' } | undefined;
 };
 
 export type TabParamList = {

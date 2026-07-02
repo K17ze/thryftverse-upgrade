@@ -265,13 +265,12 @@ describe('UI-22B settings reconstruction architecture guardrails', () => {
     expect(src).toContain('Categories:');
   });
 
-  it('AccountSettingsScreen uses FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipDangerZone', () => {
+  it('AccountSettingsScreen uses FlagshipScreen, FlagshipHeader, FlagshipStickyFooter', () => {
     const src = readSrc('screens/AccountSettingsScreen.tsx');
-    expect(src).toContain("import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipDangerZone } from '../components/flagship'");
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter");
+    expect(src).toContain("from '../components/flagship'");
     expect(src).toContain('<FlagshipScreen');
     expect(src).toContain('<FlagshipStickyFooter');
-    expect(src).toContain('<FlagshipDangerZone');
-    expect(src).toContain('Delete Account');
   });
 
   it('ChangePasswordScreen uses FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection', () => {

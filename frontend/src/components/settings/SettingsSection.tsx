@@ -34,17 +34,18 @@ export function SettingsSection({
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: Space.lg,
+    marginBottom: Space.md + 4,
   },
   title: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
-    marginTop: Space.lg,
-    paddingHorizontal: Space.md,
+    marginTop: Space.md,
+    paddingHorizontal: Space.xs,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    lineHeight: Type.caption.lineHeight,
+    lineHeight: Type.meta.lineHeight,
+    opacity: 0.7,
   },
   titleFlat: {
     fontSize: Type.subtitle.size,
@@ -66,7 +67,6 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    marginHorizontal: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
     elevation: 0,
   },

@@ -47,6 +47,21 @@ describe('resolveNotificationRoute', () => {
     expect(result).toEqual({ screen: 'Chat', params: { conversationId: 'conv_1', partnerUserId: undefined } });
   });
 
+  it('resolves AuctionDetail route with auctionId', () => {
+    const result = resolveNotificationRoute({ screen: 'AuctionDetail', params: { auctionId: 'auc_123' } });
+    expect(result).toEqual({ screen: 'AuctionDetail', params: { auctionId: 'auc_123' } });
+  });
+
+  it('resolves AuctionHome as valid screen', () => {
+    const result = resolveNotificationRoute({ screen: 'AuctionHome' });
+    expect(result).toEqual({ screen: 'AuctionHome' });
+  });
+
+  it('resolves MyBids as valid screen', () => {
+    const result = resolveNotificationRoute({ screen: 'MyBids' });
+    expect(result).toEqual({ screen: 'MyBids' });
+  });
+
   it('falls back to payload orderId when route is null', () => {
     const result = resolveNotificationRoute(null, { orderId: 'ord_fallback' });
     expect(result).toEqual({ screen: 'OrderDetail', params: { orderId: 'ord_fallback' } });
@@ -62,6 +77,11 @@ describe('resolveNotificationRoute', () => {
     expect(result).toEqual({ screen: 'SupportTicketDetail', params: { ticketId: 'tkt_fb' } });
   });
 
+  it('falls back to payload auctionId when route is null', () => {
+    const result = resolveNotificationRoute(null, { auctionId: 'auc_fb' });
+    expect(result).toEqual({ screen: 'AuctionDetail', params: { auctionId: 'auc_fb' } });
+  });
+
   it('returns null when no route or payload identifiers', () => {
     const result = resolveNotificationRoute(null, { foo: 'bar' });
     expect(result).toBeNull();
@@ -74,6 +94,11 @@ describe('resolveNotificationRoute', () => {
 
   it('returns null when route screen is valid but missing required params', () => {
     const result = resolveNotificationRoute({ screen: 'OrderDetail' });
+    expect(result).toBeNull();
+  });
+
+  it('returns null when AuctionDetail route is missing auctionId', () => {
+    const result = resolveNotificationRoute({ screen: 'AuctionDetail' });
     expect(result).toBeNull();
   });
 

@@ -13,6 +13,7 @@ import { T, Price } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
 import { AnimatedHeart } from './AnimatedHeart';
+import { ImageEmptyGraphic } from './ImageEmptyGraphic';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -24,6 +25,13 @@ import { StaggeredItem } from './StaggeredGridEntrance';
 import { PressPresets } from '../hooks/usePremiumPressFeedback';
 
 const DEFAULT_ASPECT_RATIO = 0.8; // 4:5 portrait — common for fashion product photos
+
+// A URI is only usable when it is a non-blank string. Backend rows can surface
+// `''`, `null`, or whitespace-only strings; treat all of these as "no media"
+// so the premium placeholder renders instead of a broken image.
+function isUsableUri(uri: unknown): uri is string {
+  return typeof uri === 'string' && uri.trim().length > 0;
+}
 
 interface ProductCardV2Props {
   item: Listing;
@@ -45,9 +53,18 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
   const { formatFromFiat } = useFormattedPrice();
 
   const [imageAspect, setImageAspect] = useState<number | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
   const aspectRatio = imageAspect ?? DEFAULT_ASPECT_RATIO;
-  const hasVideo = item.images.some((uri) => isVideoUri(uri));
-  const hasMultiple = item.images.length > 1;
+  // Filter to only usable URIs so empty-string backend sentinels never reach
+  // the image layer or the "multiple media" badge.
+  const usableImages = (item.images ?? []).filter(isUsableUri);
+  const primaryImage = usableImages[0] ?? '';
+  const hasUsableImage = primaryImage.length > 0;
+  const hasVideo = usableImages.some((uri) => isVideoUri(uri));
+  const hasMultiple = usableImages.length > 1;
+  const showPlaceholder = !hasUsableImage || imageFailed;
+  const sellerUsername = item.seller?.username ?? null;
+  const sellerAvatar = item.seller?.avatar ?? null;
 
   const handleToggleFav = () => {
     haptic.light(); // ELEVATED: Subtle haptic feedback
@@ -73,18 +90,29 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
     <View style={styles.container}>
       {/* Image - Full bleed, subtle radius for modern feel */}
       <AnimatedPressable onPress={onPress} style={styles.imageWrap} {...PressPresets.card}>
-        <CachedImage
-          uri={item.images?.[0] ?? ''}
-          style={[styles.image, { aspectRatio }]}
-          contentFit="cover"
-          transition={300}
-          onLoad={(e: { source: { width: number; height: number } }) => {
-            const { width, height } = e.source;
-            if (width && height && width > 0 && height > 0) {
-              setImageAspect(width / height);
-            }
-          }}
-        />
+        {showPlaceholder ? (
+          // Premium placeholder — matches Thryftverse visual language via
+          // ImageEmptyGraphic (gradient + geometric texture + icon ring).
+          // Falls back to the 4:5 editorial ratio so the masonry never collapses.
+          <ImageEmptyGraphic
+            icon="shirt-outline"
+            style={[styles.image, { aspectRatio: DEFAULT_ASPECT_RATIO }]}
+          />
+        ) : (
+          <CachedImage
+            uri={primaryImage}
+            style={[styles.image, { aspectRatio }]}
+            contentFit="cover"
+            transition={300}
+            onLoad={(e: { source: { width: number; height: number } }) => {
+              const { width, height } = e.source;
+              if (width && height && width > 0 && height > 0) {
+                setImageAspect(width / height);
+              }
+            }}
+            onError={() => setImageFailed(true)}
+          />
+        )}
 
         {/* Sold overlay */}
         {item.isSold && (
@@ -154,27 +182,50 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
                 <Text style={styles.originalPrice}>{formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })}</Text>
               )}
             </View>
-            {item.likes > 0 && (
-              <View style={styles.likes}>
-                <Ionicons name="heart" size={9} color={Colors.textMuted} />
-                <T.Caption style={{ fontSize: 11, lineHeight: 14 }}>{item.likes}</T.Caption>
-              </View>
-            )}
+            {/* Likes row stays present even when backend reports 0 so the card
+                keeps its social-proof rhythm. Muted when there is no count. */}
+            <View style={styles.likes}>
+              <Ionicons
+                name="heart"
+                size={9}
+                color={item.likes > 0 ? Colors.textMuted : Colors.border}
+              />
+              <T.Caption style={{ fontSize: 11, lineHeight: 14, color: item.likes > 0 ? undefined : Colors.textMuted }}>
+                {item.likes > 0 ? item.likes : '—'}
+              </T.Caption>
+            </View>
           </View>
 
           {item.size ? <T.Caption numberOfLines={1} style={{ marginTop: 1 }}>{item.size}</T.Caption> : null}
-          {item.seller?.username ? (
+          {sellerUsername ? (
             <View style={styles.sellerRow}>
-              {item.seller.avatar ? (
+              {sellerAvatar ? (
                 <CachedImage
-                  uri={item.seller.avatar}
+                  uri={sellerAvatar}
                   style={styles.sellerAvatar}
                   contentFit="cover"
                 />
-              ) : null}
-              <Text style={styles.sellerName} numberOfLines={1}>@{item.seller.username}</Text>
+              ) : (
+                // Premium compact seller placeholder — keeps alignment and
+                // avoids awkward whitespace when avatar is missing.
+                <View style={styles.sellerAvatarPlaceholder}>
+                  <Ionicons name="person" size={9} color={Colors.textMuted} />
+                </View>
+              )}
+              <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
             </View>
-          ) : null}
+          ) : (
+            // Premium compact seller placeholder when seller is entirely absent
+            // — never leaves a blank gap, never fabricates a username.
+            <View style={styles.sellerRow}>
+              <View style={styles.sellerAvatarPlaceholder}>
+                <Ionicons name="storefront-outline" size={9} color={Colors.textMuted} />
+              </View>
+              <Text style={[styles.sellerName, { color: Colors.textMuted }]} numberOfLines={1}>
+                Thryftverse seller
+              </Text>
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -355,6 +406,16 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
+  },
+  sellerAvatarPlaceholder: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sellerName: {
     fontSize: 11,

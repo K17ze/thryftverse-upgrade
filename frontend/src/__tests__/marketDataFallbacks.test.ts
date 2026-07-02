@@ -166,7 +166,10 @@ describe('listings api behavior', () => {
     const result = await fetchListingsFromApi();
 
     expect(result.source).toBe('api');
-    expect(result.error).toBe('request timeout');
+    // Error copy is now friendly (never raw fetch URLs/stacks) — see
+    // services/listingMapper.ts friendlyBackendError. The friendly translator
+    // maps timeout messages to premium-toned cached-listings copy.
+    expect(result.error).toBe('The feed took too long to respond. Showing cached listings.');
     expect(result.listings).toEqual([]);
   });
 });

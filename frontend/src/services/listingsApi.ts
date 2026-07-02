@@ -1,5 +1,6 @@
 import { Listing, ListingSeller } from '../data/mockData';
 import { fetchJson } from '../lib/apiClient';
+import { mapBackendListingToListing, friendlyBackendError } from './listingMapper';
 
 export { ListingSeller };
 
@@ -33,46 +34,6 @@ export interface ListingsSyncResult {
   nextCursor?: string;
 }
 
-function deriveBrand(title: string) {
-  const normalized = title.trim();
-  if (!normalized) return 'Thryftverse';
-  const parts = normalized.split(' ');
-  if (parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[1]}`;
-}
-
-function getFallbackImage(_id: string) {
-  return '';
-}
-
-function mapApiListingToApp(row: ApiListingRow): Listing {
-  const price = Number(row.priceGbp ?? 0);
-  const resolvedImages = row.images?.length
-    ? row.images
-    : row.imageUrl
-      ? [row.imageUrl]
-      : [getFallbackImage(row.id)];
-
-  return {
-    id: row.id,
-    title: row.title || 'Untitled listing',
-    brand: row.brand || deriveBrand(row.title),
-    size: row.size || 'One size',
-    condition: (row.condition as Listing['condition']) || 'Very good',
-    price,
-    images: resolvedImages,
-    likes: 0,
-    isSold: row.status === 'sold',
-    sellerId: row.sellerId || 'u1',
-    seller: row.seller ?? null,
-    category: row.category || 'women',
-    subcategory: 'Clothing',
-    description: row.description || 'No description provided.',
-    createdAt: row.createdAt,
-    originalPrice: row.originalPriceGbp != null ? Number(row.originalPriceGbp) : undefined,
-  };
-}
-
 export async function fetchListingsFromApi(cursor?: string): Promise<ListingsSyncResult> {
   try {
     const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
@@ -80,7 +41,7 @@ export async function fetchListingsFromApi(cursor?: string): Promise<ListingsSyn
     const rows = Array.isArray(payload.items) ? payload.items : [];
 
     return {
-      listings: rows.map((row) => mapApiListingToApp(row)),
+      listings: rows.map((row) => mapBackendListingToListing(row)),
       source: 'api',
       error: rows.length === 0 ? 'API returned zero listings.' : undefined,
       nextCursor: payload.nextCursor,
@@ -89,7 +50,7 @@ export async function fetchListingsFromApi(cursor?: string): Promise<ListingsSyn
     return {
       listings: [],
       source: 'api',
-      error: (error as Error).message,
+      error: friendlyBackendError(error),
     };
   }
 }
@@ -149,7 +110,7 @@ export async function fetchFilteredListings(options?: {
     const rows = Array.isArray(payload.items) ? payload.items : [];
 
     return {
-      listings: rows.map((row) => mapApiListingToApp(row)),
+      listings: rows.map((row) => mapBackendListingToListing(row)),
       source: 'api',
       error: rows.length === 0 ? 'No listings match your filters.' : undefined,
       nextCursor: payload.nextCursor,
@@ -158,7 +119,7 @@ export async function fetchFilteredListings(options?: {
     return {
       listings: [],
       source: 'api',
-      error: (error as Error).message,
+      error: friendlyBackendError(error),
     };
   }
 }
@@ -234,6 +195,7 @@ export interface ListingSingleResponse {
 
 export interface ListingsResponse {
   items: ListingApiItem[];
+  nextCursor?: string | null;
 }
 
 export async function createListingOnApi(body: ListingCreateBody): Promise<{ ok: boolean; listingId: string }> {
@@ -263,12 +225,16 @@ export async function deleteListingOnApi(listingId: string): Promise<{ ok: boole
   return fetchJson<{ ok: boolean }>(`/listings/${listingId}`, { method: 'DELETE' });
 }
 
-export async function fetchUserListingsFromApi(userId: string, options?: { status?: string; limit?: number }): Promise<ListingsResponse> {
+export async function fetchUserListingsFromApi(
+  userId: string,
+  options?: { status?: string; limit?: number; cursor?: string }
+): Promise<ListingsResponse> {
   const params = new URLSearchParams();
   if (options?.status) params.set('status', options.status);
   if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.cursor) params.set('cursor', options.cursor);
   const qs = params.toString();
-  return fetchJson<ListingsResponse>(`/users/${userId}/listings${qs ? `?${qs}` : ''}`);
+  return fetchJson<ListingsResponse>(`/users/${encodeURIComponent(userId)}/listings${qs ? `?${qs}` : ''}`);
 }
 
 export async function createListingImageOnApi(body: { id: string; listingId: string; imageUrl: string; sortOrder: number }): Promise<{ ok: boolean }> {
@@ -285,9 +251,9 @@ export async function fetchRelatedListings(listingId: string): Promise<{ ok: boo
     if (!payload.ok) return { ok: false, error: 'Related listings request failed' };
     return {
       ok: true,
-      items: payload.items.map((row) => mapApiListingToApp(row)),
+      items: payload.items.map((row) => mapBackendListingToListing(row)),
     };
   } catch (error) {
-    return { ok: false, error: (error as Error).message };
+    return { ok: false, error: friendlyBackendError(error) };
   }
 }

@@ -62,7 +62,7 @@ export function PinterestMasonryGrid({
 
   return (
     <View style={[styles.grid, { gap, paddingHorizontal: horizontalPadding }]}>
-      {columns.map((columnItems, colIndex) => (
+      {items.length === 0 ? null : columns.map((columnItems, colIndex) => (
         <View key={colIndex} style={[styles.column, { width: colWidth, gap }]}>
           {columnItems.map(({ item, index }) => (
             enableEntranceAnimation ? (

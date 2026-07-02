@@ -11,6 +11,7 @@ export interface ProductIdentitySummaryProps {
   originalPrice?: string | null;
   hasDiscount?: boolean;
   protectionTotal?: string | null;
+  izeText?: string | null;
   engagement?: ListingEngagementSummary;
 }
 
@@ -21,6 +22,7 @@ export function ProductIdentitySummary({
   originalPrice,
   hasDiscount,
   protectionTotal,
+  izeText,
   engagement,
 }: ProductIdentitySummaryProps) {
   const engagementParts: string[] = [];
@@ -52,6 +54,10 @@ export function ProductIdentitySummary({
           <Text style={styles.originalPrice}>{originalPrice}</Text>
         ) : null}
       </View>
+
+      {izeText ? (
+        <Text style={styles.izeText}>{izeText}</Text>
+      ) : null}
 
       {protectionTotal ? (
         <Text style={styles.protectionTotal}>
@@ -108,6 +114,13 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     marginTop: Space.xs,
+  },
+  izeText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    letterSpacing: 0.1,
   },
   engagementText: {
     fontSize: 12,

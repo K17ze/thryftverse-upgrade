@@ -20,6 +20,7 @@ import PosterArchiveScreen from '../screens/PosterArchiveScreen';
 import SellScreen from '../screens/SellScreen';
 import TradeHubScreen from '../screens/TradeHubScreen';
 import AuctionHomeScreen from '../screens/AuctionHomeScreen';
+import SellerAuctionCentreScreen from '../screens/SellerAuctionCentreScreen';
 import CreateAuctionScreen from '../screens/CreateAuctionScreen';
 import AuctionDetailScreen from '../screens/AuctionDetailScreen';
 import CreateCoOwnScreen from '../screens/CreateSyndicateScreen';
@@ -55,6 +56,8 @@ import PersonalisationScreen from '../screens/PersonalisationScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import AccountSettingsScreen from '../screens/AccountSettingsScreen';
+import AccountControlScreen from '../screens/AccountControlScreen';
+import SavedAddressesScreen from '../screens/SavedAddressesScreen';
 import PaymentsScreen from '../screens/PaymentsScreen';
 
 // Phase 16 new screens
@@ -225,6 +228,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Sell" component={SellScreen} options={modalScreenOptions} />
       <Stack.Screen name="TradeHub" component={TradeHubScreen} />
       <Stack.Screen name="AuctionHome" component={AuctionHomeScreen} />
+      <Stack.Screen name="SellerAuctionCentre" component={SellerAuctionCentreScreen} />
       <Stack.Screen name="CreateAuction" component={CreateAuctionScreen} options={modalScreenOptions} />
       <Stack.Screen name="AuctionDetail" component={AuctionDetailScreen} />
       <Stack.Screen name="CreateCoOwn" component={CreateCoOwnScreen} options={modalScreenOptions} />
@@ -258,6 +262,8 @@ export default function AppNavigator() {
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
+      <Stack.Screen name="AccountControl" component={AccountControlScreen} />
+      <Stack.Screen name="SavedAddresses" component={SavedAddressesScreen} />
       <Stack.Screen name="Payments" component={PaymentsScreen} />
 
       {/* Phase 16 new screens */}

@@ -8,11 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-  Pressable,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { Space, Typography } from '../theme/designTokens';
@@ -24,9 +20,9 @@ import { updateMyProfile } from '../services/profileApi';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { EditProfilePreview } from '../components/profile/EditProfilePreview';
 import { ProfileMediaEditor } from '../components/profile/ProfileMediaEditor';
+import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter } from '../components/flagship';
 
 export default function EditProfileScreen() {
-  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
@@ -160,19 +156,15 @@ export default function EditProfileScreen() {
 
   if (!user) {
     return (
-      <View style={styles.container}>
-        <View style={[styles.navHeader, { paddingTop: insets.top }]}>
-          <Pressable
-            style={styles.navCancelBtn}
-            onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Text style={styles.navCancelText}>Cancel</Text>
-          </Pressable>
-          <Text style={styles.navTitle}>Edit profile</Text>
-          <View style={styles.navSpacer} />
-        </View>
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Edit profile"
+            subtitle="Public profile"
+            onBack={() => navigation.goBack()}
+          />
+        }
+      >
         <EmptyState
           icon="person-outline"
           title="Not signed in"
@@ -180,28 +172,37 @@ export default function EditProfileScreen() {
           ctaLabel="Sign In"
           onCtaPress={() => (navigation as any).navigate('Login')}
         />
-      </View>
+      </FlagshipScreen>
     );
   }
 
   const saveDisabled = !hasChanges || isSaving;
 
   return (
-    <View style={styles.container}>
-      {/* ── 1. COMPACT NAVIGATION HEADER ── */}
-      <View style={[styles.navHeader, { paddingTop: insets.top }]}>
-        <Pressable
-          style={styles.navCancelBtn}
-          onPress={handleDiscard}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel and go back"
-        >
-          <Text style={styles.navCancelText}>Cancel</Text>
-        </Pressable>
-        <Text style={styles.navTitle}>Edit profile</Text>
-        <View style={styles.navSpacer} />
-      </View>
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Edit profile"
+          subtitle="Public profile"
+          onBack={handleDiscard}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      stickyFooter={
+        <FlagshipStickyFooter
+          actions={[
+            {
+              label: isSaving ? 'Saving…' : 'Save changes',
+              onPress: () => void handleSave(),
+              variant: 'primary',
+              disabled: saveDisabled,
+              loading: isSaving,
+            },
+          ]}
+        />
+      }
+    >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -209,7 +210,7 @@ export default function EditProfileScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: Space.xl }}
         >
           {/* ── 2. LIVE PROFILE PREVIEW ── */}
           <EditProfilePreview
@@ -228,6 +229,7 @@ export default function EditProfileScreen() {
 
           {/* ── 3. COVER EDITING CONTROLS ── */}
           <View style={styles.mediaEditorZone}>
+            <Text style={styles.publicProfileNote}>These fields appear on your public profile.</Text>
             <ProfileMediaEditor
               label="Cover"
               status={coverState.status}
@@ -252,7 +254,7 @@ export default function EditProfileScreen() {
 
           {/* ── 5. CORE IDENTITY FIELDS ── */}
           <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Identity</Text>
+            <Text style={styles.sectionHeading}>Public identity</Text>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Display name</Text>
@@ -265,6 +267,7 @@ export default function EditProfileScreen() {
                 autoCapitalize="words"
                 returnKeyType="next"
               />
+              <Text style={styles.fieldHelper}>Shown on your public profile.</Text>
               <View style={styles.hairline} />
             </View>
 
@@ -279,14 +282,14 @@ export default function EditProfileScreen() {
                 autoCapitalize="none"
                 returnKeyType="next"
               />
-              <Text style={styles.fieldHelper}>How people find you on Thryftverse.</Text>
+              <Text style={styles.fieldHelper}>Your public handle. How people find you on Thryftverse.</Text>
               <View style={styles.hairline} />
             </View>
           </View>
 
           {/* ── 6. BIO AND ADDITIONAL FIELDS ── */}
           <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>About</Text>
+            <Text style={styles.sectionHeading}>Public about</Text>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Bio</Text>
@@ -325,71 +328,23 @@ export default function EditProfileScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* ── 8. STICKY SAVE ACTION ── */}
-      <View style={[styles.stickySave, { paddingBottom: Math.max(insets.bottom, Space.sm) }]}>
-        <AnimatedPressable
-          style={[styles.saveBtn, saveDisabled && styles.saveBtnDisabled]}
-          onPress={handleSave}
-          activeOpacity={0.85}
-          disabled={saveDisabled}
-          accessibilityRole="button"
-          accessibilityLabel="Save profile changes"
-          accessibilityState={{ disabled: saveDisabled }}
-        >
-          {isSaving ? (
-            <ActivityIndicator size="small" color={Colors.textInverse} />
-          ) : (
-            <Text style={[styles.saveBtnText, saveDisabled && styles.saveBtnTextDisabled]}>
-              Save
-            </Text>
-          )}
-        </AnimatedPressable>
-      </View>
-    </View>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-
-  // Nav header
-  navHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.background,
-    zIndex: 10,
-  },
-  navCancelBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  navCancelText: {
-    fontSize: 15,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-  },
-  navTitle: {
-    fontSize: 16,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.2,
-  },
-  navSpacer: {
-    width: 60,
-  },
-
   // Media editor zone
   mediaEditorZone: {
     paddingVertical: 2,
+  },
+  publicProfileNote: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+    letterSpacing: 0.3,
   },
 
   // Section groups
@@ -447,34 +402,4 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
-  // Sticky save
-  stickySave: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
-  saveBtn: {
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtnDisabled: {
-    backgroundColor: Colors.surfaceAlt,
-  },
-  saveBtnText: {
-    fontSize: 16,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
-  },
-  saveBtnTextDisabled: {
-    color: Colors.textMuted,
-  },
 });

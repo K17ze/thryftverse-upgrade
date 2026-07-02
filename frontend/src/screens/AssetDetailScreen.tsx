@@ -1,29 +1,52 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, StatusBar } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, StatusBar, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation,
+  FadeInDown,
+} from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { EmptyState } from '../components/EmptyState';
 import { AppButton } from '../components/ui/AppButton';
-import { CachedImage } from '../components/CachedImage';
-import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, Typography } from '../theme/designTokens';
-import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
-import { FlagshipActionCluster } from '../components/flagship';
+import { Headline } from '../components/ui/Text';
 import { FinancialDisclosure } from '../components/FinancialDisclosure';
 import { fetchCoOwnAssetById, fetchCoOwnOrderBook, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
+import { toIze, formatIzeAmount } from '../utils/currency';
+import {
+  CommerceMediaStage,
+  CommerceStickyDock,
+  CommerceStateCanvas,
+  CommercePartyStrip,
+  CategoryEvidence,
+} from '../components/commerce';
+import { ProductFamilyBadge, RecommendationRail } from '../components/product';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
+import { ShareSheet } from '../components/ShareSheet';
+import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
+import { resolveCoOwnConversation } from '../utils/coOwnMessaging';
+import {
+  buildCoOwnViewModel,
+  useProductSocialState,
+  useRecommendations,
+  isRecommendationLook,
+} from '../platform/product';
+import type { RecommendationLook } from '../platform/product';
+import { Listing } from '../data/mockData';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -33,8 +56,10 @@ export default function AssetDetailScreen() {
   const route = useRoute<RouteT>();
   const { isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
+  const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
-  const { formatFromFiat } = useFormattedPrice();
+  const upsertConversation = useStore((state) => state.upsertConversation);
+  const { formatFromFiat, goldRates, displayMode } = useFormattedPrice();
   const { show } = useToast();
 
   const assetId = route.params?.assetId;
@@ -44,6 +69,12 @@ export default function AssetDetailScreen() {
   const [yourUnits, setYourUnits] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
+  const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
+
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
 
   React.useEffect(() => {
     if (!assetId) { setIsLoading(false); setIsError(true); return; }
@@ -78,236 +109,528 @@ export default function AssetDetailScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-        <TradeHeader title="Asset Detail" onBack={() => navigation.goBack()} />
-        <View style={styles.centered}>
-          <Meta style={styles.emptyText}>Loading asset details...</Meta>
-        </View>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <CommerceStateCanvas state="loading" />
+      </View>
     );
   }
 
   if (isError || !asset) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-        <TradeHeader title="Asset Detail" onBack={() => navigation.goBack()} />
-        <EmptyState
-          icon="analytics-outline"
+      <View style={styles.container}>
+        <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <CommerceStateCanvas
+          state="error"
           title="Asset not found"
-          subtitle="This co-own may have been delisted or does not exist yet."
-          ctaLabel="Back to hub"
-          onCtaPress={() => navigation.navigate('CoOwnHub')}
+          message="This co-own may have been delisted or does not exist yet."
+          onRetry={() => navigation.navigate('CoOwnHub')}
+          retryLabel="Back to hub"
         />
-      </SafeAreaView>
+      </View>
     );
   }
 
   const deltaPct = asset.marketMovePct24h ?? 0;
-  const delta = deltaPct;
-  const marketValue = asset.totalUnits * asset.unitPriceGbp;
-  const circulatingValue = Math.max(0, asset.totalUnits - asset.availableUnits) * asset.unitPriceGbp;
+  const isIssuer = currentUser?.id === asset.issuerId;
+  const isHolder = yourUnits > 0;
   const issuerHandle = asset.issuerId.slice(0, 12);
   const canMessageIssuer = currentUser?.id !== asset.issuerId;
 
-  const ownerAccounts: Array<{ id: string; handle: string; role: string; units: number }> = [];
+  const unitPriceIze = goldRates && displayMode !== 'fiat'
+    ? formatIzeAmount(toIze(asset.unitPriceGbp, 'GBP', goldRates))
+    : null;
+
+  const yourPositionValue = yourUnits * asset.unitPriceGbp;
+  const yourPositionIze = goldRates && displayMode !== 'fiat'
+    ? formatIzeAmount(toIze(yourPositionValue, 'GBP', goldRates))
+    : null;
+
+  const availableUnits = Math.max(0, asset.availableUnits);
+  const totalUnits = asset.totalUnits;
+  const availablePct = totalUnits > 0 ? (availableUnits / totalUnits) * 100 : 0;
+
+  const bestBid = orderBook.bids.length > 0 ? orderBook.bids[0] : null;
+  const bestAsk = orderBook.asks.length > 0 ? orderBook.asks[0] : null;
+
+  const ownerAccounts: Array<{ id: string; handle: string; role: string; units: number; isYou?: boolean }> = [];
   ownerAccounts.push({
     id: `issuer_${asset.issuerId}`,
     handle: `@${issuerHandle}`,
     role: 'Issuer treasury',
-    units: Math.max(0, asset.availableUnits),
+    units: availableUnits,
   });
-  if (yourUnits > 0) {
+  if (isHolder) {
     ownerAccounts.push({
       id: 'you',
       handle: currentUser ? `@${currentUser.username}` : '@you',
       role: 'Your position',
       units: yourUnits,
+      isYou: true,
     });
   }
   const allocatedUnits = ownerAccounts.reduce((sum, account) => sum + account.units, 0);
-  const remainingUnits = Math.max(0, asset.totalUnits - allocatedUnits);
+  const remainingUnits = Math.max(0, totalUnits - allocatedUnits);
   if (remainingUnits > 0) {
     ownerAccounts.push({
       id: 'other_holders',
-      handle: `${Math.max(0, asset.holders - (yourUnits > 0 ? 1 : 0) - 1)} other holders`,
+      handle: `${Math.max(0, asset.holders - (isHolder ? 1 : 0) - 1)} other holders`,
       role: 'Co-owners',
       units: remainingUnits,
     });
   }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+  const images = asset.imageUrl ? [asset.imageUrl] : [];
 
-      <TradeHeader
-        title="Asset Detail"
-        onBack={() => navigation.goBack()}
-        rightAction={
+  // ── PRODUCT-01: unified view model + shared social state + recommendations ──
+  const viewModel = React.useMemo(() => {
+    return buildCoOwnViewModel({
+      asset,
+      viewerUnits: yourUnits,
+      orderBook,
+      currentUserId: currentUser?.id,
+    });
+  }, [asset, yourUnits, orderBook, currentUser?.id]);
+
+  const social = useProductSocialState(viewModel);
+
+  const { data: recommendationsData, isLoading: recsLoading } = useRecommendations(
+    asset.listingId
+  );
+  const recommendationSections = recommendationsData?.sections ?? [];
+  const railSections = recommendationSections.filter(
+    (s) => s.key !== 'seen_in_looks' && s.key !== 'continue_exploring'
+  );
+  const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
+
+  const handlePressRecommendation = (recItem: Listing) => {
+    navigation.push('ItemDetail', { itemId: recItem.id });
+  };
+  const handlePressLook = (lookItem: RecommendationLook) => {
+    navigation.navigate('LookDetail', { lookId: lookItem.id });
+  };
+
+  const familyStateAccent = !asset.isOpen ? 'Closed' : availableUnits <= 0 ? 'Unavailable' : 'Open';
+
+  const headerStyle = useAnimatedStyle(() => {
+    const threshold = 200;
+    const opacity = interpolate(scrollY.value, [threshold - 60, threshold], [0, 1], Extrapolation.CLAMP);
+    return { opacity };
+  });
+
+  return (
+    <View style={styles.container}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+      <Reanimated.View style={[styles.collapsedHeader, { paddingTop: Math.max(insets.top, Space.sm) }, headerStyle]}>
+        <View style={styles.collapsedRow}>
           <AnimatedPressable
-            style={styles.iconBtn}
-            onPress={() => navigation.navigate('CoOwnOrderHistory')}
+            style={styles.collapsedBackBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityLabel="Go back"
             accessibilityRole="button"
+          >
+            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+          </AnimatedPressable>
+          <Text style={styles.collapsedTitle} numberOfLines={1}>{asset.title}</Text>
+          <AnimatedPressable
+            style={styles.collapsedBackBtn}
+            onPress={() => navigation.navigate('CoOwnOrderHistory')}
             accessibilityLabel="View order history"
+            accessibilityRole="button"
           >
             <Ionicons name="time-outline" size={20} color={Colors.textPrimary} />
           </AnimatedPressable>
-        }
-      />
+        </View>
+      </Reanimated.View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-          <CachedImage uri={asset.imageUrl ?? ''} style={styles.heroImage} containerStyle={styles.heroImageContainer} contentFit="cover" />
-        </Reanimated.View>
+      <Reanimated.ScrollView
+        showsVerticalScrollIndicator={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 100 }}
+      >
+        <CommerceMediaStage
+          images={images}
+          objectId={asset.id}
+          topInset={insets.top}
+          scrollY={scrollY}
+          onBack={() => navigation.goBack()}
+          onShare={social.openShare}
+          onSave={social.openCollectionPicker}
+          onToggleFav={social.toggleLike}
+          isFav={social.isLiked}
+          isSaved={social.isSavedToCollection}
+          showSaveControl
+          showFavControl
+          heightFraction={0.55}
+          onOpenFullscreen={() => {}}
+          overlayTopContent={
+            <View style={styles.familyBadgeOverlay}>
+              <ProductFamilyBadge family="co_own" stateAccent={familyStateAccent} compact />
+            </View>
+          }
+        />
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(50)}>
-          <BodyEmphasis style={styles.assetTitle}>{asset.title}</BodyEmphasis>
-          <Meta style={styles.assetSub}>{asset.totalUnits} units · {asset.settlementMode} settlement</Meta>
-        </Reanimated.View>
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)}
+          style={styles.identityStage}
+        >
+          <Text style={styles.assetEyebrow}>Co-own asset</Text>
+          <Headline style={styles.assetTitle} numberOfLines={2}>{asset.title}</Headline>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
-          <View style={styles.issuerActionRow}>
-            <AnimatedPressable
-              style={styles.issuerChip}
-              onPress={() => navigation.navigate('UserProfile', { userId: asset.issuerId })}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={`Open @${issuerHandle} profile`}
-            >
-              <View style={[styles.issuerAvatarContainer, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ fontSize: 12, fontFamily: Typography.family.bold, color: Colors.textPrimary }}>
-                  {issuerHandle.slice(0, 1).toUpperCase()}
+          <View style={styles.priceStage}>
+            <View style={styles.pricePrimary}>
+              <Text style={styles.priceLabel}>Unit price</Text>
+              <Text style={styles.priceValue}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</Text>
+              {unitPriceIze && (
+                <Text style={styles.priceIze}>{unitPriceIze}</Text>
+              )}
+            </View>
+
+            {deltaPct !== 0 && (
+              <View style={[styles.deltaPill, deltaPct >= 0 ? styles.deltaUp : styles.deltaDown]}>
+                <Ionicons
+                  name={deltaPct >= 0 ? 'trending-up-outline' : 'trending-down-outline'}
+                  size={13}
+                  color={deltaPct >= 0 ? Colors.success : Colors.danger}
+                />
+                <Text style={[styles.deltaText, { color: deltaPct >= 0 ? Colors.success : Colors.danger }]}>
+                  {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%
                 </Text>
               </View>
-              <BodyEmphasis style={styles.issuerHandle}>@{issuerHandle}</BodyEmphasis>
-              <Meta style={styles.issuerRole}>Issuer</Meta>
-            </AnimatedPressable>
+            )}
+          </View>
 
-            <AnimatedPressable
-              style={[styles.messageBtn, !canMessageIssuer && styles.messageBtnDisabled]}
-              onPress={() => {
-                if (!canMessageIssuer) return;
+          <View style={styles.availabilityRow}>
+            <View style={styles.availabilityInfo}>
+              <Text style={styles.availabilityLabel}>Available</Text>
+              <Text style={styles.availabilityValue}>
+                {availableUnits} / {totalUnits} units
+              </Text>
+            </View>
+            <View style={styles.availabilityBar}>
+              <View style={[styles.availabilityFill, { width: `${availablePct}%` }]} />
+            </View>
+          </View>
+
+          {isHolder && (
+            <View style={styles.positionCard}>
+              <View style={styles.positionHeader}>
+                <Ionicons name="wallet-outline" size={16} color={Colors.brand} />
+                <Text style={styles.positionTitle}>Your position</Text>
+              </View>
+              <View style={styles.positionRow}>
+                <View style={styles.positionMetric}>
+                  <Text style={styles.positionMetricLabel}>Units</Text>
+                  <Text style={styles.positionMetricValue}>{yourUnits}</Text>
+                </View>
+                <View style={styles.positionMetric}>
+                  <Text style={styles.positionMetricLabel}>Value</Text>
+                  <Text style={styles.positionMetricValue}>{formatFromFiat(yourPositionValue, 'GBP')}</Text>
+                </View>
+                {yourPositionIze && (
+                  <View style={styles.positionMetric}>
+                    <Text style={styles.positionMetricLabel}>1ZE</Text>
+                    <Text style={styles.positionMetricValueSmall}>{yourPositionIze}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+        </Reanimated.View>
+
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(130)}
+        >
+          <CommercePartyStrip
+            party={{
+              id: asset.issuerId,
+              username: issuerHandle,
+              displayName: `@${issuerHandle}`,
+              avatar: null,
+              location: null,
+              roleLabel: 'Issuer',
+            }}
+            facts={[
+              { label: 'Settlement', value: asset.settlementMode },
+              { label: 'Total supply', value: `${totalUnits}u` },
+            ]}
+            onOpenProfile={() => navigation.navigate('UserProfile', { userId: asset.issuerId })}
+            onMessage={canMessageIssuer ? async () => {
+              if (!currentUser?.id) {
+                show('Sign in to message the issuer.', 'error');
+                return;
+              }
+              if (isResolvingConversation) return;
+              setIsResolvingConversation(true);
+              try {
+                const conversation = await resolveCoOwnConversation(
+                  currentUser.id,
+                  asset.issuerId,
+                  issuerHandle,
+                  asset.listingId,
+                );
+                upsertConversation(conversation);
                 navigation.navigate('Chat', {
-                  conversationId: `${asset.issuerId}_${asset.listingId}`,
+                  conversationId: conversation.id,
                   focusQuery: issuerHandle,
                   partnerUserId: asset.issuerId,
                 });
-              }}
-              disabled={!canMessageIssuer}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-            >
-              <Ionicons name={canMessageIssuer ? 'chatbubble-outline' : 'checkmark'} size={16} color={Colors.textPrimary} />
-            </AnimatedPressable>
+              } catch {
+                show('Unable to open conversation. Please try again.', 'error');
+              } finally {
+                setIsResolvingConversation(false);
+              }
+            } : undefined}
+            messageLabel="Message"
+          />
+        </Reanimated.View>
+
+        {/* ── Asset evidence — editorial details when available ── */}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)}
+        >
+          {(() => {
+            const evidenceGroups = resolveEvidenceGroups({
+              category: asset.category,
+              condition: asset.conditionLabel,
+              description: asset.description,
+            });
+            return evidenceGroups.length > 0 ? (
+              <CategoryEvidence groups={evidenceGroups} />
+            ) : null;
+          })()}
+        </Reanimated.View>
+
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
+          style={styles.sectionWrap}
+        >
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Live market</Text>
+
+            <View style={styles.orderBookGrid}>
+              <View style={styles.orderBookCol}>
+                <View style={styles.orderBookHeader}>
+                  <Ionicons name="arrow-up-circle-outline" size={14} color={Colors.success} />
+                  <Text style={styles.orderBookHeaderText}>Buy interest</Text>
+                </View>
+                {bestBid && (
+                  <Text style={styles.orderBookBest}>
+                    Best: {formatFromFiat(bestBid.unitPriceGbp, 'GBP')}
+                  </Text>
+                )}
+                {orderBook.bids.slice(0, 5).map((entry: any, i: number) => (
+                  <View key={`bid-${i}`} style={styles.orderBookRow}>
+                    <Text style={styles.orderBookPrice}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
+                    <Text style={styles.orderBookUnits}>{entry.units}u</Text>
+                  </View>
+                ))}
+                {orderBook.bids.length === 0 && (
+                  <Text style={styles.orderBookEmpty}>No buy interest yet</Text>
+                )}
+              </View>
+
+              <View style={styles.orderBookDivider} />
+
+              <View style={styles.orderBookCol}>
+                <View style={styles.orderBookHeader}>
+                  <Ionicons name="arrow-down-circle-outline" size={14} color={Colors.danger} />
+                  <Text style={styles.orderBookHeaderText}>Sell availability</Text>
+                </View>
+                {bestAsk && (
+                  <Text style={styles.orderBookBest}>
+                    Best: {formatFromFiat(bestAsk.unitPriceGbp, 'GBP')}
+                  </Text>
+                )}
+                {orderBook.asks.slice(0, 5).map((entry: any, i: number) => (
+                  <View key={`ask-${i}`} style={styles.orderBookRow}>
+                    <Text style={styles.orderBookPrice}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
+                    <Text style={styles.orderBookUnits}>{entry.units}u</Text>
+                  </View>
+                ))}
+                {orderBook.asks.length === 0 && (
+                  <Text style={styles.orderBookEmpty}>No sell offers yet</Text>
+                )}
+              </View>
+            </View>
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
-          <TradeCard>
-            <View style={styles.priceRow}>
-              <View>
-                <Meta>Current Price</Meta>
-                <BodyEmphasis style={styles.priceValue}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</BodyEmphasis>
-              </View>
-              <View style={[styles.deltaPill, deltaPct >= 0 ? styles.deltaUp : styles.deltaDown]}>
-                <Ionicons name={deltaPct >= 0 ? 'trending-up-outline' : 'trending-down-outline'} size={14} color={deltaPct >= 0 ? Colors.success : Colors.danger} />
-                <Body style={[styles.deltaText, { color: deltaPct >= 0 ? Colors.success : Colors.danger }]}>
-                  {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%
-                </Body>
-              </View>
-            </View>
-          </TradeCard>
-        </Reanimated.View>
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
-          <TradeCard>
-            <Meta style={styles.sectionLabel}>PRICE HISTORY</Meta>
-            <View style={styles.chartContainer}>
-              <Meta style={styles.chartEmpty}>Price history is not available for this asset.</Meta>
-            </View>
-          </TradeCard>
-        </Reanimated.View>
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
-          <TradeCard>
-            <Meta style={styles.sectionLabel}>ORDER BOOK</Meta>
-            <View style={styles.orderBookGrid}>
-              <View style={styles.orderBookCol}>
-                <Meta style={styles.orderBookHeader}>BIDS</Meta>
-                {orderBook.bids.slice(0, 5).map((entry: any, i: number) => (
-                  <View key={`bid-${i}`} style={styles.orderBookRow}>
-                    <Body style={styles.orderBookPrice}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Body>
-                    <Meta>{entry.units}u</Meta>
-                  </View>
-                ))}
-                {orderBook.bids.length === 0 && <Meta style={styles.orderBookEmpty}>No bids</Meta>}
-              </View>
-              <View style={styles.orderBookCol}>
-                <Meta style={styles.orderBookHeader}>ASKS</Meta>
-                {orderBook.asks.slice(0, 5).map((entry: any, i: number) => (
-                  <View key={`ask-${i}`} style={styles.orderBookRow}>
-                    <Body style={styles.orderBookPrice}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Body>
-                    <Meta>{entry.units}u</Meta>
-                  </View>
-                ))}
-                {orderBook.asks.length === 0 && <Meta style={styles.orderBookEmpty}>No asks</Meta>}
-              </View>
-            </View>
-          </TradeCard>
-        </Reanimated.View>
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}>
-          <TradeCard>
-            <Meta style={styles.sectionLabel}>OWNERSHIP BREAKDOWN</Meta>
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(230)}
+          style={styles.sectionWrap}
+        >
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Ownership</Text>
             {ownerAccounts.map((account) => (
               <View key={account.id} style={styles.ownerRow}>
                 <View style={styles.ownerInfo}>
-                  <BodyEmphasis style={styles.ownerHandle} numberOfLines={1}>{account.handle}</BodyEmphasis>
-                  <Meta style={styles.ownerRole}>{account.role}</Meta>
+                  <Text style={[styles.ownerHandle, account.isYou && styles.ownerHandleYou]} numberOfLines={1}>
+                    {account.handle}
+                  </Text>
+                  <Text style={styles.ownerRole}>{account.role}</Text>
                 </View>
-                <BodyEmphasis style={styles.ownerUnits}>{account.units}u</BodyEmphasis>
+                <View style={styles.ownerRight}>
+                  <Text style={styles.ownerUnits}>{account.units}u</Text>
+                  <Text style={styles.ownerPct}>
+                    {totalUnits > 0 ? ((account.units / totalUnits) * 100).toFixed(1) : 0}%
+                  </Text>
+                </View>
               </View>
             ))}
-            <View style={[styles.ownerRow, styles.totalRow]}>
-              <BodyEmphasis>Total</BodyEmphasis>
-              <BodyEmphasis>{asset.totalUnits}u</BodyEmphasis>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total supply</Text>
+              <Text style={styles.totalValue}>{totalUnits}u</Text>
             </View>
-          </TradeCard>
+          </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(350)}>
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(280)}
+          style={styles.sectionWrap}
+        >
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Asset details</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Settlement</Text>
+              <Text style={styles.detailValue}>{asset.settlementMode}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Total units</Text>
+              <Text style={styles.detailValue}>{totalUnits}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Available</Text>
+              <Text style={styles.detailValue}>{availableUnits}</Text>
+            </View>
+            {asset.holders != null && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Holders</Text>
+                <Text style={styles.detailValue}>{asset.holders}</Text>
+              </View>
+            )}
+          </View>
+        </Reanimated.View>
+
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(330)}
+          style={styles.sectionWrap}
+        >
           <FinancialDisclosure />
         </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(400)}>
-          <FlagshipActionCluster
-            layout="row"
-            actions={[
-              {
-                label: 'Trade',
-                onPress: () => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' }),
-                variant: 'primary',
-              },
-              {
-                label: 'Buyout',
-                onPress: () => navigation.navigate('Buyout', { assetId: asset.id }),
-                variant: 'secondary',
-              },
-            ]}
-          />
-          <FlagshipActionCluster
-            actions={[
-              {
-                label: 'Report Issue',
-                onPress: () => navigation.navigate('CoOwnIssue', { assetId: asset.id }),
-                variant: 'secondary',
-              },
-            ]}
-          />
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(380)}
+          style={styles.sectionWrap}
+        >
+          <Pressable
+            style={styles.reportLink}
+            onPress={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
+            accessibilityRole="button"
+            accessibilityLabel="Report an issue with this asset"
+          >
+            <Ionicons name="flag-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.reportLinkText}>Report issue</Text>
+          </Pressable>
         </Reanimated.View>
-      </ScrollView>
-    </SafeAreaView>
+
+        {/* ── PRODUCT-01: Seen in Looks ── */}
+        {seenInLooksSection && seenInLooksSection.items.length > 0 && (
+          <View style={styles.recommendationSection}>
+            <RecommendationRail
+              section={seenInLooksSection}
+              listingId={asset.listingId}
+              onPressItem={(recItem) => {
+                if (isRecommendationLook(recItem)) {
+                  handlePressLook(recItem);
+                } else {
+                  handlePressRecommendation(recItem as Listing);
+                }
+              }}
+            />
+          </View>
+        )}
+
+        {/* ── PRODUCT-01: Personalised recommendation rails via underlying listingId ── */}
+        {recsLoading && railSections.length === 0 ? null : (
+          railSections.map((section) => (
+            <View key={section.key} style={styles.recommendationSection}>
+              <RecommendationRail
+                section={section}
+                listingId={asset.listingId}
+                onPressItem={(recItem) => {
+                  if (isRecommendationLook(recItem)) {
+                    handlePressLook(recItem);
+                  } else {
+                    handlePressRecommendation(recItem as Listing);
+                  }
+                }}
+              />
+            </View>
+          ))
+        )}
+      </Reanimated.ScrollView>
+
+      <CommerceStickyDock bottomInset={insets.bottom}>
+        {isIssuer ? (
+          <View style={styles.issuerDock}>
+            <Ionicons name="storefront-outline" size={16} color={Colors.brand} />
+            <Text style={styles.issuerDockText}>
+              Issuer view · {availableUnits} units in treasury
+            </Text>
+          </View>
+        ) : availableUnits === 0 && !isHolder ? (
+          <View style={styles.issuerDock}>
+            <Ionicons name="lock-closed-outline" size={16} color={Colors.textMuted} />
+            <Text style={styles.issuerDockText}>
+              Fully allocated · check secondary market
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.dockRow}>
+            <View style={styles.dockPriceSection}>
+              <Text style={styles.dockPriceLabel}>Unit price</Text>
+              <Text style={styles.dockPriceValue}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</Text>
+            </View>
+            <View style={styles.dockActions}>
+              {isHolder && (
+                <AnimatedPressable
+                  style={styles.dockSecondaryBtn}
+                  onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'sell' })}
+                  accessibilityLabel="Sell your units"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.dockSecondaryText}>Sell</Text>
+                </AnimatedPressable>
+              )}
+              <AppButton
+                title="Trade"
+                variant="primary"
+                size="md"
+                onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' })}
+                accessibilityLabel="Trade this asset"
+                style={styles.dockPrimaryBtn}
+              />
+            </View>
+          </View>
+        )}
+      </CommerceStickyDock>
+
+      {/* ── PRODUCT-01: Save to collection + share (shared social actions) ── */}
+      <SaveToCollectionModal
+        visible={social.collectionModalVisible}
+        itemId={asset.id}
+        onClose={social.closeCollectionPicker}
+      />
+      <ShareSheet
+        visible={social.shareVisible}
+        onDismiss={social.closeShare}
+        url={`https://thryftverse.com/asset/${asset.id}`}
+        title={asset.title}
+      />
+    </View>
   );
 }
 
@@ -316,92 +639,80 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  collapsedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+    zIndex: 50,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+  },
+  collapsedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  collapsedBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: {
+  collapsedTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    marginHorizontal: Space.sm,
+  },
+  identityStage: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
+    paddingTop: Space.lg,
   },
-  heroImageContainer: {
-    width: '100%',
-    height: 240,
-    borderRadius: Radius.lg,
-    marginBottom: Space.md,
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
+  assetEyebrow: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: Space.xs,
   },
   assetTitle: {
-    marginBottom: 4,
-  },
-  assetSub: {
     marginBottom: Space.md,
   },
-  issuerActionRow: {
+  priceStage: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: Space.md,
-    gap: Space.sm,
   },
-  issuerChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-  },
-  issuerAvatarContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  issuerAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  issuerHandle: {
+  pricePrimary: {
     flex: 1,
   },
-  issuerRole: {
-    marginLeft: 'auto',
-  },
-  messageBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  messageBtnDisabled: {
-    opacity: 0.4,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  priceLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginBottom: 2,
   },
   priceValue: {
-    marginTop: 4,
-    color: Colors.brand,
+    fontSize: 28,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  priceIze: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    letterSpacing: 0.1,
   },
   deltaPill: {
     flexDirection: 'row',
@@ -409,8 +720,9 @@ const styles = StyleSheet.create({
     gap: 4,
     borderRadius: Radius.full,
     borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginTop: 4,
   },
   deltaUp: {
     backgroundColor: Colors.success + '12',
@@ -422,42 +734,127 @@ const styles = StyleSheet.create({
   },
   deltaText: {
     fontSize: 12,
+    fontFamily: Typography.family.semibold,
   },
-  sectionLabel: {
-    marginBottom: Space.sm,
-  },
-  rangeControl: {
-    marginBottom: Space.sm,
-  },
-  chartContainer: {
-    height: 120,
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.md,
-    justifyContent: 'center',
+  availabilityRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.sm,
+    justifyContent: 'space-between',
+    marginBottom: Space.md,
+    gap: Space.md,
   },
-  chartEmpty: {
+  availabilityInfo: {
+    flexShrink: 0,
+  },
+  availabilityLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
   },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  availabilityValue: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    marginTop: 1,
   },
-  emptyText: {
+  availabilityBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  availabilityFill: {
+    height: '100%',
+    backgroundColor: Colors.brand,
+    borderRadius: 3,
+  },
+  positionCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    marginBottom: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.brand + '30',
+  },
+  positionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginBottom: Space.sm,
+  },
+  positionTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  positionRow: {
+    flexDirection: 'row',
+    gap: Space.md,
+  },
+  positionMetric: {
+    flex: 1,
+  },
+  positionMetricLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginBottom: 2,
+  },
+  positionMetricValue: {
+    fontSize: 16,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  positionMetricValueSmall: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
+  },
+  sectionWrap: {
+    paddingHorizontal: Space.md,
+    marginTop: Space.sm,
+  },
+  sectionCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: Space.sm,
   },
   orderBookGrid: {
     flexDirection: 'row',
-    gap: Space.md,
   },
   orderBookCol: {
     flex: 1,
   },
+  orderBookDivider: {
+    width: 1,
+    backgroundColor: Colors.border,
+    marginHorizontal: Space.md,
+  },
   orderBookHeader: {
-    marginBottom: Space.sm,
-    textAlign: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: Space.xs,
+  },
+  orderBookHeaderText: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+  },
+  orderBookBest: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    marginBottom: Space.xs,
   },
   orderBookRow: {
     flexDirection: 'row',
@@ -465,41 +862,167 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   orderBookPrice: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  orderBookUnits: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     fontVariant: ['tabular-nums'],
   },
   orderBookEmpty: {
-    textAlign: 'center',
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    marginTop: Space.sm,
+    marginTop: Space.xs,
+    fontStyle: 'italic',
   },
   ownerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   ownerInfo: {
     flex: 1,
   },
   ownerHandle: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     marginBottom: 2,
   },
-  ownerRole: {},
+  ownerHandleYou: {
+    color: Colors.brand,
+  },
+  ownerRole: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  ownerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
   ownerUnits: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  ownerPct: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     fontVariant: ['tabular-nums'],
   },
   totalRow: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
     marginTop: Space.xs,
     paddingTop: Space.sm,
-  },
-  actionRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.md,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  actionBtn: {
+  totalLabel: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+  },
+  totalValue: {
+    fontSize: 14,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  detailLabel: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+  },
+  detailValue: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  reportLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.md,
+  },
+  reportLinkText: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  dockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.md,
+  },
+  dockPriceSection: {
     flex: 1,
+  },
+  dockPriceLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  dockPriceValue: {
+    fontSize: 18,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  dockActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  dockPrimaryBtn: {
+    minWidth: 100,
+  },
+  dockSecondaryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: Space.md,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dockSecondaryText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  issuerDock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  issuerDockText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+  },
+  familyBadgeOverlay: {
+    alignItems: 'flex-start',
+  },
+  recommendationSection: {
+    marginTop: Space.md,
   },
 });

@@ -48,10 +48,12 @@ export default function CreateCoOwnScreen() {
 
   const issuerId = currentUser?.id ?? '';
 
+  // Only show listings owned by the authenticated issuer.
+  // Never fall back to other users' listings — that could expose or attempt
+  // to issue a listing the viewer does not own.
   const issuerListings = React.useMemo(() => {
-    const sourceListings = listings;
-    const own = sourceListings.filter((item) => item.sellerId === issuerId);
-    return own.length ? own : sourceListings.slice(0, 12);
+    if (!issuerId) return [];
+    return listings.filter((item) => item.sellerId === issuerId);
   }, [issuerId, listings]);
 
   const initialState = React.useMemo(
@@ -126,6 +128,7 @@ export default function CreateCoOwnScreen() {
       const imageUrl = getListingCoverUri(selectedListing.images, '');
       await createCoOwnAsset({
         listingId: selectedListing.id,
+        issuerId,
         title: `${selectedListing.title} Split`,
         imageUrl,
         totalUnits,
@@ -226,7 +229,33 @@ export default function CreateCoOwnScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.listingListContent}
           renderItem={renderListingCard}
-
+          ListEmptyComponent={
+            <View style={styles.emptyListWrap}>
+              <Ionicons name="cube-outline" size={32} color={Colors.textMuted} />
+              <Meta style={styles.emptyListText}>
+                {issuerId
+                  ? 'You have no eligible listings. Create a listing first to issue a Co-Own.'
+                  : 'Sign in to issue a Co-Own from your listings.'}
+              </Meta>
+              {!issuerId ? (
+                <AppButton
+                  title="Sign In"
+                  onPress={() => navigation.goBack()}
+                  variant="secondary"
+                  size="sm"
+                  style={{ marginTop: Space.sm }}
+                />
+              ) : (
+                <AppButton
+                  title="Create Listing"
+                  onPress={() => navigation.navigate('Sell')}
+                  variant="secondary"
+                  size="sm"
+                  style={{ marginTop: Space.sm }}
+                />
+              )}
+            </View>
+          }
         />
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
@@ -334,6 +363,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     gap: Space.sm,
     paddingBottom: Space.sm,
+  },
+  emptyListWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.xl,
+    gap: Space.sm,
+  },
+  emptyListText: {
+    textAlign: 'center',
+    color: Colors.textMuted,
   },
   listingCard: {
     width: 120,

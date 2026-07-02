@@ -11,7 +11,7 @@ import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 export interface SellerTrustCardProps {
   seller: SellerTrustSummary;
   onOpenProfile: () => void;
-  onMessage: () => void;
+  onMessage?: () => void;
   onFollow?: () => void;
 }
 
@@ -158,16 +158,18 @@ export function SellerTrustCard({
               </Text>
             </AnimatedPressable>
           )}
-          <AnimatedPressable
-            style={styles.messageBtn}
-            onPress={onMessage}
-            {...PressPresets.primaryButton}
-            accessibilityLabel={`Message ${seller.username}`}
-            accessibilityRole="button"
-          >
-            <Ionicons name="chatbubble-outline" size={18} color={Colors.textPrimary} />
-            <Text style={styles.messageText}>Message</Text>
-          </AnimatedPressable>
+          {onMessage && (
+            <AnimatedPressable
+              style={styles.messageBtn}
+              onPress={onMessage}
+              {...PressPresets.primaryButton}
+              accessibilityLabel={`Message ${seller.username}`}
+              accessibilityRole="button"
+            >
+              <Ionicons name="chatbubble-outline" size={18} color={Colors.textPrimary} />
+              <Text style={styles.messageText}>Message</Text>
+            </AnimatedPressable>
+          )}
         </View>
       </View>
 

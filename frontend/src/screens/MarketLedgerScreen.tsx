@@ -24,6 +24,7 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { EmptyState } from '../components/EmptyState';
 import { Meta } from '../components/ui/Text';
+import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -248,11 +249,21 @@ export default function MarketLedgerScreen() {
                 quantity={item.units ?? 1}
                 pricePerShare={formatMoney(item.amountGBP)}
                 totalAmount={formatSignedMoney(getEntryCashflow(item))}
-                status={item.action === 'bid' ? 'pending' : 'filled'}
+                status={item.action === 'bid' ? 'open' : 'filled'}
                 timestamp={relativeTime(item.timestamp)}
                 onPress={() => {
-                  if (isAuction) {
-                    navigation.navigate('AuctionDetail', { auctionId: item.referenceId });
+                  const source: CommerceDestinationSource = isAuction
+                    ? { commerceMode: 'auction', auctionId: item.referenceId }
+                    : { commerceMode: 'co_own', assetId: item.referenceId };
+                  const destination = resolveCommerceDestination(source);
+                  if (destination.ok) {
+                    if (destination.screen === 'ItemDetail') {
+                      navigation.navigate('ItemDetail', destination.params);
+                    } else if (destination.screen === 'AuctionDetail') {
+                      navigation.navigate('AuctionDetail', destination.params);
+                    } else if (destination.screen === 'AssetDetail') {
+                      navigation.navigate('AssetDetail', destination.params);
+                    }
                   }
                 }}
               />

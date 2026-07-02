@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Alert,
-  ActivityIndicator,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
+import { Typography } from '../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -16,54 +17,40 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { parseApiError } from '../lib/apiClient';
-import { requestMyDataExport, deleteMyAccount, updateUserProfile as updateUserProfileApi } from '../services/accountApi';
-import { disableTwoFactor, logoutFromSession } from '../services/authApi';
+import { updateUserProfile as updateUserProfileApi } from '../services/accountApi';
+import { disableTwoFactor } from '../services/authApi';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { SkeletonLoader } from '../components/SkeletonLoader';
 import { CachedImage } from '../components/CachedImage';
-import { Typography } from '../theme/designTokens';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipDangerZone } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter } from '../components/flagship';
+
+const VERIFIED_LABEL = 'Verified';
+const UNVERIFIED_LABEL = 'Not verified';
 
 export default function AccountSettingsScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const currentUser = useStore((state) => state.currentUser);
-  const logout = useStore((state) => state.logout);
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
-  const accountPreferences = useStore((state) => state.accountPreferences);
-  const updateAccountPreferences = useStore((state) => state.updateAccountPreferences);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
   const { show } = useToast();
   const haptic = useHaptic();
 
   const user = currentUser;
   const userAny = user as any;
-  const [email, setEmail] = useState(userAny?.email ?? '');
   const [phone, setPhone] = useState(userAny?.phone ?? '');
-  const [displayName, setDisplayName] = useState(userAny?.displayName ?? userAny?.fullName ?? user?.username ?? '');
-  const [birthday, setBirthday] = useState(userAny?.birthday ?? '');
 
-  const holidayMode = accountPreferences.holidayMode;
-  const privateProfile = accountPreferences.privateProfile;
-
-  const [isExporting, setIsExporting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTogglingTwoFactor, setIsTogglingTwoFactor] = useState(false);
   const [disableTwoFactorModalVisible, setDisableTwoFactorModalVisible] = useState(false);
   const [disableTwoFactorCode, setDisableTwoFactorCode] = useState('');
   const [disableTwoFactorRecoveryCode, setDisableTwoFactorRecoveryCode] = useState('');
-  const [isHydrating, setIsHydrating] = useState(true);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
-  useEffect(() => {
-    const timer = setTimeout(() => setIsHydrating(false), 400);
-    return () => clearTimeout(timer);
-  }, []);
+  const hasPhoneChanged = phone !== (userAny?.phone ?? '');
 
   const handleToggleTwoFactor = async (enabled: boolean) => {
     if (isTogglingTwoFactor) return;
@@ -107,83 +94,21 @@ export default function AccountSettingsScreen() {
     }
   };
 
-  const handleDownloadData = async () => {
-    if (!currentUser?.id) {
-      show('Please sign in before requesting a data export.', 'error');
-      return;
-    }
-    setIsExporting(true);
-    try {
-      const result = await requestMyDataExport();
-      const recordText = result.estimatedRecords > 0 ? ` (${result.estimatedRecords} records)` : '';
-      show(`Data export generated${recordText}. Request ID: ${result.requestId}`, 'success');
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to export account data right now.');
-      show(parsed.message, 'error');
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleDeleteAccountSupport = () => {
-    navigation.navigate('HelpSupport');
-    show('Contact support to complete your account deletion request.', 'info');
-  };
-
-  const confirmDeleteAccount = async () => {
-    if (!currentUser?.id) {
-      show('Please sign in before deleting your account.', 'error');
-      return;
-    }
-    setIsDeleting(true);
-    try {
-      const result = await deleteMyAccount('User initiated account deletion from mobile settings');
-      await logoutFromSession();
-      logout();
-      show(`Account deleted. Request ID: ${result.requestId}`, 'success');
-      navigation.reset({ index: 0, routes: [{ name: 'AuthLanding' }] });
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to delete account right now.');
-      show(parsed.message, 'error');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete account',
-      'This action cannot be undone. Do you want to delete this account now?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Contact support', style: 'default', onPress: handleDeleteAccountSupport },
-        { text: 'Delete now', style: 'destructive', onPress: () => void confirmDeleteAccount() },
-      ]
-    );
-  };
-
   const handleSaveChanges = async () => {
-    if (isSaving) return;
-    const previousEmail = email;
+    if (isSaving || !hasPhoneChanged) return;
     const previousPhone = phone;
-    const previousDisplayName = displayName;
-    const previousBirthday = birthday;
 
-    updateUserProfile({ phone, displayName, birthday });
-    show('Saving account details…', 'info');
+    updateUserProfile({ phone });
     setIsSaving(true);
 
     try {
-      await updateUserProfileApi({ phone, displayName });
-      show('Account details saved', 'success');
+      await updateUserProfileApi({ phone });
+      show('Phone number saved', 'success');
     } catch (error) {
-      const parsed = parseApiError(error, 'Unable to save account details.');
+      const parsed = parseApiError(error, 'Unable to save phone number.');
       show(parsed.message, 'error');
-      setEmail(previousEmail);
       setPhone(previousPhone);
-      setDisplayName(previousDisplayName);
-      setBirthday(previousBirthday);
-      updateUserProfile({ phone: previousPhone, displayName: previousDisplayName, birthday: previousBirthday });
+      updateUserProfile({ phone: previousPhone });
     } finally {
       setIsSaving(false);
     }
@@ -200,62 +125,37 @@ export default function AccountSettingsScreen() {
   };
 
   const saveEdit = () => {
-    if (editingField === 'email') setEmail(editValue);
     if (editingField === 'phone') setPhone(editValue);
-    if (editingField === 'fullName') setDisplayName(editValue);
-    if (editingField === 'birthday') setBirthday(editValue);
     closeEdit();
-    handleSaveChanges();
+    void handleSaveChanges();
   };
 
-  const isBusy = isExporting || isDeleting || isSaving;
-
-  const DetailRow = ({
-    label,
-    value,
-    onPress,
-    isFirst = false,
-    isLast = false,
-    danger = false,
-    loading = false,
-  }: {
-    label: string;
-    value: string;
-    onPress?: () => void;
-    isFirst?: boolean;
-    isLast?: boolean;
-    danger?: boolean;
-    loading?: boolean;
-  }) => (
-    <SettingsRow
-      title={label}
-      value={loading ? undefined : value}
-      onPress={onPress}
-      isFirst={isFirst}
-      isLast={isLast}
-      danger={danger}
-    >
-      {loading ? <ActivityIndicator size="small" color={danger ? Colors.danger : Colors.textMuted} /> : null}
-    </SettingsRow>
-  );
+  const displayName = userAny?.displayName ?? user?.username ?? '—';
+  const username = user?.username ?? '—';
+  const email = userAny?.email ?? '';
+  const emailVerified = !!user?.emailVerified;
+  const country = (userAny?.country as string) || '';
 
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title="Private details" onBack={() => navigation.goBack()} />}
+      header={<FlagshipHeader title="Private details" subtitle="Account information" onBack={() => navigation.goBack()} />}
       stickyFooter={
-        <FlagshipStickyFooter
-          actions={[
-            {
-              label: isSaving ? 'Saving…' : 'Save Changes',
-              onPress: () => void handleSaveChanges(),
-              variant: 'primary',
-              disabled: isSaving || isBusy,
-              loading: isSaving,
-            },
-          ]}
-        />
+        hasPhoneChanged ? (
+          <FlagshipStickyFooter
+            actions={[
+              {
+                label: isSaving ? 'Saving…' : 'Save changes',
+                onPress: () => void handleSaveChanges(),
+                variant: 'primary',
+                disabled: isSaving,
+                loading: isSaving,
+              },
+            ]}
+          />
+        ) : undefined
       }
     >
+      {/* ── Identity summary — routes to public profile editor ── */}
       <View style={[styles.identitySurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
         <View style={styles.identityRow}>
           {user?.avatar ? (
@@ -268,108 +168,108 @@ export default function AccountSettingsScreen() {
             </View>
           )}
           <View style={styles.identityText}>
-            <Text style={styles.identityName}>{displayName || user?.username || 'Not signed in'}</Text>
-            <Text style={[styles.identityMeta, { color: Colors.textMuted }]}>@{user?.username ?? '—'}</Text>
+            <Text style={styles.identityName}>{displayName}</Text>
+            <Text style={[styles.identityMeta, { color: Colors.textMuted }]}>@{username}</Text>
           </View>
           <AnimatedPressable
             onPress={() => (navigation as any).navigate('EditProfile')}
             scaleValue={0.92}
             hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Edit public profile"
           >
             <Text style={[styles.identityEdit, { color: Colors.brand }]}>Edit</Text>
           </AnimatedPressable>
         </View>
+        <Text style={[styles.identityHint, { color: Colors.textMuted }]}>
+          Public profile fields are managed in Edit profile.
+        </Text>
       </View>
 
-      <SettingsSection title="Personal information" noCard>
-          {isHydrating ? (
-            <View style={{ padding: 16 }}>
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: 8 }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: 8 }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-            </View>
-          ) : (
-            <>
-              <DetailRow label="Display name" value={displayName} onPress={() => openEdit('fullName', displayName)} />
-              <DetailRow label="Username" value={user?.username ?? '—'} />
-              <DetailRow
-                label="Country"
-                value={(userAny?.country as string) || '—'}
-                isLast
-              />
-            </>
-          )}
+      {/* ── Public identity — read-only, route to EditProfile ── */}
+      <SettingsSection title="Public identity">
+        <SettingsRow
+          title="Display name"
+          value={displayName}
+          onPress={() => (navigation as any).navigate('EditProfile')}
+          isFirst
+        />
+        <SettingsRow
+          title="Username"
+          value={`@${username}`}
+          onPress={() => (navigation as any).navigate('EditProfile')}
+          isLast
+        />
       </SettingsSection>
 
-      <SettingsSection title="Contact" noCard>
-          {isHydrating ? (
-            <View style={{ padding: 16 }}>
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-              <View style={{ height: 8 }} />
-              <SkeletonLoader width="100%" height={56} borderRadius={Radius.lg} />
-            </View>
-          ) : (
-            <>
-              <DetailRow label="Phone" value={phone || '—'} onPress={() => openEdit('phone', phone)} />
-              <DetailRow label="Email" value={email || '—'} isLast />
-            </>
-          )}
+      {/* ── Private contact — editable here ── */}
+      <SettingsSection title="Private contact" description="Used for account security and order updates. Not shown on your public profile.">
+        <SettingsRow
+          title="Email"
+          value={email || '—'}
+          isFirst
+        />
+        <SettingsRow
+          title="Email status"
+          value={emailVerified ? VERIFIED_LABEL : UNVERIFIED_LABEL}
+        />
+        <SettingsRow
+          title="Phone"
+          value={phone || '—'}
+          onPress={() => openEdit('phone', phone)}
+          isLast
+        />
       </SettingsSection>
 
-      <SettingsSection title="Security" noCard>
-          <DetailRow label="Password" value="••••••••" onPress={() => navigation.navigate('ChangePassword')} />
-          <DetailRow
-            label="Two-factor authentication"
-            value={twoFactorEnabled ? 'Enabled' : 'Off'}
-            onPress={() => handleToggleTwoFactor(!twoFactorEnabled)}
-            isLast
-          />
+      {/* ── Personal information — read-only ── */}
+      <SettingsSection title="Personal information">
+        <SettingsRow
+          title="Country or region"
+          value={country || '—'}
+          isFirst
+          isLast
+        />
       </SettingsSection>
 
-      <SettingsSection title="Shop preferences" noCard>
-          <DetailRow
-            label="Holiday mode"
-            value={holidayMode ? 'On' : 'Off'}
-            onPress={() => updateAccountPreferences({ holidayMode: !holidayMode })}
-          />
-          <DetailRow
-            label="Private profile"
-            value={privateProfile ? 'On' : 'Off'}
-            onPress={() => updateAccountPreferences({ privateProfile: !privateProfile })}
-            isLast
-          />
+      {/* ── Security ── */}
+      <SettingsSection title="Security">
+        <SettingsRow
+          title="Password"
+          value="••••••••"
+          onPress={() => navigation.navigate('ChangePassword')}
+          isFirst
+        />
+        <SettingsRow
+          title="Two-factor authentication"
+          value={twoFactorEnabled ? 'Enabled' : 'Off'}
+          onPress={() => handleToggleTwoFactor(!twoFactorEnabled)}
+          isLast
+        />
       </SettingsSection>
 
-      <SettingsSection title="Data & ownership" noCard>
-          <DetailRow
-            label="Download my data"
-            value=""
-            onPress={() => void handleDownloadData()}
-            loading={isExporting}
-            isLast
-          />
+      {/* ── Account control — sober navigation ── */}
+      <SettingsSection title="Account">
+        <SettingsRow
+          title="Account control"
+          subtitle="Download data, delete account"
+          onPress={() => (navigation as any).navigate('AccountControl')}
+          isFirst
+          isLast
+        />
       </SettingsSection>
 
-      <FlagshipDangerZone
-        title="Delete account"
-        description="This will permanently remove your account and all associated data. This action cannot be undone."
-        actionLabel="Delete account"
-        onAction={handleDeleteAccount}
-      />
-
-      {/* Inline Edit Modal */}
+      {/* ── Inline Edit Modal ── */}
       <Modal visible={editingField !== null} transparent animationType="slide" onRequestClose={closeEdit}>
         <View style={styles.editModalOverlay}>
           <View style={[styles.editModalCard, { backgroundColor: Colors.surface }]}>
             <Text style={styles.editModalTitle}>
-              Edit {editingField === 'fullName' ? 'name' : editingField}
+              Edit {editingField === 'phone' ? 'phone number' : editingField}
             </Text>
             <AppInput
               value={editValue}
               onChangeText={setEditValue}
               autoFocus
+              keyboardType={editingField === 'phone' ? 'phone-pad' : 'default'}
               containerStyle={{ marginBottom: Space.md }}
             />
             <View style={styles.editModalActions}>
@@ -384,7 +284,7 @@ export default function AccountSettingsScreen() {
         </View>
       </Modal>
 
-      {/* Disable 2FA Modal */}
+      {/* ── Disable 2FA Modal ── */}
       <Modal visible={disableTwoFactorModalVisible} transparent animationType="fade" onRequestClose={closeDisableTwoFactorModal}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: Colors.surface }]}>
@@ -441,6 +341,69 @@ export default function AccountSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ── Identity surface ──
+  identitySurface: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.lg,
+  },
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  identityAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  identityAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  identityAvatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  identityAvatarText: {
+    fontSize: 18,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  identityText: {
+    flex: 1,
+    gap: 2,
+  },
+  identityName: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  identityMeta: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  identityEdit: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  identityHint: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.caption.lineHeight + 2,
+    letterSpacing: Type.caption.letterSpacing,
+    marginTop: Space.sm,
+  },
+  // ── Edit modal ──
   editModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -482,39 +445,42 @@ const styles = StyleSheet.create({
   editModalBtnPrimaryText: {
     color: Colors.textInverse,
   },
+  // ── Disable 2FA modal ──
   modalCard: {
     padding: Space.lg,
     borderRadius: Radius.xl,
     marginHorizontal: 0,
-    marginBottom: 0,
+    marginVertical: 0,
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
-    paddingHorizontal: Space.md,
+    paddingHorizontal: Space.lg,
   },
   modalTitle: {
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.bold,
     fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    marginBottom: Space.sm,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   modalCopy: {
-    color: Colors.textSecondary,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    marginBottom: Space.xs,
+    color: Colors.textSecondary,
+    lineHeight: Type.body.lineHeight + 2,
+    marginBottom: Space.md,
+    letterSpacing: Type.body.letterSpacing,
   },
   modalActionRow: {
-    marginTop: Space.xs,
     flexDirection: 'row',
     gap: Space.sm,
+    marginTop: Space.sm,
   },
   modalBtn: {
     flex: 1,
-    height: 46,
+    height: 48,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -522,75 +488,17 @@ const styles = StyleSheet.create({
   modalBtnMuted: {
     backgroundColor: Colors.surfaceAlt,
   },
-  modalBtnMutedText: {
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
   modalBtnDanger: {
     backgroundColor: Colors.danger,
   },
-  modalBtnDangerText: {
-    color: Colors.background,
-    fontFamily: Typography.family.bold,
-    fontSize: Type.body.size,
-  },
-  identitySurface: {
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    marginHorizontal: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.lg,
-  },
-  identityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Space.md,
-    gap: Space.md,
-  },
-  identityAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-  },
-  identityAvatarImage: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-  },
-  identityAvatarFallback: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  identityAvatarText: {
-    fontSize: 24,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-  },
-  identityText: {
-    flex: 1,
-  },
-  identityName: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-  },
-  identityMeta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  identityEdit: {
+  modalBtnMutedText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    color: Colors.textPrimary,
+  },
+  modalBtnDangerText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.bold,
+    color: '#FFFFFF',
   },
 });

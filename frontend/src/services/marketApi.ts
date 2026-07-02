@@ -1,4 +1,5 @@
 import { fetchJson } from '../lib/apiClient';
+import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
 export type AuctionLifecycle = 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
 export type AuctionStatus = AuctionLifecycle;
@@ -194,6 +195,7 @@ export interface MarketHistoryItem {
   unitPriceGbp: number | null;
   feeGbp: number | null;
   status: 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | null;
+  orderType: 'market' | 'limit' | null;
   note: string | null;
   timestamp: string;
 }
@@ -307,6 +309,56 @@ interface ListAuctionsOptions {
   limit?: number;
 }
 
+// ── Auction House home aggregate ──
+
+export type AttentionReason =
+  | 'won_action'
+  | 'outbid'
+  | 'leading_ending'
+  | 'leading'
+  | 'watching_ending'
+  | null;
+
+export interface AuctionHomeActivity {
+  activeCount: number;
+  needsAttentionCount: number;
+  leadingCount: number;
+  outbidCount: number;
+  watchingCount: number;
+  unresolvedWonCount: number;
+}
+
+export interface CategoryWorld {
+  categoryKey: string;
+  displayName: string;
+  representativeImageUrl: string | null;
+  availableCount?: number;
+}
+
+export interface SellerSummary {
+  liveCount: number;
+  scheduledCount: number;
+  completedCount: number;
+}
+
+export interface AuctionHomeResponse {
+  ok: true;
+  serverNow: string;
+  attention: {
+    item: MarketAuction | null;
+    reason: AttentionReason;
+  };
+  activity: AuctionHomeActivity;
+  closingSoon: MarketAuction[];
+  live: MarketAuction[];
+  upcoming: MarketAuction[];
+  categoryWorlds: CategoryWorld[];
+  recentlyClosed: MarketAuction[];
+  sellerSummary?: SellerSummary;
+  sellerAuctions: MarketAuction[];
+  watchlist: MarketAuction[];
+}
+
 interface ListAuctionBidsOptions {
   limit?: number;
 }
@@ -404,6 +456,264 @@ export async function listAuctions(options: ListAuctionsOptions = {}): Promise<{
   return { items: payload.items, nextCursor: payload.nextCursor, serverNow: payload.serverNow };
 }
 
+// ── Dev mock fallback for /auctions/home ──
+// Used only when ENABLE_RUNTIME_MOCKS is true and the backend is unreachable.
+// Follows the same pattern as BackendDataContext falling back to MOCK_LISTINGS.
+const MOCK_SELLER: AuctionSeller = {
+  id: 'mock-seller-1',
+  username: 'atelier_vault',
+  displayName: 'Atelier Vault',
+  avatarUrl: null,
+};
+
+const MOCK_SELLER_2: AuctionSeller = {
+  id: 'mock-seller-2',
+  username: 'curated_archive',
+  displayName: 'Curated Archive',
+  avatarUrl: null,
+};
+
+function isoFromNow(minutesFromNow: number): string {
+  return new Date(Date.now() + minutesFromNow * 60_000).toISOString();
+}
+
+function mockAuction(
+  id: string,
+  title: string,
+  opts: {
+    seller?: AuctionSeller;
+    startsInMin?: number;
+    endsInMin?: number;
+    startingBidGbp?: number;
+    currentBidGbp?: number;
+    bidCount?: number;
+    buyNowPriceGbp?: number | null;
+    lifecycle?: AuctionLifecycle;
+    viewerState?: AuctionViewerState;
+    isWatched?: boolean;
+    category?: string | null;
+    brand?: string | null;
+    imageUrl?: string | null;
+  } = {}
+): MarketAuction {
+  const startsInMin = opts.startsInMin ?? -60;
+  const endsInMin = opts.endsInMin ?? 30;
+  return {
+    id,
+    listingId: `listing-${id}`,
+    seller: opts.seller ?? MOCK_SELLER,
+    title,
+    imageUrl: opts.imageUrl ?? null,
+    brand: opts.brand ?? null,
+    category: opts.category ?? null,
+    conditionLabel: 'Excellent',
+    startsAt: isoFromNow(startsInMin),
+    endsAt: isoFromNow(endsInMin),
+    startingBidGbp: opts.startingBidGbp ?? 50,
+    currentBidGbp: opts.currentBidGbp ?? 80,
+    minimumNextBidGbp: (opts.currentBidGbp ?? 80) + 5,
+    buyNowPriceGbp: opts.buyNowPriceGbp ?? null,
+    bidCount: opts.bidCount ?? 3,
+    lifecycle: opts.lifecycle ?? 'live',
+    terminalReason: null,
+    viewerState: opts.viewerState ?? 'not_participating',
+    isWatched: opts.isWatched ?? false,
+    winnerBidderId: null,
+    cancelledAt: null,
+    settledAt: null,
+    createdAt: isoFromNow(-1440),
+  };
+}
+
+function getMockAuctionHome(): AuctionHomeResponse {
+  const now = new Date();
+  return {
+    ok: true,
+    serverNow: now.toISOString(),
+    attention: {
+      item: mockAuction('mock-att-1', 'Vintage Rolex Datejust', {
+        seller: MOCK_SELLER_2,
+        startsInMin: -120,
+        endsInMin: 8,
+        startingBidGbp: 1200,
+        currentBidGbp: 1850,
+        bidCount: 12,
+        viewerState: 'outbid',
+        isWatched: true,
+        brand: 'Rolex',
+        category: 'Watches',
+      }),
+      reason: 'outbid',
+    },
+    activity: {
+      activeCount: 3,
+      needsAttentionCount: 1,
+      leadingCount: 1,
+      outbidCount: 1,
+      watchingCount: 4,
+      unresolvedWonCount: 0,
+    },
+    closingSoon: [
+      mockAuction('mock-cs-1', 'Vintage Rolex Datejust', {
+        seller: MOCK_SELLER_2,
+        startsInMin: -120,
+        endsInMin: 8,
+        startingBidGbp: 1200,
+        currentBidGbp: 1850,
+        bidCount: 12,
+        viewerState: 'outbid',
+        isWatched: true,
+        brand: 'Rolex',
+        category: 'Watches',
+      }),
+      mockAuction('mock-cs-2', 'Hermès Birkin 30 Togo', {
+        seller: MOCK_SELLER,
+        startsInMin: -90,
+        endsInMin: 22,
+        startingBidGbp: 4000,
+        currentBidGbp: 5200,
+        bidCount: 8,
+        viewerState: 'leading',
+        isWatched: true,
+        brand: 'Hermès',
+        category: 'Bags',
+      }),
+      mockAuction('mock-cs-3', 'Leica M6 Black Paint', {
+        seller: MOCK_SELLER_2,
+        startsInMin: -45,
+        endsInMin: 35,
+        startingBidGbp: 800,
+        currentBidGbp: 1100,
+        bidCount: 5,
+        brand: 'Leica',
+        category: 'Cameras',
+      }),
+    ],
+    live: [
+      mockAuction('mock-live-1', 'Nike Dunk Low Panda', {
+        seller: MOCK_SELLER,
+        startsInMin: -30,
+        endsInMin: 120,
+        startingBidGbp: 60,
+        currentBidGbp: 95,
+        bidCount: 4,
+        brand: 'Nike',
+        category: 'Sneakers',
+      }),
+      mockAuction('mock-live-2', 'Supreme Box Logo Tee FW23', {
+        seller: MOCK_SELLER_2,
+        startsInMin: -20,
+        endsInMin: 180,
+        startingBidGbp: 40,
+        currentBidGbp: 72,
+        bidCount: 6,
+        brand: 'Supreme',
+        category: 'Streetwear',
+      }),
+    ],
+    upcoming: [
+      mockAuction('mock-up-1', 'Patek Philippe Calatrava 5196', {
+        seller: MOCK_SELLER_2,
+        startsInMin: 240,
+        endsInMin: 1440,
+        startingBidGbp: 5000,
+        currentBidGbp: 5000,
+        bidCount: 0,
+        lifecycle: 'upcoming',
+        brand: 'Patek Philippe',
+        category: 'Watches',
+      }),
+      mockAuction('mock-up-2', 'Chanel Classic Flap Medium', {
+        seller: MOCK_SELLER,
+        startsInMin: 720,
+        endsInMin: 2880,
+        startingBidGbp: 3000,
+        currentBidGbp: 3000,
+        bidCount: 0,
+        lifecycle: 'upcoming',
+        brand: 'Chanel',
+        category: 'Bags',
+      }),
+    ],
+    categoryWorlds: [
+      { categoryKey: 'watches', displayName: 'Watches', representativeImageUrl: null, availableCount: 12 },
+      { categoryKey: 'bags', displayName: 'Bags', representativeImageUrl: null, availableCount: 8 },
+      { categoryKey: 'sneakers', displayName: 'Sneakers', representativeImageUrl: null, availableCount: 15 },
+      { categoryKey: 'cameras', displayName: 'Cameras', representativeImageUrl: null, availableCount: 5 },
+    ],
+    recentlyClosed: [
+      mockAuction('mock-rc-1', 'Omega Speedmaster Pro', {
+        seller: MOCK_SELLER,
+        startsInMin: -2880,
+        endsInMin: -120,
+        startingBidGbp: 1000,
+        currentBidGbp: 2400,
+        bidCount: 18,
+        lifecycle: 'ended',
+        viewerState: 'lost',
+        brand: 'Omega',
+        category: 'Watches',
+      }),
+    ],
+    sellerSummary: {
+      liveCount: 1,
+      scheduledCount: 0,
+      completedCount: 2,
+    },
+    sellerAuctions: [
+      mockAuction('mock-sa-1', 'Nike Dunk Low Panda', {
+        seller: MOCK_SELLER,
+        startsInMin: -30,
+        endsInMin: 120,
+        startingBidGbp: 60,
+        currentBidGbp: 95,
+        bidCount: 4,
+        viewerState: 'seller',
+        brand: 'Nike',
+        category: 'Sneakers',
+      }),
+    ],
+    watchlist: [
+      mockAuction('mock-w-1', 'Vintage Rolex Datejust', {
+        seller: MOCK_SELLER_2,
+        startsInMin: -120,
+        endsInMin: 8,
+        startingBidGbp: 1200,
+        currentBidGbp: 1850,
+        bidCount: 12,
+        viewerState: 'outbid',
+        isWatched: true,
+        brand: 'Rolex',
+        category: 'Watches',
+      }),
+      mockAuction('mock-w-2', 'Hermès Birkin 30 Togo', {
+        seller: MOCK_SELLER,
+        startsInMin: -90,
+        endsInMin: 22,
+        startingBidGbp: 4000,
+        currentBidGbp: 5200,
+        bidCount: 8,
+        viewerState: 'leading',
+        isWatched: true,
+        brand: 'Hermès',
+        category: 'Bags',
+      }),
+    ],
+  };
+}
+
+export async function getAuctionHome(): Promise<AuctionHomeResponse> {
+  try {
+    return await fetchJson<AuctionHomeResponse>('/auctions/home');
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      console.warn('[marketApi] /auctions/home failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
+      return getMockAuctionHome();
+    }
+    throw err;
+  }
+}
+
 export async function getAuctionDetail(auctionId: string): Promise<AuctionDetailResponse> {
   const payload = await fetchJson<GetAuctionDetailResponse>(
     `/auctions/${encodeURIComponent(auctionId)}`
@@ -434,7 +744,7 @@ export async function removeFromWatchlist(auctionId: string): Promise<boolean> {
 }
 
 export async function getMyAuctionBids(
-  status?: 'active' | 'won' | 'lost' | 'all',
+  status?: 'active' | 'leading' | 'outbid' | 'won' | 'lost' | 'all',
   cursor?: string
 ): Promise<{ items: MyAuctionBid[]; nextCursor: string | null }> {
   const query = toQuery({ status, cursor });
@@ -579,6 +889,7 @@ export async function placeCoOwnOrder(
 export interface CreateCoOwnAssetInput {
   id?: string;
   listingId: string;
+  issuerId: string;
   title?: string;
   imageUrl?: string;
   totalUnits: number;

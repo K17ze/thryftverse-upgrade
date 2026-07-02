@@ -11,6 +11,7 @@ export type ResolvedRoute =
   | { screen: 'OrderDetail'; params: { orderId: string } }
   | { screen: 'ItemDetail'; params: { itemId: string } }
   | { screen: 'SupportTicketDetail'; params: { ticketId: string } }
+  | { screen: 'AuctionDetail'; params: { auctionId: string } }
   | { screen: 'Wallet' }
   | { screen: 'BalanceHistory' }
   | { screen: 'NotificationsList' }
@@ -28,6 +29,12 @@ const VALID_SCREENS: ReadonlySet<string> = new Set<ScreenName>([
   'PushNotifications',
   'Settings',
   'MainTabs',
+  'AuctionHome',
+  'SellerAuctionCentre',
+  'MyBids',
+  'CoOwnHub',
+  'Portfolio',
+  'CoOwnOrderHistory',
 ]);
 
 export function resolveNotificationRoute(
@@ -68,6 +75,21 @@ export function resolveNotificationRoute(
         },
       };
     }
+    if (screen === 'AuctionDetail' && typeof params.auctionId === 'string') {
+      return { screen: 'AuctionDetail', params: { auctionId: params.auctionId } };
+    }
+    if (screen === 'AuctionHome') {
+      return { screen: 'AuctionHome' };
+    }
+    if (screen === 'MyBids') {
+      return { screen: 'MyBids' };
+    }
+    if (screen === 'CoOwnHub') {
+      return { screen: 'CoOwnHub' };
+    }
+    if (screen === 'Portfolio') {
+      return { screen: 'Portfolio' };
+    }
     if (VALID_SCREENS.has(screen)) {
       return { screen: screen as ScreenName, params };
     }
@@ -79,14 +101,24 @@ export function resolveNotificationRoute(
       return { screen: 'OrderDetail', params: { orderId } };
     }
 
-    const listingId = typeof payload.listingId === 'string' ? payload.listingId : null;
-    if (listingId) {
-      return { screen: 'ItemDetail', params: { itemId: listingId } };
-    }
-
     const ticketId = typeof payload.ticketId === 'string' ? payload.ticketId : null;
     if (ticketId) {
       return { screen: 'SupportTicketDetail', params: { ticketId } };
+    }
+
+    const auctionId = typeof payload.auctionId === 'string' ? payload.auctionId : null;
+    if (auctionId) {
+      return { screen: 'AuctionDetail', params: { auctionId } };
+    }
+
+    const assetId = typeof payload.assetId === 'string' ? payload.assetId : null;
+    if (assetId) {
+      return { screen: 'AssetDetail', params: { assetId } };
+    }
+
+    const listingId = typeof payload.listingId === 'string' ? payload.listingId : null;
+    if (listingId) {
+      return { screen: 'ItemDetail', params: { itemId: listingId } };
     }
   }
 

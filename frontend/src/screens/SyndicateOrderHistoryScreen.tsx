@@ -36,13 +36,14 @@ type DateFilter = 'all' | '24h' | '7d' | '30d';
 interface HistoryEntry {
   id: string;
   assetId: string;
+  assetTitle: string;
   side: 'buy' | 'sell';
   type: 'market' | 'limit';
   quantity: number;
   pricePerShare: number;
   totalAmount: number;
   fee: number;
-  status: 'pending' | 'filled' | 'partial' | 'cancelled';
+  status: 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
   filledQuantity: number;
   createdAt: string;
   source: 'seeded' | 'ledger' | 'backend';
@@ -82,12 +83,20 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
     .map<HistoryEntry>((item) => {
       const quantity = Math.max(0, item.units ?? 0);
       const pricePerShare = item.unitPriceGbp ?? (quantity > 0 ? Number((item.amountGbp / quantity).toFixed(4)) : 0);
-      const status = item.status === 'filled' ? 'filled' : item.status === 'rejected' ? 'cancelled' : 'filled';
+      // Preserve the exact backend status — never map open/partial/cancelled to filled.
+      const rawStatus = item.status;
+      const status: HistoryEntry['status'] =
+        rawStatus === 'open' || rawStatus === 'partially_filled' || rawStatus === 'filled' || rawStatus === 'cancelled' || rawStatus === 'rejected'
+          ? rawStatus
+          : 'open';
       return {
         id: item.id,
         assetId: item.referenceId,
+        // The backend joins sa.title as note — use it instead of the raw asset ID.
+        assetTitle: item.note ?? `Co-Own ${item.referenceId.slice(-6).toUpperCase()}`,
         side: item.action === 'buy-units' ? 'buy' : 'sell',
-        type: 'market',
+        // Preserve the real order type from the backend, default to market when null.
+        type: item.orderType === 'limit' ? 'limit' : 'market',
         quantity,
         pricePerShare,
         totalAmount: item.amountGbp,
@@ -225,7 +234,7 @@ export default function CoOwnOrderHistoryScreen() {
                 id={item.id}
                 side={item.side}
                 type={item.type}
-                assetTitle={item.assetId}
+                assetTitle={item.assetTitle}
                 quantity={item.quantity}
                 pricePerShare={formatFromFiat(item.pricePerShare, 'GBP')}
                 totalAmount={formatFromFiat(item.totalAmount, 'GBP')}

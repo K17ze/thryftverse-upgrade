@@ -1,5 +1,6 @@
 import { Listing } from '../../data/mockData';
 import { fetchJson } from '../../lib/apiClient';
+import { mapBackendListingToListing } from '../../services/listingMapper';
 import type {
   RecommendationResponse,
   RecommendationRequest,
@@ -8,31 +9,6 @@ import type {
   RecommendationLook,
 } from './recommendationTypes';
 
-interface ApiListingRow {
-  id: string;
-  sellerId: string;
-  title: string;
-  description: string;
-  priceGbp: number;
-  imageUrl: string | null;
-  images: string[];
-  status: string;
-  category: string | null;
-  brand: string | null;
-  size: string | null;
-  condition: string | null;
-  originalPriceGbp: number | null;
-  createdAt: string;
-  seller?: {
-    id: string;
-    username: string | null;
-    avatar: string | null;
-    rating: number | null;
-    reviewCount: number | null;
-    location: string | null;
-  } | null;
-}
-
 interface ApiLookRow {
   id: string;
   type: 'look';
@@ -40,28 +16,6 @@ interface ApiLookRow {
   coverImage: string;
   creatorId: string;
   creatorUsername: string | null;
-}
-
-function mapApiListingToListing(row: ApiListingRow): Listing {
-  const price = Number(row.priceGbp ?? 0);
-  return {
-    id: row.id,
-    title: row.title || 'Untitled listing',
-    brand: row.brand || row.title?.split(' ').slice(0, 2).join(' ') || 'Thryftverse',
-    size: row.size || 'One size',
-    condition: (row.condition as Listing['condition']) || 'Very good',
-    price,
-    images: row.images?.length ? row.images : row.imageUrl ? [row.imageUrl] : [],
-    likes: 0,
-    isSold: row.status === 'sold',
-    sellerId: row.sellerId || 'u1',
-    seller: row.seller ?? null,
-    category: row.category || 'women',
-    subcategory: 'Clothing',
-    description: row.description || '',
-    createdAt: row.createdAt,
-    originalPrice: row.originalPriceGbp != null ? Number(row.originalPriceGbp) : undefined,
-  };
 }
 
 function mapApiLookToRecommendationLook(row: ApiLookRow): RecommendationLook {
@@ -75,11 +29,11 @@ function mapApiLookToRecommendationLook(row: ApiLookRow): RecommendationLook {
   };
 }
 
-function mapApiItemToRecommendationItem(item: ApiListingRow | ApiLookRow): RecommendationItem {
-  if ((item as ApiLookRow).type === 'look') {
+function mapApiItemToRecommendationItem(item: any): RecommendationItem {
+  if (item && item.type === 'look') {
     return mapApiLookToRecommendationLook(item as ApiLookRow);
   }
-  return mapApiListingToListing(item as ApiListingRow);
+  return mapBackendListingToListing(item);
 }
 
 export async function fetchRecommendations(
@@ -100,7 +54,7 @@ export async function fetchRecommendations(
       subtitle?: string;
       reason?: string;
       personalised: boolean;
-      items: Array<ApiListingRow | ApiLookRow>;
+      items: Array<ApiLookRow | Record<string, unknown>>;
       nextCursor?: string;
     }>;
   }>(`/listings/${request.listingId}/recommendations${qs ? `?${qs}` : ''}`);

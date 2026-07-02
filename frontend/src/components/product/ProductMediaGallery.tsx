@@ -29,6 +29,7 @@ import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AnimatedHeart } from '../AnimatedHeart';
+import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SharedTransitionImage } from '../SharedTransitionImage';
@@ -55,6 +56,7 @@ interface MediaPageProps {
 
 function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoomStart }: MediaPageProps) {
   const reducedMotion = useReducedMotion();
+  const [failed, setFailed] = useState(false);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -138,12 +140,22 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
   return (
     <GestureDetector gesture={composed}>
       <Reanimated.View style={[styles.page, { width, height }, animStyle]}>
-        <SharedTransitionImage
-          source={{ uri }}
-          style={styles.image}
-          resizeMode="cover"
-          sharedTransitionTag={sharedTransitionTag}
-        />
+        {failed || !uri ? (
+          // Premium fallback for missing/failed media — never a bare gray box.
+          <ImageEmptyGraphic
+            icon="image-outline"
+            label="Photo unavailable"
+            style={styles.image}
+          />
+        ) : (
+          <SharedTransitionImage
+            source={{ uri }}
+            style={styles.image}
+            resizeMode="cover"
+            sharedTransitionTag={sharedTransitionTag}
+            onError={() => setFailed(true)}
+          />
+        )}
       </Reanimated.View>
     </GestureDetector>
   );
@@ -241,6 +253,15 @@ export function ProductMediaGallery({
 
   return (
     <Reanimated.View style={[styles.heroContainer, { height: heroHeight }, heroStyle]}>
+      {images.length === 0 ? (
+        // Premium fallback hero — never a bare gray box. Matches the
+        // ImageEmptyGraphic language used across the rest of the app.
+        <ImageEmptyGraphic
+          icon="image-outline"
+          label="No photos yet"
+          style={{ width: screenWidth, height: heroHeight }}
+        />
+      ) : (
       <FlatList
         ref={listRef}
         data={images}
@@ -268,6 +289,7 @@ export function ProductMediaGallery({
           setTimeout(() => scrollToIndex(index), 100);
         }}
       />
+      )}
 
       <View style={styles.topScrim} />
 

@@ -1,9 +1,13 @@
 export const queryKeys = {
   user: {
     profile: (userId?: string) => ['user', 'profile', userId] as const,
-    listings: (userId: string) => ['user', 'listings', userId] as const,
+    listings: (userId: string, status?: string) => ['user', 'listings', userId, status ?? 'all'] as const,
     orders: (userId: string) => ['user', 'orders', userId] as const,
     collections: (userId: string) => ['user', 'collections', userId] as const,
+    looks: (userId: string) => ['user', 'looks', userId] as const,
+    reviews: (userId: string) => ['user', 'reviews', userId] as const,
+    followers: (userId: string) => ['user', 'followers', userId] as const,
+    following: (userId: string) => ['user', 'following', userId] as const,
   },
   listing: {
     detail: (id: string) => ['listing', 'detail', id] as const,

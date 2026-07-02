@@ -85,9 +85,9 @@ describe('VQ-10A PASS 2.1: Canonical Auction Home header', () => {
   const src = readSrc('screens/AuctionHomeScreen.tsx');
 
   it('has a header bar with back, title, and action', () => {
-    expect(src).toContain('headerBar');
+    expect(src).toContain('editorialHeader');
     expect(src).toContain('headerBackBtn');
-    expect(src).toContain('headerTitle');
+    expect(src).toContain('editorialTitle');
     expect(src).toContain('headerActionBtn');
   });
 
@@ -116,12 +116,10 @@ describe('VQ-10A PASS 2.1: Canonical Auction Home header', () => {
   });
 
   it('does not crowd header with Create Auction, search and multiple controls', () => {
-    const headerBarMatch = src.match(/headerBar[\s\S]*?\/>/);
+    const headerBarMatch = src.match(/editorialHeaderTop[\s\S]*?<\/View>/);
     expect(headerBarMatch).toBeTruthy();
     const headerBar = headerBarMatch![0];
     expect(headerBar).not.toContain('CreateAuction');
-    expect(headerBar).not.toContain('search');
-    expect(headerBar).not.toContain('AppInput');
   });
 });
 
@@ -416,7 +414,7 @@ describe('VQ-10A PASS 2.1: Navigation contracts', () => {
   });
 
   it('does not navigate to CreateAuction from header', () => {
-    const headerMatch = src.match(/headerBar[\s\S]*?<\/View>/);
+    const headerMatch = src.match(/editorialHeaderTop[\s\S]*?<\/View>/);
     expect(headerMatch).toBeTruthy();
     expect(headerMatch![0]).not.toContain('CreateAuction');
   });

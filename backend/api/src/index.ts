@@ -814,7 +814,23 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
-  if (method === 'GET' && (path === '/auctions' || path.startsWith('/auctions/'))) {
+  if (method === 'GET' && path === '/auctions') {
+    return true;
+  }
+
+  if (method === 'GET' && path === '/auctions/home') {
+    return true;
+  }
+
+  if (method === 'GET' && path === '/auctions/1ze-rates') {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/auctions\/(?!watchlist$)[^/]+$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/auctions\/[^/]+\/bids$/.test(path)) {
     return true;
   }
 
@@ -827,6 +843,26 @@ function isPublicRoute(method: string, path: string) {
   }
 
   if (method === 'GET' && /^\/sellers\/[^/]+$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/sellers\/[^/]+\/reviews$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/users\/[^/]+\/follow-counts$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/users\/[^/]+\/followers$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/users\/[^/]+\/following$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/users\/[^/]+\/listings$/.test(path)) {
     return true;
   }
 
@@ -866,6 +902,27 @@ async function authenticateRequest(requestPath: string, authHeader: string | und
   }
 
   return authUser;
+}
+
+async function optionalAuthenticate(request: { headers: Record<string, string | string[] | undefined>; authUser?: AuthenticatedUser }, requestPath: string) {
+  if (request.authUser) {
+    return;
+  }
+
+  const authHeader = request.headers.authorization;
+  if (!authHeader) {
+    return;
+  }
+
+  const token = getBearerToken(authHeader);
+  if (!token) {
+    return;
+  }
+
+  const authUser = await verifyAccessToken(token);
+  if (authUser) {
+    request.authUser = authUser;
+  }
 }
 
 function resolveActorUserId(requestPath: string, request: { params?: unknown; body?: unknown }) {
@@ -7344,6 +7401,7 @@ async function sweepExpiredAuctions(reason: 'interval' | 'manual'): Promise<numb
             listingId: auction.listing_id,
             event: 'auction_won',
           },
+          route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
           metadata: { reason },
         });
       }
@@ -7359,6 +7417,7 @@ async function sweepExpiredAuctions(reason: 'interval' | 'manual'): Promise<numb
           listingId: auction.listing_id,
           event: topBid?.bidder_id ? 'auction_sold' : 'auction_no_sale',
         },
+        route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
         metadata: { reason },
       });
     }
@@ -12040,6 +12099,87 @@ app.post('/sellers/:sellerId/follow', async (request, reply) => {
   return { ok: true, isFollowing: true };
 });
 
+// Idempotent follow (POST /users/:userId/follow) — creates follow only if absent.
+app.post('/users/:userId/follow', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const followerId = request.authUser.userId;
+
+  if (followerId === userId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot follow yourself' };
+  }
+
+  // Check block state — cannot follow if blocked by target
+  const blockedByTarget = await readDb.query<{ id: string }>(
+    `SELECT id FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2 LIMIT 1`,
+    [userId, followerId]
+  );
+  if ((blockedByTarget.rowCount ?? 0) > 0) {
+    reply.code(403);
+    return { ok: false, error: 'Cannot follow this user', code: 'BLOCKED_BY_TARGET' };
+  }
+
+  const followId = `follow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const inserted = await db.query<{ id: string }>(
+    `INSERT INTO user_follows (id, follower_id, following_id, created_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (follower_id, following_id) DO NOTHING
+     RETURNING id`,
+    [followId, followerId, userId]
+  );
+
+  if ((inserted.rowCount ?? 0) > 0) {
+    // Queue a follow notification to the followed user
+    try {
+      const followerRow = await readDb.query<{ username: string; display_name: string | null; avatar: string | null }>(
+        `SELECT username, display_name, avatar FROM users WHERE id = $1 LIMIT 1`,
+        [followerId]
+      );
+      const follower = followerRow.rows[0];
+      const followerName = follower?.display_name || follower?.username || 'Someone';
+      await queueUserNotification({
+        userId,
+        title: 'New follower',
+        body: `${followerName} started following you`,
+        eventType: 'follow_received',
+        actorUserId: followerId,
+        imageUrl: follower?.avatar ?? undefined,
+        payload: { followerId },
+        route: { screen: 'UserProfile', params: { userId: followerId } },
+        idempotencyKey: `follow_received_${followerId}_${userId}`,
+        metadata: { source: 'user_follow' },
+      });
+    } catch (notifErr) {
+      app.log.error({ err: notifErr }, 'Failed to queue follow_received notification');
+    }
+  }
+
+  return { ok: true, isFollowing: true };
+});
+
+// Idempotent unfollow (DELETE /users/:userId/follow) — removes follow only if present.
+app.delete('/users/:userId/follow', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const followerId = request.authUser.userId;
+
+  await db.query(
+    `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
+    [followerId, userId]
+  );
+
+  return { ok: true, isFollowing: false };
+});
+
 app.get('/users/:userId/profile', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -12068,6 +12208,332 @@ app.get('/users/:userId/profile', async (request, reply) => {
     ok: true,
     user: toPublicProfilePayload(user),
   };
+});
+
+// ── Seller reviews: summary + paginated list ─────────────────────────
+
+app.get('/sellers/:sellerId/reviews', async (request, reply) => {
+  const paramsSchema = z.object({ sellerId: z.string().min(2) });
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    cursor: z.string().optional(),
+  });
+  const { sellerId } = paramsSchema.parse(request.params);
+  const { limit, cursor } = querySchema.parse(request.query ?? {});
+
+  const sellerExists = await readDb.query<{ id: string }>(
+    `SELECT id FROM users WHERE id = $1 LIMIT 1`,
+    [sellerId]
+  );
+  if (!sellerExists.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Seller not found' };
+  }
+
+  // Summary: average, total, distribution
+  const summaryRes = await readDb.query<{
+    avg_rating: string | null;
+    review_count: string;
+    d1: string;
+    d2: string;
+    d3: string;
+    d4: string;
+    d5: string;
+  }>(
+    `SELECT
+       AVG(rating)::numeric(3,2) AS avg_rating,
+       COUNT(*)::text AS review_count,
+       COUNT(*) FILTER (WHERE rating = 1)::text AS d1,
+       COUNT(*) FILTER (WHERE rating = 2)::text AS d2,
+       COUNT(*) FILTER (WHERE rating = 3)::text AS d3,
+       COUNT(*) FILTER (WHERE rating = 4)::text AS d4,
+       COUNT(*) FILTER (WHERE rating = 5)::text AS d5
+     FROM order_reviews WHERE seller_id = $1`,
+    [sellerId]
+  );
+
+  const summaryRow = summaryRes.rows[0];
+  const ratingAverage = summaryRow?.avg_rating ? Number(summaryRow.avg_rating) : null;
+  const reviewCount = Number(summaryRow?.review_count ?? '0');
+  const distribution = [
+    { rating: 5, count: Number(summaryRow?.d5 ?? '0') },
+    { rating: 4, count: Number(summaryRow?.d4 ?? '0') },
+    { rating: 3, count: Number(summaryRow?.d3 ?? '0') },
+    { rating: 2, count: Number(summaryRow?.d2 ?? '0') },
+    { rating: 1, count: Number(summaryRow?.d1 ?? '0') },
+  ];
+
+  // Paginated review list with reviewer identity + associated listing context
+  const conditions: string[] = ['r.seller_id = $1'];
+  const args: unknown[] = [sellerId];
+  if (cursor) {
+    conditions.push(`r.created_at < $${args.length + 1}`);
+    args.push(cursor);
+  }
+  const fetchLimit = limit + 1;
+
+  const reviewsRes = await readDb.query<{
+    id: string;
+    rating: number;
+    comment: string | null;
+    created_at: string;
+    reviewer_username: string | null;
+    reviewer_display_name: string | null;
+    reviewer_avatar: string | null;
+    listing_id: string | null;
+    listing_title: string | null;
+    listing_image_url: string | null;
+  }>(
+    `
+      SELECT
+        r.id, r.rating, r.comment, r.created_at,
+        u.username AS reviewer_username,
+        u.display_name AS reviewer_display_name,
+        u.avatar AS reviewer_avatar,
+        l.id AS listing_id,
+        l.title AS listing_title,
+        l.image_url AS listing_image_url
+      FROM order_reviews r
+      LEFT JOIN users u ON u.id = r.reviewer_id
+      LEFT JOIN orders o ON o.id = r.order_id
+      LEFT JOIN listings l ON l.id = o.listing_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY r.created_at DESC
+      LIMIT $${args.length + 1}
+    `,
+    [...args, fetchLimit]
+  );
+
+  const hasMore = reviewsRes.rows.length > limit;
+  const rows = hasMore ? reviewsRes.rows.slice(0, limit) : reviewsRes.rows;
+  const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
+
+  return {
+    ok: true,
+    summary: {
+      ratingAverage,
+      reviewCount,
+      distribution,
+    },
+    items: rows.map((row) => ({
+      id: row.id,
+      rating: row.rating,
+      comment: row.comment,
+      createdAt: row.created_at,
+      reviewer: {
+        id: null as string | null,
+        username: row.reviewer_username,
+        displayName: row.reviewer_display_name,
+        avatar: row.reviewer_avatar,
+      },
+      listing: row.listing_id
+        ? {
+            id: row.listing_id,
+            title: row.listing_title,
+            imageUrl: row.listing_image_url,
+          }
+        : null,
+    })),
+    nextCursor,
+  };
+});
+
+// ── Follow counts + follower/following lists ─────────────────────────
+
+app.get('/users/:userId/follow-counts', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const result = await readDb.query<{ followers: string; following: string }>(
+    `SELECT
+       (SELECT COUNT(*)::text FROM user_follows WHERE following_id = $1) AS followers,
+       (SELECT COUNT(*)::text FROM user_follows WHERE follower_id = $1) AS following`,
+    [userId]
+  );
+
+  return {
+    ok: true,
+    followerCount: Number(result.rows[0]?.followers ?? '0'),
+    followingCount: Number(result.rows[0]?.following ?? '0'),
+  };
+});
+
+app.get('/users/:userId/followers', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(40),
+    cursor: z.string().optional(),
+  });
+  const { userId } = paramsSchema.parse(request.params);
+  const { limit, cursor } = querySchema.parse(request.query ?? {});
+
+  const conditions: string[] = ['f.following_id = $1'];
+  const args: unknown[] = [userId];
+  if (cursor) {
+    conditions.push(`f.created_at < $${args.length + 1}`);
+    args.push(cursor);
+  }
+  const fetchLimit = limit + 1;
+
+  const result = await readDb.query<{
+    id: string;
+    username: string;
+    display_name: string | null;
+    avatar: string | null;
+    created_at: string;
+  }>(
+    `SELECT u.id, u.username, u.display_name, u.avatar, f.created_at
+     FROM user_follows f
+     JOIN users u ON u.id = f.follower_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY f.created_at DESC
+     LIMIT $${args.length + 1}`,
+    [...args, fetchLimit]
+  );
+
+  const hasMore = result.rows.length > limit;
+  const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+  const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      avatar: row.avatar,
+    })),
+    nextCursor,
+  };
+});
+
+app.get('/users/:userId/following', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(40),
+    cursor: z.string().optional(),
+  });
+  const { userId } = paramsSchema.parse(request.params);
+  const { limit, cursor } = querySchema.parse(request.query ?? {});
+
+  const conditions: string[] = ['f.follower_id = $1'];
+  const args: unknown[] = [userId];
+  if (cursor) {
+    conditions.push(`f.created_at < $${args.length + 1}`);
+    args.push(cursor);
+  }
+  const fetchLimit = limit + 1;
+
+  const result = await readDb.query<{
+    id: string;
+    username: string;
+    display_name: string | null;
+    avatar: string | null;
+    created_at: string;
+  }>(
+    `SELECT u.id, u.username, u.display_name, u.avatar, f.created_at
+     FROM user_follows f
+     JOIN users u ON u.id = f.following_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY f.created_at DESC
+     LIMIT $${args.length + 1}`,
+    [...args, fetchLimit]
+  );
+
+  const hasMore = result.rows.length > limit;
+  const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+  const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      avatar: row.avatar,
+    })),
+    nextCursor,
+  };
+});
+
+// ── Block / unblock ──────────────────────────────────────────────────
+
+app.post('/users/:userId/block', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const blockerId = request.authUser.userId;
+
+  if (blockerId === userId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot block yourself' };
+  }
+
+  const blockId = `block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await db.query(
+    `INSERT INTO user_blocks (id, blocker_id, blocked_id, created_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
+    [blockId, blockerId, userId]
+  );
+
+  // Remove any follow relationship in either direction
+  await db.query(
+    `DELETE FROM user_follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)`,
+    [blockerId, userId]
+  );
+
+  return { ok: true, isBlocked: true };
+});
+
+app.post('/users/:userId/unblock', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const blockerId = request.authUser.userId;
+
+  await db.query(
+    `DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`,
+    [blockerId, userId]
+  );
+
+  return { ok: true, isBlocked: false };
+});
+
+// ── Report user ──────────────────────────────────────────────────────
+
+app.post('/users/:userId/report', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const bodySchema = z.object({
+    reason: z.enum(['spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment', 'other']),
+    details: z.string().min(1).max(2000).optional(),
+  });
+  const { userId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body ?? {});
+  const reporterId = request.authUser.userId;
+
+  if (reporterId === userId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot report yourself' };
+  }
+
+  const reportId = `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await db.query(
+    `INSERT INTO user_reports (id, reporter_id, reported_id, reason, details, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+    [reportId, reporterId, userId, body.reason, body.details ?? null]
+  );
+
+  reply.code(201);
+  return { ok: true, reportId };
 });
 
 app.get('/users/search', async (request, reply) => {
@@ -19179,6 +19645,53 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
     return {
       ok: false,
       error: 'Unable to resolve 1ze quote',
+    };
+  }
+});
+
+app.get('/auctions/1ze-rates', async (request, reply) => {
+  try {
+    if (!(await onezeTablesAvailable(db)) || !(await onezePricingTablesAvailable(db))) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: '1ze controlled pricing tables are unavailable.',
+      };
+    }
+
+    const quotes = await listCountryPricingQuotes(db);
+    const anchor = await getOnezeAnchorConfig(db);
+
+    const rates: Record<string, {
+      rate: number;
+      source: string;
+      updatedAt: string;
+      settlementSupported: boolean;
+    }> = {};
+
+    for (const quote of quotes) {
+      rates[quote.currency] = {
+        rate: quote.sellPrice,
+        source: quote.source,
+        updatedAt: quote.updatedAt,
+        settlementSupported: true,
+      };
+    }
+
+    return {
+      ok: true,
+      anchorCurrency: anchor.anchorCurrency,
+      anchorValue: anchor.anchorValue,
+      rates,
+      source: 'internal_pricing',
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    request.log.error({ err: error }, 'Failed to resolve 1ze display rates');
+    reply.code(500);
+    return {
+      ok: false,
+      error: 'Unable to resolve 1ze display rates',
     };
   }
 });
@@ -28714,6 +29227,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
     unit_price_gbp: number | string | null;
     fee_gbp: number | string | null;
     status: 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | null;
+    order_type: 'market' | 'limit' | null;
     note: string | null;
     timestamp: string;
   }>(
@@ -28728,6 +29242,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
         history.unit_price_gbp,
         history.fee_gbp,
         history.status,
+        history.order_type,
         history.note,
         history.timestamp
       FROM (
@@ -28745,6 +29260,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
             ELSE NULL::NUMERIC
           END AS fee_gbp,
           NULL::TEXT AS status,
+          NULL::TEXT AS order_type,
           l.title AS note,
           ab.created_at AS timestamp
         FROM auction_bids ab
@@ -28764,6 +29280,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
           so.unit_price_gbp AS unit_price_gbp,
           so.fee_gbp AS fee_gbp,
           so.status::text AS status,
+          so.order_type::text AS order_type,
           sa.title AS note,
           so.created_at AS timestamp
         FROM coOwn_orders so
@@ -28801,6 +29318,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
       unitPriceGbp: row.unit_price_gbp === null ? null : Number(row.unit_price_gbp),
       feeGbp: row.fee_gbp === null ? null : Number(row.fee_gbp),
       status: row.status,
+      orderType: row.order_type as 'market' | 'limit' | null,
       note: row.note,
       timestamp: row.timestamp,
     })),
@@ -28811,7 +29329,273 @@ app.get('/users/:userId/market-history', async (request, reply) => {
   };
 });
 
+// ── Auction House home aggregate endpoint ──
+// Deterministic attention priority:
+// 1. unresolved won action  2. outbid live  3. leading ending within threshold
+// 4. leading live  5. watching ending within threshold  6. strongest closing-soon
+// 7. strongest live  8. nearest upcoming
+const ATTENTION_LEADING_THRESHOLD_MS = 30 * 60 * 1000; // 30 min
+const ATTENTION_WATCHING_THRESHOLD_MS = 60 * 60 * 1000; // 60 min
+const CLOSING_SOON_THRESHOLD_MS = 60 * 60 * 1000; // 60 min
+
+app.get('/auctions/home', async (request, reply) => {
+  await optionalAuthenticate(request, '/auctions/home');
+  const viewerUserId = request.authUser?.userId ?? null;
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const nowMs = now.getTime();
+
+  // ── Fetch all auctions with viewer state in a single query ──
+  // Parameterised: viewer ID passed as $1 to every authenticated query.
+  // Anonymous queries use literal false/NULL with no parameter.
+  const viewerSelect = viewerUserId
+    ? `, EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $1) AS is_watched, (SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = $1) AS viewer_highest_bid`
+    : `, false::boolean AS is_watched, NULL::text AS viewer_highest_bid`;
+
+  const baseSelect = `
+    SELECT
+      a.id, a.listing_id, a.seller_id, a.starts_at, a.ends_at,
+      a.starting_bid_gbp, a.current_bid_gbp, a.buy_now_price_gbp,
+      a.min_increment_gbp, a.bid_count, a.status, a.cancelled_at, a.settled_at,
+      a.winner_bidder_id AS auction_winner_id, a.created_at,
+      l.title, l.image_url, l.brand, l.category, l.condition AS condition_label,
+      u.username AS seller_username, u.avatar AS seller_avatar, u.display_name AS seller_display_name
+      ${viewerSelect}
+    FROM auctions a
+    LEFT JOIN listings l ON l.id = a.listing_id
+    LEFT JOIN users u ON u.id = a.seller_id
+    WHERE a.cancelled_at IS NULL
+  `;
+
+  const viewerParams = viewerUserId ? [viewerUserId] : [];
+
+  // Fetch live (including closing soon), upcoming, ended, seller, and watchlist in parallel
+  const [liveRes, upcomingRes, endedRes, sellerRes, watchlistRes, categoryRes] = await Promise.all([
+    db.query(baseSelect + ` AND a.starts_at <= NOW() AND a.ends_at > NOW() ORDER BY a.ends_at ASC LIMIT 30`, viewerParams),
+    db.query(baseSelect + ` AND a.starts_at > NOW() ORDER BY a.starts_at ASC LIMIT 20`, viewerParams),
+    db.query(baseSelect + ` AND a.ends_at <= NOW() ORDER BY a.ends_at DESC LIMIT 20`, viewerParams),
+    viewerUserId
+      ? db.query(baseSelect + ` AND a.seller_id = $1 ORDER BY a.ends_at DESC LIMIT 20`, [viewerUserId])
+      : Promise.resolve({ rows: [] as any[] }),
+    viewerUserId
+      ? db.query(baseSelect + ` AND EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $1) ORDER BY a.ends_at ASC LIMIT 20`, [viewerUserId])
+      : Promise.resolve({ rows: [] as any[] }),
+    db.query(`SELECT DISTINCT COALESCE(l.category, '') AS category FROM auctions a LEFT JOIN listings l ON l.id = a.listing_id WHERE a.cancelled_at IS NULL AND a.starts_at <= NOW() AND a.ends_at > NOW() AND COALESCE(l.category, '') != '' ORDER BY category ASC`),
+  ]);
+
+  // ── Row mapper (shared with /auctions list endpoint) ──
+  function mapRow(row: any) {
+    const canonical = resolveCanonicalLifecycle({
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      winnerBidderId: row.auction_winner_id,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+    });
+    const currentBid = Number(row.current_bid_gbp);
+    const minIncrement = Number(row.min_increment_gbp) || 0.01;
+    const minimumNextBid = roundTo(currentBid + minIncrement, 2);
+
+    let viewerState: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller' = 'not_participating';
+    const isWatched = !!row.is_watched;
+    const viewerHighestBid = row.viewer_highest_bid ? Number(row.viewer_highest_bid) : null;
+
+    if (viewerUserId && row.seller_id === viewerUserId) {
+      viewerState = 'seller';
+    } else if (canonical.lifecycle === 'ended' || canonical.lifecycle === 'cancelled' || canonical.lifecycle === 'settled') {
+      if (row.auction_winner_id && row.auction_winner_id === viewerUserId) {
+        viewerState = 'won';
+      } else if (viewerHighestBid !== null) {
+        viewerState = 'lost';
+      } else if (isWatched) {
+        viewerState = 'watching';
+      }
+    } else if (viewerHighestBid !== null) {
+      viewerState = viewerHighestBid >= currentBid ? 'leading' : 'outbid';
+    } else if (isWatched) {
+      viewerState = 'watching';
+    }
+
+    return {
+      id: row.id,
+      listingId: row.listing_id,
+      seller: {
+        id: row.seller_id,
+        username: row.seller_username ?? 'unknown',
+        displayName: row.seller_display_name ?? null,
+        avatarUrl: row.seller_avatar ?? null,
+      },
+      title: row.title ?? 'Untitled',
+      imageUrl: row.image_url ?? null,
+      brand: row.brand ?? null,
+      category: row.category ?? null,
+      conditionLabel: row.condition_label ?? null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      startingBidGbp: Number(row.starting_bid_gbp),
+      currentBidGbp: currentBid,
+      minimumNextBidGbp: minimumNextBid,
+      buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      bidCount: row.bid_count,
+      lifecycle: canonical.lifecycle,
+      terminalReason: canonical.terminalReason,
+      viewerState,
+      isWatched,
+      winnerBidderId: row.auction_winner_id,
+      cancelledAt: row.cancelled_at,
+      settledAt: row.settled_at,
+      createdAt: row.created_at,
+    };
+  }
+
+  const liveItems = liveRes.rows.map(mapRow);
+  const upcomingItems = upcomingRes.rows.map(mapRow);
+  const endedItems = endedRes.rows.map(mapRow);
+  const sellerItems = sellerRes.rows.map(mapRow);
+  const watchlistItems = watchlistRes.rows.map(mapRow);
+
+  // ── Activity counts (deduplicated by Auction ID) ──
+  const activity = {
+    activeCount: 0,
+    needsAttentionCount: 0,
+    leadingCount: 0,
+    outbidCount: 0,
+    watchingCount: 0,
+    unresolvedWonCount: 0,
+  };
+
+  const seenActivityIds = new Set<string>();
+  for (const item of [...liveItems, ...endedItems, ...watchlistItems]) {
+    if (seenActivityIds.has(item.id)) continue;
+    seenActivityIds.add(item.id);
+
+    if (item.viewerState === 'outbid') { activity.outbidCount++; activity.needsAttentionCount++; activity.activeCount++; }
+    else if (item.viewerState === 'leading') { activity.leadingCount++; activity.activeCount++; }
+    else if (item.viewerState === 'watching') { activity.watchingCount++; activity.activeCount++; }
+    else if (item.viewerState === 'won') { activity.unresolvedWonCount++; activity.needsAttentionCount++; }
+  }
+
+  // ── Deterministic attention priority ──
+  // 1. unresolved won action (won with ended/settled lifecycle and no settled_at = needs action)
+  const wonAction = [...endedItems, ...liveItems].find(
+    (i) => i.viewerState === 'won' && !i.settledAt
+  );
+  // 2. outbid live
+  const outbidLive = liveItems.find((i) => i.viewerState === 'outbid');
+  // 3. leading ending within threshold
+  const leadingEnding = liveItems.find((i) => {
+    if (i.viewerState !== 'leading') return false;
+    const msToEnd = new Date(i.endsAt).getTime() - nowMs;
+    return msToEnd > 0 && msToEnd <= ATTENTION_LEADING_THRESHOLD_MS;
+  });
+  // 4. leading live
+  const leadingLive = liveItems.find((i) => i.viewerState === 'leading');
+  // 5. watching ending within threshold
+  const watchingEnding = liveItems.find((i) => {
+    if (i.viewerState !== 'watching') return false;
+    const msToEnd = new Date(i.endsAt).getTime() - nowMs;
+    return msToEnd > 0 && msToEnd <= ATTENTION_WATCHING_THRESHOLD_MS;
+  });
+  // 6. strongest closing-soon market auction
+  const closingSoonLive = liveItems.find((i) => {
+    const msToEnd = new Date(i.endsAt).getTime() - nowMs;
+    return msToEnd > 0 && msToEnd <= CLOSING_SOON_THRESHOLD_MS;
+  });
+  // 7. strongest live
+  const strongestLive = liveItems[0] ?? null;
+  // 8. nearest upcoming
+  const nearestUpcoming = upcomingItems[0] ?? null;
+
+  let attentionItem: typeof wonAction | null = null;
+  let attentionReason: string | null = null;
+  if (wonAction) { attentionItem = wonAction; attentionReason = 'won_action'; }
+  else if (outbidLive) { attentionItem = outbidLive; attentionReason = 'outbid'; }
+  else if (leadingEnding) { attentionItem = leadingEnding; attentionReason = 'leading_ending'; }
+  else if (leadingLive) { attentionItem = leadingLive; attentionReason = 'leading'; }
+  else if (watchingEnding) { attentionItem = watchingEnding; attentionReason = 'watching_ending'; }
+
+  // Fallback to market auction if no personal attention
+  if (!attentionItem) {
+    if (closingSoonLive) { attentionItem = closingSoonLive; attentionReason = null; }
+    else if (strongestLive) { attentionItem = strongestLive; attentionReason = null; }
+    else if (nearestUpcoming) { attentionItem = nearestUpcoming; attentionReason = null; }
+  }
+
+  // ── Closing soon programme (live items ending within 60 min, excluding attention item) ──
+  const closingSoon = liveItems.filter((i) => {
+    if (attentionItem && i.id === attentionItem.id) return false;
+    const msToEnd = new Date(i.endsAt).getTime() - nowMs;
+    return msToEnd > 0 && msToEnd <= CLOSING_SOON_THRESHOLD_MS;
+  });
+
+  // ── Live auction floor (live items not in closing soon or attention) ──
+  const excludeIds = new Set<string>();
+  if (attentionItem) excludeIds.add(attentionItem.id);
+  closingSoon.forEach((i) => excludeIds.add(i.id));
+  const liveFloor = liveItems.filter((i) => !excludeIds.has(i.id));
+
+  // ── Category worlds ──
+  const categoryRows = categoryRes.rows as { category: string }[];
+  const categoryWorlds: Array<{
+    categoryKey: string;
+    displayName: string;
+    representativeImageUrl: string | null;
+    availableCount?: number;
+  }> = [];
+
+  for (const catRow of categoryRows) {
+    const cat = catRow.category;
+    // Find a representative image from live items
+    const repItem = liveItems.find((i) => i.category === cat && i.imageUrl);
+    categoryWorlds.push({
+      categoryKey: cat,
+      displayName: cat,
+      representativeImageUrl: repItem?.imageUrl ?? null,
+      availableCount: liveItems.filter((i) => i.category === cat).length || undefined,
+    });
+  }
+
+  // ── Recently closed ──
+  const recentlyClosed = endedItems.filter((i) => {
+    if (attentionItem && i.id === attentionItem.id) return false;
+    return true;
+  });
+
+  // ── Seller summary ──
+  let sellerSummary: { liveCount: number; scheduledCount: number; completedCount: number } | undefined;
+  if (sellerItems.length > 0) {
+    sellerSummary = {
+      liveCount: sellerItems.filter((i) => i.lifecycle === 'live').length,
+      scheduledCount: sellerItems.filter((i) => i.lifecycle === 'upcoming').length,
+      completedCount: sellerItems.filter((i) => i.lifecycle === 'ended' || i.lifecycle === 'settled').length,
+    };
+  }
+
+  return {
+    ok: true,
+    serverNow: nowIso,
+    attention: {
+      item: attentionItem ?? null,
+      reason: attentionReason,
+    },
+    activity,
+    closingSoon,
+    live: liveFloor,
+    upcoming: upcomingItems,
+    categoryWorlds,
+    recentlyClosed,
+    sellerSummary,
+    sellerAuctions: sellerItems,
+    watchlist: watchlistItems.filter((i) => {
+      if (attentionItem && i.id === attentionItem.id) return false;
+      return true;
+    }),
+  };
+});
+
 app.get('/auctions', async (request, reply) => {
+  await optionalAuthenticate(request, '/auctions');
   const querySchema = z.object({
     status: z.enum(['live', 'scheduled', 'ended', 'all']).default('all'),
     query: z.string().min(1).max(200).optional(),
@@ -28932,6 +29716,15 @@ app.get('/auctions', async (request, reply) => {
 
   const whereClause = `WHERE ${whereConditions.join(' AND ')}${cursorCondition}`;
 
+  const viewerParamIdx = paramIdx + 1;
+  const viewerSelect = viewerUserId
+    ? `, EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $${viewerParamIdx}) AS is_watched, (SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = $${viewerParamIdx}) AS viewer_highest_bid`
+    : `, false::boolean AS is_watched, NULL::text AS viewer_highest_bid`;
+
+  if (viewerUserId) {
+    whereParams.push(viewerUserId);
+  }
+
   const result = await db.query<{
     id: string;
     listing_id: string;
@@ -28980,12 +29773,11 @@ app.get('/auctions', async (request, reply) => {
         l.image_url,
         l.brand,
         l.category,
-        l.condition_label,
+        l.condition AS condition_label,
         u.username AS seller_username,
-        u.avatar_url AS seller_avatar,
+        u.avatar AS seller_avatar,
         u.display_name AS seller_display_name,
-        ${viewerUserId ? `(SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}' LIMIT 1)::boolean` : 'false::boolean'} AS is_watched,
-        ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = '${viewerUserId.replace(/'/g, "''")}')` : 'NULL::text'} AS viewer_highest_bid
+        ${viewerSelect}
       FROM auctions a
       LEFT JOIN listings l ON l.id = a.listing_id
       LEFT JOIN users u ON u.id = a.seller_id
@@ -29448,6 +30240,19 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
     const amountGbp = roundTo(payload.amountGbp, 2);
     const minimumNextBid = roundTo(currentBid + minIncrement, 2);
 
+    // Fetch previous top bidder to send outbid notification
+    const previousTopBidder = await client.query<{ bidder_id: string }>(
+      `
+        SELECT bidder_id
+        FROM auction_bids
+        WHERE auction_id = $1
+        ORDER BY amount_gbp DESC, created_at DESC
+        LIMIT 1
+      `,
+      [auctionId]
+    );
+    const previousTopBidderId = previousTopBidder.rows[0]?.bidder_id ?? null;
+
     if (amountGbp < minimumNextBid) {
       await client.query('ROLLBACK');
       reply.code(400);
@@ -29660,12 +30465,35 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
           amountGbp,
           event: 'auction_bid',
         },
+        route: { screen: 'AuctionDetail', params: { auctionId } },
         metadata: {
           source: 'auction_bid_route',
         },
       });
     } catch (error) {
       request.log.error({ err: error, auctionId }, 'Failed to queue seller bid notification');
+    }
+
+    // Notify the previous top bidder that they've been outbid
+    if (previousTopBidderId && previousTopBidderId !== bidderId) {
+      try {
+        await queueUserNotification({
+          userId: previousTopBidderId,
+          title: 'You\'ve been outbid',
+          body: `Someone outbid you with ${amountGbp.toFixed(2)} GBP. Place a new bid to reclaim the top spot.`,
+          payload: {
+            auctionId,
+            event: 'auction_outbid',
+            newBidAmountGbp: amountGbp,
+          },
+          route: { screen: 'AuctionDetail', params: { auctionId } },
+          metadata: {
+            source: 'auction_outbid_route',
+          },
+        });
+      } catch (error) {
+        request.log.error({ err: error, auctionId }, 'Failed to queue outbid notification');
+      }
     }
 
     await appendComplianceAuditSafe(request, {
@@ -30052,6 +30880,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
           amountGbp: transactionAmountGbp,
           event: 'auction_buy_now',
         },
+        route: { screen: 'AuctionDetail', params: { auctionId } },
         metadata: {
           source: 'auction_buy_now_route',
         },
@@ -30110,6 +30939,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
 });
 
 app.get('/auctions/:auctionId', async (request, reply) => {
+  await optionalAuthenticate(request, '/auctions/:auctionId');
   const paramsSchema = z.object({ auctionId: z.string().min(2) });
   const { auctionId } = paramsSchema.parse(request.params);
 
@@ -30165,21 +30995,21 @@ app.get('/auctions/:auctionId', async (request, reply) => {
         l.image_url,
         l.brand,
         l.category,
-        l.condition_label,
+        l.condition AS condition_label,
         l.description,
         l.price_gbp,
         u.username AS seller_username,
-        u.avatar_url AS seller_avatar,
+        u.avatar AS seller_avatar,
         u.display_name AS seller_display_name,
-        ${viewerUserId ? `(SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}' LIMIT 1)::boolean` : 'false::boolean'} AS is_watched,
-        ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = '${viewerUserId.replace(/'/g, "''")}')` : 'NULL::text'} AS viewer_highest_bid
+        ${viewerUserId ? `EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $2)::boolean` : 'false::boolean'} AS is_watched,
+        ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = $2)` : 'NULL::text'} AS viewer_highest_bid
       FROM auctions a
       LEFT JOIN listings l ON l.id = a.listing_id
       LEFT JOIN users u ON u.id = a.seller_id
       WHERE a.id = $1
       LIMIT 1
     `,
-    [auctionId]
+    viewerUserId ? [auctionId, viewerUserId] : [auctionId]
   );
 
   const row = result.rows[0];
@@ -30372,7 +31202,7 @@ app.get('/auctions/watchlist', async (request, reply) => {
         l.category,
         u.username AS seller_username,
         u.display_name AS seller_display_name,
-        u.avatar_url AS seller_avatar,
+        u.avatar AS seller_avatar,
         aw.created_at AS watched_at,
         aw.id AS aw_id
       FROM auction_watchlist aw
@@ -30764,12 +31594,15 @@ app.post('/co-own/assets', async (request, reply) => {
     id: string;
     title: string;
     image_url: string | null;
-  }>('SELECT id, title, image_url FROM listings WHERE id = $1 LIMIT 1', [payload.listingId]);
+  }>(
+    'SELECT id, title, image_url FROM listings WHERE id = $1 AND seller_id = $2 LIMIT 1',
+    [payload.listingId, payload.issuerId]
+  );
 
   const listing = listingResult.rows[0];
   if (!listing) {
     reply.code(404);
-    return { ok: false, error: 'Listing not found' };
+    return { ok: false, error: 'Listing not found or not owned by issuer', code: 'LISTING_OWNERSHIP_DENIED' };
   }
 
   const assetId = payload.id ?? `s_${Date.now()}_${Math.floor(Math.random() * 10000)}`;

@@ -66,6 +66,7 @@ export function CachedImage({
     );
   }
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
   const reducedMotionEnabled = useReducedMotion();
   const shimmerX = useSharedValue(-1);
   const imageOpacity = useSharedValue(0);
@@ -73,6 +74,7 @@ export function CachedImage({
 
   React.useEffect(() => {
     setLoaded(false);
+    setFailed(false);
     imageOpacity.value = 0;
     previewOpacity.value = previewUri ? 1 : 0;
   }, [imageOpacity, previewOpacity, previewUri, uri]);
@@ -144,6 +146,7 @@ export function CachedImage({
   }, [imageOpacity, previewOpacity, reducedMotionEnabled, onLoad]);
 
     const handleError = React.useCallback(() => {
+    setFailed(true);
     setLoaded(true);
     imageOpacity.value = withTiming(1, { duration: 0 });
     previewOpacity.value = withTiming(0, { duration: 80 });
@@ -152,6 +155,16 @@ export function CachedImage({
 
   return (
     <View style={[styles.container, containerStyle]}>
+      {/* Premium fallback for failed loads (404, network error, etc.) —
+          never leaves a broken/blank image rectangle. */}
+      {failed ? (
+        <ImageEmptyGraphic
+          label={emptyLabel}
+          icon={emptyIcon}
+          style={[styles.image, style]}
+        />
+      ) : (
+      <>
       {/* Shimmer placeholder */}
       {!loaded && (
         <View style={[StyleSheet.absoluteFill, styles.shimmerBase]}>
@@ -216,6 +229,8 @@ export function CachedImage({
           />
         )}
       </Reanimated.View>
+      </>
+      )}
     </View>
   );
 }

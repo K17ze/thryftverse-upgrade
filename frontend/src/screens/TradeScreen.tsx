@@ -9,10 +9,8 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useCurrencyContext } from '../context/CurrencyContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
-import { formatIzeAmount, toIze } from '../utils/currency';
 import {
   buildTradeQuote,
   evaluateTradeSubmit,
@@ -23,7 +21,7 @@ import {
   TradeSide,
 } from '../utils/tradeFlow';
 import { parseApiError } from '../lib/apiClient';
-import { placeCoOwnOrder, fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
+import { fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
@@ -65,8 +63,7 @@ export default function TradeScreen() {
 
   const currentUser = useStore((state) => state.currentUser);
   const checkCoOwnEligibility = useStore((state) => state.checkCoOwnEligibility);
-  const { goldRates } = useCurrencyContext();
-  const { formatFromIze } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   const [side, setSide] = React.useState<TradeSide>(route.params?.side ?? 'buy');
   const [quantityInput, setQuantityInput] = React.useState('1');
@@ -109,7 +106,9 @@ export default function TradeScreen() {
     return () => { cancelled = true; };
   }, [tradeAssetId, currentUser?.id, show]);
 
-  const marketPrice = asset ? toIze(asset.unitPriceGbp, 'GBP', goldRates) : 0;
+  // marketPrice is the authoritative backend unit price in GBP.
+  // The quote math stays in GBP end-to-end; limitPriceGbp is a real GBP value.
+  const marketPrice = asset ? asset.unitPriceGbp : 0;
   const orderMode = offerPriceInput.trim().length > 0 ? 'limit' : 'market';
 
   const quote = React.useMemo(
@@ -134,17 +133,19 @@ export default function TradeScreen() {
     if (!decision.ok) { show(decision.message, 'error'); return; }
     if (!asset) { show('Asset not found', 'error'); return; }
 
-    const feeGbp = quote.grossValue * CO_OWN_FEE_RATE;
-    const totalGbp = quote.grossValue + feeGbp;
-
+    // quote.fee and quote.netValue are already correctly computed in GBP:
+    //   buy  → netValue = gross + fee  (total cost)
+    //   sell → netValue = gross - fee  (net proceeds)
     haptic.medium();
     navigation.navigate('TradeConfirm', {
       assetId: asset.id,
+      assetTitle: asset.title,
+      assetImageUrl: asset.imageUrl,
       side,
       quantity: quote.quantity,
       totalValue: quote.grossValue,
-      fee: feeGbp,
-      netValue: totalGbp,
+      fee: quote.fee,
+      netValue: quote.netValue,
       orderMode,
       limitPriceGbp: orderMode === 'limit' && quote.hasLimitPrice ? quote.limitPrice : undefined,
     });
@@ -180,14 +181,11 @@ export default function TradeScreen() {
     );
   }
 
-  const feeGbp = quote.grossValue * CO_OWN_FEE_RATE;
-  const totalGbp = quote.grossValue + feeGbp;
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
-      <TradeHeader title={`Trade ${asset.id.toUpperCase()}`} onBack={() => navigation.goBack()} />
+      <TradeHeader title={`Trade ${asset.title}`} onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
@@ -240,13 +238,13 @@ export default function TradeScreen() {
               value={offerPriceInput}
               onChangeText={(v) => setOfferPriceInput(sanitizeTradePriceInput(v))}
               keyboardType="decimal-pad"
-              placeholder={`Market: ${formatFromIze(marketPrice)}`}
+              placeholder={`Market: ${formatFromFiat(marketPrice, 'GBP')}`}
               accessibilityLabel="Limit price"
             />
             <Meta style={styles.marketHint}>
               {orderMode === 'market'
-                ? `Market price: ${formatFromIze(marketPrice)} per unit`
-                : `Limit order at ${formatFromIze(quote.limitPrice ?? 0)} per unit`}
+                ? `Market price: ${formatFromFiat(marketPrice, 'GBP')} per unit`
+                : `Limit order at ${formatFromFiat(quote.limitPrice ?? 0, 'GBP')} per unit`}
             </Meta>
           </TradeCard>
         </Reanimated.View>
@@ -255,16 +253,16 @@ export default function TradeScreen() {
           <TradeCard variant="tint">
             <Meta style={styles.sectionLabel}>QUOTE</Meta>
             <View style={styles.quoteRow}>
-              <Meta>Notional</Meta>
-              <BodyEmphasis>{formatFromIze(toIze(quote.grossValue, 'GBP', goldRates))}</BodyEmphasis>
+              <Meta>{side === 'buy' ? 'Gross cost' : 'Gross proceeds'}</Meta>
+              <BodyEmphasis>{formatFromFiat(quote.grossValue, 'GBP')}</BodyEmphasis>
             </View>
             <View style={styles.quoteRow}>
               <Meta>Fee ({(CO_OWN_FEE_RATE * 100).toFixed(1)}%)</Meta>
-              <Body>{formatFromIze(feeGbp)}</Body>
+              <Body>{formatFromFiat(quote.fee, 'GBP')}</Body>
             </View>
             <View style={[styles.quoteRow, styles.totalRow]}>
-              <BodyEmphasis>Total</BodyEmphasis>
-              <BodyEmphasis style={{ color: Colors.brand }}>{formatFromIze(totalGbp)}</BodyEmphasis>
+              <BodyEmphasis>{side === 'buy' ? 'Total cost' : 'Net proceeds'}</BodyEmphasis>
+              <BodyEmphasis style={{ color: Colors.brand }}>{formatFromFiat(quote.netValue, 'GBP')}</BodyEmphasis>
             </View>
           </TradeCard>
         </Reanimated.View>

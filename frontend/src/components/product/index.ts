@@ -13,3 +13,4 @@ export * from './DiscoveryGrid';
 export * from './ProductActionBar';
 export * from './ProductDetailSkeleton';
 export * from './ProductErrorState';
+export * from './ProductFamilyBadge';

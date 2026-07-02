@@ -343,7 +343,7 @@ export function resolveViewerContextMessage(
   if (viewerState === 'outbid') {
     return {
       title: 'You have been outbid',
-      subtitle: `Minimum next bid: ${formatFromFiat(auction.minimumNextBidGbp, 'GBP', { displayMode: 'fiat' })}`,
+      subtitle: `Minimum next bid: ${formatFromFiat(auction.minimumNextBidGbp, 'GBP')}`,
       treatment: 'warning',
     };
   }
@@ -414,7 +414,7 @@ export function formatBidActivityRow(
 ): BidActivityDisplayRow {
   return {
     id: bid.id,
-    amountText: formatFromFiat(bid.amountGbp, 'GBP', { displayMode: 'fiat' }),
+    amountText: formatFromFiat(bid.amountGbp, 'GBP'),
     bidderLabel: bid.isViewer ? 'You' : 'Bidder',
     isViewer: bid.isViewer,
     isTopBid: index === 0,

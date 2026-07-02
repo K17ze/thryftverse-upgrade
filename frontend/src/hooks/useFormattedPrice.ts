@@ -10,7 +10,7 @@ interface FormatOptions {
 }
 
 export function useFormattedPrice() {
-  const { currencyCode, displayMode, goldRates } = useCurrencyContext();
+  const { currencyCode, displayMode, goldRates, rateSource, rateUpdatedAt, settlementCurrencies } = useCurrencyContext();
 
   const formatFromIze = React.useCallback(
     (izeAmount: number, options: FormatOptions = {}) => {
@@ -41,6 +41,10 @@ export function useFormattedPrice() {
   return {
     currencyCode,
     displayMode,
+    goldRates,
+    rateSource,
+    rateUpdatedAt,
+    settlementCurrencies,
     formatFromIze,
     formatFromFiat,
   };

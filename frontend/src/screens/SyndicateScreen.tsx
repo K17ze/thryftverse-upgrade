@@ -21,6 +21,7 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { formatIzeAmount, toIze } from '../utils/currency';
 import { parseApiError } from '../lib/apiClient';
 import { listCoOwnAssets, placeCoOwnOrder, fetchCoOwnHoldings } from '../services/marketApi';
+import { resolveCoOwnConversation } from '../utils/coOwnMessaging';
 import { t } from '../i18n';
 import { Motion } from '../constants/motion';
 import { Space, Radius } from '../theme/designTokens';
@@ -70,6 +71,7 @@ export default function CoOwnScreen() {
     return `${sign}${formatFromFiat(Math.abs(value), 'GBP', { displayMode: 'fiat' })}`;
   };
   const currentUser = useStore((state) => state.currentUser);
+  const upsertConversation = useStore((state) => state.upsertConversation);
   const reducedMotionEnabled = useReducedMotion();
 
   const actingUserId = currentUser?.id;
@@ -85,6 +87,7 @@ export default function CoOwnScreen() {
   const [isSyncingAssets, setIsSyncingAssets] = React.useState(false);
   const [syncError, setSyncError] = React.useState<string | null>(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = React.useState(false);
+  const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
 
   const syncCoOwnAssets = React.useCallback(async () => {
     if (!actingUserId) {
@@ -419,13 +422,32 @@ export default function CoOwnScreen() {
                 onBuy={() => openUnitsComposer(item, 'buy')}
                 onSell={() => openUnitsComposer(item, 'sell')}
                 onDetails={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-                onMessageIssuer={() =>
-                  navigation.navigate('Chat', {
-                    conversationId: `${item.issuerId}_${item.listingId}`,
-                    focusQuery: issuerHandle,
-                    partnerUserId: item.issuerId,
-                  })
-                }
+                onMessageIssuer={async () => {
+                  if (!currentUser?.id) {
+                    show('Sign in to message the issuer.', 'error');
+                    return;
+                  }
+                  if (isResolvingConversation) return;
+                  setIsResolvingConversation(true);
+                  try {
+                    const conversation = await resolveCoOwnConversation(
+                      currentUser.id,
+                      item.issuerId,
+                      issuerHandle,
+                      item.listingId,
+                    );
+                    upsertConversation(conversation);
+                    navigation.navigate('Chat', {
+                      conversationId: conversation.id,
+                      focusQuery: issuerHandle,
+                      partnerUserId: item.issuerId,
+                    });
+                  } catch {
+                    show('Unable to open conversation. Please try again.', 'error');
+                  } finally {
+                    setIsResolvingConversation(false);
+                  }
+                }}
                 onViewIssuer={() => navigation.navigate('UserProfile', { userId: item.issuerId })}
                 canMessageIssuer={canMessageIssuer}
                 isSubmitting={isSubmittingOrder}

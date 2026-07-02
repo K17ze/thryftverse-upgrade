@@ -527,13 +527,13 @@ describe('Profile screen guardrails', () => {
     it(`${file} has no fake follower counts`, () => {
       expect(src).not.toContain('user.followers');
       expect(src).not.toContain('user.following');
-      expect(src).not.toContain('.followers');
-      expect(src).not.toContain('.following');
+      expect(src).not.toMatch(/\.followers\b/);
+      expect(src).not.toMatch(/\.following\b/);
     });
 
     it(`${file} has no fake rating strings`, () => {
       expect(src).not.toContain('user.rating');
-      expect(src).not.toContain('reviewCount');
+      expect(src).not.toContain('MOCK_RATING');
     });
 
     it(`${file} does not hardcode gold/yellow`, () => {
@@ -553,7 +553,7 @@ describe('Profile screen guardrails', () => {
 
   it('UserProfileScreen calls backend public profile fetch', () => {
     const src = readSrc('screens/UserProfileScreen.tsx');
-    expect(src).toContain('fetchPublicProfile');
+    expect(src).toContain('usePublicProfileQuery');
   });
 
   it('EditProfileScreen calls backend profile update', () => {

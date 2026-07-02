@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar, ScrollView } from 'react-native';
+import { View, StyleSheet, StatusBar, ScrollView, Text, KeyboardAvoidingView, Platform } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { toFiat, toIze } from '../utils/currency';
+import { toFiat, toIze, formatIzeAmount } from '../utils/currency';
 import { useBackendData } from '../context/BackendDataContext';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
@@ -24,7 +24,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { Meta, BodyEmphasis, Body, Headline } from '../components/ui/Text';
 import { createAuction } from '../services/marketApi';
 import { createStableId } from '../utils/createStableId';
 import { EmptyState } from '../components/EmptyState';
@@ -32,6 +32,13 @@ import { EmptyState } from '../components/EmptyState';
 type NavT = StackNavigationProp<RootStackParamList>;
 
 const AUCTION_WINDOW_HOURS = 6;
+const DURATION_OPTIONS = [
+  { label: '3h', hours: 3 },
+  { label: '6h', hours: 6 },
+  { label: '12h', hours: 12 },
+  { label: '24h', hours: 24 },
+  { label: '3d', hours: 72 },
+];
 const START_WINDOWS = [
   { label: 'Now', minutes: 0 },
   { label: '30m', minutes: 30 },
@@ -59,10 +66,13 @@ export default function CreateAuctionScreen() {
 
   const [selectedListingId, setSelectedListingId] = React.useState(sellerListings[0]?.id ?? '');
   const [startInMinutes, setStartInMinutes] = React.useState(0);
+  const [durationHours, setDurationHours] = React.useState(6);
   const [startingBidInput, setStartingBidInput] = React.useState('');
   const [buyNowEnabled, setBuyNowEnabled] = React.useState(true);
   const [buyNowInput, setBuyNowInput] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [stage, setStage] = React.useState(0);
+  const [resultData, setResultData] = React.useState<{ auctionId: string; title: string; imageUrl: string; startLabel: string; durationLabel: string; startingBid: string; buyNow: string | null } | null>(null);
 
   const fromGbpToDisplay = React.useCallback(
     (amountGbp: number) => {
@@ -131,7 +141,7 @@ export default function CreateAuctionScreen() {
 
     const now = Date.now();
     const startsAtMs = now + startInMinutes * 60 * 1000;
-    const endsAtMs = startsAtMs + AUCTION_WINDOW_HOURS * 60 * 60 * 1000;
+    const endsAtMs = startsAtMs + durationHours * 60 * 60 * 1000;
 
     const idempotencyKey = createStableId();
     setIsSubmitting(true);
@@ -144,8 +154,18 @@ export default function CreateAuctionScreen() {
         idempotencyKey,
         ...(buyNowPriceGbp ? { buyNowPriceGbp } : {}),
       });
+      const startLabel = startInMinutes === 0 ? 'Immediately' : `In ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`;
+      const durationLabel = DURATION_OPTIONS.find(d => d.hours === durationHours)?.label ?? `${durationHours}h`;
+      setResultData({
+        auctionId: result.id,
+        title: selectedListing.title,
+        imageUrl: getListingCoverUri(selectedListing.images, ''),
+        startLabel,
+        durationLabel,
+        startingBid: `${currencyCode} ${startingBidInput}`,
+        buyNow: buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : null,
+      });
       show(startInMinutes > 0 ? 'Auction scheduled successfully' : 'Auction is now live', 'success');
-      navigation.replace('AuctionDetail', { auctionId: result.id });
     } catch (e) {
       show('Failed to launch auction. Please try again.', 'error');
     } finally {
@@ -174,7 +194,7 @@ export default function CreateAuctionScreen() {
         />
         <View style={styles.listingMeta}>
           <BodyEmphasis style={styles.listingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Meta>
+          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, 'GBP')}</Meta>
         </View>
         {selected && (
           <View style={styles.selectedTick}>
@@ -196,21 +216,31 @@ export default function CreateAuctionScreen() {
       <TradeHeader
         title="Launch Auction"
         showClose
-        onClose={() => navigation.goBack()}
-        rightAction={
-          <AppButton
-            title="Launch"
-            onPress={launchAuction}
-            variant="primary"
-            size="sm"
-            style={styles.headerLaunchBtn}
-            hapticFeedback="medium"
-            accessibilityLabel="Launch auction"
-          />
-        }
+        onClose={() => {
+          if (stage > 0) setStage(stage - 1);
+          else navigation.goBack();
+        }}
+        backIcon="chevron-back"
       />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      {/* Step indicator */}
+      <View style={styles.stepIndicator}>
+        {['Listing', 'Configure', 'Review'].map((label, i) => (
+          <View key={label} style={styles.stepItem}>
+            <View style={[styles.stepDot, i <= stage && styles.stepDotActive]}>
+              <Text style={[styles.stepDotText, i <= stage && styles.stepDotTextActive]}>{i + 1}</Text>
+            </View>
+            <Text style={[styles.stepLabel, i <= stage && styles.stepLabelActive]}>{label}</Text>
+            {i < 2 && <View style={[styles.stepConnector, i < stage && styles.stepConnectorActive]} />}
+          </View>
+        ))}
+      </View>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {!sellerListings.length ? (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
             <EmptyState
@@ -223,155 +253,357 @@ export default function CreateAuctionScreen() {
           </Reanimated.View>
         ) : (
           <>
-            <Reanimated.View
-              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}
-            >
-              <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
-            </Reanimated.View>
+            {/* ── Stage 0: Select listing ── */}
+            {stage === 0 && (
+              <>
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+                  <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
+                </Reanimated.View>
 
-            <FlashList
-              data={sellerListings}
-              horizontal
-              keyExtractor={(item) => item.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.listingListContent}
-              renderItem={renderListingCard}
-            />
+                <FlashList
+                  data={sellerListings}
+                  horizontal
+                  keyExtractor={(item) => item.id}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.listingListContent}
+                  renderItem={renderListingCard}
+                />
 
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}
-        >
-          <TradeCard variant="elevated" style={styles.previewCard}>
-            <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
-            <View style={styles.previewMeta}>
-              <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
-                {selectedListing?.title ?? 'Select a listing'}
-              </BodyEmphasis>
-              <Meta style={styles.previewPrice}>
-                {selectedListing ? formatFromFiat(selectedListing.price, 'GBP', { displayMode: 'fiat' }) : '—'}
-              </Meta>
-            </View>
-          </TradeCard>
-        </Reanimated.View>
-
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}
-        >
-          <TradeCard style={styles.formCard}>
-            <Meta style={styles.sectionLabel}>START WINDOW</Meta>
-            <View style={styles.windowRow}>
-              {START_WINDOWS.map((win) => (
-                <AnimatedPressable
-                  key={win.minutes}
-                  style={[
-                    styles.windowChip,
-                    startInMinutes === win.minutes && styles.windowChipActive,
-                  ]}
-                  onPress={() => setStartInMinutes(win.minutes)}
-                  activeOpacity={0.9}
-                  hapticFeedback="light"
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: startInMinutes === win.minutes }}
-                  accessibilityLabel={`Start ${win.label}`}
-                >
-                  <Body style={[styles.windowChipText, startInMinutes === win.minutes && styles.windowChipTextActive]}>
-                    {win.label}
-                  </Body>
-                </AnimatedPressable>
-              ))}
-            </View>
-          </TradeCard>
-        </Reanimated.View>
-
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}
-        >
-          <TradeCard style={styles.formCard}>
-            <Meta style={styles.sectionLabel}>STARTING BID</Meta>
-            <AppInput
-              value={startingBidInput}
-              onChangeText={setStartingBidInput}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              prefix={currencyCode}
-              accessibilityLabel="Starting bid"
-              containerStyle={styles.input}
-            />
-          </TradeCard>
-        </Reanimated.View>
-
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}
-        >
-          <TradeCard style={styles.formCard}>
-            <View style={styles.buyNowRow}>
-              <Meta style={styles.sectionLabel}>BUY NOW PRICE</Meta>
-              <AnimatedPressable
-                style={[styles.toggleChip, buyNowEnabled && styles.toggleChipActive]}
-                onPress={() => setBuyNowEnabled((v) => !v)}
-                activeOpacity={0.9}
-                hapticFeedback="light"
-                accessibilityRole="switch"
-                accessibilityState={{ checked: buyNowEnabled }}
-              >
-                <Body style={[styles.toggleText, buyNowEnabled && styles.toggleTextActive]}>
-                  {buyNowEnabled ? 'ON' : 'OFF'}
-                </Body>
-              </AnimatedPressable>
-            </View>
-            {buyNowEnabled && (
-              <AppInput
-                value={buyNowInput}
-                onChangeText={setBuyNowInput}
-                keyboardType="decimal-pad"
-                placeholder="0.00"
-                prefix={currencyCode}
-                accessibilityLabel="Buy now price"
-                containerStyle={styles.input}
-              />
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
+                  <TradeCard variant="elevated" style={styles.previewCard}>
+                    <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
+                    <View style={styles.previewMeta}>
+                      <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
+                        {selectedListing?.title ?? 'Select a listing'}
+                      </BodyEmphasis>
+                      <Meta style={styles.previewPrice}>
+                        {selectedListing ? formatFromFiat(selectedListing.price, 'GBP') : '—'}
+                      </Meta>
+                    </View>
+                  </TradeCard>
+                </Reanimated.View>
+              </>
             )}
-          </TradeCard>
-        </Reanimated.View>
 
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}
-        >
-          <TradeCard style={styles.formCard}>
-            <Meta style={styles.sectionLabel}>TERMS & FEES</Meta>
-            <View style={styles.termsRow}>
-              <Meta style={styles.termsLabel}>Duration</Meta>
-              <Body style={styles.termsValue}>{AUCTION_WINDOW_HOURS} hours</Body>
-            </View>
-            <View style={styles.termsRow}>
-              <Meta style={styles.termsLabel}>Platform fee</Meta>
-              <Body style={styles.termsValue}>3% of winning bid</Body>
-            </View>
-            <View style={styles.termsRow}>
-              <Meta style={styles.termsLabel}>Payment hold</Meta>
-              <Body style={styles.termsValue}>Held in escrow until settlement</Body>
-            </View>
-          </TradeCard>
-        </Reanimated.View>
+            {/* ── Stage 1: Configure ── */}
+            {stage === 1 && (
+              <>
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+                  <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>START WINDOW</Meta>
+                    <View style={styles.windowRow}>
+                      {START_WINDOWS.map((win) => (
+                        <AnimatedPressable
+                          key={win.minutes}
+                          style={[
+                            styles.windowChip,
+                            startInMinutes === win.minutes && styles.windowChipActive,
+                          ]}
+                          onPress={() => setStartInMinutes(win.minutes)}
+                          activeOpacity={0.9}
+                          hapticFeedback="light"
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: startInMinutes === win.minutes }}
+                          accessibilityLabel={`Start ${win.label}`}
+                        >
+                          <Body style={[styles.windowChipText, startInMinutes === win.minutes && styles.windowChipTextActive]}>
+                            {win.label}
+                          </Body>
+                        </AnimatedPressable>
+                      ))}
+                    </View>
+                  </TradeCard>
+                </Reanimated.View>
 
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(350)}
-        >
-          <AppButton
-            title={isSubmitting ? 'Launching...' : 'Launch Auction'}
-            icon={isSubmitting ? undefined : <Ionicons name="flash-outline" size={16} color={Colors.background} />}
-            onPress={launchAuction}
-            variant="primary"
-            size="md"
-            style={styles.launchBtn}
-            disabled={isSubmitting}
-            loading={isSubmitting}
-            hapticFeedback="medium"
-            accessibilityLabel="Launch auction"
-          />
-        </Reanimated.View>
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
+                  <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>DURATION</Meta>
+                    <View style={styles.windowRow}>
+                      {DURATION_OPTIONS.map((opt) => (
+                        <AnimatedPressable
+                          key={opt.hours}
+                          style={[
+                            styles.windowChip,
+                            durationHours === opt.hours && styles.windowChipActive,
+                          ]}
+                          onPress={() => setDurationHours(opt.hours)}
+                          activeOpacity={0.9}
+                          hapticFeedback="light"
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: durationHours === opt.hours }}
+                          accessibilityLabel={`Duration ${opt.label}`}
+                        >
+                          <Body style={[styles.windowChipText, durationHours === opt.hours && styles.windowChipTextActive]}>
+                            {opt.label}
+                          </Body>
+                        </AnimatedPressable>
+                      ))}
+                    </View>
+                  </TradeCard>
+                </Reanimated.View>
+
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+                  <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>STARTING BID</Meta>
+                    <AppInput
+                      value={startingBidInput}
+                      onChangeText={setStartingBidInput}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                      prefix={currencyCode}
+                      accessibilityLabel="Starting bid"
+                      containerStyle={styles.input}
+                    />
+                  </TradeCard>
+                </Reanimated.View>
+
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+                  <TradeCard style={styles.formCard}>
+                    <View style={styles.buyNowRow}>
+                      <Meta style={styles.sectionLabel}>BUY NOW PRICE</Meta>
+                      <AnimatedPressable
+                        style={[styles.toggleChip, buyNowEnabled && styles.toggleChipActive]}
+                        onPress={() => setBuyNowEnabled((v) => !v)}
+                        activeOpacity={0.9}
+                        hapticFeedback="light"
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: buyNowEnabled }}
+                      >
+                        <Body style={[styles.toggleText, buyNowEnabled && styles.toggleTextActive]}>
+                          {buyNowEnabled ? 'ON' : 'OFF'}
+                        </Body>
+                      </AnimatedPressable>
+                    </View>
+                    {buyNowEnabled && (
+                      <AppInput
+                        value={buyNowInput}
+                        onChangeText={setBuyNowInput}
+                        keyboardType="decimal-pad"
+                        placeholder="0.00"
+                        prefix={currencyCode}
+                        accessibilityLabel="Buy now price"
+                        containerStyle={styles.input}
+                      />
+                    )}
+                  </TradeCard>
+                </Reanimated.View>
+              </>
+            )}
+
+            {/* ── Stage 2: Review & Launch ── */}
+            {stage === 2 && (
+              <>
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+                  <Headline style={styles.reviewHeadline}>Review your auction</Headline>
+                  <Meta style={styles.reviewSubheadline}>Confirm the details below before launching.</Meta>
+                </Reanimated.View>
+
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
+                  <TradeCard variant="elevated" style={styles.previewCard}>
+                    <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
+                    <View style={styles.previewMeta}>
+                      <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
+                        {selectedListing?.title ?? 'Select a listing'}
+                      </BodyEmphasis>
+                      <Meta style={styles.previewPrice}>
+                        {selectedListing ? formatFromFiat(selectedListing.price, 'GBP') : '—'}
+                      </Meta>
+                    </View>
+                  </TradeCard>
+                </Reanimated.View>
+
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+                  <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>AUCTION SUMMARY</Meta>
+                    <View style={styles.termsRow}>
+                      <Meta style={styles.termsLabel}>Listing</Meta>
+                      <Body style={styles.termsValue} numberOfLines={1}>{selectedListing?.title ?? '—'}</Body>
+                    </View>
+                    <View style={styles.termsRow}>
+                      <Meta style={styles.termsLabel}>Starts</Meta>
+                      <Body style={styles.termsValue}>
+                        {startInMinutes === 0 ? 'Immediately' : `In ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`}
+                      </Body>
+                    </View>
+                    <View style={styles.termsRow}>
+                      <Meta style={styles.termsLabel}>Duration</Meta>
+                      <Body style={styles.termsValue}>
+                        {DURATION_OPTIONS.find(d => d.hours === durationHours)?.label ?? `${durationHours}h`}
+                      </Body>
+                    </View>
+                    <View style={styles.termsRow}>
+                      <Meta style={styles.termsLabel}>Starting bid</Meta>
+                      <View style={styles.termsValueCol}>
+                        <Body style={styles.termsValue}>
+                          {startingBidInput ? `${currencyCode} ${startingBidInput}` : '—'}
+                        </Body>
+                        {startingBidInput && (
+                          <Text style={styles.termsIzeText}>
+                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <View style={styles.termsRow}>
+                      <Meta style={styles.termsLabel}>Buy now</Meta>
+                      <View style={styles.termsValueCol}>
+                        <Body style={styles.termsValue}>
+                          {buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : 'Disabled'}
+                        </Body>
+                        {buyNowEnabled && buyNowInput && (
+                          <Text style={styles.termsIzeText}>
+                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  </TradeCard>
+                </Reanimated.View>
+
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
+                  <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>TERMS & FEES</Meta>
+                    <View style={styles.termsRow}>
+                      <Meta style={styles.termsLabel}>Platform fee</Meta>
+                      <Body style={styles.termsValue}>3% of winning bid</Body>
+                    </View>
+                    <View style={styles.termsRow}>
+                      <Meta style={styles.termsLabel}>Settlement</Meta>
+                      <Body style={styles.termsValue}>After auction ends</Body>
+                    </View>
+                  </TradeCard>
+                </Reanimated.View>
+
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
+                  <AppButton
+                    title={isSubmitting ? 'Launching...' : 'Launch Auction'}
+                    icon={isSubmitting ? undefined : <Ionicons name="flash-outline" size={16} color={Colors.background} />}
+                    onPress={launchAuction}
+                    variant="primary"
+                    size="md"
+                    style={styles.launchBtn}
+                    disabled={isSubmitting}
+                    loading={isSubmitting}
+                    hapticFeedback="medium"
+                    accessibilityLabel="Launch auction"
+                  />
+                </Reanimated.View>
+              </>
+            )}
+
+            {/* ── Stage navigation footer ── */}
+            {stage < 2 && (
+              <View style={styles.stageNavRow}>
+                {stage > 0 && (
+                  <AppButton
+                    title="Back"
+                    onPress={() => setStage(stage - 1)}
+                    variant="secondary"
+                    size="md"
+                    style={styles.stageNavBtn}
+                    hapticFeedback="light"
+                    accessibilityLabel="Go back to previous step"
+                  />
+                )}
+                <AppButton
+                  title="Continue"
+                  onPress={() => setStage(stage + 1)}
+                  variant="primary"
+                  size="md"
+                  style={[styles.stageNavBtn, stage === 0 && styles.stageNavBtnFull]}
+                  hapticFeedback="medium"
+                  accessibilityLabel="Continue to next step"
+                />
+              </View>
+            )}
           </>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* ── Result overlay ── */}
+      {resultData && (
+        <View style={styles.resultOverlay}>
+          <StatusBar barStyle="light-content" />
+          <Reanimated.View
+            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}
+            style={styles.resultCard}
+          >
+            <View style={styles.resultIconWrap}>
+              <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
+            </View>
+            <Headline style={styles.resultTitle}>Auction Launched</Headline>
+            <Meta style={styles.resultSubtitle}>{resultData.startLabel === 'Immediately' ? 'Your auction is now live' : 'Your auction is scheduled'}</Meta>
+
+            {resultData.imageUrl ? (
+              <CachedImage
+                uri={resultData.imageUrl}
+                style={styles.resultImage}
+                containerStyle={styles.resultImageContainer}
+                contentFit="cover"
+              />
+            ) : null}
+
+            <View style={styles.resultSummary}>
+              <View style={styles.termsRow}>
+                <Meta style={styles.termsLabel}>Listing</Meta>
+                <Body style={styles.termsValue} numberOfLines={1}>{resultData.title}</Body>
+              </View>
+              <View style={styles.termsRow}>
+                <Meta style={styles.termsLabel}>Starts</Meta>
+                <Body style={styles.termsValue}>{resultData.startLabel}</Body>
+              </View>
+              <View style={styles.termsRow}>
+                <Meta style={styles.termsLabel}>Duration</Meta>
+                <Body style={styles.termsValue}>{resultData.durationLabel}</Body>
+              </View>
+              <View style={styles.termsRow}>
+                <Meta style={styles.termsLabel}>Starting bid</Meta>
+                <View style={styles.termsValueCol}>
+                  <Body style={styles.termsValue}>{resultData.startingBid}</Body>
+                  {startingBidInput && (
+                    <Text style={styles.termsIzeText}>
+                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              {resultData.buyNow && (
+                <View style={styles.termsRow}>
+                  <Meta style={styles.termsLabel}>Buy now</Meta>
+                  <View style={styles.termsValueCol}>
+                    <Body style={styles.termsValue}>{resultData.buyNow}</Body>
+                    {buyNowInput && (
+                      <Text style={styles.termsIzeText}>
+                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.resultActions}>
+              <AppButton
+                title="View Auction"
+                onPress={() => navigation.replace('AuctionDetail', { auctionId: resultData.auctionId })}
+                variant="primary"
+                size="md"
+                style={styles.resultBtn}
+                accessibilityLabel="View the launched auction"
+              />
+              <AppButton
+                title="Done"
+                onPress={() => navigation.goBack()}
+                variant="secondary"
+                size="md"
+                style={styles.resultBtn}
+                accessibilityLabel="Close and go back"
+              />
+            </View>
+          </Reanimated.View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -518,6 +750,83 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginTop: Space.lg,
   },
+  stepIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: 0,
+  },
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  stepDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepDotActive: {
+    borderColor: Colors.brand,
+    backgroundColor: Colors.brand,
+  },
+  stepDotText: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+  },
+  stepDotTextActive: {
+    color: Colors.textInverse,
+  },
+  stepLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: 'Inter_500Medium',
+  },
+  stepLabelActive: {
+    color: Colors.textPrimary,
+  },
+  stepConnector: {
+    width: 32,
+    height: 1.5,
+    backgroundColor: Colors.border,
+    marginHorizontal: 6,
+  },
+  stepConnectorActive: {
+    backgroundColor: Colors.brand,
+  },
+  reviewHeadline: {
+    fontSize: 24,
+    paddingHorizontal: Space.md,
+    marginTop: Space.lg,
+  },
+  reviewSubheadline: {
+    color: Colors.textMuted,
+    paddingHorizontal: Space.md,
+    marginTop: 4,
+    marginBottom: Space.sm,
+  },
+  stageNavRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    marginTop: Space.lg,
+    marginBottom: Space.xl,
+  },
+  stageNavBtn: {
+    flex: 1,
+  },
+  stageNavBtnFull: {
+    flex: 1,
+  },
   termsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -532,5 +841,76 @@ const styles = StyleSheet.create({
   termsValue: {
     color: Colors.textPrimary,
     fontFamily: 'SpaceGrotesk_600SemiBold',
+  },
+  termsValueCol: {
+    alignItems: 'flex-end',
+  },
+  termsIzeText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 1,
+  },
+  resultOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space.lg,
+  },
+  resultCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    padding: Space.lg,
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  resultIconWrap: {
+    marginBottom: Space.sm,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(22,163,74,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resultTitle: {
+    fontSize: 24,
+    textAlign: 'center',
+  },
+  resultSubtitle: {
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: Space.md,
+  },
+  resultImageContainer: {
+    width: '100%',
+    height: 160,
+    borderRadius: Radius.md,
+    marginBottom: Space.md,
+  },
+  resultImage: {
+    width: '100%',
+    height: '100%',
+  },
+  resultSummary: {
+    width: '100%',
+    marginBottom: Space.md,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
   },
 });

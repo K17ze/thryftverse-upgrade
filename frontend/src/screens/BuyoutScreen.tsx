@@ -102,17 +102,24 @@ export default function BuyoutScreen() {
 
   const handleBuyout = async () => {
     if (isSubmitting) return;
+
+    // Never fabricate an actor identity. Buyout requires authentication.
+    if (!currentUser?.id) {
+      show('Sign in is required to initiate a buyout.', 'error');
+      return;
+    }
+
     if (sharesNeeded <= 0) {
-      show('You already control 100% of this asset pool.', 'success');
-      navigation.navigate('AssetDetail', { assetId: asset.id });
+      // Viewer already owns all units — no buyout transition is needed.
+      // Do not claim a success state that implies a backend transition occurred.
+      show('You already own 100% of this asset pool.', 'info');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const bidderUserId = currentUser?.id ?? 'u1';
       const response = await createCoOwnBuyoutOffer(asset.id, {
-        bidderUserId,
+        bidderUserId: currentUser.id,
         offerPriceGbp: offerPricePerShare,
         targetUnits: sharesNeeded,
         expiresInHours: 24,
@@ -181,14 +188,14 @@ export default function BuyoutScreen() {
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
           <AppButton
             style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
-            title={isSubmitting ? 'Submitting...' : sharesNeeded > 0 ? 'Initiate Buyout' : 'Claim Full Ownership'}
+            title={isSubmitting ? 'Submitting...' : sharesNeeded > 0 ? 'Initiate Buyout' : 'You Own 100%'}
             icon={<Ionicons name="diamond-outline" size={16} color={Colors.textInverse} />}
             onPress={handleBuyout}
-            disabled={isSubmitting}
+            disabled={isSubmitting || sharesNeeded <= 0}
             variant="primary"
             size="md"
             hapticFeedback="heavy"
-            accessibilityLabel={sharesNeeded > 0 ? 'Initiate buyout' : 'Claim full ownership'}
+            accessibilityLabel={sharesNeeded > 0 ? 'Initiate buyout' : 'You own 100 percent of this pool'}
           />
         </Reanimated.View>
 
