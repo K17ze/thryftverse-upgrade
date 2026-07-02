@@ -1523,8 +1523,65 @@ export default function AuctionHomeScreen() {
       }
 
       case 'endingSoon': {
+        // ── Horizontal discovery rail — swipe left for more ending-soon auctions ──
+        const endingRailCardWidth = Math.round(width * 0.82);
+        const endingRailImageHeight = Math.round(Math.min(380, width * 0.9));
+        const renderEndingRailItem = ({ item }: { item: AuctionHomeItem }) => {
+          const timing = resolveAuctionTiming(item, secondClock);
+          const urgency = resolveUrgency(timing);
+          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+          const timeLabel = urgency === 'finalMinutes'
+            ? formatFinalMinutesCountdown(timing.msToEnd)
+            : resolveTimeLabel(timing);
+          const personalAction = item.viewerState === 'outbid' ? 'Bid again'
+            : item.viewerState === 'won' ? 'View result'
+            : null;
+          return (
+            <AuctionRunwayCard
+              title={item.title}
+              imageUrl={item.imageUrl || null}
+              brand={item.brand ?? null}
+              izeText={valueLockup.izeText}
+              localText={valueLockup.localText}
+              valueState="current"
+              bidCount={item.bidCount}
+              countdownText={timeLabel}
+              urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+              state="live"
+              viewerState={item.viewerState}
+              onPress={() => navigateToDetail(item.id)}
+              cardWidth={endingRailCardWidth}
+              imageHeight={endingRailImageHeight}
+              metadataBelow
+              personalActionLabel={personalAction}
+              onPersonalAction={personalAction ? () => navigateToDetail(item.id) : undefined}
+            />
+          );
+        };
+        const endingRail = segmentItems.length > 0 ? (
+          <View style={styles.railWrap}>
+            <View style={styles.railHeader}>
+              <Text style={styles.railTitle}>Ending soon</Text>
+              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
+            </View>
+            <FlatList
+              data={segmentItems}
+              renderItem={renderEndingRailItem}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={endingRailCardWidth + Space.sm}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              contentContainerStyle={styles.railContent}
+              ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
+            />
+          </View>
+        ) : null;
         // Dense editorial rows — countdown is the strongest signal
         return (
+          <View>
+            {endingRail}
           <View style={styles.compositionWrap}>
             <View style={styles.endingSoonContainer}>
               {segmentItems.map((item) => {
@@ -1577,12 +1634,62 @@ export default function AuctionHomeScreen() {
               })}
             </View>
           </View>
+          </View>
         );
       }
 
       case 'upcoming': {
+        // ── Horizontal discovery rail — swipe left for more upcoming auctions ──
+        const upcomingRailCardWidth = Math.round(width * 0.82);
+        const upcomingRailImageHeight = Math.round(Math.min(380, width * 0.9));
+        const renderUpcomingRailItem = ({ item }: { item: AuctionHomeItem }) => {
+          const timing = resolveAuctionTiming(item, secondClock);
+          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+          const timeLabel = resolveTimeLabel(timing);
+          return (
+            <AuctionRunwayCard
+              title={item.title}
+              imageUrl={item.imageUrl || null}
+              brand={item.brand ?? null}
+              izeText={valueLockup.izeText}
+              localText={valueLockup.localText}
+              valueState="starting"
+              bidCount={item.bidCount}
+              countdownText={timeLabel}
+              urgent={false}
+              state="upcoming"
+              viewerState={item.viewerState}
+              onPress={() => navigateToDetail(item.id)}
+              cardWidth={upcomingRailCardWidth}
+              imageHeight={upcomingRailImageHeight}
+              metadataBelow
+            />
+          );
+        };
+        const upcomingRail = segmentItems.length > 0 ? (
+          <View style={styles.railWrap}>
+            <View style={styles.railHeader}>
+              <Text style={styles.railTitle}>Coming up</Text>
+              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
+            </View>
+            <FlatList
+              data={segmentItems}
+              renderItem={renderUpcomingRailItem}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={upcomingRailCardWidth + Space.sm}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              contentContainerStyle={styles.railContent}
+              ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
+            />
+          </View>
+        ) : null;
         // Scheduled programme rows
         return (
+          <View>
+            {upcomingRail}
           <View style={styles.compositionWrap}>
             <View style={styles.upcomingContainer}>
               {segmentItems.map((item) => (
@@ -1595,12 +1702,72 @@ export default function AuctionHomeScreen() {
               ))}
             </View>
           </View>
+          </View>
         );
       }
 
       case 'watching': {
+        // ── Horizontal discovery rail — swipe left for more watched auctions ──
+        const watchingRailCardWidth = Math.round(width * 0.82);
+        const watchingRailImageHeight = Math.round(Math.min(400, width * 0.95));
+        const renderWatchingRailItem = ({ item }: { item: AuctionHomeItem }) => {
+          const timing = resolveAuctionTiming(item, secondClock);
+          const urgency = resolveUrgency(timing);
+          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+          const timeLabel = urgency === 'finalMinutes'
+            ? formatFinalMinutesCountdown(timing.msToEnd)
+            : resolveTimeLabel(timing);
+          const effectiveState = timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended';
+          const valueState = effectiveState === 'ended' ? 'final' : effectiveState === 'upcoming' ? 'starting' : 'current';
+          const personalAction = item.viewerState === 'outbid' ? 'Bid again'
+            : item.viewerState === 'won' ? 'View result'
+            : null;
+          return (
+            <AuctionRunwayCard
+              title={item.title}
+              imageUrl={item.imageUrl || null}
+              brand={item.brand ?? null}
+              izeText={valueLockup.izeText}
+              localText={valueLockup.localText}
+              valueState={valueState}
+              bidCount={item.bidCount}
+              countdownText={timeLabel}
+              urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+              state={effectiveState}
+              viewerState={item.viewerState}
+              onPress={() => navigateToDetail(item.id)}
+              cardWidth={watchingRailCardWidth}
+              imageHeight={watchingRailImageHeight}
+              metadataBelow
+              personalActionLabel={personalAction}
+              onPersonalAction={personalAction ? () => navigateToDetail(item.id) : undefined}
+            />
+          );
+        };
+        const watchingRail = segmentItems.length > 0 ? (
+          <View style={styles.railWrap}>
+            <View style={styles.railHeader}>
+              <Text style={styles.railTitle}>Watching</Text>
+              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
+            </View>
+            <FlatList
+              data={segmentItems}
+              renderItem={renderWatchingRailItem}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={watchingRailCardWidth + Space.sm}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              contentContainerStyle={styles.railContent}
+              ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
+            />
+          </View>
+        ) : null;
         // Compact continuity grid
         return (
+          <View>
+            {watchingRail}
           <View style={styles.compositionWrap}>
             <View style={styles.continuationGrid}>
               {segmentItems.map((item) => {
@@ -1633,6 +1800,7 @@ export default function AuctionHomeScreen() {
                 );
               })}
             </View>
+          </View>
           </View>
         );
       }
