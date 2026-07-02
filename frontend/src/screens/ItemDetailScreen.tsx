@@ -45,6 +45,7 @@ import {
   ProductDetailSkeleton,
   ProductErrorState,
   FullscreenMediaViewer,
+  ProductFamilyBadge,
 } from '../components/product';
 import {
   CommerceMediaStage,
@@ -317,6 +318,15 @@ export default function ItemDetailScreen() {
           onOpenFullscreen={handleOpenFullscreen}
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
+          overlayTopContent={
+            <View style={{ alignItems: 'flex-start' }}>
+              <ProductFamilyBadge
+                family="direct"
+                stateAccent={item.isSold ? 'Sold' : null}
+                compact
+              />
+            </View>
+          }
         />
 
         <Reanimated.View entering={FadeInDown.duration(350).delay(80)}>
