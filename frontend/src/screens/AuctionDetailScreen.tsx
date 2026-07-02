@@ -50,7 +50,7 @@ import { FullscreenMediaViewer } from '../components/product/FullscreenMediaView
 import { SellerTrustCard, ProductFamilyBadge, RecommendationRail } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
-import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommercePartyStrip } from '../components/commerce';
+import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence } from '../components/commerce';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import {
   useBucketedServerClock,
@@ -703,7 +703,7 @@ export default function AuctionDetailScreen() {
               size="md"
               align="center"
               title="Bid again"
-              accessibilityLabel="Place a new bid"
+              accessibilityLabel="Place a new bid to regain the lead"
             />
           </View>
         )}
@@ -806,24 +806,7 @@ export default function AuctionDetailScreen() {
           ) : null;
         })()}
 
-        {/* ── 7. Seller confidence ── */}
-        <CommercePartyStrip
-          party={{
-            id: auction.seller.id,
-            username: auction.seller.username,
-            displayName: auction.seller.displayName ?? `@${auction.seller.username}`,
-            avatar: auction.seller.avatarUrl ?? null,
-            roleLabel: 'Seller',
-          }}
-          onOpenProfile={() => navigation.navigate('UserProfile', { userId: auction.seller.id })}
-          onMessage={!isSeller ? () =>
-            navigation.navigate('NewMessage', {
-              preselectedUserId: auction.seller.id,
-              preselectedDisplayName: auction.seller.username,
-            })
-          : undefined}
-          messageLabel="Message"
-        />
+        {/* ── 7. Seller confidence — one canonical module (SellerTrustCard below) ── */}
 
         {/* ── Bid history — tap to open sheet ── */}
         <View style={styles.section}>
