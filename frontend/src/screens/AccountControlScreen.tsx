@@ -101,7 +101,7 @@ export default function AccountControlScreen({ navigation }: Props) {
         </Text>
       </View>
 
-      {/* Download data — supported */}
+      {/* Download data — supported, compact row */}
       <View style={[styles.optionCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
         <View style={styles.optionHeader}>
           <View style={[styles.optionIcon, { backgroundColor: Colors.surfaceAlt }]}>
@@ -136,32 +136,14 @@ export default function AccountControlScreen({ navigation }: Props) {
         </AnimatedPressable>
       </View>
 
-      {/* Deactivate — NOT supported */}
+      {/* Delete — restrained navigation entry, not a giant red card */}
       <View style={[styles.optionCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
         <View style={styles.optionHeader}>
           <View style={[styles.optionIcon, { backgroundColor: Colors.surfaceAlt }]}>
-            <Ionicons name="pause-outline" size={20} color={Colors.textMuted} />
+            <Ionicons name="trash-outline" size={20} color={Colors.textSecondary} />
           </View>
           <View style={styles.optionHeaderText}>
-            <Text style={[styles.optionTitle, { color: Colors.textMuted }]}>Deactivate account</Text>
-            <Text style={[styles.optionSubtitle, { color: Colors.textMuted }]}>
-              Temporarily pause your account
-            </Text>
-          </View>
-        </View>
-        <Text style={[styles.optionBody, { color: Colors.textMuted }]}>
-          Account deactivation is not available. If you need a temporary pause, contact support and they can advise on listing removal or holiday mode instead.
-        </Text>
-      </View>
-
-      {/* Delete — supported, progressive disclosure */}
-      <View style={[styles.optionCard, { backgroundColor: `${Colors.danger}08`, borderColor: `${Colors.danger}30` }]}>
-        <View style={styles.optionHeader}>
-          <View style={[styles.optionIcon, { backgroundColor: `${Colors.danger}15` }]}>
-            <Ionicons name="trash-outline" size={20} color={Colors.danger} />
-          </View>
-          <View style={styles.optionHeaderText}>
-            <Text style={[styles.optionTitle, { color: Colors.danger }]}>Delete account permanently</Text>
+            <Text style={[styles.optionTitle, { color: Colors.textPrimary }]}>Delete account permanently</Text>
             <Text style={[styles.optionSubtitle, { color: Colors.textMuted }]}>
               Erase your account and data
             </Text>
@@ -171,15 +153,15 @@ export default function AccountControlScreen({ navigation }: Props) {
           This permanently erases your account, personal data, addresses, payment methods and wallet history. This action cannot be undone.
         </Text>
         <AnimatedPressable
-          style={[styles.optionBtn, { backgroundColor: Colors.danger, borderColor: Colors.danger }]}
+          style={[styles.optionBtn, { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border }]}
           onPress={() => { haptic.medium(); setPhase('delete-info'); }}
-          activeOpacity={0.85}
+          activeOpacity={0.8}
           scaleValue={0.98}
-          hapticFeedback="heavy"
+          hapticFeedback="medium"
           accessibilityRole="button"
           accessibilityLabel="Continue to account deletion"
         >
-          <Text style={[styles.optionBtnText, { color: '#FFFFFF' }]}>Continue</Text>
+          <Text style={[styles.optionBtnText, { color: Colors.textPrimary }]}>Continue</Text>
         </AnimatedPressable>
       </View>
     </>

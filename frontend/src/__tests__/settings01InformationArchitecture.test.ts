@@ -18,7 +18,7 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     it('has a search bar that filters real destinations', () => {
       expect(settingsSrc).toContain('AppSearchBar');
       expect(settingsSrc).toContain('searchQuery');
-      expect(settingsSrc).toContain('DESTINATIONS');
+      expect(settingsSrc).toContain('ROUTE_METADATA');
     });
 
     it('search filters by label, searchTerms and section', () => {
@@ -91,14 +91,18 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(accountSrc).not.toContain('birthday');
     });
 
-    it('shows public identity as read-only with route to EditProfile', () => {
-      expect(accountSrc).toContain('Public identity');
+    it('shows one compact public-profile navigation entry routing to EditProfile', () => {
+      // Per SETTINGS-MASTER §4.3: Account Details may contain one compact
+      // "Public profile" navigation row, not a second public-profile summary
+      // AND another "Public identity" section with Display Name + Username rows.
       expect(accountSrc).toContain("navigate('EditProfile')");
+      // The duplicate "Public identity" section must be gone
+      expect(accountSrc).not.toContain('Public identity');
     });
 
-    it('shows username as read-only (not editable here)', () => {
-      // Username should be displayed but not have an onPress to edit
-      expect(accountSrc).toContain('Username');
+    it('shows username within the compact identity summary (not a separate row)', () => {
+      // Username is displayed in the identity summary card as @username
+      expect(accountSrc).toMatch(/@{username}/);
     });
 
     it('has phone editing as the canonical private contact editor', () => {
@@ -169,9 +173,11 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(controlSrc).toContain('Download your data');
     });
 
-    it('truthfully shows deactivation as not available', () => {
-      expect(controlSrc).toContain('Deactivate account');
-      expect(controlSrc).toContain('not available');
+    it('does not surface unsupported deactivation in production UI', () => {
+      // Per SETTINGS-MASTER §12.1: Remove unsupported Deactivate Account from
+      // production UI. Do not replace it with "Coming soon" or "Not available."
+      expect(controlSrc).not.toContain('Deactivate account');
+      expect(controlSrc).not.toMatch(/not available/i);
     });
 
     it('does not fabricate deactivation behaviour', () => {

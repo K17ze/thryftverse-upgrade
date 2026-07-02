@@ -4,9 +4,7 @@ import {
   Text,
   StyleSheet,
   Modal,
-  ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { Typography } from '../theme/designTokens';
@@ -18,7 +16,6 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { parseApiError } from '../lib/apiClient';
 import { updateUserProfile as updateUserProfileApi } from '../services/accountApi';
-import { disableTwoFactor } from '../services/authApi';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -33,7 +30,6 @@ export default function AccountSettingsScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const currentUser = useStore((state) => state.currentUser);
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
-  const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
   const { show } = useToast();
   const haptic = useHaptic();
@@ -43,56 +39,10 @@ export default function AccountSettingsScreen() {
   const [phone, setPhone] = useState(userAny?.phone ?? '');
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isTogglingTwoFactor, setIsTogglingTwoFactor] = useState(false);
-  const [disableTwoFactorModalVisible, setDisableTwoFactorModalVisible] = useState(false);
-  const [disableTwoFactorCode, setDisableTwoFactorCode] = useState('');
-  const [disableTwoFactorRecoveryCode, setDisableTwoFactorRecoveryCode] = useState('');
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
   const hasPhoneChanged = phone !== (userAny?.phone ?? '');
-
-  const handleToggleTwoFactor = async (enabled: boolean) => {
-    if (isTogglingTwoFactor) return;
-    if (enabled) {
-      navigation.navigate('TwoFactorSetup');
-      return;
-    }
-    setDisableTwoFactorCode('');
-    setDisableTwoFactorRecoveryCode('');
-    setDisableTwoFactorModalVisible(true);
-  };
-
-  const closeDisableTwoFactorModal = () => {
-    if (isTogglingTwoFactor) return;
-    setDisableTwoFactorModalVisible(false);
-  };
-
-  const confirmDisableTwoFactor = async () => {
-    const normalizedCode = disableTwoFactorCode.replace(/\s+/g, '').trim();
-    const normalizedRecoveryCode = disableTwoFactorRecoveryCode.trim().toUpperCase();
-
-    if (!normalizedCode && !normalizedRecoveryCode) {
-      show('Enter your authenticator code or a recovery code to disable 2FA.', 'error');
-      return;
-    }
-
-    setIsTogglingTwoFactor(true);
-    try {
-      await disableTwoFactor({
-        code: normalizedCode || undefined,
-        recoveryCode: normalizedRecoveryCode || undefined,
-      });
-      setTwoFactorEnabled(false);
-      setDisableTwoFactorModalVisible(false);
-      show('Two-factor authentication disabled', 'info');
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to disable two-factor authentication right now.');
-      show(parsed.message, 'error');
-    } finally {
-      setIsTogglingTwoFactor(false);
-    }
-  };
 
   const handleSaveChanges = async () => {
     if (isSaving || !hasPhoneChanged) return;
@@ -186,22 +136,6 @@ export default function AccountSettingsScreen() {
         </Text>
       </View>
 
-      {/* ── Public identity — read-only, route to EditProfile ── */}
-      <SettingsSection title="Public identity">
-        <SettingsRow
-          title="Display name"
-          value={displayName}
-          onPress={() => (navigation as any).navigate('EditProfile')}
-          isFirst
-        />
-        <SettingsRow
-          title="Username"
-          value={`@${username}`}
-          onPress={() => (navigation as any).navigate('EditProfile')}
-          isLast
-        />
-      </SettingsSection>
-
       {/* ── Private contact — editable here ── */}
       <SettingsSection title="Private contact" description="Used for account security and order updates. Not shown on your public profile.">
         <SettingsRow
@@ -242,7 +176,7 @@ export default function AccountSettingsScreen() {
         <SettingsRow
           title="Two-factor authentication"
           value={twoFactorEnabled ? 'Enabled' : 'Off'}
-          onPress={() => handleToggleTwoFactor(!twoFactorEnabled)}
+          onPress={() => navigation.navigate('TwoFactorSetup')}
           isLast
         />
       </SettingsSection>
@@ -284,58 +218,6 @@ export default function AccountSettingsScreen() {
         </View>
       </Modal>
 
-      {/* ── Disable 2FA Modal ── */}
-      <Modal visible={disableTwoFactorModalVisible} transparent animationType="fade" onRequestClose={closeDisableTwoFactorModal}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: Colors.surface }]}>
-            <Text style={styles.modalTitle}>Disable 2FA</Text>
-            <Text style={styles.modalCopy}>
-              Confirm with your authenticator code or a recovery code.
-            </Text>
-
-            <AppInput
-              label="Authenticator code"
-              value={disableTwoFactorCode}
-              onChangeText={setDisableTwoFactorCode}
-              keyboardType="number-pad"
-              placeholder="123456"
-              editable={!isTogglingTwoFactor}
-              maxLength={12}
-              containerStyle={{ marginBottom: Space.xs }}
-            />
-
-            <AppInput
-              label="Recovery code"
-              value={disableTwoFactorRecoveryCode}
-              onChangeText={setDisableTwoFactorRecoveryCode}
-              placeholder="XXXX-XXXX-XXXX"
-              editable={!isTogglingTwoFactor}
-              containerStyle={{ marginBottom: Space.xs }}
-            />
-
-            <View style={styles.modalActionRow}>
-              <AnimatedPressable
-                onPress={closeDisableTwoFactorModal}
-                disabled={isTogglingTwoFactor}
-                style={[styles.modalBtn, styles.modalBtnMuted]}
-              >
-                <Text style={styles.modalBtnMutedText}>Cancel</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                onPress={() => void confirmDisableTwoFactor()}
-                disabled={isTogglingTwoFactor}
-                style={[styles.modalBtn, styles.modalBtnDanger]}
-              >
-                {isTogglingTwoFactor ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.modalBtnDangerText}>Disable</Text>
-                )}
-              </AnimatedPressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </FlagshipScreen>
   );
 }
@@ -444,61 +326,5 @@ const styles = StyleSheet.create({
   },
   editModalBtnPrimaryText: {
     color: Colors.textInverse,
-  },
-  // ── Disable 2FA modal ──
-  modalCard: {
-    padding: Space.lg,
-    borderRadius: Radius.xl,
-    marginHorizontal: 0,
-    marginVertical: 0,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    paddingHorizontal: Space.lg,
-  },
-  modalTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginBottom: Space.sm,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  modalCopy: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: Type.body.lineHeight + 2,
-    marginBottom: Space.md,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  modalActionRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.sm,
-  },
-  modalBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnMuted: {
-    backgroundColor: Colors.surfaceAlt,
-  },
-  modalBtnDanger: {
-    backgroundColor: Colors.danger,
-  },
-  modalBtnMutedText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  modalBtnDangerText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: '#FFFFFF',
   },
 });
