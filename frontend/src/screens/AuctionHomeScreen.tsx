@@ -1719,9 +1719,11 @@ const styles = StyleSheet.create({
   asymmetricRow: {
     flexDirection: 'row',
     gap: Space.sm,
+    alignItems: 'stretch',
   },
   supportingColumn: {
     gap: Space.sm,
+    flex: 1,
   },
   supportingRow: {
     flexDirection: 'row',

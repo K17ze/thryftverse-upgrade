@@ -56,7 +56,7 @@ export function AuctionRunwayCard({
   if (metadataBelow) {
     return (
       <AnimatedPressable
-        style={[styles.card, { width: cardWidth }]}
+        style={[styles.card, styles.cardMetadataBelow, { width: cardWidth }]}
         scaleValue={0.98}
         activeOpacity={0.95}
         onPress={onPress}
@@ -190,6 +190,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
+  },
+  cardMetadataBelow: {
+    backgroundColor: 'transparent',
   },
   imageWrap: {
     position: 'relative',
