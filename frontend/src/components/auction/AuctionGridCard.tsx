@@ -1,18 +1,22 @@
 import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionCountdown } from './AuctionCountdown';
+import { AuctionValueLockup } from './AuctionValueLockup';
 
 interface Props {
   title: string;
   imageUrl: string | null;
   brand?: string | null;
-  priceText: string;
-  priceLabel: string;
+  /** 1ZE primary text e.g. "24.60 1ZE" */
+  izeText: string;
+  /** Local currency e.g. "£123.00" */
+  localText?: string | null;
+  /** Value state controls prefix */
+  valueState?: 'current' | 'starting' | 'final';
   bidCount: number;
   countdownText: string;
   urgent?: boolean;
@@ -21,14 +25,17 @@ interface Props {
   onPress: () => void;
   /** Card width override (for grid layouts) */
   cardWidth?: number;
+  /** Price label for accessibility only */
+  priceLabel?: string;
 }
 
 export function AuctionGridCard({
   title,
   imageUrl,
   brand,
-  priceText,
-  priceLabel,
+  izeText,
+  localText,
+  valueState = 'current',
   bidCount,
   countdownText,
   urgent,
@@ -36,9 +43,15 @@ export function AuctionGridCard({
   viewerState,
   onPress,
   cardWidth,
+  priceLabel,
 }: Props) {
   const { width } = useWindowDimensions();
   const w = cardWidth ?? (width - Space.md * 2 - Space.sm) / 2;
+
+  // Single personal marker — not both chip and state badge
+  const personalLabel = viewerState === 'outbid' ? 'Outbid'
+    : viewerState === 'leading' ? 'Leading'
+    : null;
 
   return (
     <AnimatedPressable
@@ -47,7 +60,7 @@ export function AuctionGridCard({
       activeOpacity={0.95}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${priceLabel} ${priceText}, ${countdownText}, ${bidCount} bids`}
+      accessibilityLabel={`${title}, ${priceLabel ?? ''} ${izeText}, ${countdownText}, ${bidCount} bids`}
     >
       <View style={styles.imageWrap}>
         <CachedImage
@@ -56,21 +69,18 @@ export function AuctionGridCard({
           containerStyle={styles.imageContainer}
           contentFit="cover"
         />
-        {/* Minimal state signal — only live dot, no badge overload */}
+        {/* Single live dot — not a full badge */}
         {state === 'live' && (
-          <View style={styles.liveDotWrap}>
-            <View style={styles.liveDot} />
-          </View>
+          <View style={styles.liveDot} />
         )}
-        {/* Viewer state — one chip only */}
-        {viewerState === 'outbid' && (
-          <View style={styles.outbidChip}>
-            <Text style={styles.outbidChipText}>OUTBID</Text>
-          </View>
-        )}
-        {viewerState === 'leading' && (
-          <View style={styles.leadingChip}>
-            <Text style={styles.leadingChipText}>LEADING</Text>
+        {/* Personal state — one compact marker, not a full chip */}
+        {personalLabel && (
+          <View style={[
+            styles.personalMarker,
+            viewerState === 'outbid' && styles.personalMarkerOutbid,
+            viewerState === 'leading' && styles.personalMarkerLeading,
+          ]}>
+            <Text style={styles.personalMarkerText}>{personalLabel}</Text>
           </View>
         )}
       </View>
@@ -78,7 +88,12 @@ export function AuctionGridCard({
       <View style={styles.body}>
         {brand && <Text style={styles.brand} numberOfLines={1}>{brand}</Text>}
         <Text style={styles.title} numberOfLines={2}>{title}</Text>
-        <Text style={styles.priceValue} numberOfLines={1}>{priceText}</Text>
+        <AuctionValueLockup
+          izeText={izeText}
+          localText={localText}
+          state={valueState}
+          scale="supporting"
+        />
         <View style={styles.metaRow}>
           <AuctionCountdown text={countdownText} urgent={urgent} compact />
           <Text style={styles.bidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
@@ -107,56 +122,38 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  liveDotWrap: {
+  liveDot: {
     position: 'absolute',
     top: Space.xs,
     left: Space.xs,
-    width: 20,
-    height: 20,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
+    width: 7,
+    height: 7,
     borderRadius: 999,
     backgroundColor: Colors.danger,
   },
-  outbidChip: {
+  personalMarker: {
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
-    backgroundColor: 'rgba(220,38,38,0.85)',
     paddingHorizontal: Space.xs + 2,
     paddingVertical: 2,
     borderRadius: Radius.sm,
   },
-  outbidChipText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 8,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
+  personalMarkerOutbid: {
+    backgroundColor: 'rgba(220,38,38,0.9)',
   },
-  leadingChip: {
-    position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    backgroundColor: 'rgba(22,163,74,0.85)',
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
+  personalMarkerLeading: {
+    backgroundColor: 'rgba(22,163,74,0.9)',
   },
-  leadingChipText: {
+  personalMarkerText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 8,
+    fontSize: 9,
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   body: {
     paddingTop: Space.sm,
-    gap: 1,
+    gap: 2,
   },
   brand: {
     fontFamily: Typography.family.medium,
@@ -165,18 +162,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontSize: 14,
     color: Colors.textPrimary,
     letterSpacing: -0.2,
-    lineHeight: 17,
-  },
-  priceValue: {
-    fontFamily: Typography.family.bold,
-    fontSize: 15,
-    color: Colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
-    marginTop: 2,
+    lineHeight: 18,
   },
   metaRow: {
     flexDirection: 'row',

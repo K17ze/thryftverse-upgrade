@@ -12,6 +12,7 @@ interface Props {
   kind: AttentionKind;
   title: string;
   imageUrl: string | null;
+  /** Short context line — e.g. "08:42 left" or "Auction ended" */
   message: string;
   actionLabel: string;
   countdownText?: string;
@@ -19,12 +20,12 @@ interface Props {
   onAction: () => void;
 }
 
-const CONFIG: Record<AttentionKind, { icon: keyof typeof Ionicons.glyphMap; accent: string; bg: string }> = {
-  outbid: { icon: 'trending-down', accent: Colors.danger, bg: 'rgba(220,38,38,0.06)' },
-  leading: { icon: 'checkmark-circle', accent: Colors.success, bg: 'rgba(22,163,74,0.05)' },
-  ending_soon: { icon: 'flash', accent: Colors.danger, bg: 'rgba(220,38,38,0.05)' },
-  won: { icon: 'trophy', accent: Colors.brand, bg: 'rgba(244,240,232,0.05)' },
-  watching: { icon: 'eye-outline', accent: Colors.textSecondary, bg: 'transparent' },
+const CONFIG: Record<AttentionKind, { accent: string; bg: string; border: string }> = {
+  outbid: { accent: Colors.danger, bg: 'rgba(220,38,38,0.04)', border: 'rgba(220,38,38,0.15)' },
+  leading: { accent: Colors.success, bg: 'rgba(22,163,74,0.04)', border: 'rgba(22,163,74,0.12)' },
+  ending_soon: { accent: Colors.danger, bg: 'rgba(220,38,38,0.04)', border: 'rgba(220,38,38,0.12)' },
+  won: { accent: Colors.brand, bg: 'rgba(244,240,232,0.04)', border: 'rgba(244,240,232,0.10)' },
+  watching: { accent: Colors.textSecondary, bg: 'transparent', border: Colors.border },
 };
 
 const KIND_LABEL: Record<AttentionKind, string> = {
@@ -41,16 +42,15 @@ export function AuctionAttentionStrip({
   imageUrl,
   message,
   actionLabel,
-  countdownText,
   onPress,
   onAction,
 }: Props) {
   const cfg = CONFIG[kind];
-  const isUrgent = kind === 'outbid' || kind === 'ending_soon';
   const isWatching = kind === 'watching';
+  const isUrgent = kind === 'outbid' || kind === 'ending_soon';
 
   return (
-    <View style={[styles.container, !isWatching && { backgroundColor: cfg.bg }]}>
+    <View style={[styles.container, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
       <AnimatedPressable
         style={styles.body}
         scaleValue={0.99}
@@ -66,28 +66,23 @@ export function AuctionAttentionStrip({
         />
         <View style={styles.content}>
           <View style={styles.headerRow}>
-            <Ionicons name={cfg.icon} size={12} color={cfg.accent} />
             <Text style={[styles.kind, { color: cfg.accent }]}>
               {KIND_LABEL[kind]}
             </Text>
-            {countdownText && (
-              <Text style={[styles.countdown, { color: isUrgent ? Colors.danger : Colors.textMuted }]}>
-                {countdownText}
-              </Text>
-            )}
           </View>
+          <Text style={styles.title} numberOfLines={1}>{title}</Text>
           <Text style={styles.message} numberOfLines={1}>{message}</Text>
         </View>
       </AnimatedPressable>
 
       <AnimatedPressable
-        style={[styles.actionBtn, isWatching && styles.actionBtnGhost]}
+        style={[styles.actionBtn, isWatching && styles.actionBtnGhost, isUrgent && styles.actionBtnUrgent]}
         scaleValue={0.95}
         onPress={onAction}
         accessibilityRole="button"
         accessibilityLabel={actionLabel}
       >
-        <Text style={[styles.actionText, isWatching && styles.actionTextGhost]}>
+        <Text style={[styles.actionText, isWatching && styles.actionTextGhost, isUrgent && styles.actionTextUrgent]}>
           {actionLabel}
         </Text>
       </AnimatedPressable>
@@ -101,9 +96,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    maxHeight: 68,
+    borderWidth: StyleSheet.hairlineWidth,
+    maxHeight: 72,
   },
   body: {
     flex: 1,
@@ -116,8 +112,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   thumb: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
   },
   content: {
     flex: 1,
@@ -130,18 +126,19 @@ const styles = StyleSheet.create({
   },
   kind: {
     fontFamily: Typography.family.semibold,
-    fontSize: 11,
-    letterSpacing: 0.2,
-  },
-  countdown: {
-    fontFamily: Typography.family.semibold,
     fontSize: 10,
-    fontVariant: ['tabular-nums'],
-    marginLeft: 'auto',
+    letterSpacing: 0.4,
+  },
+  title: {
+    fontFamily: Typography.family.semibold,
+    fontSize: 13,
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+    lineHeight: 17,
   },
   message: {
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textSecondary,
   },
   actionBtn: {
@@ -152,15 +149,21 @@ const styles = StyleSheet.create({
   },
   actionBtnGhost: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
+  },
+  actionBtnUrgent: {
+    backgroundColor: Colors.danger,
   },
   actionText: {
     fontFamily: Typography.family.semibold,
     fontSize: 12,
-    color: '#FFFFFF',
+    color: Colors.textInverse,
   },
   actionTextGhost: {
     color: Colors.textSecondary,
+  },
+  actionTextUrgent: {
+    color: '#FFFFFF',
   },
 });

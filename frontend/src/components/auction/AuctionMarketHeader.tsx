@@ -22,13 +22,17 @@ interface Props {
   showBack?: boolean;
   onBack?: () => void;
   actions: AuctionHeaderAction[];
+  /** Compact context for narrow widths */
+  compactContext?: string;
 }
 
 const SMALL_WIDTH_THRESHOLD = 360;
+const VERY_SMALL_THRESHOLD = 320;
 
 export function AuctionMarketHeader({
   title,
   context,
+  compactContext,
   showBack,
   onBack,
   actions,
@@ -36,6 +40,7 @@ export function AuctionMarketHeader({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isSmall = width < SMALL_WIDTH_THRESHOLD;
+  const isVerySmall = width < VERY_SMALL_THRESHOLD;
 
   const createAction = actions.find((a) => a.key === 'create');
   const searchAction = actions.find((a) => a.key === 'search');
@@ -43,11 +48,17 @@ export function AuctionMarketHeader({
   const sellerAction = actions.find((a) => a.key === 'seller');
   const activityAction = actions.find((a) => a.key === 'activity');
 
-  // Activity only shows in header when there's genuine attention
+  // Activity always shown when attention exists; on very small screens,
+  // it's represented by the attention strip but the header control
+  // remains when badge > 0
   const showActivity = activityAction && (activityAction.badgeCount ?? 0) > 0;
 
-  // On small widths: Search, Create, Seller always; Filter hidden; Activity via strip
+  // On small widths: Search, Create, Seller always; Filter hidden
+  // On very small: same set, context uses compact form
   const showFilter = !isSmall && filterAction;
+
+  // Responsive context
+  const displayContext = isVerySmall && compactContext ? compactContext : context;
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + Space.xs }]}>
@@ -66,11 +77,13 @@ export function AuctionMarketHeader({
 
         <View style={styles.titleWrap}>
           <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          {context ? <Text style={styles.context} numberOfLines={1}>{context}</Text> : null}
+          {displayContext ? (
+            <Text style={styles.context} numberOfLines={1}>{displayContext}</Text>
+          ) : null}
         </View>
 
         <View style={styles.actions}>
-          {/* Quiet transparent actions */}
+          {/* Quiet transparent actions — consistent 22px icon size */}
           {searchAction && (
             <Pressable
               onPress={searchAction.onPress}
@@ -79,7 +92,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={searchAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={searchAction.icon} size={20} color={Colors.textPrimary} />
+              <Ionicons name={searchAction.icon} size={21} color={Colors.textPrimary} />
             </Pressable>
           )}
           {showFilter && (
@@ -90,7 +103,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={filterAction!.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={filterAction!.icon} size={20} color={Colors.textPrimary} />
+              <Ionicons name={filterAction!.icon} size={21} color={Colors.textPrimary} />
             </Pressable>
           )}
           {sellerAction && (
@@ -101,7 +114,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={sellerAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={sellerAction.icon} size={20} color={Colors.textPrimary} />
+              <Ionicons name={sellerAction.icon} size={21} color={Colors.textPrimary} />
             </Pressable>
           )}
           {showActivity && (
@@ -112,7 +125,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={activityAction!.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={activityAction!.icon} size={20} color={Colors.textPrimary} />
+              <Ionicons name={activityAction!.icon} size={21} color={Colors.textPrimary} />
               {activityAction!.badgeCount != null && activityAction!.badgeCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
@@ -123,7 +136,7 @@ export function AuctionMarketHeader({
             </Pressable>
           )}
 
-          {/* Create — primary, brand-tinted */}
+          {/* Create — primary, brand-tinted circle */}
           {createAction && (
             <Pressable
               onPress={createAction.onPress}
@@ -153,16 +166,16 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   iconBtn: {
-    width: 40,
+    width: 38,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   createBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(244,240,232,0.10)',
@@ -173,14 +186,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 22,
+    fontSize: 28,
     color: Colors.textPrimary,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   context: {
     fontFamily: Typography.family.regular,
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: 13,
+    color: Colors.textSecondary,
     marginTop: 1,
   },
   actions: {
@@ -190,19 +203,21 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: 4,
-    right: 2,
-    minWidth: 16,
-    height: 16,
+    top: 6,
+    right: 4,
+    minWidth: 15,
+    height: 15,
     borderRadius: 999,
     backgroundColor: Colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: Colors.background,
   },
   badgeText: {
     fontFamily: Typography.family.bold,
-    fontSize: 9,
+    fontSize: 8,
     color: '#FFFFFF',
   },
 });

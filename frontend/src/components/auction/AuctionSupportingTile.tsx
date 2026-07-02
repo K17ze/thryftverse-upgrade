@@ -1,15 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { AuctionValueLockup } from './AuctionValueLockup';
 
 interface Props {
   title: string;
   imageUrl: string | null;
-  priceText: string;
+  /** 1ZE primary text e.g. "24.60 1ZE" */
+  izeText: string;
+  /** Local currency e.g. "£123.00" */
+  localText?: string | null;
+  /** Value state controls prefix */
+  valueState?: 'current' | 'starting' | 'final';
   timeText: string;
   state: 'live' | 'upcoming' | 'ended';
   viewerState?: 'leading' | 'outbid' | 'watching' | 'not_participating' | 'won' | 'lost' | 'seller';
@@ -21,7 +26,9 @@ interface Props {
 export function AuctionSupportingTile({
   title,
   imageUrl,
-  priceText,
+  izeText,
+  localText,
+  valueState = 'current',
   timeText,
   state,
   viewerState,
@@ -35,7 +42,7 @@ export function AuctionSupportingTile({
       activeOpacity={0.95}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${priceText}, ${timeText}`}
+      accessibilityLabel={`${title}, ${izeText}, ${timeText}`}
     >
       <View style={styles.imageWrap}>
         <CachedImage
@@ -44,17 +51,23 @@ export function AuctionSupportingTile({
           containerStyle={styles.imageContainer}
           contentFit="cover"
         />
-        {/* Single state marker only */}
+        {/* Single live dot only */}
         {state === 'live' && (
           <View style={styles.liveDot} />
         )}
+        {/* Outbid marker — single, compact */}
         {viewerState === 'outbid' && (
           <View style={styles.outbidDot} />
         )}
       </View>
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>{title}</Text>
-        <Text style={styles.price} numberOfLines={1}>{priceText}</Text>
+        <AuctionValueLockup
+          izeText={izeText}
+          localText={localText}
+          state={valueState}
+          scale="supporting"
+        />
         <Text style={styles.time} numberOfLines={1}>{timeText}</Text>
       </View>
     </AnimatedPressable>
@@ -66,11 +79,13 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: 'transparent',
   },
   imageWrap: {
     position: 'relative',
     aspectRatio: 4 / 3,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
   },
   imageContainer: {
     borderRadius: Radius.md,
@@ -84,22 +99,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: Space.xs,
     left: Space.xs,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 999,
     backgroundColor: Colors.danger,
   },
   outbidDot: {
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 999,
     backgroundColor: Colors.danger,
   },
   body: {
-    padding: Space.sm,
+    paddingTop: Space.xs,
     gap: 1,
   },
   title: {
@@ -108,13 +123,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     letterSpacing: -0.2,
     lineHeight: 16,
-  },
-  price: {
-    fontFamily: Typography.family.bold,
-    fontSize: 14,
-    color: Colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
   },
   time: {
     fontFamily: Typography.family.regular,

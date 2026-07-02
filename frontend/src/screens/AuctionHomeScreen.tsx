@@ -44,6 +44,7 @@ import {
   AuctionRunwayCard,
   AuctionGridCard,
   AuctionSupportingTile,
+  AuctionValueLockup,
   AuctionSkeletons,
   AuctionSegmentRail,
   SegmentContentTransition,
@@ -112,6 +113,7 @@ const CategoryRailTile = memo(function CategoryRailTile({
   onPress: () => void;
   cardWidth: number;
 }) {
+  const hasImage = Boolean(world.representativeImageUrl);
   return (
     <Pressable
       style={[styles.categoryTile, { width: cardWidth }]}
@@ -119,19 +121,21 @@ const CategoryRailTile = memo(function CategoryRailTile({
       accessibilityRole="button"
       accessibilityLabel={`Browse ${world.displayName} auctions`}
     >
-      {world.representativeImageUrl ? (
+      {hasImage ? (
         <CachedImage
-          uri={world.representativeImageUrl}
+          uri={world.representativeImageUrl!}
           style={StyleSheet.absoluteFill}
           containerStyle={StyleSheet.absoluteFill}
           contentFit="cover"
         />
       ) : (
+        // Deliberate editorial placeholder — not a skeleton
         <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surfaceAlt }]} />
       )}
+      {/* Restrained gradient only behind label */}
       <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.6)']}
-        locations={[0.5, 1]}
+        colors={['transparent', 'rgba(0,0,0,0.65)']}
+        locations={[0.55, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
@@ -148,17 +152,17 @@ const CategoryRailTile = memo(function CategoryRailTile({
 const UpcomingRow = memo(function UpcomingRow({
   item,
   onPress,
-  formatDualPrice,
+  formatValueLockup,
 }: {
   item: AuctionHomeItem;
   onPress: () => void;
-  formatDualPrice: FormatDualPrice;
+  formatValueLockup: (amountGbp: number) => { izeText: string; localText: string | null };
 }) {
-  const dualPrice = formatDualPrice(item.startingBidGbp);
+  const valueLockup = formatValueLockup(item.startingBidGbp);
   const startDate = new Date(item.startsAt);
   const timeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = startDate.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
-  const a11yLabel = `Starts ${dateStr} at ${timeStr}. ${item.title}. Starting at ${dualPrice.primaryText}`;
+  const a11yLabel = `Starts ${dateStr} at ${timeStr}. ${item.title}. Starting at ${valueLockup.izeText}`;
 
   return (
     <Pressable
@@ -184,7 +188,12 @@ const UpcomingRow = memo(function UpcomingRow({
         <Text style={styles.upcomingDate}>{dateStr} · {timeStr}</Text>
         {item.brand ? <Text style={styles.upcomingEyebrow} numberOfLines={1}>{item.brand}</Text> : null}
         <Text style={styles.upcomingTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.upcomingPrice}>Starting at {dualPrice.primaryText}</Text>
+        <AuctionValueLockup
+          izeText={valueLockup.izeText}
+          localText={valueLockup.localText}
+          state="starting"
+          scale="compact"
+        />
       </View>
       <Pressable
         style={styles.upcomingNotify}
@@ -205,13 +214,13 @@ const UpcomingRow = memo(function UpcomingRow({
 const ResultRow = memo(function ResultRow({
   item,
   onPress,
-  formatDualPrice,
+  formatValueLockup,
 }: {
   item: AuctionHomeItem;
   onPress: () => void;
-  formatDualPrice: FormatDualPrice;
+  formatValueLockup: (amountGbp: number) => { izeText: string; localText: string | null };
 }) {
-  const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+  const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
   const resultText = item.viewerState === 'won' ? 'Won'
     : item.viewerState === 'lost' ? 'Lost'
     : item.terminalReason === 'cancelled' ? 'Cancelled'
@@ -222,7 +231,11 @@ const ResultRow = memo(function ResultRow({
     : item.terminalReason === 'cancelled' ? Colors.textMuted
     : item.bidCount === 0 ? Colors.textMuted
     : Colors.textSecondary;
-  const a11yLabel = `${item.title}. ${resultText}. ${item.bidCount > 0 ? `${item.bidCount} bids` : 'No bids'}. ${dualPrice.primaryText}`;
+  // Truthful continuation action
+  const continuationLabel = item.viewerState === 'won' ? 'Continue'
+    : item.viewerState === 'lost' ? 'View'
+    : null;
+  const a11yLabel = `${item.title}. ${resultText}. ${item.bidCount > 0 ? `${item.bidCount} bids` : 'No bids'}. ${valueLockup.izeText}`;
 
   return (
     <Pressable
@@ -246,14 +259,22 @@ const ResultRow = memo(function ResultRow({
       </View>
       <View style={styles.resultBody}>
         <Text style={styles.resultTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.resultPrice}>{item.bidCount > 0 ? dualPrice.primaryText : 'No bids'}</Text>
+        <Text style={[styles.resultOutcome, { color: resultColor }]}>{resultText}{item.bidCount > 0 ? ` · ${item.bidCount} bids` : ''}</Text>
+        {item.bidCount > 0 ? (
+          <AuctionValueLockup
+            izeText={valueLockup.izeText}
+            localText={valueLockup.localText}
+            state="final"
+            scale="compact"
+          />
+        ) : null}
       </View>
-      <View style={styles.resultRight}>
-        <Text style={[styles.resultOutcome, { color: resultColor }]}>{resultText}</Text>
-        {item.bidCount > 0 && (
-          <Text style={styles.resultBids}>{item.bidCount} bids</Text>
-        )}
-      </View>
+      {continuationLabel && (
+        <View style={styles.resultActionWrap}>
+          <Text style={styles.resultActionLabel}>{continuationLabel}</Text>
+          <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+        </View>
+      )}
     </Pressable>
   );
 });
@@ -617,11 +638,25 @@ export default function AuctionHomeScreen() {
     return { primaryText: izeText, secondaryText: fiatText };
   }, [goldRates, currencyCode, displayMode]);
 
+  // ── Separate 1ZE + local text for the value lockup primitive ──
+  // Always returns the canonical 1ZE text as izeText and local as localText.
+  // In fiat-only display mode, izeText holds the local value and localText is null,
+  // preserving the user's display preference.
+  const formatValueLockup = useCallback((amountGbp: number): { izeText: string; localText: string | null } => {
+    const izeAmount = toIze(amountGbp, 'GBP', goldRates);
+    const izeText = formatIzeAmount(izeAmount, 4);
+    const fiatValue = izeAmount * (goldRates?.[currencyCode] ?? 1);
+    const fiatText = formatFiatAmount(fiatValue, currencyCode, 2);
+    if (displayMode === 'ize') return { izeText, localText: null };
+    if (displayMode === 'fiat') return { izeText: fiatText, localText: null };
+    return { izeText, localText: fiatText };
+  }, [goldRates, currencyCode, displayMode]);
+
   // ── Renderers for search/filter ──
   const renderSearchItem = useCallback(({ item }: { item: AuctionHomeItem }) => {
     const timing = resolveAuctionTiming(item, secondClock);
     const urgency = resolveUrgency(timing);
-    const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+    const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
     const timeLabel = urgency === 'finalMinutes'
       ? formatFinalMinutesCountdown(timing.msToEnd)
       : resolveTimeLabel(timing);
@@ -630,7 +665,9 @@ export default function AuctionHomeScreen() {
         title={item.title}
         imageUrl={item.imageUrl || null}
         brand={item.brand ?? null}
-        priceText={dualPrice.primaryText}
+        izeText={valueLockup.izeText}
+        localText={valueLockup.localText}
+        valueState={timing.effectiveState === 'ended' ? 'final' : timing.effectiveState === 'upcoming' ? 'starting' : 'current'}
         priceLabel={resolvePriceLabel(item, timing)}
         bidCount={item.bidCount}
         countdownText={timeLabel}
@@ -640,31 +677,35 @@ export default function AuctionHomeScreen() {
         onPress={() => navigateToDetail(item.id)}
       />
     );
-  }, [secondClock, navigateToDetail, formatDualPrice]);
+  }, [secondClock, navigateToDetail, formatValueLockup]);
 
   const renderFilterItem = useCallback(({ item }: { item: AuctionHomeItem }) => {
     const timing = resolveAuctionTiming(item, secondClock);
     const urgency = resolveUrgency(timing);
-    const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+    const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
     const timeLabel = urgency === 'finalMinutes'
       ? formatFinalMinutesCountdown(timing.msToEnd)
       : resolveTimeLabel(timing);
+    const effectiveState = timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended';
+    const valueState = effectiveState === 'ended' ? 'final' : effectiveState === 'upcoming' ? 'starting' : 'current';
     return (
       <AuctionGridCard
         title={item.title}
         imageUrl={item.imageUrl || null}
         brand={item.brand ?? null}
-        priceText={dualPrice.primaryText}
+        izeText={valueLockup.izeText}
+        localText={valueLockup.localText}
+        valueState={valueState}
         priceLabel={resolvePriceLabel(item, timing)}
         bidCount={item.bidCount}
         countdownText={timeLabel}
         urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
-        state={timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended'}
+        state={effectiveState}
         viewerState={item.viewerState}
         onPress={() => navigateToDetail(item.id)}
       />
     );
-  }, [secondClock, navigateToDetail, formatDualPrice]);
+  }, [secondClock, navigateToDetail, formatValueLockup]);
 
   // ── Category options for filter sheet ──
   const categoryOptions = useMemo(() => {
@@ -755,6 +796,11 @@ export default function AuctionHomeScreen() {
     return parts.length > 0 ? parts.join(' · ') : undefined;
   }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length]);
 
+  const compactHeaderContext = useMemo(() => {
+    const total = homeData.live.length + homeData.closingSoon.length + homeData.upcoming.length;
+    return total > 0 ? `${total} active auctions` : undefined;
+  }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length]);
+
   // ── Header actions ──
   const headerActions: AuctionHeaderAction[] = useMemo(() => [
     { key: 'search', icon: 'search-outline', label: 'Search auctions', onPress: () => { haptics.tap(); setSearchOverlayVisible(true); }, priority: 'primary' },
@@ -775,7 +821,7 @@ export default function AuctionHomeScreen() {
         kind: 'outbid' as const,
         title: homeData.attentionItem.title,
         imageUrl: homeData.attentionItem.imageUrl || null,
-        message: `Bid again to lead · ${timeLabel}`,
+        message: timeLabel,
         actionLabel: 'Bid again',
         countdownText: timeLabel,
         onPress: () => navigateToDetail(homeData.attentionItem!.id),
@@ -791,7 +837,7 @@ export default function AuctionHomeScreen() {
         kind: 'leading' as const,
         title: homeData.attentionItem.title,
         imageUrl: homeData.attentionItem.imageUrl || null,
-        message: `You have the top bid · ${timeLabel}`,
+        message: `Top bid · ${timeLabel}`,
         actionLabel: 'View',
         countdownText: timeLabel,
         onPress: () => navigateToDetail(homeData.attentionItem!.id),
@@ -803,8 +849,8 @@ export default function AuctionHomeScreen() {
         kind: 'won' as const,
         title: homeData.attentionItem.title,
         imageUrl: homeData.attentionItem.imageUrl || null,
-        message: 'Next step required',
-        actionLabel: 'View result',
+        message: 'Payment required',
+        actionLabel: 'Continue',
         onPress: () => navigateToDetail(homeData.attentionItem!.id),
         onAction: () => navigateToDetail(homeData.attentionItem!.id),
       };
@@ -1073,7 +1119,7 @@ export default function AuctionHomeScreen() {
                     key={item.id}
                     item={item}
                     onPress={() => navigateToDetail(item.id)}
-                    formatDualPrice={formatDualPrice}
+                    formatValueLockup={formatValueLockup}
                   />
                 ))}
               </View>
@@ -1124,10 +1170,13 @@ export default function AuctionHomeScreen() {
           const continuation = rest.slice(2);
           const featuredTiming = resolveAuctionTiming(featured, secondClock);
           const featuredUrgency = resolveUrgency(featuredTiming);
-          const featuredPrice = formatDualPrice(featured.currentBidGbp || featured.startingBidGbp);
+          const featuredValue = formatValueLockup(featured.currentBidGbp || featured.startingBidGbp);
           const featuredTime = featuredUrgency === 'finalMinutes'
             ? formatFinalMinutesCountdown(featuredTiming.msToEnd)
             : resolveTimeLabel(featuredTiming);
+          const featuredPersonalAction = featured.viewerState === 'outbid' ? 'Bid again'
+            : featured.viewerState === 'won' ? 'View result'
+            : null;
           return (
             <View style={styles.compositionWrap}>
               <View style={styles.asymmetricRow}>
@@ -1135,8 +1184,9 @@ export default function AuctionHomeScreen() {
                   title={featured.title}
                   imageUrl={featured.imageUrl || null}
                   brand={featured.brand ?? null}
-                  currentBidText={featuredPrice.primaryText}
-                  secondaryPriceText={featuredPrice.secondaryText}
+                  izeText={featuredValue.izeText}
+                  localText={featuredValue.localText}
+                  valueState="current"
                   bidCount={featured.bidCount}
                   countdownText={featuredTime}
                   urgent={featuredUrgency === 'finalMinutes' || featuredUrgency === 'endingSoon'}
@@ -1144,14 +1194,16 @@ export default function AuctionHomeScreen() {
                   viewerState={featured.viewerState}
                   onPress={() => navigateToDetail(featured.id)}
                   cardWidth={featuredWidth}
-                  imageHeight={280}
+                  imageHeight={300}
                   metadataBelow
+                  personalActionLabel={featuredPersonalAction}
+                  onPersonalAction={featuredPersonalAction ? () => navigateToDetail(featured.id) : undefined}
                 />
                 <View style={[styles.supportingColumn, { width: supportingColumnWidth }]}>
                   {supporting.map((item) => {
                     const timing = resolveAuctionTiming(item, secondClock);
                     const urgency = resolveUrgency(timing);
-                    const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                    const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
                     const timeLabel = urgency === 'finalMinutes'
                       ? formatFinalMinutesCountdown(timing.msToEnd)
                       : resolveTimeLabel(timing);
@@ -1160,7 +1212,9 @@ export default function AuctionHomeScreen() {
                         key={item.id}
                         title={item.title}
                         imageUrl={item.imageUrl || null}
-                        priceText={dualPrice.primaryText}
+                        izeText={valueLockup.izeText}
+                        localText={valueLockup.localText}
+                        valueState="current"
                         timeText={timeLabel}
                         state="live"
                         viewerState={item.viewerState}
@@ -1175,7 +1229,7 @@ export default function AuctionHomeScreen() {
                   {continuation.map((item) => {
                     const timing = resolveAuctionTiming(item, secondClock);
                     const urgency = resolveUrgency(timing);
-                    const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                    const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
                     const timeLabel = urgency === 'finalMinutes'
                       ? formatFinalMinutesCountdown(timing.msToEnd)
                       : resolveTimeLabel(timing);
@@ -1185,7 +1239,9 @@ export default function AuctionHomeScreen() {
                         title={item.title}
                         imageUrl={item.imageUrl || null}
                         brand={item.brand ?? null}
-                        priceText={dualPrice.primaryText}
+                        izeText={valueLockup.izeText}
+                        localText={valueLockup.localText}
+                        valueState="current"
                         priceLabel={resolvePriceLabel(item, timing)}
                         bidCount={item.bidCount}
                         countdownText={timeLabel}
@@ -1209,18 +1265,22 @@ export default function AuctionHomeScreen() {
           const continuation = rest.slice(2);
           const featuredTiming = resolveAuctionTiming(featured, secondClock);
           const featuredUrgency = resolveUrgency(featuredTiming);
-          const featuredPrice = formatDualPrice(featured.currentBidGbp || featured.startingBidGbp);
+          const featuredValue = formatValueLockup(featured.currentBidGbp || featured.startingBidGbp);
           const featuredTime = featuredUrgency === 'finalMinutes'
             ? formatFinalMinutesCountdown(featuredTiming.msToEnd)
             : resolveTimeLabel(featuredTiming);
+          const featuredPersonalAction = featured.viewerState === 'outbid' ? 'Bid again'
+            : featured.viewerState === 'won' ? 'View result'
+            : null;
           return (
             <View style={styles.compositionWrap}>
               <AuctionRunwayCard
                 title={featured.title}
                 imageUrl={featured.imageUrl || null}
                 brand={featured.brand ?? null}
-                currentBidText={featuredPrice.primaryText}
-                secondaryPriceText={featuredPrice.secondaryText}
+                izeText={featuredValue.izeText}
+                localText={featuredValue.localText}
+                valueState="current"
                 bidCount={featured.bidCount}
                 countdownText={featuredTime}
                 urgent={featuredUrgency === 'finalMinutes' || featuredUrgency === 'endingSoon'}
@@ -1228,14 +1288,16 @@ export default function AuctionHomeScreen() {
                 viewerState={featured.viewerState}
                 onPress={() => navigateToDetail(featured.id)}
                 cardWidth={fullWidth}
-                imageHeight={240}
+                imageHeight={260}
                 metadataBelow
+                personalActionLabel={featuredPersonalAction}
+                onPersonalAction={featuredPersonalAction ? () => navigateToDetail(featured.id) : undefined}
               />
               <View style={styles.supportingRow}>
                 {supporting.map((item) => {
                   const timing = resolveAuctionTiming(item, secondClock);
                   const urgency = resolveUrgency(timing);
-                  const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                  const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
                   const timeLabel = urgency === 'finalMinutes'
                     ? formatFinalMinutesCountdown(timing.msToEnd)
                     : resolveTimeLabel(timing);
@@ -1245,7 +1307,9 @@ export default function AuctionHomeScreen() {
                       title={item.title}
                       imageUrl={item.imageUrl || null}
                       brand={item.brand ?? null}
-                      priceText={dualPrice.primaryText}
+                      izeText={valueLockup.izeText}
+                      localText={valueLockup.localText}
+                      valueState="current"
                       priceLabel={resolvePriceLabel(item, timing)}
                       bidCount={item.bidCount}
                       countdownText={timeLabel}
@@ -1263,7 +1327,7 @@ export default function AuctionHomeScreen() {
                   {continuation.map((item) => {
                     const timing = resolveAuctionTiming(item, secondClock);
                     const urgency = resolveUrgency(timing);
-                    const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                    const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
                     const timeLabel = urgency === 'finalMinutes'
                       ? formatFinalMinutesCountdown(timing.msToEnd)
                       : resolveTimeLabel(timing);
@@ -1273,7 +1337,9 @@ export default function AuctionHomeScreen() {
                         title={item.title}
                         imageUrl={item.imageUrl || null}
                         brand={item.brand ?? null}
-                        priceText={dualPrice.primaryText}
+                        izeText={valueLockup.izeText}
+                        localText={valueLockup.localText}
+                        valueState="current"
                         priceLabel={resolvePriceLabel(item, timing)}
                         bidCount={item.bidCount}
                         countdownText={timeLabel}
@@ -1298,7 +1364,7 @@ export default function AuctionHomeScreen() {
                 {segmentItems.map((item) => {
                   const timing = resolveAuctionTiming(item, secondClock);
                   const urgency = resolveUrgency(timing);
-                  const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                  const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
                   const timeLabel = urgency === 'finalMinutes'
                     ? formatFinalMinutesCountdown(timing.msToEnd)
                     : resolveTimeLabel(timing);
@@ -1308,7 +1374,9 @@ export default function AuctionHomeScreen() {
                       title={item.title}
                       imageUrl={item.imageUrl || null}
                       brand={item.brand ?? null}
-                      priceText={dualPrice.primaryText}
+                      izeText={valueLockup.izeText}
+                      localText={valueLockup.localText}
+                      valueState="current"
                       priceLabel={resolvePriceLabel(item, timing)}
                       bidCount={item.bidCount}
                       countdownText={timeLabel}
@@ -1328,18 +1396,22 @@ export default function AuctionHomeScreen() {
         const featured = segmentItems[0];
         const featuredTiming = resolveAuctionTiming(featured, secondClock);
         const featuredUrgency = resolveUrgency(featuredTiming);
-        const featuredPrice = formatDualPrice(featured.currentBidGbp || featured.startingBidGbp);
+        const featuredValue = formatValueLockup(featured.currentBidGbp || featured.startingBidGbp);
         const featuredTime = featuredUrgency === 'finalMinutes'
           ? formatFinalMinutesCountdown(featuredTiming.msToEnd)
           : resolveTimeLabel(featuredTiming);
+        const featuredPersonalAction = featured.viewerState === 'outbid' ? 'Bid again'
+          : featured.viewerState === 'won' ? 'View result'
+          : null;
         return (
           <View style={styles.compositionWrap}>
             <AuctionRunwayCard
               title={featured.title}
               imageUrl={featured.imageUrl || null}
               brand={featured.brand ?? null}
-              currentBidText={featuredPrice.primaryText}
-              secondaryPriceText={featuredPrice.secondaryText}
+              izeText={featuredValue.izeText}
+              localText={featuredValue.localText}
+              valueState="current"
               bidCount={featured.bidCount}
               countdownText={featuredTime}
               urgent={featuredUrgency === 'finalMinutes' || featuredUrgency === 'endingSoon'}
@@ -1347,8 +1419,10 @@ export default function AuctionHomeScreen() {
               viewerState={featured.viewerState}
               onPress={() => navigateToDetail(featured.id)}
               cardWidth={fullWidth}
-              imageHeight={260}
+              imageHeight={280}
               metadataBelow
+              personalActionLabel={featuredPersonalAction}
+              onPersonalAction={featuredPersonalAction ? () => navigateToDetail(featured.id) : undefined}
             />
           </View>
         );
@@ -1362,7 +1436,7 @@ export default function AuctionHomeScreen() {
               {segmentItems.map((item) => {
                 const timing = resolveAuctionTiming(item, secondClock);
                 const urgency = resolveUrgency(timing);
-                const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
                 const timeLabel = urgency === 'finalMinutes'
                   ? formatFinalMinutesCountdown(timing.msToEnd)
                   : resolveTimeLabel(timing);
@@ -1373,7 +1447,7 @@ export default function AuctionHomeScreen() {
                     style={styles.endingSoonRow}
                     onPress={() => navigateToDetail(item.id)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${item.title}, ${dualPrice.primaryText}, ${timeLabel}, ${item.bidCount} bids`}
+                    accessibilityLabel={`${item.title}, ${valueLockup.izeText}, ${timeLabel}, ${item.bidCount} bids`}
                     accessibilityHint="Opens auction details"
                   >
                     <View style={styles.endingSoonImageWrap}>
@@ -1390,7 +1464,12 @@ export default function AuctionHomeScreen() {
                     </View>
                     <View style={styles.endingSoonBody}>
                       <Text style={styles.endingSoonTitle} numberOfLines={1}>{item.title}</Text>
-                      <Text style={styles.endingSoonPrice}>{dualPrice.primaryText}</Text>
+                      <AuctionValueLockup
+                        izeText={valueLockup.izeText}
+                        localText={valueLockup.localText}
+                        state="current"
+                        scale="compact"
+                      />
                       <Text style={styles.endingSoonBids}>{item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}</Text>
                     </View>
                     <View style={styles.endingSoonTimeCol}>
@@ -1417,7 +1496,7 @@ export default function AuctionHomeScreen() {
                   key={item.id}
                   item={item}
                   onPress={() => navigateToDetail(item.id)}
-                  formatDualPrice={formatDualPrice}
+                  formatValueLockup={formatValueLockup}
                 />
               ))}
             </View>
@@ -1433,22 +1512,26 @@ export default function AuctionHomeScreen() {
               {segmentItems.map((item) => {
                 const timing = resolveAuctionTiming(item, secondClock);
                 const urgency = resolveUrgency(timing);
-                const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
                 const timeLabel = urgency === 'finalMinutes'
                   ? formatFinalMinutesCountdown(timing.msToEnd)
                   : resolveTimeLabel(timing);
+                const effectiveState = timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended';
+                const valueState = effectiveState === 'ended' ? 'final' : effectiveState === 'upcoming' ? 'starting' : 'current';
                 return (
                   <AuctionGridCard
                     key={item.id}
                     title={item.title}
                     imageUrl={item.imageUrl || null}
                     brand={item.brand ?? null}
-                    priceText={dualPrice.primaryText}
+                    izeText={valueLockup.izeText}
+                    localText={valueLockup.localText}
+                    valueState={valueState}
                     priceLabel={resolvePriceLabel(item, timing)}
                     bidCount={item.bidCount}
                     countdownText={timeLabel}
                     urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
-                    state={timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended'}
+                    state={effectiveState}
                     viewerState={item.viewerState}
                     onPress={() => navigateToDetail(item.id)}
                     cardWidth={gridCardWidth}
@@ -1471,6 +1554,7 @@ export default function AuctionHomeScreen() {
       <AuctionMarketHeader
         title="Auctions"
         context={headerContext}
+        compactContext={compactHeaderContext}
         actions={headerActions}
       />
       <ScrollView
@@ -1536,7 +1620,7 @@ export default function AuctionHomeScreen() {
                   key={item.id}
                   item={item}
                   onPress={() => navigateToDetail(item.id)}
-                  formatDualPrice={formatDualPrice}
+                  formatValueLockup={formatValueLockup}
                 />
               ))}
             </View>
@@ -1815,7 +1899,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   categoryTile: {
-    height: 100,
+    height: 132,
     borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
@@ -1825,13 +1909,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: Space.sm,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm,
   },
   categoryTileName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: Typography.family.bold,
+    letterSpacing: 0.1,
   },
 
   // ── Upcoming rows ──
@@ -1881,11 +1967,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     marginBottom: 2,
   },
-  upcomingPrice: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
   upcomingNotify: {
     width: 44,
     height: 44,
@@ -1906,44 +1987,44 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   resultImageWrap: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     borderRadius: Radius.sm,
     overflow: 'hidden',
+    backgroundColor: Colors.surface,
   },
   resultImage: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
   },
   resultBody: {
     flex: 1,
+    gap: 2,
   },
   resultTitle: {
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 18,
-    fontWeight: '500',
+    fontWeight: '600',
     color: Colors.textPrimary,
-    fontFamily: Typography.family.medium,
-    marginBottom: 2,
-  },
-  resultPrice: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
-  resultRight: {
-    alignItems: 'flex-end',
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
   },
   resultOutcome: {
     fontSize: 12,
-    fontWeight: '600',
-    fontFamily: Typography.family.semibold,
-    marginBottom: 2,
+    fontWeight: '500',
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.1,
   },
-  resultBids: {
-    fontSize: 11,
+  resultActionWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  resultActionLabel: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
+    letterSpacing: 0.1,
   },
 
   // ── Empty market ──
