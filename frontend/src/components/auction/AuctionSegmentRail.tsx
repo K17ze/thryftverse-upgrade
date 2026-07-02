@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
 import { Space, Typography } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface Segment {
   key: string;
@@ -23,12 +25,42 @@ export function AuctionSegmentRail({
   onSelect,
   accessibilityLabelPrefix = 'Show',
 }: Props) {
+  const reducedMotion = useReducedMotion();
+  const underlineX = useSharedValue(0);
+  const underlineWidth = useSharedValue(0);
+  const segmentLayouts = useRef<Record<string, { x: number; width: number }>>({});
+
+  const updateUnderline = React.useCallback((key: string) => {
+    const layout = segmentLayouts.current[key];
+    if (!layout) return;
+    if (reducedMotion) {
+      underlineX.value = layout.x;
+      underlineWidth.value = layout.width;
+    } else {
+      underlineX.value = withSpring(layout.x, { damping: 18, stiffness: 260 });
+      underlineWidth.value = withSpring(layout.width, { damping: 18, stiffness: 260 });
+    }
+  }, [reducedMotion, underlineX, underlineWidth]);
+
+  useEffect(() => {
+    updateUnderline(activeKey);
+  }, [activeKey, updateUnderline]);
+
+  const handleLayout = (key: string) => (e: LayoutChangeEvent) => {
+    segmentLayouts.current[key] = {
+      x: e.nativeEvent.layout.x,
+      width: e.nativeEvent.layout.width,
+    };
+    if (key === activeKey) updateUnderline(key);
+  };
+
+  const animatedUnderlineStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: underlineX.value }],
+    width: underlineWidth.value,
+  }));
+
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.content}
-    >
+    <View style={styles.container}>
       {segments.map((seg) => {
         const active = seg.key === activeKey;
         return (
@@ -39,6 +71,7 @@ export function AuctionSegmentRail({
               haptics.tap();
               onSelect(seg.key);
             }}
+            onLayout={handleLayout(seg.key)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={`${accessibilityLabelPrefix} ${seg.label}${seg.count != null ? `, ${seg.count} auctions` : ''}`}
@@ -51,26 +84,27 @@ export function AuctionSegmentRail({
                 {seg.count}
               </Text>
             )}
-            <View style={[styles.underline, active && styles.underlineActive]} />
           </Pressable>
         );
       })}
-    </ScrollView>
+      <Reanimated.View style={[styles.underline, animatedUnderlineStyle]} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    gap: Space.md,
+  container: {
+    flexDirection: 'row',
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
+    position: 'relative',
   },
   segment: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 5,
+    paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.sm,
-    position: 'relative',
   },
   label: {
     fontFamily: Typography.family.medium,
@@ -95,12 +129,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     left: 0,
-    right: 0,
     height: 2,
     borderRadius: 1,
-    backgroundColor: 'transparent',
-  },
-  underlineActive: {
     backgroundColor: Colors.brand,
   },
 });

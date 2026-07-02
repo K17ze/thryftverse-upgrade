@@ -5,6 +5,10 @@ import { Space, Radius } from '../../theme/designTokens';
 
 export function AuctionSkeletons() {
   const { width } = useWindowDimensions();
+  const contentWidth = width - Space.md * 2;
+  const featuredWidth = contentWidth * 0.62;
+  const supportingWidth = contentWidth - featuredWidth - Space.sm;
+
   return (
     <View style={styles.container}>
       {/* Header skeleton */}
@@ -13,7 +17,7 @@ export function AuctionSkeletons() {
         <View style={styles.skeletonHeaderActions} />
       </View>
 
-      {/* Thin attention strip skeleton */}
+      {/* Attention strip skeleton */}
       <View style={styles.attentionStrip} />
 
       {/* Segment rail skeleton */}
@@ -23,18 +27,19 @@ export function AuctionSkeletons() {
         <View style={styles.segmentSkeleton} />
       </View>
 
-      {/* Selected market composition — featured + supporting */}
-      <View style={styles.featuredCard} />
-      <View style={styles.supportingRow}>
-        <View style={[styles.supportingCard, { width: (width - Space.md * 2 - Space.sm) / 2 }]} />
-        <View style={[styles.supportingCard, { width: (width - Space.md * 2 - Space.sm) / 2 }]} />
+      {/* Asymmetric composition — featured + 2 stacked supporting */}
+      <View style={styles.compositionRow}>
+        <View style={[styles.featuredSkeleton, { width: featuredWidth }]} />
+        <View style={[styles.supportingColumn, { width: supportingWidth }]}>
+          <View style={styles.supportingSkeleton} />
+          <View style={styles.supportingSkeleton} />
+        </View>
       </View>
 
-      {/* Category continuation skeleton */}
-      <View style={styles.categoryRow}>
-        <View style={styles.categorySkeleton} />
-        <View style={styles.categorySkeleton} />
-        <View style={styles.categorySkeleton} />
+      {/* Continuation hint */}
+      <View style={styles.continuationRow}>
+        <View style={[styles.gridSkeleton, { width: (contentWidth - Space.sm) / 2 }]} />
+        <View style={[styles.gridSkeleton, { width: (contentWidth - Space.sm) / 2 }]} />
       </View>
     </View>
   );
@@ -61,13 +66,13 @@ const styles = StyleSheet.create({
     backgroundColor: SKELETON_BG,
   },
   skeletonHeaderActions: {
-    width: 120,
+    width: 140,
     height: 24,
     borderRadius: Radius.sm,
     backgroundColor: SKELETON_BG,
   },
   attentionStrip: {
-    height: 52,
+    height: 56,
     borderRadius: Radius.md,
     backgroundColor: SKELETON_BG,
   },
@@ -82,28 +87,29 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     backgroundColor: SKELETON_BG,
   },
-  featuredCard: {
-    width: '100%',
-    height: 220,
+  compositionRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  featuredSkeleton: {
+    height: 280,
     borderRadius: Radius.lg,
     backgroundColor: SKELETON_BG,
   },
-  supportingRow: {
-    flexDirection: 'row',
+  supportingColumn: {
     gap: Space.sm,
   },
-  supportingCard: {
-    height: 200,
+  supportingSkeleton: {
+    flex: 1,
     borderRadius: Radius.md,
     backgroundColor: SKELETON_BG,
   },
-  categoryRow: {
+  continuationRow: {
     flexDirection: 'row',
     gap: Space.sm,
   },
-  categorySkeleton: {
-    flex: 1,
-    height: 100,
+  gridSkeleton: {
+    height: 200,
     borderRadius: Radius.md,
     backgroundColor: SKELETON_BG,
   },

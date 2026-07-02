@@ -14,6 +14,7 @@ interface Props {
   imageUrl: string | null;
   brand?: string | null;
   currentBidText: string;
+  secondaryPriceText?: string | null;
   bidCount: number;
   countdownText: string;
   urgent?: boolean;
@@ -22,10 +23,12 @@ interface Props {
   onPress: () => void;
   onWatch?: () => void;
   isWatching?: boolean;
-  /** Override the computed card width (e.g. for full-width featured layout) */
+  /** Override the computed card width */
   cardWidth?: number;
-  /** Override the image height (e.g. for compact runway rows) */
+  /** Override the image height */
   imageHeight?: number;
+  /** When true, metadata renders below the image (clean overlay) */
+  metadataBelow?: boolean;
 }
 
 export function AuctionRunwayCard({
@@ -33,6 +36,7 @@ export function AuctionRunwayCard({
   imageUrl,
   brand,
   currentBidText,
+  secondaryPriceText,
   bidCount,
   countdownText,
   urgent,
@@ -43,11 +47,75 @@ export function AuctionRunwayCard({
   isWatching,
   cardWidth: cardWidthOverride,
   imageHeight: imageHeightOverride,
+  metadataBelow = false,
 }: Props) {
   const { width } = useWindowDimensions();
   const cardWidth = cardWidthOverride ?? width * 0.76;
   const imageHeight = imageHeightOverride ?? 360;
 
+  if (metadataBelow) {
+    return (
+      <AnimatedPressable
+        style={[styles.card, { width: cardWidth }]}
+        scaleValue={0.98}
+        activeOpacity={0.95}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}, ${state}, ${currentBidText}, ${countdownText}`}
+      >
+        {/* Clean image — only lifecycle signal + watch */}
+        <View style={[styles.imageWrap, { height: imageHeight }]}>
+          <CachedImage
+            uri={imageUrl ?? ''}
+            style={styles.image}
+            containerStyle={styles.imageContainer}
+            contentFit="cover"
+          />
+          <LinearGradient
+            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.25)']}
+            locations={[0.6, 1]}
+            style={styles.gradient}
+          />
+          <View style={styles.topRow}>
+            <AuctionStateBadge state={state} compact />
+            {onWatch && (
+              <AnimatedPressable
+                style={styles.watchBtn}
+                scaleValue={0.9}
+                onPress={onWatch}
+                accessibilityRole="button"
+                accessibilityLabel={isWatching ? 'Stop watching' : 'Watch this auction'}
+              >
+                <Ionicons
+                  name={isWatching ? 'eye' : 'eye-outline'}
+                  size={16}
+                  color={isWatching ? Colors.brand : '#FFFFFF'}
+                />
+              </AnimatedPressable>
+            )}
+          </View>
+        </View>
+
+        {/* Metadata below image — on page surface */}
+        <View style={styles.belowBody}>
+          {brand && <Text style={styles.belowBrand} numberOfLines={1}>{brand}</Text>}
+          <Text style={styles.belowTitle} numberOfLines={2}>{title}</Text>
+          <View style={styles.belowPriceRow}>
+            <Text style={styles.belowPriceValue} numberOfLines={1}>{currentBidText}</Text>
+            {secondaryPriceText && (
+              <Text style={styles.belowPriceSecondary} numberOfLines={1}>{secondaryPriceText}</Text>
+            )}
+          </View>
+          <View style={styles.belowMetaRow}>
+            <AuctionCountdown text={countdownText} urgent={urgent} compact />
+            <Text style={styles.belowBidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+          </View>
+        </View>
+      </AnimatedPressable>
+    );
+  }
+
+  // Original overlay variant
   return (
     <AnimatedPressable
       style={[styles.card, { width: cardWidth }]}
@@ -69,7 +137,6 @@ export function AuctionRunwayCard({
           style={styles.gradient}
         />
 
-        {/* Top row: state badge + watch */}
         <View style={styles.topRow}>
           <AuctionStateBadge state={state} compact />
           {onWatch && (
@@ -89,7 +156,6 @@ export function AuctionRunwayCard({
           )}
         </View>
 
-        {/* Viewer state chip */}
         {viewerState === 'outbid' && (
           <View style={[styles.viewerChip, styles.viewerChipOutbid]}>
             <Ionicons name="trending-down" size={11} color={Colors.danger} />
@@ -103,12 +169,10 @@ export function AuctionRunwayCard({
           </View>
         )}
 
-        {/* Bottom content seam */}
         <View style={styles.bottomContent}>
-          {brand && <Text style={styles.brand} numberOfLines={1}>{brand.toUpperCase()}</Text>}
+          {brand && <Text style={styles.brand} numberOfLines={1}>{brand}</Text>}
           <Text style={styles.title} numberOfLines={2}>{title}</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>CURRENT BID</Text>
             <Text style={styles.priceValue} numberOfLines={1}>{currentBidText}</Text>
           </View>
           <View style={styles.metaRow}>
@@ -196,7 +260,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: 10,
     color: '#FFFFFF',
-    letterSpacing: 0.8,
+    letterSpacing: 0.3,
     opacity: 0.8,
   },
   title: {
@@ -212,12 +276,6 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     gap: Space.xs,
     marginBottom: 2,
-  },
-  priceLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: 9,
-    color: 'rgba(255,255,255,0.6)',
-    letterSpacing: 0.6,
   },
   priceValue: {
     fontFamily: Typography.family.extrabold,
@@ -235,5 +293,53 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     fontSize: 11,
     color: 'rgba(255,255,255,0.7)',
+  },
+
+  // ── Metadata-below variant ──
+  belowBody: {
+    padding: Space.md,
+    gap: 2,
+  },
+  belowBrand: {
+    fontFamily: Typography.family.medium,
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginBottom: 2,
+  },
+  belowTitle: {
+    fontFamily: Typography.family.semibold,
+    fontSize: 16,
+    color: Colors.textPrimary,
+    letterSpacing: -0.3,
+    lineHeight: 21,
+    marginBottom: 4,
+  },
+  belowPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.xs,
+    marginBottom: 2,
+  },
+  belowPriceValue: {
+    fontFamily: Typography.family.bold,
+    fontSize: 20,
+    color: Colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.4,
+  },
+  belowPriceSecondary: {
+    fontFamily: Typography.family.regular,
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
+  belowMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  belowBidCount: {
+    fontFamily: Typography.family.regular,
+    fontSize: 12,
+    color: Colors.textMuted,
   },
 });

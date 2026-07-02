@@ -43,6 +43,7 @@ import {
   AuctionAttentionStrip,
   AuctionRunwayCard,
   AuctionGridCard,
+  AuctionSupportingTile,
   AuctionSkeletons,
   AuctionSegmentRail,
   type AuctionHeaderAction,
@@ -676,8 +677,17 @@ export default function AuctionHomeScreen() {
   // ── Active filter chips ──
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
-    if (filterStatus !== 'all') chips.push(filterStatus);
-    if (filterSort !== 'endingSoon') chips.push(filterSort);
+    if (filterStatus !== 'all') {
+      chips.push(filterStatus === 'live' ? 'Live' : filterStatus === 'scheduled' ? 'Scheduled' : 'Ended');
+    }
+    if (filterSort !== 'endingSoon') {
+      chips.push(
+        filterSort === 'newest' ? 'Newest'
+        : filterSort === 'mostBids' ? 'Most bids'
+        : filterSort === 'priceLow' ? 'Price: low to high'
+        : 'Price: high to low'
+      );
+    }
     if (filterCategory) chips.push(filterCategory);
     return chips;
   }, [filterStatus, filterSort, filterCategory]);
@@ -1090,6 +1100,9 @@ export default function AuctionHomeScreen() {
   const fullWidth = width - Space.md * 2;
   const gridCardWidth = (width - Space.md * 2 - Space.sm) / 2;
   const categoryCardWidth = (width - Space.md * 2 - Space.sm * 2) / 3;
+  const isSmallWidth = width < 360;
+  const featuredWidth = isSmallWidth ? fullWidth : fullWidth * 0.62;
+  const supportingColumnWidth = isSmallWidth ? 0 : fullWidth - featuredWidth - Space.sm;
 
   // ── Render selected market composition ──
   const renderComposition = () => {
@@ -1103,8 +1116,93 @@ export default function AuctionHomeScreen() {
 
     switch (activeSegment) {
       case 'live': {
-        // Asymmetric edit: one featured + two compact + continuation grid
-        if (segmentItems.length >= 3) {
+        // True asymmetric edit: featured left + 2 stacked supporting right
+        if (segmentItems.length >= 3 && !isSmallWidth) {
+          const [featured, ...rest] = segmentItems;
+          const supporting = rest.slice(0, 2);
+          const continuation = rest.slice(2);
+          const featuredTiming = resolveAuctionTiming(featured, secondClock);
+          const featuredUrgency = resolveUrgency(featuredTiming);
+          const featuredPrice = formatDualPrice(featured.currentBidGbp || featured.startingBidGbp);
+          const featuredTime = featuredUrgency === 'finalMinutes'
+            ? formatFinalMinutesCountdown(featuredTiming.msToEnd)
+            : resolveTimeLabel(featuredTiming);
+          return (
+            <View style={styles.compositionWrap}>
+              <View style={styles.asymmetricRow}>
+                <AuctionRunwayCard
+                  title={featured.title}
+                  imageUrl={featured.imageUrl || null}
+                  brand={featured.brand ?? null}
+                  currentBidText={featuredPrice.primaryText}
+                  secondaryPriceText={featuredPrice.secondaryText}
+                  bidCount={featured.bidCount}
+                  countdownText={featuredTime}
+                  urgent={featuredUrgency === 'finalMinutes' || featuredUrgency === 'endingSoon'}
+                  state="live"
+                  viewerState={featured.viewerState}
+                  onPress={() => navigateToDetail(featured.id)}
+                  cardWidth={featuredWidth}
+                  imageHeight={280}
+                  metadataBelow
+                />
+                <View style={[styles.supportingColumn, { width: supportingColumnWidth }]}>
+                  {supporting.map((item) => {
+                    const timing = resolveAuctionTiming(item, secondClock);
+                    const urgency = resolveUrgency(timing);
+                    const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                    const timeLabel = urgency === 'finalMinutes'
+                      ? formatFinalMinutesCountdown(timing.msToEnd)
+                      : resolveTimeLabel(timing);
+                    return (
+                      <AuctionSupportingTile
+                        key={item.id}
+                        title={item.title}
+                        imageUrl={item.imageUrl || null}
+                        priceText={dualPrice.primaryText}
+                        timeText={timeLabel}
+                        state="live"
+                        viewerState={item.viewerState}
+                        onPress={() => navigateToDetail(item.id)}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
+              {continuation.length > 0 && (
+                <View style={styles.continuationGrid}>
+                  {continuation.map((item) => {
+                    const timing = resolveAuctionTiming(item, secondClock);
+                    const urgency = resolveUrgency(timing);
+                    const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                    const timeLabel = urgency === 'finalMinutes'
+                      ? formatFinalMinutesCountdown(timing.msToEnd)
+                      : resolveTimeLabel(timing);
+                    return (
+                      <AuctionGridCard
+                        key={item.id}
+                        title={item.title}
+                        imageUrl={item.imageUrl || null}
+                        brand={item.brand ?? null}
+                        priceText={dualPrice.primaryText}
+                        priceLabel={resolvePriceLabel(item, timing)}
+                        bidCount={item.bidCount}
+                        countdownText={timeLabel}
+                        urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                        state="live"
+                        viewerState={item.viewerState}
+                        onPress={() => navigateToDetail(item.id)}
+                        cardWidth={gridCardWidth}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        }
+        // Small width or <3 items: featured wide + supporting row
+        if (segmentItems.length >= 3 && isSmallWidth) {
           const [featured, ...rest] = segmentItems;
           const supporting = rest.slice(0, 2);
           const continuation = rest.slice(2);
@@ -1121,6 +1219,7 @@ export default function AuctionHomeScreen() {
                 imageUrl={featured.imageUrl || null}
                 brand={featured.brand ?? null}
                 currentBidText={featuredPrice.primaryText}
+                secondaryPriceText={featuredPrice.secondaryText}
                 bidCount={featured.bidCount}
                 countdownText={featuredTime}
                 urgent={featuredUrgency === 'finalMinutes' || featuredUrgency === 'endingSoon'}
@@ -1129,6 +1228,7 @@ export default function AuctionHomeScreen() {
                 onPress={() => navigateToDetail(featured.id)}
                 cardWidth={fullWidth}
                 imageHeight={240}
+                metadataBelow
               />
               <View style={styles.supportingRow}>
                 {supporting.map((item) => {
@@ -1189,10 +1289,75 @@ export default function AuctionHomeScreen() {
             </View>
           );
         }
-        // <3 items: simple grid
+        // 2 items: balanced editorial columns
+        if (segmentItems.length === 2) {
+          return (
+            <View style={styles.compositionWrap}>
+              <View style={styles.continuationGrid}>
+                {segmentItems.map((item) => {
+                  const timing = resolveAuctionTiming(item, secondClock);
+                  const urgency = resolveUrgency(timing);
+                  const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                  const timeLabel = urgency === 'finalMinutes'
+                    ? formatFinalMinutesCountdown(timing.msToEnd)
+                    : resolveTimeLabel(timing);
+                  return (
+                    <AuctionGridCard
+                      key={item.id}
+                      title={item.title}
+                      imageUrl={item.imageUrl || null}
+                      brand={item.brand ?? null}
+                      priceText={dualPrice.primaryText}
+                      priceLabel={resolvePriceLabel(item, timing)}
+                      bidCount={item.bidCount}
+                      countdownText={timeLabel}
+                      urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                      state="live"
+                      viewerState={item.viewerState}
+                      onPress={() => navigateToDetail(item.id)}
+                      cardWidth={gridCardWidth}
+                    />
+                  );
+                })}
+              </View>
+            </View>
+          );
+        }
+        // 1 item: feature + category continuation
+        const featured = segmentItems[0];
+        const featuredTiming = resolveAuctionTiming(featured, secondClock);
+        const featuredUrgency = resolveUrgency(featuredTiming);
+        const featuredPrice = formatDualPrice(featured.currentBidGbp || featured.startingBidGbp);
+        const featuredTime = featuredUrgency === 'finalMinutes'
+          ? formatFinalMinutesCountdown(featuredTiming.msToEnd)
+          : resolveTimeLabel(featuredTiming);
         return (
           <View style={styles.compositionWrap}>
-            <View style={styles.continuationGrid}>
+            <AuctionRunwayCard
+              title={featured.title}
+              imageUrl={featured.imageUrl || null}
+              brand={featured.brand ?? null}
+              currentBidText={featuredPrice.primaryText}
+              secondaryPriceText={featuredPrice.secondaryText}
+              bidCount={featured.bidCount}
+              countdownText={featuredTime}
+              urgent={featuredUrgency === 'finalMinutes' || featuredUrgency === 'endingSoon'}
+              state="live"
+              viewerState={featured.viewerState}
+              onPress={() => navigateToDetail(featured.id)}
+              cardWidth={fullWidth}
+              imageHeight={260}
+              metadataBelow
+            />
+          </View>
+        );
+      }
+
+      case 'endingSoon': {
+        // Dense editorial rows — countdown is the strongest signal
+        return (
+          <View style={styles.compositionWrap}>
+            <View style={styles.endingSoonContainer}>
               {segmentItems.map((item) => {
                 const timing = resolveAuctionTiming(item, secondClock);
                 const urgency = resolveUrgency(timing);
@@ -1200,63 +1365,43 @@ export default function AuctionHomeScreen() {
                 const timeLabel = urgency === 'finalMinutes'
                   ? formatFinalMinutesCountdown(timing.msToEnd)
                   : resolveTimeLabel(timing);
+                const isUrgent = urgency === 'finalMinutes';
                 return (
-                  <AuctionGridCard
+                  <Pressable
                     key={item.id}
-                    title={item.title}
-                    imageUrl={item.imageUrl || null}
-                    brand={item.brand ?? null}
-                    priceText={dualPrice.primaryText}
-                    priceLabel={resolvePriceLabel(item, timing)}
-                    bidCount={item.bidCount}
-                    countdownText={timeLabel}
-                    urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
-                    state="live"
-                    viewerState={item.viewerState}
+                    style={styles.endingSoonRow}
                     onPress={() => navigateToDetail(item.id)}
-                    cardWidth={gridCardWidth}
-                  />
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.title}, ${dualPrice.primaryText}, ${timeLabel}, ${item.bidCount} bids`}
+                    accessibilityHint="Opens auction details"
+                  >
+                    <View style={styles.endingSoonImageWrap}>
+                      {item.imageUrl ? (
+                        <CachedImage
+                          uri={item.imageUrl}
+                          style={styles.endingSoonImage}
+                          containerStyle={StyleSheet.absoluteFill}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
+                      )}
+                    </View>
+                    <View style={styles.endingSoonBody}>
+                      <Text style={styles.endingSoonTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.endingSoonPrice}>{dualPrice.primaryText}</Text>
+                      <Text style={styles.endingSoonBids}>{item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}</Text>
+                    </View>
+                    <View style={styles.endingSoonTimeCol}>
+                      <Text style={[styles.endingSoonTime, isUrgent && { color: Colors.danger }]}>
+                        {timeLabel}
+                      </Text>
+                      {isUrgent && <View style={styles.urgencyBar} />}
+                    </View>
+                  </Pressable>
                 );
               })}
             </View>
-          </View>
-        );
-      }
-
-      case 'endingSoon': {
-        // Dense editorial runway — horizontal scroll of runway cards
-        return (
-          <View style={styles.compositionWrap}>
-            <FlashList
-              data={segmentItems}
-              keyExtractor={(a) => a.id}
-              renderItem={({ item }) => {
-                const timing = resolveAuctionTiming(item, secondClock);
-                const urgency = resolveUrgency(timing);
-                const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
-                const timeLabel = urgency === 'finalMinutes'
-                  ? formatFinalMinutesCountdown(timing.msToEnd)
-                  : resolveTimeLabel(timing);
-                return (
-                  <AuctionRunwayCard
-                    title={item.title}
-                    imageUrl={item.imageUrl || null}
-                    brand={item.brand ?? null}
-                    currentBidText={dualPrice.primaryText}
-                    bidCount={item.bidCount}
-                    countdownText={timeLabel}
-                    urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
-                    state={timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended'}
-                    viewerState={item.viewerState}
-                    onPress={() => navigateToDetail(item.id)}
-                  />
-                );
-              }}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalRailContent}
-              ItemSeparatorComponent={() => <View style={{ width: Space.md }} />}
-            />
           </View>
         );
       }
@@ -1571,6 +1716,13 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
   },
+  asymmetricRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  supportingColumn: {
+    gap: Space.sm,
+  },
   supportingRow: {
     flexDirection: 'row',
     gap: Space.sm,
@@ -1581,6 +1733,71 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Space.sm,
     marginTop: Space.sm,
+  },
+
+  // ── Ending soon rows ──
+  endingSoonContainer: {
+    gap: 0,
+  },
+  endingSoonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  endingSoonImageWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  endingSoonImage: {
+    width: 72,
+    height: 72,
+  },
+  endingSoonBody: {
+    flex: 1,
+  },
+  endingSoonTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    marginBottom: 3,
+  },
+  endingSoonPrice: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.3,
+    marginBottom: 2,
+  },
+  endingSoonBids: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+  },
+  endingSoonTimeCol: {
+    alignItems: 'flex-end',
+  },
+  endingSoonTime: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  urgencyBar: {
+    width: 24,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: Colors.danger,
+    marginTop: 4,
   },
 
   // ── Horizontal rail ──

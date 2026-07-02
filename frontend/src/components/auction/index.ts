@@ -4,6 +4,7 @@ export { AuctionPriceBlock } from './AuctionPriceBlock';
 export { AuctionSkeletons } from './AuctionSkeletons';
 export { AuctionRunwayCard } from './AuctionRunwayCard';
 export { AuctionGridCard } from './AuctionGridCard';
+export { AuctionSupportingTile } from './AuctionSupportingTile';
 export { AuctionAttentionStrip } from './AuctionAttentionStrip';
 export { AuctionSegmentRail } from './AuctionSegmentRail';
 export { AuctionMarketHeader } from './AuctionMarketHeader';

@@ -76,12 +76,9 @@ export function AuctionGridCard({
       </View>
 
       <View style={styles.body}>
-        {brand && <Text style={styles.brand} numberOfLines={1}>{brand.toUpperCase()}</Text>}
-        <Text style={styles.title} numberOfLines={1}>{title}</Text>
-        <View style={styles.priceSection}>
-          <Text style={styles.priceLabel}>{priceLabel.toUpperCase()}</Text>
-          <Text style={styles.priceValue} numberOfLines={1}>{priceText}</Text>
-        </View>
+        {brand && <Text style={styles.brand} numberOfLines={1}>{brand}</Text>}
+        <Text style={styles.title} numberOfLines={2}>{title}</Text>
+        <Text style={styles.priceValue} numberOfLines={1}>{priceText}</Text>
         <View style={styles.metaRow}>
           <AuctionCountdown text={countdownText} urgent={urgent} compact />
           <Text style={styles.bidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
@@ -162,10 +159,9 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   brand: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 9,
+    fontFamily: Typography.family.medium,
+    fontSize: 10,
     color: Colors.textMuted,
-    letterSpacing: 0.6,
   },
   title: {
     fontFamily: Typography.family.semibold,
@@ -174,24 +170,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     lineHeight: 17,
   },
-  priceSection: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Space.xs,
-    marginTop: 2,
-  },
-  priceLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: 9,
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-  },
   priceValue: {
     fontFamily: Typography.family.bold,
     fontSize: 15,
     color: Colors.textPrimary,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
+    marginTop: 2,
   },
   metaRow: {
     flexDirection: 'row',
