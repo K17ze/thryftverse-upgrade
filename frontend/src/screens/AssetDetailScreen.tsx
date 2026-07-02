@@ -34,7 +34,18 @@ import {
   CommercePartyStrip,
   CategoryEvidence,
 } from '../components/commerce';
+import { ProductFamilyBadge, RecommendationRail } from '../components/product';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
+import { ShareSheet } from '../components/ShareSheet';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
+import {
+  buildCoOwnViewModel,
+  useProductSocialState,
+  useRecommendations,
+  isRecommendationLook,
+} from '../platform/product';
+import type { RecommendationLook } from '../platform/product';
+import { Listing } from '../data/mockData';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -168,6 +179,36 @@ export default function AssetDetailScreen() {
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
 
+  // ── PRODUCT-01: unified view model + shared social state + recommendations ──
+  const viewModel = React.useMemo(() => {
+    return buildCoOwnViewModel({
+      asset,
+      viewerUnits: yourUnits,
+      orderBook,
+      currentUserId: currentUser?.id,
+    });
+  }, [asset, yourUnits, orderBook, currentUser?.id]);
+
+  const social = useProductSocialState(viewModel);
+
+  const { data: recommendationsData, isLoading: recsLoading } = useRecommendations(
+    asset.listingId
+  );
+  const recommendationSections = recommendationsData?.sections ?? [];
+  const railSections = recommendationSections.filter(
+    (s) => s.key !== 'seen_in_looks' && s.key !== 'continue_exploring'
+  );
+  const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
+
+  const handlePressRecommendation = (recItem: Listing) => {
+    navigation.push('ItemDetail', { itemId: recItem.id });
+  };
+  const handlePressLook = (lookItem: RecommendationLook) => {
+    navigation.navigate('LookDetail', { lookId: lookItem.id });
+  };
+
+  const familyStateAccent = !asset.isOpen ? 'Closed' : availableUnits <= 0 ? 'Unavailable' : 'Open';
+
   const headerStyle = useAnimatedStyle(() => {
     const threshold = 200;
     const opacity = interpolate(scrollY.value, [threshold - 60, threshold], [0, 1], Extrapolation.CLAMP);
@@ -212,13 +253,20 @@ export default function AssetDetailScreen() {
           topInset={insets.top}
           scrollY={scrollY}
           onBack={() => navigation.goBack()}
-          onShare={() => {
-            show('Share not available yet', 'info');
-          }}
-          showSaveControl={false}
-          showFavControl={false}
+          onShare={social.openShare}
+          onSave={social.openCollectionPicker}
+          onToggleFav={social.toggleLike}
+          isFav={social.isLiked}
+          isSaved={social.isSavedToCollection}
+          showSaveControl
+          showFavControl
           heightFraction={0.55}
           onOpenFullscreen={() => {}}
+          overlayTopContent={
+            <View style={styles.familyBadgeOverlay}>
+              <ProductFamilyBadge family="co_own" stateAccent={familyStateAccent} compact />
+            </View>
+          }
         />
 
         <Reanimated.View
@@ -465,6 +513,42 @@ export default function AssetDetailScreen() {
             <Text style={styles.reportLinkText}>Report issue</Text>
           </Pressable>
         </Reanimated.View>
+
+        {/* ── PRODUCT-01: Seen in Looks ── */}
+        {seenInLooksSection && seenInLooksSection.items.length > 0 && (
+          <View style={styles.recommendationSection}>
+            <RecommendationRail
+              section={seenInLooksSection}
+              listingId={asset.listingId}
+              onPressItem={(recItem) => {
+                if (isRecommendationLook(recItem)) {
+                  handlePressLook(recItem);
+                } else {
+                  handlePressRecommendation(recItem as Listing);
+                }
+              }}
+            />
+          </View>
+        )}
+
+        {/* ── PRODUCT-01: Personalised recommendation rails via underlying listingId ── */}
+        {recsLoading && railSections.length === 0 ? null : (
+          railSections.map((section) => (
+            <View key={section.key} style={styles.recommendationSection}>
+              <RecommendationRail
+                section={section}
+                listingId={asset.listingId}
+                onPressItem={(recItem) => {
+                  if (isRecommendationLook(recItem)) {
+                    handlePressLook(recItem);
+                  } else {
+                    handlePressRecommendation(recItem as Listing);
+                  }
+                }}
+              />
+            </View>
+          ))
+        )}
       </Reanimated.ScrollView>
 
       <CommerceStickyDock bottomInset={insets.bottom}>
@@ -511,6 +595,19 @@ export default function AssetDetailScreen() {
           </View>
         )}
       </CommerceStickyDock>
+
+      {/* ── PRODUCT-01: Save to collection + share (shared social actions) ── */}
+      <SaveToCollectionModal
+        visible={social.collectionModalVisible}
+        itemId={asset.id}
+        onClose={social.closeCollectionPicker}
+      />
+      <ShareSheet
+        visible={social.shareVisible}
+        onDismiss={social.closeShare}
+        url={`https://thryftverse.com/asset/${asset.id}`}
+        title={asset.title}
+      />
     </View>
   );
 }
@@ -899,5 +996,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
+  },
+  familyBadgeOverlay: {
+    alignItems: 'flex-start',
+  },
+  recommendationSection: {
+    marginTop: Space.md,
   },
 });
