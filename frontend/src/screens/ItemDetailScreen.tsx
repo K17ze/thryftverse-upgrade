@@ -189,6 +189,22 @@ export default function ItemDetailScreen() {
     if (item) ProductAnalytics.mediaZoom(item.id);
   };
 
+  // NOTE: exploreItems useMemo must run BEFORE any conditional return so the
+  // hook count stays stable across loading → loaded (Rules of Hooks).
+  const exploreItems: Listing[] = useMemo(() => {
+    const allPages = exploreData?.pages ?? [];
+    const items: Listing[] = [];
+    for (const page of allPages) {
+      const section = page.sections.find((s) => s.key === 'continue_exploring');
+      if (section) {
+        for (const item of section.items) {
+          if (!isRecommendationLook(item)) items.push(item);
+        }
+      }
+    }
+    return items;
+  }, [exploreData]);
+
   if (queryLoading && !item) {
     return (
       <View style={styles.container}>
@@ -254,20 +270,6 @@ export default function ItemDetailScreen() {
   const railSections = recommendationSections.filter(
     (s) => s.key !== 'seen_in_looks' && s.key !== 'continue_exploring'
   );
-
-  const exploreItems: Listing[] = useMemo(() => {
-    const allPages = exploreData?.pages ?? [];
-    const items: Listing[] = [];
-    for (const page of allPages) {
-      const section = page.sections.find((s) => s.key === 'continue_exploring');
-      if (section) {
-        for (const item of section.items) {
-          if (!isRecommendationLook(item)) items.push(item);
-        }
-      }
-    }
-    return items;
-  }, [exploreData]);
 
   const heroHeight = Math.min(screenHeight * 0.62, screenWidth * 1.35);
 

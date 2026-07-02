@@ -34,7 +34,7 @@ import {
   CommercePartyStrip,
   CategoryEvidence,
 } from '../components/commerce';
-import { ProductFamilyBadge, RecommendationRail } from '../components/product';
+import { ProductFamilyBadge, RecommendationRail, FullscreenMediaViewer } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
@@ -70,6 +70,13 @@ export default function AssetDetailScreen() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
+  const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
+  const [fullscreenVisible, setFullscreenVisible] = React.useState(false);
+
+  const handleOpenFullscreen = (index: number) => {
+    setFullscreenIndex(index);
+    setFullscreenVisible(true);
+  };
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => {
@@ -106,6 +113,31 @@ export default function AssetDetailScreen() {
 
     return () => { cancelled = true; };
   }, [assetId, currentUser?.id, show]);
+
+  // ── PRODUCT-01: unified view model + shared social state + recommendations ──
+  // NOTE: these hooks MUST run before any conditional return so the hook count
+  // stays stable across loading → loaded (Rules of Hooks). They are null-safe.
+  const viewModel = React.useMemo(() => {
+    if (!asset) return null;
+    return buildCoOwnViewModel({
+      asset,
+      viewerUnits: yourUnits,
+      orderBook,
+      currentUserId: currentUser?.id,
+    });
+  }, [asset, yourUnits, orderBook, currentUser?.id]);
+
+  const social = useProductSocialState(viewModel);
+
+  const { data: recommendationsData, isLoading: recsLoading } = useRecommendations(
+    asset?.listingId
+  );
+
+  const headerStyle = useAnimatedStyle(() => {
+    const threshold = 200;
+    const opacity = interpolate(scrollY.value, [threshold - 60, threshold], [0, 1], Extrapolation.CLAMP);
+    return { opacity };
+  });
 
   if (isLoading) {
     return (
@@ -182,21 +214,6 @@ export default function AssetDetailScreen() {
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
 
-  // ── PRODUCT-01: unified view model + shared social state + recommendations ──
-  const viewModel = React.useMemo(() => {
-    return buildCoOwnViewModel({
-      asset,
-      viewerUnits: yourUnits,
-      orderBook,
-      currentUserId: currentUser?.id,
-    });
-  }, [asset, yourUnits, orderBook, currentUser?.id]);
-
-  const social = useProductSocialState(viewModel);
-
-  const { data: recommendationsData, isLoading: recsLoading } = useRecommendations(
-    asset.listingId
-  );
   const recommendationSections = recommendationsData?.sections ?? [];
   const railSections = recommendationSections.filter(
     (s) => s.key !== 'seen_in_looks' && s.key !== 'continue_exploring'
@@ -211,12 +228,6 @@ export default function AssetDetailScreen() {
   };
 
   const familyStateAccent = !asset.isOpen ? 'Closed' : availableUnits <= 0 ? 'Unavailable' : 'Open';
-
-  const headerStyle = useAnimatedStyle(() => {
-    const threshold = 200;
-    const opacity = interpolate(scrollY.value, [threshold - 60, threshold], [0, 1], Extrapolation.CLAMP);
-    return { opacity };
-  });
 
   return (
     <View style={styles.container}>
@@ -264,7 +275,7 @@ export default function AssetDetailScreen() {
           showSaveControl
           showFavControl
           heightFraction={0.55}
-          onOpenFullscreen={() => {}}
+          onOpenFullscreen={handleOpenFullscreen}
           overlayTopContent={
             <View style={styles.familyBadgeOverlay}>
               <ProductFamilyBadge family="co_own" stateAccent={familyStateAccent} compact />
@@ -629,6 +640,14 @@ export default function AssetDetailScreen() {
         onDismiss={social.closeShare}
         url={`https://thryftverse.com/asset/${asset.id}`}
         title={asset.title}
+      />
+
+      {/* ── Fullscreen media viewer (was a no-op, PRODUCT-MASTER defect #3) ── */}
+      <FullscreenMediaViewer
+        images={images}
+        initialIndex={fullscreenIndex}
+        visible={fullscreenVisible}
+        onClose={() => setFullscreenVisible(false)}
       />
     </View>
   );
