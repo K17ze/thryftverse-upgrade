@@ -69,7 +69,7 @@ BEGIN
   FOR poster_row IN
     SELECT id, creator_id, created_at, expiry_hours
     FROM posters
-    WHERE story_id IS NULL
+    WHERE posters.story_id IS NULL
   LOOP
     story_id := poster_row.id;
     INSERT INTO poster_stories (id, creator_id, audience, allow_replies, allow_reactions, status, expires_at, created_at, updated_at)

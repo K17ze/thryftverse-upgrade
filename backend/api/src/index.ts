@@ -814,7 +814,23 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
-  if (method === 'GET' && (path === '/auctions' || path.startsWith('/auctions/'))) {
+  if (method === 'GET' && path === '/auctions') {
+    return true;
+  }
+
+  if (method === 'GET' && path === '/auctions/home') {
+    return true;
+  }
+
+  if (method === 'GET' && path === '/auctions/1ze-rates') {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/auctions\/(?!watchlist$)[^/]+$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/auctions\/[^/]+\/bids$/.test(path)) {
     return true;
   }
 
@@ -866,6 +882,27 @@ async function authenticateRequest(requestPath: string, authHeader: string | und
   }
 
   return authUser;
+}
+
+async function optionalAuthenticate(request: { headers: Record<string, string | string[] | undefined>; authUser?: AuthenticatedUser }, requestPath: string) {
+  if (request.authUser) {
+    return;
+  }
+
+  const authHeader = request.headers.authorization;
+  if (!authHeader) {
+    return;
+  }
+
+  const token = getBearerToken(authHeader);
+  if (!token) {
+    return;
+  }
+
+  const authUser = await verifyAccessToken(token);
+  if (authUser) {
+    request.authUser = authUser;
+  }
 }
 
 function resolveActorUserId(requestPath: string, request: { params?: unknown; body?: unknown }) {
@@ -28870,6 +28907,7 @@ const ATTENTION_WATCHING_THRESHOLD_MS = 60 * 60 * 1000; // 60 min
 const CLOSING_SOON_THRESHOLD_MS = 60 * 60 * 1000; // 60 min
 
 app.get('/auctions/home', async (request, reply) => {
+  await optionalAuthenticate(request, '/auctions/home');
   const viewerUserId = request.authUser?.userId ?? null;
 
   const now = new Date();
@@ -28877,28 +28915,40 @@ app.get('/auctions/home', async (request, reply) => {
   const nowMs = now.getTime();
 
   // ── Fetch all auctions with viewer state in a single query ──
+  // Parameterised: viewer ID passed as $1 to every authenticated query.
+  // Anonymous queries use literal false/NULL with no parameter.
+  const viewerSelect = viewerUserId
+    ? `, EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $1) AS is_watched, (SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = $1) AS viewer_highest_bid`
+    : `, false::boolean AS is_watched, NULL::text AS viewer_highest_bid`;
+
   const baseSelect = `
     SELECT
       a.id, a.listing_id, a.seller_id, a.starts_at, a.ends_at,
       a.starting_bid_gbp, a.current_bid_gbp, a.buy_now_price_gbp,
       a.min_increment_gbp, a.bid_count, a.status, a.cancelled_at, a.settled_at,
       a.winner_bidder_id AS auction_winner_id, a.created_at,
-      l.title, l.image_url, l.brand, l.category, l.condition_label,
-      u.username AS seller_username, u.avatar_url AS seller_avatar, u.display_name AS seller_display_name
-      ${viewerUserId ? `, (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}' LIMIT 1)::boolean AS is_watched, (SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = '${viewerUserId.replace(/'/g, "''")}') AS viewer_highest_bid` : `, false::boolean AS is_watched, NULL::text AS viewer_highest_bid`}
+      l.title, l.image_url, l.brand, l.category, l.condition AS condition_label,
+      u.username AS seller_username, u.avatar AS seller_avatar, u.display_name AS seller_display_name
+      ${viewerSelect}
     FROM auctions a
     LEFT JOIN listings l ON l.id = a.listing_id
     LEFT JOIN users u ON u.id = a.seller_id
     WHERE a.cancelled_at IS NULL
   `;
 
+  const viewerParams = viewerUserId ? [viewerUserId] : [];
+
   // Fetch live (including closing soon), upcoming, ended, seller, and watchlist in parallel
   const [liveRes, upcomingRes, endedRes, sellerRes, watchlistRes, categoryRes] = await Promise.all([
-    db.query(baseSelect + ` AND a.starts_at <= NOW() AND a.ends_at > NOW() ORDER BY a.ends_at ASC LIMIT 30`),
-    db.query(baseSelect + ` AND a.starts_at > NOW() ORDER BY a.starts_at ASC LIMIT 20`),
-    db.query(baseSelect + ` AND a.ends_at <= NOW() ORDER BY a.ends_at DESC LIMIT 20`),
-    viewerUserId ? db.query(baseSelect + ` AND a.seller_id = '${viewerUserId.replace(/'/g, "''")}' ORDER BY a.ends_at DESC LIMIT 20`) : Promise.resolve({ rows: [] as any[] }),
-    viewerUserId ? db.query(baseSelect + ` AND EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}') ORDER BY a.ends_at ASC LIMIT 20`) : Promise.resolve({ rows: [] as any[] }),
+    db.query(baseSelect + ` AND a.starts_at <= NOW() AND a.ends_at > NOW() ORDER BY a.ends_at ASC LIMIT 30`, viewerParams),
+    db.query(baseSelect + ` AND a.starts_at > NOW() ORDER BY a.starts_at ASC LIMIT 20`, viewerParams),
+    db.query(baseSelect + ` AND a.ends_at <= NOW() ORDER BY a.ends_at DESC LIMIT 20`, viewerParams),
+    viewerUserId
+      ? db.query(baseSelect + ` AND a.seller_id = $1 ORDER BY a.ends_at DESC LIMIT 20`, [viewerUserId])
+      : Promise.resolve({ rows: [] as any[] }),
+    viewerUserId
+      ? db.query(baseSelect + ` AND EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $1) ORDER BY a.ends_at ASC LIMIT 20`, [viewerUserId])
+      : Promise.resolve({ rows: [] as any[] }),
     db.query(`SELECT DISTINCT COALESCE(l.category, '') AS category FROM auctions a LEFT JOIN listings l ON l.id = a.listing_id WHERE a.cancelled_at IS NULL AND a.starts_at <= NOW() AND a.ends_at > NOW() AND COALESCE(l.category, '') != '' ORDER BY category ASC`),
   ]);
 
@@ -28973,7 +29023,7 @@ app.get('/auctions/home', async (request, reply) => {
   const sellerItems = sellerRes.rows.map(mapRow);
   const watchlistItems = watchlistRes.rows.map(mapRow);
 
-  // ── Activity counts ──
+  // ── Activity counts (deduplicated by Auction ID) ──
   const activity = {
     activeCount: 0,
     needsAttentionCount: 0,
@@ -28983,7 +29033,11 @@ app.get('/auctions/home', async (request, reply) => {
     unresolvedWonCount: 0,
   };
 
+  const seenActivityIds = new Set<string>();
   for (const item of [...liveItems, ...endedItems, ...watchlistItems]) {
+    if (seenActivityIds.has(item.id)) continue;
+    seenActivityIds.add(item.id);
+
     if (item.viewerState === 'outbid') { activity.outbidCount++; activity.needsAttentionCount++; activity.activeCount++; }
     else if (item.viewerState === 'leading') { activity.leadingCount++; activity.activeCount++; }
     else if (item.viewerState === 'watching') { activity.watchingCount++; activity.activeCount++; }
@@ -29109,6 +29163,7 @@ app.get('/auctions/home', async (request, reply) => {
 });
 
 app.get('/auctions', async (request, reply) => {
+  await optionalAuthenticate(request, '/auctions');
   const querySchema = z.object({
     status: z.enum(['live', 'scheduled', 'ended', 'all']).default('all'),
     query: z.string().min(1).max(200).optional(),
@@ -29229,6 +29284,15 @@ app.get('/auctions', async (request, reply) => {
 
   const whereClause = `WHERE ${whereConditions.join(' AND ')}${cursorCondition}`;
 
+  const viewerParamIdx = paramIdx + 1;
+  const viewerSelect = viewerUserId
+    ? `, EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $${viewerParamIdx}) AS is_watched, (SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = $${viewerParamIdx}) AS viewer_highest_bid`
+    : `, false::boolean AS is_watched, NULL::text AS viewer_highest_bid`;
+
+  if (viewerUserId) {
+    whereParams.push(viewerUserId);
+  }
+
   const result = await db.query<{
     id: string;
     listing_id: string;
@@ -29277,12 +29341,11 @@ app.get('/auctions', async (request, reply) => {
         l.image_url,
         l.brand,
         l.category,
-        l.condition_label,
+        l.condition AS condition_label,
         u.username AS seller_username,
-        u.avatar_url AS seller_avatar,
+        u.avatar AS seller_avatar,
         u.display_name AS seller_display_name,
-        ${viewerUserId ? `(SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}' LIMIT 1)::boolean` : 'false::boolean'} AS is_watched,
-        ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = '${viewerUserId.replace(/'/g, "''")}')` : 'NULL::text'} AS viewer_highest_bid
+        ${viewerSelect}
       FROM auctions a
       LEFT JOIN listings l ON l.id = a.listing_id
       LEFT JOIN users u ON u.id = a.seller_id
@@ -30444,6 +30507,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
 });
 
 app.get('/auctions/:auctionId', async (request, reply) => {
+  await optionalAuthenticate(request, '/auctions/:auctionId');
   const paramsSchema = z.object({ auctionId: z.string().min(2) });
   const { auctionId } = paramsSchema.parse(request.params);
 
@@ -30499,21 +30563,21 @@ app.get('/auctions/:auctionId', async (request, reply) => {
         l.image_url,
         l.brand,
         l.category,
-        l.condition_label,
+        l.condition AS condition_label,
         l.description,
         l.price_gbp,
         u.username AS seller_username,
-        u.avatar_url AS seller_avatar,
+        u.avatar AS seller_avatar,
         u.display_name AS seller_display_name,
-        ${viewerUserId ? `(SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = '${viewerUserId.replace(/'/g, "''")}' LIMIT 1)::boolean` : 'false::boolean'} AS is_watched,
-        ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = '${viewerUserId.replace(/'/g, "''")}')` : 'NULL::text'} AS viewer_highest_bid
+        ${viewerUserId ? `EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $2)::boolean` : 'false::boolean'} AS is_watched,
+        ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = $2)` : 'NULL::text'} AS viewer_highest_bid
       FROM auctions a
       LEFT JOIN listings l ON l.id = a.listing_id
       LEFT JOIN users u ON u.id = a.seller_id
       WHERE a.id = $1
       LIMIT 1
     `,
-    [auctionId]
+    viewerUserId ? [auctionId, viewerUserId] : [auctionId]
   );
 
   const row = result.rows[0];
@@ -30706,7 +30770,7 @@ app.get('/auctions/watchlist', async (request, reply) => {
         l.category,
         u.username AS seller_username,
         u.display_name AS seller_display_name,
-        u.avatar_url AS seller_avatar,
+        u.avatar AS seller_avatar,
         aw.created_at AS watched_at,
         aw.id AS aw_id
       FROM auction_watchlist aw

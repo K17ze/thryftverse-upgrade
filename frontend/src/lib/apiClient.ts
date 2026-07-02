@@ -408,7 +408,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
 
   if (isWriteMethod) {
     const networkState = await Network.getNetworkStateAsync();
-    if (!networkState.isInternetReachable) {
+    if (networkState.isInternetReachable === false) {
       // 🚨 Offline Silent Queue Path
       console.log(`[OfflineQueue] Intercepting ${init.method} to ${url}`);
       useOfflineQueue.getState().pushToQueue(url, init || {});
@@ -439,7 +439,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   let response: Response;
   try {
     const networkState = await Network.getNetworkStateAsync();
-    if (!networkState.isInternetReachable && !isWriteMethod) {
+    if (networkState.isInternetReachable === false && !isWriteMethod) {
       throw new ApiRequestError(`Internet connection is offline`);
     }
 

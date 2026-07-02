@@ -97,7 +97,7 @@ export default function AuctionDetailScreen() {
   const [relatedLoading, setRelatedLoading] = React.useState(false);
 
   const SCREEN_HEIGHT = Dimensions.get('window').height;
-  const HERO_HEIGHT = Math.min(SCREEN_HEIGHT * 0.65, 600);
+  const HERO_HEIGHT = Math.min(SCREEN_HEIGHT * 0.48, 440);
 
   const serverNowRef = React.useRef<string | null>(null);
   const { secondClock, minuteClock, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed } =
@@ -419,10 +419,10 @@ export default function AuctionDetailScreen() {
               </View>
             )}
 
-            {/* Gradient legibility layer */}
+            {/* Gradient legibility layer — top-only for floating controls */}
             <LinearGradient
-              colors={['transparent', 'transparent', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.85)']}
-              locations={[0, 0.4, 0.75, 1]}
+              colors={['rgba(0,0,0,0.35)', 'transparent', 'transparent', 'rgba(0,0,0,0.25)']}
+              locations={[0, 0.25, 0.7, 1]}
               style={styles.heroGradient}
             />
 
@@ -485,86 +485,7 @@ export default function AuctionDetailScreen() {
               />
             </AnimatedPressable>
 
-            {/* ── State and price stage — one visual statement overlaid on gradient ── */}
-            <View style={styles.heroBottomStage}>
-              {viewerContext && !isTerminal && (
-                <Text
-                  style={[
-                    styles.stateLine,
-                    viewerContext.treatment === 'warning' && { color: '#ff6b6b' },
-                    viewerContext.treatment === 'calm' && { color: '#51cf66' },
-                    viewerContext.treatment === 'seller' && { color: Colors.brand },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {viewerContext.title}
-                  {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
-                </Text>
-              )}
-
-              <View style={styles.priceStageRow}>
-                <View style={styles.priceStagePrimary}>
-                  <Text style={styles.priceStageLabel}>{priceLabel}</Text>
-                  <Text
-                    style={styles.priceStageValue}
-                    accessibilityRole="text"
-                    accessibilityLabel={`${priceLabel} ${priceText}`}
-                    numberOfLines={1}
-                  >
-                    {priceText}
-                  </Text>
-                  {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
-                    <Text style={styles.outbidMinText}>
-                      Minimum to lead: {formatFromFiat(auction.minimumNextBidGbp, 'GBP')}
-                    </Text>
-                  )}
-                  {(() => {
-                    const amount = priceLabel === 'Starting bid'
-                      ? auction.startingBidGbp
-                      : auction.currentBidGbp > 0
-                        ? auction.currentBidGbp
-                        : auction.startingBidGbp;
-                    if (amount <= 0) return null;
-                    if (displayMode === 'fiat') return null;
-                    return (
-                      <Text style={styles.priceStageIze}>
-                        {formatIzeAmount(toIze(amount, 'GBP', goldRates))}
-                      </Text>
-                    );
-                  })()}
-                </View>
-                <View style={styles.priceStageMeta}>
-                  <Text style={styles.bidCountInline}>
-                    {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.countdownRow}>
-                <Ionicons
-                  name={
-                    isLive ? 'flash-outline'
-                    : isUpcoming ? 'time-outline'
-                    : isCancelled ? 'close-circle-outline'
-                    : isSettled ? 'checkmark-circle-outline'
-                    : 'checkmark-done-outline'
-                  }
-                  size={13}
-                  color={countdown.isFinalMinutes ? '#ff6b6b' : '#FFFFFF'}
-                />
-                <Text
-                  style={[
-                    styles.countdownText,
-                    countdown.isFinalMinutes && styles.countdownTextUrgent,
-                  ]}
-                  accessibilityRole="text"
-                  accessibilityLabel={countdown.text}
-                  numberOfLines={1}
-                >
-                  {countdown.text}
-                </Text>
-              </View>
-            </View>
+            {/* Media count hint when multiple media exists (kept minimal) */}
           </View>
         </Reanimated.View>
 
@@ -575,12 +496,103 @@ export default function AuctionDetailScreen() {
           </View>
         )}
 
-        {/* ── Active viewer-state composition — changes hierarchy per state ── */}
+        {/* ── B. Item identity — one primary location, editorial negative space ── */}
+        <View style={styles.itemIdentitySection}>
+          {auction.brand && <Text style={styles.itemIdentityEyebrow} numberOfLines={1}>{auction.brand.toUpperCase()}</Text>}
+          <Headline style={styles.itemIdentityTitle} numberOfLines={2}>{auction.title}</Headline>
+          {auction.conditionLabel && (
+            <Text style={styles.itemIdentityCondition}>{auction.conditionLabel}</Text>
+          )}
+        </View>
+
+        {/* ── C. Auction transaction module — one strong surface ── */}
+        <View style={styles.transactionModule}>
+          {/* State line */}
+          {viewerContext && !isTerminal && (
+            <Text
+              style={[
+                styles.transactionStateLine,
+                viewerContext.treatment === 'warning' && { color: Colors.danger },
+                viewerContext.treatment === 'calm' && { color: Colors.success },
+                viewerContext.treatment === 'seller' && { color: Colors.brand },
+              ]}
+              numberOfLines={1}
+            >
+              {viewerContext.title}
+              {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
+            </Text>
+          )}
+
+          {/* Price — 1ZE visually primary in both-mode display */}
+          <View style={styles.transactionPriceRow}>
+            <View style={styles.transactionPricePrimary}>
+              <Text style={styles.transactionPriceLabel}>{priceLabel}</Text>
+              {(() => {
+                const izeAmount = toIze(priceAmount, 'GBP', goldRates);
+                const izeText = formatIzeAmount(izeAmount);
+                const localText = formatFromFiat(priceAmount, 'GBP');
+                if (displayMode === 'fiat') {
+                  return (
+                    <>
+                      <Text style={styles.transactionPriceValue} numberOfLines={1}>{localText}</Text>
+                      <Text style={styles.transactionPriceSecondary} numberOfLines={1}>{izeText}</Text>
+                    </>
+                  );
+                }
+                return (
+                  <>
+                    <Text style={styles.transactionPriceValue} numberOfLines={1}>{izeText}</Text>
+                    {displayMode !== 'ize' && (
+                      <Text style={styles.transactionPriceSecondary} numberOfLines={1}>≈ {localText}</Text>
+                    )}
+                  </>
+                );
+              })()}
+            </View>
+            <View style={styles.transactionPriceMeta}>
+              <Text style={styles.transactionBidCount}>
+                {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Minimum to lead (outbid) */}
+          {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
+            <View style={styles.transactionMinRow}>
+              <Text style={styles.transactionMinLabel}>Minimum to lead</Text>
+              <Text style={styles.transactionMinValue}>
+                {formatIzeAmount(toIze(auction.minimumNextBidGbp, 'GBP', goldRates))}
+              </Text>
+            </View>
+          )}
+
+          {/* Countdown / state time */}
+          <View style={styles.transactionCountdownRow}>
+            <Ionicons
+              name={
+                isLive ? 'flash-outline'
+                : isUpcoming ? 'time-outline'
+                : isCancelled ? 'close-circle-outline'
+                : isSettled ? 'checkmark-circle-outline'
+                : 'checkmark-done-outline'
+              }
+              size={14}
+              color={countdown.isFinalMinutes ? Colors.danger : Colors.textSecondary}
+            />
+            <Text
+              style={[styles.transactionCountdownText, countdown.isFinalMinutes && { color: Colors.danger }]}
+              accessibilityRole="text"
+              accessibilityLabel={countdown.text}
+              numberOfLines={1}
+            >
+              {countdown.text}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── D. Viewer-state action — compact, single next action ── */}
         {!isTerminal && viewerState === 'outbid' && isLive && (
           <View style={styles.outbidActionBlock}>
-            <Text style={styles.outbidHeadline}>You've been outbid</Text>
-            <Text style={styles.outbidMinLabel}>Minimum to lead</Text>
-            <Text style={styles.outbidMinValue}>{formatFromFiat(auction.minimumNextBidGbp, 'GBP')}</Text>
             <AppButton
               style={styles.outbidAction}
               onPress={openBidSheet}
@@ -608,38 +620,23 @@ export default function AuctionDetailScreen() {
           </View>
         )}
 
-        {/* ── Terminal body — full result experience, not small blocks ── */}
+        {/* ── Terminal result — one compact module, no duplicate title/brand ── */}
         {isTerminal && !isCancelled && (
-          <View style={styles.resultBodySection}>
+          <View style={styles.terminalResultModule}>
             {viewerState === 'won' && (
-              <View style={styles.resultExperience}>
-                <Text style={styles.resultEyebrow}>Result</Text>
-                <Text style={styles.resultTitleWon}>You won</Text>
-                <Text style={styles.resultPrice}>
-                  {formatFromFiat(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP')}
+              <>
+                <Text style={styles.terminalResultTitleWon}>You won</Text>
+                <Text style={styles.terminalResultValue}>
+                  {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates))}
                 </Text>
-                <Text style={styles.resultItemTitle}>{auction.title}</Text>
-                {auction.brand && <Text style={styles.resultBrand}>{auction.brand}</Text>}
-                <View style={styles.resultMetaRow}>
-                  <Text style={styles.resultMetaText}>
-                    {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
-                  </Text>
-                </View>
-                <Text style={styles.resultNote}>
-                  Transaction fulfilment is not yet available for this auction result.
-                </Text>
-              </View>
+                <Text style={styles.terminalResultNote}>Next step required — view result for fulfilment details.</Text>
+              </>
             )}
             {viewerState === 'lost' && (
-              <View style={styles.resultExperience}>
-                <Text style={styles.resultEyebrow}>Closed</Text>
-                <Text style={styles.resultTitleLost}>Auction ended</Text>
-                <Text style={styles.resultPriceSecondary}>
-                  {formatFromFiat(auction.currentBidGbp, 'GBP')}
-                </Text>
-                <Text style={styles.resultItemTitle}>{auction.title}</Text>
-                <Text style={styles.resultMetaText}>
-                  {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'} were placed
+              <>
+                <Text style={styles.terminalResultTitleLost}>Auction closed</Text>
+                <Text style={styles.terminalResultValue}>
+                  {formatIzeAmount(toIze(auction.currentBidGbp, 'GBP', goldRates))}
                 </Text>
                 <Pressable
                   style={styles.discoverLinkInline}
@@ -651,73 +648,47 @@ export default function AuctionDetailScreen() {
                   <Text style={styles.discoverLinkInlineText}>Discover similar</Text>
                   <Ionicons name="chevron-forward" size={12} color={Colors.brand} />
                 </Pressable>
-              </View>
+              </>
             )}
             {viewerState === 'seller' && auction.bidCount > 0 && (
-              <View style={styles.resultExperience}>
-                <Text style={styles.resultEyebrow}>Result</Text>
-                <Text style={styles.resultTitleSold}>Sold</Text>
-                <Text style={styles.resultPrice}>
-                  {formatFromFiat(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP')}
+              <>
+                <Text style={styles.terminalResultTitleSold}>Sold</Text>
+                <Text style={styles.terminalResultValue}>
+                  {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates))}
                 </Text>
-                <Text style={styles.resultItemTitle}>{auction.title}</Text>
-                <Text style={styles.resultMetaText}>
-                  {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
-                </Text>
-                <Text style={styles.resultNote}>
-                  Transaction fulfilment is not yet available for this auction result.
-                </Text>
-              </View>
+                <Text style={styles.terminalResultNote}>Fulfilment not yet available for this result.</Text>
+              </>
             )}
             {viewerState === 'seller' && auction.bidCount === 0 && (
-              <View style={styles.resultExperience}>
-                <Text style={styles.resultEyebrow}>Closed</Text>
-                <Text style={styles.resultTitleLost}>Ended without bids</Text>
-                <Text style={styles.resultItemTitle}>{auction.title}</Text>
-                <Text style={styles.resultMetaText}>No bids were placed</Text>
-              </View>
+              <Text style={styles.terminalResultTitleLost}>Ended without bids</Text>
             )}
             {viewerState === 'not_participating' && (
-              <View style={styles.resultExperience}>
-                <Text style={styles.resultEyebrow}>Closed</Text>
-                <Text style={styles.resultTitleLost}>Auction ended</Text>
-                <Text style={styles.resultPriceSecondary}>
-                  {formatFromFiat(auction.currentBidGbp, 'GBP')}
+              <>
+                <Text style={styles.terminalResultTitleLost}>Auction closed</Text>
+                <Text style={styles.terminalResultValue}>
+                  {formatIzeAmount(toIze(auction.currentBidGbp, 'GBP', goldRates))}
                 </Text>
-                <Text style={styles.resultItemTitle}>{auction.title}</Text>
-                <Text style={styles.resultMetaText}>
-                  {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
-                </Text>
-              </View>
+              </>
             )}
           </View>
         )}
 
-        {/* ── Cancelled terminal body ── */}
+        {/* ── Cancelled terminal module ── */}
         {isCancelled && (
-          <View style={styles.resultBodySection}>
-            <View style={styles.resultExperience}>
-              <Text style={styles.resultEyebrow}>Cancelled</Text>
-              <Text style={styles.resultTitleLost}>Auction cancelled</Text>
-              <Text style={styles.resultItemTitle}>{auction.title}</Text>
-              <Text style={styles.resultNote}>
-                This auction was cancelled by the seller or platform. No bids were charged.
-              </Text>
-            </View>
+          <View style={styles.terminalResultModule}>
+            <Text style={styles.terminalResultTitleLost}>Auction cancelled</Text>
+            <Text style={styles.terminalResultNote}>
+              Cancelled by the seller or platform. No bids were charged.
+            </Text>
           </View>
         )}
 
-        {/* ── Item story — brand, title, condition, description in one editorial block ── */}
-        <View style={styles.itemStorySection}>
-          {auction.brand && <Text style={styles.itemStoryBrand}>{auction.brand}</Text>}
-          <Headline style={styles.itemStoryTitle} numberOfLines={2}>{auction.title}</Headline>
-          {auction.conditionLabel && (
-            <Text style={styles.itemStoryCondition}>{auction.conditionLabel}</Text>
-          )}
-          {auction.description && (
-            <Text style={styles.itemStoryDescription}>{auction.description}</Text>
-          )}
-        </View>
+        {/* ── E. Item evidence/details — description + category evidence ── */}
+        {auction.description && (
+          <View style={styles.itemDetailsSection}>
+            <Text style={styles.itemDetailsDescription}>{auction.description}</Text>
+          </View>
+        )}
 
         {/* ── Category evidence — editorial product details ── */}
         {(() => {
@@ -750,15 +721,6 @@ export default function AuctionDetailScreen() {
           : undefined}
           messageLabel="Message"
         />
-
-        {/* ── 8. Transaction truth (terminal states only) ── */}
-        {isTerminal && !isCancelled && viewerState !== 'lost' && (
-          <View style={styles.transactionTruthSection}>
-            <Meta style={styles.transactionTruthText}>
-              Transaction fulfilment is not yet available for this auction result.
-            </Meta>
-          </View>
-        )}
 
         {/* ── Bid history — tap to open sheet ── */}
         <View style={styles.section}>
@@ -1576,6 +1538,178 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontFamily: 'Inter_400Regular',
     marginTop: Space.xs,
+  },
+
+  // ── B. Item identity — one primary location below media ──
+  itemIdentitySection: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.sm,
+    gap: Space.xs,
+  },
+  itemIdentityEyebrow: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
+  itemIdentityTitle: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  itemIdentityCondition: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 2,
+  },
+
+  // ── C. Auction transaction module — one strong surface ──
+  transactionModule: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    padding: Space.md,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: Space.sm,
+  },
+  transactionStateLine: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  transactionPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  transactionPricePrimary: {
+    flex: 1,
+  },
+  transactionPriceLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: Colors.textMuted,
+    fontFamily: 'Inter_500Medium',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  transactionPriceValue: {
+    fontSize: 26,
+    lineHeight: 30,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: -0.4,
+  },
+  transactionPriceSecondary: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 2,
+  },
+  transactionPriceMeta: {
+    alignItems: 'flex-end',
+    paddingBottom: 2,
+  },
+  transactionBidCount: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+  transactionMinRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingVertical: Space.xs,
+    borderTopWidth: 0.5,
+    borderTopColor: Colors.border,
+  },
+  transactionMinLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+  transactionMinValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.danger,
+    fontFamily: 'Inter_700Bold',
+  },
+  transactionCountdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  transactionCountdownText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+    fontVariant: ['tabular-nums'],
+  },
+
+  // ── Terminal result — one compact module (120-220pt) ──
+  terminalResultModule: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    padding: Space.md,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: Space.xs,
+  },
+  terminalResultTitleWon: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.success,
+    fontFamily: 'Inter_700Bold',
+  },
+  terminalResultTitleLost: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    fontFamily: 'Inter_700Bold',
+  },
+  terminalResultTitleSold: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.brand,
+    fontFamily: 'Inter_700Bold',
+  },
+  terminalResultValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: -0.3,
+  },
+  terminalResultNote: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 18,
+  },
+
+  // ── E. Item details ──
+  itemDetailsSection: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+  },
+  itemDetailsDescription: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    lineHeight: 22,
+    fontFamily: 'Inter_400Regular',
   },
   titleSection: {
     paddingHorizontal: Space.md,
