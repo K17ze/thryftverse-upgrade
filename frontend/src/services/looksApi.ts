@@ -35,6 +35,7 @@ export interface LookApiItem {
 
 export interface LookApiResponse {
   items: LookApiItem[];
+  nextCursor?: string | null;
 }
 
 export interface LookSingleResponse {
@@ -70,11 +71,12 @@ export async function createLookOnApi(body: LookCreateBody): Promise<{ ok: boole
   });
 }
 
-export async function fetchLooksFromApi(options?: { creatorId?: string; status?: string; limit?: number }): Promise<LookApiResponse> {
+export async function fetchLooksFromApi(options?: { creatorId?: string; status?: string; limit?: number; cursor?: string }): Promise<LookApiResponse> {
   const params = new URLSearchParams();
   if (options?.creatorId) params.set('creatorId', options.creatorId);
   if (options?.status) params.set('status', options.status);
   if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.cursor) params.set('cursor', options.cursor);
   const qs = params.toString();
   return fetchJson<LookApiResponse>(`/looks${qs ? `?${qs}` : ''}`);
 }

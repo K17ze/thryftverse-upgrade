@@ -1,5 +1,6 @@
 import { Listing, ListingSeller } from '../data/mockData';
 import { fetchJson } from '../lib/apiClient';
+import { mapBackendListingToListing, friendlyBackendError } from './listingMapper';
 
 interface FeedListingRow {
   id: string;
@@ -48,46 +49,10 @@ export interface HomeFeedResult {
   error?: string;
 }
 
-function deriveBrand(title: string) {
-  const normalized = title.trim();
-  if (!normalized) return 'Thryftverse';
-  const parts = normalized.split(' ');
-  if (parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[1]}`;
-}
-
-function mapFeedListing(row: FeedListingRow): Listing {
-  const price = Number(row.priceGbp ?? 0);
-  const resolvedImages = row.images?.length
-    ? row.images
-    : row.imageUrl
-      ? [row.imageUrl]
-      : [''];
-
-  return {
-    id: row.id,
-    title: row.title || 'Untitled listing',
-    brand: row.brand || deriveBrand(row.title),
-    size: row.size || 'One size',
-    condition: (row.condition as Listing['condition']) || 'Very good',
-    price,
-    images: resolvedImages,
-    likes: 0,
-    isSold: row.status === 'sold',
-    sellerId: row.sellerId || 'u1',
-    seller: null,
-    category: row.category || 'women',
-    subcategory: 'Clothing',
-    description: row.description || 'No description provided.',
-    createdAt: row.createdAt,
-    originalPrice: row.originalPriceGbp != null ? Number(row.originalPriceGbp) : undefined,
-  };
-}
-
 export async function fetchHomeFeed(): Promise<HomeFeedResult> {
   try {
     const payload = await fetchJson<HomeFeedResponse>('/feed/home');
-    const listings = (payload.listings ?? []).map(mapFeedListing);
+    const listings = (payload.listings ?? []).map(mapBackendListingToListing);
     const posterIds = (payload.posters ?? []).map((p) => p.id);
     const lookIds = (payload.looks ?? []).map((l) => l.id);
 
@@ -104,7 +69,7 @@ export async function fetchHomeFeed(): Promise<HomeFeedResult> {
       posterIds: [],
       lookIds: [],
       source: 'api',
-      error: (error as Error).message,
+      error: friendlyBackendError(error),
     };
   }
 }
@@ -144,7 +109,7 @@ export async function searchListingsFromApi(query: string, limit?: number): Prom
   } catch (error) {
     return {
       items: [],
-      error: (error as Error).message,
+      error: friendlyBackendError(error),
     };
   }
 }

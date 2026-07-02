@@ -99,13 +99,13 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: Space.md,
-    minHeight: 60,
-    gap: Space.sm + 4,
+    minHeight: 54,
+    gap: Space.sm + 2,
   },
   iconWrap: {
-    width: 28,
+    width: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },

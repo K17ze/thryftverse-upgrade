@@ -3,6 +3,8 @@ import { Listing, MOCK_LISTINGS } from '../data/mockData';
 import { getApiBaseUrl } from '../lib/apiClient';
 import { fetchListingsFromApi } from '../services/listingsApi';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+import { recordListingsSync } from '../lib/backendDiagnostics';
+import { BackendDiagnosticsOverlay } from '../dev/BackendDiagnosticsOverlay';
 
 interface BackendDataContextValue {
   listings: Listing[];
@@ -49,6 +51,7 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
       setHasMore(false);
       setLastError(result.error ?? null);
     }
+    recordListingsSync(result.listings.length, result.error ?? null);
     setIsSyncing(false);
   }, []);
 
@@ -67,6 +70,7 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
     } else {
       setHasMore(false);
     }
+    recordListingsSync(result.listings.length, result.error ?? null);
     setIsLoadingMore(false);
   }, [cursor, isLoadingMore, isSyncing]);
 
@@ -101,7 +105,12 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
     [apiBaseUrl, deleteListing, isSyncing, lastError, listings, refreshListings, loadMoreListings, hasMore, isLoadingMore, source, updateListing]
   );
 
-  return <BackendDataContext.Provider value={value}>{children}</BackendDataContext.Provider>;
+  return (
+    <BackendDataContext.Provider value={value}>
+      {children}
+      {__DEV__ ? <BackendDiagnosticsOverlay /> : null}
+    </BackendDataContext.Provider>
+  );
 }
 
 export function useBackendData() {

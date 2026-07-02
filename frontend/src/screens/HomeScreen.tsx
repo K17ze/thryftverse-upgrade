@@ -21,6 +21,7 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
+  FadeInDown,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from '../components/compat/Video';
@@ -47,6 +48,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 // Phase 3: Removed SyncStatusPill (status indicator clutter reduced)
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
+import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { ThryftCartIcon } from '../components/icons/ThryftCartIcon';
@@ -819,6 +821,21 @@ export default function HomeScreen() {
         />
         {showFeedLoadingSkeleton ? (
           renderExploreLoadingState()
+        ) : feedGridData.length === 0 ? (
+          // Premium empty state — backend returned zero items and we are not
+          // loading. Preserves the flagship layout instead of collapsing to
+          // a blank masonry. Distinct from the sync-error banner above.
+          <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+            <EmptyState
+              icon="sparkles-outline"
+              title="No drops live yet"
+              subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
+              ctaLabel="Browse all"
+              onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+              secondaryCtaLabel="Refresh"
+              onSecondaryCtaPress={() => void handleRefresh()}
+            />
+          </Reanimated.View>
         ) : (
           <View style={styles.masonryGrid}>
             <View style={styles.masonryColumn}>

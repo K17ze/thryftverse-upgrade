@@ -19,9 +19,10 @@ describe('VISUAL-13B Profile Closet Social Upgrade', () => {
     expect(src).toContain('ProfileTabRail');
   });
 
-  it('2. UserProfileScreen uses ProfileVisualHeader or ProfileTabRail', () => {
+  it('2. UserProfileScreen uses FlagshipProfileMedia or TabRail', () => {
     const src = readFile('screens/UserProfileScreen.tsx');
-    expect(src).toContain('ProfileTabRail');
+    expect(src).toContain('FlagshipProfileMedia');
+    expect(src).toContain('TabRail');
   });
 
   it('3. ClosetScreen uses MoodboardCollectionGrid', () => {
@@ -115,7 +116,7 @@ describe('VISUAL-13B Profile Closet Social Upgrade', () => {
   it('12. No dead unused visual components', () => {
     expect(readFile('screens/MyProfileScreen.tsx')).toContain('ProfileVisualHeader');
     expect(readFile('screens/MyProfileScreen.tsx')).toContain('ProfileTabRail');
-    expect(readFile('screens/UserProfileScreen.tsx')).toContain('ProfileTabRail');
+    expect(readFile('screens/UserProfileScreen.tsx')).toContain('TabRail');
     expect(readFile('screens/ClosetScreen.tsx')).toContain('MoodboardCollectionGrid');
     expect(readFile('screens/ClosetScreen.tsx')).toContain('BoardEmptyGraphic');
     expect(readFile('screens/CollectionDetailScreen.tsx')).toContain('BoardEmptyGraphic');

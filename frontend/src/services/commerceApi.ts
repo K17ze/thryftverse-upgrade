@@ -5,17 +5,49 @@ export interface CommerceAddress {
   userId: string;
   name: string;
   // Address lines
-  streetAddress: string;      // Primary street address
-  apartment?: string;         // Apartment, suite, unit, floor
+  streetAddress: string;      // Primary street address (mapped from backend `street`)
+  apartment?: string;         // Apartment, suite, unit, floor (not stored by backend)
   // Location hierarchy
   city: string;               // City / Town / Village
-  region?: string;            // State (US), Province (CA), County (UK), etc.
-  postalCode: string;         // ZIP/Postcode/PIN
-  countryCode: string;        // ISO 3166-1 alpha-2 (e.g., 'US', 'GB', 'IN')
-  country: string;            // Display name (e.g., 'United States')
+  region?: string;            // State (US), Province (CA), County (UK), etc. (not stored by backend)
+  postalCode: string;         // ZIP/Postcode/PIN (mapped from backend `postcode`)
+  countryCode: string;        // ISO 3166-1 alpha-2 (not stored by backend)
+  country: string;            // Display name (not stored by backend)
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// Backend address row shape (what the API actually returns)
+interface BackendAddressRow {
+  id: number;
+  userId: string;
+  name: string;
+  street: string;
+  city: string;
+  postcode: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Map backend response to frontend CommerceAddress
+function mapBackendAddress(row: BackendAddressRow): CommerceAddress {
+  return {
+    id: row.id,
+    userId: row.userId,
+    name: row.name,
+    streetAddress: row.street,
+    apartment: undefined,
+    city: row.city,
+    region: undefined,
+    postalCode: row.postcode,
+    countryCode: '',
+    country: '',
+    isDefault: row.isDefault,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }
 
 export interface CommercePaymentMethod {
@@ -97,12 +129,12 @@ export interface ShippingServiceabilityResponse {
 
 interface ListAddressesResponse {
   ok: true;
-  items: CommerceAddress[];
+  items: BackendAddressRow[];
 }
 
 interface CreateAddressResponse {
   ok: true;
-  item: CommerceAddress;
+  item: BackendAddressRow;
 }
 
 interface ListPaymentMethodsResponse {
@@ -272,23 +304,31 @@ export interface ShippingServiceabilityInput {
 
 export async function listUserAddresses(userId: string): Promise<CommerceAddress[]> {
   const payload = await fetchJson<ListAddressesResponse>(`/users/${encodeURIComponent(userId)}/addresses`);
-  return payload.items;
+  return payload.items.map(mapBackendAddress);
 }
 
 export async function createUserAddress(
   userId: string,
   input: CreateAddressInput
 ): Promise<CommerceAddress> {
+  // Map frontend field names to backend field names
+  const backendInput = {
+    name: input.name,
+    street: input.streetAddress,
+    city: input.city,
+    postcode: input.postalCode,
+    isDefault: input.isDefault ?? false,
+  };
   const payload = await fetchJson<CreateAddressResponse>(
     `/users/${encodeURIComponent(userId)}/addresses`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
+      body: JSON.stringify(backendInput),
     }
   );
 
-  return payload.item;
+  return mapBackendAddress(payload.item);
 }
 
 export async function deleteUserAddress(userId: string, addressId: number): Promise<void> {

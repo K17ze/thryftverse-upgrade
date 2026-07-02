@@ -35,6 +35,7 @@ import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { fetchFilteredListings } from '../services/listingsApi';
+import { friendlyBackendError } from '../services/listingMapper';
 import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Elevation } from '../theme/designTokens';
@@ -149,8 +150,8 @@ export default function BrowseScreen() {
         setBackendListings(result.listings);
         setBackendError(result.error ?? null);
       })
-      .catch(() => {
-        if (!cancelled) setBackendError('Failed to load filtered results');
+      .catch((error) => {
+        if (!cancelled) setBackendError(friendlyBackendError(error));
       })
       .finally(() => {
         if (!cancelled) setBackendLoading(false);
@@ -348,7 +349,7 @@ export default function BrowseScreen() {
           <EmptyState
             icon="cloud-offline-outline"
             title="Filter unavailable"
-            subtitle={backendError}
+            subtitle={friendlyBackendError(backendError)}
             ctaLabel="Clear filters"
             onCtaPress={() =>
               updateBrowseFilters({

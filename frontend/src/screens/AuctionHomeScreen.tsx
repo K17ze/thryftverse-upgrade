@@ -1285,6 +1285,48 @@ export default function AuctionHomeScreen() {
     </View>
   ), []);
 
+  // ── Derived values and hooks MUST be before any conditional return ──
+  // (React hooks-order rule: hooks must execute unconditionally on every render)
+  const hasSellerAuctions = homeData.sellerAuctions.length > 0;
+
+  const hasActiveMarket =
+    homeData.closingSoon.length > 0 ||
+    homeData.live.length > 0 ||
+    homeData.upcoming.length > 0;
+
+  const hasPersonalActivity =
+    homeData.activity.activeCount > 0 ||
+    homeData.activity.needsAttentionCount > 0 ||
+    !!homeData.attentionItem;
+
+  const spotlightIds = useMemo(() => {
+    const ids = new Set<string>();
+    homeData.closingSoon.forEach((a) => ids.add(a.id));
+    homeData.live.forEach((a) => ids.add(a.id));
+    return ids;
+  }, [homeData.closingSoon, homeData.live]);
+
+  const dedupedWatchlist = useMemo(
+    () => homeData.watchlist.filter((a) => !spotlightIds.has(a.id)),
+    [homeData.watchlist, spotlightIds]
+  );
+
+  const hasAnyContent =
+    hasActiveMarket ||
+    hasPersonalActivity ||
+    homeData.recentlyClosed.length > 0 ||
+    hasSellerAuctions ||
+    homeData.categoryWorlds.length > 0 ||
+    dedupedWatchlist.length > 0;
+
+  const liveContext = homeData.closingSoon.length > 0
+    ? `${homeData.closingSoon.length} closing soon`
+    : homeData.live.length > 0
+      ? `${homeData.live.length} live now`
+      : homeData.upcoming.length > 0
+        ? `${homeData.upcoming.length} upcoming`
+        : 'Nothing live or scheduled right now';
+
   // ════════════════════════════════════════════════════════════════
   // RENDER
   // ════════════════════════════════════════════════════════════════
@@ -1547,52 +1589,7 @@ export default function AuctionHomeScreen() {
     );
   }
 
-  const hasSellerAuctions = homeData.sellerAuctions.length > 0;
-
-  // ── Market spotlight: only live / closing-soon / upcoming.
-  // Ended, settled, cancelled or old won/lost results never lead.
-  const hasActiveMarket =
-    homeData.closingSoon.length > 0 ||
-    homeData.live.length > 0 ||
-    homeData.upcoming.length > 0;
-
-  const hasPersonalActivity =
-    homeData.activity.activeCount > 0 ||
-    homeData.activity.needsAttentionCount > 0 ||
-    !!homeData.attentionItem;
-
-  // ── Watching dedup: don't repeat items already in Closing Soon / Live.
-  const spotlightIds = useMemo(() => {
-    const ids = new Set<string>();
-    homeData.closingSoon.forEach((a) => ids.add(a.id));
-    homeData.live.forEach((a) => ids.add(a.id));
-    return ids;
-  }, [homeData.closingSoon, homeData.live]);
-
-  const dedupedWatchlist = useMemo(
-    () => homeData.watchlist.filter((a) => !spotlightIds.has(a.id)),
-    [homeData.watchlist, spotlightIds]
-  );
-
-  // ── Screen-level empty state: evaluated independently of createCta.
-  const hasAnyContent =
-    hasActiveMarket ||
-    hasPersonalActivity ||
-    homeData.recentlyClosed.length > 0 ||
-    hasSellerAuctions ||
-    homeData.categoryWorlds.length > 0 ||
-    dedupedWatchlist.length > 0;
-
-  // ── Live market context label for the compact header.
-  const liveContext = homeData.closingSoon.length > 0
-    ? `${homeData.closingSoon.length} closing soon`
-    : homeData.live.length > 0
-      ? `${homeData.live.length} live now`
-      : homeData.upcoming.length > 0
-        ? `${homeData.upcoming.length} upcoming`
-        : 'Nothing live or scheduled right now';
-
-  // Build zone list for the main FlashList.
+  // Build zone list for the main ScrollView.
   // Hierarchy: header → actionBanner → market spotlight (closing/live/upcoming)
   // → category → watching → recentlyClosed → sellerStrip → createCta
   type ZoneItem =
@@ -1623,7 +1620,8 @@ export default function AuctionHomeScreen() {
   // artificially non-empty and the screen-level empty state can render).
   if (hasAnyContent) zones.push({ zone: 'createCta' });
 
-  const renderZone = useCallback(({ item }: { item: ZoneItem }) => {
+  // Plain function (not a hook) so it can live after conditional returns.
+  const renderZone = ({ item }: { item: ZoneItem }) => {
     switch (item.zone) {
       case 'header':
         return (
@@ -1672,14 +1670,18 @@ export default function AuctionHomeScreen() {
         return (
           <View style={styles.zoneWrap}>
             <SectionHeader title="Live Now" subtitle={`${homeData.live.length} active`} />
-            <FlashList
-              data={homeData.live}
-              keyExtractor={(a) => a.id}
-              renderItem={renderLiveFloorItem}
-              numColumns={2}
-              scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={{ height: Space.md }} />}
-            />
+            <View style={styles.liveGridContainer}>
+              {homeData.live.map((item) => (
+                <View key={item.id} style={styles.liveGridItem}>
+                  <LiveFloorCard
+                    item={item}
+                    clockMs={secondClock}
+                    onPress={() => navigateToDetail(item.id)}
+                    formatDualPrice={formatDualPrice}
+                  />
+                </View>
+              ))}
+            </View>
           </View>
         );
 
@@ -1775,7 +1777,7 @@ export default function AuctionHomeScreen() {
       default:
         return null;
     }
-  }, [homeData, secondClock, minuteClock, navigateToDetail, handleBack, handleActivity, formatDualPrice, renderClosingSoonItem, renderLiveFloorItem, renderWatchingRailItem, navigation, openFilterSheet, liveContext, hasPersonalActivity, dedupedWatchlist, handleCategoryPress]);
+  };
 
   // ── No-active-market screen-level empty state.
   // Rendered independently so it is never masked by a permanent CTA zone.
@@ -1917,10 +1919,7 @@ export default function AuctionHomeScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <FlashList
-        data={zones}
-        keyExtractor={(item, index) => `${item.zone}-${index}`}
-        renderItem={renderZone}
+      <ScrollView
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -1932,7 +1931,8 @@ export default function AuctionHomeScreen() {
             progressBackgroundColor={Colors.surfaceAlt}
           />
         }
-        ListEmptyComponent={
+      >
+        {zones.length === 0 ? (
           <EmptyState
             icon="pricetag-outline"
             title="Nothing live or scheduled right now"
@@ -1940,8 +1940,14 @@ export default function AuctionHomeScreen() {
             ctaLabel="Create Auction"
             onCtaPress={() => { haptics.tap(); navigation.navigate('CreateAuction'); }}
           />
-        }
-      />
+        ) : (
+          zones.map((item, index) => (
+            <View key={`${item.zone}-${index}`}>
+              {renderZone({ item })}
+            </View>
+          ))
+        )}
+      </ScrollView>
       <BottomSheet
         visible={filterSheetVisible}
         onDismiss={() => setFilterSheetVisible(false)}
@@ -2300,6 +2306,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: Colors.surface,
     marginHorizontal: Space.xs,
+  },
+  liveGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -Space.xs,
+  },
+  liveGridItem: {
+    width: '50%',
+    marginBottom: Space.md,
   },
   liveFloorImageWrap: {
     width: '100%',

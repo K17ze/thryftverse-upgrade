@@ -29,6 +29,7 @@ import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AnimatedHeart } from '../AnimatedHeart';
+import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SharedTransitionImage } from '../SharedTransitionImage';
@@ -55,6 +56,7 @@ interface MediaPageProps {
 
 function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoomStart }: MediaPageProps) {
   const reducedMotion = useReducedMotion();
+  const [failed, setFailed] = useState(false);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -138,12 +140,21 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
   return (
     <GestureDetector gesture={composed}>
       <Reanimated.View style={[styles.page, { width, height }, animStyle]}>
-        <SharedTransitionImage
-          source={{ uri }}
-          style={styles.image}
-          resizeMode="cover"
-          sharedTransitionTag={sharedTransitionTag}
-        />
+        {failed || !uri ? (
+          <ImageEmptyGraphic
+            icon="image-outline"
+            label="Photo unavailable"
+            style={styles.image}
+          />
+        ) : (
+          <SharedTransitionImage
+            source={{ uri }}
+            style={styles.image}
+            resizeMode="cover"
+            sharedTransitionTag={sharedTransitionTag}
+            onError={() => setFailed(true)}
+          />
+        )}
       </Reanimated.View>
     </GestureDetector>
   );
@@ -252,9 +263,12 @@ export function CommerceMediaStage({
   return (
     <Reanimated.View style={[styles.heroContainer, { height: heroHeight }, heroStyle]}>
       {images.length === 0 ? (
-        <View style={styles.emptyHero}>
-          <Ionicons name="image-outline" size={48} color={Colors.textMuted} />
-        </View>
+        // Premium fallback hero — matches Thryftverse visual language.
+        <ImageEmptyGraphic
+          icon="image-outline"
+          label="No photos yet"
+          style={{ width: screenWidth, height: heroHeight }}
+        />
       ) : (
       <FlatList
         ref={listRef}

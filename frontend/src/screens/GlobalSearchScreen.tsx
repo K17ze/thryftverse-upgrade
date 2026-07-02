@@ -35,6 +35,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { searchListingsFromApi } from '../services/feedApi';
+import { friendlyBackendError } from '../services/listingMapper';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 
 /* ── New Discover Components ── */
@@ -263,9 +264,10 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           setBackendSearchResults(
             result.items.map((item) => ({
               id: item.id,
-              title: item.title,
-              brand: '',
-              size: '',
+              title: item.title || 'Untitled listing',
+              // Safe brand fallback — never blank in the result rows.
+              brand: (item as any).brand || (item.title ? item.title.split(' ').slice(0, 2).join(' ') : 'Thryftverse'),
+              size: (item as any).size || 'One size',
               condition: 'Very good' as const,
               image: item.imageUrl ?? '',
               price: Number(item.priceGbp ?? 0),
@@ -808,7 +810,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               <>
                 {(lastError || searchError) ? (
                   <SyncRetryBanner
-                    message={searchError ? `Search error: ${searchError}` : 'Search index is delayed. Showing cached results.'}
+                    message={searchError ? friendlyBackendError(searchError) : 'Search index is delayed. Showing cached results.'}
                     onRetry={() => void refreshListings()}
                     isRetrying={isSyncing || isSearching}
                     telemetryContext="global_search_sync"

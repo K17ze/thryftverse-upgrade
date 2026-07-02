@@ -101,8 +101,8 @@ export default function PostageScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Delivery Centre"
-          subtitle="Shipping addresses and carrier preferences"
+          title="Shipping preferences"
+          subtitle="Carrier and postage defaults"
           onBack={() => navigation.goBack()}
           rightAction={undefined}
         />
@@ -112,58 +112,32 @@ export default function PostageScreen({ navigation }: Props) {
         <View style={[styles.deliveryTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
           <Ionicons name="cube-outline" size={18} color={Colors.brand} />
           <Text style={[styles.deliveryTrustText, { color: Colors.textSecondary }]}>
-            Set your default delivery address and preferred carrier for faster checkout.
+            Set your preferred carrier and postage defaults for faster listing. Manage saved delivery addresses in Settings.
           </Text>
         </View>
       </Reanimated.View>
 
-      {/* Delivery address */}
-      <View style={styles.addressSection}>
-        <Text style={styles.addressSectionTitle}>Delivery address</Text>
-        {savedAddress ? (
-          <View style={styles.addressBlock}>
-            <View style={styles.addressHeaderRow}>
-              <Text style={styles.defaultLabel}>DEFAULT</Text>
-              <Pressable
-                onPress={() => navigation.navigate('AddressForm', { mode: 'edit', source: 'postage' })}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Edit delivery address"
-              >
-                <Text style={styles.editAction}>Edit</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.addressName}>{savedAddress.name}</Text>
-            <Text style={styles.addressLine}>{savedAddress.streetAddress}</Text>
-            {savedAddress.apartment ? (
-              <Text style={styles.addressLine}>{savedAddress.apartment}</Text>
-            ) : null}
-            <Text style={styles.addressLine}>
-              {savedAddress.city}
-              {savedAddress.region ? `, ${savedAddress.region}` : ''}
-              {savedAddress.postalCode ? ` ${savedAddress.postalCode}` : ''}
+      {/* Link to saved addresses */}
+      <Pressable
+        onPress={() => navigation.navigate('SavedAddresses')}
+        style={({ pressed }) => [
+          styles.addressLinkRow,
+          { backgroundColor: Colors.surface, borderColor: Colors.border, opacity: pressed ? 0.7 : 1 },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Manage saved addresses"
+      >
+        <View style={styles.addressLinkLeft}>
+          <Ionicons name="location-outline" size={20} color={Colors.textPrimary} />
+          <View>
+            <Text style={[styles.addressLinkTitle, { color: Colors.textPrimary }]}>Saved addresses</Text>
+            <Text style={[styles.addressLinkSubtitle, { color: Colors.textMuted }]}>
+              {savedAddress ? '1 saved' : 'None saved'}
             </Text>
-            <Text style={styles.addressLine}>{savedAddress.country}</Text>
           </View>
-        ) : (
-          <View style={styles.addressEmpty}>
-            <Ionicons name="location-outline" size={24} color={Colors.textMuted} />
-            <Text style={styles.addressEmptyTitle}>No delivery address</Text>
-            <Text style={styles.addressEmptyBody}>
-              Add an address for checkout and delivery.
-            </Text>
-            <Pressable
-              style={styles.addressAddBtn}
-              onPress={() => navigation.navigate('AddressForm', { mode: 'add', source: 'postage' })}
-              hitSlop={{ top: 8, bottom: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Add delivery address"
-            >
-              <Text style={styles.addressAddBtnText}>Add address</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+      </Pressable>
 
       {/* Default Carrier */}
       <Reanimated.View entering={FadeIn.duration(300)}>
@@ -237,79 +211,35 @@ const styles = StyleSheet.create({
   skeletonWrap: {
     marginBottom: Space.md,
   },
-  addressSection: {
-    paddingHorizontal: Space.md,
-    marginBottom: Space.lg,
-  },
-  addressSectionTitle: {
-    fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: Space.sm,
-  },
-  addressBlock: {
-    gap: 2,
-  },
-  addressHeaderRow: {
+  addressLinkRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  defaultLabel: {
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
-  },
-  editAction: {
-    fontSize: 15,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  addressName: {
-    fontSize: 16,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  addressLine: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: 19,
-  },
-  addressEmpty: {
-    alignItems: 'flex-start',
-    gap: Space.xs,
-  },
-  addressEmptyTitle: {
-    fontSize: 16,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginTop: Space.xs,
-  },
-  addressEmptyBody: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    lineHeight: 19,
-  },
-  addressAddBtn: {
-    marginTop: Space.sm,
-    paddingVertical: 12,
     paddingHorizontal: Space.md,
-    backgroundColor: Colors.brand,
-    borderRadius: 8,
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingVertical: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Space.md,
+    minHeight: 56,
   },
-  addressAddBtnText: {
-    fontSize: 15,
+  addressLinkLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  addressLinkTitle: {
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+  },
+  addressLinkSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
   carrierRow: {
     flexDirection: 'row',

@@ -32,9 +32,9 @@ describe('VISUAL-13B.2 Profile Final Polish', () => {
     expect(src).toContain('ProfileTabRail');
   });
 
-  it('4. UserProfileScreen uses ProfileVisualHeader', () => {
+  it('4. UserProfileScreen uses FlagshipProfileMedia', () => {
     const src = readFile('screens/UserProfileScreen.tsx');
-    expect(src).toContain('ProfileVisualHeader');
+    expect(src).toContain('FlagshipProfileMedia');
   });
 
   it('5. CollectionDetailScreen has board-style visual layout', () => {

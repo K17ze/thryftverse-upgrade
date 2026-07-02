@@ -11,6 +11,7 @@ import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
 import { AudiencePreferenceGrid } from '../components/personalisation/AudiencePreferenceGrid';
 import { DiscoveryPreferenceRow } from '../components/personalisation/DiscoveryPreferenceRow';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type PreferencePickerMode = 'categories' | 'brands' | 'members' | null;
 
@@ -131,25 +132,22 @@ export default function PersonalisationScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      {/* 1. Compact navigation header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Pressable
-          style={styles.headerBack}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Personalisation</Text>
-        <View style={styles.headerRight}>
-          <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
-          <Text style={styles.headerSaved}>Saved</Text>
-        </View>
-      </View>
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Personalisation"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <View style={styles.headerRight}>
+              <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+              <Text style={styles.headerSaved}>Saved</Text>
+            </View>
+          }
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
@@ -228,38 +226,11 @@ export default function PersonalisationScreen() {
         selectedValue={selectedPickerValue}
         onSelect={handleSelectPreference}
       />
-    </View>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-
-  // Compact header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    gap: Space.sm,
-  },
-  headerBack: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -Space.xs,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 26,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',

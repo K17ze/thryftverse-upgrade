@@ -7,34 +7,11 @@ import type { ListingCommerceServerContext } from '../../services/listingsApi';
 import type { Listing } from '../../data/mockData';
 import { fetchJson } from '../../lib/apiClient';
 import type { SellerTrustSummary } from './listingDetailContract';
+import { mapBackendListingToListing } from '../../services/listingMapper';
 
 export interface ListingDetailResult {
   listing: Listing;
   commerce?: ListingCommerceServerContext;
-}
-
-function mapApiListingToListing(row: any): Listing {
-  const price = Number(row.priceGbp ?? 0);
-  return {
-    id: row.id,
-    title: row.title || 'Untitled listing',
-    brand: row.brand || row.title?.split(' ').slice(0, 2).join(' ') || 'Thryftverse',
-    size: row.size || 'One size',
-    condition: (row.condition as Listing['condition']) || 'Very good',
-    price,
-    images: row.images?.length ? row.images : row.imageUrl ? [row.imageUrl] : [],
-    likes: 0,
-    isSold: row.status === 'sold',
-    sellerId: row.sellerId || 'u1',
-    seller: row.seller ?? null,
-    category: row.category || 'women',
-    subcategory: 'Clothing',
-    description: row.description || '',
-    createdAt: row.createdAt,
-    originalPrice: row.originalPriceGbp != null ? Number(row.originalPriceGbp) : undefined,
-    shippingMethod: row.shippingMethod ?? null,
-    shippingPayer: row.shippingPayer ?? null,
-  };
 }
 
 export function useListingDetail(listingId: string | undefined) {
@@ -47,7 +24,7 @@ export function useListingDetail(listingId: string | undefined) {
         throw new Error(res.error || 'Listing not found');
       }
       return {
-        listing: mapApiListingToListing(res.listing),
+        listing: mapBackendListingToListing(res.listing),
         commerce: res.commerce,
       } as ListingDetailResult;
     },

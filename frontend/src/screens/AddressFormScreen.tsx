@@ -26,6 +26,7 @@ import {
   deleteUserAddress,
   CreateAddressInput,
 } from '../services/commerceApi';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'AddressForm'>;
 
@@ -406,20 +407,10 @@ export default function AddressFormScreen({ navigation, route }: Props) {
 
   if (!currentUser) {
     return (
-      <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <Pressable
-            style={styles.headerBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>{isEditing ? 'Edit address' : 'Add address'}</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+      <FlagshipScreen
+        header={<FlagshipHeader title={isEditing ? 'Edit address' : 'Add address'} onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+      >
         <View style={styles.signedOutContainer}>
           <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
           <Text style={styles.signedOutTitle}>Sign in required</Text>
@@ -435,29 +426,18 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             <Text style={styles.signedOutBtnText}>Sign in</Text>
           </Pressable>
         </View>
-      </View>
+      </FlagshipScreen>
     );
   }
 
   const countryDisplayName = form.country || 'Select country';
 
   return (
-    <View style={styles.container}>
-      {/* 1. Compact navigation header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Pressable
-          style={styles.headerBtn}
-          onPress={handleCancel}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel and go back"
-        >
-          <Text style={styles.headerCancelText}>Cancel</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>{isEditing ? 'Edit address' : 'Add address'}</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
+    <FlagshipScreen
+      header={<FlagshipHeader title={isEditing ? 'Edit address' : 'Add address'} onBack={handleCancel} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -478,7 +458,9 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               {isEditing ? 'Edit delivery address' : 'Add delivery address'}
             </Text>
             <Text style={styles.introBody}>
-              Used as your default delivery address in this app.
+              {isEditing
+                ? 'Update your saved delivery address. Used at checkout and for delivery.'
+                : 'Add a delivery address for faster checkout. You can save multiple addresses.'}
             </Text>
           </View>
 
@@ -706,7 +688,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         selectedValue={form.country || undefined}
         onSelect={handleCountrySelect}
       />
-    </View>
+    </FlagshipScreen>
   );
 }
 
