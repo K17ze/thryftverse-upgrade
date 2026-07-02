@@ -286,7 +286,7 @@ export function BuyNowSheet({
         {/* ── Review stage — distinct fixed-price experience ── */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
-            <Text style={styles.fixedPriceLabel}>Fixed price</Text>
+            <Text style={styles.fixedPriceLabel}>FIXED PRICE</Text>
 
             {/* Large centered 1ZE value — dominates */}
             <View style={styles.fixedPriceBlock}>
@@ -460,13 +460,13 @@ const styles = StyleSheet.create({
   },
   // ── Fixed-price experience ──
   fixedPriceLabel: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.semibold,
     textAlign: 'center',
     marginTop: Space.xs,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   fixedPriceBlock: {
     alignItems: 'center',
