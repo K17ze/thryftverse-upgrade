@@ -8,7 +8,6 @@ import {
   Text,
   ScrollView,
   TextInput,
-  FlatList,
   useWindowDimensions,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -1230,19 +1229,21 @@ export default function AuctionHomeScreen() {
               <Text style={styles.railTitle}>Live now</Text>
               <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
             </View>
-            <FlatList
-              data={segmentItems}
-              renderItem={renderLiveRailItem}
-              keyExtractor={(item) => item.id}
+            <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
               snapToInterval={railCardWidth + Space.sm}
               snapToAlignment="start"
-              decelerationRate="fast"
-              nestedScrollEnabled
               contentContainerStyle={styles.railContent}
-              ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
-            />
+            >
+              {segmentItems.map((item, idx) => (
+                <React.Fragment key={item.id}>
+                  {idx > 0 && <View style={{ width: Space.sm }} />}
+                  {renderLiveRailItem({ item })}
+                </React.Fragment>
+              ))}
+            </ScrollView>
           </View>
         ) : null;
 
@@ -1565,19 +1566,21 @@ export default function AuctionHomeScreen() {
               <Text style={styles.railTitle}>Ending soon</Text>
               <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
             </View>
-            <FlatList
-              data={segmentItems}
-              renderItem={renderEndingRailItem}
-              keyExtractor={(item) => item.id}
+            <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
               snapToInterval={endingRailCardWidth + Space.sm}
               snapToAlignment="start"
-              decelerationRate="fast"
-              nestedScrollEnabled
               contentContainerStyle={styles.railContent}
-              ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
-            />
+            >
+              {segmentItems.map((item, idx) => (
+                <React.Fragment key={item.id}>
+                  {idx > 0 && <View style={{ width: Space.sm }} />}
+                  {renderEndingRailItem({ item })}
+                </React.Fragment>
+              ))}
+            </ScrollView>
           </View>
         ) : null;
         // Dense editorial rows — countdown is the strongest signal
@@ -1674,19 +1677,21 @@ export default function AuctionHomeScreen() {
               <Text style={styles.railTitle}>Coming up</Text>
               <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
             </View>
-            <FlatList
-              data={segmentItems}
-              renderItem={renderUpcomingRailItem}
-              keyExtractor={(item) => item.id}
+            <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
               snapToInterval={upcomingRailCardWidth + Space.sm}
               snapToAlignment="start"
-              decelerationRate="fast"
-              nestedScrollEnabled
               contentContainerStyle={styles.railContent}
-              ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
-            />
+            >
+              {segmentItems.map((item, idx) => (
+                <React.Fragment key={item.id}>
+                  {idx > 0 && <View style={{ width: Space.sm }} />}
+                  {renderUpcomingRailItem({ item })}
+                </React.Fragment>
+              ))}
+            </ScrollView>
           </View>
         ) : null;
         // Scheduled programme rows
@@ -1753,19 +1758,21 @@ export default function AuctionHomeScreen() {
               <Text style={styles.railTitle}>Watching</Text>
               <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
             </View>
-            <FlatList
-              data={segmentItems}
-              renderItem={renderWatchingRailItem}
-              keyExtractor={(item) => item.id}
+            <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
               snapToInterval={watchingRailCardWidth + Space.sm}
               snapToAlignment="start"
-              decelerationRate="fast"
-              nestedScrollEnabled
               contentContainerStyle={styles.railContent}
-              ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
-            />
+            >
+              {segmentItems.map((item, idx) => (
+                <React.Fragment key={item.id}>
+                  {idx > 0 && <View style={{ width: Space.sm }} />}
+                  {renderWatchingRailItem({ item })}
+                </React.Fragment>
+              ))}
+            </ScrollView>
           </View>
         ) : null;
         // Compact continuity grid
