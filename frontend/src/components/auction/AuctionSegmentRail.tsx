@@ -33,14 +33,10 @@ export function AuctionSegmentRail({
   const updateUnderline = React.useCallback((key: string) => {
     const layout = segmentLayouts.current[key];
     if (!layout) return;
-    if (reducedMotion) {
-      underlineX.value = layout.x;
-      underlineWidth.value = layout.width;
-    } else {
-      underlineX.value = withSpring(layout.x, { damping: 18, stiffness: 260 });
-      underlineWidth.value = withSpring(layout.width, { damping: 18, stiffness: 260 });
-    }
-  }, [reducedMotion, underlineX, underlineWidth]);
+    // Instant snap — no spring animation, no flowing
+    underlineX.value = layout.x;
+    underlineWidth.value = layout.width;
+  }, [underlineX, underlineWidth]);
 
   useEffect(() => {
     updateUnderline(activeKey);
