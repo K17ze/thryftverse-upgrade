@@ -541,6 +541,10 @@ const screenSrc = fs.readFileSync(
   path.resolve(__dirname, '../screens/AuctionDetailScreen.tsx'),
   'utf-8'
 );
+const sellerTrustCardSrc = fs.readFileSync(
+  path.resolve(__dirname, '../components/product/SellerTrustCard.tsx'),
+  'utf-8'
+);
 const logicSrc = fs.readFileSync(
   path.resolve(__dirname, '../utils/auctionDetailLogic.ts'),
   'utf-8'
@@ -729,7 +733,8 @@ describe('PASS 4.12: Static guardrails (source inspection)', () => {
   });
 
   it('seller name has numberOfLines to prevent overflow', () => {
-    expect(screenSrc).toMatch(/sellerName[\s\S]*?numberOfLines/);
+    // Seller name rendering (with numberOfLines) lives in SellerTrustCard
+    expect(sellerTrustCardSrc).toMatch(/numberOfLines/);
   });
 
   it('has lifecycle transition loop guard (isTransitionRefreshing)', () => {
@@ -917,12 +922,10 @@ describe('PASS 4.1: Seller and messaging parity', () => {
   });
 
   it('hides Message Seller when viewer is seller', () => {
-    const sellerSection = screenSrc.substring(
-      screenSrc.indexOf('sellerSection'),
-      screenSrc.indexOf('Bid history')
-    );
-    expect(sellerSection).toContain('!isSeller');
-    expect(sellerSection).toContain('sellerMessageBtn');
+    // AuctionDetailScreen passes onMessage=undefined when isSeller;
+    // SellerTrustCard only renders the message button when onMessage is truthy.
+    expect(screenSrc).toContain('!isSeller');
+    expect(sellerTrustCardSrc).toMatch(/onMessage\s*&&/);
   });
 
   it('does not use fabricated conversation IDs', () => {
@@ -932,8 +935,8 @@ describe('PASS 4.1: Seller and messaging parity', () => {
   });
 
   it('has avatar fallback for missing avatarUrl', () => {
-    expect(screenSrc).toContain('sellerAvatarPlaceholder');
-    expect(screenSrc).toContain('person');
+    // Avatar fallback lives in SellerTrustCard
+    expect(sellerTrustCardSrc).toContain('avatarFallback');
   });
 
   it('has displayName fallback to @username', () => {

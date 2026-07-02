@@ -59,13 +59,11 @@ export function BottomSheet({
       translateY.value = 0;
       backdropOpacity.value = 1;
     } else {
-      translateY.value = withSpring(0, {
-        damping: springDamping,
-        stiffness: 260,
-      });
-      backdropOpacity.value = withTiming(1, { duration: 250 });
+      // Snappy timing instead of spring — no bounce, no flow
+      translateY.value = withTiming(0, { duration: 180 });
+      backdropOpacity.value = withTiming(1, { duration: 180 });
     }
-  }, [translateY, backdropOpacity, springDamping, reducedMotion]);
+  }, [translateY, backdropOpacity, reducedMotion]);
 
   const close = useCallback(() => {
     if (reducedMotion) {
@@ -73,15 +71,13 @@ export function BottomSheet({
       backdropOpacity.value = 0;
       runOnJS(onDismiss)();
     } else {
-      translateY.value = withSpring(sheetHeight, {
-        damping: springDamping,
-        stiffness: 260,
-      });
-      backdropOpacity.value = withTiming(0, { duration: 200 });
-      const t = setTimeout(() => runOnJS(onDismiss)(), 280);
+      // Snappy dismiss — no spring bounce
+      translateY.value = withTiming(sheetHeight, { duration: 160 });
+      backdropOpacity.value = withTiming(0, { duration: 160 });
+      const t = setTimeout(() => runOnJS(onDismiss)(), 170);
       return () => clearTimeout(t);
     }
-  }, [translateY, backdropOpacity, sheetHeight, onDismiss, springDamping, reducedMotion]);
+  }, [translateY, backdropOpacity, sheetHeight, onDismiss, reducedMotion]);
 
   useEffect(() => {
     if (visible) {

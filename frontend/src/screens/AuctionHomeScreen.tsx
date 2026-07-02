@@ -8,14 +8,14 @@ import {
   Text,
   ScrollView,
   TextInput,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -39,6 +39,19 @@ import { Space, Radius, Typography } from '../theme/designTokens';
 import { toIze, formatIzeAmount, formatFiatAmount } from '../utils/currency';
 import { BottomSheet } from '../components/BottomSheet';
 import {
+  AuctionMarketHeader,
+  AuctionAttentionStrip,
+  AuctionRunwayCard,
+  AuctionGridCard,
+  AuctionSupportingTile,
+  AuctionValueLockup,
+  AuctionSkeletons,
+  AuctionSegmentRail,
+  SegmentContentTransition,
+  type AuctionHeaderAction,
+  type Segment,
+} from '../components/auction';
+import {
   listAuctions,
   getAuctionHome,
   type MarketAuction,
@@ -50,10 +63,7 @@ import {
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-// Closing Soon runway: 72-78% viewport-width first card so the next lot peeks
-// (marketplace plurality, not a single-product page).
-const CLOSING_SOON_CARD_WIDTH = SCREEN_WIDTH * 0.76;
+type MarketSegment = 'live' | 'endingSoon' | 'upcoming' | 'watching';
 
 function toViewModel(api: MarketAuction): AuctionHomeItem {
   return {
@@ -92,510 +102,81 @@ interface DualPriceResult {
 type FormatDualPrice = (amountGbp: number) => DualPriceResult;
 
 // ════════════════════════════════════════════════════════════════
-// ZONE A: MARKETPLACE HEADER — compact native lobby header (56-88pt)
-// Replaces the rejected single-lot CinematicMasthead. Communicates
-// plurality (Auctions marketplace) not a product-detail hero.
+// CATEGORY RAIL — compact horizontal image rail, max 3 visible
 // ════════════════════════════════════════════════════════════════
-const MarketplaceHeader = memo(function MarketplaceHeader({
-  liveContext,
-  onSearch,
-  onFilter,
-  onActivity,
-  onBack,
-  showBack,
-}: {
-  liveContext: string;
-  onSearch: () => void;
-  onFilter: () => void;
-  onActivity: () => void;
-  onBack: () => void;
-  showBack: boolean;
-}) {
-  const insets = useSafeAreaInsets();
-  return (
-    <View style={[styles.marketHeader, { paddingTop: insets.top + Space.xs }]}>
-      <View style={styles.marketHeaderRow}>
-        {showBack ? (
-          <Pressable
-            onPress={onBack}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            style={styles.marketHeaderIconBtn}
-          >
-            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
-          </Pressable>
-        ) : null}
-        <View style={styles.marketHeaderTitleWrap}>
-          <Text style={styles.marketHeaderTitle} numberOfLines={1}>Auctions</Text>
-          <Text style={styles.marketHeaderContext} numberOfLines={1}>{liveContext}</Text>
-        </View>
-        <View style={styles.marketHeaderActions}>
-          <Pressable
-            onPress={onSearch}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Search auctions"
-            style={styles.marketHeaderIconBtn}
-          >
-            <Ionicons name="search-outline" size={22} color={Colors.textPrimary} />
-          </Pressable>
-          <Pressable
-            onPress={onFilter}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Filter auctions"
-            style={styles.marketHeaderIconBtn}
-          >
-            <Ionicons name="options-outline" size={22} color={Colors.textPrimary} />
-          </Pressable>
-          <Pressable
-            onPress={onActivity}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="View your auction activity"
-            style={styles.marketHeaderIconBtn}
-          >
-            <Ionicons name="pulse-outline" size={22} color={Colors.textPrimary} />
-          </Pressable>
-        </View>
-      </View>
-    </View>
-  );
-});
-
-// ════════════════════════════════════════════════════════════════
-// ZONE B: PERSONAL ACTION BANNER — compact action layer (64-92pt)
-// Personal attention is separated from market discovery. Never the
-// marketplace masthead. One thumbnail only where useful.
-// ════════════════════════════════════════════════════════════════
-const PersonalActionBanner = memo(function PersonalActionBanner({
-  activity,
-  attentionItem,
-  attentionReason,
-  clockMs,
-  onPress,
-  onDetail,
-  formatDualPrice,
-}: {
-  activity: AuctionHomeActivity;
-  attentionItem: AuctionHomeItem | null;
-  attentionReason: AttentionReason;
-  clockMs: number;
-  onPress: () => void;
-  onDetail: () => void;
-  formatDualPrice: FormatDualPrice;
-}) {
-  const hasActivity = activity.activeCount > 0 || activity.needsAttentionCount > 0;
-  if (!hasActivity && !attentionItem) return null;
-
-  const isOutbid = attentionReason === 'outbid';
-  const isLeading = attentionReason === 'leading' || attentionReason === 'leading_ending';
-  const isWon = attentionReason === 'won_action';
-
-  // ── Outbid: urgent personal action ──
-  if (isOutbid && attentionItem) {
-    const timing = resolveAuctionTiming(attentionItem, clockMs);
-    const timeLabel = resolveUrgency(timing) === 'finalMinutes'
-      ? formatFinalMinutesCountdown(timing.msToEnd)
-      : resolveTimeLabel(timing);
-    const minPrice = attentionItem.minimumNextBidGbp ? formatDualPrice(attentionItem.minimumNextBidGbp) : null;
-    return (
-      <Pressable
-        style={[styles.actionBanner, styles.actionBannerUrgent]}
-        onPress={() => { haptics.tap(); onDetail(); }}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={`You've been outbid. ${minPrice ? `Minimum to lead ${minPrice.primaryText}.` : ''} ${timeLabel} left. Bid again.`}
-      >
-        {attentionItem.imageUrl ? (
-          <CachedImage
-            uri={attentionItem.imageUrl}
-            style={styles.actionBannerThumb}
-            containerStyle={styles.actionBannerThumbContainer}
-            contentFit="cover"
-          />
-        ) : null}
-        <View style={styles.actionBannerBody}>
-          <Text style={[styles.actionBannerTitle, { color: Colors.danger }]} numberOfLines={1}>You've been outbid</Text>
-          <Text style={styles.actionBannerMeta} numberOfLines={1}>
-            {timeLabel} left{minPrice ? ` · ${minPrice.primaryText}` : ''}
-          </Text>
-        </View>
-        <View style={styles.actionBannerCta}>
-          <Text style={styles.actionBannerCtaText}>Bid again</Text>
-          <Ionicons name="chevron-forward" size={14} color={Colors.danger} />
-        </View>
-      </Pressable>
-    );
-  }
-
-  // ── Leading: calm confirmation ──
-  if (isLeading && attentionItem) {
-    const timing = resolveAuctionTiming(attentionItem, clockMs);
-    const timeLabel = resolveUrgency(timing) === 'finalMinutes'
-      ? formatFinalMinutesCountdown(timing.msToEnd)
-      : resolveTimeLabel(timing);
-    return (
-      <Pressable
-        style={[styles.actionBanner, styles.actionBannerCalm]}
-        onPress={() => { haptics.tap(); onDetail(); }}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={`You're leading. Ends in ${timeLabel}. View activity.`}
-      >
-        {attentionItem.imageUrl ? (
-          <CachedImage
-            uri={attentionItem.imageUrl}
-            style={styles.actionBannerThumb}
-            containerStyle={styles.actionBannerThumbContainer}
-            contentFit="cover"
-          />
-        ) : null}
-        <View style={styles.actionBannerBody}>
-          <Text style={[styles.actionBannerTitle, { color: Colors.success }]} numberOfLines={1}>You're leading</Text>
-          <Text style={styles.actionBannerMeta} numberOfLines={1}>Ends in {timeLabel}</Text>
-        </View>
-        <View style={styles.actionBannerCta}>
-          <Text style={styles.actionBannerCtaText}>View Activity</Text>
-          <Ionicons name="chevron-forward" size={14} color={Colors.success} />
-        </View>
-      </Pressable>
-    );
-  }
-
-  // ── Won requiring action ──
-  if (isWon && attentionItem) {
-    return (
-      <Pressable
-        style={[styles.actionBanner, styles.actionBannerWon]}
-        onPress={() => { haptics.tap(); onDetail(); }}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="You won. Next step required. View result."
-      >
-        {attentionItem.imageUrl ? (
-          <CachedImage
-            uri={attentionItem.imageUrl}
-            style={styles.actionBannerThumb}
-            containerStyle={styles.actionBannerThumbContainer}
-            contentFit="cover"
-          />
-        ) : null}
-        <View style={styles.actionBannerBody}>
-          <Text style={[styles.actionBannerTitle, { color: Colors.brand }]} numberOfLines={1}>You won</Text>
-          <Text style={styles.actionBannerMeta} numberOfLines={1}>Next step required</Text>
-        </View>
-        <View style={styles.actionBannerCta}>
-          <Text style={styles.actionBannerCtaText}>View result</Text>
-          <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
-        </View>
-      </Pressable>
-    );
-  }
-
-  // ── No urgent action: restrained summary ──
-  const summary = `${activity.activeCount} active · ${activity.watchingCount} watching`;
-  return (
-    <Pressable
-      style={styles.actionBanner}
-      onPress={() => { haptics.tap(); onPress(); }}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel={`${activity.activeCount} active auctions, ${activity.watchingCount} watching. View activity.`}
-    >
-      <View style={styles.actionBannerBody}>
-        <Text style={styles.actionBannerSummary} numberOfLines={1}>{summary}</Text>
-      </View>
-      <View style={styles.actionBannerCta}>
-        <Text style={styles.actionBannerCtaText}>View Activity</Text>
-        <Ionicons name="chevron-forward" size={14} color={Colors.textSecondary} />
-      </View>
-    </Pressable>
-  );
-});
-
-// ════════════════════════════════════════════════════════════════
-// ZONE C: CLOSING SOON PROGRAMME — cinematic runway
-// ════════════════════════════════════════════════════════════════
-const ClosingSoonCard = memo(function ClosingSoonCard({
-  item,
-  index,
-  clockMs,
-  onPress,
-  formatDualPrice,
-}: {
-  item: AuctionHomeItem;
-  index: number;
-  clockMs: number;
-  onPress: () => void;
-  formatDualPrice: FormatDualPrice;
-}) {
-  const timing = resolveAuctionTiming(item, clockMs);
-  const urgency = resolveUrgency(timing);
-  const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
-  const timeLabel = urgency === 'finalMinutes'
-    ? formatFinalMinutesCountdown(timing.msToEnd)
-    : resolveTimeLabel(timing);
-  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, resolvePriceLabel(item, timing), dualPrice.primaryText);
-  const eyebrow = item.brand ?? item.category ?? '';
-
-  return (
-    <AnimatedPressable
-      style={styles.closingSoonCard}
-      onPress={onPress}
-      activeOpacity={0.94}
-      scaleValue={0.98}
-      accessibilityRole="button"
-      accessibilityLabel={a11yLabel}
-      accessibilityHint="Opens auction details"
-    >
-      <View style={styles.closingSoonImageWrap}>
-        {item.imageUrl ? (
-          <CachedImage
-            uri={item.imageUrl}
-            style={styles.closingSoonImage}
-            containerStyle={StyleSheet.absoluteFill}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
-        )}
-        <LinearGradient
-          colors={['transparent', 'transparent', 'rgba(0,0,0,0.7)']}
-          locations={[0, 0.45, 1]}
-          style={styles.closingSoonGradient}
-          pointerEvents="none"
-        />
-        <View style={styles.closingSoonSequenceWrap}>
-          <Text style={styles.closingSoonSequence}>{String(index + 1).padStart(2, '0')}</Text>
-        </View>
-        <View style={styles.closingSoonCountdownWrap}>
-          <Text style={styles.closingSoonCountdown}>{timeLabel}</Text>
-        </View>
-      </View>
-      <View style={styles.closingSoonBody}>
-        {eyebrow ? <Text style={styles.closingSoonEyebrow} numberOfLines={1}>{eyebrow.toUpperCase()}</Text> : null}
-        <Text style={styles.closingSoonTitle} numberOfLines={1}>{item.title}</Text>
-        <View style={styles.closingSoonPriceRow}>
-          <Text style={styles.closingSoonPrice}>{dualPrice.primaryText}</Text>
-          {dualPrice.secondaryText ? (
-            <Text style={styles.closingSoonPriceSecondary}>≈ {dualPrice.secondaryText}</Text>
-          ) : null}
-        </View>
-        <Text style={styles.closingSoonBids}>{item.bidCount > 0 ? `${item.bidCount} bids` : 'No bids'}</Text>
-      </View>
-    </AnimatedPressable>
-  );
-});
-
-// ════════════════════════════════════════════════════════════════
-// ZONE D: LIVE AUCTION FLOOR — borderless editorial grid
-// ════════════════════════════════════════════════════════════════
-const LiveFloorCard = memo(function LiveFloorCard({
-  item,
-  clockMs,
-  onPress,
-  formatDualPrice,
-}: {
-  item: AuctionHomeItem;
-  clockMs: number;
-  onPress: () => void;
-  formatDualPrice: FormatDualPrice;
-}) {
-  const timing = resolveAuctionTiming(item, clockMs);
-  const urgency = resolveUrgency(timing);
-  const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
-  const timeLabel = urgency === 'finalMinutes'
-    ? formatFinalMinutesCountdown(timing.msToEnd)
-    : resolveTimeLabel(timing);
-  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, resolvePriceLabel(item, timing), dualPrice.primaryText);
-
-  return (
-    <AnimatedPressable
-      style={styles.liveFloorCard}
-      onPress={onPress}
-      activeOpacity={0.92}
-      scaleValue={0.985}
-      accessibilityRole="button"
-      accessibilityLabel={a11yLabel}
-      accessibilityHint="Opens auction details"
-    >
-      <View style={styles.liveFloorImageWrap}>
-        {item.imageUrl ? (
-          <CachedImage
-            uri={item.imageUrl}
-            style={styles.liveFloorImage}
-            containerStyle={StyleSheet.absoluteFill}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
-        )}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.55)']}
-          locations={[0.5, 1]}
-          style={styles.liveFloorGradient}
-          pointerEvents="none"
-        />
-        <View style={styles.liveFloorLiveBadge}>
-          <View style={styles.liveFloorLiveDot} />
-          <Text style={styles.liveFloorLiveText}>LIVE</Text>
-        </View>
-        {urgency === 'finalMinutes' && (
-          <View style={styles.liveFloorUrgencyBadge}>
-            <Text style={styles.liveFloorUrgencyText}>{timeLabel}</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.liveFloorBody}>
-        <Text style={styles.liveFloorTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.liveFloorPrice}>{dualPrice.primaryText}</Text>
-        {dualPrice.secondaryText ? (
-          <Text style={styles.liveFloorPriceSecondary} numberOfLines={1}>≈ {dualPrice.secondaryText}</Text>
-        ) : null}
-        <View style={styles.liveFloorMetaRow}>
-          <Text style={styles.liveFloorBids}>{item.bidCount > 0 ? `${item.bidCount} bids` : 'No bids'}</Text>
-          {urgency !== 'finalMinutes' && (
-            <Text style={[styles.liveFloorTime, urgency === 'endingSoon' && { color: Colors.danger }]}>{timeLabel}</Text>
-          )}
-        </View>
-      </View>
-    </AnimatedPressable>
-  );
-});
-
-// ════════════════════════════════════════════════════════════════
-// ZONE E: CATEGORY WORLDS — compact editorial mosaic
-// One featured category tile + two or four secondary tiles.
-// Replaces the rejected six full-width 180px stacked banners that
-// created excessive scrolling and repeated hero-like sections.
-// Max initial section height ~360-480pt.
-// ════════════════════════════════════════════════════════════════
-const CategoryTile = memo(function CategoryTile({
+const CategoryRailTile = memo(function CategoryRailTile({
   world,
   onPress,
-  variant,
+  cardWidth,
 }: {
   world: CategoryWorld;
   onPress: () => void;
-  variant: 'featured' | 'secondary';
+  cardWidth: number;
 }) {
+  const hasImage = Boolean(world.representativeImageUrl);
   return (
     <Pressable
-      style={[styles.categoryTile, variant === 'featured' ? styles.categoryTileFeatured : styles.categoryTileSecondary]}
+      style={[styles.categoryTile, { width: cardWidth }]}
       onPress={() => { haptics.tap(); onPress(); }}
       accessibilityRole="button"
       accessibilityLabel={`Browse ${world.displayName} auctions`}
     >
-      {world.representativeImageUrl ? (
+      {hasImage ? (
         <CachedImage
-          uri={world.representativeImageUrl}
+          uri={world.representativeImageUrl!}
           style={StyleSheet.absoluteFill}
           containerStyle={StyleSheet.absoluteFill}
           contentFit="cover"
         />
       ) : (
+        // Deliberate editorial placeholder — not a skeleton
         <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surfaceAlt }]} />
       )}
+      {/* Restrained gradient only behind label */}
       <LinearGradient
         colors={['transparent', 'rgba(0,0,0,0.65)']}
-        locations={[0.45, 1]}
+        locations={[0.55, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
       <View style={styles.categoryTileOverlay}>
-        <Text
-          style={[styles.categoryTileName, variant === 'featured' && styles.categoryTileNameFeatured]}
-          numberOfLines={variant === 'featured' ? 2 : 1}
-        >
-          {world.displayName}
-        </Text>
-        {variant === 'featured' && world.availableCount != null && world.availableCount > 0 ? (
-          <Text style={styles.categoryTileCount}>{world.availableCount} live now</Text>
-        ) : null}
+        <Text style={styles.categoryTileName} numberOfLines={1}>{world.displayName}</Text>
       </View>
     </Pressable>
   );
 });
 
-const CategoryMosaic = memo(function CategoryMosaic({
-  worlds,
-  onPress,
-}: {
-  worlds: CategoryWorld[];
-  onPress: (categoryKey: string) => void;
-}) {
-  if (worlds.length === 0) return null;
-  // 1 featured + up to 4 secondary (2x2). Falls back to 2-col grid when <3.
-  if (worlds.length < 3) {
-    return (
-      <View style={styles.categoryMosaicRow}>
-        {worlds.slice(0, 2).map((world) => (
-          <CategoryTile
-            key={world.categoryKey}
-            world={world}
-            variant="secondary"
-            onPress={() => onPress(world.categoryKey)}
-          />
-        ))}
-      </View>
-    );
-  }
-  const featured = worlds[0];
-  const secondary = worlds.slice(1, 5); // up to 4
-  return (
-    <View style={styles.categoryMosaicContainer}>
-      <CategoryTile world={featured} variant="featured" onPress={() => onPress(featured.categoryKey)} />
-      <View style={styles.categoryMosaicSecondaryRow}>
-        {secondary.map((world) => (
-          <CategoryTile
-            key={world.categoryKey}
-            world={world}
-            variant="secondary"
-            onPress={() => onPress(world.categoryKey)}
-          />
-        ))}
-      </View>
-    </View>
-  );
-});
-
 // ════════════════════════════════════════════════════════════════
-// ZONE F: UPCOMING DROPS — programme-style rows
+// UPCOMING ROW — scheduled programme row
 // ════════════════════════════════════════════════════════════════
-const UpcomingDropRow = memo(function UpcomingDropRow({
+const UpcomingRow = memo(function UpcomingRow({
   item,
-  clockMs,
   onPress,
-  formatDualPrice,
+  formatValueLockup,
 }: {
   item: AuctionHomeItem;
-  clockMs: number;
   onPress: () => void;
-  formatDualPrice: FormatDualPrice;
+  formatValueLockup: (amountGbp: number) => { izeText: string; localText: string | null };
 }) {
-  const timing = resolveAuctionTiming(item, clockMs);
-  const dualPrice = formatDualPrice(item.startingBidGbp);
-  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, resolvePriceLabel(item, timing), dualPrice.primaryText);
-  const eyebrow = item.brand ?? item.category ?? '';
+  const valueLockup = formatValueLockup(item.startingBidGbp);
   const startDate = new Date(item.startsAt);
   const timeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = startDate.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+  const a11yLabel = `Starts ${dateStr} at ${timeStr}. ${item.title}. Starting at ${valueLockup.izeText}`;
 
   return (
     <Pressable
-      style={styles.upcomingDropRow}
+      style={styles.upcomingRow}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
       accessibilityHint="Opens auction details"
     >
-      <View style={styles.upcomingDropImageWrap}>
+      <View style={styles.upcomingImageWrap}>
         {item.imageUrl ? (
           <CachedImage
             uri={item.imageUrl}
-            style={styles.upcomingDropImage}
+            style={styles.upcomingImage}
             containerStyle={StyleSheet.absoluteFill}
             contentFit="cover"
           />
@@ -603,119 +184,72 @@ const UpcomingDropRow = memo(function UpcomingDropRow({
           <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
         )}
       </View>
-      <View style={styles.upcomingDropBody}>
-        <Text style={styles.upcomingDropDate}>STARTS {dateStr.toUpperCase()} · {timeStr}</Text>
-        {eyebrow ? <Text style={styles.upcomingDropEyebrow} numberOfLines={1}>{eyebrow}</Text> : null}
-        <Text style={styles.upcomingDropTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.upcomingDropPrice}>Starting at {dualPrice.primaryText}</Text>
+      <View style={styles.upcomingBody}>
+        <Text style={styles.upcomingDate}>{dateStr} · {timeStr}</Text>
+        {item.brand ? <Text style={styles.upcomingEyebrow} numberOfLines={1}>{item.brand}</Text> : null}
+        <Text style={styles.upcomingTitle} numberOfLines={1}>{item.title}</Text>
+        <AuctionValueLockup
+          izeText={valueLockup.izeText}
+          localText={valueLockup.localText}
+          state="starting"
+          scale="compact"
+        />
       </View>
       <Pressable
-        style={styles.upcomingDropNotify}
+        style={styles.upcomingNotify}
         onPress={() => { haptics.tap(); onPress(); }}
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="View auction"
       >
-        <Ionicons name="notifications-outline" size={18} color={Colors.brand} />
+        <Ionicons name="chevron-forward" size={18} color={Colors.brand} />
       </Pressable>
     </Pressable>
   );
 });
 
 // ════════════════════════════════════════════════════════════════
-// ZONE G: WATCHING CONTINUITY — compact image-led rail
+// RESULT ROW — compact results ledger
 // ════════════════════════════════════════════════════════════════
-const WatchingRailCard = memo(function WatchingRailCard({
+const ResultRow = memo(function ResultRow({
   item,
-  clockMs,
   onPress,
-  formatDualPrice,
+  formatValueLockup,
 }: {
   item: AuctionHomeItem;
-  clockMs: number;
   onPress: () => void;
-  formatDualPrice: FormatDualPrice;
+  formatValueLockup: (amountGbp: number) => { izeText: string; localText: string | null };
 }) {
-  const timing = resolveAuctionTiming(item, clockMs);
-  const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
-  const timeLabel = resolveTimeLabel(timing);
-  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, resolvePriceLabel(item, timing), dualPrice.primaryText);
-  const stateText = item.viewerState === 'leading' ? 'Leading'
-    : item.viewerState === 'outbid' ? 'Outbid'
-    : timing.effectiveState === 'live' ? 'Live'
-    : 'Upcoming';
-
-  return (
-    <Pressable
-      style={styles.watchingRailCard}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={a11yLabel}
-      accessibilityHint="Opens auction details"
-    >
-      <View style={styles.watchingRailImageWrap}>
-        {item.imageUrl ? (
-          <CachedImage
-            uri={item.imageUrl}
-            style={styles.watchingRailImage}
-            containerStyle={StyleSheet.absoluteFill}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
-        )}
-      </View>
-      <View style={styles.watchingRailBody}>
-        <Text style={styles.watchingRailTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.watchingRailState}>{stateText}</Text>
-        <Text style={styles.watchingRailPrice}>{dualPrice.primaryText}</Text>
-        <Text style={styles.watchingRailTime}>{timeLabel}</Text>
-      </View>
-    </Pressable>
-  );
-});
-
-// ════════════════════════════════════════════════════════════════
-// ZONE H: RECENTLY CLOSED — quiet results ledger
-// ════════════════════════════════════════════════════════════════
-const ClosedLedgerRow = memo(function ClosedLedgerRow({
-  item,
-  clockMs,
-  onPress,
-  formatDualPrice,
-}: {
-  item: AuctionHomeItem;
-  clockMs: number;
-  onPress: () => void;
-  formatDualPrice: FormatDualPrice;
-}) {
-  const timing = resolveAuctionTiming(item, clockMs);
-  const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
-  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, resolvePriceLabel(item, timing), dualPrice.primaryText);
+  const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
   const resultText = item.viewerState === 'won' ? 'Won'
     : item.viewerState === 'lost' ? 'Lost'
     : item.terminalReason === 'cancelled' ? 'Cancelled'
-    : item.bidCount === 0 ? 'No sale'
+    : item.bidCount === 0 ? 'No bids'
     : 'Sold';
   const resultColor = item.viewerState === 'won' ? Colors.success
     : item.viewerState === 'lost' ? Colors.danger
     : item.terminalReason === 'cancelled' ? Colors.textMuted
     : item.bidCount === 0 ? Colors.textMuted
     : Colors.textSecondary;
+  // Truthful continuation action
+  const continuationLabel = item.viewerState === 'won' ? 'Continue'
+    : item.viewerState === 'lost' ? 'View'
+    : null;
+  const a11yLabel = `${item.title}. ${resultText}. ${item.bidCount > 0 ? `${item.bidCount} bids` : 'No bids'}. ${valueLockup.izeText}`;
 
   return (
     <Pressable
-      style={styles.closedLedgerRow}
+      style={styles.resultRow}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
       accessibilityHint="Opens auction details"
     >
-      <View style={styles.closedLedgerImageWrap}>
+      <View style={styles.resultImageWrap}>
         {item.imageUrl ? (
           <CachedImage
             uri={item.imageUrl}
-            style={styles.closedLedgerImage}
+            style={styles.resultImage}
             containerStyle={StyleSheet.absoluteFill}
             contentFit="cover"
           />
@@ -723,122 +257,25 @@ const ClosedLedgerRow = memo(function ClosedLedgerRow({
           <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
         )}
       </View>
-      <View style={styles.closedLedgerBody}>
-        <Text style={styles.closedLedgerTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.closedLedgerPrice}>{dualPrice.primaryText}</Text>
-      </View>
-      <View style={styles.closedLedgerRight}>
-        <Text style={[styles.closedLedgerResult, { color: resultColor }]}>{resultText}</Text>
-        {item.bidCount > 0 && (
-          <Text style={styles.closedLedgerBids}>{item.bidCount} bids</Text>
-        )}
-      </View>
-    </Pressable>
-  );
-});
-
-// ════════════════════════════════════════════════════════════════
-// ZONE I: SELLER STUDIO — seller-specific rows
-// ════════════════════════════════════════════════════════════════
-const SellerStudioRow = memo(function SellerStudioRow({
-  item,
-  clockMs,
-  onPress,
-  formatDualPrice,
-}: {
-  item: AuctionHomeItem;
-  clockMs: number;
-  onPress: () => void;
-  formatDualPrice: FormatDualPrice;
-}) {
-  const timing = resolveAuctionTiming(item, clockMs);
-  const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
-  const timeLabel = resolveTimeLabel(timing);
-  const a11yLabel = buildAuctionAccessibilityLabel(item, timing, resolvePriceLabel(item, timing), dualPrice.primaryText);
-  const stateText = timing.effectiveState === 'live' ? 'Live'
-    : timing.effectiveState === 'upcoming' ? 'Scheduled'
-    : timing.effectiveState === 'ended' ? 'Ended'
-    : '';
-  const stateColor = timing.effectiveState === 'live' ? Colors.success
-    : timing.effectiveState === 'upcoming' ? Colors.textSecondary
-    : Colors.textMuted;
-
-  return (
-    <Pressable
-      style={styles.sellerStudioRow}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={a11yLabel}
-      accessibilityHint="Opens auction details"
-    >
-      <View style={styles.sellerStudioImageWrap}>
-        {item.imageUrl ? (
-          <CachedImage
-            uri={item.imageUrl}
-            style={styles.sellerStudioImage}
-            containerStyle={StyleSheet.absoluteFill}
-            contentFit="cover"
+      <View style={styles.resultBody}>
+        <Text style={styles.resultTitle} numberOfLines={1}>{item.title}</Text>
+        <Text style={[styles.resultOutcome, { color: resultColor }]}>{resultText}{item.bidCount > 0 ? ` · ${item.bidCount} bids` : ''}</Text>
+        {item.bidCount > 0 ? (
+          <AuctionValueLockup
+            izeText={valueLockup.izeText}
+            localText={valueLockup.localText}
+            state="final"
+            scale="compact"
           />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
-        )}
+        ) : null}
       </View>
-      <View style={styles.sellerStudioBody}>
-        <Text style={styles.sellerStudioTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.sellerStudioPrice}>{dualPrice.primaryText}</Text>
-      </View>
-      <View style={styles.sellerStudioRight}>
-        <Text style={[styles.sellerStudioState, { color: stateColor }]}>{stateText}</Text>
-        <Text style={styles.sellerStudioBids}>{item.bidCount > 0 ? `${item.bidCount} bids` : 'No bids'}</Text>
-        <Text style={styles.sellerStudioTime}>{timeLabel}</Text>
-      </View>
+      {continuationLabel && (
+        <View style={styles.resultActionWrap}>
+          <Text style={styles.resultActionLabel}>{continuationLabel}</Text>
+          <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+        </View>
+      )}
     </Pressable>
-  );
-});
-
-// ════════════════════════════════════════════════════════════════
-// ZONE I: SELLER STRIP — compact seller access (not a long feed)
-// "Seller Centre · 2 live · 1 scheduled · Manage"
-// Full seller inventory belongs in SellerAuctionCentre.
-// ════════════════════════════════════════════════════════════════
-const SellerStrip = memo(function SellerStrip({
-  summary,
-  onManage,
-}: {
-  summary: SellerSummary;
-  onManage: () => void;
-}) {
-  const context = `${summary.liveCount} live · ${summary.scheduledCount} scheduled`;
-  return (
-    <Pressable
-      style={styles.sellerStrip}
-      onPress={() => { haptics.tap(); onManage(); }}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel={`Seller Centre. ${context}. Manage your auctions.`}
-    >
-      <View style={styles.sellerStripIconWrap}>
-        <Ionicons name="storefront-outline" size={18} color={Colors.brand} />
-      </View>
-      <View style={styles.sellerStripBody}>
-        <Text style={styles.sellerStripTitle} numberOfLines={1}>Seller Centre</Text>
-        <Text style={styles.sellerStripContext} numberOfLines={1}>{context}</Text>
-      </View>
-      <View style={styles.sellerStripManage}>
-        <Text style={styles.sellerStripManageText}>Manage</Text>
-        <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
-      </View>
-    </Pressable>
-  );
-});
-
-// ── Section header ──
-const SectionHeader = memo(function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
-    </View>
   );
 });
 
@@ -872,14 +309,19 @@ const EMPTY_HOME_DATA: HomeData = {
   serverNow: null,
 };
 
-// ── Main screen: Thryftverse Auction House ──
+// ── Main screen ──
 export default function AuctionHomeScreen() {
   const navigation = useNavigation<NavT>();
   const { currencyCode, displayMode, goldRates } = useFormattedPrice();
+  const { width } = useWindowDimensions();
   const [homeData, setHomeData] = React.useState<HomeData>(EMPTY_HOME_DATA);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // ── Segment state ──
+  const [activeSegment, setActiveSegment] = useState<MarketSegment>('live');
+  const hasSetDefaultSegment = useRef(false);
 
   // ── Search overlay ──
   const [searchOverlayVisible, setSearchOverlayVisible] = React.useState(false);
@@ -1196,70 +638,74 @@ export default function AuctionHomeScreen() {
     return { primaryText: izeText, secondaryText: fiatText };
   }, [goldRates, currencyCode, displayMode]);
 
-  // ── Renderers ──
-  const renderClosingSoonItem = useCallback(({ item, index }: { item: AuctionHomeItem; index: number }) => (
-    <ClosingSoonCard
-      item={item}
-      index={index}
-      clockMs={secondClock}
-      onPress={() => navigateToDetail(item.id)}
-      formatDualPrice={formatDualPrice}
-    />
-  ), [secondClock, navigateToDetail, formatDualPrice]);
+  // ── Separate 1ZE + local text for the value lockup primitive ──
+  // Always returns the canonical 1ZE text as izeText and local as localText.
+  // In fiat-only display mode, izeText holds the local value and localText is null,
+  // preserving the user's display preference.
+  const formatValueLockup = useCallback((amountGbp: number): { izeText: string; localText: string | null } => {
+    const izeAmount = toIze(amountGbp, 'GBP', goldRates);
+    const izeText = formatIzeAmount(izeAmount, 4);
+    const fiatValue = izeAmount * (goldRates?.[currencyCode] ?? 1);
+    const fiatText = formatFiatAmount(fiatValue, currencyCode, 2);
+    if (displayMode === 'ize') return { izeText, localText: null };
+    if (displayMode === 'fiat') return { izeText: fiatText, localText: null };
+    return { izeText, localText: fiatText };
+  }, [goldRates, currencyCode, displayMode]);
 
-  const renderLiveFloorItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
-    <LiveFloorCard
-      item={item}
-      clockMs={secondClock}
-      onPress={() => navigateToDetail(item.id)}
-      formatDualPrice={formatDualPrice}
-    />
-  ), [secondClock, navigateToDetail, formatDualPrice]);
+  // ── Renderers for search/filter ──
+  const renderSearchItem = useCallback(({ item }: { item: AuctionHomeItem }) => {
+    const timing = resolveAuctionTiming(item, secondClock);
+    const urgency = resolveUrgency(timing);
+    const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+    const timeLabel = urgency === 'finalMinutes'
+      ? formatFinalMinutesCountdown(timing.msToEnd)
+      : resolveTimeLabel(timing);
+    return (
+      <AuctionGridCard
+        title={item.title}
+        imageUrl={item.imageUrl || null}
+        brand={item.brand ?? null}
+        izeText={valueLockup.izeText}
+        localText={valueLockup.localText}
+        valueState={timing.effectiveState === 'ended' ? 'final' : timing.effectiveState === 'upcoming' ? 'starting' : 'current'}
+        priceLabel={resolvePriceLabel(item, timing)}
+        bidCount={item.bidCount}
+        countdownText={timeLabel}
+        urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+        state={timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended'}
+        viewerState={item.viewerState}
+        onPress={() => navigateToDetail(item.id)}
+      />
+    );
+  }, [secondClock, navigateToDetail, formatValueLockup]);
 
-  const renderUpcomingDrop = useCallback(({ item }: { item: AuctionHomeItem }) => (
-    <UpcomingDropRow
-      item={item}
-      clockMs={minuteClock}
-      onPress={() => navigateToDetail(item.id)}
-      formatDualPrice={formatDualPrice}
-    />
-  ), [minuteClock, navigateToDetail, formatDualPrice]);
-
-  const renderWatchingRailItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
-    <WatchingRailCard
-      item={item}
-      clockMs={secondClock}
-      onPress={() => navigateToDetail(item.id)}
-      formatDualPrice={formatDualPrice}
-    />
-  ), [secondClock, navigateToDetail, formatDualPrice]);
-
-  const renderClosedLedgerItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
-    <ClosedLedgerRow
-      item={item}
-      clockMs={minuteClock}
-      onPress={() => navigateToDetail(item.id)}
-      formatDualPrice={formatDualPrice}
-    />
-  ), [minuteClock, navigateToDetail, formatDualPrice]);
-
-  const renderSearchItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
-    <LiveFloorCard
-      item={item}
-      clockMs={secondClock}
-      onPress={() => navigateToDetail(item.id)}
-      formatDualPrice={formatDualPrice}
-    />
-  ), [secondClock, navigateToDetail, formatDualPrice]);
-
-  const renderFilterItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
-    <LiveFloorCard
-      item={item}
-      clockMs={secondClock}
-      onPress={() => navigateToDetail(item.id)}
-      formatDualPrice={formatDualPrice}
-    />
-  ), [secondClock, navigateToDetail, formatDualPrice]);
+  const renderFilterItem = useCallback(({ item }: { item: AuctionHomeItem }) => {
+    const timing = resolveAuctionTiming(item, secondClock);
+    const urgency = resolveUrgency(timing);
+    const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+    const timeLabel = urgency === 'finalMinutes'
+      ? formatFinalMinutesCountdown(timing.msToEnd)
+      : resolveTimeLabel(timing);
+    const effectiveState = timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended';
+    const valueState = effectiveState === 'ended' ? 'final' : effectiveState === 'upcoming' ? 'starting' : 'current';
+    return (
+      <AuctionGridCard
+        title={item.title}
+        imageUrl={item.imageUrl || null}
+        brand={item.brand ?? null}
+        izeText={valueLockup.izeText}
+        localText={valueLockup.localText}
+        valueState={valueState}
+        priceLabel={resolvePriceLabel(item, timing)}
+        bidCount={item.bidCount}
+        countdownText={timeLabel}
+        urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+        state={effectiveState}
+        viewerState={item.viewerState}
+        onPress={() => navigateToDetail(item.id)}
+      />
+    );
+  }, [secondClock, navigateToDetail, formatValueLockup]);
 
   // ── Category options for filter sheet ──
   const categoryOptions = useMemo(() => {
@@ -1273,22 +719,26 @@ export default function AuctionHomeScreen() {
   // ── Active filter chips ──
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
-    if (filterStatus !== 'all') chips.push(filterStatus);
-    if (filterSort !== 'endingSoon') chips.push(filterSort);
+    if (filterStatus !== 'all') {
+      chips.push(filterStatus === 'live' ? 'Live' : filterStatus === 'scheduled' ? 'Scheduled' : 'Ended');
+    }
+    if (filterSort !== 'endingSoon') {
+      chips.push(
+        filterSort === 'newest' ? 'Newest'
+        : filterSort === 'mostBids' ? 'Most bids'
+        : filterSort === 'priceLow' ? 'Price: low to high'
+        : 'Price: high to low'
+      );
+    }
     if (filterCategory) chips.push(filterCategory);
     return chips;
   }, [filterStatus, filterSort, filterCategory]);
 
   const renderLoadingState = useCallback(() => (
-    <View style={styles.loadingContainer}>
-      <Text style={styles.loadingText}>Loading auctions…</Text>
-    </View>
+    <AuctionSkeletons />
   ), []);
 
-  // ── Derived values and hooks MUST be before any conditional return ──
-  // (React hooks-order rule: hooks must execute unconditionally on every render)
-  const hasSellerAuctions = homeData.sellerAuctions.length > 0;
-
+  // ── Derived values (MUST be before any conditional return) ──
   const hasActiveMarket =
     homeData.closingSoon.length > 0 ||
     homeData.live.length > 0 ||
@@ -1315,17 +765,143 @@ export default function AuctionHomeScreen() {
     hasActiveMarket ||
     hasPersonalActivity ||
     homeData.recentlyClosed.length > 0 ||
-    hasSellerAuctions ||
     homeData.categoryWorlds.length > 0 ||
     dedupedWatchlist.length > 0;
 
-  const liveContext = homeData.closingSoon.length > 0
-    ? `${homeData.closingSoon.length} closing soon`
-    : homeData.live.length > 0
-      ? `${homeData.live.length} live now`
-      : homeData.upcoming.length > 0
-        ? `${homeData.upcoming.length} upcoming`
-        : 'Nothing live or scheduled right now';
+  // ── Default segment selection ──
+  React.useEffect(() => {
+    if (loading || hasSetDefaultSegment.current) return;
+    if (homeData.closingSoon.length > 0) setActiveSegment('endingSoon');
+    else if (homeData.live.length > 0) setActiveSegment('live');
+    else if (homeData.upcoming.length > 0) setActiveSegment('upcoming');
+    else if (dedupedWatchlist.length > 0) setActiveSegment('watching');
+    hasSetDefaultSegment.current = true;
+  }, [loading, homeData, dedupedWatchlist]);
+
+  // ── Segment rail ──
+  const segments: Segment[] = useMemo(() => {
+    const segs: Segment[] = [{ key: 'live', label: 'Live', count: homeData.live.length }];
+    if (homeData.closingSoon.length > 0) segs.push({ key: 'endingSoon', label: 'Ending soon', count: homeData.closingSoon.length });
+    if (homeData.upcoming.length > 0) segs.push({ key: 'upcoming', label: 'Upcoming', count: homeData.upcoming.length });
+    if (dedupedWatchlist.length > 0) segs.push({ key: 'watching', label: 'Watching', count: dedupedWatchlist.length });
+    return segs;
+  }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length, dedupedWatchlist.length]);
+
+  // ── Compact header context ──
+  const headerContext = useMemo(() => {
+    const parts: string[] = [];
+    if (homeData.live.length > 0) parts.push(`${homeData.live.length} live`);
+    if (homeData.closingSoon.length > 0) parts.push(`${homeData.closingSoon.length} ending`);
+    if (homeData.upcoming.length > 0) parts.push(`${homeData.upcoming.length} upcoming`);
+    return parts.length > 0 ? parts.join(' · ') : undefined;
+  }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length]);
+
+  const compactHeaderContext = useMemo(() => {
+    const total = homeData.live.length + homeData.closingSoon.length + homeData.upcoming.length;
+    return total > 0 ? `${total} active auctions` : undefined;
+  }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length]);
+
+  // ── Header actions ──
+  const headerActions: AuctionHeaderAction[] = useMemo(() => [
+    { key: 'search', icon: 'search-outline', label: 'Search auctions', onPress: () => { haptics.tap(); setSearchOverlayVisible(true); }, priority: 'primary' },
+    { key: 'filter', icon: 'options-outline', label: 'Filter auctions', onPress: () => { haptics.tap(); openFilterSheet(); }, priority: 'secondary' },
+    { key: 'create', icon: 'add-outline', label: 'Create auction', onPress: () => { haptics.tap(); navigation.navigate('CreateAuction'); }, priority: 'primary' },
+    { key: 'seller', icon: 'storefront-outline', label: 'Open Seller Centre', onPress: () => { haptics.tap(); navigation.navigate('SellerAuctionCentre'); }, priority: 'primary' },
+    { key: 'activity', icon: 'pulse-outline', label: 'View auction activity', onPress: () => { haptics.tap(); handleActivity(); }, badgeCount: homeData.activity.needsAttentionCount, priority: 'secondary' },
+  ], [openFilterSheet, navigation, handleActivity, homeData.activity.needsAttentionCount]);
+
+  // ── Personal attention strip props ──
+  const attentionProps = useMemo(() => {
+    if (homeData.attentionReason === 'outbid' && homeData.attentionItem) {
+      const timing = resolveAuctionTiming(homeData.attentionItem, secondClock);
+      const timeLabel = resolveUrgency(timing) === 'finalMinutes'
+        ? formatFinalMinutesCountdown(timing.msToEnd)
+        : resolveTimeLabel(timing);
+      return {
+        kind: 'outbid' as const,
+        title: homeData.attentionItem.title,
+        imageUrl: homeData.attentionItem.imageUrl || null,
+        message: timeLabel,
+        actionLabel: 'Bid again',
+        countdownText: timeLabel,
+        onPress: () => navigateToDetail(homeData.attentionItem!.id),
+        onAction: () => navigateToDetail(homeData.attentionItem!.id),
+      };
+    }
+    if ((homeData.attentionReason === 'leading' || homeData.attentionReason === 'leading_ending') && homeData.attentionItem) {
+      const timing = resolveAuctionTiming(homeData.attentionItem, secondClock);
+      const timeLabel = resolveUrgency(timing) === 'finalMinutes'
+        ? formatFinalMinutesCountdown(timing.msToEnd)
+        : resolveTimeLabel(timing);
+      return {
+        kind: 'leading' as const,
+        title: homeData.attentionItem.title,
+        imageUrl: homeData.attentionItem.imageUrl || null,
+        message: `Top bid · ${timeLabel}`,
+        actionLabel: 'View',
+        countdownText: timeLabel,
+        onPress: () => navigateToDetail(homeData.attentionItem!.id),
+        onAction: () => navigateToDetail(homeData.attentionItem!.id),
+      };
+    }
+    if (homeData.attentionReason === 'won_action' && homeData.attentionItem) {
+      return {
+        kind: 'won' as const,
+        title: homeData.attentionItem.title,
+        imageUrl: homeData.attentionItem.imageUrl || null,
+        message: 'Payment required',
+        actionLabel: 'Continue',
+        onPress: () => navigateToDetail(homeData.attentionItem!.id),
+        onAction: () => navigateToDetail(homeData.attentionItem!.id),
+      };
+    }
+    if (dedupedWatchlist.length > 0) {
+      return {
+        kind: 'watching' as const,
+        title: `${dedupedWatchlist.length} watched auctions`,
+        imageUrl: dedupedWatchlist[0]?.imageUrl || null,
+        message: 'Track your watched auctions',
+        actionLabel: 'View',
+        onPress: () => handleActivity(),
+        onAction: () => handleActivity(),
+      };
+    }
+    return null;
+  }, [homeData.attentionReason, homeData.attentionItem, dedupedWatchlist, navigateToDetail, handleActivity, secondClock]);
+
+  // ── Selected segment data ──
+  const segmentItems = useMemo(() => {
+    switch (activeSegment) {
+      case 'live': return homeData.live;
+      case 'endingSoon': return homeData.closingSoon;
+      case 'upcoming': return homeData.upcoming;
+      case 'watching': return dedupedWatchlist;
+      default: return [];
+    }
+  }, [activeSegment, homeData.live, homeData.closingSoon, homeData.upcoming, dedupedWatchlist]);
+
+  // ── Continuous "More to explore" feed ──
+  // Combines all auction items across every segment + recently closed,
+  // excluding those already shown in the active segment composition above.
+  // This is the feed layer — scrolling down keeps revealing more auctions.
+  const exploreFeedItems = useMemo(() => {
+    const seen = new Set(segmentItems.map((i) => i.id));
+    const combined: AuctionHomeItem[] = [
+      ...homeData.live,
+      ...homeData.closingSoon,
+      ...homeData.upcoming,
+      ...homeData.recentlyClosed,
+      ...dedupedWatchlist,
+    ];
+    const deduped: AuctionHomeItem[] = [];
+    const feedSeen = new Set<string>();
+    for (const item of combined) {
+      if (seen.has(item.id) || feedSeen.has(item.id)) continue;
+      feedSeen.add(item.id);
+      deduped.push(item);
+    }
+    return deduped;
+  }, [segmentItems, homeData.live, homeData.closingSoon, homeData.upcoming, homeData.recentlyClosed, dedupedWatchlist]);
 
   // ════════════════════════════════════════════════════════════════
   // RENDER
@@ -1479,105 +1055,44 @@ export default function AuctionHomeScreen() {
           />
         )}
 
-        {/* Filter sheet */}
-        <BottomSheet
+        <FilterSheet
           visible={filterSheetVisible}
           onDismiss={() => setFilterSheetVisible(false)}
-        >
-          <View style={styles.filterSheetContent}>
-            <Text style={styles.filterSheetTitle}>Filter & Sort</Text>
-
-            <Text style={styles.filterSectionLabel}>Status</Text>
-            <View style={styles.filterOptionRow}>
-              {(['all', 'live', 'scheduled', 'ended'] as const).map((opt) => (
-                <Pressable
-                  key={opt}
-                  style={[styles.filterOption, draftStatus === opt && styles.filterOptionActive]}
-                  onPress={() => { haptics.tap(); setDraftStatus(opt); }}
-                >
-                  <Text style={[styles.filterOptionText, draftStatus === opt && styles.filterOptionTextActive]}>
-                    {opt === 'all' ? 'All' : opt === 'live' ? 'Live' : opt === 'scheduled' ? 'Scheduled' : 'Ended'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Text style={styles.filterSectionLabel}>Sort</Text>
-            <View style={styles.filterOptionRow}>
-              {(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh'] as const).map((opt) => (
-                <Pressable
-                  key={opt}
-                  style={[styles.filterOption, draftSort === opt && styles.filterOptionActive]}
-                  onPress={() => { haptics.tap(); setDraftSort(opt); }}
-                >
-                  <Text style={[styles.filterOptionText, draftSort === opt && styles.filterOptionTextActive]}>
-                    {opt === 'endingSoon' ? 'Ending soon' : opt === 'newest' ? 'Newest' : opt === 'mostBids' ? 'Most bids' : opt === 'priceLow' ? 'Price ↑' : 'Price ↓'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {categoryOptions.length > 0 && (
-              <>
-                <Text style={styles.filterSectionLabel}>Category</Text>
-                <View style={styles.filterOptionRow}>
-                  <Pressable
-                    style={[styles.filterOption, draftCategory === null && styles.filterOptionActive]}
-                    onPress={() => { haptics.tap(); setDraftCategory(null); }}
-                  >
-                    <Text style={[styles.filterOptionText, draftCategory === null && styles.filterOptionTextActive]}>All</Text>
-                  </Pressable>
-                  {categoryOptions.map((cat) => (
-                    <Pressable
-                      key={cat}
-                      style={[styles.filterOption, draftCategory === cat && styles.filterOptionActive]}
-                      onPress={() => { haptics.tap(); setDraftCategory(cat); }}
-                    >
-                      <Text style={[styles.filterOptionText, draftCategory === cat && styles.filterOptionTextActive]}>{cat}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            )}
-
-            <View style={styles.filterActionsRow}>
-              <Pressable
-                style={styles.filterResetBtn}
-                onPress={resetDraftFilters}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Reset filters"
-              >
-                <Text style={styles.filterResetText}>Reset</Text>
-              </Pressable>
-              <Pressable
-                style={styles.filterApplyBtn}
-                onPress={applyDraftFilters}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Show results"
-              >
-                <Text style={styles.filterApplyText}>Show results</Text>
-              </Pressable>
-            </View>
-          </View>
-        </BottomSheet>
+          categoryOptions={categoryOptions}
+          draftStatus={draftStatus}
+          setDraftStatus={setDraftStatus}
+          draftSort={draftSort}
+          setDraftSort={setDraftSort}
+          draftCategory={draftCategory}
+          setDraftCategory={setDraftCategory}
+          onReset={resetDraftFilters}
+          onApply={applyDraftFilters}
+        />
       </SafeAreaView>
     );
   }
 
-  // ── Default: 9-zone Auction House ──
+  // ── Loading state ──
   if (loading && !homeData.attentionItem) {
     return (
       <View style={[styles.container, { backgroundColor: Colors.background }]}>
+        <AuctionMarketHeader
+          title="Auctions"
+          actions={headerActions}
+        />
         {renderLoadingState()}
       </View>
     );
   }
 
+  // ── Error state ──
   if (error && !homeData.attentionItem) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <AuctionMarketHeader
+          title="Auctions"
+          actions={headerActions}
+        />
         <EmptyState
           icon="cloud-offline-outline"
           title="Unable to load"
@@ -1589,209 +1104,14 @@ export default function AuctionHomeScreen() {
     );
   }
 
-  // Build zone list for the main ScrollView.
-  // Hierarchy: header → actionBanner → market spotlight (closing/live/upcoming)
-  // → category → watching → recentlyClosed → sellerStrip → createCta
-  type ZoneItem =
-    | { zone: 'header' }
-    | { zone: 'actionBanner' }
-    | { zone: 'closingSoon' }
-    | { zone: 'liveFloor' }
-    | { zone: 'upcomingDrops' }
-    | { zone: 'categoryWorlds' }
-    | { zone: 'watching' }
-    | { zone: 'recentlyClosed' }
-    | { zone: 'sellerStrip' }
-    | { zone: 'createCta' };
-
-  const zones: ZoneItem[] = [];
-  zones.push({ zone: 'header' });
-  if (hasPersonalActivity) zones.push({ zone: 'actionBanner' });
-  // Market spotlight order: Closing Soon → Live → Upcoming.
-  // Upcoming leads when no Live exists (per acceptance rule 4).
-  if (homeData.closingSoon.length > 0) zones.push({ zone: 'closingSoon' });
-  if (homeData.live.length > 0) zones.push({ zone: 'liveFloor' });
-  if (homeData.categoryWorlds.length > 0) zones.push({ zone: 'categoryWorlds' });
-  if (homeData.upcoming.length > 0) zones.push({ zone: 'upcomingDrops' });
-  if (dedupedWatchlist.length > 2) zones.push({ zone: 'watching' });
-  if (homeData.recentlyClosed.length > 0) zones.push({ zone: 'recentlyClosed' });
-  if (hasSellerAuctions && homeData.sellerSummary) zones.push({ zone: 'sellerStrip' });
-  // createCta only when there is real content above (so the list is not
-  // artificially non-empty and the screen-level empty state can render).
-  if (hasAnyContent) zones.push({ zone: 'createCta' });
-
-  // Plain function (not a hook) so it can live after conditional returns.
-  const renderZone = ({ item }: { item: ZoneItem }) => {
-    switch (item.zone) {
-      case 'header':
-        return (
-          <MarketplaceHeader
-            liveContext={liveContext}
-            onSearch={() => { haptics.tap(); setSearchOverlayVisible(true); }}
-            onFilter={() => { haptics.tap(); openFilterSheet(); }}
-            onActivity={() => { haptics.tap(); handleActivity(); }}
-            onBack={handleBack}
-            showBack={navigation.canGoBack()}
-          />
-        );
-
-      case 'actionBanner':
-        return (
-          <View style={styles.actionBannerZone}>
-            <PersonalActionBanner
-              activity={homeData.activity}
-              attentionItem={homeData.attentionItem}
-              attentionReason={homeData.attentionReason}
-              clockMs={secondClock}
-              onPress={handleActivity}
-              onDetail={() => homeData.attentionItem && navigateToDetail(homeData.attentionItem.id)}
-              formatDualPrice={formatDualPrice}
-            />
-          </View>
-        );
-
-      case 'closingSoon':
-        return (
-          <View style={styles.zoneWrap}>
-            <SectionHeader title="Closing Soon" subtitle="Final minutes" />
-            <FlashList
-              data={homeData.closingSoon}
-              keyExtractor={(a) => a.id}
-              renderItem={renderClosingSoonItem}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalRailContent}
-              ItemSeparatorComponent={() => <View style={{ width: Space.md }} />}
-            />
-          </View>
-        );
-
-      case 'liveFloor':
-        return (
-          <View style={styles.zoneWrap}>
-            <SectionHeader title="Live Now" subtitle={`${homeData.live.length} active`} />
-            <View style={styles.liveGridContainer}>
-              {homeData.live.map((item) => (
-                <View key={item.id} style={styles.liveGridItem}>
-                  <LiveFloorCard
-                    item={item}
-                    clockMs={secondClock}
-                    onPress={() => navigateToDetail(item.id)}
-                    formatDualPrice={formatDualPrice}
-                  />
-                </View>
-              ))}
-            </View>
-          </View>
-        );
-
-      case 'categoryWorlds':
-        return (
-          <View style={styles.zoneWrap}>
-            <SectionHeader title="Categories" subtitle="Browse by world" />
-            <CategoryMosaic
-              worlds={homeData.categoryWorlds.slice(0, 5)}
-              onPress={handleCategoryPress}
-            />
-          </View>
-        );
-
-      case 'upcomingDrops':
-        return (
-          <View style={styles.zoneWrap}>
-            <SectionHeader title="Upcoming Auctions" subtitle="Scheduled" />
-            <View style={styles.upcomingDropsContainer}>
-              {homeData.upcoming.map((item) => (
-                <UpcomingDropRow
-                  key={item.id}
-                  item={item}
-                  clockMs={minuteClock}
-                  onPress={() => navigateToDetail(item.id)}
-                  formatDualPrice={formatDualPrice}
-                />
-              ))}
-            </View>
-          </View>
-        );
-
-      case 'watching':
-        return (
-          <View style={styles.zoneWrap}>
-            <SectionHeader title="Watching" subtitle="Your tracked auctions" />
-            <FlashList
-              data={dedupedWatchlist}
-              keyExtractor={(a) => a.id}
-              renderItem={renderWatchingRailItem}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalRailContent}
-              ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
-            />
-          </View>
-        );
-
-      case 'recentlyClosed':
-        return (
-          <View style={styles.zoneWrap}>
-            <SectionHeader title="Recently Closed" subtitle="Results" />
-            <View style={styles.closedLedgerContainer}>
-              {homeData.recentlyClosed.slice(0, 3).map((item) => (
-                <ClosedLedgerRow
-                  key={item.id}
-                  item={item}
-                  clockMs={minuteClock}
-                  onPress={() => navigateToDetail(item.id)}
-                  formatDualPrice={formatDualPrice}
-                />
-              ))}
-            </View>
-          </View>
-        );
-
-      case 'sellerStrip':
-        return homeData.sellerSummary ? (
-          <View style={styles.zoneWrap}>
-            <SellerStrip
-              summary={homeData.sellerSummary}
-              onManage={() => { haptics.tap(); navigation.navigate('SellerAuctionCentre'); }}
-            />
-          </View>
-        ) : null;
-
-      case 'createCta':
-        return (
-          <View style={styles.createCtaZone}>
-            <Pressable
-              style={styles.createCtaBtn}
-              onPress={() => { haptics.tap(); navigation.navigate('CreateAuction'); }}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Create a new auction"
-            >
-              <Ionicons name="add-outline" size={18} color={Colors.textInverse} />
-              <Text style={styles.createCtaText}>Create Auction</Text>
-            </Pressable>
-          </View>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  // ── No-active-market screen-level empty state.
-  // Rendered independently so it is never masked by a permanent CTA zone.
-  if (!hasActiveMarket && !hasPersonalActivity && !hasAnyContent) {
+  // ── Empty market state ──
+  if (!hasActiveMarket && !hasAnyContent) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <MarketplaceHeader
-          liveContext="Nothing live or scheduled right now"
-          onSearch={() => { haptics.tap(); setSearchOverlayVisible(true); }}
-          onFilter={() => { haptics.tap(); openFilterSheet(); }}
-          onActivity={() => { haptics.tap(); handleActivity(); }}
-          onBack={handleBack}
-          showBack={navigation.canGoBack()}
+        <AuctionMarketHeader
+          title="Auctions"
+          actions={headerActions}
         />
         <ScrollView
           contentContainerStyle={styles.emptyMarketContainer}
@@ -1808,117 +1128,708 @@ export default function AuctionHomeScreen() {
         >
           <EmptyState
             icon="pricetag-outline"
-            title="Nothing live or scheduled right now"
-            subtitle="Check back soon or create your own auction"
+            title="Nothing live right now"
+            subtitle="New Auctions will appear here when they are scheduled."
             ctaLabel="Create Auction"
             onCtaPress={() => { haptics.tap(); navigation.navigate('CreateAuction'); }}
           />
           {homeData.recentlyClosed.length > 0 && (
-            <View style={styles.emptyMarketClosedWrap}>
-              <SectionHeader title="Recently Closed" subtitle="Results" />
-              <View style={styles.closedLedgerContainer}>
+            <View style={styles.emptyMarketResultsWrap}>
+              <Text style={styles.sectionTitle}>Results</Text>
+              <View style={styles.resultsContainer}>
                 {homeData.recentlyClosed.slice(0, 3).map((item) => (
-                  <ClosedLedgerRow
+                  <ResultRow
                     key={item.id}
                     item={item}
-                    clockMs={minuteClock}
                     onPress={() => navigateToDetail(item.id)}
-                    formatDualPrice={formatDualPrice}
+                    formatValueLockup={formatValueLockup}
                   />
                 ))}
               </View>
             </View>
           )}
         </ScrollView>
-        <BottomSheet
+        <FilterSheet
           visible={filterSheetVisible}
           onDismiss={() => setFilterSheetVisible(false)}
-        >
-          <View style={styles.filterSheetContent}>
-            <Text style={styles.filterSheetTitle}>Filter & Sort</Text>
-
-            <Text style={styles.filterSectionLabel}>Status</Text>
-            <View style={styles.filterOptionRow}>
-              {(['all', 'live', 'scheduled', 'ended'] as const).map((opt) => (
-                <Pressable
-                  key={opt}
-                  style={[styles.filterOption, draftStatus === opt && styles.filterOptionActive]}
-                  onPress={() => { haptics.tap(); setDraftStatus(opt); }}
-                >
-                  <Text style={[styles.filterOptionText, draftStatus === opt && styles.filterOptionTextActive]}>
-                    {opt === 'all' ? 'All' : opt === 'live' ? 'Live' : opt === 'scheduled' ? 'Scheduled' : 'Ended'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Text style={styles.filterSectionLabel}>Sort</Text>
-            <View style={styles.filterOptionRow}>
-              {(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh'] as const).map((opt) => (
-                <Pressable
-                  key={opt}
-                  style={[styles.filterOption, draftSort === opt && styles.filterOptionActive]}
-                  onPress={() => { haptics.tap(); setDraftSort(opt); }}
-                >
-                  <Text style={[styles.filterOptionText, draftSort === opt && styles.filterOptionTextActive]}>
-                    {opt === 'endingSoon' ? 'Ending soon' : opt === 'newest' ? 'Newest' : opt === 'mostBids' ? 'Most bids' : opt === 'priceLow' ? 'Price ↑' : 'Price ↓'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {categoryOptions.length > 0 && (
-              <>
-                <Text style={styles.filterSectionLabel}>Category</Text>
-                <View style={styles.filterOptionRow}>
-                  <Pressable
-                    style={[styles.filterOption, draftCategory === null && styles.filterOptionActive]}
-                    onPress={() => { haptics.tap(); setDraftCategory(null); }}
-                  >
-                    <Text style={[styles.filterOptionText, draftCategory === null && styles.filterOptionTextActive]}>All</Text>
-                  </Pressable>
-                  {categoryOptions.map((cat) => (
-                    <Pressable
-                      key={cat}
-                      style={[styles.filterOption, draftCategory === cat && styles.filterOptionActive]}
-                      onPress={() => { haptics.tap(); setDraftCategory(cat); }}
-                    >
-                      <Text style={[styles.filterOptionText, draftCategory === cat && styles.filterOptionTextActive]}>{cat}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            )}
-
-            <View style={styles.filterActionsRow}>
-              <Pressable
-                style={styles.filterResetBtn}
-                onPress={resetDraftFilters}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Reset filters"
-              >
-                <Text style={styles.filterResetText}>Reset</Text>
-              </Pressable>
-              <Pressable
-                style={styles.filterApplyBtn}
-                onPress={applyDraftFilters}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Show results"
-              >
-                <Text style={styles.filterApplyText}>Show results</Text>
-              </Pressable>
-            </View>
-          </View>
-        </BottomSheet>
+          categoryOptions={categoryOptions}
+          draftStatus={draftStatus}
+          setDraftStatus={setDraftStatus}
+          draftSort={draftSort}
+          setDraftSort={setDraftSort}
+          draftCategory={draftCategory}
+          setDraftCategory={setDraftCategory}
+          onReset={resetDraftFilters}
+          onApply={applyDraftFilters}
+        />
       </View>
     );
   }
 
+  // ── Default: restructured Auction Home ──
+  const fullWidth = width - Space.md * 2;
+  const gridCardWidth = (width - Space.md * 2 - Space.sm) / 2;
+  const categoryCardWidth = (width - Space.md * 2 - Space.sm * 2) / 3;
+  const isSmallWidth = width < 360;
+  const featuredWidth = isSmallWidth ? fullWidth : fullWidth * 0.62;
+  const supportingColumnWidth = isSmallWidth ? 0 : fullWidth - featuredWidth - Space.sm;
+
+  // ── Render selected market composition ──
+  const renderComposition = () => {
+    if (segmentItems.length === 0) {
+      return (
+        <View style={styles.compositionEmpty}>
+          <Text style={styles.compositionEmptyText}>No auctions in this view</Text>
+        </View>
+      );
+    }
+
+    switch (activeSegment) {
+      case 'live': {
+        // ── Horizontal discovery rail — swipe left for more live auctions ──
+        // Each card ~82% viewport with a deliberate peek of the next card.
+        // Built ON TOP of the existing asymmetric editorial composition below.
+        const railCardWidth = Math.round(width * 0.82);
+        const railImageHeight = Math.round(Math.min(420, width * 1.0));
+        const renderLiveRailItem = ({ item }: { item: AuctionHomeItem }) => {
+          const timing = resolveAuctionTiming(item, secondClock);
+          const urgency = resolveUrgency(timing);
+          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+          const timeLabel = urgency === 'finalMinutes'
+            ? formatFinalMinutesCountdown(timing.msToEnd)
+            : resolveTimeLabel(timing);
+          const personalAction = item.viewerState === 'outbid' ? 'Bid again'
+            : item.viewerState === 'won' ? 'View result'
+            : null;
+          return (
+            <AuctionRunwayCard
+              title={item.title}
+              imageUrl={item.imageUrl || null}
+              brand={item.brand ?? null}
+              izeText={valueLockup.izeText}
+              localText={valueLockup.localText}
+              valueState="current"
+              bidCount={item.bidCount}
+              countdownText={timeLabel}
+              urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+              state="live"
+              viewerState={item.viewerState}
+              onPress={() => navigateToDetail(item.id)}
+              cardWidth={railCardWidth}
+              imageHeight={railImageHeight}
+              metadataBelow
+              personalActionLabel={personalAction}
+              onPersonalAction={personalAction ? () => navigateToDetail(item.id) : undefined}
+            />
+          );
+        };
+        const liveRail = segmentItems.length > 0 ? (
+          <View style={styles.railWrap}>
+            <View style={styles.railHeader}>
+              <Text style={styles.railTitle}>Live now</Text>
+              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToInterval={railCardWidth + Space.sm}
+              snapToAlignment="start"
+              contentContainerStyle={styles.railContent}
+            >
+              {segmentItems.map((item, idx) => (
+                <React.Fragment key={item.id}>
+                  {idx > 0 && <View style={{ width: Space.sm }} />}
+                  {renderLiveRailItem({ item })}
+                </React.Fragment>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null;
+
+        // True asymmetric edit: featured left + 2 stacked supporting right
+        if (segmentItems.length >= 3 && !isSmallWidth) {
+          const [featured, ...rest] = segmentItems;
+          const supporting = rest.slice(0, 2);
+          const continuation = rest.slice(2);
+          const featuredTiming = resolveAuctionTiming(featured, secondClock);
+          const featuredUrgency = resolveUrgency(featuredTiming);
+          const featuredValue = formatValueLockup(featured.currentBidGbp || featured.startingBidGbp);
+          const featuredTime = featuredUrgency === 'finalMinutes'
+            ? formatFinalMinutesCountdown(featuredTiming.msToEnd)
+            : resolveTimeLabel(featuredTiming);
+          const featuredPersonalAction = featured.viewerState === 'outbid' ? 'Bid again'
+            : featured.viewerState === 'won' ? 'View result'
+            : null;
+          return (
+            <View>
+              {liveRail}
+            <View style={styles.compositionWrap}>
+              <View style={styles.asymmetricRow}>
+                <AuctionRunwayCard
+                  title={featured.title}
+                  imageUrl={featured.imageUrl || null}
+                  brand={featured.brand ?? null}
+                  izeText={featuredValue.izeText}
+                  localText={featuredValue.localText}
+                  valueState="current"
+                  bidCount={featured.bidCount}
+                  countdownText={featuredTime}
+                  urgent={featuredUrgency === 'finalMinutes' || featuredUrgency === 'endingSoon'}
+                  state="live"
+                  viewerState={featured.viewerState}
+                  onPress={() => navigateToDetail(featured.id)}
+                  cardWidth={featuredWidth}
+                  imageHeight={300}
+                  metadataBelow
+                  personalActionLabel={featuredPersonalAction}
+                  onPersonalAction={featuredPersonalAction ? () => navigateToDetail(featured.id) : undefined}
+                />
+                <View style={[styles.supportingColumn, { width: supportingColumnWidth }]}>
+                  {supporting.map((item) => {
+                    const timing = resolveAuctionTiming(item, secondClock);
+                    const urgency = resolveUrgency(timing);
+                    const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+                    const timeLabel = urgency === 'finalMinutes'
+                      ? formatFinalMinutesCountdown(timing.msToEnd)
+                      : resolveTimeLabel(timing);
+                    return (
+                      <AuctionSupportingTile
+                        key={item.id}
+                        title={item.title}
+                        imageUrl={item.imageUrl || null}
+                        izeText={valueLockup.izeText}
+                        localText={valueLockup.localText}
+                        valueState="current"
+                        timeText={timeLabel}
+                        state="live"
+                        viewerState={item.viewerState}
+                        onPress={() => navigateToDetail(item.id)}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
+              {continuation.length > 0 && (
+                <View style={styles.continuationGrid}>
+                  {continuation.map((item) => {
+                    const timing = resolveAuctionTiming(item, secondClock);
+                    const urgency = resolveUrgency(timing);
+                    const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+                    const timeLabel = urgency === 'finalMinutes'
+                      ? formatFinalMinutesCountdown(timing.msToEnd)
+                      : resolveTimeLabel(timing);
+                    return (
+                      <AuctionGridCard
+                        key={item.id}
+                        title={item.title}
+                        imageUrl={item.imageUrl || null}
+                        brand={item.brand ?? null}
+                        izeText={valueLockup.izeText}
+                        localText={valueLockup.localText}
+                        valueState="current"
+                        priceLabel={resolvePriceLabel(item, timing)}
+                        bidCount={item.bidCount}
+                        countdownText={timeLabel}
+                        urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                        state="live"
+                        viewerState={item.viewerState}
+                        onPress={() => navigateToDetail(item.id)}
+                        cardWidth={gridCardWidth}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+            </View>
+          );
+        }
+        // Small width or <3 items: featured wide + supporting row
+        if (segmentItems.length >= 3 && isSmallWidth) {
+          const [featured, ...rest] = segmentItems;
+          const supporting = rest.slice(0, 2);
+          const continuation = rest.slice(2);
+          const featuredTiming = resolveAuctionTiming(featured, secondClock);
+          const featuredUrgency = resolveUrgency(featuredTiming);
+          const featuredValue = formatValueLockup(featured.currentBidGbp || featured.startingBidGbp);
+          const featuredTime = featuredUrgency === 'finalMinutes'
+            ? formatFinalMinutesCountdown(featuredTiming.msToEnd)
+            : resolveTimeLabel(featuredTiming);
+          const featuredPersonalAction = featured.viewerState === 'outbid' ? 'Bid again'
+            : featured.viewerState === 'won' ? 'View result'
+            : null;
+          return (
+            <View>
+              {liveRail}
+            <View style={styles.compositionWrap}>
+              <AuctionRunwayCard
+                title={featured.title}
+                imageUrl={featured.imageUrl || null}
+                brand={featured.brand ?? null}
+                izeText={featuredValue.izeText}
+                localText={featuredValue.localText}
+                valueState="current"
+                bidCount={featured.bidCount}
+                countdownText={featuredTime}
+                urgent={featuredUrgency === 'finalMinutes' || featuredUrgency === 'endingSoon'}
+                state="live"
+                viewerState={featured.viewerState}
+                onPress={() => navigateToDetail(featured.id)}
+                cardWidth={fullWidth}
+                imageHeight={260}
+                metadataBelow
+                personalActionLabel={featuredPersonalAction}
+                onPersonalAction={featuredPersonalAction ? () => navigateToDetail(featured.id) : undefined}
+              />
+              <View style={styles.supportingRow}>
+                {supporting.map((item) => {
+                  const timing = resolveAuctionTiming(item, secondClock);
+                  const urgency = resolveUrgency(timing);
+                  const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+                  const timeLabel = urgency === 'finalMinutes'
+                    ? formatFinalMinutesCountdown(timing.msToEnd)
+                    : resolveTimeLabel(timing);
+                  return (
+                    <AuctionGridCard
+                      key={item.id}
+                      title={item.title}
+                      imageUrl={item.imageUrl || null}
+                      brand={item.brand ?? null}
+                      izeText={valueLockup.izeText}
+                      localText={valueLockup.localText}
+                      valueState="current"
+                      priceLabel={resolvePriceLabel(item, timing)}
+                      bidCount={item.bidCount}
+                      countdownText={timeLabel}
+                      urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                      state="live"
+                      viewerState={item.viewerState}
+                      onPress={() => navigateToDetail(item.id)}
+                      cardWidth={gridCardWidth}
+                    />
+                  );
+                })}
+              </View>
+              {continuation.length > 0 && (
+                <View style={styles.continuationGrid}>
+                  {continuation.map((item) => {
+                    const timing = resolveAuctionTiming(item, secondClock);
+                    const urgency = resolveUrgency(timing);
+                    const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+                    const timeLabel = urgency === 'finalMinutes'
+                      ? formatFinalMinutesCountdown(timing.msToEnd)
+                      : resolveTimeLabel(timing);
+                    return (
+                      <AuctionGridCard
+                        key={item.id}
+                        title={item.title}
+                        imageUrl={item.imageUrl || null}
+                        brand={item.brand ?? null}
+                        izeText={valueLockup.izeText}
+                        localText={valueLockup.localText}
+                        valueState="current"
+                        priceLabel={resolvePriceLabel(item, timing)}
+                        bidCount={item.bidCount}
+                        countdownText={timeLabel}
+                        urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                        state="live"
+                        viewerState={item.viewerState}
+                        onPress={() => navigateToDetail(item.id)}
+                        cardWidth={gridCardWidth}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+            </View>
+          );
+        }
+        // 2 items: balanced editorial columns
+        if (segmentItems.length === 2) {
+          return (
+            <View>
+              {liveRail}
+            <View style={styles.compositionWrap}>
+              <View style={styles.continuationGrid}>
+                {segmentItems.map((item) => {
+                  const timing = resolveAuctionTiming(item, secondClock);
+                  const urgency = resolveUrgency(timing);
+                  const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+                  const timeLabel = urgency === 'finalMinutes'
+                    ? formatFinalMinutesCountdown(timing.msToEnd)
+                    : resolveTimeLabel(timing);
+                  return (
+                    <AuctionGridCard
+                      key={item.id}
+                      title={item.title}
+                      imageUrl={item.imageUrl || null}
+                      brand={item.brand ?? null}
+                      izeText={valueLockup.izeText}
+                      localText={valueLockup.localText}
+                      valueState="current"
+                      priceLabel={resolvePriceLabel(item, timing)}
+                      bidCount={item.bidCount}
+                      countdownText={timeLabel}
+                      urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                      state="live"
+                      viewerState={item.viewerState}
+                      onPress={() => navigateToDetail(item.id)}
+                      cardWidth={gridCardWidth}
+                    />
+                  );
+                })}
+              </View>
+            </View>
+            </View>
+          );
+        }
+        // 1 item: feature + category continuation
+        const featured = segmentItems[0];
+        const featuredTiming = resolveAuctionTiming(featured, secondClock);
+        const featuredUrgency = resolveUrgency(featuredTiming);
+        const featuredValue = formatValueLockup(featured.currentBidGbp || featured.startingBidGbp);
+        const featuredTime = featuredUrgency === 'finalMinutes'
+          ? formatFinalMinutesCountdown(featuredTiming.msToEnd)
+          : resolveTimeLabel(featuredTiming);
+        const featuredPersonalAction = featured.viewerState === 'outbid' ? 'Bid again'
+          : featured.viewerState === 'won' ? 'View result'
+          : null;
+        return (
+          <View>
+            {liveRail}
+          <View style={styles.compositionWrap}>
+            <AuctionRunwayCard
+              title={featured.title}
+              imageUrl={featured.imageUrl || null}
+              brand={featured.brand ?? null}
+              izeText={featuredValue.izeText}
+              localText={featuredValue.localText}
+              valueState="current"
+              bidCount={featured.bidCount}
+              countdownText={featuredTime}
+              urgent={featuredUrgency === 'finalMinutes' || featuredUrgency === 'endingSoon'}
+              state="live"
+              viewerState={featured.viewerState}
+              onPress={() => navigateToDetail(featured.id)}
+              cardWidth={fullWidth}
+              imageHeight={280}
+              metadataBelow
+              personalActionLabel={featuredPersonalAction}
+              onPersonalAction={featuredPersonalAction ? () => navigateToDetail(featured.id) : undefined}
+            />
+          </View>
+          </View>
+        );
+      }
+
+      case 'endingSoon': {
+        // ── Horizontal discovery rail — swipe left for more ending-soon auctions ──
+        const endingRailCardWidth = Math.round(width * 0.82);
+        const endingRailImageHeight = Math.round(Math.min(380, width * 0.9));
+        const renderEndingRailItem = ({ item }: { item: AuctionHomeItem }) => {
+          const timing = resolveAuctionTiming(item, secondClock);
+          const urgency = resolveUrgency(timing);
+          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+          const timeLabel = urgency === 'finalMinutes'
+            ? formatFinalMinutesCountdown(timing.msToEnd)
+            : resolveTimeLabel(timing);
+          const personalAction = item.viewerState === 'outbid' ? 'Bid again'
+            : item.viewerState === 'won' ? 'View result'
+            : null;
+          return (
+            <AuctionRunwayCard
+              title={item.title}
+              imageUrl={item.imageUrl || null}
+              brand={item.brand ?? null}
+              izeText={valueLockup.izeText}
+              localText={valueLockup.localText}
+              valueState="current"
+              bidCount={item.bidCount}
+              countdownText={timeLabel}
+              urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+              state="live"
+              viewerState={item.viewerState}
+              onPress={() => navigateToDetail(item.id)}
+              cardWidth={endingRailCardWidth}
+              imageHeight={endingRailImageHeight}
+              metadataBelow
+              personalActionLabel={personalAction}
+              onPersonalAction={personalAction ? () => navigateToDetail(item.id) : undefined}
+            />
+          );
+        };
+        const endingRail = segmentItems.length > 0 ? (
+          <View style={styles.railWrap}>
+            <View style={styles.railHeader}>
+              <Text style={styles.railTitle}>Ending soon</Text>
+              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToInterval={endingRailCardWidth + Space.sm}
+              snapToAlignment="start"
+              contentContainerStyle={styles.railContent}
+            >
+              {segmentItems.map((item, idx) => (
+                <React.Fragment key={item.id}>
+                  {idx > 0 && <View style={{ width: Space.sm }} />}
+                  {renderEndingRailItem({ item })}
+                </React.Fragment>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null;
+        // Dense editorial rows — countdown is the strongest signal
+        return (
+          <View>
+            {endingRail}
+          <View style={styles.compositionWrap}>
+            <View style={styles.endingSoonContainer}>
+              {segmentItems.map((item) => {
+                const timing = resolveAuctionTiming(item, secondClock);
+                const urgency = resolveUrgency(timing);
+                const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+                const timeLabel = urgency === 'finalMinutes'
+                  ? formatFinalMinutesCountdown(timing.msToEnd)
+                  : resolveTimeLabel(timing);
+                const isUrgent = urgency === 'finalMinutes';
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={styles.endingSoonRow}
+                    onPress={() => navigateToDetail(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.title}, ${valueLockup.izeText}, ${timeLabel}, ${item.bidCount} bids`}
+                    accessibilityHint="Opens auction details"
+                  >
+                    <View style={styles.endingSoonImageWrap}>
+                      {item.imageUrl ? (
+                        <CachedImage
+                          uri={item.imageUrl}
+                          style={styles.endingSoonImage}
+                          containerStyle={StyleSheet.absoluteFill}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
+                      )}
+                    </View>
+                    <View style={styles.endingSoonBody}>
+                      <Text style={styles.endingSoonTitle} numberOfLines={1}>{item.title}</Text>
+                      <AuctionValueLockup
+                        izeText={valueLockup.izeText}
+                        localText={valueLockup.localText}
+                        state="current"
+                        scale="compact"
+                      />
+                      <Text style={styles.endingSoonBids}>{item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}</Text>
+                    </View>
+                    <View style={styles.endingSoonTimeCol}>
+                      <Text style={[styles.endingSoonTime, isUrgent && { color: Colors.danger }]}>
+                        {timeLabel}
+                      </Text>
+                      {isUrgent && <View style={styles.urgencyBar} />}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          </View>
+        );
+      }
+
+      case 'upcoming': {
+        // ── Horizontal discovery rail — swipe left for more upcoming auctions ──
+        const upcomingRailCardWidth = Math.round(width * 0.82);
+        const upcomingRailImageHeight = Math.round(Math.min(380, width * 0.9));
+        const renderUpcomingRailItem = ({ item }: { item: AuctionHomeItem }) => {
+          const timing = resolveAuctionTiming(item, secondClock);
+          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+          const timeLabel = resolveTimeLabel(timing);
+          return (
+            <AuctionRunwayCard
+              title={item.title}
+              imageUrl={item.imageUrl || null}
+              brand={item.brand ?? null}
+              izeText={valueLockup.izeText}
+              localText={valueLockup.localText}
+              valueState="starting"
+              bidCount={item.bidCount}
+              countdownText={timeLabel}
+              urgent={false}
+              state="upcoming"
+              viewerState={item.viewerState}
+              onPress={() => navigateToDetail(item.id)}
+              cardWidth={upcomingRailCardWidth}
+              imageHeight={upcomingRailImageHeight}
+              metadataBelow
+            />
+          );
+        };
+        const upcomingRail = segmentItems.length > 0 ? (
+          <View style={styles.railWrap}>
+            <View style={styles.railHeader}>
+              <Text style={styles.railTitle}>Coming up</Text>
+              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToInterval={upcomingRailCardWidth + Space.sm}
+              snapToAlignment="start"
+              contentContainerStyle={styles.railContent}
+            >
+              {segmentItems.map((item, idx) => (
+                <React.Fragment key={item.id}>
+                  {idx > 0 && <View style={{ width: Space.sm }} />}
+                  {renderUpcomingRailItem({ item })}
+                </React.Fragment>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null;
+        // Scheduled programme rows
+        return (
+          <View>
+            {upcomingRail}
+          <View style={styles.compositionWrap}>
+            <View style={styles.upcomingContainer}>
+              {segmentItems.map((item) => (
+                <UpcomingRow
+                  key={item.id}
+                  item={item}
+                  onPress={() => navigateToDetail(item.id)}
+                  formatValueLockup={formatValueLockup}
+                />
+              ))}
+            </View>
+          </View>
+          </View>
+        );
+      }
+
+      case 'watching': {
+        // ── Horizontal discovery rail — swipe left for more watched auctions ──
+        const watchingRailCardWidth = Math.round(width * 0.82);
+        const watchingRailImageHeight = Math.round(Math.min(400, width * 0.95));
+        const renderWatchingRailItem = ({ item }: { item: AuctionHomeItem }) => {
+          const timing = resolveAuctionTiming(item, secondClock);
+          const urgency = resolveUrgency(timing);
+          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+          const timeLabel = urgency === 'finalMinutes'
+            ? formatFinalMinutesCountdown(timing.msToEnd)
+            : resolveTimeLabel(timing);
+          const effectiveState = timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended';
+          const valueState = effectiveState === 'ended' ? 'final' : effectiveState === 'upcoming' ? 'starting' : 'current';
+          const personalAction = item.viewerState === 'outbid' ? 'Bid again'
+            : item.viewerState === 'won' ? 'View result'
+            : null;
+          return (
+            <AuctionRunwayCard
+              title={item.title}
+              imageUrl={item.imageUrl || null}
+              brand={item.brand ?? null}
+              izeText={valueLockup.izeText}
+              localText={valueLockup.localText}
+              valueState={valueState}
+              bidCount={item.bidCount}
+              countdownText={timeLabel}
+              urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+              state={effectiveState}
+              viewerState={item.viewerState}
+              onPress={() => navigateToDetail(item.id)}
+              cardWidth={watchingRailCardWidth}
+              imageHeight={watchingRailImageHeight}
+              metadataBelow
+              personalActionLabel={personalAction}
+              onPersonalAction={personalAction ? () => navigateToDetail(item.id) : undefined}
+            />
+          );
+        };
+        const watchingRail = segmentItems.length > 0 ? (
+          <View style={styles.railWrap}>
+            <View style={styles.railHeader}>
+              <Text style={styles.railTitle}>Watching</Text>
+              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToInterval={watchingRailCardWidth + Space.sm}
+              snapToAlignment="start"
+              contentContainerStyle={styles.railContent}
+            >
+              {segmentItems.map((item, idx) => (
+                <React.Fragment key={item.id}>
+                  {idx > 0 && <View style={{ width: Space.sm }} />}
+                  {renderWatchingRailItem({ item })}
+                </React.Fragment>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null;
+        // Compact continuity grid
+        return (
+          <View>
+            {watchingRail}
+          <View style={styles.compositionWrap}>
+            <View style={styles.continuationGrid}>
+              {segmentItems.map((item) => {
+                const timing = resolveAuctionTiming(item, secondClock);
+                const urgency = resolveUrgency(timing);
+                const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+                const timeLabel = urgency === 'finalMinutes'
+                  ? formatFinalMinutesCountdown(timing.msToEnd)
+                  : resolveTimeLabel(timing);
+                const effectiveState = timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended';
+                const valueState = effectiveState === 'ended' ? 'final' : effectiveState === 'upcoming' ? 'starting' : 'current';
+                return (
+                  <AuctionGridCard
+                    key={item.id}
+                    title={item.title}
+                    imageUrl={item.imageUrl || null}
+                    brand={item.brand ?? null}
+                    izeText={valueLockup.izeText}
+                    localText={valueLockup.localText}
+                    valueState={valueState}
+                    priceLabel={resolvePriceLabel(item, timing)}
+                    bidCount={item.bidCount}
+                    countdownText={timeLabel}
+                    urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                    state={effectiveState}
+                    viewerState={item.viewerState}
+                    onPress={() => navigateToDetail(item.id)}
+                    cardWidth={gridCardWidth}
+                  />
+                );
+              })}
+            </View>
+          </View>
+          </View>
+        );
+      }
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
+      <AuctionMarketHeader
+        title="Auctions"
+        context={headerContext}
+        compactContext={compactHeaderContext}
+        actions={headerActions}
+      />
       <ScrollView
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
@@ -1932,107 +1843,228 @@ export default function AuctionHomeScreen() {
           />
         }
       >
-        {zones.length === 0 ? (
-          <EmptyState
-            icon="pricetag-outline"
-            title="Nothing live or scheduled right now"
-            subtitle="Check back soon or create your own"
-            ctaLabel="Create Auction"
-            onCtaPress={() => { haptics.tap(); navigation.navigate('CreateAuction'); }}
-          />
-        ) : (
-          zones.map((item, index) => (
-            <View key={`${item.zone}-${index}`}>
-              {renderZone({ item })}
+        {/* Personal attention strip */}
+        {attentionProps && (
+          <View style={styles.attentionZone}>
+            <AuctionAttentionStrip {...attentionProps} />
+          </View>
+        )}
+
+        {/* Segment rail */}
+        <AuctionSegmentRail
+          segments={segments}
+          activeKey={activeSegment}
+          onSelect={(key) => setActiveSegment(key as MarketSegment)}
+        />
+
+        {/* Selected market composition */}
+        <SegmentContentTransition segmentKey={activeSegment}>
+          {renderComposition()}
+        </SegmentContentTransition>
+
+        {/* Category discovery */}
+        {homeData.categoryWorlds.length > 0 && (
+          <View style={styles.zoneWrap}>
+            <Text style={styles.sectionTitle}>Categories</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryRailContent}
+            >
+              {homeData.categoryWorlds.map((world) => (
+                <CategoryRailTile
+                  key={world.categoryKey}
+                  world={world}
+                  cardWidth={categoryCardWidth}
+                  onPress={() => handleCategoryPress(world.categoryKey)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Results — compact, near lower page */}
+        {homeData.recentlyClosed.length > 0 && (
+          <View style={styles.zoneWrap}>
+            <Text style={styles.sectionTitle}>Results</Text>
+            <View style={styles.resultsContainer}>
+              {homeData.recentlyClosed.map((item) => (
+                <ResultRow
+                  key={item.id}
+                  item={item}
+                  onPress={() => navigateToDetail(item.id)}
+                  formatValueLockup={formatValueLockup}
+                />
+              ))}
             </View>
-          ))
+          </View>
+        )}
+
+        {/* ── More to explore — continuous feed ── */}
+        {exploreFeedItems.length > 0 && (
+          <View style={styles.zoneWrap}>
+            <Text style={styles.sectionTitle}>More to explore</Text>
+            <View style={styles.continuationGrid}>
+              {exploreFeedItems.map((item) => {
+                const timing = resolveAuctionTiming(item, secondClock);
+                const urgency = resolveUrgency(timing);
+                const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+                const timeLabel = urgency === 'finalMinutes'
+                  ? formatFinalMinutesCountdown(timing.msToEnd)
+                  : resolveTimeLabel(timing);
+                const effectiveState = timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended';
+                const valueState = effectiveState === 'ended' ? 'final' : effectiveState === 'upcoming' ? 'starting' : 'current';
+                return (
+                  <AuctionGridCard
+                    key={item.id}
+                    title={item.title}
+                    imageUrl={item.imageUrl || null}
+                    brand={item.brand ?? null}
+                    izeText={valueLockup.izeText}
+                    localText={valueLockup.localText}
+                    valueState={valueState}
+                    priceLabel={resolvePriceLabel(item, timing)}
+                    bidCount={item.bidCount}
+                    countdownText={timeLabel}
+                    urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                    state={effectiveState}
+                    viewerState={item.viewerState}
+                    onPress={() => navigateToDetail(item.id)}
+                    cardWidth={gridCardWidth}
+                  />
+                );
+              })}
+            </View>
+          </View>
         )}
       </ScrollView>
-      <BottomSheet
+      <FilterSheet
         visible={filterSheetVisible}
         onDismiss={() => setFilterSheetVisible(false)}
-      >
-        <View style={styles.filterSheetContent}>
-          <Text style={styles.filterSheetTitle}>Filter & Sort</Text>
-
-          <Text style={styles.filterSectionLabel}>Status</Text>
-          <View style={styles.filterOptionRow}>
-            {(['all', 'live', 'scheduled', 'ended'] as const).map((opt) => (
-              <Pressable
-                key={opt}
-                style={[styles.filterOption, draftStatus === opt && styles.filterOptionActive]}
-                onPress={() => { haptics.tap(); setDraftStatus(opt); }}
-              >
-                <Text style={[styles.filterOptionText, draftStatus === opt && styles.filterOptionTextActive]}>
-                  {opt === 'all' ? 'All' : opt === 'live' ? 'Live' : opt === 'scheduled' ? 'Scheduled' : 'Ended'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={styles.filterSectionLabel}>Sort</Text>
-          <View style={styles.filterOptionRow}>
-            {(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh'] as const).map((opt) => (
-              <Pressable
-                key={opt}
-                style={[styles.filterOption, draftSort === opt && styles.filterOptionActive]}
-                onPress={() => { haptics.tap(); setDraftSort(opt); }}
-              >
-                <Text style={[styles.filterOptionText, draftSort === opt && styles.filterOptionTextActive]}>
-                  {opt === 'endingSoon' ? 'Ending soon' : opt === 'newest' ? 'Newest' : opt === 'mostBids' ? 'Most bids' : opt === 'priceLow' ? 'Price ↑' : 'Price ↓'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {categoryOptions.length > 0 && (
-            <>
-              <Text style={styles.filterSectionLabel}>Category</Text>
-              <View style={styles.filterOptionRow}>
-                <Pressable
-                  style={[styles.filterOption, draftCategory === null && styles.filterOptionActive]}
-                  onPress={() => { haptics.tap(); setDraftCategory(null); }}
-                >
-                  <Text style={[styles.filterOptionText, draftCategory === null && styles.filterOptionTextActive]}>All</Text>
-                </Pressable>
-                {categoryOptions.map((cat) => (
-                  <Pressable
-                    key={cat}
-                    style={[styles.filterOption, draftCategory === cat && styles.filterOptionActive]}
-                    onPress={() => { haptics.tap(); setDraftCategory(cat); }}
-                  >
-                    <Text style={[styles.filterOptionText, draftCategory === cat && styles.filterOptionTextActive]}>{cat}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </>
-          )}
-
-          <View style={styles.filterActionsRow}>
-            <Pressable
-              style={styles.filterResetBtn}
-              onPress={resetDraftFilters}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Reset filters"
-            >
-              <Text style={styles.filterResetText}>Reset</Text>
-            </Pressable>
-            <Pressable
-              style={styles.filterApplyBtn}
-              onPress={applyDraftFilters}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Show results"
-            >
-              <Text style={styles.filterApplyText}>Show results</Text>
-            </Pressable>
-          </View>
-        </View>
-      </BottomSheet>
+        categoryOptions={categoryOptions}
+        draftStatus={draftStatus}
+        setDraftStatus={setDraftStatus}
+        draftSort={draftSort}
+        setDraftSort={setDraftSort}
+        draftCategory={draftCategory}
+        setDraftCategory={setDraftCategory}
+        onReset={resetDraftFilters}
+        onApply={applyDraftFilters}
+      />
     </View>
   );
 }
+
+// ════════════════════════════════════════════════════════════════
+// FILTER SHEET — extracted for reuse across render paths
+// ════════════════════════════════════════════════════════════════
+const FilterSheet = memo(function FilterSheet({
+  visible,
+  onDismiss,
+  categoryOptions,
+  draftStatus,
+  setDraftStatus,
+  draftSort,
+  setDraftSort,
+  draftCategory,
+  setDraftCategory,
+  onReset,
+  onApply,
+}: {
+  visible: boolean;
+  onDismiss: () => void;
+  categoryOptions: string[];
+  draftStatus: 'all' | 'live' | 'scheduled' | 'ended';
+  setDraftStatus: (s: 'all' | 'live' | 'scheduled' | 'ended') => void;
+  draftSort: 'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh';
+  setDraftSort: (s: 'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh') => void;
+  draftCategory: string | null;
+  setDraftCategory: (c: string | null) => void;
+  onReset: () => void;
+  onApply: () => void;
+}) {
+  return (
+    <BottomSheet visible={visible} onDismiss={onDismiss}>
+      <View style={styles.filterSheetContent}>
+        <Text style={styles.filterSheetTitle}>Filter & Sort</Text>
+
+        <Text style={styles.filterSectionLabel}>Status</Text>
+        <View style={styles.filterOptionRow}>
+          {(['all', 'live', 'scheduled', 'ended'] as const).map((opt) => (
+            <Pressable
+              key={opt}
+              style={[styles.filterOption, draftStatus === opt && styles.filterOptionActive]}
+              onPress={() => { haptics.tap(); setDraftStatus(opt); }}
+            >
+              <Text style={[styles.filterOptionText, draftStatus === opt && styles.filterOptionTextActive]}>
+                {opt === 'all' ? 'All' : opt === 'live' ? 'Live' : opt === 'scheduled' ? 'Scheduled' : 'Ended'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.filterSectionLabel}>Sort</Text>
+        <View style={styles.filterOptionRow}>
+          {(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh'] as const).map((opt) => (
+            <Pressable
+              key={opt}
+              style={[styles.filterOption, draftSort === opt && styles.filterOptionActive]}
+              onPress={() => { haptics.tap(); setDraftSort(opt); }}
+            >
+              <Text style={[styles.filterOptionText, draftSort === opt && styles.filterOptionTextActive]}>
+                {opt === 'endingSoon' ? 'Ending soon' : opt === 'newest' ? 'Newest' : opt === 'mostBids' ? 'Most bids' : opt === 'priceLow' ? 'Price ↑' : 'Price ↓'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {categoryOptions.length > 0 && (
+          <>
+            <Text style={styles.filterSectionLabel}>Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterCategoryScroll}>
+              <Pressable
+                style={[styles.filterOption, draftCategory === null && styles.filterOptionActive]}
+                onPress={() => { haptics.tap(); setDraftCategory(null); }}
+              >
+                <Text style={[styles.filterOptionText, draftCategory === null && styles.filterOptionTextActive]}>All</Text>
+              </Pressable>
+              {categoryOptions.map((cat) => (
+                <Pressable
+                  key={cat}
+                  style={[styles.filterOption, draftCategory === cat && styles.filterOptionActive]}
+                  onPress={() => { haptics.tap(); setDraftCategory(cat); }}
+                >
+                  <Text style={[styles.filterOptionText, draftCategory === cat && styles.filterOptionTextActive]}>{cat}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        <View style={styles.filterActionsRow}>
+          <Pressable
+            style={styles.filterResetBtn}
+            onPress={onReset}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Reset filters"
+          >
+            <Text style={styles.filterResetText}>Reset</Text>
+          </Pressable>
+          <Pressable
+            style={styles.filterApplyBtn}
+            onPress={onApply}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Show results"
+          >
+            <Text style={styles.filterApplyText}>Show results</Text>
+          </Pressable>
+        </View>
+      </View>
+    </BottomSheet>
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -2040,477 +2072,235 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   contentContainer: {
-    paddingBottom: Space.xxl,
+    paddingBottom: Space.xxl + 24,
   },
 
   // ── Zone wrapper ──
   zoneWrap: {
     paddingHorizontal: Space.md,
-    marginTop: Space.lg,
+    marginTop: Space.lg + 4,
   },
 
-  // ── Loading ──
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xxl,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
-
-  // ── Section header ──
-  sectionHeader: {
-    marginBottom: Space.sm,
-  },
+  // ── Section title (no subtitle) ──
   sectionTitle: {
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-  },
-
-  // ════════════════════════════════════════════════════════════════
-  // ZONE A: MARKETPLACE HEADER — compact native lobby header (56-88pt)
-  // ════════════════════════════════════════════════════════════════
-  marketHeader: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    backgroundColor: Colors.background,
-  },
-  marketHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    minHeight: 44,
-  },
-  marketHeaderTitleWrap: {
-    flex: 1,
-  },
-  marketHeaderTitle: {
-    fontSize: 22,
+    fontSize: 20,
     lineHeight: 26,
     fontWeight: '700',
     letterSpacing: -0.5,
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
-  },
-  marketHeaderContext: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    marginTop: 1,
-  },
-  marketHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  marketHeaderIconBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
+    marginBottom: Space.sm + 2,
   },
 
-  // ════════════════════════════════════════════════════════════════
-  // ZONE B: PERSONAL ACTION BANNER — compact action layer (64-92pt)
-  // ════════════════════════════════════════════════════════════════
-  actionBannerZone: {
+  // ── Attention zone ──
+  attentionZone: {
     paddingHorizontal: Space.md,
     marginTop: Space.sm,
-  },
-  actionBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: 12,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minHeight: 64,
-    maxHeight: 92,
-  },
-  actionBannerUrgent: {
-    borderColor: Colors.danger,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  actionBannerCalm: {
-    borderColor: Colors.success,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  actionBannerWon: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  actionBannerThumbContainer: {
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
-  actionBannerThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-  },
-  actionBannerBody: {
-    flex: 1,
-  },
-  actionBannerTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    fontFamily: Typography.family.semibold,
-    marginBottom: 2,
-  },
-  actionBannerSummary: {
-    fontSize: 14,
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.medium,
-  },
-  actionBannerMeta: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
-  actionBannerCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  actionBannerCtaText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.semibold,
+    marginBottom: Space.xs,
   },
 
-  // ════════════════════════════════════════════════════════════════
-  // ZONE C: CLOSING SOON PROGRAMME
-  // ════════════════════════════════════════════════════════════════
-  closingSoonCard: {
-    width: CLOSING_SOON_CARD_WIDTH,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    backgroundColor: Colors.surface,
+  // ── Horizontal discovery rail ──
+  railWrap: {
+    marginTop: Space.md,
+    marginBottom: Space.xs,
   },
-  closingSoonImageWrap: {
-    width: '100%',
-    height: 280,
-    position: 'relative',
-  },
-  closingSoonImage: {
-    width: '100%',
-    height: 280,
-  },
-  closingSoonGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  closingSoonSequenceWrap: {
-    position: 'absolute',
-    top: Space.sm,
-    left: Space.sm,
-    zIndex: 5,
-  },
-  closingSoonSequence: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -1,
-    color: 'rgba(255,255,255,0.5)',
-    fontFamily: Typography.family.extrabold,
-  },
-  closingSoonCountdownWrap: {
-    position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    zIndex: 5,
-  },
-  closingSoonCountdown: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-  closingSoonBody: {
-    padding: Space.md,
-  },
-  closingSoonEyebrow: {
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 1,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  closingSoonTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    marginBottom: 6,
-  },
-  closingSoonPriceRow: {
+  railHeader: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Space.xs,
-    marginBottom: 2,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
   },
-  closingSoonPrice: {
-    fontSize: 18,
+  railTitle: {
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: -0.3,
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
+    letterSpacing: -0.4,
   },
-  closingSoonPriceSecondary: {
+  railCount: {
     fontSize: 12,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
   },
-  closingSoonBids: {
-    fontSize: 12,
+  railContent: {
+    paddingHorizontal: Space.md,
+    paddingRight: Space.xl + Space.md,
+  },
+
+  // ── Composition ──
+  compositionWrap: {
+    paddingHorizontal: Space.md,
+    marginTop: Space.lg,
+  },
+  compositionEmpty: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xl,
+    alignItems: 'center',
+  },
+  compositionEmptyText: {
+    fontSize: 14,
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
   },
-
-  // ════════════════════════════════════════════════════════════════
-  // ZONE D: LIVE AUCTION FLOOR
-  // ════════════════════════════════════════════════════════════════
-  liveFloorCard: {
-    flex: 1,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    backgroundColor: Colors.surface,
-    marginHorizontal: Space.xs,
+  asymmetricRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    alignItems: 'stretch',
   },
-  liveGridContainer: {
+  supportingColumn: {
+    gap: Space.sm,
+    flex: 1,
+  },
+  supportingRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.sm,
+  },
+  continuationGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -Space.xs,
+    gap: Space.sm,
+    marginTop: Space.sm,
   },
-  liveGridItem: {
-    width: '50%',
-    marginBottom: Space.md,
+
+  // ── Ending soon rows ──
+  endingSoonContainer: {
+    gap: 0,
   },
-  liveFloorImageWrap: {
-    width: '100%',
-    height: 200,
-    position: 'relative',
-  },
-  liveFloorImage: {
-    width: '100%',
-    height: 200,
-  },
-  liveFloorGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  liveFloorLiveBadge: {
-    position: 'absolute',
-    top: Space.sm,
-    left: Space.sm,
+  endingSoonRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    zIndex: 5,
+    gap: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  liveFloorLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.success,
+  endingSoonImageWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
   },
-  liveFloorLiveText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    color: '#FFFFFF',
-    fontFamily: Typography.family.bold,
+  endingSoonImage: {
+    width: 72,
+    height: 72,
   },
-  liveFloorUrgencyBadge: {
-    position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    backgroundColor: Colors.danger,
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    zIndex: 5,
+  endingSoonBody: {
+    flex: 1,
   },
-  liveFloorUrgencyText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-  liveFloorBody: {
-    padding: Space.sm,
-  },
-  liveFloorTitle: {
-    fontSize: 13,
+  endingSoonTitle: {
+    fontSize: 14,
     lineHeight: 18,
     fontWeight: '600',
     color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  liveFloorPrice: {
-    fontSize: 16,
+  endingSoonPrice: {
+    fontSize: 15,
     fontWeight: '700',
-    letterSpacing: -0.2,
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.3,
     marginBottom: 2,
   },
-  liveFloorPriceSecondary: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    marginBottom: 4,
-  },
-  liveFloorMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  liveFloorBids: {
+  endingSoonBids: {
     fontSize: 11,
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
   },
-  liveFloorTime: {
-    fontSize: 11,
+  endingSoonTimeCol: {
+    alignItems: 'flex-end',
+  },
+  endingSoonTime: {
+    fontSize: 14,
+    fontWeight: '700',
     color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  urgencyBar: {
+    width: 24,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: Colors.danger,
+    marginTop: 4,
   },
 
-  // ════════════════════════════════════════════════════════════════
-  // ZONE E: CATEGORY WORLDS — compact editorial mosaic
-  // ════════════════════════════════════════════════════════════════
-  categoryMosaicContainer: {
-    gap: Space.sm,
+  // ── Horizontal rail ──
+  horizontalRailContent: {
+    paddingHorizontal: Space.md,
   },
-  categoryMosaicRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-  },
-  categoryMosaicSecondaryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+
+  // ── Category rail ──
+  categoryRailContent: {
     gap: Space.sm,
   },
   categoryTile: {
-    borderRadius: Radius.lg,
+    height: 132,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
-  },
-  categoryTileFeatured: {
-    width: '100%',
-    height: 200,
-  },
-  categoryTileSecondary: {
-    flex: 1,
-    minWidth: (SCREEN_WIDTH - Space.md * 2 - Space.sm) / 2,
-    maxWidth: (SCREEN_WIDTH - Space.md * 2 - Space.sm) / 2,
-    height: 120,
   },
   categoryTileOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: Space.md,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm,
   },
   categoryTileName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: Typography.family.bold,
-  },
-  categoryTileNameFeatured: {
-    fontSize: 20,
-  },
-  categoryTileCount: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.75)',
-    fontFamily: Typography.family.medium,
-    marginTop: 2,
+    letterSpacing: 0.1,
   },
 
-  // ════════════════════════════════════════════════════════════════
-  // ZONE F: UPCOMING DROPS
-  // ════════════════════════════════════════════════════════════════
-  upcomingDropsContainer: {
-    gap: Space.sm,
+  // ── Upcoming rows ──
+  upcomingContainer: {
+    gap: 0,
   },
-  upcomingDropRow: {
+  upcomingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
-  upcomingDropImageWrap: {
+  upcomingImageWrap: {
     width: 64,
     height: 64,
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
-  upcomingDropImage: {
+  upcomingImage: {
     width: 64,
     height: 64,
   },
-  upcomingDropBody: {
+  upcomingBody: {
     flex: 1,
   },
-  upcomingDropDate: {
-    fontSize: 10,
+  upcomingDate: {
+    fontSize: 11,
     fontWeight: '600',
-    letterSpacing: 0.8,
+    letterSpacing: 0.3,
     color: Colors.textSecondary,
     fontFamily: Typography.family.semibold,
     marginBottom: 3,
   },
-  upcomingDropEyebrow: {
+  upcomingEyebrow: {
     fontSize: 11,
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
     marginBottom: 2,
   },
-  upcomingDropTitle: {
+  upcomingTitle: {
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '600',
@@ -2518,298 +2308,73 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     marginBottom: 2,
   },
-  upcomingDropPrice: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
-  upcomingDropNotify: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  upcomingNotify: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  // ════════════════════════════════════════════════════════════════
-  // ZONE G: WATCHING CONTINUITY
-  // ════════════════════════════════════════════════════════════════
-  watchingRailCard: {
-    width: 120,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    backgroundColor: Colors.surface,
-  },
-  watchingRailImageWrap: {
-    width: '100%',
-    height: 120,
-  },
-  watchingRailImage: {
-    width: '100%',
-    height: 120,
-  },
-  watchingRailBody: {
-    padding: Space.sm,
-  },
-  watchingRailTitle: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    marginBottom: 2,
-  },
-  watchingRailState: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.semibold,
-    marginBottom: 4,
-  },
-  watchingRailPrice: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.bold,
-    marginBottom: 2,
-  },
-  watchingRailTime: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
-
-  // ════════════════════════════════════════════════════════════════
-  // ZONE H: RECENTLY CLOSED
-  // ════════════════════════════════════════════════════════════════
-  closedLedgerContainer: {
+  // ── Results ──
+  resultsContainer: {
     gap: 0,
   },
-  closedLedgerRow: {
+  resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
-  closedLedgerImageWrap: {
-    width: 48,
-    height: 48,
+  resultImageWrap: {
+    width: 56,
+    height: 56,
     borderRadius: Radius.sm,
     overflow: 'hidden',
-  },
-  closedLedgerImage: {
-    width: 48,
-    height: 48,
-  },
-  closedLedgerBody: {
-    flex: 1,
-  },
-  closedLedgerTitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.medium,
-    marginBottom: 2,
-  },
-  closedLedgerPrice: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
-  closedLedgerRight: {
-    alignItems: 'flex-end',
-  },
-  closedLedgerResult: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: Typography.family.semibold,
-    marginBottom: 2,
-  },
-  closedLedgerBids: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
-
-  // ════════════════════════════════════════════════════════════════
-  // ZONE I: SELLER STUDIO
-  // ════════════════════════════════════════════════════════════════
-  sellerStudioHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
-  sellerStudioSummary: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-  },
-  sellerStudioManageBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.full,
     backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  sellerStudioManageText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.brand,
-    fontFamily: Typography.family.semibold,
+  resultImage: {
+    width: 56,
+    height: 56,
   },
-  sellerStudioContainer: {
-    gap: 0,
-  },
-  sellerStudioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: 0.5,
-    borderBottomColor: Colors.border,
-  },
-  sellerStudioImageWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.sm,
-    overflow: 'hidden',
-  },
-  sellerStudioImage: {
-    width: 48,
-    height: 48,
-  },
-  sellerStudioBody: {
+  resultBody: {
     flex: 1,
+    gap: 2,
   },
-  sellerStudioTitle: {
-    fontSize: 13,
+  resultTitle: {
+    fontSize: 14,
     lineHeight: 18,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
+  },
+  resultOutcome: {
+    fontSize: 12,
     fontWeight: '500',
-    color: Colors.textPrimary,
     fontFamily: Typography.family.medium,
-    marginBottom: 2,
+    letterSpacing: 0.1,
   },
-  sellerStudioPrice: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
-  sellerStudioRight: {
-    alignItems: 'flex-end',
-  },
-  sellerStudioState: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: Typography.family.semibold,
-    marginBottom: 2,
-  },
-  sellerStudioBids: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    marginBottom: 2,
-  },
-  sellerStudioTime: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
-
-  // ════════════════════════════════════════════════════════════════
-  // ZONE I: SELLER STRIP — compact seller access
-  // ════════════════════════════════════════════════════════════════
-  sellerStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: 14,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  sellerStripIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sellerStripBody: {
-    flex: 1,
-  },
-  sellerStripTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    marginBottom: 2,
-  },
-  sellerStripContext: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
-  sellerStripManage: {
+  resultActionWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
   },
-  sellerStripManageText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.brand,
-    fontFamily: Typography.family.semibold,
+  resultActionLabel: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    letterSpacing: 0.1,
   },
 
-  // ── No-active-market empty state ──
+  // ── Empty market ──
   emptyMarketContainer: {
     flexGrow: 1,
     paddingBottom: Space.xxl,
   },
-  emptyMarketClosedWrap: {
+  emptyMarketResultsWrap: {
     marginTop: Space.xl,
-    paddingHorizontal: Space.md,
-  },
-
-  // ── Create CTA ──
-  createCtaZone: {
-    paddingHorizontal: Space.md,
-    marginTop: Space.xl,
-    marginBottom: Space.lg,
-  },
-  createCtaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
-    paddingVertical: 14,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.brand,
-  },
-  createCtaText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textInverse,
-    fontFamily: Typography.family.semibold,
-  },
-
-  // ── Horizontal rail content ──
-  horizontalRailContent: {
     paddingHorizontal: Space.md,
   },
 
@@ -2820,7 +2385,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   searchOverlayInput: {
@@ -2855,7 +2420,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   filterResultBackBtn: {
@@ -2931,6 +2496,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Space.sm,
   },
+  filterCategoryScroll: {
+    flexDirection: 'row',
+  },
   filterOption: {
     paddingVertical: 8,
     paddingHorizontal: Space.md,
@@ -2938,6 +2506,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
+    marginRight: Space.sm,
   },
   filterOptionActive: {
     backgroundColor: Colors.brand,
@@ -2982,4 +2551,3 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
 });
-

@@ -1,18 +1,18 @@
-# THRYFTVERSE — PRODUCTION UI/UX EXECUTION CONTRACT
+# THRYFTVERSE — FLAGSHIP PRODUCT EXECUTION CHARTER
 
-This file defines the permanent working rules for every AI agent operating inside the ThryftVerse repository.
+This file defines the working principles for every AI agent operating inside the ThryftVerse repository.
 
-These rules apply to all implementation, UI/UX, debugging, refactoring and validation tasks unless the user explicitly overrides a rule in the current task.
+These principles apply to all implementation, UI/UX, debugging, refactoring and validation tasks unless the user explicitly overrides a principle in the current task.
 
-The native mobile application is the product.
+The native mobile application is the product. Every decision must serve the user's experience at the highest possible quality.
 
 ---
 
-## 1. WORKSPACE LOCK
+## 1. WORKSPACE VERIFICATION
 
-Work only inside the repository currently opened by the user.
+Work inside the repository currently opened by the user.
 
-Before editing, run:
+Before editing, verify:
 
 ```bash
 pwd
@@ -22,39 +22,6 @@ git branch --show-current
 git rev-parse HEAD
 git status --short
 ```
-
-The workspace root and Git root must match the currently opened local ThryftVerse project.
-
-Never:
-
-* clone another ThryftVerse repository
-* switch to another checkout
-* open an older project folder
-* search the machine for a different ThryftVerse copy
-* use a cloud repository when the user opened a local workspace
-* use instructions from an `AGENTS.md` outside the current Git root
-* replace the current workspace with a fresh clone
-
-When the repository is incorrect, stop before editing and report:
-
-```text
-BLOCKED — INCORRECT REPOSITORY OPEN
-```
-
-Do not fix repository selection by cloning, changing directories or opening another checkout.
-
----
-
-## 2. READ CURRENT INSTRUCTIONS FIRST
-
-Before implementation, read:
-
-```text
-AGENTS.md
-.windsurf/rules/repository-lock.md
-```
-
-Also inspect any task-specific files or reference images supplied by the user.
 
 At the start of every task, report:
 
@@ -68,59 +35,153 @@ AGENTS.md path:
 Execution mode:
 ```
 
-Do not begin implementation until the repository is verified.
+Begin implementation once the repository is verified.
 
 ---
 
-## 3. DEFAULT TASK INTERPRETATION
+## 2. DEEP SYSTEM RESEARCH — THINK END-TO-END BEFORE ACTING
 
-When the user asks to improve, elevate, polish, refine or upgrade UI/UX:
+Every meaningful change requires ultra-deep system understanding before implementation.
 
-* upgrade the existing canonical implementation
-* preserve working functionality
-* preserve navigation
-* preserve existing integrations
-* improve the real rendered composition
-* work directly in the production TSX files
+### Research methodology
 
-Do not interpret “upgrade” as:
+**Top-down (user experience → data):**
+```
+route → page → container → orchestration → state → hooks → services → API → DB
+```
 
-* rebuild from scratch
-* replace the screen
-* create a V2 screen
-* consolidate features away
-* reduce LOC
-* remove product depth
-* redesign backend architecture
-* write an audit instead of implementing
+**Bottom-up (data → user experience):**
+```
+DB → API → serializers → contracts → services → hooks → state → UI → page → route
+```
 
-A redesign is allowed only when the user explicitly requests a redesign or replacement.
+### Diagnostic principles
+
+- Do not fix symptoms before identifying the root cause.
+- Fix at the source-of-truth (owner layer), not where the symptom appears.
+- Avoid child-layer compensation (fallbacks, patches, duplicated logic, branching).
+- When a bug appears in a child, inspect the parent/owner layer first.
+- When changing a mechanic, align all directly coupled layers: contracts, handlers, queries, cache, serializers, loading/error states.
+- Be skeptical of one-file fixes; justify why other layers are unaffected.
+- For frontend issues, inspect the full flow: route → layout → page → hooks → API → backend.
+- Prefer systemic fixes, but keep changes proportional.
+- If re-architecture is required, define scope, risks, compatibility, and rollout order.
+
+### Layer diagnosis
+
+Diagnose by layers in this order:
+
+```
+data/contracts → business logic → async/timing → UI state → integration → architecture
+```
+
+When a layer is the root cause, fix it there. When multiple layers are coupled, align all of them in the same pass.
 
 ---
 
-## 4. PRODUCT PRIORITY
+## 3. CASE STUDY BEFORE IMPLEMENTATION
 
-The priority order is:
+Before implementing any UI/UX upgrade, conduct a proper case study of the relevant surface.
 
-1. visible native product quality
-2. correct user interaction
-3. truthful application behaviour
-4. preservation of working features
-5. maintainable implementation
-6. static validation
-7. tests and documentation
+### What to study
 
-Do not prioritise:
+Study the current implementation deeply:
 
-* lower LOC
-* fewer components
-* prettier diffs
-* passing superficial tests
-* audit completion
-* documentation volume
-* architecture purity
+- What is the screen trying to accomplish for the user?
+- What is the first-viewport experience?
+- Where does hierarchy fail?
+- Where does composition feel assembled rather than authored?
+- What interactions feel prototype-level?
+- What state transitions are missing or jarring?
+- Where does media treatment fall short?
+- Where does information density hurt readability?
+- Where does the page feel like a generic dashboard instead of a crafted product surface?
 
-over the actual user-facing product.
+### What to study from references
+
+When reference apps or images are provided, study them seriously:
+
+- hierarchy and visual weight
+- density and breathing room
+- spacing rhythm and grid system
+- typography relationships and scale
+- media treatment and art direction
+- alignment and edge behaviour
+- control placement and interaction patterns
+- first-viewport usefulness
+- state transitions and motion language
+- how information architecture guides the eye
+
+References are quality benchmarks to exceed, not surfaces to photocopy. Study the underlying design thinking, then produce something that belongs to ThryftVerse.
+
+### Case study output
+
+The case study informs implementation. It is not the deliverable. Move from study to implementation quickly:
+
+```
+study → identify highest-impact improvements → implement → render → criticise → correct → render again
+```
+
+Do not spend the task producing documentation instead of product improvement. A case study that doesn't lead to visible implementation is not completion.
+
+---
+
+## 4. PUSH TO MAXIMUM QUALITY
+
+Every UI/UX task must be pushed to the highest quality the codebase and agent capability can produce.
+
+### Quality bar
+
+A production-quality screen must achieve:
+
+- **Authored composition** — the screen feels designed as one product surface, not assembled from reusable parts
+- **Clear visual hierarchy** — the user's eye knows where to look first, second, third
+- **Useful first viewport** — the most important content and actions are visible without scrolling
+- **Deliberate spacing** — every gap communicates relationship; no random padding
+- **Consistent alignment** — edges, baselines, and centres are intentional
+- **Readable typography** — type scale has clear relationships; no competing weights
+- **Strong media treatment** — images are art-directed, not blindly covered; focal points preserved
+- **Coherent action placement** — primary actions are obvious; secondary actions are restrained; destructive actions are separated
+- **Appropriate information density** — enough to be useful, not so much that it overwhelms
+- **Native interaction patterns** — press feedback, haptics, motion, and transitions feel native
+- **Complete state coverage** — loading, empty, error, partial, offline, populated states are all designed
+
+### Quality comes from composition, not decoration
+
+Visual elevation must come from:
+
+- **composition** — how elements relate spatially
+- **hierarchy** — what dominates and what recedes
+- **rhythm** — the cadence of spacing and scale
+- **contrast** — the difference between primary and secondary
+- **restraint** — the courage to show less
+
+Not from:
+
+- shadows on every surface
+- cards around every element
+- pills around every control
+- gradients everywhere
+- glass effects
+- excessive animation
+- decorative subtitles
+- repeated labels
+- duplicate titles
+- excessive badges
+
+### Exceed references
+
+When reference apps are studied, the goal is to match or exceed their quality, not to match their surface appearance. Study why they feel premium:
+
+- information architecture decisions
+- spacing rhythm
+- typography relationships
+- media art direction
+- interaction restraint
+- motion language
+- state transition quality
+
+Then produce a ThryftVerse surface that embodies those same principles.
 
 ---
 
@@ -129,75 +190,48 @@ over the actual user-facing product.
 When visual references are supplied, use this priority:
 
 1. user-supplied reference images
-2. user’s explicit written requirements
+2. user's explicit written requirements
 3. current successful product patterns
 4. existing design tokens and components
 5. general platform conventions
 
-References are quality benchmarks, not instructions to photocopy another application.
-
-Study:
-
-* hierarchy
-* density
-* spacing
-* typography relationships
-* media treatment
-* alignment
-* controls
-* interaction placement
-* first-viewport usefulness
-* visual rhythm
-
 Do not claim reference matching based only on:
 
-* similar colours
-* rounded corners
-* shadows
-* gradients
-* glass effects
-* token replacements
-* animation
+- similar colours
+- rounded corners
+- shadows
+- gradients
+- glass effects
+- token replacements
+- animation
+
+Reference matching is about the underlying design quality, not surface similarity.
 
 ---
 
-## 6. STRICT SCOPE DISCIPLINE
+## 6. SCOPE AND PROPORTIONALITY
 
-Touch only files required by the current task.
+Touch the files required by the current task. Minimal supporting changes are permitted when they make a visible interaction or route work correctly.
 
-Do not expand into:
+When a systemic issue spans multiple layers, fix all coupled layers in the same pass. Proportional means:
 
-* unrelated screens
-* unrelated navigation
-* unrelated backend work
-* repository-wide refactors
-* design-system rewrites
-* testing infrastructure
-* documentation
-* future phases
-* unrelated formatting
+- fix the root cause and all directly coupled layers
+- do not expand into unrelated screens, navigation, or backend work
+- do not begin another product department after completing the requested scope
+- do not refuse to fix a coupled layer just because it's "out of scope" — coupled layers are in scope
 
-Minimal supporting changes are permitted only when they are required to make a visible interaction or route work correctly.
+When re-architecture is required:
 
-Do not begin another product department after completing the requested scope.
+1. define the scope clearly
+2. identify risks and compatibility concerns
+3. plan the rollout order
+4. implement proportionally
 
 ---
 
-## 7. CANONICAL IMPLEMENTATION RULE
+## 7. CANONICAL IMPLEMENTATION
 
 Modify the existing canonical screen or component.
-
-Never create:
-
-```text
-ScreenV2.tsx
-NewScreen.tsx
-ScreenFinal.tsx
-ScreenRedesign.tsx
-ScreenFlagship.tsx
-```
-
-as a replacement for an existing production screen unless the user explicitly requests a parallel implementation.
 
 Before creating a new screen or component:
 
@@ -206,178 +240,85 @@ Before creating a new screen or component:
 3. inspect navigator registration
 4. confirm no canonical implementation already exists
 
-Do not recreate previously deleted duplicate systems.
+Do not create `ScreenV2.tsx`, `ScreenFinal.tsx`, `ScreenRedesign.tsx`, `ScreenFlagship.tsx` as replacements for existing production screens unless the user explicitly requests a parallel implementation.
+
+Creating focused new components (e.g. a purpose-built tile for a specific layout) is encouraged when the information hierarchy genuinely differs and a shared component would be forced to serve too many masters.
 
 ---
 
-## 8. NON-DESTRUCTIVE EDITING
+## 8. PRESERVE AND ELEVATE
+
+When upgrading UI/UX:
+
+- preserve working functionality
+- preserve navigation
+- preserve existing integrations
+- improve the real rendered composition
+- work directly in the production TSX files
 
 Preserve working:
 
-* handlers
-* callbacks
-* navigation
-* selectors
-* mutations
-* store actions
-* API integrations
-* loading states
-* error states
-* empty states
-* accessibility properties
-* list virtualization
-* keyboard behaviour
-* media behaviour
-* route parameters
-
-Never:
-
-* replace a large production file wholesale
-* delete a screen to simplify it
-* remove features and call them clutter
-* remove handlers to reduce complexity
-* remove product depth to achieve minimalism
-* perform broad automated rewrites
-* use scripts to rewrite many source files
-* use `git reset --hard`
-* use `git clean`
-* force-push
-* discard user changes
-* delete source files without proving they are unused
+- handlers, callbacks, navigation, selectors, mutations, store actions
+- API integrations, loading states, error states, empty states
+- accessibility properties, list virtualization, keyboard behaviour, media behaviour, route parameters
 
 Before removing a JSX block, determine:
 
-```text
+```
 State powering it:
 Handler powering it:
 Route or action:
 User capability affected:
 ```
 
-When a real capability would disappear, do not remove it.
+When a real capability would disappear, do not remove it. When functionality is broken, repair it or honestly disable it — do not hide it.
+
+When a component or pattern is genuinely better replaced by a new purpose-built component, the replacement is justified if:
+
+- the new component serves the layout's information hierarchy better
+- all existing functionality is preserved or improved
+- the diff is reviewed and committed with explanation
 
 ---
 
-## 9. LOC SAFETY
+## 9. LOC IS NOT A METRIC
 
-LOC reduction is not a success metric.
+LOC reduction is not a success metric. LOC increase is not a failure metric.
 
 For UI/UX upgrade tasks:
 
-* additions should normally equal or exceed deletions
-* avoid deleting more than 5% of a target screen
-* avoid deleting blocks longer than 20 consecutive lines
-* justify every substantial deletion
-* do not replace feature-rich JSX with a smaller generic wrapper
-* do not delete styles without tracing their current usage
-* do not remove controls merely because they are difficult to improve
+- additions should normally equal or exceed deletions when adding product depth
+- do not replace feature-rich JSX with a smaller generic wrapper
+- do not delete styles without tracing their current usage
+- do not remove controls merely because they are difficult to improve
+- justify every substantial deletion
 
-Before and after significant edits, inspect:
+Before and after significant edits:
 
 ```bash
 git diff --numstat -- <file>
 git diff -- <file>
 ```
 
-When a patch becomes deletion-heavy, stop and use a smaller surgical edit.
+The correct outcome is a richer, clearer, more coherent product — not merely a smaller codebase.
 
 ---
 
 ## 10. IMPLEMENTATION OVER AUDITING
 
-Inspect only enough to understand the current implementation.
-
-Then implement.
+Inspect enough to understand the current implementation deeply, then implement.
 
 Use this loop:
 
-```text
-inspect current screen
-→ identify highest-impact weakness
-→ edit existing TSX
-→ inspect rendered structure
-→ test visible controls
-→ refine
+```
+study current screen → identify highest-impact improvements → implement → render → criticise → correct → render again
 ```
 
-Do not spend the task producing:
-
-* audit reports
-* phase reports
-* case studies
-* deletion reports
-* migration plans
-* roadmaps
-* screenshot catalogues
-
-unless the user explicitly asks for documentation.
-
-An audit is not completion.
+An audit is not completion. A case study is not completion. Documentation is not completion. Visible product improvement is completion.
 
 ---
 
-## 11. VISUAL QUALITY STANDARD
-
-A production-quality screen must have:
-
-* clear primary hierarchy
-* restrained secondary hierarchy
-* useful first viewport
-* deliberate spacing
-* consistent alignment
-* readable typography
-* strong media treatment
-* coherent action placement
-* appropriate information density
-* native interaction patterns
-* complete loading, empty and error states
-
-Avoid:
-
-* card around every element
-* pill around every control
-* shadow on every surface
-* oversized headers
-* excessive empty space
-* decorative subtitles
-* repeated labels
-* duplicate titles
-* excessive badges
-* excessive animation
-* generic dashboard composition
-* settings-style layouts applied to social or commerce screens
-
-Visual elevation must come from composition, not decoration.
-
----
-
-## 12. FEATURE PRESERVATION
-
-Do not remove working features to improve appearance.
-
-For every affected screen, preserve:
-
-* primary user journey
-* secondary user actions
-* destructive confirmations
-* existing content types
-* real data relationships
-* error recovery
-* offline behaviour when present
-* accessibility
-* platform Back behaviour
-
-When functionality is broken:
-
-* repair it when possible
-* honestly disable it when necessary
-* remove it only when no real capability exists
-
-Do not hide broken functionality and call the screen complete.
-
----
-
-## 13. TRUTHFUL UI
+## 11. TRUTHFUL UI
 
 Every visible control must:
 
@@ -386,227 +327,230 @@ Every visible control must:
 3. show a truthful disabled state
 4. or be removed
 
-Never expose controls that only produce:
+Never expose controls that only produce "Coming soon", "Backend required", or generic explanation toasts.
 
-* “Coming soon”
-* “Backend required”
-* “Use another screen”
-* generic explanation toasts
-* fake success
-* fabricated IDs
-* fabricated data
-* fabricated persistence
-* fabricated presence
-* fabricated activity
-* fabricated order or tracking state
+Never fabricate:
+
+- success states
+- IDs
+- data
+- persistence
+- presence
+- activity
+- order or tracking state
 
 Do not claim that an operation succeeded when only local temporary state changed.
 
-Use truthful labels such as:
+Use truthful labels:
 
-```text
-Delete for me
 ```
-
-when deletion is local.
-
-Use:
-
-```text
-Delete message
+Delete for me     → when deletion is local
+Delete message    → when the message is genuinely deleted from the shared system
 ```
-
-only when the message is genuinely deleted from the shared system.
 
 ---
 
-## 14. NAVIGATION QUALITY
+## 12. NAVIGATION QUALITY
 
 Every route must have:
 
-* correct destination
-* correct parameters
-* correct presentation style
-* correct Back behaviour
-* correct return destination
-* no fabricated route IDs
-* no duplicate screens
-* no dead chevrons
+- correct destination
+- correct parameters
+- correct presentation style
+- correct Back behaviour
+- correct return destination
+- no fabricated route IDs
+- no duplicate screens
+- no dead chevrons
 
-Use pushed screens for normal hierarchy.
+Use pushed screens for normal hierarchy. Use modal presentation for creation, selection, or temporary tasks. Use full-screen modal for immersive media.
 
-Use modal presentation for creation, selection or temporary tasks when appropriate.
-
-Use full-screen modal presentation for immersive media when appropriate.
-
-After destructive actions, navigate to the correct explicit destination rather than a vague root route.
-
-Do not modify global navigation unless the current task requires it.
+After destructive actions, navigate to the correct explicit destination.
 
 ---
 
-## 15. BUTTON AND CONTROL QUALITY
+## 13. CONTROL QUALITY
 
 Every interactive control must have:
 
-* a minimum practical touch target
-* clear enabled state
-* clear disabled state
-* loading state when asynchronous
-* pressed feedback
-* accessibility role
-* accessibility label
-* correct haptic level when haptics are used
+- a minimum practical touch target (44pt recommended)
+- clear enabled state
+- clear disabled state
+- loading state when asynchronous
+- pressed feedback (scale, opacity, or both)
+- accessibility role
+- accessibility label
+- correct haptic level when haptics are used
 
-Do not use icon-only controls without accessible labels.
+Primary actions must be visually dominant. Secondary actions must be restrained. Destructive actions must be clearly separated and confirmed.
 
-Do not use colour alone to communicate state.
-
-Primary actions must be visually dominant.
-
-Secondary actions must be restrained.
-
-Destructive actions must be clearly separated and confirmed.
+Do not use icon-only controls without accessible labels. Do not use colour alone to communicate state.
 
 ---
 
-## 16. STATE COMPLETENESS
+## 14. STATE COMPLETENESS
 
 Every screen touched must account for relevant states:
 
-* loading
-* populated
-* empty
-* filtered-empty
-* offline
-* error
-* retry
-* disabled
-* submitting
-* success
-* partial data
-* missing media
-* permission denied
+- loading
+- populated
+- empty
+- filtered-empty
+- offline
+- error
+- retry
+- disabled
+- submitting
+- success
+- partial data
+- missing media
+- permission denied
 
-Skeletons should resemble the final layout.
-
-Do not use a generic centred spinner for every state.
-
-Do not fabricate data to avoid designing an empty state.
+Skeletons should resemble the final layout. Do not use a generic centred spinner for every state. Do not fabricate data to avoid designing an empty state.
 
 ---
 
-## 17. MEDIA RULES
+## 15. MEDIA RULES
 
-Do not treat temporary local device URIs as delivered remote media.
+A supported media flow:
 
-A supported media flow should be:
-
-```text
-select or capture
-→ local optimistic preview
-→ upload
-→ receive remote URL
-→ send remote URL
-→ progress
-→ failure
-→ retry
+```
+select or capture → local optimistic preview → upload → receive remote URL → send remote URL → progress → failure → retry
 ```
 
-Do not fabricate upload success.
+Do not fabricate upload success. Do not treat temporary local URIs as delivered remote media.
 
 Media viewers must:
 
-* use explicit close or Back controls
-* respect safe areas
-* handle loading
-* handle failure
-* avoid exposing internal IDs
-* avoid closing from accidental media taps
-* use responsive dimensions
-* avoid unsupported gestures or dependencies
+- use explicit close or Back controls
+- respect safe areas
+- handle loading and failure
+- avoid exposing internal IDs
+- avoid closing from accidental media taps
+- use responsive dimensions
 
-Do not add new media dependencies without approval.
+### Image art direction
+
+Audit image crops on the physical device:
+
+- fashion objects remain visible
+- shoes and bags are not cropped at critical edges
+- portrait garments retain silhouette
+- square jewellery/watch images remain centred
+- low-quality or missing images receive a restrained placeholder
+- featured and supporting crops should not look identical
+
+Do not rely on `cover` blindly. Use category-sensitive focal positioning when supported safely. Do not fabricate alternate media.
 
 ---
 
-## 18. PERFORMANCE
+## 16. PERFORMANCE
 
 Preserve or improve:
 
-* FlashList, FlatList or equivalent virtualization
-* stable keys
-* memoized expensive derived data
-* smooth typing
-* limited rerenders
-* efficient image rendering
-* stable keyboard transitions
-* deterministic skeletons
-* reduced-motion behaviour
+- FlashList, FlatList, or equivalent virtualization
+- stable keys
+- memoized expensive derived data
+- smooth typing
+- limited rerenders
+- efficient image rendering
+- stable keyboard transitions
+- deterministic skeletons
+- reduced-motion behaviour
 
 Do not:
 
-* render large data sets inside unvirtualized wrapped Views
-* use random values during render
-* reanimate entire lists for small updates
-* remount large screens unnecessarily
-* animate every historical item on initial load
+- render large data sets inside unvirtualized Views
+- use random values during render
+- reanimate entire lists for small updates
+- remount large screens unnecessarily
+- animate every historical item on initial load
 
 ---
 
-## 19. ACCESSIBILITY
+## 17. MOTION AND INTERACTION
+
+Use restrained native motion to elevate the product:
+
+### Encouraged
+
+- press scale (0.97–0.985)
+- slight opacity response on press
+- animated segment indicators with spring physics
+- content crossfade or directional slide on mode change
+- watch icon state transition
+- countdown colour interpolation at genuine threshold changes
+- haptic selection feedback
+- reduced-motion fallbacks for all motion
+
+### Prohibited
+
+- bounce
+- continuous pulsing
+- floating cards
+- decorative shimmer after loading
+- large spring movement
+- dramatic parallax
+- excessive blur dependency
+- animating the entire page
+
+Motion duration: 160–240ms for most transitions. Respect reduced motion by changing instantly or using a simple fade.
+
+---
+
+## 18. ACCESSIBILITY
 
 For all edited screens, verify:
 
-* controls have labels
-* state is announced
-* selected states are exposed
-* unread state is exposed
-* loading and failure are exposed
-* destructive actions are clear
-* text has sufficient contrast
-* touch targets are practical
-* Back and Close are distinguishable
-* screen-reader order follows visual order
+- controls have labels
+- state is announced
+- selected states are exposed
+- unread state is exposed
+- loading and failure are exposed
+- destructive actions are clear
+- text has sufficient contrast
+- touch targets are practical
+- Back and Close are distinguishable
+- screen-reader order follows visual order
+
+Accessibility labels must be state-aware. Do not append "left" to states where countdown text already says "Ended", "Starts tomorrow", or "Closed".
+
+Test with large text enabled. Do not rely only on `numberOfLines` — verify that titles remain understandable, header actions remain reachable, and prices do not overlap at large font sizes.
 
 Accessibility is part of completion, not optional polish.
 
 ---
 
-## 20. NATIVE VALIDATION
+## 19. NATIVE VALIDATION
 
 When a native device or emulator is available:
 
-* use the actual development build
-* inspect the real screen
-* test keyboard behaviour
-* test Back behaviour
-* test touch targets
-* test gestures
-* capture before and after screenshots locally
-* do not commit screenshots unless requested
+- use the actual development build
+- inspect the real screen
+- test keyboard behaviour, Back behaviour, touch targets, gestures
+- capture before and after screenshots locally
+- iterate based on the actual render — the device is the source of truth
+- do not commit screenshots unless requested
 
 Web rendering is not proof of native quality.
 
-When no native device or emulator is available:
+The required loop for flagship work:
 
-* continue implementation
-* use code, references and existing screenshots
-* run static validation
-* do not waste time configuring ADB unless asked
-* do not claim native visual verification
-
-Use the final status:
-
-```text
-IMPLEMENTED — NATIVE DEVICE VALIDATION PENDING
+```
+render → capture → criticise → correct → capture again
 ```
 
-when implementation is complete but native verification remains.
+When no native device or emulator is available:
+
+- continue implementation
+- use code, references, and existing screenshots
+- run static validation
+- do not claim native visual verification
+- use the status: `IMPLEMENTED — NATIVE DEVICE VALIDATION PENDING`
 
 ---
 
-## 21. TEST POLICY
+## 20. TEST POLICY
 
 Do not begin UI/UX tasks by writing tests.
 
@@ -620,22 +564,13 @@ Order:
 6. run existing tests
 7. add only essential regression tests
 
-Do not add:
-
-* source-string tests
-* file-existence tests
-* component-name tests
-* constant tests
-* tautological tests
-* tests that only increase counts
-
-Do not repair test infrastructure during a UI task unless it prevents application compilation or execution.
+Do not add source-string tests, file-existence tests, component-name tests, constant tests, tautological tests, or tests that only increase counts.
 
 Report pre-existing test-environment failures honestly.
 
 ---
 
-## 22. GIT SAFETY
+## 21. GIT SAFETY
 
 Before editing:
 
@@ -652,54 +587,35 @@ git diff --numstat
 git diff
 ```
 
-Do not commit:
+Do not commit screenshots, temporary scripts, audit files, generated reports, debug logs, unrelated formatting, or unrelated screens.
 
-* screenshots
-* temporary scripts
-* audit files
-* generated reports
-* debug logs
-* unrelated formatting
-* unrelated screens
-* changes to `AGENTS.md` unless explicitly requested
+Use focused commits. Stage only the files relevant to the task.
 
-Use focused commits.
-
-Do not merge to `main` without explicit user instruction.
-
-Do not force-push.
-
-Do not approve or execute destructive Git commands without explicit user confirmation.
+Do not merge to `main` without explicit user instruction. Do not force-push. Do not execute destructive Git commands without explicit user confirmation.
 
 ---
 
-## 23. COMPLETION STANDARD
+## 22. COMPLETION STANDARD
 
-A UI/UX task is complete only when:
+A task is complete only when:
 
-* requested screens were visibly improved
-* working functionality was preserved
-* navigation is correct
-* every visible control is truthful
-* relevant states are complete
-* TypeScript passes
-* the diff contains no unrelated work
-* no duplicate screens were created
-* no large unjustified deletion occurred
-* no fake success or fake data remains in the edited area
-* remaining blockers are explicitly reported
+- requested screens were visibly improved to flagship quality
+- working functionality was preserved
+- navigation is correct
+- every visible control is truthful
+- relevant states are complete
+- TypeScript passes
+- the diff contains no unrelated work
+- no fake success or fake data remains
+- remaining blockers are explicitly reported
 
-Passing TypeScript alone is not completion.
+Passing TypeScript alone is not completion. Passing tests alone is not completion. Replacing tokens alone is not visual elevation. Adding shadows and radius alone is not visual elevation.
 
-Passing tests alone is not completion.
-
-Replacing tokens alone is not visual elevation.
-
-Adding shadows and radius tokens alone is not visual elevation.
+The improvement must be obvious at thumbnail size.
 
 ---
 
-## 24. FINAL RESPONSE FORMAT
+## 23. FINAL RESPONSE FORMAT
 
 Every implementation report must include:
 
@@ -740,26 +656,19 @@ BLOCKED — REFERENCE IMAGES UNAVAILABLE
 BLOCKED — RUNTIME FAILURE
 ```
 
-Do not use `COMPLETE` when native verification was required but not performed.
-
 ---
 
-## 25. PERMANENT PROHIBITIONS
+## 24. CORE PRINCIPLES
 
-Never:
-
-* optimise for deleted LOC
-* replace upgrades with rebuilds
-* create duplicate screen versions
-* invent data or identifiers
-* report fake success
-* hide unsupported actions behind toasts
-* mix unrelated departments into one task
-* rewrite architecture during visual work
-* modify backend systems without scope
-* claim native validation without a native device
-* call token migration flagship elevation
-* call audit completion product completion
-* damage existing product depth for minimalism
-
-The correct outcome is a richer, clearer, more coherent and more trustworthy native product—not merely a smaller or cleaner codebase.
+- The product is the native mobile application. Every decision serves the user's experience.
+- Fix at the source-of-truth, not at the symptom layer.
+- Ultra-deep system research before acting. Diagnose end-to-end.
+- When changing a mechanic, align all directly coupled layers.
+- Push every UI/UX task to maximum quality. Exceed references, don't photocopy them.
+- Composition over decoration. Hierarchy over ornament.
+- Motion is restrained and purposeful, not decorative.
+- Truthful UI always. No fabricated success, data, or capability.
+- Preserve working features. Elevate, don't strip.
+- The device render is the source of truth. Iterate against it.
+- The improvement must be obvious at thumbnail size.
+- The correct outcome is a richer, clearer, more coherent, and more trustworthy native product.

@@ -345,7 +345,7 @@ export function BidSheet({
         {/* ── Entry stage — large centered amount ── */}
         {stage === 'entry' && (
           <View style={styles.stageContent}>
-            <Text style={styles.entryHeading}>Enter your bid</Text>
+            <Text style={styles.entryHeading}>PLACE YOUR BID</Text>
 
             {/* Large amount input — dominates the sheet */}
             <View style={styles.amountContainer}>
@@ -370,15 +370,15 @@ export function BidSheet({
             {/* Minimum and current — stacked, not columns */}
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>Minimum to lead</Text>
+                <Text style={styles.bidContextLabel}>MINIMUM TO LEAD</Text>
                 <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>Current value</Text>
+                <Text style={styles.bidContextLabel}>CURRENT VALUE</Text>
                 <Text style={styles.bidContextValueSecondary}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>Time remaining</Text>
+                <Text style={styles.bidContextLabel}>TIME REMAINING</Text>
                 <Text style={[styles.bidContextValueSecondary, auction.effectiveState === 'live' && { color: Colors.danger }]}>
                   {auction.countdownText}
                 </Text>
@@ -437,7 +437,7 @@ export function BidSheet({
         {/* ── Review stage — clean confirmation receipt ── */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
-            <Text style={styles.reviewHeading}>Confirm your bid</Text>
+            <Text style={styles.reviewHeading}>CONFIRM YOUR BID</Text>
 
             {/* Dominant bid amount */}
             <View style={styles.reviewAmountBlock}>
@@ -455,19 +455,19 @@ export function BidSheet({
             {/* Receipt details */}
             <View style={styles.reviewReceipt}>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>Current value</Text>
+                <Text style={styles.reviewReceiptLabel}>CURRENT VALUE</Text>
                 <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>Minimum</Text>
+                <Text style={styles.reviewReceiptLabel}>MINIMUM</Text>
                 <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>Time remaining</Text>
+                <Text style={styles.reviewReceiptLabel}>TIME REMAINING</Text>
                 <Text style={styles.reviewReceiptValue}>{auction.countdownText}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>Seller</Text>
+                <Text style={styles.reviewReceiptLabel}>SELLER</Text>
                 <Text style={styles.reviewReceiptValue}>{auction.sellerName}</Text>
               </View>
             </View>
@@ -670,9 +670,10 @@ const styles = StyleSheet.create({
   },
   // ── Entry stage — large centered amount ──
   entryHeading: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.8,
     textAlign: 'center',
     marginTop: Space.xs,
   },
@@ -712,9 +713,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bidContextLabel: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.5,
   },
   bidContextValue: {
     fontSize: 15,
@@ -742,9 +744,10 @@ const styles = StyleSheet.create({
   },
   // ── Review stage — receipt ──
   reviewHeading: {
-    fontSize: 17,
+    fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: Colors.textMuted,
+    letterSpacing: 0.8,
     textAlign: 'center',
     marginBottom: Space.sm,
   },
@@ -785,9 +788,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   reviewReceiptLabel: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.5,
   },
   reviewReceiptValue: {
     fontSize: 14,

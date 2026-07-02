@@ -81,8 +81,10 @@ describe('VQ-08A Product Detail Page Revamp', () => {
       expect(screen).toContain("from '../platform/product'");
     });
 
-    it('uses ProductMediaGallery', () => {
-      expect(screen).toContain('ProductMediaGallery');
+    it('uses CommerceMediaStage (shared product shell media)', () => {
+      // PRODUCT-01 unified the media stage into CommerceMediaStage; the old
+      // ProductMediaGallery name is no longer used by ItemDetailScreen.
+      expect(screen).toContain('CommerceMediaStage');
     });
 
     it('uses ProductCommerceSummary', () => {

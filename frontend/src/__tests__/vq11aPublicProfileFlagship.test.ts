@@ -233,11 +233,15 @@ describe('VQ-11A: Public Profile Flagship Elevation', () => {
 
   // ── Grid: 4:5 portrait tiles ─────────────────────────────────────
   describe('Grid composition', () => {
-    it('ShopTile uses 4:5 portrait aspect ratio', () => {
+    it('ShopTile uses 4:5 portrait aspect ratio via responsive geometry', () => {
       const src = readFile('screens/UserProfileScreen.tsx');
-      expect(src).toContain('CARD_WIDTH');
-      expect(src).toContain('CARD_HEIGHT');
-      expect(src).toMatch(/CARD_WIDTH \* 1\.25/);
+      // Brief §2: no module-level screen-width calculation; useWindowDimensions
+      // for responsive geometry. 4:5 portrait is enforced via CARD_ASPECT.
+      expect(src).toContain('useWindowDimensions');
+      expect(src).toContain('CARD_ASPECT');
+      expect(src).toMatch(/cardWidth \* CARD_ASPECT/);
+      // Module-level Dimensions.get must be gone
+      expect(src).not.toMatch(/Dimensions\.get/);
     });
 
     it('ShopTile shows sold overlay for sold items', () => {

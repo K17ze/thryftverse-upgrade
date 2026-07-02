@@ -61,22 +61,6 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'HelpSupport', label: 'Help', searchTerms: 'help support faq contact', section: 'Help', showSection: true },
   { key: 'About', label: 'About Thryftverse', searchTerms: 'about version', section: 'Help', showSection: true },
 ];
-  { key: 'EditProfile', label: 'Public profile', searchTerms: 'edit profile avatar name bio username', section: 'Account' },
-  { key: 'AccountSettings', label: 'Private details', searchTerms: 'account details email phone private', section: 'Account' },
-  { key: 'AccountControl', label: 'Account control', searchTerms: 'account control delete deactivate download data export', section: 'Account' },
-  { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'saved addresses delivery shipping address buying', section: 'Buying' },
-  { key: 'Payments', label: 'Payment methods', searchTerms: 'payment methods card bank buying', section: 'Buying' },
-  { key: 'Closet', label: 'Saved & collections', searchTerms: 'closet saved wishlist collections buying', section: 'Buying' },
-  { key: 'Wallet', label: 'Payout account', searchTerms: 'wallet balance payout selling', section: 'Selling & payouts' },
-  { key: 'BalanceHistory', label: 'Payout history', searchTerms: 'balance history payouts selling', section: 'Selling & payouts' },
-  { key: 'Postage', label: 'Shipping preferences', searchTerms: 'postage shipping preferences carrier selling', section: 'Selling & payouts' },
-  { key: 'PrivacySettings', label: 'Privacy & safety', searchTerms: 'privacy controls visibility safety blocked', section: 'Privacy & safety' },
-  { key: 'ChatSettings', label: 'Messages & notifications', searchTerms: 'messages chat notifications messaging', section: 'Messages & notifications' },
-  { key: 'Personalisation', label: 'Personalisation & appearance', searchTerms: 'personalisation feed preferences theme currency language appearance', section: 'Personalisation & appearance' },
-  { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push notifications alerts categories', section: 'Messages & notifications' },
-  { key: 'HelpSupport', label: 'Help', searchTerms: 'help support faq contact', section: 'Help' },
-  { key: 'About', label: 'About Thryftverse', searchTerms: 'about version', section: 'Help' },
-];
 
 export default function SettingsScreen({ navigation }: Props) {
   const logout = useStore((state) => state.logout);

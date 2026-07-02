@@ -34,7 +34,7 @@ import {
   CommercePartyStrip,
   CategoryEvidence,
 } from '../components/commerce';
-import { ProductFamilyBadge, RecommendationRail } from '../components/product';
+import { ProductFamilyBadge, RecommendationRail, FullscreenMediaViewer } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
@@ -43,6 +43,7 @@ import {
   buildCoOwnViewModel,
   useProductSocialState,
   useRecommendations,
+  useSellerTrust,
   isRecommendationLook,
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
@@ -70,6 +71,13 @@ export default function AssetDetailScreen() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
+  const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
+  const [fullscreenVisible, setFullscreenVisible] = React.useState(false);
+
+  const handleOpenFullscreen = (index: number) => {
+    setFullscreenIndex(index);
+    setFullscreenVisible(true);
+  };
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => {
@@ -107,6 +115,34 @@ export default function AssetDetailScreen() {
     return () => { cancelled = true; };
   }, [assetId, currentUser?.id, show]);
 
+  // ── PRODUCT-01: unified view model + shared social state + recommendations ──
+  // NOTE: these hooks MUST run before any conditional return so the hook count
+  // stays stable across loading → loaded (Rules of Hooks). They are null-safe.
+  const viewModel = React.useMemo(() => {
+    if (!asset) return null;
+    return buildCoOwnViewModel({
+      asset,
+      viewerUnits: yourUnits,
+      orderBook,
+      currentUserId: currentUser?.id,
+    });
+  }, [asset, yourUnits, orderBook, currentUser?.id]);
+
+  const social = useProductSocialState(viewModel);
+
+  const { data: recommendationsData, isLoading: recsLoading } = useRecommendations(
+    asset?.listingId
+  );
+
+  // Real issuer identity (brief §8: do not derive identity by slicing a UUID).
+  const { data: issuerTrust } = useSellerTrust(asset?.issuerId);
+
+  const headerStyle = useAnimatedStyle(() => {
+    const threshold = 200;
+    const opacity = interpolate(scrollY.value, [threshold - 60, threshold], [0, 1], Extrapolation.CLAMP);
+    return { opacity };
+  });
+
   if (isLoading) {
     return (
       <View style={styles.container}>
@@ -134,7 +170,10 @@ export default function AssetDetailScreen() {
   const deltaPct = asset.marketMovePct24h ?? 0;
   const isIssuer = currentUser?.id === asset.issuerId;
   const isHolder = yourUnits > 0;
-  const issuerHandle = asset.issuerId.slice(0, 12);
+  // Real issuer identity from /sellers/:id; fall back to a truthful label
+  // (never a sliced UUID fabricated as a @handle). Brief §8.
+  const issuerUsername = issuerTrust?.username || 'issuer';
+  const issuerDisplayName = issuerTrust?.username || 'Issuer';
   const canMessageIssuer = currentUser?.id !== asset.issuerId;
 
   const unitPriceIze = goldRates && displayMode !== 'fiat'
@@ -156,7 +195,7 @@ export default function AssetDetailScreen() {
   const ownerAccounts: Array<{ id: string; handle: string; role: string; units: number; isYou?: boolean }> = [];
   ownerAccounts.push({
     id: `issuer_${asset.issuerId}`,
-    handle: `@${issuerHandle}`,
+    handle: `@${issuerUsername}`,
     role: 'Issuer treasury',
     units: availableUnits,
   });
@@ -182,21 +221,6 @@ export default function AssetDetailScreen() {
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
 
-  // ── PRODUCT-01: unified view model + shared social state + recommendations ──
-  const viewModel = React.useMemo(() => {
-    return buildCoOwnViewModel({
-      asset,
-      viewerUnits: yourUnits,
-      orderBook,
-      currentUserId: currentUser?.id,
-    });
-  }, [asset, yourUnits, orderBook, currentUser?.id]);
-
-  const social = useProductSocialState(viewModel);
-
-  const { data: recommendationsData, isLoading: recsLoading } = useRecommendations(
-    asset.listingId
-  );
   const recommendationSections = recommendationsData?.sections ?? [];
   const railSections = recommendationSections.filter(
     (s) => s.key !== 'seen_in_looks' && s.key !== 'continue_exploring'
@@ -211,12 +235,6 @@ export default function AssetDetailScreen() {
   };
 
   const familyStateAccent = !asset.isOpen ? 'Closed' : availableUnits <= 0 ? 'Unavailable' : 'Open';
-
-  const headerStyle = useAnimatedStyle(() => {
-    const threshold = 200;
-    const opacity = interpolate(scrollY.value, [threshold - 60, threshold], [0, 1], Extrapolation.CLAMP);
-    return { opacity };
-  });
 
   return (
     <View style={styles.container}>
@@ -264,7 +282,7 @@ export default function AssetDetailScreen() {
           showSaveControl
           showFavControl
           heightFraction={0.55}
-          onOpenFullscreen={() => {}}
+          onOpenFullscreen={handleOpenFullscreen}
           overlayTopContent={
             <View style={styles.familyBadgeOverlay}>
               <ProductFamilyBadge family="co_own" stateAccent={familyStateAccent} compact />
@@ -346,10 +364,10 @@ export default function AssetDetailScreen() {
           <CommercePartyStrip
             party={{
               id: asset.issuerId,
-              username: issuerHandle,
-              displayName: `@${issuerHandle}`,
-              avatar: null,
-              location: null,
+              username: issuerUsername,
+              displayName: issuerDisplayName,
+              avatar: issuerTrust?.avatar || null,
+              location: issuerTrust?.location || null,
               roleLabel: 'Issuer',
             }}
             facts={[
@@ -368,13 +386,13 @@ export default function AssetDetailScreen() {
                 const conversation = await resolveCoOwnConversation(
                   currentUser.id,
                   asset.issuerId,
-                  issuerHandle,
+                  issuerUsername,
                   asset.listingId,
                 );
                 upsertConversation(conversation);
                 navigation.navigate('Chat', {
                   conversationId: conversation.id,
-                  focusQuery: issuerHandle,
+                  focusQuery: issuerUsername,
                   partnerUserId: asset.issuerId,
                 });
               } catch {
@@ -458,6 +476,25 @@ export default function AssetDetailScreen() {
           </View>
         </Reanimated.View>
 
+        {/* ── Price history (honest unavailable state) ── */}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(210)}
+          style={styles.sectionWrap}
+        >
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Price history</Text>
+            <View style={styles.priceHistoryEmpty}>
+              <Ionicons name="analytics-outline" size={24} color={Colors.textMuted} />
+              <Text style={styles.priceHistoryEmptyText}>
+                Price history is not available
+              </Text>
+              <Text style={styles.priceHistoryEmptySub}>
+                Historical price data will appear here once the secondary market has sufficient trading activity.
+              </Text>
+            </View>
+          </View>
+        </Reanimated.View>
+
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(230)}
           style={styles.sectionWrap}
@@ -484,6 +521,18 @@ export default function AssetDetailScreen() {
               <Text style={styles.totalLabel}>Total supply</Text>
               <Text style={styles.totalValue}>{totalUnits}u</Text>
             </View>
+            {isHolder && !isIssuer && (
+              <Pressable
+                style={styles.buyoutLink}
+                onPress={() => navigation.navigate('Buyout', { assetId: asset.id })}
+                accessibilityRole="button"
+                accessibilityLabel="Open buyout options for your units"
+              >
+                <Ionicons name="swap-horizontal-outline" size={14} color={Colors.brand} />
+                <Text style={styles.buyoutLinkText}>Buyout options</Text>
+                <Ionicons name="chevron-forward" size={12} color={Colors.textMuted} />
+              </Pressable>
+            )}
           </View>
         </Reanimated.View>
 
@@ -606,11 +655,11 @@ export default function AssetDetailScreen() {
                 </AnimatedPressable>
               )}
               <AppButton
-                title="Trade"
+                title={isHolder ? 'Buy more' : 'Buy units'}
                 variant="primary"
                 size="md"
                 onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' })}
-                accessibilityLabel="Trade this asset"
+                accessibilityLabel={isHolder ? 'Buy more units' : 'Buy units in this Co-own'}
                 style={styles.dockPrimaryBtn}
               />
             </View>
@@ -629,6 +678,14 @@ export default function AssetDetailScreen() {
         onDismiss={social.closeShare}
         url={`https://thryftverse.com/asset/${asset.id}`}
         title={asset.title}
+      />
+
+      {/* ── Fullscreen media viewer (was a no-op, PRODUCT-MASTER defect #3) ── */}
+      <FullscreenMediaViewer
+        images={images}
+        initialIndex={fullscreenIndex}
+        visible={fullscreenVisible}
+        onClose={() => setFullscreenVisible(false)}
       />
     </View>
   );
@@ -939,6 +996,36 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     fontVariant: ['tabular-nums'],
+  },
+  buyoutLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  buyoutLinkText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  priceHistoryEmpty: {
+    alignItems: 'center',
+    paddingVertical: Space.md,
+    gap: Space.xs,
+  },
+  priceHistoryEmptyText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+  },
+  priceHistoryEmptySub: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 17,
   },
   detailRow: {
     flexDirection: 'row',
