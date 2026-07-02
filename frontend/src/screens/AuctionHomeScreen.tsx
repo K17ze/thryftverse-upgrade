@@ -46,6 +46,7 @@ import {
   AuctionSupportingTile,
   AuctionSkeletons,
   AuctionSegmentRail,
+  SegmentContentTransition,
   type AuctionHeaderAction,
   type Segment,
 } from '../components/auction';
@@ -1500,7 +1501,9 @@ export default function AuctionHomeScreen() {
         />
 
         {/* Selected market composition */}
-        {renderComposition()}
+        <SegmentContentTransition segmentKey={activeSegment}>
+          {renderComposition()}
+        </SegmentContentTransition>
 
         {/* Category discovery */}
         {homeData.categoryWorlds.length > 0 && (

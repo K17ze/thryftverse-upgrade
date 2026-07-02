@@ -123,7 +123,7 @@ export function AuctionRunwayCard({
       activeOpacity={0.95}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${state}, current bid ${currentBidText}, ${countdownText} left`}
+      accessibilityLabel={`${title}, ${state}, current bid ${currentBidText}, ${countdownText}`}
     >
       <View style={[styles.imageWrap, { height: imageHeight }]}>
         <CachedImage

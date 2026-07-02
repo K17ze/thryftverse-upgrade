@@ -9,5 +9,6 @@ export { AuctionAttentionStrip } from './AuctionAttentionStrip';
 export { AuctionSegmentRail } from './AuctionSegmentRail';
 export { AuctionMarketHeader } from './AuctionMarketHeader';
 export { AuctionStickyBidDock } from './AuctionStickyBidDock';
+export { SegmentContentTransition } from './SegmentContentTransition';
 export type { Segment } from './AuctionSegmentRail';
 export type { AuctionHeaderAction, AuctionHeaderActionKey } from './AuctionMarketHeader';

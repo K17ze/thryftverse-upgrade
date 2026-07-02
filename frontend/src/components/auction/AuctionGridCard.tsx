@@ -47,7 +47,7 @@ export function AuctionGridCard({
       activeOpacity={0.95}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${priceLabel} ${priceText}, ${countdownText} left, ${bidCount} bids`}
+      accessibilityLabel={`${title}, ${priceLabel} ${priceText}, ${countdownText}, ${bidCount} bids`}
     >
       <View style={styles.imageWrap}>
         <CachedImage
