@@ -6,7 +6,7 @@ import {
   RefreshControl,
   Pressable,
   Text,
-  Dimensions,
+  useWindowDimensions,
   LayoutAnimation,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,7 +28,7 @@ import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Meta, Body, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   getAuctionDetail,
@@ -81,6 +81,11 @@ import {
   detectLifecycleTransition,
   type AuctionDetailInput,
 } from '../utils/auctionDetailLogic';
+import {
+  AuctionStateBadge,
+  AuctionStickyBidDock,
+  AuctionCountdown,
+} from '../components/auction';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'AuctionDetail'>;
@@ -116,8 +121,8 @@ export default function AuctionDetailScreen() {
 
   const currentUser = useStore((state) => state.currentUser);
 
-  const SCREEN_HEIGHT = Dimensions.get('window').height;
-  const HERO_HEIGHT = Math.min(SCREEN_HEIGHT * 0.48, 440);
+  const { height: screenHeight } = useWindowDimensions();
+  const HERO_HEIGHT = Math.min(screenHeight * 0.48, 440);
 
   const serverNowRef = React.useRef<string | null>(null);
   const { secondClock, minuteClock, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed } =
@@ -480,35 +485,11 @@ export default function AuctionDetailScreen() {
               style={styles.heroGradient}
             />
 
-            {/* Lifecycle indicator — single clean pill */}
+            {/* Lifecycle indicator — single clean badge */}
             <View style={styles.heroTopRow}>
-              {isLive && (
-                <View style={styles.livePill}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.livePillText}>LIVE</Text>
-                </View>
-              )}
-              {isUpcoming && (
-                <View style={styles.scheduledPill}>
-                  <Ionicons name="time-outline" size={11} color={Colors.textInverse} />
-                  <Text style={styles.scheduledPillText}>UPCOMING</Text>
-                </View>
-              )}
-              {isEnded && (
-                <View style={styles.endedPill}>
-                  <Text style={styles.endedPillText}>ENDED</Text>
-                </View>
-              )}
-              {isCancelled && (
-                <View style={styles.cancelledPill}>
-                  <Text style={styles.cancelledPillText}>CANCELLED</Text>
-                </View>
-              )}
-              {isSettled && (
-                <View style={styles.settledPill}>
-                  <Text style={styles.settledPillText}>SETTLED</Text>
-                </View>
-              )}
+              <AuctionStateBadge
+                state={isLive ? 'live' : isUpcoming ? 'upcoming' : isCancelled ? 'cancelled' : isSettled ? 'settled' : 'ended'}
+              />
             </View>
 
             {/* Floating controls — back (left), share + save + like + watch (right) */}
@@ -626,10 +607,10 @@ export default function AuctionDetailScreen() {
             </Text>
           )}
 
-          {/* Price — 1ZE visually primary in both-mode display */}
+          {/* Price — dominant hierarchy with label above */}
           <View style={styles.transactionPriceRow}>
             <View style={styles.transactionPricePrimary}>
-              <Text style={styles.transactionPriceLabel}>{priceLabel}</Text>
+              <Text style={styles.transactionPriceLabel}>{priceLabel.toUpperCase()}</Text>
               {(() => {
                 const izeAmount = toIze(priceAmount, 'GBP', goldRates);
                 const izeText = formatIzeAmount(izeAmount);
@@ -659,37 +640,22 @@ export default function AuctionDetailScreen() {
             </View>
           </View>
 
-          {/* Minimum to lead (outbid) */}
+          {/* Minimum to lead (outbid) — actionable emphasis */}
           {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
             <View style={styles.transactionMinRow}>
-              <Text style={styles.transactionMinLabel}>Minimum to lead</Text>
+              <Text style={styles.transactionMinLabel}>MINIMUM TO LEAD</Text>
               <Text style={styles.transactionMinValue}>
                 {formatIzeAmount(toIze(auction.minimumNextBidGbp, 'GBP', goldRates))}
               </Text>
             </View>
           )}
 
-          {/* Countdown / state time */}
+          {/* Countdown — tabular-nums, urgency color */}
           <View style={styles.transactionCountdownRow}>
-            <Ionicons
-              name={
-                isLive ? 'flash-outline'
-                : isUpcoming ? 'time-outline'
-                : isCancelled ? 'close-circle-outline'
-                : isSettled ? 'checkmark-circle-outline'
-                : 'checkmark-done-outline'
-              }
-              size={14}
-              color={countdown.isFinalMinutes ? Colors.danger : Colors.textSecondary}
+            <AuctionCountdown
+              text={countdown.text}
+              urgent={countdown.isFinalMinutes}
             />
-            <Text
-              style={[styles.transactionCountdownText, countdown.isFinalMinutes && { color: Colors.danger }]}
-              accessibilityRole="text"
-              accessibilityLabel={countdown.text}
-              numberOfLines={1}
-            >
-              {countdown.text}
-            </Text>
           </View>
         </View>
 
@@ -942,86 +908,65 @@ export default function AuctionDetailScreen() {
 
       {/* ── Sticky bottom action dock ── */}
       {showBidControls && stateAction && stateAction.primary.type !== 'none' && (
-        <CommerceStickyDock bottomInset={insets.bottom}>
-          <AppButton
-            style={styles.actionDockFull}
-            onPress={() => {
-              if (stateAction.primary.type === 'placeBid' || stateAction.primary.type === 'increaseBid' || stateAction.primary.type === 'bidAgain') {
-                openBidSheet();
-              } else if (stateAction.primary.type === 'watchAuction') {
-                void handleToggleWatch();
-              } else if (stateAction.primary.type === 'viewSimilar') {
-                navigation.navigate('MainTabs', { screen: 'Explore' });
-              }
-            }}
-            disabled={isSubmittingBid || watchToggling}
-            variant={stateAction.primary.type === 'watchAuction' ? 'secondary' : 'primary'}
-            size="md"
-            title={stateAction.primary.label}
-            accessibilityLabel={stateAction.primary.label}
-          />
-          {buyNowAvailable && stateAction.secondary.type === 'buyNow' && (
-            <Pressable
-              style={styles.buyNowLink}
-              onPress={openBuyNowSheet}
-              disabled={isBuyNowLoading}
-              accessibilityRole="button"
-              accessibilityLabel={`Buy now for ${formatFromFiat(auction.buyNowPriceGbp!, 'GBP')}`}
-              accessibilityHint="Fixed price purchase. Ends auction immediately. Requires confirmation."
-            >
-              <Text style={styles.buyNowLinkText}>
-                {isBuyNowLoading ? 'Processing...' : `or Buy Now for ${formatFromFiat(auction.buyNowPriceGbp!, 'GBP')}`}
-              </Text>
-            </Pressable>
-          )}
-        </CommerceStickyDock>
+        <AuctionStickyBidDock
+          primaryLabel={stateAction.primary.label}
+          onPrimary={() => {
+            if (stateAction.primary.type === 'placeBid' || stateAction.primary.type === 'increaseBid' || stateAction.primary.type === 'bidAgain') {
+              openBidSheet();
+            } else if (stateAction.primary.type === 'watchAuction') {
+              void handleToggleWatch();
+            } else if (stateAction.primary.type === 'viewSimilar') {
+              navigation.navigate('MainTabs', { screen: 'Explore' });
+            }
+          }}
+          primaryLoading={isSubmittingBid || watchToggling}
+          disabled={isSubmittingBid || watchToggling}
+          secondaryLabel={buyNowAvailable && stateAction.secondary.type === 'buyNow' && !isBuyNowLoading
+            ? `Buy Now · ${formatFromFiat(auction.buyNowPriceGbp!, 'GBP')}`
+            : isBuyNowLoading ? 'Processing…' : undefined}
+          onSecondary={buyNowAvailable && stateAction.secondary.type === 'buyNow' ? openBuyNowSheet : undefined}
+          contextLine={isLive && auction.minimumNextBidGbp > 0
+            ? `Min bid · ${formatFromFiat(auction.minimumNextBidGbp, 'GBP')}`
+            : undefined}
+        />
       )}
 
       {isSeller && !isTerminal && stateAction && stateAction.primary.type !== 'none' && (
-        <CommerceStickyDock bottomInset={insets.bottom}>
-          <View style={styles.sellerDockInfo}>
-            <Ionicons name="storefront-outline" size={16} color={Colors.brand} />
-            <Text style={styles.sellerDockText}>
-              {isUpcoming ? 'Your auction is scheduled' : `${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'} so far`}
-            </Text>
-          </View>
-        </CommerceStickyDock>
+        <AuctionStickyBidDock
+          variant="seller"
+          primaryLabel=""
+          onPrimary={() => {}}
+          terminalMessage={isUpcoming ? 'Your auction is scheduled' : `${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'} so far`}
+        />
       )}
 
       {isTerminal && (
-        <CommerceStickyDock bottomInset={insets.bottom}>
-          {isCancelled ? (
-            <View style={styles.terminalDockRow}>
-              <Ionicons name="close-circle-outline" size={16} color={Colors.textMuted} />
-              <Text style={styles.terminalDockText}>Auction cancelled</Text>
-            </View>
-          ) : viewerState === 'won' ? (
-            <View style={styles.terminalDockRow}>
-              <Ionicons name="trophy-outline" size={16} color={Colors.success} />
-              <Text style={[styles.terminalDockText, { color: Colors.success }]}>You won this auction</Text>
-            </View>
-          ) : viewerState === 'lost' ? (
-            <View style={styles.terminalDockRow}>
-              <Ionicons name="close-circle-outline" size={16} color={Colors.textMuted} />
-              <Text style={styles.terminalDockText}>Auction ended — you did not win</Text>
-            </View>
-          ) : isSeller && auction.bidCount > 0 ? (
-            <View style={styles.terminalDockRow}>
-              <Ionicons name="checkmark-circle-outline" size={16} color={Colors.brand} />
-              <Text style={[styles.terminalDockText, { color: Colors.brand }]}>Sold — {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}</Text>
-            </View>
-          ) : isSeller ? (
-            <View style={styles.terminalDockRow}>
-              <Ionicons name="close-circle-outline" size={16} color={Colors.textMuted} />
-              <Text style={styles.terminalDockText}>Ended without bids</Text>
-            </View>
-          ) : (
-            <View style={styles.terminalDockRow}>
-              <Ionicons name="checkmark-done-outline" size={16} color={Colors.textMuted} />
-              <Text style={styles.terminalDockText}>Auction ended</Text>
-            </View>
-          )}
-        </CommerceStickyDock>
+        <AuctionStickyBidDock
+          variant="terminal"
+          primaryLabel=""
+          onPrimary={() => {}}
+          terminalMessage={
+            isCancelled ? 'Auction cancelled'
+            : viewerState === 'won' ? 'You won this auction'
+            : viewerState === 'lost' ? 'Auction ended — you did not win'
+            : isSeller && auction.bidCount > 0 ? `Sold — ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`
+            : isSeller ? 'Ended without bids'
+            : 'Auction ended'
+          }
+          terminalIcon={
+            isCancelled ? 'close-circle-outline'
+            : viewerState === 'won' ? 'trophy-outline'
+            : viewerState === 'lost' ? 'close-circle-outline'
+            : isSeller && auction.bidCount > 0 ? 'checkmark-circle-outline'
+            : isSeller ? 'close-circle-outline'
+            : 'checkmark-done-outline'
+          }
+          terminalAccent={
+            viewerState === 'won' ? Colors.success
+            : isSeller && auction.bidCount > 0 ? Colors.brand
+            : Colors.textMuted
+          }
+        />
       )}
 
       {/* ── Bid transaction sheet ── */}
