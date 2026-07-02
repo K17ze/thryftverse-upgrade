@@ -9,7 +9,7 @@ import { AppStatusPill } from '../ui/AppStatusPill';
 import { Meta, BodyEmphasis, Body } from '../ui/Text';
 
 export type OrderSide = 'buy' | 'sell';
-export type OrderStatus = 'filled' | 'pending' | 'partial' | 'cancelled';
+export type OrderStatus = 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
 
 interface OrderHistoryRowProps {
   id: string;
@@ -42,11 +42,13 @@ function resolveStatusTone(status: OrderStatus) {
   switch (status) {
     case 'filled':
       return 'positive' as const;
-    case 'pending':
+    case 'open':
       return 'warning' as const;
-    case 'partial':
+    case 'partially_filled':
       return 'accent' as const;
     case 'cancelled':
+      return 'neutral' as const;
+    case 'rejected':
       return 'negative' as const;
     default:
       return 'neutral' as const;

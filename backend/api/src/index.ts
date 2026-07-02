@@ -846,6 +846,26 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && /^\/sellers\/[^/]+\/reviews$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/users\/[^/]+\/follow-counts$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/users\/[^/]+\/followers$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/users\/[^/]+\/following$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/users\/[^/]+\/listings$/.test(path)) {
+    return true;
+  }
+
   if (method === 'GET' && (path === '/poster-stories' || path.startsWith('/poster-stories/'))) {
     return true;
   }
@@ -12079,6 +12099,87 @@ app.post('/sellers/:sellerId/follow', async (request, reply) => {
   return { ok: true, isFollowing: true };
 });
 
+// Idempotent follow (POST /users/:userId/follow) — creates follow only if absent.
+app.post('/users/:userId/follow', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const followerId = request.authUser.userId;
+
+  if (followerId === userId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot follow yourself' };
+  }
+
+  // Check block state — cannot follow if blocked by target
+  const blockedByTarget = await readDb.query<{ id: string }>(
+    `SELECT id FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2 LIMIT 1`,
+    [userId, followerId]
+  );
+  if ((blockedByTarget.rowCount ?? 0) > 0) {
+    reply.code(403);
+    return { ok: false, error: 'Cannot follow this user', code: 'BLOCKED_BY_TARGET' };
+  }
+
+  const followId = `follow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const inserted = await db.query<{ id: string }>(
+    `INSERT INTO user_follows (id, follower_id, following_id, created_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (follower_id, following_id) DO NOTHING
+     RETURNING id`,
+    [followId, followerId, userId]
+  );
+
+  if ((inserted.rowCount ?? 0) > 0) {
+    // Queue a follow notification to the followed user
+    try {
+      const followerRow = await readDb.query<{ username: string; display_name: string | null; avatar: string | null }>(
+        `SELECT username, display_name, avatar FROM users WHERE id = $1 LIMIT 1`,
+        [followerId]
+      );
+      const follower = followerRow.rows[0];
+      const followerName = follower?.display_name || follower?.username || 'Someone';
+      await queueUserNotification({
+        userId,
+        title: 'New follower',
+        body: `${followerName} started following you`,
+        eventType: 'follow_received',
+        actorUserId: followerId,
+        imageUrl: follower?.avatar ?? undefined,
+        payload: { followerId },
+        route: { screen: 'UserProfile', params: { userId: followerId } },
+        idempotencyKey: `follow_received_${followerId}_${userId}`,
+        metadata: { source: 'user_follow' },
+      });
+    } catch (notifErr) {
+      app.log.error({ err: notifErr }, 'Failed to queue follow_received notification');
+    }
+  }
+
+  return { ok: true, isFollowing: true };
+});
+
+// Idempotent unfollow (DELETE /users/:userId/follow) — removes follow only if present.
+app.delete('/users/:userId/follow', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const followerId = request.authUser.userId;
+
+  await db.query(
+    `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
+    [followerId, userId]
+  );
+
+  return { ok: true, isFollowing: false };
+});
+
 app.get('/users/:userId/profile', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -12107,6 +12208,332 @@ app.get('/users/:userId/profile', async (request, reply) => {
     ok: true,
     user: toPublicProfilePayload(user),
   };
+});
+
+// ── Seller reviews: summary + paginated list ─────────────────────────
+
+app.get('/sellers/:sellerId/reviews', async (request, reply) => {
+  const paramsSchema = z.object({ sellerId: z.string().min(2) });
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    cursor: z.string().optional(),
+  });
+  const { sellerId } = paramsSchema.parse(request.params);
+  const { limit, cursor } = querySchema.parse(request.query ?? {});
+
+  const sellerExists = await readDb.query<{ id: string }>(
+    `SELECT id FROM users WHERE id = $1 LIMIT 1`,
+    [sellerId]
+  );
+  if (!sellerExists.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Seller not found' };
+  }
+
+  // Summary: average, total, distribution
+  const summaryRes = await readDb.query<{
+    avg_rating: string | null;
+    review_count: string;
+    d1: string;
+    d2: string;
+    d3: string;
+    d4: string;
+    d5: string;
+  }>(
+    `SELECT
+       AVG(rating)::numeric(3,2) AS avg_rating,
+       COUNT(*)::text AS review_count,
+       COUNT(*) FILTER (WHERE rating = 1)::text AS d1,
+       COUNT(*) FILTER (WHERE rating = 2)::text AS d2,
+       COUNT(*) FILTER (WHERE rating = 3)::text AS d3,
+       COUNT(*) FILTER (WHERE rating = 4)::text AS d4,
+       COUNT(*) FILTER (WHERE rating = 5)::text AS d5
+     FROM order_reviews WHERE seller_id = $1`,
+    [sellerId]
+  );
+
+  const summaryRow = summaryRes.rows[0];
+  const ratingAverage = summaryRow?.avg_rating ? Number(summaryRow.avg_rating) : null;
+  const reviewCount = Number(summaryRow?.review_count ?? '0');
+  const distribution = [
+    { rating: 5, count: Number(summaryRow?.d5 ?? '0') },
+    { rating: 4, count: Number(summaryRow?.d4 ?? '0') },
+    { rating: 3, count: Number(summaryRow?.d3 ?? '0') },
+    { rating: 2, count: Number(summaryRow?.d2 ?? '0') },
+    { rating: 1, count: Number(summaryRow?.d1 ?? '0') },
+  ];
+
+  // Paginated review list with reviewer identity + associated listing context
+  const conditions: string[] = ['r.seller_id = $1'];
+  const args: unknown[] = [sellerId];
+  if (cursor) {
+    conditions.push(`r.created_at < $${args.length + 1}`);
+    args.push(cursor);
+  }
+  const fetchLimit = limit + 1;
+
+  const reviewsRes = await readDb.query<{
+    id: string;
+    rating: number;
+    comment: string | null;
+    created_at: string;
+    reviewer_username: string | null;
+    reviewer_display_name: string | null;
+    reviewer_avatar: string | null;
+    listing_id: string | null;
+    listing_title: string | null;
+    listing_image_url: string | null;
+  }>(
+    `
+      SELECT
+        r.id, r.rating, r.comment, r.created_at,
+        u.username AS reviewer_username,
+        u.display_name AS reviewer_display_name,
+        u.avatar AS reviewer_avatar,
+        l.id AS listing_id,
+        l.title AS listing_title,
+        l.image_url AS listing_image_url
+      FROM order_reviews r
+      LEFT JOIN users u ON u.id = r.reviewer_id
+      LEFT JOIN orders o ON o.id = r.order_id
+      LEFT JOIN listings l ON l.id = o.listing_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY r.created_at DESC
+      LIMIT $${args.length + 1}
+    `,
+    [...args, fetchLimit]
+  );
+
+  const hasMore = reviewsRes.rows.length > limit;
+  const rows = hasMore ? reviewsRes.rows.slice(0, limit) : reviewsRes.rows;
+  const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
+
+  return {
+    ok: true,
+    summary: {
+      ratingAverage,
+      reviewCount,
+      distribution,
+    },
+    items: rows.map((row) => ({
+      id: row.id,
+      rating: row.rating,
+      comment: row.comment,
+      createdAt: row.created_at,
+      reviewer: {
+        id: null as string | null,
+        username: row.reviewer_username,
+        displayName: row.reviewer_display_name,
+        avatar: row.reviewer_avatar,
+      },
+      listing: row.listing_id
+        ? {
+            id: row.listing_id,
+            title: row.listing_title,
+            imageUrl: row.listing_image_url,
+          }
+        : null,
+    })),
+    nextCursor,
+  };
+});
+
+// ── Follow counts + follower/following lists ─────────────────────────
+
+app.get('/users/:userId/follow-counts', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const result = await readDb.query<{ followers: string; following: string }>(
+    `SELECT
+       (SELECT COUNT(*)::text FROM user_follows WHERE following_id = $1) AS followers,
+       (SELECT COUNT(*)::text FROM user_follows WHERE follower_id = $1) AS following`,
+    [userId]
+  );
+
+  return {
+    ok: true,
+    followerCount: Number(result.rows[0]?.followers ?? '0'),
+    followingCount: Number(result.rows[0]?.following ?? '0'),
+  };
+});
+
+app.get('/users/:userId/followers', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(40),
+    cursor: z.string().optional(),
+  });
+  const { userId } = paramsSchema.parse(request.params);
+  const { limit, cursor } = querySchema.parse(request.query ?? {});
+
+  const conditions: string[] = ['f.following_id = $1'];
+  const args: unknown[] = [userId];
+  if (cursor) {
+    conditions.push(`f.created_at < $${args.length + 1}`);
+    args.push(cursor);
+  }
+  const fetchLimit = limit + 1;
+
+  const result = await readDb.query<{
+    id: string;
+    username: string;
+    display_name: string | null;
+    avatar: string | null;
+    created_at: string;
+  }>(
+    `SELECT u.id, u.username, u.display_name, u.avatar, f.created_at
+     FROM user_follows f
+     JOIN users u ON u.id = f.follower_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY f.created_at DESC
+     LIMIT $${args.length + 1}`,
+    [...args, fetchLimit]
+  );
+
+  const hasMore = result.rows.length > limit;
+  const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+  const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      avatar: row.avatar,
+    })),
+    nextCursor,
+  };
+});
+
+app.get('/users/:userId/following', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(40),
+    cursor: z.string().optional(),
+  });
+  const { userId } = paramsSchema.parse(request.params);
+  const { limit, cursor } = querySchema.parse(request.query ?? {});
+
+  const conditions: string[] = ['f.follower_id = $1'];
+  const args: unknown[] = [userId];
+  if (cursor) {
+    conditions.push(`f.created_at < $${args.length + 1}`);
+    args.push(cursor);
+  }
+  const fetchLimit = limit + 1;
+
+  const result = await readDb.query<{
+    id: string;
+    username: string;
+    display_name: string | null;
+    avatar: string | null;
+    created_at: string;
+  }>(
+    `SELECT u.id, u.username, u.display_name, u.avatar, f.created_at
+     FROM user_follows f
+     JOIN users u ON u.id = f.following_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY f.created_at DESC
+     LIMIT $${args.length + 1}`,
+    [...args, fetchLimit]
+  );
+
+  const hasMore = result.rows.length > limit;
+  const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+  const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      avatar: row.avatar,
+    })),
+    nextCursor,
+  };
+});
+
+// ── Block / unblock ──────────────────────────────────────────────────
+
+app.post('/users/:userId/block', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const blockerId = request.authUser.userId;
+
+  if (blockerId === userId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot block yourself' };
+  }
+
+  const blockId = `block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await db.query(
+    `INSERT INTO user_blocks (id, blocker_id, blocked_id, created_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
+    [blockId, blockerId, userId]
+  );
+
+  // Remove any follow relationship in either direction
+  await db.query(
+    `DELETE FROM user_follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)`,
+    [blockerId, userId]
+  );
+
+  return { ok: true, isBlocked: true };
+});
+
+app.post('/users/:userId/unblock', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const blockerId = request.authUser.userId;
+
+  await db.query(
+    `DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`,
+    [blockerId, userId]
+  );
+
+  return { ok: true, isBlocked: false };
+});
+
+// ── Report user ──────────────────────────────────────────────────────
+
+app.post('/users/:userId/report', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const bodySchema = z.object({
+    reason: z.enum(['spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment', 'other']),
+    details: z.string().min(1).max(2000).optional(),
+  });
+  const { userId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body ?? {});
+  const reporterId = request.authUser.userId;
+
+  if (reporterId === userId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot report yourself' };
+  }
+
+  const reportId = `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await db.query(
+    `INSERT INTO user_reports (id, reporter_id, reported_id, reason, details, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+    [reportId, reporterId, userId, body.reason, body.details ?? null]
+  );
+
+  reply.code(201);
+  return { ok: true, reportId };
 });
 
 app.get('/users/search', async (request, reply) => {
@@ -28800,6 +29227,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
     unit_price_gbp: number | string | null;
     fee_gbp: number | string | null;
     status: 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | null;
+    order_type: 'market' | 'limit' | null;
     note: string | null;
     timestamp: string;
   }>(
@@ -28814,6 +29242,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
         history.unit_price_gbp,
         history.fee_gbp,
         history.status,
+        history.order_type,
         history.note,
         history.timestamp
       FROM (
@@ -28831,6 +29260,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
             ELSE NULL::NUMERIC
           END AS fee_gbp,
           NULL::TEXT AS status,
+          NULL::TEXT AS order_type,
           l.title AS note,
           ab.created_at AS timestamp
         FROM auction_bids ab
@@ -28850,6 +29280,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
           so.unit_price_gbp AS unit_price_gbp,
           so.fee_gbp AS fee_gbp,
           so.status::text AS status,
+          so.order_type::text AS order_type,
           sa.title AS note,
           so.created_at AS timestamp
         FROM coOwn_orders so
@@ -28887,6 +29318,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
       unitPriceGbp: row.unit_price_gbp === null ? null : Number(row.unit_price_gbp),
       feeGbp: row.fee_gbp === null ? null : Number(row.fee_gbp),
       status: row.status,
+      orderType: row.order_type as 'market' | 'limit' | null,
       note: row.note,
       timestamp: row.timestamp,
     })),
@@ -31162,12 +31594,15 @@ app.post('/co-own/assets', async (request, reply) => {
     id: string;
     title: string;
     image_url: string | null;
-  }>('SELECT id, title, image_url FROM listings WHERE id = $1 LIMIT 1', [payload.listingId]);
+  }>(
+    'SELECT id, title, image_url FROM listings WHERE id = $1 AND seller_id = $2 LIMIT 1',
+    [payload.listingId, payload.issuerId]
+  );
 
   const listing = listingResult.rows[0];
   if (!listing) {
     reply.code(404);
-    return { ok: false, error: 'Listing not found' };
+    return { ok: false, error: 'Listing not found or not owned by issuer', code: 'LISTING_OWNERSHIP_DENIED' };
   }
 
   const assetId = payload.id ?? `s_${Date.now()}_${Math.floor(Math.random() * 10000)}`;

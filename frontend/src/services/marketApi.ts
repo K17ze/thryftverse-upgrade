@@ -194,6 +194,7 @@ export interface MarketHistoryItem {
   unitPriceGbp: number | null;
   feeGbp: number | null;
   status: 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | null;
+  orderType: 'market' | 'limit' | null;
   note: string | null;
   timestamp: string;
 }
@@ -633,6 +634,7 @@ export async function placeCoOwnOrder(
 export interface CreateCoOwnAssetInput {
   id?: string;
   listingId: string;
+  issuerId: string;
   title?: string;
   imageUrl?: string;
   totalUnits: number;

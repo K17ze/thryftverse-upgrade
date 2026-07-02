@@ -15,7 +15,9 @@ export interface TradeQuoteInput {
   orderMode: TradeOrderMode;
   side: TradeSide;
   quantityInput: string;
+  /** User-entered limit price in GBP (the storage/settlement currency). */
   limitPriceInput: string;
+  /** Authoritative unit price in GBP from the backend (NOT 1ze). */
   marketPrice: number;
 }
 
@@ -23,11 +25,16 @@ export interface TradeQuote {
   orderMode: TradeOrderMode;
   quantity: number;
   isValidQty: boolean;
+  /** Limit price in GBP (only valid when orderMode is 'limit'). */
   limitPrice: number;
   hasLimitPrice: boolean;
+  /** Execution price in GBP — market orders use the backend unit price, limit orders use the entered price. */
   executionPrice: number;
+  /** Gross value in GBP (quantity × executionPrice). */
   grossValue: number;
+  /** Platform fee in GBP. */
   fee: number;
+  /** Buy: grossValue + fee (total cost). Sell: grossValue - fee (net proceeds). */
   netValue: number;
 }
 
@@ -68,10 +75,13 @@ export function buildTradeQuote(input: TradeQuoteInput): TradeQuote {
   const limitPrice = Number(input.limitPriceInput);
   const hasLimitPrice = Number.isFinite(limitPrice) && limitPrice > 0;
 
+  // Market orders use the authoritative backend unit price directly.
+  // The server's matching engine determines final execution price — the
+  // client must NOT invent a slippage/adjustment factor.
   const executionPrice =
     input.orderMode === 'limit' && hasLimitPrice
       ? limitPrice
-      : input.marketPrice * (input.side === 'buy' ? 1.003 : 0.997);
+      : input.marketPrice;
 
   const grossValue = isValidQty ? quantity * executionPrice : 0;
   const fee = grossValue * CO_OWN_FEE_RATE;

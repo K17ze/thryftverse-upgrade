@@ -65,6 +65,8 @@ export type RootStackParamList = {
   Settings: undefined;
   EditProfile: { focus?: 'avatar' | 'cover' };
   AccountSettings: undefined;
+  AccountControl: undefined;
+  SavedAddresses: undefined;
   Payments: undefined;
   // Phase 16 new screens
   MakeOffer: { itemId: string; price: number; title: string };
@@ -193,6 +195,8 @@ export type RootStackParamList = {
   };
   TradeConfirm: {
     assetId: string;
+    assetTitle?: string;
+    assetImageUrl?: string | null;
     side: 'buy' | 'sell';
     quantity: number;
     totalValue: number;

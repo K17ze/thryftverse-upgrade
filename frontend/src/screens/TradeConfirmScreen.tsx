@@ -25,16 +25,17 @@ import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
 import { placeCoOwnOrder } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useStore } from '../store/useStore';
+import { CachedImage } from '../components/CachedImage';
 
 type Props = StackScreenProps<RootStackParamList, 'TradeConfirm'>;
 
 export default function TradeConfirmScreen({ navigation, route }: Props) {
-  const { assetId, side, quantity, totalValue, fee, netValue, orderMode, limitPriceGbp } = route.params;
+  const { assetId, assetTitle, assetImageUrl, side, quantity, totalValue, fee, netValue, orderMode, limitPriceGbp } = route.params;
   const { isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { show } = useToast();
-  const { formatFromIze } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,13 +44,20 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
 
   const handleConfirm = async () => {
     if (isSubmitting) return;
+
+    // Never fabricate an actor identity. If the user is not authenticated,
+    // block the submission honestly rather than falling back to a fake ID.
+    if (!currentUser?.id) {
+      show('Sign in is required to place an order.', 'error');
+      return;
+    }
+
     haptic.heavy();
     setIsSubmitting(true);
 
     try {
-      const actingUserId = currentUser?.id ?? 'u1';
       const remoteOrder = await placeCoOwnOrder(assetId, {
-        userId: actingUserId,
+        userId: currentUser.id,
         side,
         units: quantity,
         orderType: orderMode,
@@ -84,7 +92,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     navigation.goBack();
   };
 
-  const assetName = `Asset ${assetId.slice(-6).toUpperCase()}`;
+  const assetName = assetTitle ?? `Co-Own ${assetId.slice(-6).toUpperCase()}`;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -95,7 +103,11 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         {/* Asset summary */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)} style={styles.assetCard}>
           <View style={styles.assetIconWrap}>
-            <Ionicons name="cube-outline" size={28} color={Colors.brand} />
+            {assetImageUrl ? (
+              <CachedImage uri={assetImageUrl} style={styles.assetImage} contentFit="cover" />
+            ) : (
+              <Ionicons name="cube-outline" size={28} color={Colors.brand} />
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <BodyEmphasis style={styles.assetName}>{assetName}</BodyEmphasis>
@@ -125,21 +137,21 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           </View>
 
           <View style={styles.summaryRow}>
-            <Caption color={Colors.textMuted}>Total value</Caption>
-            <Text style={styles.summaryValue}>{formatFromIze(totalValue, { displayMode: 'fiat' })}</Text>
+            <Caption color={Colors.textMuted}>{isBuy ? 'Gross cost' : 'Gross proceeds'}</Caption>
+            <Text style={styles.summaryValue}>{formatFromFiat(totalValue, 'GBP')}</Text>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.summaryRow}>
             <Caption color={Colors.textMuted}>Platform fee</Caption>
-            <Text style={styles.summaryValue}>{formatFromIze(fee, { displayMode: 'fiat' })}</Text>
+            <Text style={styles.summaryValue}>{formatFromFiat(fee, 'GBP')}</Text>
           </View>
 
           <View style={styles.summaryRow}>
-            <Caption color={Colors.textMuted}>Net {isBuy ? 'cost' : 'proceeds'}</Caption>
+            <Caption color={Colors.textMuted}>{isBuy ? 'Total cost' : 'Net proceeds'}</Caption>
             <Text style={[styles.summaryValue, styles.netValue]}>
-              {formatFromIze(netValue, { displayMode: 'fiat' })}
+              {formatFromFiat(netValue, 'GBP')}
             </Text>
           </View>
         </Reanimated.View>
@@ -215,6 +227,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  assetImage: {
+    width: 52,
+    height: 52,
   },
   assetName: {
     fontSize: Type.title.size,

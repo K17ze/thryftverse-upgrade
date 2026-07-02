@@ -38,6 +38,7 @@ import { ProductFamilyBadge, RecommendationRail } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
+import { resolveCoOwnConversation } from '../utils/coOwnMessaging';
 import {
   buildCoOwnViewModel,
   useProductSocialState,
@@ -57,6 +58,7 @@ export default function AssetDetailScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
+  const upsertConversation = useStore((state) => state.upsertConversation);
   const { formatFromFiat, goldRates, displayMode } = useFormattedPrice();
   const { show } = useToast();
 
@@ -67,6 +69,7 @@ export default function AssetDetailScreen() {
   const [yourUnits, setYourUnits] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
+  const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => {
@@ -354,12 +357,31 @@ export default function AssetDetailScreen() {
               { label: 'Total supply', value: `${totalUnits}u` },
             ]}
             onOpenProfile={() => navigation.navigate('UserProfile', { userId: asset.issuerId })}
-            onMessage={canMessageIssuer ? () => {
-              navigation.navigate('Chat', {
-                conversationId: `${asset.issuerId}_${asset.listingId}`,
-                focusQuery: issuerHandle,
-                partnerUserId: asset.issuerId,
-              });
+            onMessage={canMessageIssuer ? async () => {
+              if (!currentUser?.id) {
+                show('Sign in to message the issuer.', 'error');
+                return;
+              }
+              if (isResolvingConversation) return;
+              setIsResolvingConversation(true);
+              try {
+                const conversation = await resolveCoOwnConversation(
+                  currentUser.id,
+                  asset.issuerId,
+                  issuerHandle,
+                  asset.listingId,
+                );
+                upsertConversation(conversation);
+                navigation.navigate('Chat', {
+                  conversationId: conversation.id,
+                  focusQuery: issuerHandle,
+                  partnerUserId: asset.issuerId,
+                });
+              } catch {
+                show('Unable to open conversation. Please try again.', 'error');
+              } finally {
+                setIsResolvingConversation(false);
+              }
             } : undefined}
             messageLabel="Message"
           />

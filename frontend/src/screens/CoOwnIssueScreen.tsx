@@ -18,7 +18,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppInput } from '../components/ui/AppInput';
 import { useToast } from '../context/ToastContext';
-import { FlagshipEmptyGraphic, FlagshipActionCluster } from '../components/flagship';
+import { FlagshipActionCluster } from '../components/flagship';
 
 type Props = StackScreenProps<RootStackParamList, 'CoOwnIssue'>;
 
@@ -33,8 +33,6 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const [category, setCategory] = useState<string | null>(null);
   const [description, setDescription] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
 
   const assetId = route.params?.assetId;
 
@@ -47,36 +45,12 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       show('Describe the issue', 'error');
       return;
     }
-    setIsSubmitting(true);
-    // Honest local-only handling — no fake backend call
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSubmitted(true);
-    }, 800);
+    // Route to the real Help & Support flow with Co-Own context.
+    // Do not simulate a local submission or claim a report was recorded.
+    const categoryLabel = CATEGORIES.find((c) => c.value === category)?.label ?? 'Issue';
+    show(`Opening support — reference: ${categoryLabel} for this Co-Own.`, 'info');
+    navigation.navigate('HelpSupport');
   };
-
-  if (submitted) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <ScreenHeader title="Report Issue" onBack={() => navigation.goBack()} />
-        <View style={styles.centered}>
-          <FlagshipEmptyGraphic variant="box" size={140} />
-          <Text style={styles.successTitle}>Report recorded</Text>
-          <Text style={styles.successSub}>
-            Your issue has been logged locally. Support connection is required for escalation.
-          </Text>
-          <FlagshipActionCluster
-            actions={[
-              { label: 'Back to Asset', onPress: () => navigation.goBack(), variant: 'primary' },
-              { label: 'Contact Support', onPress: () => navigation.navigate('HelpSupport'), variant: 'secondary' },
-            ]}
-            style={{ marginTop: Space.lg, width: '100%', paddingHorizontal: Space.lg }}
-          />
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -127,13 +101,13 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         <Reanimated.View entering={FadeInDown.duration(300).delay(150)} style={styles.note}>
           <Ionicons name="information-circle-outline" size={16} color={Colors.textMuted} />
           <Text style={styles.noteText}>
-            Submission requires a support backend connection. This form logs your report locally.
+            Your report will be submitted through the Help & Support flow. Use the description above when contacting support.
           </Text>
         </Reanimated.View>
 
         <FlagshipActionCluster
           actions={[
-            { label: isSubmitting ? 'Recording...' : 'Record Report', onPress: handleSubmit, variant: 'primary', disabled: isSubmitting, loading: isSubmitting },
+            { label: 'Continue to Support', onPress: handleSubmit, variant: 'primary' },
           ]}
           style={{ marginTop: Space.lg }}
         />
@@ -145,21 +119,6 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   scroll: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.lg },
-  successIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.lg,
-  },
-  successTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: Space.sm },
-  successSub: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, textAlign: 'center' },
 
   assetContext: {
     flexDirection: 'row',

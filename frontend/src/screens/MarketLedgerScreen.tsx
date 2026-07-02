@@ -249,7 +249,7 @@ export default function MarketLedgerScreen() {
                 quantity={item.units ?? 1}
                 pricePerShare={formatMoney(item.amountGBP)}
                 totalAmount={formatSignedMoney(getEntryCashflow(item))}
-                status={item.action === 'bid' ? 'pending' : 'filled'}
+                status={item.action === 'bid' ? 'open' : 'filled'}
                 timestamp={relativeTime(item.timestamp)}
                 onPress={() => {
                   const source: CommerceDestinationSource = isAuction
