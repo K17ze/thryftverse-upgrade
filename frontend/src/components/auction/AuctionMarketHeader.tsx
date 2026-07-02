@@ -1,89 +1,89 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
-import { AnimatedPressable } from '../AnimatedPressable';
+import { Space, Typography } from '../../theme/designTokens';
+
+export type AuctionHeaderActionKey = 'search' | 'filter' | 'create' | 'seller' | 'activity';
+
+export interface AuctionHeaderAction {
+  key: AuctionHeaderActionKey;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  badgeCount?: number;
+  priority?: 'primary' | 'secondary';
+}
 
 interface Props {
   title: string;
   context?: string;
-  onBack: () => void;
-  onSearch: () => void;
-  onActivity: () => void;
-  activityCount?: number;
-  rightIcon?: keyof typeof Ionicons.glyphMap;
-  onRightAction?: () => void;
-  rightActionLabel?: string;
+  showBack?: boolean;
+  onBack?: () => void;
+  actions: AuctionHeaderAction[];
 }
+
+const SMALL_WIDTH_THRESHOLD = 360;
 
 export function AuctionMarketHeader({
   title,
   context,
+  showBack,
   onBack,
-  onSearch,
-  onActivity,
-  activityCount,
-  rightIcon,
-  onRightAction,
-  rightActionLabel,
+  actions,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isSmall = width < SMALL_WIDTH_THRESHOLD;
+
+  // Responsive: on small devices, drop secondary-priority actions first.
+  // Priority order for hiding: Activity (secondary) → Filter (secondary) → Seller (primary)
+  // Create and Search are always preserved (highest priority).
+  const visibleActions = isSmall
+    ? actions.filter((a) => a.priority !== 'secondary')
+    : actions;
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + Space.xs }]}>
       <View style={styles.row}>
-        <AnimatedPressable
-          style={styles.iconBtn}
-          scaleValue={0.9}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
-        </AnimatedPressable>
+        {showBack && onBack ? (
+          <Pressable
+            onPress={onBack}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            style={styles.iconBtn}
+          >
+            <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
+          </Pressable>
+        ) : null}
 
         <View style={styles.titleWrap}>
           <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          {context && <Text style={styles.context} numberOfLines={1}>{context}</Text>}
+          {context ? <Text style={styles.context} numberOfLines={1}>{context}</Text> : null}
         </View>
 
         <View style={styles.actions}>
-          <AnimatedPressable
-            style={styles.iconBtn}
-            scaleValue={0.9}
-            onPress={onSearch}
-            accessibilityRole="button"
-            accessibilityLabel="Search auctions"
-          >
-            <Ionicons name="search-outline" size={20} color={Colors.textPrimary} />
-          </AnimatedPressable>
-          {rightIcon && onRightAction ? (
-            <AnimatedPressable
-              style={styles.iconBtn}
-              scaleValue={0.9}
-              onPress={onRightAction}
+          {visibleActions.map((action) => (
+            <Pressable
+              key={action.key}
+              onPress={action.onPress}
+              hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel={rightActionLabel ?? 'Action'}
+              accessibilityLabel={action.label}
+              style={styles.iconBtn}
             >
-              <Ionicons name={rightIcon} size={20} color={Colors.textPrimary} />
-            </AnimatedPressable>
-          ) : null}
-          <AnimatedPressable
-            style={styles.iconBtn}
-            scaleValue={0.9}
-            onPress={onActivity}
-            accessibilityRole="button"
-            accessibilityLabel="My auction activity"
-          >
-            <Ionicons name="notifications-outline" size={20} color={Colors.textPrimary} />
-            {activityCount != null && activityCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{activityCount > 9 ? '9+' : activityCount}</Text>
-              </View>
-            )}
-          </AnimatedPressable>
+              <Ionicons name={action.icon} size={20} color={Colors.textPrimary} />
+              {action.badgeCount != null && action.badgeCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {action.badgeCount > 9 ? '9+' : action.badgeCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          ))}
         </View>
       </View>
     </View>
@@ -98,12 +98,12 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.xs,
+    minHeight: 44,
   },
   iconBtn: {
     width: 44,
     height: 44,
-    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 0,
   },
   badge: {
     position: 'absolute',

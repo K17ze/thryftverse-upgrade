@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Typography } from '../../theme/designTokens';
+import { haptics } from '../../utils/haptics';
 
 export interface Segment {
   key: string;
@@ -16,7 +17,12 @@ interface Props {
   accessibilityLabelPrefix?: string;
 }
 
-export function AuctionSegmentRail({ segments, activeKey, onSelect, accessibilityLabelPrefix = 'Show' }: Props) {
+export function AuctionSegmentRail({
+  segments,
+  activeKey,
+  onSelect,
+  accessibilityLabelPrefix = 'Show',
+}: Props) {
   return (
     <ScrollView
       horizontal
@@ -28,18 +34,24 @@ export function AuctionSegmentRail({ segments, activeKey, onSelect, accessibilit
         return (
           <Pressable
             key={seg.key}
-            style={[styles.segment, active && styles.segmentActive]}
-            onPress={() => onSelect(seg.key)}
+            style={styles.segment}
+            onPress={() => {
+              haptics.tap();
+              onSelect(seg.key);
+            }}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={`${accessibilityLabelPrefix} ${seg.label}`}
+            accessibilityLabel={`${accessibilityLabelPrefix} ${seg.label}${seg.count != null ? `, ${seg.count} auctions` : ''}`}
           >
-            <Text style={[styles.label, active && styles.labelActive]}>{seg.label}</Text>
+            <Text style={[styles.label, active && styles.labelActive]}>
+              {seg.label}
+            </Text>
             {seg.count != null && (
-              <View style={[styles.count, active && styles.countActive]}>
-                <Text style={[styles.countText, active && styles.countTextActive]}>{seg.count}</Text>
-              </View>
+              <Text style={[styles.count, active && styles.countActive]}>
+                {seg.count}
+              </Text>
             )}
+            <View style={[styles.underline, active && styles.underlineActive]} />
           </Pressable>
         );
       })}
@@ -49,49 +61,46 @@ export function AuctionSegmentRail({ segments, activeKey, onSelect, accessibilit
 
 const styles = StyleSheet.create({
   content: {
-    gap: Space.xs,
+    gap: Space.md,
     paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
   },
   segment: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: 5,
-    paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
-  },
-  segmentActive: {
-    backgroundColor: Colors.brand,
+    position: 'relative',
   },
   label: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    fontSize: 15,
     color: Colors.textSecondary,
-    letterSpacing: -0.1,
+    letterSpacing: -0.2,
   },
   labelActive: {
-    color: Colors.textInverse,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   count: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 999,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  countActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  countText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 10,
+    fontFamily: Typography.family.regular,
+    fontSize: 12,
     color: Colors.textMuted,
     fontVariant: ['tabular-nums'],
   },
-  countTextActive: {
-    color: Colors.textInverse,
+  countActive: {
+    color: Colors.textSecondary,
+  },
+  underline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: 'transparent',
+  },
+  underlineActive: {
+    backgroundColor: Colors.brand,
   },
 });

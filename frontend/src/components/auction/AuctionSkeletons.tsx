@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Space, Radius } from '../../theme/designTokens';
 
 export function AuctionSkeletons() {
+  const { width } = useWindowDimensions();
   return (
     <View style={styles.container}>
       {/* Header skeleton */}
@@ -12,36 +13,28 @@ export function AuctionSkeletons() {
         <View style={styles.skeletonHeaderActions} />
       </View>
 
-      {/* Runway skeleton */}
-      <View style={styles.runwayWrap}>
-        <View style={[styles.skeletonBlock, styles.runwayCard]} />
-        <View style={[styles.skeletonBlock, styles.runwayPeek]} />
+      {/* Thin attention strip skeleton */}
+      <View style={styles.attentionStrip} />
+
+      {/* Segment rail skeleton */}
+      <View style={styles.segmentRail}>
+        <View style={styles.segmentSkeleton} />
+        <View style={styles.segmentSkeleton} />
+        <View style={styles.segmentSkeleton} />
       </View>
 
-      {/* Grid skeleton */}
-      <View style={styles.gridRow}>
-        <View style={[styles.skeletonBlock, styles.gridCard]} />
-        <View style={[styles.skeletonBlock, styles.gridCard]} />
-      </View>
-      <View style={styles.gridRow}>
-        <View style={[styles.skeletonBlock, styles.gridCard]} />
-        <View style={[styles.skeletonBlock, styles.gridCard]} />
+      {/* Selected market composition — featured + supporting */}
+      <View style={styles.featuredCard} />
+      <View style={styles.supportingRow}>
+        <View style={[styles.supportingCard, { width: (width - Space.md * 2 - Space.sm) / 2 }]} />
+        <View style={[styles.supportingCard, { width: (width - Space.md * 2 - Space.sm) / 2 }]} />
       </View>
 
-      {/* Row skeletons */}
-      <View style={styles.rowSkeleton}>
-        <View style={[styles.skeletonBlock, styles.rowThumb]} />
-        <View style={styles.rowBody}>
-          <View style={styles.skeletonLine} />
-          <View style={[styles.skeletonLine, { width: '60%' }]} />
-        </View>
-      </View>
-      <View style={styles.rowSkeleton}>
-        <View style={[styles.skeletonBlock, styles.rowThumb]} />
-        <View style={styles.rowBody}>
-          <View style={styles.skeletonLine} />
-          <View style={[styles.skeletonLine, { width: '60%' }]} />
-        </View>
+      {/* Category continuation skeleton */}
+      <View style={styles.categoryRow}>
+        <View style={styles.categorySkeleton} />
+        <View style={styles.categorySkeleton} />
+        <View style={styles.categorySkeleton} />
       </View>
     </View>
   );
@@ -68,57 +61,50 @@ const styles = StyleSheet.create({
     backgroundColor: SKELETON_BG,
   },
   skeletonHeaderActions: {
-    width: 80,
+    width: 120,
     height: 24,
     borderRadius: Radius.sm,
     backgroundColor: SKELETON_BG,
   },
-  runwayWrap: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginBottom: Space.sm,
-  },
-  runwayCard: {
-    width: '76%',
-    height: 320,
-    borderRadius: Radius.lg,
-  },
-  runwayPeek: {
-    flex: 1,
-    height: 320,
-    borderRadius: Radius.lg,
-  },
-  gridRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginBottom: Space.sm,
-  },
-  gridCard: {
-    flex: 1,
-    height: 240,
+  attentionStrip: {
+    height: 52,
     borderRadius: Radius.md,
+    backgroundColor: SKELETON_BG,
   },
-  rowSkeleton: {
+  segmentRail: {
     flexDirection: 'row',
-    gap: Space.sm,
-    alignItems: 'center',
+    gap: Space.md,
     paddingVertical: Space.sm,
   },
-  rowThumb: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.md,
-  },
-  rowBody: {
-    flex: 1,
-    gap: Space.xs,
-  },
-  skeletonLine: {
-    height: 14,
+  segmentSkeleton: {
+    width: 80,
+    height: 20,
     borderRadius: Radius.sm,
     backgroundColor: SKELETON_BG,
   },
-  skeletonBlock: {
+  featuredCard: {
+    width: '100%',
+    height: 220,
+    borderRadius: Radius.lg,
+    backgroundColor: SKELETON_BG,
+  },
+  supportingRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  supportingCard: {
+    height: 200,
+    borderRadius: Radius.md,
+    backgroundColor: SKELETON_BG,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  categorySkeleton: {
+    flex: 1,
+    height: 100,
+    borderRadius: Radius.md,
     backgroundColor: SKELETON_BG,
   },
 });

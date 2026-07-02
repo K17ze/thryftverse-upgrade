@@ -9,3 +9,4 @@ export { AuctionSegmentRail } from './AuctionSegmentRail';
 export { AuctionMarketHeader } from './AuctionMarketHeader';
 export { AuctionStickyBidDock } from './AuctionStickyBidDock';
 export type { Segment } from './AuctionSegmentRail';
+export type { AuctionHeaderAction, AuctionHeaderActionKey } from './AuctionMarketHeader';

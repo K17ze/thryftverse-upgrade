@@ -22,6 +22,10 @@ interface Props {
   onPress: () => void;
   onWatch?: () => void;
   isWatching?: boolean;
+  /** Override the computed card width (e.g. for full-width featured layout) */
+  cardWidth?: number;
+  /** Override the image height (e.g. for compact runway rows) */
+  imageHeight?: number;
 }
 
 export function AuctionRunwayCard({
@@ -37,9 +41,12 @@ export function AuctionRunwayCard({
   onPress,
   onWatch,
   isWatching,
+  cardWidth: cardWidthOverride,
+  imageHeight: imageHeightOverride,
 }: Props) {
   const { width } = useWindowDimensions();
-  const cardWidth = width * 0.76;
+  const cardWidth = cardWidthOverride ?? width * 0.76;
+  const imageHeight = imageHeightOverride ?? 360;
 
   return (
     <AnimatedPressable
@@ -50,7 +57,7 @@ export function AuctionRunwayCard({
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${state}, current bid ${currentBidText}, ${countdownText} left`}
     >
-      <View style={styles.imageWrap}>
+      <View style={[styles.imageWrap, { height: imageHeight }]}>
         <CachedImage
           uri={imageUrl ?? ''}
           style={styles.image}
@@ -122,7 +129,6 @@ const styles = StyleSheet.create({
   },
   imageWrap: {
     position: 'relative',
-    height: 360,
   },
   imageContainer: {
     borderRadius: Radius.lg,
