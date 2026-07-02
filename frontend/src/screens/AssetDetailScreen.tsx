@@ -43,6 +43,7 @@ import {
   buildCoOwnViewModel,
   useProductSocialState,
   useRecommendations,
+  useSellerTrust,
   isRecommendationLook,
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
@@ -133,6 +134,9 @@ export default function AssetDetailScreen() {
     asset?.listingId
   );
 
+  // Real issuer identity (brief §8: do not derive identity by slicing a UUID).
+  const { data: issuerTrust } = useSellerTrust(asset?.issuerId);
+
   const headerStyle = useAnimatedStyle(() => {
     const threshold = 200;
     const opacity = interpolate(scrollY.value, [threshold - 60, threshold], [0, 1], Extrapolation.CLAMP);
@@ -166,7 +170,10 @@ export default function AssetDetailScreen() {
   const deltaPct = asset.marketMovePct24h ?? 0;
   const isIssuer = currentUser?.id === asset.issuerId;
   const isHolder = yourUnits > 0;
-  const issuerHandle = asset.issuerId.slice(0, 12);
+  // Real issuer identity from /sellers/:id; fall back to a truthful label
+  // (never a sliced UUID fabricated as a @handle). Brief §8.
+  const issuerUsername = issuerTrust?.username || 'issuer';
+  const issuerDisplayName = issuerTrust?.username || 'Issuer';
   const canMessageIssuer = currentUser?.id !== asset.issuerId;
 
   const unitPriceIze = goldRates && displayMode !== 'fiat'
@@ -188,7 +195,7 @@ export default function AssetDetailScreen() {
   const ownerAccounts: Array<{ id: string; handle: string; role: string; units: number; isYou?: boolean }> = [];
   ownerAccounts.push({
     id: `issuer_${asset.issuerId}`,
-    handle: `@${issuerHandle}`,
+    handle: `@${issuerUsername}`,
     role: 'Issuer treasury',
     units: availableUnits,
   });
@@ -357,10 +364,10 @@ export default function AssetDetailScreen() {
           <CommercePartyStrip
             party={{
               id: asset.issuerId,
-              username: issuerHandle,
-              displayName: `@${issuerHandle}`,
-              avatar: null,
-              location: null,
+              username: issuerUsername,
+              displayName: issuerDisplayName,
+              avatar: issuerTrust?.avatar || null,
+              location: issuerTrust?.location || null,
               roleLabel: 'Issuer',
             }}
             facts={[
@@ -379,13 +386,13 @@ export default function AssetDetailScreen() {
                 const conversation = await resolveCoOwnConversation(
                   currentUser.id,
                   asset.issuerId,
-                  issuerHandle,
+                  issuerUsername,
                   asset.listingId,
                 );
                 upsertConversation(conversation);
                 navigation.navigate('Chat', {
                   conversationId: conversation.id,
-                  focusQuery: issuerHandle,
+                  focusQuery: issuerUsername,
                   partnerUserId: asset.issuerId,
                 });
               } catch {
@@ -617,11 +624,11 @@ export default function AssetDetailScreen() {
                 </AnimatedPressable>
               )}
               <AppButton
-                title="Trade"
+                title={isHolder ? 'Buy more' : 'Buy units'}
                 variant="primary"
                 size="md"
                 onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' })}
-                accessibilityLabel="Trade this asset"
+                accessibilityLabel={isHolder ? 'Buy more units' : 'Buy units in this Co-own'}
                 style={styles.dockPrimaryBtn}
               />
             </View>
