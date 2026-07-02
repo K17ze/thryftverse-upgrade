@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  Dimensions,
+  useWindowDimensions,
   Share,
   Pressable,
   ActivityIndicator,
@@ -72,14 +72,12 @@ const BRAND = Colors.brand;
 const BRAND_PRESSED = Colors.brandPressed;
 const TEXT_INVERSE = Colors.textInverse;
 const DANGER = Colors.danger;
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const COVER_HEIGHT = 240;
 const AVATAR_SIZE = 92;
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
 const GRID_GAP = 8;
-const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP) / 2;
-const CARD_HEIGHT = CARD_WIDTH * 1.25; // 4:5 portrait
+const CARD_ASPECT = 1.25; // 4:5 portrait
 
 type Tab = 'Shop' | 'Looks' | 'Reviews';
 type ShopSegment = 'forsale' | 'sold';
@@ -89,12 +87,20 @@ const PROFILE_WEB_BASE = 'https://thryftverse.app';
 export default function UserProfileScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
+  const { width: screenWidth } = useWindowDimensions();
   const currentUser = useStore(state => state.currentUser);
   const userAvatar = useStore(state => state.userAvatar);
   const userCover = useStore(state => state.userCover);
   const profileMediaOverrides = useStore(state => state.profileMediaOverrides);
   const [activeTab, setActiveTab] = useState<Tab>('Shop');
   const [shopSegment, setShopSegment] = useState<ShopSegment>('forsale');
+
+  // Responsive grid geometry (brief §2: no module-level screen-width calc)
+  const cardWidth = useMemo(
+    () => (screenWidth - Space.md * 2 - GRID_GAP) / 2,
+    [screenWidth]
+  );
+  const cardHeight = cardWidth * CARD_ASPECT;
 
   const isMe = route.params?.isMe ?? false;
   const userId = route.params?.userId;
@@ -622,6 +628,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           isSold={shopSegment === 'sold'}
           onPress={() => navigation.push('ItemDetail', { itemId: (item as ListingApiItem).id })}
           formatPrice={formatFromFiat}
+          cardWidth={cardWidth}
+          cardHeight={cardHeight}
         />
       );
     }
@@ -630,13 +638,15 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         <LookTile
           item={item as LookApiItem}
           onPress={() => navigation.navigate('LookDetail', { lookId: (item as LookApiItem).id })}
+          cardWidth={cardWidth}
+          cardHeight={cardHeight}
         />
       );
     }
     return (
       <ReviewRow item={item as SellerReviewItem} />
     );
-  }, [activeTab, shopSegment, navigation, formatFromFiat]);
+  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight]);
 
   // ── Empty / error / footer for list ──
   const listEmpty = (() => {
@@ -1069,16 +1079,20 @@ const ShopTile = React.memo(function ShopTile({
   isSold,
   onPress,
   formatPrice,
+  cardWidth,
+  cardHeight,
 }: {
   item: ListingApiItem;
   isSold: boolean;
   onPress: () => void;
   formatPrice: (fiatAmount: number, sourceCurrency?: SupportedCurrencyCode, options?: { displayMode?: CurrencyDisplayMode; fiatFractionDigits?: number; izeFractionDigits?: number }) => string;
+  cardWidth: number;
+  cardHeight: number;
 }) {
   const showSold = isSold || item.status === 'sold';
   return (
     <AnimatedPressable
-      style={[styles.gridCard, { width: CARD_WIDTH }]}
+      style={[styles.gridCard, { width: cardWidth }]}
       activeOpacity={0.9}
       onPress={onPress}
       accessibilityRole="button"
@@ -1086,7 +1100,7 @@ const ShopTile = React.memo(function ShopTile({
       accessibilityHint="Opens listing details"
     >
       <SharedTransitionView
-        style={[styles.gridImageWrap, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
+        style={[styles.gridImageWrap, { width: cardWidth, height: cardHeight }]}
         sharedTransitionTag={`image-${item.id}-0`}
       >
         <CachedImage
@@ -1120,14 +1134,18 @@ const ShopTile = React.memo(function ShopTile({
 const LookTile = React.memo(function LookTile({
   item,
   onPress,
+  cardWidth,
+  cardHeight,
 }: {
   item: LookApiItem;
   onPress: () => void;
+  cardWidth: number;
+  cardHeight: number;
 }) {
   const isVideo = isVideoUri(item.mediaUrl);
   return (
     <AnimatedPressable
-      style={[styles.gridCard, { width: CARD_WIDTH }]}
+      style={[styles.gridCard, { width: cardWidth }]}
       activeOpacity={0.9}
       onPress={onPress}
       accessibilityRole="button"
@@ -1135,7 +1153,7 @@ const LookTile = React.memo(function LookTile({
       accessibilityHint="Opens Look details"
     >
       <SharedTransitionView
-        style={[styles.gridImageWrap, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
+        style={[styles.gridImageWrap, { width: cardWidth, height: cardHeight }]}
         sharedTransitionTag={`look-${item.id}`}
       >
         <CachedImage
@@ -1969,7 +1987,7 @@ const styles = StyleSheet.create({
   },
   skeletonCard: {
     flex: 1,
-    height: CARD_HEIGHT,
+    aspectRatio: 1 / CARD_ASPECT,
     borderRadius: Radius.sm,
     backgroundColor: SURFACE_ALT,
   },
