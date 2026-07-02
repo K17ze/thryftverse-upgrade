@@ -11,6 +11,7 @@ import {
   Linking,
   Platform,
   RefreshControl,
+  ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,8 +58,11 @@ import { RootStackParamList } from '../navigation/types';
 import type { ListingApiItem } from '../services/listingsApi';
 import type { LookApiItem } from '../services/looksApi';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
+import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 
-const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
+// Animated FlashList: cast to any so estimatedItemSize (required by FlashList
+// at runtime for virtualization accuracy) is accepted by the animated wrapper type.
+const AnimatedFlashList: any = Reanimated.createAnimatedComponent(FlashList);
 
 type Props = StackScreenProps<RootStackParamList, 'UserProfile'>;
 
@@ -73,9 +77,14 @@ const BRAND_PRESSED = Colors.brandPressed;
 const TEXT_INVERSE = Colors.textInverse;
 const DANGER = Colors.danger;
 
-const COVER_HEIGHT = 240;
+// ── Flagship geometry ───────────────────────────────────────────────────
+// Cover is restrained (188pt) so the first viewport can show identity + proof
+// + actions + tab rail + the start of fashion content. Avatar overlaps the
+// cover bottom and the identity canvas, visually anchoring the composition.
+const COVER_HEIGHT = 188;
 const AVATAR_SIZE = 92;
-const AVATAR_OVERLAP = AVATAR_SIZE / 2;
+const AVATAR_OVERLAP = AVATAR_SIZE / 2; // avatar half sits above cover bottom
+const AVATAR_CANVAS_LIFT = AVATAR_OVERLAP; // identity canvas lifts to meet avatar
 const GRID_GAP = 8;
 const CARD_ASPECT = 1.25; // 4:5 portrait
 
@@ -94,6 +103,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const profileMediaOverrides = useStore(state => state.profileMediaOverrides);
   const [activeTab, setActiveTab] = useState<Tab>('Shop');
   const [shopSegment, setShopSegment] = useState<ShopSegment>('forsale');
+  const [connectionsSheet, setConnectionsSheet] = useState<{
+    visible: boolean;
+    segment: 'followers' | 'following';
+  }>({ visible: false, segment: 'followers' });
 
   // Responsive grid geometry (brief §2: no module-level screen-width calc)
   const cardWidth = useMemo(
@@ -101,6 +114,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     [screenWidth]
   );
   const cardHeight = cardWidth * CARD_ASPECT;
+
+  // Looks use a 3-column masonry on wider phones, 2-column on narrow.
+  const looksColumns = useMemo(() => (screenWidth >= 380 ? 3 : 2), [screenWidth]);
+  const lookTileGap = 6;
+  const lookTileWidth = useMemo(
+    () => (screenWidth - Space.md * 2 - lookTileGap * (looksColumns - 1)) / looksColumns,
+    [screenWidth, looksColumns, lookTileGap]
+  );
+  // Portrait 3:4 for the looks portfolio — taller, more editorial than shop.
+  const lookTileHeight = lookTileWidth * (4 / 3);
 
   const isMe = route.params?.isMe ?? false;
   const userId = route.params?.userId;
@@ -228,6 +251,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     });
   }, [blockMutation]);
 
+  const openConnections = useCallback((segment: 'followers' | 'following') => {
+    setConnectionsSheet({ visible: true, segment });
+  }, []);
+
   // ── Scroll / header animation ──
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -251,12 +278,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   });
 
   const collapsedHeaderStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(scrollY.value, [COVER_HEIGHT - 80, COVER_HEIGHT - 20], [0, 1], Extrapolation.CLAMP);
+    // Collapse as the avatar reaches the sticky header band.
+    const opacity = interpolate(scrollY.value, [COVER_HEIGHT - 90, COVER_HEIGHT - 30], [0, 1], Extrapolation.CLAMP);
     return { opacity };
   });
 
   const collapsedHeaderShadowStyle = useAnimatedStyle(() => {
-    const shadowOpacity = interpolate(scrollY.value, [COVER_HEIGHT - 80, COVER_HEIGHT - 20], [0, 0.06], Extrapolation.CLAMP);
+    const shadowOpacity = interpolate(scrollY.value, [COVER_HEIGHT - 90, COVER_HEIGHT - 30], [0, 0.06], Extrapolation.CLAMP);
     return { shadowOpacity };
   });
 
@@ -280,6 +308,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             <View style={styles.skeletonStat} />
             <View style={styles.skeletonStat} />
             <View style={styles.skeletonStat} />
+            <View style={styles.skeletonStat} />
+          </View>
+          <View style={styles.skeletonActionRow}>
+            <View style={styles.skeletonActionPrimary} />
+            <View style={styles.skeletonActionSecondary} />
           </View>
           <View style={styles.skeletonTabRail} />
           <View style={styles.skeletonGrid}>
@@ -413,11 +446,17 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     if (!isSelfProfile) publicProfileQuery.refetch();
   }, [activeQuery, publicProfileQuery, isSelfProfile]);
 
+  // Review summary (first page holds the reputation aggregate).
+  const reviewSummary: SellerReviewSummary | null = reviewsQuery.data?.pages?.[0]?.summary ?? null;
+
   // ── List header: identity hero + stats + actions + tab rail + shop segment ──
   const ListHeader = useMemo(() => (
     <View>
-      {/* Identity hero */}
-      <View style={styles.identitySection}>
+      {/* ── Identity canvas ──
+          Lifts above the cover to meet the overlapping avatar, creating one
+          continuous authored surface rather than cover → text → buttons. */}
+      <View style={styles.identityCanvas}>
+        {/* Avatar — overlaps cover above and canvas below */}
         <View style={styles.avatarRow}>
           <View style={styles.avatarWrap}>
             {displayAvatar ? (
@@ -440,17 +479,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           </View>
         </View>
 
+        {/* Bio — concise, editorial */}
         {targetProfile?.bio ? (
-          <Text style={styles.bio}>{targetProfile.bio}</Text>
+          <Text style={styles.bio} numberOfLines={3}>{targetProfile.bio}</Text>
         ) : null}
 
-        {/* Context line: location · member since · website */}
+        {/* Context line — quiet, single composed line */}
         <View style={styles.contextRow}>
           {targetProfile?.location ? (
             <View style={styles.contextItem}>
               <Ionicons name="location-outline" size={12} color={MUTED} />
               <Text style={styles.contextText} numberOfLines={1}>{targetProfile.location}</Text>
             </View>
+          ) : null}
+          {targetProfile?.location && memberSince ? (
+            <Text style={styles.contextSep}>·</Text>
           ) : null}
           {memberSince ? (
             <View style={styles.contextItem}>
@@ -459,40 +502,52 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             </View>
           ) : null}
           {targetProfile?.website ? (
-            <Pressable
-              style={styles.contextItem}
-              onPress={() => openWebsite(targetProfile.website!)}
-              accessibilityRole="link"
-              accessibilityLabel={`Open website ${targetProfile.website}`}
-            >
-              <Ionicons name="link-outline" size={12} color={SECONDARY} />
-              <Text style={[styles.contextText, styles.contextLink]} numberOfLines={1}>{targetProfile.website}</Text>
-            </Pressable>
+            <>
+              {(targetProfile?.location || memberSince) ? <Text style={styles.contextSep}>·</Text> : null}
+              <Pressable
+                style={styles.contextItem}
+                onPress={() => openWebsite(targetProfile.website!)}
+                accessibilityRole="link"
+                accessibilityLabel={`Open website ${targetProfile.website}`}
+              >
+                <Ionicons name="link-outline" size={12} color={SECONDARY} />
+                <Text style={[styles.contextText, styles.contextLink]} numberOfLines={1}>Website</Text>
+              </Pressable>
+            </>
           ) : null}
         </View>
 
-        {/* Statistics — compact, tappable, real */}
+        {/* ── Social + commerce proof ──
+            Four compact primary stats (For sale / Sold / Followers / Following)
+            with intentional hierarchy; rating is a separate trust affordance
+            below, not a fifth cramped cell. */}
         <View style={styles.statsRow}>
           <StatCell
             label="For sale"
             value={activeCount}
             onPress={activeCount > 0 ? () => { setActiveTab('Shop'); setShopSegment('forsale'); } : undefined}
           />
+          <StatDivider />
           <StatCell
             label="Sold"
             value={soldCount}
             onPress={soldCount > 0 ? () => { setActiveTab('Shop'); setShopSegment('sold'); } : undefined}
           />
+          <StatDivider />
           <StatCell
             label="Followers"
             value={stats?.followerCount ?? 0}
+            onPress={(stats?.followerCount ?? 0) > 0 ? () => openConnections('followers') : undefined}
           />
+          <StatDivider />
           <StatCell
             label="Following"
             value={stats?.followingCount ?? 0}
+            onPress={(stats?.followingCount ?? 0) > 0 ? () => openConnections('following') : undefined}
           />
         </View>
 
+        {/* Rating — separate trust affordance, not a 5th stat cell */}
         {stats && stats.ratingAverage !== null && reviewCount > 0 ? (
           <Pressable
             style={styles.ratingRow}
@@ -508,7 +563,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         ) : null}
       </View>
 
-      {/* Relationship actions */}
+      {/* ── Action hierarchy ──
+          For others: Follow (primary, dominant) + Message (secondary, equal width)
+          + More (tertiary, icon only). Identity stays more important than buttons.
+          For self: Edit profile (primary) + Share (secondary). */}
       {!isSelfProfile && viewer ? (
         <View style={styles.actionRow}>
           <AnimatedPressable
@@ -584,7 +642,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       ) : null}
 
-      {/* Tab rail */}
+      {/* ── Sticky tab rail ──
+          Refined underline indicator; counts quiet; no pill backgrounds. */}
       <View style={styles.tabRailWrap}>
         <TabRail
           tabs={[
@@ -597,7 +656,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         />
       </View>
 
-      {/* Shop sub-segment */}
+      {/* ── Shop sub-rail ──
+          Editorial text segment, not a large rounded segmented control. */}
       {activeTab === 'Shop' ? (
         <View style={styles.segmentWrap}>
           <SegmentedControl
@@ -610,13 +670,19 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           />
         </View>
       ) : null}
+
+      {/* ── Reviews reputation summary ──
+          Lives in the header so it leads the Reviews tab as a trust surface. */}
+      {activeTab === 'Reviews' && reviewSummary && reviewCount > 0 ? (
+        <ReviewSummaryBlock summary={reviewSummary} onSeeAll={() => {}} />
+      ) : null}
     </View>
   ), [
     displayAvatar, displayUsername, targetProfile, memberSince,
     activeCount, soldCount, lookCount, reviewCount, stats,
     isSelfProfile, viewer, followMutation, isBlocked,
     handleFollowToggle, handleMessageProfile, handleMore, handleShare, handleEditProfile,
-    activeTab, shopSegment,
+    activeTab, shopSegment, openConnections, reviewSummary,
   ]);
 
   // ── Render list item ──
@@ -638,15 +704,15 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         <LookTile
           item={item as LookApiItem}
           onPress={() => navigation.navigate('LookDetail', { lookId: (item as LookApiItem).id })}
-          cardWidth={cardWidth}
-          cardHeight={cardHeight}
+          cardWidth={lookTileWidth}
+          cardHeight={lookTileHeight}
         />
       );
     }
     return (
       <ReviewRow item={item as SellerReviewItem} />
     );
-  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight]);
+  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight]);
 
   // ── Empty / error / footer for list ──
   const listEmpty = (() => {
@@ -684,6 +750,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           </View>
         );
       }
+      // Reviews empty — intentional reputation-empty state, no star theatre.
       return (
         <View style={styles.listState}>
           <Ionicons name="chatbubble-ellipses-outline" size={32} color={MUTED} />
@@ -716,7 +783,14 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return <View style={{ height: 120 }} />;
   })();
 
-  const numColumns = activeTab === 'Reviews' ? 1 : 2;
+  // Shop uses 2 columns; Looks use 3 (or 2 on narrow); Reviews use 1.
+  const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? looksColumns : 2;
+  // Looks need their own column gap; FlashList spacing handled via estimatedItemSize + item style.
+  const estimatedItemSize = activeTab === 'Shop'
+    ? cardHeight + 56
+    : activeTab === 'Looks'
+    ? lookTileHeight + 8
+    : 120;
 
   return (
     <View style={styles.container}>
@@ -844,7 +918,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         <AnimatedFlashList
           data={listData as (ListingApiItem | LookApiItem | SellerReviewItem)[]}
           renderItem={renderItem as any}
-          keyExtractor={(item, index) => (item as { id?: string }).id ?? `item-${index}`}
+          keyExtractor={(item: ListingApiItem | LookApiItem | SellerReviewItem, index: number) => (item as { id?: string }).id ?? `item-${index}`}
           ListHeaderComponent={ListHeader}
           ListEmptyComponent={listEmpty}
           ListFooterComponent={listFooter}
@@ -861,7 +935,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               colors={[MUTED]}
             />
           }
-          key={`list-${activeTab}-${shopSegment}-${numColumns}`}
+          key={`list-${activeTab}-${shopSegment}-${numColumns}-${looksColumns}`}
+          estimatedItemSize={estimatedItemSize}
         />
       </Reanimated.View>
 
@@ -972,11 +1047,22 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           </View>
         </View>
       </NativeSheet>
+
+      {/* ── 8. CONNECTIONS SHEET (followers / following) ── */}
+      <PublicProfileConnectionsSheet
+        visible={connectionsSheet.visible}
+        onDismiss={() => setConnectionsSheet(s => ({ ...s, visible: false }))}
+        userId={targetUserId}
+        initialSegment={connectionsSheet.segment}
+        followerCount={stats?.followerCount ?? 0}
+        followingCount={stats?.followingCount ?? 0}
+        onOpenProfile={(id) => navigation.push('UserProfile', { userId: id })}
+      />
     </View>
   );
 }
 
-// ── Helper: open website safely ──────────────────────────────────────
+// ── Helper: open website safely ──────────────────────────────────────────
 function openWebsite(url: string) {
   let normalized = url.trim();
   if (!/^https?:\/\//i.test(normalized)) {
@@ -985,7 +1071,7 @@ function openWebsite(url: string) {
   Linking.openURL(normalized).catch(() => {});
 }
 
-// ── Stat cell ────────────────────────────────────────────────────────
+// ── Stat cell ────────────────────────────────────────────────────────────
 function StatCell({ label, value, onPress }: { label: string; value: number; onPress?: () => void }) {
   const content = (
     <View style={styles.statCell}>
@@ -1003,7 +1089,12 @@ function StatCell({ label, value, onPress }: { label: string; value: number; onP
   return content;
 }
 
-// ── Tab rail ─────────────────────────────────────────────────────────
+// ── Stat divider — hairline vertical, intentional rhythm ─────────────────
+function StatDivider() {
+  return <View style={styles.statDivider} />;
+}
+
+// ── Tab rail ─────────────────────────────────────────────────────────────
 function TabRail({
   tabs,
   activeKey,
@@ -1042,7 +1133,7 @@ function TabRail({
   );
 }
 
-// ── Segmented control ────────────────────────────────────────────────
+// ── Segmented control — editorial text segment, not a pill bar ───────────
 function SegmentedControl({
   segments,
   activeKey,
@@ -1059,13 +1150,14 @@ function SegmentedControl({
         return (
           <Pressable
             key={seg.key}
-            style={[styles.segment, isActive && styles.segmentActive]}
+            style={styles.segment}
             onPress={() => onChange(seg.key)}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={seg.label}
           >
             <Text style={[styles.segmentLabel, isActive && styles.segmentLabelActive]}>{seg.label}</Text>
+            {isActive ? <View style={styles.segmentUnderline} /> : null}
           </Pressable>
         );
       })}
@@ -1073,7 +1165,65 @@ function SegmentedControl({
   );
 }
 
-// ── Shop tile (4:5 portrait) ─────────────────────────────────────────
+// ── Review summary block — reputation header for the Reviews tab ─────────
+function ReviewSummaryBlock({
+  summary,
+  onSeeAll,
+}: {
+  summary: SellerReviewSummary;
+  onSeeAll: () => void;
+}) {
+  const avg = summary.ratingAverage ?? 0;
+  const total = summary.reviewCount;
+  // Distribution is [{rating:5,count:n},...]; normalise to a 5..1 map.
+  const distMap = new Map<number, number>();
+  for (const d of summary.distribution) distMap.set(d.rating, d.count);
+  const maxCount = Math.max(1, ...Array.from(distMap.values()));
+
+  return (
+    <View style={styles.reviewSummary}>
+      <View style={styles.reviewSummaryTop}>
+        <View style={styles.reviewSummaryAvg}>
+          <Text style={styles.reviewSummaryAvgValue}>{avg.toFixed(1)}</Text>
+          <View style={styles.reviewSummaryStars}>
+            {[1, 2, 3, 4, 5].map((s) => (
+              <Ionicons
+                key={s}
+                name={s <= Math.round(avg) ? 'star' : 'star-outline'}
+                size={13}
+                color={BRAND}
+              />
+            ))}
+          </View>
+          <Text style={styles.reviewSummaryCount}>
+            {total} review{total !== 1 ? 's' : ''}
+          </Text>
+        </View>
+        <View style={styles.reviewSummaryDist}>
+          {[5, 4, 3, 2, 1].map((star) => {
+            const count = distMap.get(star) ?? 0;
+            const pct = count / maxCount;
+            return (
+              <View key={star} style={styles.distRow}>
+                <Text style={styles.distStar}>{star}</Text>
+                <Ionicons name="star" size={9} color={MUTED} />
+                <View style={styles.distTrack}>
+                  <View style={[styles.distFill, { width: `${Math.round(pct * 100)}%` }]} />
+                </View>
+                <Text style={styles.distCount}>{count}</Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+      <Text style={styles.reviewSummaryContext}>
+        Reputation from completed orders
+      </Text>
+    </View>
+  );
+}
+
+// ── Shop tile (4:5 portrait storefront) ──────────────────────────────────
 const ShopTile = React.memo(function ShopTile({
   item,
   isSold,
@@ -1109,6 +1259,7 @@ const ShopTile = React.memo(function ShopTile({
           containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
           contentFit="cover"
         />
+        {/* Quiet SOLD treatment — corner ribbon, not a full dark overlay */}
         {showSold ? (
           <View style={styles.soldOverlay}>
             <Text style={styles.soldText}>SOLD</Text>
@@ -1130,7 +1281,7 @@ const ShopTile = React.memo(function ShopTile({
   );
 });
 
-// ── Look tile (portrait editorial) ───────────────────────────────────
+// ── Look tile (portrait editorial portfolio — distinct from Shop) ────────
 const LookTile = React.memo(function LookTile({
   item,
   onPress,
@@ -1145,7 +1296,7 @@ const LookTile = React.memo(function LookTile({
   const isVideo = isVideoUri(item.mediaUrl);
   return (
     <AnimatedPressable
-      style={[styles.gridCard, { width: cardWidth }]}
+      style={[styles.lookCard, { width: cardWidth }]}
       activeOpacity={0.9}
       onPress={onPress}
       accessibilityRole="button"
@@ -1153,13 +1304,13 @@ const LookTile = React.memo(function LookTile({
       accessibilityHint="Opens Look details"
     >
       <SharedTransitionView
-        style={[styles.gridImageWrap, { width: cardWidth, height: cardHeight }]}
+        style={[styles.lookImageWrap, { width: cardWidth, height: cardHeight }]}
         sharedTransitionTag={`look-${item.id}`}
       >
         <CachedImage
           uri={item.mediaUrl}
           style={styles.gridImage}
-          containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
+          containerStyle={{ width: '100%', height: '100%', borderRadius: 2 }}
           contentFit="cover"
         />
         {/* Restrained overlays: video indicator + tag count */}
@@ -1174,22 +1325,21 @@ const LookTile = React.memo(function LookTile({
           </View>
         ) : null}
       </SharedTransitionView>
-      {item.title ? (
-        <Text style={styles.lookTitle} numberOfLines={1}>{item.title}</Text>
-      ) : null}
-      <View style={styles.lookMetaRow}>
-        {item.likeCount > 0 ? (
+      {/* Looks are media-first: no permanent title/meta stack like shop cards.
+          Only show engagement when real and useful. */}
+      {item.likeCount > 0 ? (
+        <View style={styles.lookMetaRow}>
           <View style={styles.lookMetaItem}>
-            <Ionicons name="heart-outline" size={11} color={MUTED} />
+            <Ionicons name="heart-outline" size={10} color={MUTED} />
             <Text style={styles.lookMetaText}>{item.likeCount}</Text>
           </View>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
     </AnimatedPressable>
   );
 });
 
-// ── Review row (flat editorial) ──────────────────────────────────────
+// ── Review row (flat editorial trust row) ────────────────────────────────
 const ReviewRow = React.memo(function ReviewRow({ item }: { item: SellerReviewItem }) {
   const reviewerName = item.reviewer.displayName || item.reviewer.username || 'Anonymous';
   const dateText = item.createdAt
@@ -1241,7 +1391,7 @@ const ReviewRow = React.memo(function ReviewRow({ item }: { item: SellerReviewIt
   );
 });
 
-// ── Sheet item ───────────────────────────────────────────────────────
+// ── Sheet item ───────────────────────────────────────────────────────────
 function SheetItem({
   icon,
   label,
@@ -1266,7 +1416,7 @@ function SheetItem({
   );
 }
 
-// ── Report sheet content ─────────────────────────────────────────────
+// ── Report sheet content ─────────────────────────────────────────────────
 const REPORT_REASONS: { key: ReportReason; label: string }[] = [
   { key: 'spam', label: 'Spam or misleading' },
   { key: 'inappropriate', label: 'Inappropriate content' },
@@ -1326,7 +1476,7 @@ function ReportSheetContent({
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────
+// ── Styles ───────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
 
@@ -1460,12 +1610,17 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
 
-  // Identity section
-  identitySection: {
+  // ── Identity canvas ──
+  // Lifts above the cover to meet the avatar, creating one continuous surface.
+  identityCanvas: {
+    marginTop: -AVATAR_CANVAS_LIFT,
     paddingHorizontal: Space.md,
-    paddingTop: AVATAR_OVERLAP + Space.sm,
+    paddingTop: AVATAR_CANVAS_LIFT + Space.sm,
     paddingBottom: Space.sm,
     backgroundColor: BG,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    overflow: 'hidden',
   },
   avatarRow: {
     flexDirection: 'row',
@@ -1513,7 +1668,7 @@ const styles = StyleSheet.create({
   contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 6,
     flexWrap: 'wrap',
     marginBottom: Space.sm,
   },
@@ -1527,20 +1682,25 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: MUTED,
   },
+  contextSep: {
+    fontSize: 12,
+    color: MUTED,
+  },
   contextLink: {
     color: SECONDARY,
   },
 
-  // Stats
+  // ── Stats — 4 compact primary cells with hairline dividers ──
   statsRow: {
     flexDirection: 'row',
-    gap: Space.lg,
+    alignItems: 'center',
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
     marginBottom: Space.sm,
   },
   statCell: {
+    flex: 1,
     alignItems: 'flex-start',
   },
   statValue: {
@@ -1550,18 +1710,26 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Typography.family.regular,
     color: MUTED,
-    marginTop: 1,
+    marginTop: 2,
+    letterSpacing: 0.1,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 22,
+    backgroundColor: BORDER,
+    marginHorizontal: 4,
   },
 
-  // Rating row
+  // Rating row — separate trust affordance
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingVertical: 2,
+    marginBottom: Space.sm,
   },
   ratingValue: {
     fontSize: 14,
@@ -1697,45 +1865,50 @@ const styles = StyleSheet.create({
   tabUnderline: {
     position: 'absolute',
     bottom: 0,
-    left: '25%',
-    right: '25%',
+    left: '30%',
+    right: '30%',
     height: 2,
     backgroundColor: TEXT,
+    borderRadius: 1,
   },
 
-  // Segmented control
+  // Segmented control — editorial text segment
   segmentWrap: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     backgroundColor: BG,
+    flexDirection: 'row',
   },
   segmentControl: {
     flexDirection: 'row',
-    backgroundColor: SURFACE_ALT,
-    borderRadius: Radius.md,
-    padding: 3,
+    gap: Space.lg,
   },
   segment: {
-    flex: 1,
-    height: 34,
-    borderRadius: Radius.md - 2,
+    paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  segmentActive: {
-    backgroundColor: BG,
+    position: 'relative',
   },
   segmentLabel: {
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
     color: MUTED,
   },
   segmentLabelActive: {
     color: TEXT,
     fontFamily: Typography.family.semibold,
   },
+  segmentUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: TEXT,
+    borderRadius: 1,
+  },
 
-  // Grid
+  // ── Shop grid ──
   gridCard: {
     marginBottom: Space.md,
   },
@@ -1779,7 +1952,15 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // Look tile
+  // ── Look grid — distinct editorial portfolio ──
+  lookCard: {
+    marginBottom: Space.sm,
+  },
+  lookImageWrap: {
+    borderRadius: 2,
+    overflow: 'hidden',
+    position: 'relative',
+  },
   lookTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
@@ -1804,23 +1985,23 @@ const styles = StyleSheet.create({
   },
   videoBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    top: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   tagCountBadge: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
-    minWidth: 22,
-    height: 22,
+    bottom: 6,
+    right: 6,
+    minWidth: 20,
+    height: 20,
     paddingHorizontal: 6,
-    borderRadius: 11,
+    borderRadius: 10,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1829,6 +2010,80 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: Typography.family.bold,
     color: '#fff',
+  },
+
+  // ── Review summary block ──
+  reviewSummary: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    backgroundColor: BG,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+  },
+  reviewSummaryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  reviewSummaryAvg: {
+    alignItems: 'center',
+  },
+  reviewSummaryAvgValue: {
+    fontSize: 34,
+    fontFamily: Typography.family.bold,
+    color: TEXT,
+    letterSpacing: -0.8,
+  },
+  reviewSummaryStars: {
+    flexDirection: 'row',
+    gap: 1,
+    marginTop: 2,
+  },
+  reviewSummaryCount: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+    marginTop: 2,
+  },
+  reviewSummaryDist: {
+    flex: 1,
+    gap: 3,
+  },
+  distRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  distStar: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: SECONDARY,
+    width: 8,
+  },
+  distTrack: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: SURFACE_ALT,
+    overflow: 'hidden',
+  },
+  distFill: {
+    height: '100%',
+    backgroundColor: BRAND,
+    borderRadius: 2,
+  },
+  distCount: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+    width: 24,
+    textAlign: 'right',
+  },
+  reviewSummaryContext: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+    marginTop: Space.sm,
   },
 
   // Review row
@@ -1942,7 +2197,7 @@ const styles = StyleSheet.create({
   // Skeleton
   skeletonBody: {
     paddingHorizontal: Space.md,
-    paddingTop: AVATAR_OVERLAP + Space.sm,
+    paddingTop: AVATAR_CANVAS_LIFT + Space.sm,
   },
   skeletonAvatar: {
     width: AVATAR_SIZE,
@@ -1967,13 +2222,30 @@ const styles = StyleSheet.create({
   },
   skeletonStatsRow: {
     flexDirection: 'row',
-    gap: Space.lg,
+    gap: Space.md,
     marginBottom: Space.md,
   },
   skeletonStat: {
-    width: 60,
+    width: 56,
     height: 36,
     borderRadius: 4,
+    backgroundColor: SURFACE_ALT,
+  },
+  skeletonActionRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginBottom: Space.md,
+  },
+  skeletonActionPrimary: {
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: SURFACE_ALT,
+  },
+  skeletonActionSecondary: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: SURFACE_ALT,
   },
   skeletonTabRail: {
