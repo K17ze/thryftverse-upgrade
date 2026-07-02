@@ -8,7 +8,7 @@ import {
   Text,
   ScrollView,
   TextInput,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +39,16 @@ import { Space, Radius, Typography } from '../theme/designTokens';
 import { toIze, formatIzeAmount, formatFiatAmount } from '../utils/currency';
 import { BottomSheet } from '../components/BottomSheet';
 import {
+  AuctionMarketHeader,
+  AuctionAttentionStrip,
+  AuctionRunwayCard,
+  AuctionGridCard,
+  AuctionSkeletons,
+  AuctionStateBadge,
+  AuctionCountdown,
+  AuctionSegmentRail,
+} from '../components/auction';
+import {
   listAuctions,
   getAuctionHome,
   type MarketAuction,
@@ -49,11 +59,6 @@ import {
 } from '../services/marketApi';
 
 type NavT = StackNavigationProp<RootStackParamList>;
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-// Closing Soon runway: 72-78% viewport-width first card so the next lot peeks
-// (marketplace plurality, not a single-product page).
-const CLOSING_SOON_CARD_WIDTH = SCREEN_WIDTH * 0.76;
 
 function toViewModel(api: MarketAuction): AuctionHomeItem {
   return {
@@ -1243,23 +1248,53 @@ export default function AuctionHomeScreen() {
     />
   ), [minuteClock, navigateToDetail, formatDualPrice]);
 
-  const renderSearchItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
-    <LiveFloorCard
-      item={item}
-      clockMs={secondClock}
-      onPress={() => navigateToDetail(item.id)}
-      formatDualPrice={formatDualPrice}
-    />
-  ), [secondClock, navigateToDetail, formatDualPrice]);
+  const renderSearchItem = useCallback(({ item }: { item: AuctionHomeItem }) => {
+    const timing = resolveAuctionTiming(item, secondClock);
+    const urgency = resolveUrgency(timing);
+    const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+    const timeLabel = urgency === 'finalMinutes'
+      ? formatFinalMinutesCountdown(timing.msToEnd)
+      : resolveTimeLabel(timing);
+    return (
+      <AuctionGridCard
+        title={item.title}
+        imageUrl={item.imageUrl || null}
+        brand={item.brand ?? null}
+        priceText={dualPrice.primaryText}
+        priceLabel={resolvePriceLabel(item, timing)}
+        bidCount={item.bidCount}
+        countdownText={timeLabel}
+        urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+        state={timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended'}
+        viewerState={item.viewerState}
+        onPress={() => navigateToDetail(item.id)}
+      />
+    );
+  }, [secondClock, navigateToDetail, formatDualPrice]);
 
-  const renderFilterItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
-    <LiveFloorCard
-      item={item}
-      clockMs={secondClock}
-      onPress={() => navigateToDetail(item.id)}
-      formatDualPrice={formatDualPrice}
-    />
-  ), [secondClock, navigateToDetail, formatDualPrice]);
+  const renderFilterItem = useCallback(({ item }: { item: AuctionHomeItem }) => {
+    const timing = resolveAuctionTiming(item, secondClock);
+    const urgency = resolveUrgency(timing);
+    const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+    const timeLabel = urgency === 'finalMinutes'
+      ? formatFinalMinutesCountdown(timing.msToEnd)
+      : resolveTimeLabel(timing);
+    return (
+      <AuctionGridCard
+        title={item.title}
+        imageUrl={item.imageUrl || null}
+        brand={item.brand ?? null}
+        priceText={dualPrice.primaryText}
+        priceLabel={resolvePriceLabel(item, timing)}
+        bidCount={item.bidCount}
+        countdownText={timeLabel}
+        urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+        state={timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended'}
+        viewerState={item.viewerState}
+        onPress={() => navigateToDetail(item.id)}
+      />
+    );
+  }, [secondClock, navigateToDetail, formatDualPrice]);
 
   // ── Category options for filter sheet ──
   const categoryOptions = useMemo(() => {
@@ -1280,9 +1315,7 @@ export default function AuctionHomeScreen() {
   }, [filterStatus, filterSort, filterCategory]);
 
   const renderLoadingState = useCallback(() => (
-    <View style={styles.loadingContainer}>
-      <Text style={styles.loadingText}>Loading auctions…</Text>
-    </View>
+    <AuctionSkeletons />
   ), []);
 
   // ── Derived values and hooks MUST be before any conditional return ──
@@ -1625,13 +1658,16 @@ export default function AuctionHomeScreen() {
     switch (item.zone) {
       case 'header':
         return (
-          <MarketplaceHeader
-            liveContext={liveContext}
-            onSearch={() => { haptics.tap(); setSearchOverlayVisible(true); }}
-            onFilter={() => { haptics.tap(); openFilterSheet(); }}
-            onActivity={() => { haptics.tap(); handleActivity(); }}
+          <AuctionMarketHeader
+            title="Auctions"
+            context={liveContext}
             onBack={handleBack}
-            showBack={navigation.canGoBack()}
+            onSearch={() => { haptics.tap(); setSearchOverlayVisible(true); }}
+            onActivity={() => { haptics.tap(); handleActivity(); }}
+            activityCount={homeData.activity.needsAttentionCount}
+            rightIcon="options-outline"
+            onRightAction={() => { haptics.tap(); openFilterSheet(); }}
+            rightActionLabel="Filter auctions"
           />
         );
 
@@ -1657,7 +1693,28 @@ export default function AuctionHomeScreen() {
             <FlashList
               data={homeData.closingSoon}
               keyExtractor={(a) => a.id}
-              renderItem={renderClosingSoonItem}
+              renderItem={({ item }) => {
+                const timing = resolveAuctionTiming(item, secondClock);
+                const urgency = resolveUrgency(timing);
+                const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                const timeLabel = urgency === 'finalMinutes'
+                  ? formatFinalMinutesCountdown(timing.msToEnd)
+                  : resolveTimeLabel(timing);
+                return (
+                  <AuctionRunwayCard
+                    title={item.title}
+                    imageUrl={item.imageUrl || null}
+                    brand={item.brand ?? null}
+                    currentBidText={dualPrice.primaryText}
+                    bidCount={item.bidCount}
+                    countdownText={timeLabel}
+                    urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                    state={timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended'}
+                    viewerState={item.viewerState}
+                    onPress={() => navigateToDetail(item.id)}
+                  />
+                );
+              }}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.horizontalRailContent}
@@ -1671,16 +1728,30 @@ export default function AuctionHomeScreen() {
           <View style={styles.zoneWrap}>
             <SectionHeader title="Live Now" subtitle={`${homeData.live.length} active`} />
             <View style={styles.liveGridContainer}>
-              {homeData.live.map((item) => (
-                <View key={item.id} style={styles.liveGridItem}>
-                  <LiveFloorCard
-                    item={item}
-                    clockMs={secondClock}
+              {homeData.live.map((item) => {
+                const timing = resolveAuctionTiming(item, secondClock);
+                const urgency = resolveUrgency(timing);
+                const dualPrice = formatDualPrice(item.currentBidGbp || item.startingBidGbp);
+                const timeLabel = urgency === 'finalMinutes'
+                  ? formatFinalMinutesCountdown(timing.msToEnd)
+                  : resolveTimeLabel(timing);
+                return (
+                  <AuctionGridCard
+                    key={item.id}
+                    title={item.title}
+                    imageUrl={item.imageUrl || null}
+                    brand={item.brand ?? null}
+                    priceText={dualPrice.primaryText}
+                    priceLabel={resolvePriceLabel(item, timing)}
+                    bidCount={item.bidCount}
+                    countdownText={timeLabel}
+                    urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                    state="live"
+                    viewerState={item.viewerState}
                     onPress={() => navigateToDetail(item.id)}
-                    formatDualPrice={formatDualPrice}
                   />
-                </View>
-              ))}
+                );
+              })}
             </View>
           </View>
         );
@@ -1785,13 +1856,15 @@ export default function AuctionHomeScreen() {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <MarketplaceHeader
-          liveContext="Nothing live or scheduled right now"
-          onSearch={() => { haptics.tap(); setSearchOverlayVisible(true); }}
-          onFilter={() => { haptics.tap(); openFilterSheet(); }}
-          onActivity={() => { haptics.tap(); handleActivity(); }}
+        <AuctionMarketHeader
+          title="Auctions"
+          context="Nothing live or scheduled right now"
           onBack={handleBack}
-          showBack={navigation.canGoBack()}
+          onSearch={() => { haptics.tap(); setSearchOverlayVisible(true); }}
+          onActivity={() => { haptics.tap(); handleActivity(); }}
+          rightIcon="options-outline"
+          onRightAction={() => { haptics.tap(); openFilterSheet(); }}
+          rightActionLabel="Filter auctions"
         />
         <ScrollView
           contentContainerStyle={styles.emptyMarketContainer}
@@ -2202,7 +2275,7 @@ const styles = StyleSheet.create({
   // ZONE C: CLOSING SOON PROGRAMME
   // ════════════════════════════════════════════════════════════════
   closingSoonCard: {
-    width: CLOSING_SOON_CARD_WIDTH,
+    width: 280,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
@@ -2442,8 +2515,6 @@ const styles = StyleSheet.create({
   },
   categoryTileSecondary: {
     flex: 1,
-    minWidth: (SCREEN_WIDTH - Space.md * 2 - Space.sm) / 2,
-    maxWidth: (SCREEN_WIDTH - Space.md * 2 - Space.sm) / 2,
     height: 120,
   },
   categoryTileOverlay: {
