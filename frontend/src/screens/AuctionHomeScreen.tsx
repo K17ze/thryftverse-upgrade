@@ -1239,6 +1239,7 @@ export default function AuctionHomeScreen() {
               snapToInterval={railCardWidth + Space.sm}
               snapToAlignment="start"
               decelerationRate="fast"
+              nestedScrollEnabled
               contentContainerStyle={styles.railContent}
               ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
             />
@@ -1573,6 +1574,7 @@ export default function AuctionHomeScreen() {
               snapToInterval={endingRailCardWidth + Space.sm}
               snapToAlignment="start"
               decelerationRate="fast"
+              nestedScrollEnabled
               contentContainerStyle={styles.railContent}
               ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
             />
@@ -1681,6 +1683,7 @@ export default function AuctionHomeScreen() {
               snapToInterval={upcomingRailCardWidth + Space.sm}
               snapToAlignment="start"
               decelerationRate="fast"
+              nestedScrollEnabled
               contentContainerStyle={styles.railContent}
               ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
             />
@@ -1759,6 +1762,7 @@ export default function AuctionHomeScreen() {
               snapToInterval={watchingRailCardWidth + Space.sm}
               snapToAlignment="start"
               decelerationRate="fast"
+              nestedScrollEnabled
               contentContainerStyle={styles.railContent}
               ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
             />
@@ -2061,24 +2065,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   contentContainer: {
-    paddingBottom: Space.xxl,
+    paddingBottom: Space.xxl + 24,
   },
 
   // ── Zone wrapper ──
   zoneWrap: {
     paddingHorizontal: Space.md,
-    marginTop: Space.lg,
+    marginTop: Space.lg + 4,
   },
 
   // ── Section title (no subtitle) ──
   sectionTitle: {
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: 20,
+    lineHeight: 26,
     fontWeight: '700',
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
     color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    marginBottom: Space.sm,
+    fontFamily: Typography.family.bold,
+    marginBottom: Space.sm + 2,
   },
 
   // ── Attention zone ──
@@ -2090,36 +2094,38 @@ const styles = StyleSheet.create({
 
   // ── Horizontal discovery rail ──
   railWrap: {
-    marginTop: Space.sm,
+    marginTop: Space.md,
     marginBottom: Space.xs,
   },
   railHeader: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
+    marginBottom: Space.sm,
   },
   railTitle: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '700',
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.2,
+    letterSpacing: -0.4,
   },
   railCount: {
     fontSize: 12,
     color: Colors.textMuted,
     fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
   },
   railContent: {
     paddingHorizontal: Space.md,
+    paddingRight: Space.xl + Space.md,
   },
 
   // ── Composition ──
   compositionWrap: {
     paddingHorizontal: Space.md,
-    marginTop: Space.sm,
+    marginTop: Space.lg,
   },
   compositionEmpty: {
     paddingHorizontal: Space.md,

@@ -48,20 +48,20 @@ export function AuctionValueLockup({
 }
 
 const SCALE_SIZES: Record<ValueScale, { ize: number; izeLineHeight: number; local: number; prefix: number }> = {
-  featured: { ize: 26, izeLineHeight: 32, local: 14, prefix: 13 },
-  supporting: { ize: 16, izeLineHeight: 20, local: 11, prefix: 10 },
+  featured: { ize: 28, izeLineHeight: 34, local: 14, prefix: 13 },
+  supporting: { ize: 17, izeLineHeight: 22, local: 11, prefix: 10 },
   compact: { ize: 15, izeLineHeight: 19, local: 11, prefix: 10 },
 };
 
 const styles = StyleSheet.create({
   container: {
-    gap: 1,
+    gap: 2,
   },
   izeValue: {
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
   prefix: {
     fontFamily: Typography.family.medium,
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   localValue: {
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.1,

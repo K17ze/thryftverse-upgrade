@@ -35,17 +35,19 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 3,
+    gap: 5,
+    paddingVertical: 4,
     borderRadius: Radius.full,
     alignSelf: 'flex-start',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   dot: {
     borderRadius: 999,
     backgroundColor: Colors.danger,
   },
   label: {
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.6,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.8,
   },
 });

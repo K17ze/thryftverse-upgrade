@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
@@ -110,12 +110,16 @@ const styles = StyleSheet.create({
   imageWrap: {
     position: 'relative',
     aspectRatio: 4 / 5,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceAlt,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 },
+      android: { elevation: 4 },
+    }),
   },
   imageContainer: {
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   image: {
@@ -124,57 +128,63 @@ const styles = StyleSheet.create({
   },
   liveDot: {
     position: 'absolute',
-    top: Space.xs,
-    left: Space.xs,
-    width: 7,
-    height: 7,
+    top: Space.xs + 2,
+    left: Space.xs + 2,
+    width: 8,
+    height: 8,
     borderRadius: 999,
     backgroundColor: Colors.danger,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.3)',
   },
   personalMarker: {
     position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
+    top: Space.xs + 2,
+    right: Space.xs + 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   personalMarkerOutbid: {
-    backgroundColor: 'rgba(220,38,38,0.9)',
+    backgroundColor: 'rgba(220,38,38,0.92)',
   },
   personalMarkerLeading: {
-    backgroundColor: 'rgba(22,163,74,0.9)',
+    backgroundColor: 'rgba(22,163,74,0.92)',
   },
   personalMarkerText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 9,
+    fontSize: 10,
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
   body: {
-    paddingTop: Space.sm,
-    gap: 2,
+    paddingTop: Space.sm + 2,
+    gap: 3,
   },
   brand: {
     fontFamily: Typography.family.medium,
     fontSize: 10,
     color: Colors.textMuted,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   title: {
     fontFamily: Typography.family.semibold,
     fontSize: 14,
     color: Colors.textPrimary,
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
     lineHeight: 18,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginTop: 3,
   },
   bidCount: {
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.medium,
     fontSize: 10,
     color: Colors.textMuted,
   },

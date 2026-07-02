@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Elevation } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionStateBadge } from './AuctionStateBadge';
@@ -87,7 +87,7 @@ export function AuctionRunwayCard({
         accessibilityLabel={`${title}, ${state}, ${izeText}, ${countdownText}`}
       >
         {/* Clean image — only state badge + watch */}
-        <View style={[styles.imageWrap, { height: imageHeight }]}>
+        <View style={[styles.imageWrapBelow, { height: imageHeight }]}>
           <CachedImage
             uri={imageUrl ?? ''}
             style={styles.image}
@@ -215,18 +215,36 @@ export function AuctionRunwayCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16 },
+      android: { elevation: 8 },
+    }),
   },
   cardMetadataBelow: {
     backgroundColor: 'transparent',
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   imageWrap: {
     position: 'relative',
   },
+  // Metadata-below variant: image gets its own premium rounding + shadow
+  imageWrapBelow: {
+    position: 'relative',
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12 },
+      android: { elevation: 6 },
+    }),
+  },
   imageContainer: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
   },
   image: {
@@ -238,7 +256,9 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 80,
+    height: 90,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
   },
   gradient: {
     position: 'absolute',
@@ -249,96 +269,106 @@ const styles = StyleSheet.create({
   },
   topRow: {
     position: 'absolute',
-    top: Space.sm,
-    left: Space.sm,
-    right: Space.sm,
+    top: Space.sm + 2,
+    left: Space.sm + 2,
+    right: Space.sm + 2,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   watchBtn: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   bottomContent: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: Space.md,
-    gap: 3,
+    padding: Space.md + 2,
+    gap: 4,
   },
   brand: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
-    letterSpacing: 0.2,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.75)',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 20,
+    fontSize: 22,
     color: '#FFFFFF',
-    letterSpacing: -0.4,
-    lineHeight: 24,
-    marginBottom: 4,
+    letterSpacing: -0.5,
+    lineHeight: 26,
+    marginBottom: 6,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginTop: 4,
   },
   bidCount: {
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.medium,
     fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.65)',
   },
 
   // ── Metadata-below variant ──
   belowBody: {
-    paddingTop: Space.sm,
-    gap: 3,
+    paddingTop: Space.md,
+    paddingHorizontal: 2,
+    gap: 4,
   },
   belowBrand: {
     fontFamily: Typography.family.medium,
     fontSize: 11,
     color: Colors.textMuted,
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   belowTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: 20,
+    fontSize: 22,
     color: Colors.textPrimary,
-    letterSpacing: -0.4,
-    lineHeight: 24,
-    marginBottom: 2,
+    letterSpacing: -0.5,
+    lineHeight: 26,
+    marginBottom: 4,
   },
   belowMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginTop: 4,
   },
   belowBidCount: {
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.medium,
     fontSize: 12,
     color: Colors.textMuted,
   },
   personalActionBtn: {
-    marginTop: Space.sm,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
+    marginTop: Space.md,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.full,
     backgroundColor: Colors.brand,
     alignSelf: 'flex-start',
+    ...Platform.select({
+      ios: { shadowColor: Colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+      android: { elevation: 4 },
+    }),
   },
   personalActionText: {
     fontFamily: Typography.family.semibold,
     fontSize: 13,
     color: Colors.textInverse,
+    letterSpacing: 0.3,
   },
 });
