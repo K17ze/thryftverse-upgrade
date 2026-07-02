@@ -1128,7 +1128,7 @@ export default function AuctionHomeScreen() {
                 viewerState={featured.viewerState}
                 onPress={() => navigateToDetail(featured.id)}
                 cardWidth={fullWidth}
-                imageHeight={220}
+                imageHeight={240}
               />
               <View style={styles.supportingRow}>
                 {supporting.map((item) => {

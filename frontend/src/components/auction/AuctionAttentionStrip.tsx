@@ -116,8 +116,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   thumb: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
   },
   content: {
     flex: 1,

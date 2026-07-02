@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 0,
+    gap: 2,
   },
   badge: {
     position: 'absolute',
