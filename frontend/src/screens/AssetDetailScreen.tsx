@@ -476,6 +476,25 @@ export default function AssetDetailScreen() {
           </View>
         </Reanimated.View>
 
+        {/* ── Price history (honest unavailable state) ── */}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(210)}
+          style={styles.sectionWrap}
+        >
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Price history</Text>
+            <View style={styles.priceHistoryEmpty}>
+              <Ionicons name="analytics-outline" size={24} color={Colors.textMuted} />
+              <Text style={styles.priceHistoryEmptyText}>
+                Price history is not available
+              </Text>
+              <Text style={styles.priceHistoryEmptySub}>
+                Historical price data will appear here once the secondary market has sufficient trading activity.
+              </Text>
+            </View>
+          </View>
+        </Reanimated.View>
+
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(230)}
           style={styles.sectionWrap}
@@ -502,6 +521,18 @@ export default function AssetDetailScreen() {
               <Text style={styles.totalLabel}>Total supply</Text>
               <Text style={styles.totalValue}>{totalUnits}u</Text>
             </View>
+            {isHolder && !isIssuer && (
+              <Pressable
+                style={styles.buyoutLink}
+                onPress={() => navigation.navigate('Buyout', { assetId: asset.id })}
+                accessibilityRole="button"
+                accessibilityLabel="Open buyout options for your units"
+              >
+                <Ionicons name="swap-horizontal-outline" size={14} color={Colors.brand} />
+                <Text style={styles.buyoutLinkText}>Buyout options</Text>
+                <Ionicons name="chevron-forward" size={12} color={Colors.textMuted} />
+              </Pressable>
+            )}
           </View>
         </Reanimated.View>
 
@@ -965,6 +996,36 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     fontVariant: ['tabular-nums'],
+  },
+  buyoutLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  buyoutLinkText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  priceHistoryEmpty: {
+    alignItems: 'center',
+    paddingVertical: Space.md,
+    gap: Space.xs,
+  },
+  priceHistoryEmptyText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+  },
+  priceHistoryEmptySub: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 17,
   },
   detailRow: {
     flexDirection: 'row',

@@ -427,7 +427,7 @@ export default function AuctionDetailScreen() {
           state="error"
           title={error ?? 'Auction not found'}
           onRetry={() => navigation.goBack()}
-          retryLabel="Go back"
+          retryLabel="Go Back"
         />
       </View>
     );
@@ -1476,8 +1476,8 @@ const styles = StyleSheet.create({
   backBtnFloating: {
     position: 'absolute',
     left: Space.sm,
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
@@ -1486,8 +1486,8 @@ const styles = StyleSheet.create({
   watchBtnFloating: {
     position: 'absolute',
     right: Space.sm,
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
