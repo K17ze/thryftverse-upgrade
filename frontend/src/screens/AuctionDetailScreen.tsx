@@ -47,9 +47,27 @@ import { BottomSheet } from '../components/BottomSheet';
 import { BidSheet } from '../components/ui/BidSheet';
 import { BuyNowSheet } from '../components/ui/BuyNowSheet';
 import { FullscreenMediaViewer } from '../components/product/FullscreenMediaViewer';
+import { SellerTrustCard, ProductFamilyBadge, RecommendationRail } from '../components/product';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
+import { ShareSheet } from '../components/ShareSheet';
 import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommercePartyStrip } from '../components/commerce';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
-import { useBucketedServerClock, resolveAuctionTiming, type AuctionEffectiveState } from '../hooks/useServerClock';
+import {
+  useBucketedServerClock,
+  resolveAuctionTiming,
+  type AuctionEffectiveState,
+} from '../hooks/useServerClock';
+import {
+  buildAuctionViewModel,
+  useProductSocialState,
+  useRecommendations,
+  useSellerTrust,
+  useSellerFollow,
+  isRecommendationLook,
+} from '../platform/product';
+import type { RecommendationLook } from '../platform/product';
+import { useStore } from '../store/useStore';
+import { Listing } from '../data/mockData';
 import {
   resolveStateAction,
   resolveDetailPriceLabel,
@@ -95,6 +113,8 @@ export default function AuctionDetailScreen() {
   const [mediaViewerVisible, setMediaViewerVisible] = React.useState(false);
   const [relatedAuctions, setRelatedAuctions] = React.useState<MarketAuction[]>([]);
   const [relatedLoading, setRelatedLoading] = React.useState(false);
+
+  const currentUser = useStore((state) => state.currentUser);
 
   const SCREEN_HEIGHT = Dimensions.get('window').height;
   const HERO_HEIGHT = Math.min(SCREEN_HEIGHT * 0.48, 440);
@@ -358,6 +378,40 @@ export default function AuctionDetailScreen() {
   const showBidControls = !isTerminal && !isSeller;
   const treatmentStyle = stateAction?.viewerTreatment ?? 'none';
 
+  // ── PRODUCT-01: unified view model + shared social state + seller trust + recommendations ──
+  const viewModel = React.useMemo(() => {
+    if (!auction) return null;
+    return buildAuctionViewModel({
+      auction,
+      currentUserId: currentUser?.id,
+    });
+  }, [auction, currentUser?.id]);
+
+  const social = useProductSocialState(viewModel);
+
+  const { data: sellerTrustData } = useSellerTrust(auction?.seller.id);
+  const sellerFollowMutation = useSellerFollow(auction?.seller.id);
+
+  const { data: recommendationsData, isLoading: recsLoading } = useRecommendations(
+    auction?.listingId
+  );
+  const recommendationSections = recommendationsData?.sections ?? [];
+  const railSections = recommendationSections.filter(
+    (s) => s.key !== 'seen_in_looks' && s.key !== 'continue_exploring'
+  );
+  const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
+
+  const handlePressRecommendation = (recItem: Listing) => {
+    navigation.push('ItemDetail', { itemId: recItem.id });
+  };
+  const handlePressLook = (lookItem: RecommendationLook) => {
+    navigation.navigate('LookDetail', { lookId: lookItem.id });
+  };
+
+  // Family badge state accent
+  const familyStateAccent = isLive ? 'Live' : isUpcoming ? 'Upcoming' : isCancelled ? 'Cancelled'
+    : isSettled ? 'Settled' : isEnded ? 'Ended' : null;
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -457,7 +511,7 @@ export default function AuctionDetailScreen() {
               )}
             </View>
 
-            {/* Floating controls */}
+            {/* Floating controls — back (left), share + save + like + watch (right) */}
             <AnimatedPressable
               style={[styles.backBtnFloating, { top: insets.top + Space.xs }]}
               onPress={() => navigation.goBack()}
@@ -469,21 +523,70 @@ export default function AuctionDetailScreen() {
               <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
             </AnimatedPressable>
 
-            <AnimatedPressable
-              style={[styles.watchBtnFloating, { top: insets.top + Space.xs }, auction.isWatched && styles.watchBtnFloatingActive]}
-              onPress={handleToggleWatch}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
-              accessibilityHint={watchToggling ? 'Updating' : undefined}
-              hitSlop={4}
-            >
-              <Ionicons
-                name={auction.isWatched ? 'heart' : 'heart-outline'}
-                size={18}
-                color={auction.isWatched ? '#ff4444' : '#FFFFFF'}
-              />
-            </AnimatedPressable>
+            <View style={[styles.floatingControlsRight, { top: insets.top + Space.xs }]}>
+              <AnimatedPressable
+                style={styles.floatingControlBtn}
+                onPress={social.openShare}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Share auction"
+                hitSlop={4}
+              >
+                <Ionicons name="share-outline" size={20} color="#FFFFFF" />
+              </AnimatedPressable>
+
+              <AnimatedPressable
+                style={styles.floatingControlBtn}
+                onPress={social.openCollectionPicker}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={social.isSavedToCollection ? 'Saved to collection' : 'Save to collection'}
+                hitSlop={4}
+              >
+                <Ionicons
+                  name={social.isSavedToCollection ? 'bookmark' : 'bookmark-outline'}
+                  size={20}
+                  color={social.isSavedToCollection ? Colors.brand : '#FFFFFF'}
+                />
+              </AnimatedPressable>
+
+              <AnimatedPressable
+                style={styles.floatingControlBtn}
+                onPress={social.toggleLike}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={social.isLiked ? 'Remove from wishlist' : 'Add to wishlist'}
+                hitSlop={4}
+              >
+                <Ionicons
+                  name={social.isLiked ? 'heart' : 'heart-outline'}
+                  size={20}
+                  color={social.isLiked ? Colors.danger : '#FFFFFF'}
+                />
+              </AnimatedPressable>
+
+              {/* Auction watch — separate from like/save. Eye icon = participation tracking. */}
+              <AnimatedPressable
+                style={[styles.floatingControlBtn, auction.isWatched && styles.watchBtnFloatingActive]}
+                onPress={handleToggleWatch}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+                accessibilityHint={watchToggling ? 'Updating' : undefined}
+                hitSlop={4}
+              >
+                <Ionicons
+                  name={auction.isWatched ? 'eye' : 'eye-outline'}
+                  size={20}
+                  color={auction.isWatched ? Colors.brand : '#FFFFFF'}
+                />
+              </AnimatedPressable>
+            </View>
+
+            {/* Unified family badge */}
+            <View style={[styles.familyBadgeWrap, { top: insets.top + Space.xs + 48 }]}>
+              <ProductFamilyBadge family="auction" stateAccent={familyStateAccent} compact />
+            </View>
 
             {/* Media count hint when multiple media exists (kept minimal) */}
           </View>
@@ -792,6 +895,65 @@ export default function AuctionDetailScreen() {
           />
         )}
 
+        {/* ── PRODUCT-01: Premium seller trust card with follow ── */}
+        {(() => {
+          const seller = sellerTrustData ?? {
+            id: auction.seller.id,
+            username: auction.seller.username,
+            avatar: auction.seller.avatarUrl,
+            verified: false,
+          };
+          return (
+            <SellerTrustCard
+              seller={seller}
+              onFollow={() => sellerFollowMutation.mutate()}
+              onOpenProfile={() => navigation.navigate('UserProfile', { userId: auction.seller.id })}
+              onMessage={!isSeller ? () =>
+                navigation.navigate('NewMessage', {
+                  preselectedUserId: auction.seller.id,
+                  preselectedDisplayName: auction.seller.username,
+                })
+              : undefined}
+            />
+          );
+        })()}
+
+        {/* ── PRODUCT-01: Seen in Looks ── */}
+        {seenInLooksSection && seenInLooksSection.items.length > 0 && (
+          <View style={styles.recommendationSection}>
+            <RecommendationRail
+              section={seenInLooksSection}
+              listingId={auction.listingId}
+              onPressItem={(recItem) => {
+                if (isRecommendationLook(recItem)) {
+                  handlePressLook(recItem);
+                } else {
+                  handlePressRecommendation(recItem as Listing);
+                }
+              }}
+            />
+          </View>
+        )}
+
+        {/* ── PRODUCT-01: Personalised recommendation rails via underlying listingId ── */}
+        {recsLoading && railSections.length === 0 ? null : (
+          railSections.map((section) => (
+            <View key={section.key} style={styles.recommendationSection}>
+              <RecommendationRail
+                section={section}
+                listingId={auction.listingId}
+                onPressItem={(recItem) => {
+                  if (isRecommendationLook(recItem)) {
+                    handlePressLook(recItem);
+                  } else {
+                    handlePressRecommendation(recItem as Listing);
+                  }
+                }}
+              />
+            </View>
+          ))
+        )}
+
         <View style={{ height: 100 + insets.bottom }} />
       </ScrollView>
 
@@ -1071,6 +1233,19 @@ export default function AuctionDetailScreen() {
         visible={mediaViewerVisible}
         onClose={() => setMediaViewerVisible(false)}
       />
+
+      {/* ── PRODUCT-01: Save to collection + share (shared social actions) ── */}
+      <SaveToCollectionModal
+        visible={social.collectionModalVisible}
+        itemId={auction.id}
+        onClose={social.closeCollectionPicker}
+      />
+      <ShareSheet
+        visible={social.shareVisible}
+        onDismiss={social.closeShare}
+        url={`https://thryftverse.com/auction/${auction.id}`}
+        title={auction.title}
+      />
     </View>
   );
 }
@@ -1337,6 +1512,28 @@ const styles = StyleSheet.create({
   },
   watchBtnFloatingActive: {
     backgroundColor: 'rgba(255,68,68,0.2)',
+  },
+  floatingControlsRight: {
+    position: 'absolute',
+    right: Space.sm,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+  },
+  floatingControlBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  familyBadgeWrap: {
+    position: 'absolute',
+    left: Space.sm,
+  },
+  recommendationSection: {
+    marginTop: Space.md,
   },
   stateHeader: {
     paddingHorizontal: Space.md,
