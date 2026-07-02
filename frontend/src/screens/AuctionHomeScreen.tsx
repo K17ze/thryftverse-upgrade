@@ -881,6 +881,29 @@ export default function AuctionHomeScreen() {
     }
   }, [activeSegment, homeData.live, homeData.closingSoon, homeData.upcoming, dedupedWatchlist]);
 
+  // ── Continuous "More to explore" feed ──
+  // Combines all auction items across every segment + recently closed,
+  // excluding those already shown in the active segment composition above.
+  // This is the feed layer — scrolling down keeps revealing more auctions.
+  const exploreFeedItems = useMemo(() => {
+    const seen = new Set(segmentItems.map((i) => i.id));
+    const combined: AuctionHomeItem[] = [
+      ...homeData.live,
+      ...homeData.closingSoon,
+      ...homeData.upcoming,
+      ...homeData.recentlyClosed,
+      ...dedupedWatchlist,
+    ];
+    const deduped: AuctionHomeItem[] = [];
+    const feedSeen = new Set<string>();
+    for (const item of combined) {
+      if (seen.has(item.id) || feedSeen.has(item.id)) continue;
+      feedSeen.add(item.id);
+      deduped.push(item);
+    }
+    return deduped;
+  }, [segmentItems, homeData.live, homeData.closingSoon, homeData.upcoming, homeData.recentlyClosed, dedupedWatchlist]);
+
   // ════════════════════════════════════════════════════════════════
   // RENDER
   // ════════════════════════════════════════════════════════════════
@@ -1165,10 +1188,10 @@ export default function AuctionHomeScreen() {
     switch (activeSegment) {
       case 'live': {
         // ── Horizontal discovery rail — swipe left for more live auctions ──
-        // Each card ~78% viewport with a deliberate peek of the next card.
+        // Each card ~82% viewport with a deliberate peek of the next card.
         // Built ON TOP of the existing asymmetric editorial composition below.
-        const railCardWidth = Math.round(width * 0.78);
-        const railImageHeight = Math.round(Math.min(400, width * 0.95));
+        const railCardWidth = Math.round(width * 0.82);
+        const railImageHeight = Math.round(Math.min(420, width * 1.0));
         const renderLiveRailItem = ({ item }: { item: AuctionHomeItem }) => {
           const timing = resolveAuctionTiming(item, secondClock);
           const urgency = resolveUrgency(timing);
@@ -1203,6 +1226,10 @@ export default function AuctionHomeScreen() {
         };
         const liveRail = segmentItems.length > 0 ? (
           <View style={styles.railWrap}>
+            <View style={styles.railHeader}>
+              <Text style={styles.railTitle}>Live now</Text>
+              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
+            </View>
             <FlatList
               data={segmentItems}
               renderItem={renderLiveRailItem}
@@ -1665,7 +1692,7 @@ export default function AuctionHomeScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.categoryRailContent}
             >
-              {homeData.categoryWorlds.slice(0, 5).map((world) => (
+              {homeData.categoryWorlds.map((world) => (
                 <CategoryRailTile
                   key={world.categoryKey}
                   world={world}
@@ -1682,7 +1709,7 @@ export default function AuctionHomeScreen() {
           <View style={styles.zoneWrap}>
             <Text style={styles.sectionTitle}>Results</Text>
             <View style={styles.resultsContainer}>
-              {homeData.recentlyClosed.slice(0, 3).map((item) => (
+              {homeData.recentlyClosed.map((item) => (
                 <ResultRow
                   key={item.id}
                   item={item}
@@ -1690,6 +1717,44 @@ export default function AuctionHomeScreen() {
                   formatValueLockup={formatValueLockup}
                 />
               ))}
+            </View>
+          </View>
+        )}
+
+        {/* ── More to explore — continuous feed ── */}
+        {exploreFeedItems.length > 0 && (
+          <View style={styles.zoneWrap}>
+            <Text style={styles.sectionTitle}>More to explore</Text>
+            <View style={styles.continuationGrid}>
+              {exploreFeedItems.map((item) => {
+                const timing = resolveAuctionTiming(item, secondClock);
+                const urgency = resolveUrgency(timing);
+                const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
+                const timeLabel = urgency === 'finalMinutes'
+                  ? formatFinalMinutesCountdown(timing.msToEnd)
+                  : resolveTimeLabel(timing);
+                const effectiveState = timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended';
+                const valueState = effectiveState === 'ended' ? 'final' : effectiveState === 'upcoming' ? 'starting' : 'current';
+                return (
+                  <AuctionGridCard
+                    key={item.id}
+                    title={item.title}
+                    imageUrl={item.imageUrl || null}
+                    brand={item.brand ?? null}
+                    izeText={valueLockup.izeText}
+                    localText={valueLockup.localText}
+                    valueState={valueState}
+                    priceLabel={resolvePriceLabel(item, timing)}
+                    bidCount={item.bidCount}
+                    countdownText={timeLabel}
+                    urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
+                    state={effectiveState}
+                    viewerState={item.viewerState}
+                    onPress={() => navigateToDetail(item.id)}
+                    cardWidth={gridCardWidth}
+                  />
+                );
+              })}
             </View>
           </View>
         )}
@@ -1859,6 +1924,25 @@ const styles = StyleSheet.create({
   railWrap: {
     marginTop: Space.sm,
     marginBottom: Space.xs,
+  },
+  railHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    marginBottom: Space.xs,
+  },
+  railTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.2,
+  },
+  railCount: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.medium,
   },
   railContent: {
     paddingHorizontal: Space.md,
