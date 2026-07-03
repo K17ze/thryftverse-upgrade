@@ -2291,19 +2291,17 @@ const styles = StyleSheet.create({
   upcomingDate: {
     fontSize: 11,
     fontWeight: '600',
-    letterSpacing: 0.4,
+    letterSpacing: 0.2,
     color: Colors.textSecondary,
     fontFamily: Typography.family.semibold,
     marginBottom: 2,
-    textTransform: 'uppercase',
   },
   upcomingEyebrow: {
     fontSize: 10,
     color: Colors.textMuted,
     fontFamily: Typography.family.medium,
     marginBottom: 1,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
+    letterSpacing: 0.1,
   },
   upcomingTitle: {
     fontSize: 14,
@@ -2490,10 +2488,9 @@ const styles = StyleSheet.create({
   filterSectionLabel: {
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
     color: Colors.textSecondary,
     fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
     marginBottom: Space.sm,
     marginTop: Space.md,
   },

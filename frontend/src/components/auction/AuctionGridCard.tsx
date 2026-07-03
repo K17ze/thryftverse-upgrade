@@ -163,8 +163,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     fontSize: 10,
     color: Colors.textMuted,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   title: {
     fontFamily: Typography.family.semibold,

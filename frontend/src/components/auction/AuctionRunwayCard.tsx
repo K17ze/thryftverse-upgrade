@@ -215,12 +215,12 @@ export function AuctionRunwayCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16 },
-      android: { elevation: 8 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10 },
+      android: { elevation: 3 },
     }),
   },
   cardMetadataBelow: {
@@ -233,18 +233,18 @@ const styles = StyleSheet.create({
   imageWrap: {
     position: 'relative',
   },
-  // Metadata-below variant: image gets its own premium rounding + shadow
+  // Metadata-below variant: image gets its own rounding + restrained shadow
   imageWrapBelow: {
     position: 'relative',
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12 },
-      android: { elevation: 6 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 8 },
+      android: { elevation: 2 },
     }),
   },
   imageContainer: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   image: {
@@ -257,8 +257,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 90,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
   },
   gradient: {
     position: 'absolute',
@@ -298,8 +298,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     fontSize: 11,
     color: 'rgba(255,255,255,0.7)',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   title: {
     fontFamily: Typography.family.bold,
@@ -331,8 +330,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     fontSize: 11,
     color: Colors.textMuted,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   belowTitle: {
     fontFamily: Typography.family.bold,
