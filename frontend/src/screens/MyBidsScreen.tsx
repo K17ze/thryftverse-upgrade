@@ -14,13 +14,14 @@ import { TradeHeader } from '../components/trade';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
-import { Space, Radius } from '../theme/designTokens';
+import { AuctionValueLockup } from '../components/auction/AuctionValueLockup';
+import { BodyEmphasis } from '../components/ui/Text';
+import { Space, Radius, Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getMyAuctionBids, getWatchlist, type MyAuctionBid, type MarketAuction } from '../services/marketApi';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { toIze, formatIzeAmount } from '../utils/currency';
+import { toIze, formatAuctionIze } from '../utils/currency';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -92,13 +93,13 @@ function bidToActivity(b: MyAuctionBid): ActivityItem {
   };
 }
 
-function getStateInfo(state: ActivityItem['bidState']): { label: string; color: string; icon: keyof typeof Ionicons.glyphMap; nextAction: string } {
-  if (state === 'won') return { label: 'Won', color: Colors.success, icon: 'trophy-outline', nextAction: 'View result' };
-  if (state === 'lost') return { label: 'Lost', color: Colors.textMuted, icon: 'close-circle-outline', nextAction: 'Browse more' };
-  if (state === 'outbid') return { label: 'Outbid', color: Colors.danger, icon: 'trending-down', nextAction: 'Bid again' };
-  if (state === 'leading') return { label: 'Leading', color: Colors.success, icon: 'trending-up', nextAction: 'View auction' };
-  if (state === 'watching') return { label: 'Watching', color: Colors.textSecondary, icon: 'eye-outline', nextAction: 'View auction' };
-  return { label: 'Active', color: Colors.brand, icon: 'hammer-outline', nextAction: 'View auction' };
+function getStateInfo(state: ActivityItem['bidState']): { label: string; color: string; nextAction: string } {
+  if (state === 'won') return { label: 'Won', color: Colors.success, nextAction: 'View result' };
+  if (state === 'lost') return { label: 'Lost', color: Colors.textMuted, nextAction: 'View result' };
+  if (state === 'outbid') return { label: 'Outbid', color: Colors.danger, nextAction: 'Bid again' };
+  if (state === 'leading') return { label: 'Leading', color: Colors.success, nextAction: 'View auction' };
+  if (state === 'watching') return { label: 'Watching', color: Colors.textSecondary, nextAction: 'View auction' };
+  return { label: 'Active', color: Colors.brand, nextAction: 'View auction' };
 }
 
 function formatActivityTime(endsAt: string, lifecycle: string): string {
@@ -121,7 +122,7 @@ function formatActivityTime(endsAt: string, lifecycle: string): string {
 export default function MyBidsScreen() {
   const navigation = useNavigation<NavT>();
   const { formatFromFiat } = useFormattedPrice();
-  const { goldRates, displayMode } = useCurrencyContext();
+  const { goldRates } = useCurrencyContext();
   const reducedMotionEnabled = useReducedMotion();
 
   const [filter, setFilter] = React.useState<BidFilter>('all');
@@ -186,7 +187,7 @@ export default function MyBidsScreen() {
 
       <TradeHeader title="Auction Activity" onBack={() => navigation.goBack()} />
 
-      {/* State rail — separated bid filters and watching */}
+      {/* State rail — text-first with underline indicator */}
       <Reanimated.View
         entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}
       >
@@ -195,30 +196,37 @@ export default function MyBidsScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.stateRailContent}
         >
-          {BID_FILTERS.map((opt) => (
-            <Pressable
-              key={opt.value}
-              style={[styles.stateRailChip, filter === opt.value && styles.stateRailChipActive]}
-              onPress={() => setFilter(opt.value)}
-              accessibilityRole="button"
-              accessibilityLabel={opt.accessibilityLabel}
-            >
-              <Text style={[styles.stateRailText, filter === opt.value && styles.stateRailTextActive]}>
-                {opt.label}
-              </Text>
-            </Pressable>
-          ))}
+          {BID_FILTERS.map((opt) => {
+            const isActive = filter === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={({ pressed }) => [styles.stateRailTab, pressed && styles.stateRailTabPressed]}
+                onPress={() => setFilter(opt.value)}
+                accessibilityRole="tab"
+                accessibilityLabel={opt.accessibilityLabel}
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text style={[styles.stateRailText, isActive && styles.stateRailTextActive]}>
+                  {opt.label}
+                </Text>
+                {isActive && <View style={styles.stateRailIndicator} />}
+              </Pressable>
+            );
+          })}
           <View style={styles.filterDivider} />
           <Pressable
             key={WATCHING_FILTER.value}
-            style={[styles.stateRailChip, filter === WATCHING_FILTER.value && styles.stateRailChipActive]}
+            style={({ pressed }) => [styles.stateRailTab, pressed && styles.stateRailTabPressed]}
             onPress={() => setFilter(WATCHING_FILTER.value)}
-            accessibilityRole="button"
+            accessibilityRole="tab"
             accessibilityLabel={WATCHING_FILTER.accessibilityLabel}
+            accessibilityState={{ selected: filter === WATCHING_FILTER.value }}
           >
             <Text style={[styles.stateRailText, filter === WATCHING_FILTER.value && styles.stateRailTextActive]}>
               {WATCHING_FILTER.label}
             </Text>
+            {filter === WATCHING_FILTER.value && <View style={styles.stateRailIndicator} />}
           </Pressable>
         </ScrollView>
       </Reanimated.View>
@@ -232,6 +240,26 @@ export default function MyBidsScreen() {
         onEndReachedThreshold={0.5}
         renderItem={({ item, index }) => {
           const stateInfo = getStateInfo(item.bidState);
+          const isWatching = item.bidState === 'watching';
+          const isTerminal = item.bidState === 'won' || item.bidState === 'lost';
+
+          // Primary value: current for active/watching, final for terminal
+          const primaryAmount = isTerminal
+            ? item.currentBidGbp
+            : item.currentBidGbp > 0 ? item.currentBidGbp : item.amountGbp;
+          const primaryIze = primaryAmount > 0
+            ? formatAuctionIze(toIze(primaryAmount, 'GBP', goldRates))
+            : null;
+          const primaryLocal = primaryAmount > 0 ? formatFromFiat(primaryAmount, 'GBP') : null;
+          const primaryState: 'current' | 'final' = isTerminal ? 'final' : 'current';
+
+          // Secondary value: your bid for active, outcome for terminal
+          const showYourBid = item.amountGbp > 0 && !isTerminal;
+          const yourBidIze = showYourBid
+            ? formatAuctionIze(toIze(item.amountGbp, 'GBP', goldRates))
+            : null;
+          const yourBidLocal = showYourBid ? formatFromFiat(item.amountGbp, 'GBP') : null;
+
           return (
             <Reanimated.View
               entering={
@@ -248,10 +276,9 @@ export default function MyBidsScreen() {
                 activeOpacity={0.92}
                 scaleValue={0.985}
                 accessibilityRole="button"
-                accessibilityLabel={`${item.title}, ${stateInfo.label}, your bid ${formatFromFiat(item.amountGbp, 'GBP')}`}
+                accessibilityLabel={`${item.title}, ${stateInfo.label}, ${primaryLocal ?? 'no value'}`}
                 accessibilityHint="Opens auction details"
               >
-                {/* Edge-aligned imagery */}
                 <View style={styles.activityImageWrap}>
                   {item.imageUrl ? (
                     <CachedImage
@@ -267,55 +294,43 @@ export default function MyBidsScreen() {
                   )}
                 </View>
 
-                {/* Content — answers all activity questions */}
                 <View style={styles.activityBody}>
-                  <BodyEmphasis style={styles.activityTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-                  <View style={styles.activityStateRow}>
-                    <Ionicons name={stateInfo.icon} size={12} color={stateInfo.color} />
-                    <Text style={[styles.activityState, { color: stateInfo.color }]}>
+                  {/* Title + personal state */}
+                  <View style={styles.activityTitleRow}>
+                    <BodyEmphasis style={styles.activityTitle} numberOfLines={2}>{item.title}</BodyEmphasis>
+                    <Text style={[styles.activityStateBadge, { color: stateInfo.color }]}>
                       {stateInfo.label}
                     </Text>
                   </View>
-                  <View style={styles.activityPriceRow}>
-                    {item.amountGbp > 0 && (
-                      <View>
-                        <Meta style={styles.activityPriceLabel}>Your bid</Meta>
-                        <Body style={styles.activityPriceValue}>{formatFromFiat(item.amountGbp, 'GBP')}</Body>
-                        {displayMode !== 'ize' && (
-                          <Text style={styles.activityIzeText}>
-                            {formatIzeAmount(toIze(item.amountGbp, 'GBP', goldRates))}
-                          </Text>
-                        )}
-                      </View>
-                    )}
-                    {item.currentBidGbp > 0 && (
-                      <View style={[item.amountGbp > 0 && styles.activityPriceCol]}>
-                        <Meta style={styles.activityPriceLabel}>Current</Meta>
-                        <Body style={styles.activityPriceValue}>{formatFromFiat(item.currentBidGbp, 'GBP')}</Body>
-                        {displayMode !== 'ize' && (
-                          <Text style={styles.activityIzeText}>
-                            {formatIzeAmount(toIze(item.currentBidGbp, 'GBP', goldRates))}
-                          </Text>
-                        )}
-                      </View>
-                    )}
-                  </View>
+
+                  {/* Primary value — AuctionValueLockup */}
+                  {primaryIze && (
+                    <AuctionValueLockup
+                      izeText={primaryIze}
+                      localText={primaryLocal}
+                      state={primaryState}
+                      scale="compact"
+                    />
+                  )}
+
+                  {/* Secondary value — your bid or outcome */}
+                  {showYourBid && yourBidIze && (
+                    <Text style={styles.activitySecondaryValue}>
+                      Your bid {yourBidIze}
+                      {yourBidLocal ? ` · ${yourBidLocal}` : ''}
+                    </Text>
+                  )}
+
+                  {/* Time + next action */}
                   <View style={styles.activityMetaRow}>
-                    <View style={styles.activityMetaCol}>
-                      <Meta style={styles.activityMetaLabel}>Time</Meta>
-                      <Text style={styles.activityMetaValue}>{formatActivityTime(item.endsAt, item.lifecycle)}</Text>
-                    </View>
-                    {(item.bidState === 'won' || item.bidState === 'lost') && (
-                      <View style={styles.activityMetaCol}>
-                        <Meta style={styles.activityMetaLabel}>Result</Meta>
-                        <Text style={[styles.activityMetaValue, { color: stateInfo.color }]}>
-                          {item.bidState === 'won' ? 'Won' : 'Lost'}
-                        </Text>
-                      </View>
-                    )}
+                    <Text style={styles.activityMetaValue}>
+                      {formatActivityTime(item.endsAt, item.lifecycle)}
+                    </Text>
                     <View style={styles.activityNextRow}>
-                      <Text style={styles.activityNextText}>{stateInfo.nextAction}</Text>
-                      <Ionicons name="chevron-forward" size={11} color={Colors.brand} />
+                      <Text style={[styles.activityNextText, { color: stateInfo.color }]}>
+                        {stateInfo.nextAction}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={11} color={stateInfo.color} />
                     </View>
                   </View>
                 </View>
@@ -366,36 +381,47 @@ const styles = StyleSheet.create({
   },
   stateRailContent: {
     paddingHorizontal: Space.md,
-    gap: Space.xs,
-    paddingBottom: Space.sm,
+    gap: Space.md,
+    paddingBottom: 0,
+    height: 44,
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  stateRailChip: {
-    paddingHorizontal: Space.md,
-    paddingVertical: 10,
-    minHeight: 36,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+  stateRailTab: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    position: 'relative',
   },
-  stateRailChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+  stateRailTabPressed: {
+    opacity: 0.5,
   },
   stateRailText: {
-    fontSize: 13,
+    fontSize: 14,
     color: Colors.textSecondary,
     fontFamily: 'Inter_500Medium',
   },
   stateRailTextActive: {
-    color: Colors.textInverse,
+    color: Colors.textPrimary,
     fontFamily: 'Inter_600SemiBold',
   },
+  stateRailIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 2,
+    right: 2,
+    height: 2,
+    backgroundColor: Colors.textPrimary,
+    borderRadius: 1,
+  },
   filterDivider: {
-    width: 1,
+    width: StyleSheet.hairlineWidth,
     height: 20,
     backgroundColor: Colors.border,
     alignSelf: 'center',
+    marginHorizontal: Space.xs,
   },
   listContent: {
     paddingHorizontal: Space.md,
@@ -408,7 +434,7 @@ const styles = StyleSheet.create({
   loadMoreWrap: {
     paddingVertical: Space.sm,
   },
-  // ── Activity row — edge-aligned imagery, no bordered card ──
+  // ── Activity row — personal auction ledger ──
   activityRow: {
     flexDirection: 'row',
     paddingVertical: Space.sm,
@@ -439,83 +465,51 @@ const styles = StyleSheet.create({
   },
   activityBody: {
     flex: 1,
+    gap: 4,
+  },
+  activityTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: Space.sm,
   },
   activityTitle: {
+    flex: 1,
     fontSize: 14,
-    marginBottom: 4,
+    marginBottom: 0,
   },
-  activityStateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 6,
-  },
-  activityState: {
+  activityStateBadge: {
     fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
+    paddingTop: 2,
   },
-  activityPriceRow: {
-    flexDirection: 'row',
-    gap: Space.md,
-    marginBottom: 4,
-  },
-  activityPriceCol: {
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: Colors.border,
-    paddingLeft: Space.md,
-  },
-  activityPriceLabel: {
-    fontSize: 10,
+  activitySecondaryValue: {
+    fontSize: 12,
     color: Colors.textMuted,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
-  activityPriceValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  activityIzeText: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
-    marginTop: 1,
+    fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.1,
   },
   activityMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-    marginTop: 4,
-  },
-  activityMetaCol: {
-    alignItems: 'flex-start',
-  },
-  activityMetaLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    marginTop: 2,
   },
   activityMetaValue: {
     fontSize: 12,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 1,
+    fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
   },
   activityNextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    marginLeft: 'auto',
+    gap: 2,
   },
   activityNextText: {
     fontSize: 12,
-    color: Colors.brand,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.medium,
   },
 });

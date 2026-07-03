@@ -1649,8 +1649,10 @@ describe('PASS 5: BidSheet static guardrails', () => {
     expect(bidSheetSrc).toContain('0.05');
   });
 
-  it('has binding commitment notice in review', () => {
-    expect(bidSheetSrc).toContain('binding');
+  it('has review stage receipt with current bid and minimum', () => {
+    expect(bidSheetSrc).toContain('review');
+    expect(bidSheetSrc).toContain('Current bid');
+    expect(bidSheetSrc).toContain('Minimum required');
   });
 
   it('has GBP equivalent display for non-GBP currencies', () => {
@@ -1689,7 +1691,7 @@ describe('PASS 5: BidSheet static guardrails', () => {
 describe('PASS 5: BuyNowSheet static guardrails', () => {
   it('has review stage with price display', () => {
     expect(buyNowSheetSrc).toContain('review');
-    expect(buyNowSheetSrc).toContain('fixedPriceValue');
+    expect(buyNowSheetSrc).toContain('totalValue');
   });
 
   it('has success stage', () => {

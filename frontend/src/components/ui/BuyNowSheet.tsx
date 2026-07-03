@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
 import { AppButton } from './AppButton';
 import { CachedImage } from '../CachedImage';
-import { Meta, Body, Headline } from './Text';
+import { Meta, Headline } from './Text';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import {
@@ -21,7 +21,7 @@ import {
 } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
 import { createStableId } from '../../utils/createStableId';
-import { toIze, formatIzeAmount } from '../../utils/currency';
+import { toIze, formatAuctionIze } from '../../utils/currency';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
 
@@ -171,7 +171,6 @@ export function BuyNowSheet({
     const transactionAmount = Number(effectivePrice.toFixed(2));
 
     setIsSubmitting(true);
-    setStage('submitting');
 
     try {
       const result = await onSubmitBuyNow(transactionAmount, idempotencyKeyRef.current);
@@ -283,30 +282,47 @@ export function BuyNowSheet({
 
         <View style={styles.divider} />
 
-        {/* ── Review stage — distinct fixed-price experience ── */}
+        {/* ── Review stage — transaction receipt (also covers submitting) ── */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
-            <Text style={styles.fixedPriceLabel}>FIXED PRICE</Text>
-
-            {/* Large centered 1ZE value — dominates */}
-            <View style={styles.fixedPriceBlock}>
-              <Text style={styles.fixedPriceValue} numberOfLines={1}>{priceText}</Text>
+            {/* Receipt — hairline-divided rows */}
+            <View style={styles.receiptSection}>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Fixed price</Text>
+                <Text style={styles.receiptValue}>{priceText}</Text>
+              </View>
               {displayPriceGbp && (
-                <Text style={styles.fixedPriceIze}>
-                  {formatIzeAmount(toIze(displayPriceGbp, 'GBP'), 2)}
-                </Text>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>1ZE equivalent</Text>
+                  <Text style={styles.receiptValue}>
+                    {formatAuctionIze(toIze(displayPriceGbp, 'GBP'))}
+                  </Text>
+                </View>
               )}
               {displayPriceText && (
-                <Text style={styles.fixedPriceEquivalent}>
-                  {displayPriceText} {currencyCode}
-                </Text>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Local equivalent</Text>
+                  <Text style={styles.receiptValue}>{displayPriceText} {currencyCode}</Text>
+                </View>
               )}
             </View>
 
-            {/* Calm fixed-price context — not form rows */}
-            <Text style={styles.fixedPriceContext}>
-              This is a fixed-price purchase, not a bid.{'\n'}
-              It ends the auction immediately.
+            {/* Total — visually dominant */}
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <View style={styles.totalValueCol}>
+                <Text style={styles.totalValue} numberOfLines={1}>{priceText}</Text>
+                {displayPriceGbp && (
+                  <Text style={styles.totalIze}>
+                    {formatAuctionIze(toIze(displayPriceGbp, 'GBP'))}
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {/* Transaction consequence */}
+            <Text style={styles.consequenceText}>
+              This is a fixed-price purchase, not a bid. It ends the auction immediately.
             </Text>
 
             {error && (
@@ -316,7 +332,7 @@ export function BuyNowSheet({
               </View>
             )}
 
-            {/* Single decisive action */}
+            {/* Primary action + cancel — preserves layout during submit */}
             <AppButton
               style={styles.dominantAction}
               onPress={handleConfirm}
@@ -324,13 +340,15 @@ export function BuyNowSheet({
               variant="primary"
               size="md"
               align="center"
-              title={isPreflighting ? 'Checking...' : 'Review purchase'}
-              accessibilityLabel="Review Buy Now purchase"
+              title={isSubmitting ? 'Processing...' : isPreflighting ? 'Checking...' : 'Confirm purchase'}
+              loading={isSubmitting}
+              accessibilityLabel="Confirm Buy Now purchase"
             />
             <Pressable
-              style={styles.dismissLink}
+              style={[styles.dismissLink, isSubmitting && { opacity: 0.4 }]}
               onPress={handleDismiss}
               hitSlop={12}
+              disabled={isSubmitting}
               accessibilityRole="button"
               accessibilityLabel="Cancel Buy Now"
             >
@@ -339,23 +357,10 @@ export function BuyNowSheet({
           </View>
         )}
 
-        {/* ── Submitting stage ── */}
-        {stage === 'submitting' && (
-          <View style={styles.centerStage}>
-            <View style={styles.submittingSpinnerWrap}>
-              <Ionicons name="hourglass-outline" size={40} color={Colors.brand} />
-            </View>
-            <Text style={styles.submittingText}>Processing your purchase...</Text>
-            <Text style={styles.submittingDetail}>This may take a moment.</Text>
-          </View>
-        )}
-
         {/* ── Success stage ── */}
         {stage === 'success' && (
           <View style={styles.centerStage}>
-            <View style={styles.successIcon}>
-              <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
-            </View>
+            <Ionicons name="checkmark-circle" size={36} color={Colors.success} style={styles.successIcon} />
             <Text style={styles.successTitle}>Purchase confirmed</Text>
             <Text style={styles.successDetail}>
               You bought this item for {priceText}.{'\n'}The auction has ended and is being refreshed.
@@ -458,48 +463,65 @@ const styles = StyleSheet.create({
   stageContent: {
     gap: Space.sm,
   },
-  // ── Fixed-price experience ──
-  fixedPriceLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'center',
-    marginTop: Space.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  // ── Review receipt ──
+  receiptSection: {
+    gap: Space.xs + 2,
+    paddingVertical: Space.sm,
   },
-  fixedPriceBlock: {
+  receiptRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Space.md,
-    gap: 4,
   },
-  fixedPriceValue: {
-    fontSize: 36,
-    lineHeight: 42,
-    fontWeight: '700',
-    letterSpacing: -0.5,
+  receiptLabel: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    letterSpacing: -0.1,
+  },
+  receiptValue: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
+  },
+  totalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  totalLabel: {
+    fontSize: 15,
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+  },
+  totalValueCol: {
+    alignItems: 'flex-end',
+    gap: 1,
+  },
+  totalValue: {
+    fontSize: 20,
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
+    letterSpacing: -0.4,
   },
-  fixedPriceIze: {
-    fontSize: 14,
+  totalIze: {
+    fontSize: 12,
     color: Colors.brand,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
   },
-  fixedPriceEquivalent: {
+  consequenceText: {
     fontSize: 13,
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
-  fixedPriceContext: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 18,
     paddingVertical: Space.xs,
   },
   dominantAction: {
@@ -546,19 +568,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.md,
-  },
-  submittingText: {
-    fontSize: 16,
-    fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-  },
-  submittingSpinnerWrap: {
-    marginBottom: Space.xs,
-  },
-  submittingDetail: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
   },
   successIcon: {
     marginBottom: Space.xs,

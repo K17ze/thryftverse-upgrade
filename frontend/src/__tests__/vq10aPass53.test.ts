@@ -186,10 +186,10 @@ describe('PASS 5.3: BidSheet recoverable_conflict stage (source inspection)', ()
     expect(bidSheetSrc).toContain('Review Buy Now');
   });
 
-  it('BidSheet recoverable_conflict stage shows Edit bid button', () => {
+  it('BidSheet recoverable_conflict stage shows Edit amount button', () => {
     const conflictStageStart = bidSheetSrc.indexOf("stage === 'recoverable_conflict'");
     const conflictSection = bidSheetSrc.substring(conflictStageStart, conflictStageStart + 1200);
-    expect(conflictSection).toContain('Edit bid');
+    expect(conflictSection).toContain('Edit amount');
   });
 
   it('BidSheet resets idempotency key on recoverable_conflict', () => {

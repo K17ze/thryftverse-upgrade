@@ -17,7 +17,7 @@ import { Space, Radius, Typography } from '../../theme/designTokens';
 import {
   sanitizeDecimalInput,
 } from '../../utils/currencyAuthoringFlows';
-import { toIze, formatIzeAmount } from '../../utils/currency';
+import { toIze, formatAuctionIze } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { GoldRates } from '../../utils/currency';
@@ -238,7 +238,6 @@ export function BidSheet({
     }
 
     setIsSubmitting(true);
-    setStage('submitting');
 
     try {
       // Submit the validated local variable, not stale state
@@ -345,7 +344,7 @@ export function BidSheet({
         {/* ── Entry stage — large centered amount ── */}
         {stage === 'entry' && (
           <View style={styles.stageContent}>
-            <Text style={styles.entryHeading}>PLACE YOUR BID</Text>
+            <Text style={styles.entryHeading}>Place your bid</Text>
 
             {/* Large amount input — dominates the sheet */}
             <View style={styles.amountContainer}>
@@ -364,21 +363,21 @@ export function BidSheet({
 
             {/* 1ZE equivalent — platform value */}
             <Text style={styles.amountIzeEquivalent}>
-              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 2)}
+              {formatAuctionIze(toIze(Number(bidInput) || 0, currencyCode, goldRates))}
             </Text>
 
             {/* Minimum and current — stacked, not columns */}
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>MINIMUM TO LEAD</Text>
+                <Text style={styles.bidContextLabel}>Minimum to lead</Text>
                 <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>CURRENT VALUE</Text>
+                <Text style={styles.bidContextLabel}>Current value</Text>
                 <Text style={styles.bidContextValueSecondary}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>TIME REMAINING</Text>
+                <Text style={styles.bidContextLabel}>Time remaining</Text>
                 <Text style={[styles.bidContextValueSecondary, auction.effectiveState === 'live' && { color: Colors.danger }]}>
                   {auction.countdownText}
                 </Text>
@@ -434,10 +433,10 @@ export function BidSheet({
           </View>
         )}
 
-        {/* ── Review stage — clean confirmation receipt ── */}
+        {/* ── Review stage — transaction receipt (also covers submitting) ── */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
-            <Text style={styles.reviewHeading}>CONFIRM YOUR BID</Text>
+            <Text style={styles.reviewHeading}>Review your bid</Text>
 
             {/* Dominant bid amount */}
             <View style={styles.reviewAmountBlock}>
@@ -445,7 +444,7 @@ export function BidSheet({
                 {currencyCode} {bidInput}
               </Text>
               <Text style={styles.reviewAmountIze}>
-                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0, 2)}
+                {formatAuctionIze(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0)}
               </Text>
               {isNonGbp && gbpEquivalentText && (
                 <Text style={styles.reviewGbpEquivalent}>{gbpEquivalentText}</Text>
@@ -455,28 +454,17 @@ export function BidSheet({
             {/* Receipt details */}
             <View style={styles.reviewReceipt}>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>CURRENT VALUE</Text>
+                <Text style={styles.reviewReceiptLabel}>Current bid</Text>
                 <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>MINIMUM</Text>
+                <Text style={styles.reviewReceiptLabel}>Minimum required</Text>
                 <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>TIME REMAINING</Text>
+                <Text style={styles.reviewReceiptLabel}>Auction ends</Text>
                 <Text style={styles.reviewReceiptValue}>{auction.countdownText}</Text>
               </View>
-              <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>SELLER</Text>
-                <Text style={styles.reviewReceiptValue}>{auction.sellerName}</Text>
-              </View>
-            </View>
-
-            <View style={styles.commitmentRow}>
-              <Ionicons name="information-circle-outline" size={14} color={Colors.textSecondary} />
-              <Text style={styles.commitmentText}>
-                Bids are binding once accepted.
-              </Text>
             </View>
 
             {error && (
@@ -486,46 +474,40 @@ export function BidSheet({
               </View>
             )}
 
-            {/* Single dominant action + quiet edit */}
+            {/* Binding disclosure — quiet, close to the confirm action */}
+            <Text style={styles.bindingNotice}>
+              Bids are binding once accepted.
+            </Text>
+
+            {/* Primary action + quiet edit — preserves layout during submit */}
             <AppButton
               style={styles.dominantAction}
               onPress={handleConfirmBid}
               variant="primary"
               size="md"
               align="center"
-              title={isPreflighting ? 'Checking...' : 'Confirm bid'}
+              title={isSubmitting ? 'Submitting...' : isPreflighting ? 'Checking...' : 'Confirm bid'}
               disabled={isPreflighting || isSubmitting}
+              loading={isSubmitting}
               accessibilityLabel="Confirm and submit your bid"
             />
             <Pressable
-              style={styles.dismissLink}
+              style={[styles.dismissLink, isSubmitting && { opacity: 0.4 }]}
               onPress={handleEditFromReview}
               hitSlop={12}
+              disabled={isSubmitting}
               accessibilityRole="button"
-              accessibilityLabel="Edit your bid"
+              accessibilityLabel="Edit amount"
             >
-              <Text style={styles.dismissLinkText}>Edit bid</Text>
+              <Text style={styles.dismissLinkText}>Edit amount</Text>
             </Pressable>
-          </View>
-        )}
-
-        {/* ── Submitting stage ── */}
-        {stage === 'submitting' && (
-          <View style={styles.centerStage}>
-            <View style={styles.submittingSpinnerWrap}>
-              <Ionicons name="hourglass-outline" size={40} color={Colors.brand} />
-            </View>
-            <Text style={styles.submittingText}>Submitting your bid...</Text>
-            <Text style={styles.submittingDetail}>This may take a moment.</Text>
           </View>
         )}
 
         {/* ── Success stage ── */}
         {stage === 'success' && (
           <View style={styles.centerStage}>
-            <View style={styles.successIcon}>
-              <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
-            </View>
+            <Ionicons name="checkmark-circle" size={36} color={Colors.success} style={styles.successIcon} />
             <Text style={styles.successTitle}>Bid placed</Text>
             <Text style={styles.successDetail}>
               Your bid of {formatFromFiat(gbpAmount ?? 0, 'GBP')} has been submitted
@@ -566,7 +548,7 @@ export function BidSheet({
                 variant="secondary"
                 size="md"
                 align="center"
-                title="Edit bid"
+                title="Edit amount"
                 accessibilityLabel="Edit your bid amount"
               />
               <AppButton
@@ -670,10 +652,10 @@ const styles = StyleSheet.create({
   },
   // ── Entry stage — large centered amount ──
   entryHeading: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: 15,
+    color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.8,
+    letterSpacing: -0.2,
     textAlign: 'center',
     marginTop: Space.xs,
   },
@@ -714,11 +696,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bidContextLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    letterSpacing: -0.1,
   },
   bidContextValue: {
     fontSize: 15,
@@ -731,6 +712,13 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
+  },
+  bindingNotice: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    textAlign: 'center',
+    paddingVertical: Space.xs,
   },
   dominantAction: {
     width: '100%',
@@ -748,13 +736,12 @@ const styles = StyleSheet.create({
   },
   // ── Review stage — receipt ──
   reviewHeading: {
-    fontSize: 11,
+    fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
     textAlign: 'center',
     marginBottom: Space.sm,
-    textTransform: 'uppercase',
   },
   reviewAmountBlock: {
     alignItems: 'center',
@@ -796,31 +783,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   reviewReceiptLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.5,
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    letterSpacing: -0.1,
   },
   reviewReceiptValue: {
     fontSize: 14,
     color: Colors.textPrimary,
-    fontFamily: Typography.family.medium,
-  },
-  countdownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: Space.xs,
-  },
-  izeEquivalentText: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.xs,
-  },
-  countdownText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
   input: {
@@ -878,39 +848,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   primaryBtn: {},
-  reviewDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginVertical: Space.xs,
-  },
-  commitmentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: Space.xs,
-  },
-  commitmentText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
   centerStage: {
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.md,
-  },
-  submittingText: {
-    fontSize: 16,
-    fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-  },
-  submittingSpinnerWrap: {
-    marginBottom: Space.xs,
-  },
-  submittingDetail: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
   },
   successIcon: {
     marginBottom: Space.xs,
