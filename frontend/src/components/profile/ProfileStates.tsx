@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, StatusBar, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActiveTheme, Colors } from '../../constants/colors';
-import { Space } from '../../theme/designTokens';
+import { Space, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 const BG = Colors.background;
@@ -11,21 +11,36 @@ const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
 const SURFACE_ALT = Colors.surfaceAlt;
 
-const COVER_HEIGHT = 176;
+const COVER_HEIGHT = 168;
 
 interface BaseProps {
   coverHeight?: number;
 }
 
 /**
- * Error state — profile-level failure with retry. Retains Back access via top controls.
+ * Error state — profile-level failure with retry.
+ * Includes explicit Back control with correct safe-area placement.
  */
-export function ProfileErrorState({ onRetry, coverHeight = COVER_HEIGHT }: BaseProps & { onRetry: () => void }) {
+export function ProfileErrorState({ onRetry, onBack, coverHeight = COVER_HEIGHT }: BaseProps & { onRetry: () => void; onBack: () => void }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
       <View style={[styles.coverSkeleton, { height: coverHeight }]} />
+      <View pointerEvents="box-none" style={styles.coverActionLayer}>
+        <View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }]}>
+          <AnimatedPressable
+            style={styles.topUtilityIconBtn}
+            activeOpacity={0.9}
+            onPress={onBack}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            <Ionicons name="arrow-back" size={18} color="#fff" />
+          </AnimatedPressable>
+        </View>
+      </View>
       <Pressable
         style={styles.stateContainer}
         onPress={onRetry}
@@ -42,12 +57,28 @@ export function ProfileErrorState({ onRetry, coverHeight = COVER_HEIGHT }: BaseP
 
 /**
  * Unavailable state — profile doesn't exist or was deactivated.
+ * Includes explicit Back control.
  */
-export function ProfileUnavailableState({ coverHeight = COVER_HEIGHT }: BaseProps) {
+export function ProfileUnavailableState({ onBack, coverHeight = COVER_HEIGHT }: BaseProps & { onBack: () => void }) {
+  const insets = useSafeAreaInsets();
   return (
     <View style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
       <View style={[styles.coverSkeleton, { height: coverHeight }]} />
+      <View pointerEvents="box-none" style={styles.coverActionLayer}>
+        <View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }]}>
+          <AnimatedPressable
+            style={styles.topUtilityIconBtn}
+            activeOpacity={0.9}
+            onPress={onBack}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            <Ionicons name="arrow-back" size={18} color="#fff" />
+          </AnimatedPressable>
+        </View>
+      </View>
       <View style={styles.stateContainer}>
         <Ionicons name="person-outline" size={40} color={MUTED} />
         <Text style={styles.stateText}>Profile unavailable</Text>
@@ -141,6 +172,6 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: Space.md,
   },
-  stateText: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: TEXT },
-  stateSubtext: { fontSize: 14, fontFamily: 'Inter_400Regular', color: MUTED, textAlign: 'center' },
+  stateText: { fontSize: 16, fontFamily: Typography.family.semibold, color: TEXT },
+  stateSubtext: { fontSize: 14, fontFamily: Typography.family.regular, color: MUTED, textAlign: 'center' },
 });

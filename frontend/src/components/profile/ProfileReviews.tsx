@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
@@ -20,14 +20,14 @@ interface ReviewSummaryBlockProps {
 
 /**
  * Reputation summary — dominant average, restrained stars, total count,
- * 5→1 distribution bars, completed-order context. One trust surface.
+ * 5→1 distribution bars using count/totalReviews (NOT count/maxCount).
+ * Bars represent actual review proportions.
  */
 export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
   const avg = summary.ratingAverage ?? 0;
   const total = summary.reviewCount;
   const distMap = new Map<number, number>();
   for (const d of summary.distribution) distMap.set(d.rating, d.count);
-  const maxCount = Math.max(1, ...Array.from(distMap.values()));
 
   return (
     <View style={styles.reviewSummary}>
@@ -44,7 +44,8 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
         <View style={styles.reviewSummaryDist}>
           {[5, 4, 3, 2, 1].map((star) => {
             const count = distMap.get(star) ?? 0;
-            const pct = count / maxCount;
+            // Use count / totalReviews for accurate proportions
+            const pct = total > 0 ? count / total : 0;
             return (
               <View key={star} style={styles.distRow}>
                 <Text style={styles.distStar}>{star}</Text>
@@ -65,21 +66,36 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
 
 interface ProfileReviewRowProps {
   item: SellerReviewItem;
+  onOpenReviewer?: (userId: string) => void;
+  onOpenListing?: (listingId: string) => void;
 }
 
 /**
  * Review row — compact reviewer identity, strong comment readability,
- * listing context visually subordinate. Consistent hairline rhythm.
+ * listing context visually subordinate. Reviewer and listing are interactive.
  */
-export const ProfileReviewRow = React.memo(function ProfileReviewRow({ item }: ProfileReviewRowProps) {
+export const ProfileReviewRow = React.memo(function ProfileReviewRow({
+  item,
+  onOpenReviewer,
+  onOpenListing,
+}: ProfileReviewRowProps) {
   const reviewerName = item.reviewer.displayName || item.reviewer.username || 'Anonymous';
   const dateText = item.createdAt
     ? new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : '';
+  const canOpenReviewer = Boolean(item.reviewer.id && onOpenReviewer);
+  const canOpenListing = Boolean(item.listing?.id && onOpenListing);
+
   return (
     <View style={styles.reviewRow}>
       <View style={styles.reviewHeader}>
-        <View style={styles.reviewAvatarWrap}>
+        <Pressable
+          style={styles.reviewAvatarWrap}
+          onPress={() => canOpenReviewer && onOpenReviewer!(item.reviewer.id!)}
+          disabled={!canOpenReviewer}
+          accessibilityRole={canOpenReviewer ? 'button' : undefined}
+          accessibilityLabel={canOpenReviewer ? `Open ${reviewerName}'s profile` : undefined}
+        >
           {item.reviewer.avatar ? (
             <CachedImage
               uri={item.reviewer.avatar}
@@ -89,10 +105,12 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({ item }: P
             />
           ) : (
             <View style={[styles.reviewAvatar, styles.reviewAvatarFallback]}>
-              <Ionicons name="person" size={16} color={MUTED} />
+              <Text style={styles.reviewAvatarInitials}>
+                {reviewerName.charAt(0).toUpperCase()}
+              </Text>
             </View>
           )}
-        </View>
+        </Pressable>
         <View style={styles.reviewIdentityCol}>
           <Text style={styles.reviewName} numberOfLines={1}>{reviewerName}</Text>
           <Text style={styles.reviewDate}>{dateText}</Text>
@@ -104,7 +122,13 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({ item }: P
       </View>
       {item.comment ? <Text style={styles.reviewComment}>{item.comment}</Text> : null}
       {item.listing ? (
-        <View style={styles.reviewListingContext}>
+        <Pressable
+          style={styles.reviewListingContext}
+          onPress={() => canOpenListing && onOpenListing!(item.listing!.id!)}
+          disabled={!canOpenListing}
+          accessibilityRole={canOpenListing ? 'button' : undefined}
+          accessibilityLabel={canOpenListing ? `Open listing ${item.listing!.title}` : undefined}
+        >
           {item.listing.imageUrl ? (
             <CachedImage
               uri={item.listing.imageUrl}
@@ -114,7 +138,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({ item }: P
             />
           ) : null}
           <Text style={styles.reviewListingTitle} numberOfLines={1}>{item.listing.title}</Text>
-        </View>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -150,6 +174,7 @@ const styles = StyleSheet.create({
   reviewAvatarWrap: {},
   reviewAvatar: { width: 36, height: 36, borderRadius: 18 },
   reviewAvatarFallback: { backgroundColor: SURFACE_ALT, alignItems: 'center', justifyContent: 'center' },
+  reviewAvatarInitials: { fontSize: 14, fontFamily: Typography.family.bold, color: SECONDARY },
   reviewIdentityCol: { flex: 1 },
   reviewName: { fontSize: 14, fontFamily: Typography.family.semibold, color: TEXT },
   reviewDate: { fontSize: 12, fontFamily: Typography.family.regular, color: MUTED, marginTop: 1 },

@@ -1,6 +1,5 @@
 import React from 'react';
-import { Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
@@ -31,7 +30,7 @@ interface ProfileShopTileProps {
 
 /**
  * Shop tile — 4:5 portrait, price/brand/size·condition hierarchy.
- * Sold treatment: restrained corner label, NOT a full 50% dark overlay.
+ * Sold treatment: quiet lower-edge marker, not aggressive all-caps stamp.
  * The garment stays readable; sold inventory feels historical, not disabled.
  */
 const ProfileShopTile = React.memo(function ProfileShopTile({
@@ -62,10 +61,12 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
           containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
           contentFit="cover"
         />
-        {/* Restrained SOLD corner label — image stays readable */}
+        {/* Quiet lower-edge sold marker — image stays readable */}
         {showSold ? (
-          <View style={styles.soldCorner}>
-            <Text style={styles.soldText}>SOLD</Text>
+          <View style={styles.soldOverlay}>
+            <View style={styles.soldMarker}>
+              <Text style={styles.soldText}>Sold</Text>
+            </View>
           </View>
         ) : null}
       </SharedTransitionView>
@@ -82,9 +83,6 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
   );
 });
 
-// Need View import for the sold corner wrapper
-import { View } from 'react-native';
-
 const styles = StyleSheet.create({
   gridCard: {},
   gridImageWrap: {
@@ -93,20 +91,29 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   gridImage: { width: '100%', height: '100%' },
-  soldCorner: {
+  // Quiet lower-edge sold overlay — gradient-like fade from bottom
+  soldOverlay: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 36,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 6,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  soldMarker: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderRadius: 4,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   soldText: {
     color: '#fff',
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.8,
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.2,
   },
   gridPrice: { fontSize: 14, fontFamily: Typography.family.bold, color: TEXT, marginTop: 6 },
   gridBrand: { fontSize: 12, fontFamily: Typography.family.regular, color: SECONDARY, marginTop: 1 },

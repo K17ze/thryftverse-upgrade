@@ -20,9 +20,11 @@ function fileExists(rel: string) {
 describe('VQ-11A: Public Profile Flagship Elevation', () => {
   // ── Screen architecture ──────────────────────────────────────────
   describe('Screen architecture', () => {
-    it('UserProfileScreen imports FlagshipProfileMedia', () => {
-      const src = readFile('screens/UserProfileScreen.tsx');
-      expect(src).toContain('FlagshipProfileMedia');
+    it('UserProfileScreen uses ProfileHero which renders FlagshipProfileMedia', () => {
+      const screen = readFile('screens/UserProfileScreen.tsx');
+      const hero = readFile('components/profile/ProfileHero.tsx');
+      expect(screen).toContain('ProfileHero');
+      expect(hero).toContain('FlagshipProfileMedia');
     });
 
     it('UserProfileScreen uses FlashList for virtualization', () => {
@@ -129,24 +131,29 @@ describe('VQ-11A: Public Profile Flagship Elevation', () => {
 
     it('UserProfileScreen uses useReportUserMutation for reporting', () => {
       const src = readFile('screens/UserProfileScreen.tsx');
+      const sheets = readFile('components/profile/ProfileSheets.tsx');
       expect(src).toContain('useReportUserMutation');
-      expect(src).toContain('ReportSheetContent');
-      expect(src).toContain('REPORT_REASONS');
+      expect(src).toContain('ProfileReportSheet');
+      expect(sheets).toContain('REPORT_REASONS');
     });
 
     it('UserProfileScreen has NativeSheet for more actions', () => {
       const src = readFile('screens/UserProfileScreen.tsx');
-      expect(src).toContain('NativeSheet');
+      const sheets = readFile('components/profile/ProfileSheets.tsx');
+      expect(src).toContain('ProfileMoreSheet');
       expect(src).toContain('moreSheetVisible');
       expect(src).toContain('reportSheetVisible');
       expect(src).toContain('blockConfirmVisible');
+      expect(sheets).toContain('NativeSheet');
     });
 
     it('UserProfileScreen has block confirmation dialog', () => {
       const src = readFile('screens/UserProfileScreen.tsx');
-      expect(src).toContain('Block');
-      expect(src).toContain('confirmBlockBtn');
-      expect(src).toContain('cancelBtn');
+      const sheets = readFile('components/profile/ProfileSheets.tsx');
+      expect(src).toContain('ProfileBlockConfirmSheet');
+      expect(sheets).toContain('Block');
+      expect(sheets).toContain('confirmBlockBtn');
+      expect(sheets).toContain('cancelBtn');
     });
 
     it('UserProfileScreen has share and copy link actions', () => {
@@ -161,10 +168,11 @@ describe('VQ-11A: Public Profile Flagship Elevation', () => {
   // ── States: loading, error, empty, blocked ───────────────────────
   describe('State completeness', () => {
     it('UserProfileScreen has loading skeleton state', () => {
-      const src = readFile('screens/UserProfileScreen.tsx');
-      expect(src).toContain('skeleton');
-      expect(src).toContain('coverSkeleton');
-      expect(src).toContain('skeletonAvatar');
+      const screen = readFile('screens/UserProfileScreen.tsx');
+      const skeleton = readFile('components/profile/ProfileSkeleton.tsx');
+      expect(screen).toContain('ProfileSkeleton');
+      expect(skeleton).toContain('coverSkeleton');
+      expect(skeleton).toContain('skeletonAvatar');
     });
 
     it('UserProfileScreen has error state with retry', () => {
@@ -219,15 +227,15 @@ describe('VQ-11A: Public Profile Flagship Elevation', () => {
     });
 
     it('UserProfileScreen has accessibility labels on follow/message', () => {
-      const src = readFile('screens/UserProfileScreen.tsx');
-      expect(src).toMatch(/accessibilityLabel.*Follow/);
-      expect(src).toMatch(/accessibilityLabel.*message/i);
+      const hero = readFile('components/profile/ProfileHero.tsx');
+      expect(hero).toMatch(/accessibilityLabel.*Follow/);
+      expect(hero).toMatch(/accessibilityLabel.*message/i);
     });
 
     it('UserProfileScreen has accessibility labels on tabs', () => {
-      const src = readFile('screens/UserProfileScreen.tsx');
-      expect(src).toContain('accessibilityRole="tab"');
-      expect(src).toContain('accessibilityState');
+      const tabRail = readFile('components/profile/ProfileTabRail.tsx');
+      expect(tabRail).toContain('accessibilityRole="tab"');
+      expect(tabRail).toContain('accessibilityState');
     });
   });
 
@@ -244,23 +252,23 @@ describe('VQ-11A: Public Profile Flagship Elevation', () => {
       expect(src).not.toMatch(/Dimensions\.get/);
     });
 
-    it('ShopTile shows sold overlay for sold items', () => {
-      const src = readFile('screens/UserProfileScreen.tsx');
-      expect(src).toContain('soldOverlay');
-      expect(src).toContain('SOLD');
+    it('ShopTile shows sold marker for sold items', () => {
+      const shopTile = readFile('components/profile/ProfileShopTile.tsx');
+      expect(shopTile).toContain('soldOverlay');
+      expect(shopTile).toContain('Sold');
     });
 
     it('LookTile shows video badge and tag count', () => {
-      const src = readFile('screens/UserProfileScreen.tsx');
-      expect(src).toContain('videoBadge');
-      expect(src).toContain('tagCountBadge');
+      const lookTile = readFile('components/profile/ProfileLookTile.tsx');
+      expect(lookTile).toContain('videoBadge');
+      expect(lookTile).toContain('tagCountBadge');
     });
 
     it('ReviewRow shows reviewer identity, rating, and listing context', () => {
-      const src = readFile('screens/UserProfileScreen.tsx');
-      expect(src).toContain('reviewName');
-      expect(src).toContain('reviewRatingValue');
-      expect(src).toContain('reviewListingContext');
+      const reviews = readFile('components/profile/ProfileReviews.tsx');
+      expect(reviews).toContain('reviewName');
+      expect(reviews).toContain('reviewRatingValue');
+      expect(reviews).toContain('reviewListingContext');
     });
   });
 

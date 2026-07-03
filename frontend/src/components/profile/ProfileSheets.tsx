@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { NativeSheet } from '../../platform/native';
@@ -59,7 +59,7 @@ export function ProfileMoreSheet({
   onShare, onCopyLink, onReport, onBlock, onUnblock,
 }: MoreSheetProps) {
   return (
-    <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={['half']}>
+    <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.38 }]}>
       <View style={styles.sheetContainer}>
         <Text style={styles.sheetTitle}>Profile options</Text>
         <SheetItem icon="share-outline" label="Share profile" onPress={() => { onDismiss(); onShare(); }} />
@@ -98,6 +98,10 @@ interface ReportSheetProps {
 
 export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: ReportSheetProps) {
   const [selected, setSelected] = useState<ReportReason | null>(null);
+  const [details, setDetails] = useState('');
+  const requiresDetails = selected === 'other';
+  const canSubmit = selected !== null && (!requiresDetails || details.trim().length > 0);
+
   return (
     <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.7 }]}>
       <View style={styles.sheetContainer}>
@@ -121,11 +125,30 @@ export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: 
             </Pressable>
           );
         })}
+        {/* Optional details field — required when "Other" is selected */}
+        {selected ? (
+          <View style={styles.detailsWrap}>
+            <Text style={styles.detailsLabel}>
+              {requiresDetails ? 'Details (required)' : 'Additional details (optional)'}
+            </Text>
+            <TextInput
+              style={[styles.detailsInput, requiresDetails && details.trim().length === 0 && styles.detailsInputRequired]}
+              value={details}
+              onChangeText={setDetails}
+              placeholder={requiresDetails ? 'Please describe the issue' : 'Add more context'}
+              placeholderTextColor={MUTED}
+              multiline
+              maxLength={500}
+              accessibilityLabel="Report details"
+              accessibilityHint={requiresDetails ? 'Required when Other is selected' : 'Optional additional context'}
+            />
+          </View>
+        ) : null}
         <AnimatedPressable
-          style={[styles.submitBtn, !selected && styles.btnDisabled]}
-          onPress={() => selected && onSubmit(selected)}
+          style={[styles.submitBtn, !canSubmit && styles.btnDisabled]}
+          onPress={() => canSubmit && onSubmit(selected!, details.trim() || undefined)}
           activeOpacity={0.85}
-          disabled={!selected || isPending}
+          disabled={!canSubmit || isPending}
           accessibilityRole="button"
           accessibilityLabel="Submit report"
         >
@@ -203,6 +226,15 @@ const styles = StyleSheet.create({
   radioOuterActive: { borderColor: BRAND },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: BRAND },
   reportReasonLabel: { flex: 1, fontSize: 15, fontFamily: Typography.family.regular, color: TEXT },
+  // Details field
+  detailsWrap: { marginTop: Space.md },
+  detailsLabel: { fontSize: 13, fontFamily: Typography.family.medium, color: SECONDARY, marginBottom: Space.xs },
+  detailsInput: {
+    borderWidth: StyleSheet.hairlineWidth, borderColor: BORDER, borderRadius: 8,
+    paddingHorizontal: Space.sm, paddingVertical: Space.sm, fontSize: 14,
+    fontFamily: Typography.family.regular, color: TEXT, minHeight: 80, textAlignVertical: 'top',
+  },
+  detailsInputRequired: { borderColor: DANGER },
   submitBtn: {
     height: 48, borderRadius: 24, backgroundColor: BRAND,
     alignItems: 'center', justifyContent: 'center', marginTop: Space.md,

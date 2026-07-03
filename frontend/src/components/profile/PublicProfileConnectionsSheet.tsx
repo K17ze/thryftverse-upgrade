@@ -55,7 +55,6 @@ export function PublicProfileConnectionsSheet({
     return acc;
   }, [activeQuery.data]);
 
-  const count = segment === 'followers' ? followerCount : followingCount;
   const isLoading = activeQuery.isLoading && items.length === 0;
   const hasError = Boolean(activeQuery.error) && items.length === 0;
   const hasNextPage = Boolean(activeQuery.hasNextPage);
@@ -84,7 +83,7 @@ export function PublicProfileConnectionsSheet({
             />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback]}>
-              <Ionicons name="person" size={18} color={Colors.textMuted} />
+              <Text style={styles.avatarInitials}>{name.charAt(0).toUpperCase()}</Text>
             </View>
           )}
         </View>
@@ -92,7 +91,6 @@ export function PublicProfileConnectionsSheet({
           <Text style={styles.displayName} numberOfLines={1}>{name}</Text>
           <Text style={styles.handle} numberOfLines={1}>@{item.username}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
       </Pressable>
     );
   };
@@ -114,11 +112,10 @@ export function PublicProfileConnectionsSheet({
       snapPoints={[{ fraction: 0.75 }]}
     >
       <View style={styles.container}>
-        <Text style={styles.title}>
-          {segment === 'followers' ? 'Followers' : 'Following'}
-          <Text style={styles.titleCount}> · {count}</Text>
-        </Text>
+        {/* One title — "Connections" — not duplicated per segment */}
+        <Text style={styles.title}>Connections</Text>
 
+        {/* Segment rail with integrated counts */}
         <View style={styles.segmentRail}>
           <Pressable
             style={[styles.segment, segment === 'followers' && styles.segmentActive]}
@@ -127,7 +124,9 @@ export function PublicProfileConnectionsSheet({
             accessibilityState={{ selected: segment === 'followers' }}
             accessibilityLabel={`Followers, ${followerCount}`}
           >
-            <Text style={[styles.segmentLabel, segment === 'followers' && styles.segmentLabelActive]}>Followers</Text>
+            <Text style={[styles.segmentLabel, segment === 'followers' && styles.segmentLabelActive]}>
+              Followers <Text style={styles.segmentCount}>{followerCount}</Text>
+            </Text>
             {segment === 'followers' ? <View style={styles.segmentUnderline} /> : null}
           </Pressable>
           <Pressable
@@ -137,7 +136,9 @@ export function PublicProfileConnectionsSheet({
             accessibilityState={{ selected: segment === 'following' }}
             accessibilityLabel={`Following, ${followingCount}`}
           >
-            <Text style={[styles.segmentLabel, segment === 'following' && styles.segmentLabelActive]}>Following</Text>
+            <Text style={[styles.segmentLabel, segment === 'following' && styles.segmentLabelActive]}>
+              Following <Text style={styles.segmentCount}>{followingCount}</Text>
+            </Text>
             {segment === 'following' ? <View style={styles.segmentUnderline} /> : null}
           </Pressable>
         </View>
@@ -205,7 +206,6 @@ export function PublicProfileConnectionsSheet({
 const styles = StyleSheet.create({
   container: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flex: 1 },
   title: { fontSize: 20, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: -0.4, marginBottom: Space.sm },
-  titleCount: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary },
   segmentRail: {
     flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border, marginBottom: Space.sm,
@@ -214,18 +214,21 @@ const styles = StyleSheet.create({
   segmentActive: {},
   segmentLabel: { fontSize: 14, fontFamily: Typography.family.regular, color: Colors.textMuted },
   segmentLabelActive: { fontFamily: Typography.family.bold, color: Colors.textPrimary },
+  segmentCount: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
   segmentUnderline: {
     position: 'absolute', bottom: 0, left: '30%', right: '30%',
     height: 2, backgroundColor: Colors.textPrimary,
   },
+  // Rows — no chevron, row reads as tappable on its own
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 56 },
   avatarWrap: {},
   avatar: { width: 44, height: 44, borderRadius: 22 },
   avatarFallback: { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  avatarInitials: { fontSize: 16, fontFamily: Typography.family.bold, color: Colors.textSecondary },
   identityCol: { flex: 1 },
   displayName: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
   handle: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary, marginTop: 1 },
-  // Skeleton rows — match final row geometry
+  // Skeleton rows
   skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 56 },
   skeletonAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceAlt },
   skeletonIdentity: { flex: 1, gap: 4 },
