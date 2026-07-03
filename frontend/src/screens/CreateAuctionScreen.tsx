@@ -21,7 +21,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body, Headline } from '../components/ui/Text';
@@ -198,7 +198,7 @@ export default function CreateAuctionScreen() {
         </View>
         {selected && (
           <View style={styles.selectedTick}>
-            <Ionicons name="checkmark" size={12} color={Colors.textInverse} />
+            <Ionicons name="checkmark" size={14} color={Colors.textInverse} />
           </View>
         )}
       </AnimatedPressable>
@@ -223,17 +223,26 @@ export default function CreateAuctionScreen() {
         backIcon="chevron-back"
       />
 
-      {/* Step indicator */}
+      {/* Step indicator — refined active/inactive, weighted connectors */}
       <View style={styles.stepIndicator}>
-        {['Listing', 'Configure', 'Review'].map((label, i) => (
-          <View key={label} style={styles.stepItem}>
-            <View style={[styles.stepDot, i <= stage && styles.stepDotActive]}>
-              <Text style={[styles.stepDotText, i <= stage && styles.stepDotTextActive]}>{i + 1}</Text>
+        {['Listing', 'Configure', 'Review'].map((label, i) => {
+          const isComplete = i < stage;
+          const isActive = i === stage;
+          const isReached = i <= stage;
+          return (
+            <View key={label} style={styles.stepItem}>
+              <View style={[styles.stepDot, isReached && styles.stepDotActive, isComplete && styles.stepDotComplete]}>
+                {isComplete ? (
+                  <Ionicons name="checkmark" size={12} color={Colors.textInverse} />
+                ) : (
+                  <Text style={[styles.stepDotText, isReached && styles.stepDotTextActive]}>{i + 1}</Text>
+                )}
+              </View>
+              <Text style={[styles.stepLabel, isReached && styles.stepLabelActive, isActive && styles.stepLabelCurrent]}>{label}</Text>
+              {i < 2 && <View style={[styles.stepConnector, i < stage && styles.stepConnectorActive]} />}
             </View>
-            <Text style={[styles.stepLabel, i <= stage && styles.stepLabelActive]}>{label}</Text>
-            {i < 2 && <View style={[styles.stepConnector, i < stage && styles.stepConnectorActive]} />}
-          </View>
-        ))}
+          );
+        })}
       </View>
 
       <KeyboardAvoidingView
@@ -257,7 +266,7 @@ export default function CreateAuctionScreen() {
             {stage === 0 && (
               <>
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-                  <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
+                  <Meta style={styles.sectionLabel}>Select listing</Meta>
                 </Reanimated.View>
 
                 <FlashList
@@ -290,7 +299,7 @@ export default function CreateAuctionScreen() {
               <>
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>START WINDOW</Meta>
+                    <Meta style={styles.sectionLabel}>Start window</Meta>
                     <View style={styles.windowRow}>
                       {START_WINDOWS.map((win) => (
                         <AnimatedPressable
@@ -317,7 +326,7 @@ export default function CreateAuctionScreen() {
 
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>DURATION</Meta>
+                    <Meta style={styles.sectionLabel}>Duration</Meta>
                     <View style={styles.windowRow}>
                       {DURATION_OPTIONS.map((opt) => (
                         <AnimatedPressable
@@ -344,7 +353,7 @@ export default function CreateAuctionScreen() {
 
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>STARTING BID</Meta>
+                    <Meta style={styles.sectionLabel}>Starting bid</Meta>
                     <AppInput
                       value={startingBidInput}
                       onChangeText={setStartingBidInput}
@@ -360,7 +369,7 @@ export default function CreateAuctionScreen() {
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
                   <TradeCard style={styles.formCard}>
                     <View style={styles.buyNowRow}>
-                      <Meta style={styles.sectionLabel}>BUY NOW PRICE</Meta>
+                      <Meta style={styles.sectionLabel}>Buy now price</Meta>
                       <AnimatedPressable
                         style={[styles.toggleChip, buyNowEnabled && styles.toggleChipActive]}
                         onPress={() => setBuyNowEnabled((v) => !v)}
@@ -414,7 +423,7 @@ export default function CreateAuctionScreen() {
 
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>AUCTION SUMMARY</Meta>
+                    <Meta style={styles.sectionLabel}>Auction summary</Meta>
                     <View style={styles.termsRow}>
                       <Meta style={styles.termsLabel}>Listing</Meta>
                       <Body style={styles.termsValue} numberOfLines={1}>{selectedListing?.title ?? '—'}</Body>
@@ -461,17 +470,19 @@ export default function CreateAuctionScreen() {
                 </Reanimated.View>
 
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
-                  <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>TERMS & FEES</Meta>
-                    <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Platform fee</Meta>
-                      <Body style={styles.termsValue}>3% of winning bid</Body>
+                  <View style={styles.termsCard}>
+                    <Meta style={styles.termsSectionLabel}>Terms & fees</Meta>
+                    <View style={styles.termsInlineRow}>
+                      <Ionicons name="pricetag-outline" size={13} color={Colors.textMuted} />
+                      <Text style={styles.termsInlineLabel}>Platform fee</Text>
+                      <Text style={styles.termsInlineValue}>3% of winning bid</Text>
                     </View>
-                    <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Settlement</Meta>
-                      <Body style={styles.termsValue}>After auction ends</Body>
+                    <View style={styles.termsInlineRow}>
+                      <Ionicons name="time-outline" size={13} color={Colors.textMuted} />
+                      <Text style={styles.termsInlineLabel}>Settlement</Text>
+                      <Text style={styles.termsInlineValue}>After auction ends</Text>
                     </View>
-                  </TradeCard>
+                  </View>
                 </Reanimated.View>
 
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
@@ -521,7 +532,7 @@ export default function CreateAuctionScreen() {
       </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Result overlay ── */}
+      {/* ── Result overlay — crafted success moment ── */}
       {resultData && (
         <View style={styles.resultOverlay}>
           <StatusBar barStyle="light-content" />
@@ -529,8 +540,9 @@ export default function CreateAuctionScreen() {
             entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}
             style={styles.resultCard}
           >
+            {/* Success mark — refined, not a giant icon */}
             <View style={styles.resultIconWrap}>
-              <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
+              <Ionicons name="checkmark" size={28} color={Colors.success} />
             </View>
             <Headline style={styles.resultTitle}>Auction Launched</Headline>
             <Meta style={styles.resultSubtitle}>{resultData.startLabel === 'Immediately' ? 'Your auction is now live' : 'Your auction is scheduled'}</Meta>
@@ -614,7 +626,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   headerLaunchBtn: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     minHeight: 34,
     paddingHorizontal: 12,
   },
@@ -626,35 +638,45 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     marginTop: Space.md,
   },
+  // ── Listing cards — elevated with shadow + rounded image ──
   listingListContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
     paddingBottom: Space.sm,
   },
   listingCard: {
-    width: 140,
+    width: 150,
     backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
+      android: { elevation: 2 },
+    }),
   },
   listingCardSelected: {
-    borderColor: Colors.brand,
-    borderWidth: 2,
+    borderColor: Colors.textPrimary,
+    borderWidth: StyleSheet.hairlineWidth,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10 },
+      android: { elevation: 3 },
+    }),
   },
   listingImageContainer: {
     width: '100%',
-    height: 160,
+    height: 140,
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
+    overflow: 'hidden',
   },
   listingImage: {
     width: '100%',
     height: '100%',
   },
   listingMeta: {
-    padding: 8,
+    padding: Space.sm,
   },
   listingTitle: {
     marginBottom: 2,
@@ -662,23 +684,27 @@ const styles = StyleSheet.create({
   listingPrice: {},
   selectedTick: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    top: Space.sm,
+    right: Space.sm,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.surface,
   },
+  // ── Preview card ──
   previewCard: {
     marginTop: Space.sm,
     padding: Space.sm,
   },
   previewImageContainer: {
     width: '100%',
-    height: 240,
-    borderRadius: Radius.lg,
+    height: 200,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
   },
   previewImage: {
     width: '100%',
@@ -691,6 +717,7 @@ const styles = StyleSheet.create({
   previewPrice: {
     marginTop: 2,
   },
+  // ── Form cards ──
   formCard: {
     marginTop: Space.sm,
   },
@@ -699,14 +726,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     marginTop: Space.xs,
   },
+  // ── Window chips — refined inactive, solid active ──
   windowChip: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceAlt,
     paddingVertical: 12,
     minHeight: 44,
   },
@@ -716,9 +744,11 @@ const styles = StyleSheet.create({
   },
   windowChipText: {
     color: Colors.textSecondary,
+    fontFamily: Typography.family.medium,
   },
   windowChipTextActive: {
     color: Colors.textInverse,
+    fontFamily: Typography.family.semibold,
   },
   input: {
     marginTop: Space.xs,
@@ -728,13 +758,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  // ── Toggle — refined pill ──
   toggleChip: {
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    minWidth: 48,
+    alignItems: 'center',
   },
   toggleChipActive: {
     backgroundColor: Colors.brand,
@@ -742,14 +775,19 @@ const styles = StyleSheet.create({
   },
   toggleText: {
     color: Colors.textSecondary,
+    fontFamily: Typography.family.medium,
+    fontSize: 12,
   },
   toggleTextActive: {
     color: Colors.textInverse,
+    fontFamily: Typography.family.bold,
+    fontSize: 12,
   },
   launchBtn: {
     marginHorizontal: Space.md,
     marginTop: Space.lg,
   },
+  // ── Step indicator — refined active/inactive, weighted connectors ──
   stepIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -764,12 +802,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   stepDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -777,11 +815,15 @@ const styles = StyleSheet.create({
     borderColor: Colors.brand,
     backgroundColor: Colors.brand,
   },
+  stepDotComplete: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
+  },
   stepDotText: {
     fontSize: 12,
     color: Colors.textMuted,
     fontWeight: '700',
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   stepDotTextActive: {
     color: Colors.textInverse,
@@ -789,24 +831,30 @@ const styles = StyleSheet.create({
   stepLabel: {
     fontSize: 12,
     color: Colors.textMuted,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   stepLabelActive: {
     color: Colors.textPrimary,
   },
+  stepLabelCurrent: {
+    fontFamily: Typography.family.semibold,
+  },
   stepConnector: {
-    width: 32,
+    width: 28,
     height: 1.5,
     backgroundColor: Colors.border,
     marginHorizontal: 6,
   },
   stepConnectorActive: {
     backgroundColor: Colors.brand,
+    height: 2,
   },
+  // ── Review ──
   reviewHeadline: {
-    fontSize: 24,
+    fontSize: 26,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
+    letterSpacing: -0.6,
   },
   reviewSubheadline: {
     color: Colors.textMuted,
@@ -827,24 +875,25 @@ const styles = StyleSheet.create({
   stageNavBtnFull: {
     flex: 1,
   },
+  // ── Terms rows ──
   termsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   termsLabel: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    letterSpacing: -0.1,
   },
   termsValue: {
     color: Colors.textPrimary,
-    fontFamily: 'SpaceGrotesk_600SemiBold',
+    fontFamily: Typography.family.semibold,
+    fontSize: 14,
   },
   termsValueCol: {
     alignItems: 'flex-end',
@@ -852,42 +901,86 @@ const styles = StyleSheet.create({
   termsIzeText: {
     fontSize: 11,
     color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     marginTop: 1,
+    fontVariant: ['tabular-nums'],
   },
+  // ── Terms & fees — inline, lighter than summary ──
+  termsCard: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    gap: Space.xs,
+  },
+  termsSectionLabel: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    letterSpacing: -0.1,
+    marginBottom: Space.xs,
+  },
+  termsInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  termsInlineLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+  },
+  termsInlineValue: {
+    fontSize: 13,
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.medium,
+  },
+  // ── Result overlay — crafted success moment ──
   resultOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.88)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Space.lg,
   },
   resultCard: {
     backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     padding: Space.lg,
     width: '100%',
     maxWidth: 380,
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.3, shadowRadius: 24 },
+      android: { elevation: 16 },
+    }),
   },
   resultIconWrap: {
     marginBottom: Space.sm,
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(22,163,74,0.1)',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(22,163,74,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(22,163,74,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   resultTitle: {
     fontSize: 24,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   resultSubtitle: {
     color: Colors.textMuted,
@@ -900,6 +993,7 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: Radius.lg,
     marginBottom: Space.md,
+    overflow: 'hidden',
   },
   resultImage: {
     width: '100%',

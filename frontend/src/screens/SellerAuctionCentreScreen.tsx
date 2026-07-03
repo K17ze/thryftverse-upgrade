@@ -8,11 +8,12 @@ import {
   Text,
   SectionList,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -31,9 +32,9 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Meta } from '../components/ui/Text';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius } from '../theme/designTokens';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { Space, Radius, Typography } from '../theme/designTokens';
 import {
   listAuctions,
   type MarketAuction,
@@ -99,7 +100,103 @@ function computeStats(items: AuctionHomeItem[], clockMs: number): SellerStats {
   return { total: items.length, live, scheduled, sold, unsold, cancelled, totalBids, highestBid };
 }
 
-function SellerAuctionCard({
+// ── State-specific presentation config ──
+interface StatePresentation {
+  stateLabel: string;
+  stateColor: string;
+  /** Leading operational line — the most important fact for this state */
+  leadingLabel: string;
+  leadingColor: string;
+  /** One truthful next action */
+  actionLabel: string;
+  /** Whether to show the live signal dot on the image */
+  showLiveDot: boolean;
+  /** Whether to use danger colour for state text (genuine final urgency only) */
+  useDangerState: boolean;
+}
+
+function resolveStatePresentation(
+  item: AuctionHomeItem,
+  timing: ReturnType<typeof resolveAuctionTiming>,
+  urgency: ReturnType<typeof resolveUrgency>,
+  timeLabel: string,
+): StatePresentation {
+  const isCancelled = timing.effectiveState === 'cancelled' || item.cancelledAt;
+  const isSold = (timing.effectiveState === 'ended' || timing.effectiveState === 'settled') && item.bidCount > 0 && !isCancelled;
+  const isUnsold = timing.effectiveState === 'ended' && item.bidCount === 0 && !isCancelled;
+  const isLive = timing.effectiveState === 'live';
+  const isScheduled = timing.effectiveState === 'upcoming';
+
+  if (isCancelled) {
+    const reason = item.terminalReason ? ` · ${item.terminalReason}` : '';
+    return {
+      stateLabel: 'Cancelled',
+      stateColor: Colors.textMuted,
+      leadingLabel: `Cancelled${reason}`,
+      leadingColor: Colors.textMuted,
+      actionLabel: 'Details',
+      showLiveDot: false,
+      useDangerState: false,
+    };
+  }
+  if (isSold) {
+    return {
+      stateLabel: 'Sold',
+      stateColor: Colors.success,
+      leadingLabel: `Sold · ${item.bidCount} ${item.bidCount === 1 ? 'bid' : 'bids'}`,
+      leadingColor: Colors.textSecondary,
+      actionLabel: 'View sale',
+      showLiveDot: false,
+      useDangerState: false,
+    };
+  }
+  if (isUnsold) {
+    return {
+      stateLabel: 'Unsold',
+      stateColor: Colors.textMuted,
+      leadingLabel: 'No bids received',
+      leadingColor: Colors.textMuted,
+      actionLabel: 'View result',
+      showLiveDot: false,
+      useDangerState: false,
+    };
+  }
+  if (isLive) {
+    const finalUrgency = urgency === 'finalMinutes';
+    return {
+      stateLabel: finalUrgency ? 'Ending' : 'Live',
+      stateColor: finalUrgency ? Colors.danger : Colors.textPrimary,
+      leadingLabel: timeLabel,
+      leadingColor: finalUrgency ? Colors.danger : Colors.textSecondary,
+      actionLabel: 'View bids',
+      showLiveDot: true,
+      useDangerState: finalUrgency,
+    };
+  }
+  if (isScheduled) {
+    return {
+      stateLabel: 'Scheduled',
+      stateColor: Colors.textSecondary,
+      leadingLabel: timeLabel,
+      leadingColor: Colors.textSecondary,
+      actionLabel: 'Manage',
+      showLiveDot: false,
+      useDangerState: false,
+    };
+  }
+  return {
+    stateLabel: 'Ended',
+    stateColor: Colors.textMuted,
+    leadingLabel: timeLabel,
+    leadingColor: Colors.textMuted,
+    actionLabel: 'View result',
+    showLiveDot: false,
+    useDangerState: false,
+  };
+}
+
+// ── Inventory row — horizontal, operations-studio layout ──
+function SellerAuctionRow({
   item,
   clockMs,
   onPress,
@@ -117,100 +214,126 @@ function SellerAuctionCard({
   const priceLabel = resolvePriceLabel(item, timing);
   const priceText = resolvePriceText(item, timing, priceLabel, formatFromFiat);
   const timeLabel = resolveTimeLabel(timing);
-  const isTerminal = timing.effectiveState === 'ended' || timing.effectiveState === 'cancelled' || timing.effectiveState === 'settled';
-  const isCancelled = timing.effectiveState === 'cancelled' || item.cancelledAt;
-  const isSold = (timing.effectiveState === 'ended' || timing.effectiveState === 'settled') && item.bidCount > 0 && !isCancelled;
-  const isUnsold = timing.effectiveState === 'ended' && item.bidCount === 0 && !isCancelled;
+  const presentation = resolveStatePresentation(item, timing, urgency, timeLabel);
+
+  const amount = item.currentBidGbp > 0 ? item.currentBidGbp : item.startingBidGbp;
+  const izeText = amount > 0 ? `${formatIzeAmount(toIze(amount, 'GBP', goldRates))} 1ZE` : null;
+  const localText = priceLabel === 'No bids' ? null : priceText;
+
+  // Value prefix depends on state
+  const valuePrefix =
+    priceLabel === 'Starting bid' ? 'Starts '
+    : priceLabel === 'Final bid' ? 'Final '
+    : priceLabel === 'Current bid' ? 'Current '
+    : '';
 
   return (
-    <Pressable
-      style={styles.card}
+    <AnimatedPressable
+      style={styles.row}
+      scaleValue={0.992}
+      activeOpacity={0.94}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText)}
     >
-      <View style={styles.cardImageWrap}>
+      {/* Media — controlled radius, scanable size */}
+      <View style={styles.rowImageWrap}>
         {item.imageUrl ? (
           <CachedImage
             uri={item.imageUrl}
-            style={styles.cardImage}
-            containerStyle={styles.cardImageContainer}
+            style={styles.rowImage}
+            containerStyle={styles.rowImageContainer}
             contentFit="cover"
           />
         ) : (
-          <View style={styles.cardImagePlaceholder}>
-            <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+          <View style={styles.rowImagePlaceholder}>
+            <Ionicons name="image-outline" size={22} color={Colors.textMuted} />
           </View>
         )}
-        {urgency === 'finalMinutes' && timing.effectiveState === 'live' && (
-          <View style={styles.urgencyPill}>
-            <Text style={styles.urgencyPillText}>ENDING</Text>
-          </View>
-        )}
-        {isSold && (
-          <View style={styles.soldPill}>
-            <Text style={styles.soldPillText}>SOLD</Text>
-          </View>
-        )}
-        {isUnsold && (
-          <View style={styles.unsoldPill}>
-            <Text style={styles.unsoldPillText}>UNSOLD</Text>
-          </View>
-        )}
-        {isCancelled && (
-          <View style={styles.cancelledPill}>
-            <Text style={styles.cancelledPillText}>CANCELLED</Text>
-          </View>
-        )}
+        {presentation.showLiveDot && <View style={styles.rowLiveDot} />}
       </View>
-      <View style={styles.cardBody}>
-        {item.brand && <Text style={styles.cardBrand} numberOfLines={1}>{item.brand}</Text>}
-        <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-        <View style={styles.cardMetaRow}>
-          <View style={styles.cardPriceCol}>
-            <Meta style={styles.cardPriceLabel}>{priceLabel}</Meta>
-            <Text style={styles.cardPriceValue}>{priceText}</Text>
-            {(() => {
-              const amount = item.currentBidGbp > 0 ? item.currentBidGbp : item.startingBidGbp;
-              if (amount <= 0) return null;
-              return <Text style={styles.cardPriceIze}>{formatIzeAmount(toIze(amount, 'GBP', goldRates))}</Text>;
-            })()}
-          </View>
-          <View style={styles.cardStatusCol}>
-            <View style={[
-              styles.statusBadge,
-              timing.effectiveState === 'live' && styles.statusBadgeLive,
-              timing.effectiveState === 'upcoming' && styles.statusBadgeUpcoming,
-              isTerminal && styles.statusBadgeEnded,
-            ]}>
-              <Text style={[
-                styles.statusBadgeText,
-                timing.effectiveState === 'live' && styles.statusBadgeTextLive,
-              ]}>
-                {timing.effectiveState === 'live' ? 'LIVE'
-                  : timing.effectiveState === 'upcoming' ? 'SCHEDULED'
-                  : isCancelled ? 'CANCELLED'
-                  : isSold ? 'SOLD'
-                  : isUnsold ? 'UNSOLD'
-                  : 'ENDED'}
-              </Text>
-            </View>
-            <Text style={styles.cardBidCount}>
-              {item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}
+
+      {/* Body — identity + operational block */}
+      <View style={styles.rowBody}>
+        {/* Identity */}
+        <View style={styles.rowIdentity}>
+          <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
+          <Text style={[styles.rowStateText, { color: presentation.stateColor }]}>
+            {presentation.stateLabel}
+          </Text>
+        </View>
+        {item.brand && <Text style={styles.rowBrand} numberOfLines={1}>{item.brand}</Text>}
+
+        {/* Hairline separator — identity → operational */}
+        <View style={styles.rowHairline} />
+
+        {/* Operational block — value + leading op + action */}
+        <View style={styles.rowOperational}>
+          <View style={styles.rowValueCol}>
+            <Text style={styles.rowIze} numberOfLines={1}>
+              {valuePrefix && <Text style={styles.rowValuePrefix}>{valuePrefix}</Text>}
+              {izeText ?? 'No value'}
             </Text>
-            <Text style={styles.cardTimeLabel}>{timeLabel}</Text>
+            {localText && (
+              <Text style={styles.rowLocal} numberOfLines={1}>{localText}</Text>
+            )}
+          </View>
+          <View style={styles.rowActionCol}>
+            <Text style={styles.rowActionLabel}>{presentation.actionLabel}</Text>
+            <Ionicons name="chevron-forward" size={13} color={Colors.textMuted} style={styles.rowActionChevron} />
           </View>
         </View>
+        <View style={styles.rowLeadingRow}>
+          <Text
+            style={[styles.rowLeading, { color: presentation.leadingColor }]}
+            numberOfLines={1}
+          >
+            {presentation.leadingLabel}
+          </Text>
+          {item.bidCount > 0 && presentation.stateLabel !== 'Sold' && (
+            <Text style={styles.rowBidCount}>
+              {item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}
+            </Text>
+          )}
+        </View>
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
-function StatPill({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
+function SellerSummary({ stats }: { stats: SellerStats }) {
+  const active = stats.live;
+  const activeColor = active > 0 ? Colors.danger : Colors.textPrimary;
   return (
-    <View style={[styles.statPill, accent && styles.statPillAccent]}>
-      <Text style={[styles.statPillValue, accent && styles.statPillValueAccent]}>{value}</Text>
-      <Text style={[styles.statPillLabel, accent && styles.statPillLabelAccent]}>{label}</Text>
+    <View style={styles.summary}>
+      {/* Primary measure — Active auctions */}
+      <View style={styles.summaryPrimary}>
+        <Text style={[styles.summaryPrimaryValue, { color: activeColor }]}>{active}</Text>
+        <Text style={[styles.summaryPrimaryLabel, { color: active > 0 ? Colors.danger : Colors.textMuted }]}>
+          Active
+        </Text>
+      </View>
+      {/* Vertical hairline divider */}
+      <View style={styles.summaryPrimaryDivider} />
+      {/* Secondary measures — hairline-divided compact row */}
+      <View style={styles.summarySecondary}>
+        <View style={styles.summarySecondaryItem}>
+          <Text style={styles.summarySecondaryValue}>{stats.scheduled}</Text>
+          <Text style={styles.summarySecondaryLabel}>Scheduled</Text>
+        </View>
+        <View style={styles.summarySecondaryItem}>
+          <Text style={styles.summarySecondaryValue}>{stats.sold}</Text>
+          <Text style={styles.summarySecondaryLabel}>Sold</Text>
+        </View>
+        <View style={styles.summarySecondaryItem}>
+          <Text style={styles.summarySecondaryValue}>{stats.unsold}</Text>
+          <Text style={styles.summarySecondaryLabel}>Unsold</Text>
+        </View>
+        <View style={styles.summarySecondaryItem}>
+          <Text style={styles.summarySecondaryValue}>{stats.cancelled}</Text>
+          <Text style={styles.summarySecondaryLabel}>Cancelled</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -220,6 +343,7 @@ export default function SellerAuctionCentreScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { goldRates } = useCurrencyContext();
   const { isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = React.useState<SellerTab>('scheduled');
   const [allItems, setAllItems] = React.useState<AuctionHomeItem[]>([]);
@@ -330,7 +454,7 @@ export default function SellerAuctionCentreScreen() {
   ];
 
   const renderItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
-    <SellerAuctionCard
+    <SellerAuctionRow
       item={item}
       clockMs={secondClock}
       onPress={() => navigateToDetail(item.id)}
@@ -343,12 +467,18 @@ export default function SellerAuctionCentreScreen() {
     if (loading) {
       return (
         <View style={styles.loadingWrap}>
-          {[0, 1, 2].map((i) => (
-            <View key={i} style={styles.loadingCard}>
-              <SkeletonLoader width="100%" height={180} borderRadius={Radius.lg} />
-              <View style={{ padding: Space.sm }}>
-                <SkeletonLoader width="70%" height={16} borderRadius={8} style={{ marginBottom: Space.xs }} />
-                <SkeletonLoader width="40%" height={12} borderRadius={6} />
+          {[0, 1, 2, 3].map((i) => (
+            <View key={i} style={styles.loadingRow}>
+              <SkeletonLoader width={96} height={96} borderRadius={Radius.md} />
+              <View style={styles.loadingBody}>
+                <View style={styles.loadingTitleRow}>
+                  <SkeletonLoader width="70%" height={15} borderRadius={4} />
+                  <SkeletonLoader width={40} height={12} borderRadius={4} />
+                </View>
+                <SkeletonLoader width="40%" height={11} borderRadius={4} />
+                <View style={styles.loadingHairline} />
+                <SkeletonLoader width="55%" height={17} borderRadius={4} />
+                <SkeletonLoader width="35%" height={11} borderRadius={4} />
               </View>
             </View>
           ))}
@@ -381,79 +511,82 @@ export default function SellerAuctionCentreScreen() {
   }, [loading, error, activeTab]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={Colors.background}
       />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
+      {/* Header — native, deliberate, 44pt touch targets, no filled icon backgrounds */}
+      <View style={[styles.header, { paddingTop: insets.top + Space.sm }]}>
+        <View style={styles.headerRow}>
           <Pressable
             onPress={handleBack}
-            hitSlop={12}
+            hitSlop={{ top: 8, bottom: 8, left: 12, right: 8 }}
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            style={styles.backBtn}
+            style={({ pressed }) => [
+              styles.headerIconBtn,
+              pressed && styles.headerIconPressed,
+            ]}
           >
-            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
           </Pressable>
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerTitle}>Seller Centre</Text>
-            <Text style={styles.headerSubtitle}>
+            <Text style={styles.headerTitle} numberOfLines={1}>Seller Centre</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
               {stats.total > 0 ? `${stats.total} auctions` : 'Manage your auctions'}
             </Text>
           </View>
           <Pressable
             onPress={navigateToCreate}
-            hitSlop={12}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Create new auction"
-            style={styles.createBtn}
+            style={({ pressed }) => [
+              styles.headerIconBtn,
+              pressed && styles.headerIconPressed,
+            ]}
           >
-            <Ionicons name="add" size={24} color={Colors.brand} />
+            <Ionicons name="add" size={26} color={Colors.textPrimary} />
           </Pressable>
         </View>
       </View>
 
-      {/* Stats summary */}
+      {/* Seller summary — one integrated operational surface */}
       {stats.total > 0 && (
-        <View style={styles.statsRow}>
-          <StatPill label="Live" value={stats.live} accent={stats.live > 0} />
-          <StatPill label="Scheduled" value={stats.scheduled} />
-          <StatPill label="Sold" value={stats.sold} />
-          <StatPill label="Unsold" value={stats.unsold} />
-        </View>
+        <SellerSummary stats={stats} />
       )}
 
-      {/* Tab bar */}
+      {/* Tab bar — text-first rail, underline indicator, count subordinate */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tabBar}
       >
-        {tabs.map((tab) => (
-          <Pressable
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-            onPress={() => setActiveTab(tab.key)}
-            accessibilityRole="tab"
-            accessibilityLabel={tab.label}
-            accessibilityState={{ selected: activeTab === tab.key }}
-          >
-            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-              {tab.label}
-            </Text>
-            {tab.count > 0 && (
-              <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
-                <Text style={[styles.tabBadgeText, activeTab === tab.key && styles.tabBadgeTextActive]}>
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              style={styles.tab}
+              onPress={() => setActiveTab(tab.key)}
+              accessibilityRole="tab"
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {tab.label}
+              </Text>
+              {tab.count > 0 && (
+                <Text style={[styles.tabCount, isActive && styles.tabCountActive]}>
                   {tab.count}
                 </Text>
-              </View>
-            )}
-          </Pressable>
-        ))}
+              )}
+              {isActive && <View style={styles.tabIndicator} />}
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
       {/* List */}
@@ -461,9 +594,12 @@ export default function SellerAuctionCentreScreen() {
         sections={[{ key: activeTab, data: filteredItems }]}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        ItemSeparatorComponent={() => <View style={{ height: Space.sm }} />}
+        ItemSeparatorComponent={() => <View style={styles.rowSeparator} />}
         ListEmptyComponent={renderEmpty}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          stats.total === 0 && !loading && !error && { paddingBottom: 120 + insets.bottom },
+        ]}
         showsVerticalScrollIndicator={false}
         stickyHeaderHiddenOnScroll
         refreshControl={
@@ -478,25 +614,32 @@ export default function SellerAuctionCentreScreen() {
         renderSectionFooter={() =>
           cursor && !loading ? (
             <View style={styles.loadMoreWrap}>
-              <Pressable
+              <AnimatedPressable
                 style={styles.loadMoreBtn}
                 onPress={() => void handleLoadMore()}
                 disabled={loadingMore}
+                scaleValue={0.97}
+                activeOpacity={0.9}
                 accessibilityRole="button"
                 accessibilityLabel="Load more auctions"
               >
-                <Text style={styles.loadMoreText}>
-                  {loadingMore ? 'Loading...' : 'Load More'}
-                </Text>
-              </Pressable>
+                {loadingMore ? (
+                  <Text style={styles.loadMoreText}>Loading…</Text>
+                ) : (
+                  <>
+                    <Ionicons name="chevron-down" size={14} color={Colors.brand} />
+                    <Text style={styles.loadMoreText}>Load more</Text>
+                  </>
+                )}
+              </AnimatedPressable>
             </View>
           ) : null
         }
       />
 
-      {/* Floating create CTA when no auctions */}
+      {/* Floating create CTA — only when no auctions exist; safe-area aware, controlled elevation */}
       {stats.total === 0 && !loading && !error && (
-        <View style={styles.floatingCta}>
+        <View style={[styles.floatingCta, { bottom: Space.lg + insets.bottom }]}>
           <AppButton
             onPress={navigateToCreate}
             variant="primary"
@@ -511,334 +654,363 @@ export default function SellerAuctionCentreScreen() {
   );
 }
 
+const ROW_IMAGE_SIZE = 96;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
   },
+  // ── Header ──
   header: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
     paddingBottom: Space.sm,
+    paddingHorizontal: Space.sm,
   },
-  headerTop: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.xs,
+    minHeight: 44,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
+  headerIconBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerIconPressed: {
+    opacity: 0.5,
   },
   headerTitleWrap: {
     flex: 1,
+    marginLeft: Space.xs,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
+    fontSize: 26,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: -0.3,
+    letterSpacing: -0.6,
+    lineHeight: 30,
   },
   headerSubtitle: {
+    fontFamily: Typography.family.regular,
     fontSize: 13,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
-    marginTop: 2,
+    marginTop: 1,
+    letterSpacing: -0.1,
   },
-  createBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statsRow: {
+  // ── Seller summary — one integrated surface ──
+  summary: {
     flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    gap: Space.xs,
-  },
-  statPill: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    gap: Space.md,
   },
-  statPillAccent: {
-    backgroundColor: 'rgba(244,63,94,0.08)',
+  summaryPrimary: {
+    alignItems: 'flex-start',
   },
-  statPillValue: {
-    fontSize: 18,
-    fontWeight: '700',
+  summaryPrimaryValue: {
+    fontSize: 32,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.8,
+    fontVariant: ['tabular-nums'],
+    lineHeight: 34,
+  },
+  summaryPrimaryLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    marginTop: 3,
+    letterSpacing: 0.1,
+  },
+  summaryPrimaryDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 36,
+    backgroundColor: Colors.border,
+  },
+  summarySecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  summarySecondaryItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  summarySecondaryValue: {
+    fontSize: 17,
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.3,
   },
-  statPillValueAccent: {
-    color: Colors.danger,
-  },
-  statPillLabel: {
+  summarySecondaryLabel: {
     fontSize: 10,
     color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
-    marginTop: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontFamily: Typography.family.regular,
+    marginTop: 3,
+    letterSpacing: 0.1,
   },
-  statPillLabelAccent: {
-    color: Colors.danger,
-  },
+  // ── Tab bar — text-first, underline indicator ──
   tabBar: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    gap: Space.xs,
+    gap: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+    height: 44,
+    alignItems: 'center',
   },
   tab: {
-    minWidth: 60,
-    minHeight: 44,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  tabActive: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    gap: 5,
+    paddingHorizontal: 2,
+    position: 'relative',
   },
   tabText: {
     fontSize: 14,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   tabTextActive: {
     color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
-  tabBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.border,
-  },
-  tabBadgeActive: {
-    backgroundColor: Colors.brand,
-  },
-  tabBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
+  tabCount: {
+    fontSize: 12,
     color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
   },
-  tabBadgeTextActive: {
-    color: '#fff',
+  tabCountActive: {
+    color: Colors.textSecondary,
   },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 2,
+    right: 2,
+    height: 2,
+    backgroundColor: Colors.textPrimary,
+    borderRadius: 1,
+  },
+  // ── List ──
   listContent: {
     paddingHorizontal: Space.md,
+    paddingTop: Space.md,
     paddingBottom: Space.xl,
   },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
+  // ── Inventory row — horizontal, operations studio ──
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.md,
+    paddingVertical: Space.sm,
+  },
+  rowImageWrap: {
+    position: 'relative',
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
-  cardImageWrap: {
-    position: 'relative',
+  rowImageContainer: {
+    width: ROW_IMAGE_SIZE,
+    height: ROW_IMAGE_SIZE,
   },
-  cardImageContainer: {
-    width: '100%',
-    height: 180,
+  rowImage: {
+    width: ROW_IMAGE_SIZE,
+    height: ROW_IMAGE_SIZE,
   },
-  cardImage: {
-    width: '100%',
-    height: 180,
-  },
-  cardImagePlaceholder: {
-    width: '100%',
-    height: 180,
+  rowImagePlaceholder: {
+    width: ROW_IMAGE_SIZE,
+    height: ROW_IMAGE_SIZE,
     backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: Radius.md,
   },
-  urgencyPill: {
+  rowLiveDot: {
     position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    backgroundColor: 'rgba(220,38,38,0.9)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    top: 6,
+    left: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.danger,
+    borderWidth: 1.5,
+    borderColor: Colors.background,
   },
-  urgencyPillText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  soldPill: {
-    position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    backgroundColor: 'rgba(22,163,74,0.9)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  soldPillText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  unsoldPill: {
-    position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    backgroundColor: 'rgba(100,116,139,0.9)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  unsoldPillText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  cancelledPill: {
-    position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    backgroundColor: 'rgba(220,38,38,0.8)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  cancelledPillText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  cardBody: {
-    padding: Space.sm,
-    gap: Space.xs,
-  },
-  cardBrand: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: 'Inter_500Medium',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  cardTitle: {
-    fontSize: 15,
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-    lineHeight: 20,
-  },
-  cardMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: 2,
-  },
-  cardPriceCol: {
+  rowBody: {
     flex: 1,
+    minHeight: ROW_IMAGE_SIZE,
+    justifyContent: 'space-between',
   },
-  cardPriceLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  cardPriceValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
-    marginTop: 2,
-  },
-  cardPriceIze: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
-    marginTop: 1,
-  },
-  cardStatusCol: {
-    alignItems: 'flex-end',
-    gap: 3,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  statusBadgeLive: {
-    backgroundColor: 'rgba(220,38,38,0.1)',
-  },
-  statusBadgeUpcoming: {
-    backgroundColor: 'rgba(59,130,246,0.1)',
-  },
-  statusBadgeEnded: {
-    backgroundColor: Colors.surfaceAlt,
-  },
-  statusBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    color: Colors.textMuted,
-  },
-  statusBadgeTextLive: {
-    color: Colors.danger,
-  },
-  cardBidCount: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
-  },
-  cardTimeLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
-  },
-  loadingWrap: {
-    paddingTop: Space.md,
+  rowIdentity: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     gap: Space.sm,
   },
-  loadingCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
+  rowTitle: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    lineHeight: 19,
+    letterSpacing: -0.2,
   },
+  rowStateText: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.2,
+    paddingTop: 3,
+  },
+  rowBrand: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+  },
+  rowHairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginVertical: Space.sm - 2,
+  },
+  rowOperational: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  rowValueCol: {
+    flex: 1,
+    gap: 1,
+  },
+  rowIze: {
+    fontSize: 17,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.4,
+    lineHeight: 21,
+  },
+  rowValuePrefix: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.1,
+  },
+  rowLocal: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.1,
+  },
+  rowActionCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 1,
+    paddingBottom: 1,
+  },
+  rowActionLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.1,
+  },
+  rowActionChevron: {
+    marginTop: 1,
+  },
+  rowLeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    marginTop: 4,
+  },
+  rowLeading: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.1,
+  },
+  rowBidCount: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
+  },
+  rowSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+  },
+  // ── Loading ──
+  loadingWrap: {
+    paddingTop: Space.sm,
+    gap: Space.md,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.md,
+    paddingVertical: Space.sm,
+  },
+  loadingBody: {
+    flex: 1,
+    gap: Space.xs,
+  },
+  loadingTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  loadingHairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginVertical: Space.xs,
+  },
+  // ── Load more ──
   loadMoreWrap: {
-    paddingVertical: Space.md,
+    paddingVertical: Space.lg,
     alignItems: 'center',
   },
   loadMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.lg,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
   loadMoreText: {
     fontSize: 14,
     color: Colors.brand,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
+  // ── Floating CTA ──
   floatingCta: {
     position: 'absolute',
-    bottom: Space.lg,
     left: Space.md,
     right: Space.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
 });

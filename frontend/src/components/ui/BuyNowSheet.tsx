@@ -286,14 +286,14 @@ export function BuyNowSheet({
         {/* ── Review stage — distinct fixed-price experience ── */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
-            <Text style={styles.fixedPriceLabel}>FIXED PRICE</Text>
+            <Text style={styles.fixedPriceLabel}>Fixed price</Text>
 
             {/* Large centered 1ZE value — dominates */}
             <View style={styles.fixedPriceBlock}>
               <Text style={styles.fixedPriceValue} numberOfLines={1}>{priceText}</Text>
               {displayPriceGbp && (
                 <Text style={styles.fixedPriceIze}>
-                  {formatIzeAmount(toIze(displayPriceGbp, 'GBP'), 4)}
+                  {formatIzeAmount(toIze(displayPriceGbp, 'GBP'), 2)}
                 </Text>
               )}
               {displayPriceText && (
@@ -301,6 +301,12 @@ export function BuyNowSheet({
                   {displayPriceText} {currencyCode}
                 </Text>
               )}
+            </View>
+
+            {/* Receipt-style total row */}
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalValue}>{priceText}</Text>
             </View>
 
             {/* Calm fixed-price context — not form rows */}
@@ -460,13 +466,12 @@ const styles = StyleSheet.create({
   },
   // ── Fixed-price experience ──
   fixedPriceLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: 15,
+    color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
     textAlign: 'center',
     marginTop: Space.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: -0.2,
   },
   fixedPriceBlock: {
     alignItems: 'center',
@@ -480,16 +485,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   fixedPriceIze: {
     fontSize: 14,
     color: Colors.brand,
     fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
   },
   fixedPriceEquivalent: {
     fontSize: 13,
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
   },
   fixedPriceContext: {
     fontSize: 14,
@@ -498,6 +506,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     paddingVertical: Space.xs,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  totalLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+  },
+  totalValue: {
+    fontSize: 17,
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.3,
   },
   dominantAction: {
     width: '100%',

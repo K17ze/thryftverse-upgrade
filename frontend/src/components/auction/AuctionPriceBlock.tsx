@@ -26,7 +26,7 @@ export function AuctionPriceBlock({ primary, secondary, label, size = 'card', do
 
   return (
     <View style={styles.block}>
-      <Text style={[styles.label, { fontSize: s.label }]}>{label.toUpperCase()}</Text>
+      <Text style={[styles.label, { fontSize: s.label }]}>{label}</Text>
       <View style={styles.priceRow}>
         <Text
           style={[
@@ -53,9 +53,9 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   label: {
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    letterSpacing: 0.6,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    letterSpacing: -0.1,
   },
   priceRow: {
     flexDirection: 'row',

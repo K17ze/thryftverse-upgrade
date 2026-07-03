@@ -345,7 +345,7 @@ export function BidSheet({
         {/* ── Entry stage — large centered amount ── */}
         {stage === 'entry' && (
           <View style={styles.stageContent}>
-            <Text style={styles.entryHeading}>PLACE YOUR BID</Text>
+            <Text style={styles.entryHeading}>Place your bid</Text>
 
             {/* Large amount input — dominates the sheet */}
             <View style={styles.amountContainer}>
@@ -364,21 +364,21 @@ export function BidSheet({
 
             {/* 1ZE equivalent — platform value */}
             <Text style={styles.amountIzeEquivalent}>
-              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 4)}
+              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 2)}
             </Text>
 
             {/* Minimum and current — stacked, not columns */}
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>MINIMUM TO LEAD</Text>
+                <Text style={styles.bidContextLabel}>Minimum to lead</Text>
                 <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>CURRENT VALUE</Text>
+                <Text style={styles.bidContextLabel}>Current value</Text>
                 <Text style={styles.bidContextValueSecondary}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>TIME REMAINING</Text>
+                <Text style={styles.bidContextLabel}>Time remaining</Text>
                 <Text style={[styles.bidContextValueSecondary, auction.effectiveState === 'live' && { color: Colors.danger }]}>
                   {auction.countdownText}
                 </Text>
@@ -437,7 +437,7 @@ export function BidSheet({
         {/* ── Review stage — clean confirmation receipt ── */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
-            <Text style={styles.reviewHeading}>CONFIRM YOUR BID</Text>
+            <Text style={styles.reviewHeading}>Confirm your bid</Text>
 
             {/* Dominant bid amount */}
             <View style={styles.reviewAmountBlock}>
@@ -445,7 +445,7 @@ export function BidSheet({
                 {currencyCode} {bidInput}
               </Text>
               <Text style={styles.reviewAmountIze}>
-                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0, 4)}
+                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0, 2)}
               </Text>
               {isNonGbp && gbpEquivalentText && (
                 <Text style={styles.reviewGbpEquivalent}>{gbpEquivalentText}</Text>
@@ -455,19 +455,19 @@ export function BidSheet({
             {/* Receipt details */}
             <View style={styles.reviewReceipt}>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>CURRENT VALUE</Text>
+                <Text style={styles.reviewReceiptLabel}>Current value</Text>
                 <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>MINIMUM</Text>
+                <Text style={styles.reviewReceiptLabel}>Minimum</Text>
                 <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>TIME REMAINING</Text>
+                <Text style={styles.reviewReceiptLabel}>Time remaining</Text>
                 <Text style={styles.reviewReceiptValue}>{auction.countdownText}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>SELLER</Text>
+                <Text style={styles.reviewReceiptLabel}>Seller</Text>
                 <Text style={styles.reviewReceiptValue}>{auction.sellerName}</Text>
               </View>
             </View>
@@ -670,10 +670,10 @@ const styles = StyleSheet.create({
   },
   // ── Entry stage — large centered amount ──
   entryHeading: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: 15,
+    color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.8,
+    letterSpacing: -0.2,
     textAlign: 'center',
     marginTop: Space.xs,
   },
@@ -698,6 +698,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     textAlign: 'center',
     marginBottom: Space.sm,
+    fontVariant: ['tabular-nums'],
   },
   bidContextStack: {
     gap: Space.xs + 2,
@@ -713,20 +714,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bidContextLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.5,
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    letterSpacing: -0.1,
   },
   bidContextValue: {
     fontSize: 15,
     color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   bidContextValueSecondary: {
     fontSize: 14,
     color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
   },
   dominantAction: {
     width: '100%',
@@ -744,10 +747,10 @@ const styles = StyleSheet.create({
   },
   // ── Review stage — receipt ──
   reviewHeading: {
-    fontSize: 11,
+    fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
     textAlign: 'center',
     marginBottom: Space.sm,
   },
@@ -763,16 +766,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   reviewAmountIze: {
     fontSize: 14,
     color: Colors.brand,
     fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
   },
   reviewGbpEquivalent: {
     fontSize: 12,
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
   },
   reviewReceipt: {
     gap: Space.xs + 2,
@@ -788,10 +794,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   reviewReceiptLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.5,
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    letterSpacing: -0.1,
   },
   reviewReceiptValue: {
     fontSize: 14,
