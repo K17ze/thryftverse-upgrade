@@ -1,169 +1,114 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, LayoutChangeEvent } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
-import { AnimatedPressable } from '../AnimatedPressable';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
-import { PressPresets } from '../../hooks/usePremiumPressFeedback';
+import { Space, Typography } from '../../theme/designTokens';
 
-export interface ProfileTab {
-  key: string;
-  label: string;
-  icon?: keyof typeof Ionicons.glyphMap;
-  count?: number;
-}
-
-interface ProfileTabRailProps {
-  tabs: ProfileTab[];
-  activeKey: string;
-  onChange: (key: string) => void;
-}
-
-export function ProfileTabRail({ tabs, activeKey, onChange }: ProfileTabRailProps) {
-  const activeIndex = tabs.findIndex((t) => t.key === activeKey);
-  const indicatorX = useSharedValue(0);
-  const indicatorW = useSharedValue(0);
-  const tabLayouts = React.useRef<Map<number, { x: number; width: number }>>(new Map());
-
-  const indicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: indicatorX.value }],
-    width: indicatorW.value,
-    opacity: withSpring(indicatorW.value > 0 ? 1 : 0, { damping: 20, stiffness: 250 }),
-  }));
-
-  const updateIndicator = React.useCallback(
-    (index: number, animated = true) => {
-      const layout = tabLayouts.current.get(index);
-      if (!layout) return;
-      if (animated) {
-        indicatorX.value = withSpring(layout.x, { damping: 18, stiffness: 300 });
-        indicatorW.value = withSpring(layout.width, { damping: 18, stiffness: 300 });
-      } else {
-        indicatorX.value = layout.x;
-        indicatorW.value = layout.width;
-      }
-    },
-    [indicatorX, indicatorW]
-  );
-
-  React.useEffect(() => {
-    updateIndicator(activeIndex, true);
-  }, [activeIndex, updateIndicator]);
-
-  return (
-    <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.root}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-      >
-        {tabs.map((tab, index) => {
-          const isActive = tab.key === activeKey;
-          return (
-            <AnimatedPressable
-              key={tab.key}
-              style={[styles.tab, isActive && styles.tabActive]}
-              onPress={() => onChange(tab.key)}
-              {...PressPresets.tabItem}
-              onLayout={(e: LayoutChangeEvent) => {
-                const { x, width } = e.nativeEvent.layout;
-                tabLayouts.current.set(index, { x, width });
-                if (isActive) updateIndicator(index, false);
-              }}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              accessibilityLabel={`${tab.label} tab${tab.count !== undefined ? `, ${tab.count} items` : ''}`}
-            >
-              {tab.icon && (
-                <Ionicons
-                  name={tab.icon}
-                  size={18}
-                  color={isActive ? Colors.textPrimary : Colors.textMuted}
-                  style={{ marginRight: 6 }}
-                />
-              )}
-              <Text style={[styles.label, isActive && styles.labelActive]}>{tab.label}</Text>
-              {tab.count !== undefined && (
-                <View style={[styles.countPill, isActive && styles.countPillActive]}>
-                  <Text style={[styles.countText, isActive && styles.countTextActive]}>{tab.count}</Text>
-                </View>
-              )}
-            </AnimatedPressable>
-          );
-        })}
-        {/* Animated sliding indicator */}
-        <Reanimated.View style={[styles.indicator, indicatorStyle]} />
-      </ScrollView>
-    </Reanimated.View>
-  );
-}
+const BG = Colors.background;
+const BORDER = Colors.border;
+const MUTED = Colors.textMuted;
+const TEXT = Colors.textPrimary;
+const SECONDARY = Colors.textSecondary;
 
 const TAB_HEIGHT = 44;
 
+export type TabKey = 'Shop' | 'Looks' | 'Reviews';
+export type SegmentKey = 'forsale' | 'sold';
+
+interface TabRailProps {
+  tabs: { key: TabKey; label: string; count?: number }[];
+  activeKey: TabKey;
+  onChange: (key: TabKey) => void;
+}
+
+/**
+ * Tab rail with underline indicator. Used both inline (in list header)
+ * and as an external sticky overlay. Identical visual in both positions.
+ */
+export function TabRail({ tabs, activeKey, onChange }: TabRailProps) {
+  return (
+    <View style={styles.tabRail}>
+      {tabs.map((tab) => {
+        const isActive = tab.key === activeKey;
+        return (
+          <Pressable
+            key={tab.key}
+            style={styles.tab}
+            onPress={() => onChange(tab.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={`${tab.label} tab${tab.count !== undefined ? `, ${tab.count} items` : ''}`}
+          >
+            <View style={styles.tabContent}>
+              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]} numberOfLines={1}>
+                {tab.label}
+              </Text>
+              {tab.count !== undefined ? (
+                <Text style={[styles.tabCount, isActive && styles.tabCountActive]}>{tab.count}</Text>
+              ) : null}
+            </View>
+            {isActive ? <View style={styles.tabUnderline} /> : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+interface SegmentedControlProps {
+  segments: { key: SegmentKey; label: string }[];
+  activeKey: SegmentKey;
+  onChange: (key: SegmentKey) => void;
+}
+
+/**
+ * Editorial text segment for For sale / Sold. Not a pill bar.
+ */
+export function SegmentedControl({ segments, activeKey, onChange }: SegmentedControlProps) {
+  return (
+    <View style={styles.segmentControl}>
+      {segments.map((seg) => {
+        const isActive = seg.key === activeKey;
+        return (
+          <Pressable
+            key={seg.key}
+            style={styles.segment}
+            onPress={() => onChange(seg.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={seg.label}
+          >
+            <Text style={[styles.segmentLabel, isActive && styles.segmentLabelActive]}>{seg.label}</Text>
+            {isActive ? <View style={styles.segmentUnderline} /> : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  root: {
-    backgroundColor: Colors.surface,
+  tabRail: {
+    flexDirection: 'row',
+    backgroundColor: BG,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: BORDER,
   },
-  scroll: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    alignItems: 'center',
+  tab: { flex: 1, height: TAB_HEIGHT, alignItems: 'center', justifyContent: 'center' },
+  tabContent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  tabLabel: { fontSize: 14, fontFamily: Typography.family.regular, color: MUTED },
+  tabLabelActive: { fontFamily: Typography.family.bold, color: TEXT },
+  tabCount: { fontSize: 13, fontFamily: Typography.family.regular, color: MUTED },
+  tabCountActive: { color: SECONDARY },
+  tabUnderline: {
+    position: 'absolute', bottom: 0, left: '30%', right: '30%',
+    height: 2, backgroundColor: TEXT, borderRadius: 1,
   },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    height: TAB_HEIGHT,
-    borderRadius: Radius.full,
-    position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
-    minWidth: 80,
-  },
-  tabActive: {
-    backgroundColor: Colors.surface,
-  },
-  label: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 14,
-    color: Colors.textMuted,
-    letterSpacing: 0.2,
-  },
-  labelActive: {
-    color: Colors.textPrimary,
-  },
-  countPill: {
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 20,
-    alignItems: 'center',
-    marginLeft: 4,
-  },
-  countPillActive: {
-    backgroundColor: Colors.textPrimary,
-  },
-  countText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 11,
-    color: Colors.textMuted,
-  },
-  countTextActive: {
-    color: Colors.background,
-  },
-  indicator: {
-    position: 'absolute',
-    bottom: Space.sm - 2,
-    left: Space.md,
-    height: 2.5,
-    backgroundColor: Colors.textPrimary,
-    borderRadius: 1.25,
+  segmentControl: { flexDirection: 'row', gap: Space.lg },
+  segment: { paddingVertical: 6, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  segmentLabel: { fontSize: 14, fontFamily: Typography.family.regular, color: MUTED },
+  segmentLabelActive: { color: TEXT, fontFamily: Typography.family.semibold },
+  segmentUnderline: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    height: 2, backgroundColor: TEXT, borderRadius: 1,
   },
 });

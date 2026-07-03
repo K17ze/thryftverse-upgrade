@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeSheet } from '../../platform/native';
 import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
-import { Space, Typography, Radius } from '../../theme/designTokens';
+import { Space, Typography } from '../../theme/designTokens';
 import { useFollowersInfinite, useFollowingInfinite } from '../../platform/server';
 import type { FollowListUser } from '../../services/profileApi';
 
@@ -44,7 +44,6 @@ export function PublicProfileConnectionsSheet({
 
   const followersQuery = useFollowersInfinite(segment === 'followers' ? userId : null);
   const followingQuery = useFollowingInfinite(segment === 'following' ? userId : null);
-
   const activeQuery = segment === 'followers' ? followersQuery : followingQuery;
 
   const items: FollowListUser[] = useMemo(() => {
@@ -58,6 +57,7 @@ export function PublicProfileConnectionsSheet({
 
   const count = segment === 'followers' ? followerCount : followingCount;
   const isLoading = activeQuery.isLoading && items.length === 0;
+  const hasError = Boolean(activeQuery.error) && items.length === 0;
   const hasNextPage = Boolean(activeQuery.hasNextPage);
   const isFetchingNextPage = activeQuery.isFetchingNextPage;
 
@@ -70,10 +70,7 @@ export function PublicProfileConnectionsSheet({
     return (
       <Pressable
         style={styles.row}
-        onPress={() => {
-          onDismiss();
-          onOpenProfile(item.id);
-        }}
+        onPress={() => { onDismiss(); onOpenProfile(item.id); }}
         accessibilityRole="button"
         accessibilityLabel={`Open ${name}'s profile`}
       >
@@ -100,6 +97,16 @@ export function PublicProfileConnectionsSheet({
     );
   };
 
+  const renderSkeletonRow = ({ index }: { index: number }) => (
+    <View style={styles.skeletonRow} key={`skel-${index}`}>
+      <View style={styles.skeletonAvatar} />
+      <View style={styles.skeletonIdentity}>
+        <View style={styles.skeletonName} />
+        <View style={styles.skeletonHandle} />
+      </View>
+    </View>
+  );
+
   return (
     <NativeSheet
       visible={visible}
@@ -120,9 +127,7 @@ export function PublicProfileConnectionsSheet({
             accessibilityState={{ selected: segment === 'followers' }}
             accessibilityLabel={`Followers, ${followerCount}`}
           >
-            <Text style={[styles.segmentLabel, segment === 'followers' && styles.segmentLabelActive]}>
-              Followers
-            </Text>
+            <Text style={[styles.segmentLabel, segment === 'followers' && styles.segmentLabelActive]}>Followers</Text>
             {segment === 'followers' ? <View style={styles.segmentUnderline} /> : null}
           </Pressable>
           <Pressable
@@ -132,17 +137,31 @@ export function PublicProfileConnectionsSheet({
             accessibilityState={{ selected: segment === 'following' }}
             accessibilityLabel={`Following, ${followingCount}`}
           >
-            <Text style={[styles.segmentLabel, segment === 'following' && styles.segmentLabelActive]}>
-              Following
-            </Text>
+            <Text style={[styles.segmentLabel, segment === 'following' && styles.segmentLabelActive]}>Following</Text>
             {segment === 'following' ? <View style={styles.segmentUnderline} /> : null}
           </Pressable>
         </View>
 
         {isLoading ? (
-          <View style={styles.stateWrap}>
-            <ActivityIndicator size="large" color={Colors.brand} />
-          </View>
+          <FlatList
+            data={Array.from({ length: 8 })}
+            keyExtractor={(_, i) => `skel-${i}`}
+            renderItem={renderSkeletonRow}
+            contentContainerStyle={{ paddingBottom: Space.xl }}
+            showsVerticalScrollIndicator={false}
+            key="skeleton-list"
+          />
+        ) : hasError ? (
+          <Pressable
+            style={styles.stateWrap}
+            onPress={() => activeQuery.refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading connections"
+          >
+            <Ionicons name="cloud-offline-outline" size={32} color={Colors.textMuted} />
+            <Text style={styles.stateTitle}>Couldn't load {segment === 'followers' ? 'followers' : 'following'}</Text>
+            <Text style={styles.stateSub}>Tap to retry</Text>
+          </Pressable>
         ) : items.length === 0 ? (
           <View style={styles.stateWrap}>
             <Ionicons
@@ -184,106 +203,37 @@ export function PublicProfileConnectionsSheet({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    flex: 1,
-  },
-  title: {
-    fontSize: 20,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.4,
-    marginBottom: Space.sm,
-  },
-  titleCount: {
-    fontSize: 15,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-  },
+  container: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flex: 1 },
+  title: { fontSize: 20, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: -0.4, marginBottom: Space.sm },
+  titleCount: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary },
   segmentRail: {
-    flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-    marginBottom: Space.sm,
+    flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border, marginBottom: Space.sm,
   },
-  segment: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  segment: { flex: 1, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   segmentActive: {},
-  segmentLabel: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-  },
-  segmentLabelActive: {
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-  },
+  segmentLabel: { fontSize: 14, fontFamily: Typography.family.regular, color: Colors.textMuted },
+  segmentLabelActive: { fontFamily: Typography.family.bold, color: Colors.textPrimary },
   segmentUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    left: '30%',
-    right: '30%',
-    height: 2,
-    backgroundColor: Colors.textPrimary,
+    position: 'absolute', bottom: 0, left: '30%', right: '30%',
+    height: 2, backgroundColor: Colors.textPrimary,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-    minHeight: 56,
-  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 56 },
   avatarWrap: {},
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  avatarFallback: {
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  identityCol: {
-    flex: 1,
-  },
-  displayName: {
-    fontSize: 15,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.2,
-  },
-  handle: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    marginTop: 1,
-  },
-  stateWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xl * 2,
-    gap: 8,
-    paddingHorizontal: Space.md,
-  },
-  stateTitle: {
-    fontSize: 15,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  stateSub: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
-  },
-  footerIndicator: {
-    paddingVertical: Space.md,
-    alignItems: 'center',
-  },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
+  avatarFallback: { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  identityCol: { flex: 1 },
+  displayName: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
+  handle: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary, marginTop: 1 },
+  // Skeleton rows — match final row geometry
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 56 },
+  skeletonAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceAlt },
+  skeletonIdentity: { flex: 1, gap: 4 },
+  skeletonName: { width: 140, height: 14, borderRadius: 4, backgroundColor: Colors.surfaceAlt },
+  skeletonHandle: { width: 100, height: 12, borderRadius: 4, backgroundColor: Colors.surfaceAlt },
+  // States
+  stateWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl * 2, gap: 8, paddingHorizontal: Space.md },
+  stateTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
+  stateSub: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textMuted, textAlign: 'center' },
+  footerIndicator: { paddingVertical: Space.md, alignItems: 'center' },
 });
