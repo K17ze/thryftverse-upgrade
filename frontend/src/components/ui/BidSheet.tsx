@@ -17,7 +17,7 @@ import { Space, Radius, Typography } from '../../theme/designTokens';
 import {
   sanitizeDecimalInput,
 } from '../../utils/currencyAuthoringFlows';
-import { toIze, formatIzeAmount } from '../../utils/currency';
+import { toIze, formatAuctionIze } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { GoldRates } from '../../utils/currency';
@@ -363,7 +363,7 @@ export function BidSheet({
 
             {/* 1ZE equivalent — platform value */}
             <Text style={styles.amountIzeEquivalent}>
-              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 2)}
+              {formatAuctionIze(toIze(Number(bidInput) || 0, currencyCode, goldRates))}
             </Text>
 
             {/* Minimum and current — stacked, not columns */}
@@ -444,7 +444,7 @@ export function BidSheet({
                 {currencyCode} {bidInput}
               </Text>
               <Text style={styles.reviewAmountIze}>
-                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0, 2)}
+                {formatAuctionIze(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0)}
               </Text>
               {isNonGbp && gbpEquivalentText && (
                 <Text style={styles.reviewGbpEquivalent}>{gbpEquivalentText}</Text>
@@ -473,6 +473,11 @@ export function BidSheet({
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
+
+            {/* Binding disclosure — quiet, close to the confirm action */}
+            <Text style={styles.bindingNotice}>
+              Bids are binding once accepted.
+            </Text>
 
             {/* Primary action + quiet edit — preserves layout during submit */}
             <AppButton
@@ -707,6 +712,13 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
+  },
+  bindingNotice: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    textAlign: 'center',
+    paddingVertical: Space.xs,
   },
   dominantAction: {
     width: '100%',

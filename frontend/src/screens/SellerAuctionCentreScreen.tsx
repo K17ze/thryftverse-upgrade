@@ -18,7 +18,7 @@ import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { toIze, formatIzeAmount } from '../utils/currency';
+import { toIze, formatAuctionIze } from '../utils/currency';
 import { useBucketedServerClock, resolveAuctionTiming } from '../hooks/useServerClock';
 import {
   resolvePriceLabel,
@@ -99,6 +99,21 @@ function computeStats(items: AuctionHomeItem[], clockMs: number): SellerStats {
   return { total: items.length, live, scheduled, sold, unsold, cancelled, totalBids, highestBid };
 }
 
+// ── Terminal reason mapping — never expose raw backend enums ──
+const TERMINAL_REASON_MAP: Record<string, string> = {
+  seller_cancelled: 'Cancelled by seller',
+  policy_violation: 'Cancelled after review',
+  payment_failure: 'Payment was not completed',
+  admin_cancelled: 'Cancelled after review',
+  duplicate_listing: 'Cancelled after review',
+  prohibited_item: 'Cancelled after review',
+};
+
+function mapTerminalReason(reason: string | null): string {
+  if (!reason) return 'Cancelled';
+  return TERMINAL_REASON_MAP[reason] ?? 'Cancelled';
+}
+
 // ── State-specific presentation config ──
 interface StatePresentation {
   stateLabel: string;
@@ -127,11 +142,10 @@ function resolveStatePresentation(
   const isScheduled = timing.effectiveState === 'upcoming';
 
   if (isCancelled) {
-    const reason = item.terminalReason ? ` · ${item.terminalReason}` : '';
     return {
       stateLabel: 'Cancelled',
       stateColor: Colors.textMuted,
-      leadingLabel: `Cancelled${reason}`,
+      leadingLabel: mapTerminalReason(item.terminalReason),
       leadingColor: Colors.textMuted,
       actionLabel: 'View details',
       showLiveDot: false,
@@ -216,7 +230,7 @@ function SellerAuctionRow({
   const presentation = resolveStatePresentation(item, timing, urgency, timeLabel);
 
   const amount = item.currentBidGbp > 0 ? item.currentBidGbp : item.startingBidGbp;
-  const izeText = amount > 0 ? `${formatIzeAmount(toIze(amount, 'GBP', goldRates))} 1ZE` : null;
+  const izeText = amount > 0 ? formatAuctionIze(toIze(amount, 'GBP', goldRates)) : null;
   const localText = priceLabel === 'No bids' ? null : priceText;
 
   // Value prefix depends on state
@@ -313,7 +327,7 @@ function SellerSummary({
   const activeColor = active > 0 ? Colors.danger : Colors.textPrimary;
   const hasBidContext = stats.totalBids > 0 && stats.highestBid > 0;
   const highestBidIze = hasBidContext
-    ? `${formatIzeAmount(toIze(stats.highestBid, 'GBP', goldRates))} 1ZE`
+    ? formatAuctionIze(toIze(stats.highestBid, 'GBP', goldRates))
     : null;
   const highestBidLocal = hasBidContext
     ? formatFromFiat(stats.highestBid, 'GBP')

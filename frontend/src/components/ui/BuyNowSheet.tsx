@@ -21,7 +21,7 @@ import {
 } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
 import { createStableId } from '../../utils/createStableId';
-import { toIze, formatIzeAmount } from '../../utils/currency';
+import { toIze, formatAuctionIze } from '../../utils/currency';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
 
@@ -295,7 +295,7 @@ export function BuyNowSheet({
                 <View style={styles.receiptRow}>
                   <Text style={styles.receiptLabel}>1ZE equivalent</Text>
                   <Text style={styles.receiptValue}>
-                    {formatIzeAmount(toIze(displayPriceGbp, 'GBP'), 2)}
+                    {formatAuctionIze(toIze(displayPriceGbp, 'GBP'))}
                   </Text>
                 </View>
               )}
@@ -314,7 +314,7 @@ export function BuyNowSheet({
                 <Text style={styles.totalValue} numberOfLines={1}>{priceText}</Text>
                 {displayPriceGbp && (
                   <Text style={styles.totalIze}>
-                    {formatIzeAmount(toIze(displayPriceGbp, 'GBP'), 2)}
+                    {formatAuctionIze(toIze(displayPriceGbp, 'GBP'))}
                   </Text>
                 )}
               </View>

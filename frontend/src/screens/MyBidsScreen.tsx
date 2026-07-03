@@ -21,7 +21,7 @@ import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getMyAuctionBids, getWatchlist, type MyAuctionBid, type MarketAuction } from '../services/marketApi';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { toIze, formatIzeAmount } from '../utils/currency';
+import { toIze, formatAuctionIze } from '../utils/currency';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -248,7 +248,7 @@ export default function MyBidsScreen() {
             ? item.currentBidGbp
             : item.currentBidGbp > 0 ? item.currentBidGbp : item.amountGbp;
           const primaryIze = primaryAmount > 0
-            ? `${formatIzeAmount(toIze(primaryAmount, 'GBP', goldRates))} 1ZE`
+            ? formatAuctionIze(toIze(primaryAmount, 'GBP', goldRates))
             : null;
           const primaryLocal = primaryAmount > 0 ? formatFromFiat(primaryAmount, 'GBP') : null;
           const primaryState: 'current' | 'final' = isTerminal ? 'final' : 'current';
@@ -256,7 +256,7 @@ export default function MyBidsScreen() {
           // Secondary value: your bid for active, outcome for terminal
           const showYourBid = item.amountGbp > 0 && !isTerminal;
           const yourBidIze = showYourBid
-            ? `${formatIzeAmount(toIze(item.amountGbp, 'GBP', goldRates))} 1ZE`
+            ? formatAuctionIze(toIze(item.amountGbp, 'GBP', goldRates))
             : null;
           const yourBidLocal = showYourBid ? formatFromFiat(item.amountGbp, 'GBP') : null;
 

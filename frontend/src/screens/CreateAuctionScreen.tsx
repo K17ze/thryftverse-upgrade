@@ -13,7 +13,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { toFiat, toIze, formatIzeAmount } from '../utils/currency';
+import { toFiat, toIze, formatAuctionIze } from '../utils/currency';
 import { useBackendData } from '../context/BackendDataContext';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
@@ -378,7 +378,7 @@ export default function CreateAuctionScreen() {
                     />
                     {startingBidInput && Number(startingBidInput) > 0 && (
                       <Text style={styles.inputIzeHint}>
-                        {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))} 1ZE
+                        {formatAuctionIze(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
                       </Text>
                     )}
                   </View>
@@ -414,7 +414,7 @@ export default function CreateAuctionScreen() {
                         />
                         {buyNowInput && Number(buyNowInput) > 0 && (
                           <Text style={styles.inputIzeHint}>
-                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))} 1ZE
+                            {formatAuctionIze(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
                           </Text>
                         )}
                       </>
@@ -475,7 +475,7 @@ export default function CreateAuctionScreen() {
                         </Text>
                         {startingBidInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))} 1ZE
+                            {formatAuctionIze(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
                           </Text>
                         )}
                       </View>
@@ -488,7 +488,7 @@ export default function CreateAuctionScreen() {
                         </Text>
                         {buyNowEnabled && buyNowInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))} 1ZE
+                            {formatAuctionIze(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
                           </Text>
                         )}
                       </View>
@@ -580,7 +580,7 @@ export default function CreateAuctionScreen() {
                   <Text style={styles.termsValue}>{resultData.startingBid}</Text>
                   {startingBidInput && (
                     <Text style={styles.termsIzeText}>
-                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))} 1ZE
+                      {formatAuctionIze(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
                     </Text>
                   )}
                 </View>
@@ -592,7 +592,7 @@ export default function CreateAuctionScreen() {
                     <Text style={styles.termsValue}>{resultData.buyNow}</Text>
                     {buyNowInput && (
                       <Text style={styles.termsIzeText}>
-                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))} 1ZE
+                        {formatAuctionIze(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
                       </Text>
                     )}
                   </View>

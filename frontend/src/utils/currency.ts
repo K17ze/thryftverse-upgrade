@@ -54,6 +54,14 @@ export function formatIzeAmount(value: number, fractionDigits: number = IZE_DECI
   return `${value.toFixed(fractionDigits)} ${IZE_SYMBOL}`;
 }
 
+// Auction display helper: produces exactly "24.60 1ZE".
+// Uppercase suffix, two display decimals, one suffix only.
+// Full calculation precision preserved; caller passes the 1ZE amount.
+// Stored values, bidding calculations, settlement, and API payloads unchanged.
+export function formatAuctionIze(izeAmount: number): string {
+  return `${izeAmount.toFixed(2)} 1ZE`;
+}
+
 export function formatFiatAmount(
   value: number,
   currencyCode: SupportedCurrencyCode,
