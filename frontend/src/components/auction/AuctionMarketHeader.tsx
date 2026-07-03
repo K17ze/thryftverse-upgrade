@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
 
 export type AuctionHeaderActionKey = 'search' | 'filter' | 'create' | 'seller' | 'activity';
 
@@ -71,7 +71,7 @@ export function AuctionMarketHeader({
             accessibilityLabel="Go back"
             style={styles.iconBtn}
           >
-            <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </Pressable>
         ) : null}
 
@@ -92,7 +92,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={searchAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={searchAction.icon} size={21} color={Colors.textPrimary} />
+              <Ionicons name={searchAction.icon} size={22} color={Colors.textPrimary} />
             </Pressable>
           )}
           {showFilter && (
@@ -103,7 +103,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={filterAction!.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={filterAction!.icon} size={21} color={Colors.textPrimary} />
+              <Ionicons name={filterAction!.icon} size={22} color={Colors.textPrimary} />
             </Pressable>
           )}
           {sellerAction && (
@@ -114,7 +114,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={sellerAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={sellerAction.icon} size={21} color={Colors.textPrimary} />
+              <Ionicons name={sellerAction.icon} size={22} color={Colors.textPrimary} />
             </Pressable>
           )}
           {showActivity && (
@@ -125,7 +125,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={activityAction!.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={activityAction!.icon} size={21} color={Colors.textPrimary} />
+              <Ionicons name={activityAction!.icon} size={22} color={Colors.textPrimary} />
               {activityAction!.badgeCount != null && activityAction!.badgeCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
@@ -145,7 +145,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={createAction.label}
               style={styles.createBtn}
             >
-              <Ionicons name={createAction.icon} size={20} color={Colors.brand} />
+              <Ionicons name={createAction.icon} size={22} color={Colors.brand} />
             </Pressable>
           )}
         </View>
@@ -156,45 +156,46 @@ export function AuctionMarketHeader({
 
 const styles = StyleSheet.create({
   header: {
-    paddingBottom: Space.sm,
+    paddingBottom: Space.sm - 2,
     paddingHorizontal: Space.md,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    minHeight: 44,
+    minHeight: 48,
   },
   iconBtn: {
-    width: 38,
+    width: 36,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   createBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(244,240,232,0.10)',
-    marginLeft: 2,
+    marginLeft: 4,
   },
   titleWrap: {
     flex: 1,
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 28,
+    fontSize: 30,
     color: Colors.textPrimary,
-    letterSpacing: -0.6,
+    letterSpacing: -0.8,
   },
   context: {
     fontFamily: Typography.family.regular,
     fontSize: 13,
     color: Colors.textSecondary,
-    marginTop: 1,
+    marginTop: 0,
+    letterSpacing: -0.1,
   },
   actions: {
     flexDirection: 'row',
@@ -203,21 +204,21 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: 6,
-    right: 4,
-    minWidth: 15,
-    height: 15,
-    borderRadius: 999,
+    top: 5,
+    right: 3,
+    minWidth: 16,
+    height: 16,
+    borderRadius: Radius.full,
     backgroundColor: Colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: Colors.background,
   },
   badgeText: {
     fontFamily: Typography.family.bold,
-    fontSize: 8,
+    fontSize: 9,
     color: '#FFFFFF',
   },
 });

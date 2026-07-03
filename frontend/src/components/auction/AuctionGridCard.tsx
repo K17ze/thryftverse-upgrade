@@ -105,21 +105,17 @@ export function AuctionGridCard({
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: Space.md,
+    marginBottom: Space.md - 2,
   },
   imageWrap: {
     position: 'relative',
     aspectRatio: 4 / 5,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 },
-      android: { elevation: 4 },
-    }),
   },
   imageContainer: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   image: {
@@ -132,10 +128,10 @@ const styles = StyleSheet.create({
     left: Space.xs + 2,
     width: 8,
     height: 8,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     backgroundColor: Colors.danger,
     borderWidth: 1.5,
-    borderColor: 'rgba(0,0,0,0.3)',
+    borderColor: 'rgba(0,0,0,0.35)',
   },
   personalMarker: {
     position: 'absolute',
@@ -160,15 +156,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   body: {
-    paddingTop: Space.sm + 2,
+    paddingTop: Space.sm,
     gap: 3,
   },
   brand: {
     fontFamily: Typography.family.medium,
     fontSize: 10,
     color: Colors.textMuted,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   title: {
     fontFamily: Typography.family.semibold,
@@ -181,7 +176,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 3,
+    marginTop: 2,
   },
   bidCount: {
     fontFamily: Typography.family.medium,

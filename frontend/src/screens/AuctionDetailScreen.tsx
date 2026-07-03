@@ -582,7 +582,7 @@ export default function AuctionDetailScreen() {
 
         {/* ── B. Item identity — one primary location, editorial negative space ── */}
         <View style={styles.itemIdentitySection}>
-          {auction.brand && <Text style={styles.itemIdentityEyebrow} numberOfLines={1}>{auction.brand.toUpperCase()}</Text>}
+          {auction.brand && <Text style={styles.itemIdentityEyebrow} numberOfLines={1}>{auction.brand}</Text>}
           <Headline style={styles.itemIdentityTitle} numberOfLines={2}>{auction.title}</Headline>
           {auction.conditionLabel && (
             <Text style={styles.itemIdentityCondition}>{auction.conditionLabel}</Text>
@@ -610,10 +610,10 @@ export default function AuctionDetailScreen() {
           {/* Price — dominant hierarchy with label above */}
           <View style={styles.transactionPriceRow}>
             <View style={styles.transactionPricePrimary}>
-              <Text style={styles.transactionPriceLabel}>{priceLabel.toUpperCase()}</Text>
+              <Text style={styles.transactionPriceLabel}>{priceLabel}</Text>
               {(() => {
                 const izeAmount = toIze(priceAmount, 'GBP', goldRates);
-                const izeText = formatIzeAmount(izeAmount);
+                const izeText = formatIzeAmount(izeAmount, 2);
                 const localText = formatFromFiat(priceAmount, 'GBP');
                 if (displayMode === 'fiat') {
                   return (
@@ -643,9 +643,9 @@ export default function AuctionDetailScreen() {
           {/* Minimum to lead (outbid) — actionable emphasis */}
           {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
             <View style={styles.transactionMinRow}>
-              <Text style={styles.transactionMinLabel}>MINIMUM TO LEAD</Text>
+              <Text style={styles.transactionMinLabel}>Minimum to lead</Text>
               <Text style={styles.transactionMinValue}>
-                {formatIzeAmount(toIze(auction.minimumNextBidGbp, 'GBP', goldRates))}
+                {formatIzeAmount(toIze(auction.minimumNextBidGbp, 'GBP', goldRates), 2)}
               </Text>
             </View>
           )}
@@ -696,7 +696,7 @@ export default function AuctionDetailScreen() {
               <>
                 <Text style={styles.terminalResultTitleWon}>You won</Text>
                 <Text style={styles.terminalResultValue}>
-                  {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates))}
+                  {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates), 2)}
                 </Text>
                 <Text style={styles.terminalResultNote}>Next step required — view result for fulfilment details.</Text>
               </>
@@ -705,7 +705,7 @@ export default function AuctionDetailScreen() {
               <>
                 <Text style={styles.terminalResultTitleLost}>Auction closed</Text>
                 <Text style={styles.terminalResultValue}>
-                  {formatIzeAmount(toIze(auction.currentBidGbp, 'GBP', goldRates))}
+                  {formatIzeAmount(toIze(auction.currentBidGbp, 'GBP', goldRates), 2)}
                 </Text>
                 <Pressable
                   style={styles.discoverLinkInline}
@@ -723,7 +723,7 @@ export default function AuctionDetailScreen() {
               <>
                 <Text style={styles.terminalResultTitleSold}>Sold</Text>
                 <Text style={styles.terminalResultValue}>
-                  {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates))}
+                  {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates), 2)}
                 </Text>
                 <Text style={styles.terminalResultNote}>Fulfilment not yet available for this result.</Text>
               </>
@@ -735,7 +735,7 @@ export default function AuctionDetailScreen() {
               <>
                 <Text style={styles.terminalResultTitleLost}>Auction closed</Text>
                 <Text style={styles.terminalResultValue}>
-                  {formatIzeAmount(toIze(auction.currentBidGbp, 'GBP', goldRates))}
+                  {formatIzeAmount(toIze(auction.currentBidGbp, 'GBP', goldRates), 2)}
                 </Text>
               </>
             )}
@@ -833,7 +833,7 @@ export default function AuctionDetailScreen() {
                 title: rel.title,
                 imageUrl: rel.imageUrl,
                 priceText: formatFromFiat(relPrice, 'GBP'),
-                izeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, 'GBP', goldRates)) : undefined,
+                izeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, 'GBP', goldRates), 2) : undefined,
                 badgeText: relStateLabel,
                 mode: 'auction' as const,
                 stateText: relStateLabel,
@@ -1264,8 +1264,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    top: 0,
     bottom: 0,
-    height: '50%',
   },
   heroTopRow: {
     position: 'absolute',
@@ -1285,7 +1285,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   priceStageRow: {
     flexDirection: 'row',
@@ -1299,7 +1299,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255,255,255,0.7)',
     marginBottom: 2,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
   priceStageValue: {
     fontSize: 42,
@@ -1307,19 +1307,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -1,
     color: '#FFFFFF',
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   outbidMinText: {
     fontSize: 13,
     color: '#ff6b6b',
     marginTop: 4,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   priceStageIze: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.6)',
     marginTop: 2,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
   priceStageMeta: {
     alignItems: 'flex-end',
@@ -1328,7 +1328,7 @@ const styles = StyleSheet.create({
   bidCountInline: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.7)',
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   countdownRow: {
     flexDirection: 'row',
@@ -1338,13 +1338,13 @@ const styles = StyleSheet.create({
   countdownText: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.85)',
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   countdownTextUrgent: {
     color: '#ff6b6b',
     fontWeight: '700',
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   livePill: {
     flexDirection: 'row',
@@ -1421,12 +1421,14 @@ const styles = StyleSheet.create({
   backBtnFloating: {
     position: 'absolute',
     left: Space.sm,
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   watchBtnFloating: {
     position: 'absolute',
@@ -1439,22 +1441,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   watchBtnFloatingActive: {
-    backgroundColor: 'rgba(255,68,68,0.2)',
+    backgroundColor: 'rgba(244,240,232,0.15)',
+    borderColor: 'rgba(244,240,232,0.3)',
   },
   floatingControlsRight: {
     position: 'absolute',
     right: Space.sm,
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     alignItems: 'center',
   },
   floatingControlBtn: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   familyBadgeWrap: {
     position: 'absolute',
@@ -1484,7 +1489,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.5,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   priceSecondary: {
     alignItems: 'flex-end',
@@ -1496,7 +1501,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.textSecondary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   bidCountLabel: {
     fontSize: 11,
@@ -1512,10 +1517,10 @@ const styles = StyleSheet.create({
   outbidHintText: {
     fontSize: 13,
     color: Colors.danger,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   outbidHintAmount: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   timeRow: {
     flexDirection: 'row',
@@ -1526,13 +1531,13 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 14,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   timeTextUrgent: {
     color: Colors.danger,
     fontWeight: '700',
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   viewerMessage: {
     flexDirection: 'row',
@@ -1551,7 +1556,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   viewerMessageSubtitle: {
     marginTop: 2,
@@ -1577,18 +1582,18 @@ const styles = StyleSheet.create({
   },
   outbidHeadline: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.danger,
     marginBottom: Space.xs,
   },
   outbidMinLabel: {
     fontSize: 13,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
   outbidMinValue: {
     fontSize: 28,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.5,
     marginBottom: Space.sm,
@@ -1610,13 +1615,13 @@ const styles = StyleSheet.create({
   },
   leadingTitle: {
     fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.success,
   },
   leadingSubtitle: {
     fontSize: 13,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     marginTop: 2,
   },
   watchingBlock: {
@@ -1631,7 +1636,7 @@ const styles = StyleSheet.create({
   watchingText: {
     fontSize: 14,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
   // ── Item story ──
   itemStorySection: {
@@ -1642,26 +1647,26 @@ const styles = StyleSheet.create({
   itemStoryBrand: {
     fontSize: 13,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   itemStoryTitle: {
     fontSize: 22,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.3,
   },
   itemStoryCondition: {
     fontSize: 13,
     color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
   itemStoryDescription: {
     fontSize: 15,
     color: Colors.textSecondary,
     lineHeight: 22,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     marginTop: Space.xs,
   },
 
@@ -1676,21 +1681,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: Colors.textSecondary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: 1.0,
   },
   itemIdentityTitle: {
-    fontSize: 24,
-    lineHeight: 30,
-    fontFamily: 'Inter_700Bold',
+    fontSize: 26,
+    lineHeight: 32,
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   itemIdentityCondition: {
     fontSize: 13,
     color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     marginTop: 2,
   },
 
@@ -1698,17 +1703,18 @@ const styles = StyleSheet.create({
   transactionModule: {
     marginHorizontal: Space.md,
     marginTop: Space.sm,
-    padding: Space.md,
-    borderRadius: 12,
+    padding: Space.md + 2,
+    borderRadius: Radius.lg,
     backgroundColor: Colors.surface,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     gap: Space.sm,
   },
   transactionStateLine: {
     fontSize: 13,
     fontWeight: '600',
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.1,
   },
   transactionPriceRow: {
     flexDirection: 'row',
@@ -1722,24 +1728,26 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
     color: Colors.textMuted,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 2,
   },
   transactionPriceValue: {
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: 28,
+    lineHeight: 32,
     fontWeight: '700',
     color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: -0.4,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'],
   },
   transactionPriceSecondary: {
     fontSize: 14,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
   transactionPriceMeta: {
     alignItems: 'flex-end',
@@ -1748,26 +1756,29 @@ const styles = StyleSheet.create({
   transactionBidCount: {
     fontSize: 13,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   transactionMinRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
     paddingVertical: Space.xs,
-    borderTopWidth: 0.5,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
   },
   transactionMinLabel: {
     fontSize: 12,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   transactionMinValue: {
     fontSize: 16,
     fontWeight: '700',
     color: Colors.danger,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   transactionCountdownRow: {
     flexDirection: 'row',
@@ -1778,7 +1789,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
   },
 
@@ -1786,42 +1797,43 @@ const styles = StyleSheet.create({
   terminalResultModule: {
     marginHorizontal: Space.md,
     marginTop: Space.sm,
-    padding: Space.md,
-    borderRadius: 12,
+    padding: Space.md + 2,
+    borderRadius: Radius.lg,
     backgroundColor: Colors.surface,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    gap: Space.xs,
+    gap: Space.xs + 2,
   },
   terminalResultTitleWon: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.success,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   terminalResultTitleLost: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   terminalResultTitleSold: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.brand,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   terminalResultValue: {
     fontSize: 22,
     fontWeight: '700',
     color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
   },
   terminalResultNote: {
     fontSize: 13,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     lineHeight: 18,
   },
 
@@ -1834,7 +1846,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textSecondary,
     lineHeight: 22,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
   titleSection: {
     paddingHorizontal: Space.md,
@@ -1893,13 +1905,13 @@ const styles = StyleSheet.create({
   bidSummaryLabel: {
     color: Colors.textMuted,
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   bidSummaryValue: {
     fontSize: 15,
     fontWeight: '600',
     color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   bidList: {
     borderRadius: Radius.md,
@@ -1940,7 +1952,7 @@ const styles = StyleSheet.create({
   bidderName: {
     color: Colors.textSecondary,
     fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
   bidRowRight: {
     flexDirection: 'row',
@@ -1951,7 +1963,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   topBidLabel: {
     color: Colors.success,
@@ -1961,7 +1973,7 @@ const styles = StyleSheet.create({
   noBidsText: {
     color: Colors.textMuted,
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
   subSectionError: {
     flexDirection: 'row',
@@ -2035,7 +2047,7 @@ const styles = StyleSheet.create({
   buyNowLinkText: {
     fontSize: 13,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textDecorationLine: 'underline',
   },
   sellerDockInfo: {
@@ -2047,7 +2059,7 @@ const styles = StyleSheet.create({
   sellerDockText: {
     fontSize: 14,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   terminalDock: {
     position: 'absolute',
@@ -2070,7 +2082,7 @@ const styles = StyleSheet.create({
   terminalDockText: {
     fontSize: 14,
     color: Colors.textMuted,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   resultBodySection: {
     paddingHorizontal: Space.md,
@@ -2084,51 +2096,51 @@ const styles = StyleSheet.create({
   resultEyebrow: {
     fontSize: 12,
     color: Colors.textMuted,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
   resultTitleWon: {
     fontSize: 32,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.success,
     letterSpacing: -0.5,
   },
   resultTitleLost: {
     fontSize: 32,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.5,
   },
   resultTitleSold: {
     fontSize: 32,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
     color: Colors.brand,
     letterSpacing: -0.5,
   },
   resultPrice: {
     fontSize: 28,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     marginTop: Space.xs,
   },
   resultPriceSecondary: {
     fontSize: 22,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     marginTop: Space.xs,
   },
   resultItemTitle: {
     fontSize: 16,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     textAlign: 'center',
     marginTop: Space.xs,
   },
   resultBrand: {
     fontSize: 13,
     color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
   resultMetaRow: {
     flexDirection: 'row',
@@ -2139,7 +2151,7 @@ const styles = StyleSheet.create({
   resultMetaText: {
     fontSize: 14,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   resultNote: {
     color: Colors.textMuted,
@@ -2159,7 +2171,7 @@ const styles = StyleSheet.create({
   },
   discoverLinkInlineText: {
     color: Colors.brand,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
     fontSize: 14,
   },
   transactionTruthSection: {
@@ -2181,7 +2193,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: Colors.brand,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   // ── Bottom sheet styles ──
   sheetHeader: {
@@ -2219,7 +2231,7 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
     fontSize: 13,
     fontWeight: '700',
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   ruleContent: {
     flex: 1,
@@ -2232,6 +2244,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
 });

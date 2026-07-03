@@ -53,9 +53,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   label: {
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    letterSpacing: -0.1,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   priceRow: {
     flexDirection: 'row',
