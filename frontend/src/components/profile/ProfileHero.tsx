@@ -396,18 +396,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
 
-  // Identity canvas — paddingTop reserves avatar overlap space
+  // Identity canvas — no top padding; seamRow reserves avatar overlap space
   identityCanvas: {
     paddingHorizontal: Space.md,
-    paddingTop: AVATAR_OVERLAP + Space.sm,
+    paddingTop: 0,
     paddingBottom: Space.sm,
   },
 
-  // Seam row — avatar space on left, stats on right, vertically centred
+  // Seam row — begins immediately at canvas boundary, reserves avatar overlap height
   seamRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Space.sm,
+    minHeight: AVATAR_OVERLAP + Space.sm,
+    marginBottom: Space.xs,
   },
   seamSpacer: {
     width: AVATAR_SIZE + Space.sm,
@@ -415,12 +416,12 @@ const styles = StyleSheet.create({
   seamStats: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-around',
   },
   seamStat: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: Space.lg,
   },
   seamStatValue: {
     fontSize: 17,

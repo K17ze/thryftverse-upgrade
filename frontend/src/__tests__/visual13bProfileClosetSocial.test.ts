@@ -19,10 +19,12 @@ describe('VISUAL-13B Profile Closet Social Upgrade', () => {
     expect(src).toContain('ProfileTabRail');
   });
 
-  it('2. UserProfileScreen uses FlagshipProfileMedia or TabRail', () => {
-    const src = readFile('screens/UserProfileScreen.tsx');
-    expect(src).toContain('FlagshipProfileMedia');
-    expect(src).toContain('TabRail');
+  it('2. UserProfileScreen uses ProfileHero (FlagshipProfileMedia) and TabRail', () => {
+    const heroSrc = readFile('components/profile/ProfileHero.tsx');
+    expect(heroSrc).toContain('FlagshipProfileMedia');
+    const screenSrc = readFile('screens/UserProfileScreen.tsx');
+    expect(screenSrc).toContain('ProfileHero');
+    expect(screenSrc).toContain('TabRail');
   });
 
   it('3. ClosetScreen uses MoodboardCollectionGrid', () => {

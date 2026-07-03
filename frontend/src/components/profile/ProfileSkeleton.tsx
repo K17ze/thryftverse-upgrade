@@ -62,10 +62,10 @@ export function ProfileSkeleton({
           top: -avatarOverlap, left: Space.md,
         }]} />
 
-        {/* Identity canvas — paddingTop reserves avatar space */}
-        <View style={[styles.skeletonBody, { paddingTop: avatarOverlap + Space.sm }]}>
-          {/* Seam row — 3 stats to the right of avatar */}
-          <View style={styles.skeletonSeamRow}>
+        {/* Identity canvas — no top padding; seamRow reserves avatar overlap height */}
+        <View style={[styles.skeletonBody, { paddingTop: 0 }]}>
+          {/* Seam row — begins at canvas boundary, minHeight reserves avatar space */}
+          <View style={[styles.skeletonSeamRow, { minHeight: avatarOverlap + Space.sm }]}>
             <View style={{ width: avatarSize + Space.sm }} />
             <View style={styles.skeletonSeamStats}>
               <View style={styles.skeletonSeamStat} />
@@ -160,9 +160,9 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   skeletonBody: { paddingHorizontal: Space.md, paddingBottom: Space.sm },
-  // Seam row — 3 stats to the right of avatar
-  skeletonSeamRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Space.sm },
-  skeletonSeamStats: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end', gap: Space.lg },
+  // Seam row — begins at canvas boundary, minHeight reserves avatar overlap
+  skeletonSeamRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Space.xs },
+  skeletonSeamStats: { flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
   skeletonSeamStat: { width: 40, height: 36, borderRadius: 4, backgroundColor: SURFACE_ALT },
   // Identity — full-width
   skeletonName: { width: 180, height: 20, borderRadius: 4, backgroundColor: SURFACE_ALT, marginBottom: 6 },
