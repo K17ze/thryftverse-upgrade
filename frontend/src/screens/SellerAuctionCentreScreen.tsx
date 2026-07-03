@@ -8,11 +8,13 @@ import {
   Text,
   SectionList,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -33,7 +35,8 @@ import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Meta } from '../components/ui/Text';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius } from '../theme/designTokens';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { Space, Radius, Typography, Elevation } from '../theme/designTokens';
 import {
   listAuctions,
   type MarketAuction,
@@ -122,9 +125,27 @@ function SellerAuctionCard({
   const isSold = (timing.effectiveState === 'ended' || timing.effectiveState === 'settled') && item.bidCount > 0 && !isCancelled;
   const isUnsold = timing.effectiveState === 'ended' && item.bidCount === 0 && !isCancelled;
 
+  // Single state badge config — no duplicate pills
+  const stateConfig: { label: string; bg: string; fg: string; dot?: boolean } = isCancelled
+    ? { label: 'CANCELLED', bg: 'rgba(220,38,38,0.14)', fg: Colors.danger }
+    : isSold
+    ? { label: 'SOLD', bg: 'rgba(22,163,74,0.14)', fg: Colors.success }
+    : isUnsold
+    ? { label: 'UNSOLD', bg: 'rgba(255,255,255,0.08)', fg: Colors.textMuted }
+    : timing.effectiveState === 'live'
+    ? { label: 'LIVE', bg: 'rgba(220,38,38,0.15)', fg: Colors.danger, dot: true }
+    : timing.effectiveState === 'upcoming'
+    ? { label: 'SCHEDULED', bg: 'rgba(255,255,255,0.08)', fg: Colors.textSecondary }
+    : { label: 'ENDED', bg: 'rgba(255,255,255,0.06)', fg: Colors.textMuted };
+
+  const amount = item.currentBidGbp > 0 ? item.currentBidGbp : item.startingBidGbp;
+  const izeText = amount > 0 ? formatIzeAmount(toIze(amount, 'GBP', goldRates)) : null;
+
   return (
-    <Pressable
+    <AnimatedPressable
       style={styles.card}
+      scaleValue={0.985}
+      activeOpacity={0.96}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText)}
@@ -139,27 +160,25 @@ function SellerAuctionCard({
           />
         ) : (
           <View style={styles.cardImagePlaceholder}>
-            <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+            <Ionicons name="image-outline" size={28} color={Colors.textMuted} />
           </View>
         )}
+        {/* Bottom gradient for badge legibility */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.4)']}
+          locations={[0.5, 1]}
+          style={styles.cardGradient}
+        />
+        {/* Single state badge — top-left, no duplication */}
+        <View style={styles.cardStateBadge}>
+          {stateConfig.dot && <View style={styles.cardStateDot} />}
+          <Text style={[styles.cardStateText, { color: stateConfig.fg }]}>{stateConfig.label}</Text>
+        </View>
+        {/* Urgency flag — only when live + final minutes, top-right */}
         {urgency === 'finalMinutes' && timing.effectiveState === 'live' && (
-          <View style={styles.urgencyPill}>
-            <Text style={styles.urgencyPillText}>ENDING</Text>
-          </View>
-        )}
-        {isSold && (
-          <View style={styles.soldPill}>
-            <Text style={styles.soldPillText}>SOLD</Text>
-          </View>
-        )}
-        {isUnsold && (
-          <View style={styles.unsoldPill}>
-            <Text style={styles.unsoldPillText}>UNSOLD</Text>
-          </View>
-        )}
-        {isCancelled && (
-          <View style={styles.cancelledPill}>
-            <Text style={styles.cancelledPillText}>CANCELLED</Text>
+          <View style={styles.cardUrgencyFlag}>
+            <Ionicons name="flash" size={10} color="#FFFFFF" />
+            <Text style={styles.cardUrgencyText}>ENDING</Text>
           </View>
         )}
       </View>
@@ -168,33 +187,11 @@ function SellerAuctionCard({
         <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
         <View style={styles.cardMetaRow}>
           <View style={styles.cardPriceCol}>
-            <Meta style={styles.cardPriceLabel}>{priceLabel}</Meta>
+            <Text style={styles.cardPriceLabel}>{priceLabel}</Text>
             <Text style={styles.cardPriceValue}>{priceText}</Text>
-            {(() => {
-              const amount = item.currentBidGbp > 0 ? item.currentBidGbp : item.startingBidGbp;
-              if (amount <= 0) return null;
-              return <Text style={styles.cardPriceIze}>{formatIzeAmount(toIze(amount, 'GBP', goldRates))}</Text>;
-            })()}
+            {izeText && <Text style={styles.cardPriceIze}>{izeText}</Text>}
           </View>
           <View style={styles.cardStatusCol}>
-            <View style={[
-              styles.statusBadge,
-              timing.effectiveState === 'live' && styles.statusBadgeLive,
-              timing.effectiveState === 'upcoming' && styles.statusBadgeUpcoming,
-              isTerminal && styles.statusBadgeEnded,
-            ]}>
-              <Text style={[
-                styles.statusBadgeText,
-                timing.effectiveState === 'live' && styles.statusBadgeTextLive,
-              ]}>
-                {timing.effectiveState === 'live' ? 'LIVE'
-                  : timing.effectiveState === 'upcoming' ? 'SCHEDULED'
-                  : isCancelled ? 'CANCELLED'
-                  : isSold ? 'SOLD'
-                  : isUnsold ? 'UNSOLD'
-                  : 'ENDED'}
-              </Text>
-            </View>
             <Text style={styles.cardBidCount}>
               {item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}
             </Text>
@@ -202,15 +199,15 @@ function SellerAuctionCard({
           </View>
         </View>
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
-function StatPill({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
+function StatPill({ label, value, accent, accentColor }: { label: string; value: string | number; accent?: boolean; accentColor?: string }) {
   return (
     <View style={[styles.statPill, accent && styles.statPillAccent]}>
-      <Text style={[styles.statPillValue, accent && styles.statPillValueAccent]}>{value}</Text>
-      <Text style={[styles.statPillLabel, accent && styles.statPillLabelAccent]}>{label}</Text>
+      <Text style={[styles.statPillValue, accent && accentColor ? { color: accentColor } : undefined]}>{value}</Text>
+      <Text style={[styles.statPillLabel, accent && accentColor ? { color: accentColor } : undefined]}>{label}</Text>
     </View>
   );
 }
@@ -220,6 +217,7 @@ export default function SellerAuctionCentreScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { goldRates } = useCurrencyContext();
   const { isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = React.useState<SellerTab>('scheduled');
   const [allItems, setAllItems] = React.useState<AuctionHomeItem[]>([]);
@@ -381,79 +379,83 @@ export default function SellerAuctionCentreScreen() {
   }, [loading, error, activeTab]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={Colors.background}
       />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
+      {/* Header — flagship language: chevron-back, 30px title, brand-tinted create */}
+      <View style={[styles.header, { paddingTop: insets.top + Space.xs }]}>
+        <View style={styles.headerRow}>
           <Pressable
             onPress={handleBack}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            style={styles.backBtn}
+            style={styles.headerIconBtn}
           >
-            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </Pressable>
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerTitle}>Seller Centre</Text>
-            <Text style={styles.headerSubtitle}>
+            <Text style={styles.headerTitle} numberOfLines={1}>Seller Centre</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
               {stats.total > 0 ? `${stats.total} auctions` : 'Manage your auctions'}
             </Text>
           </View>
           <Pressable
             onPress={navigateToCreate}
-            hitSlop={12}
+            hitSlop={6}
             accessibilityRole="button"
             accessibilityLabel="Create new auction"
-            style={styles.createBtn}
+            style={styles.headerCreateBtn}
           >
-            <Ionicons name="add" size={24} color={Colors.brand} />
+            <Ionicons name="add" size={22} color={Colors.brand} />
           </Pressable>
         </View>
       </View>
 
-      {/* Stats summary */}
+      {/* Stats summary — editorial hierarchy, live accent in danger */}
       {stats.total > 0 && (
         <View style={styles.statsRow}>
-          <StatPill label="Live" value={stats.live} accent={stats.live > 0} />
+          <StatPill label="Live" value={stats.live} accent={stats.live > 0} accentColor={Colors.danger} />
           <StatPill label="Scheduled" value={stats.scheduled} />
           <StatPill label="Sold" value={stats.sold} />
           <StatPill label="Unsold" value={stats.unsold} />
         </View>
       )}
 
-      {/* Tab bar */}
+      {/* Tab bar — underline indicator, active weight, count badges */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tabBar}
       >
-        {tabs.map((tab) => (
-          <Pressable
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-            onPress={() => setActiveTab(tab.key)}
-            accessibilityRole="tab"
-            accessibilityLabel={tab.label}
-            accessibilityState={{ selected: activeTab === tab.key }}
-          >
-            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-              {tab.label}
-            </Text>
-            {tab.count > 0 && (
-              <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
-                <Text style={[styles.tabBadgeText, activeTab === tab.key && styles.tabBadgeTextActive]}>
-                  {tab.count}
-                </Text>
-              </View>
-            )}
-          </Pressable>
-        ))}
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              style={styles.tab}
+              onPress={() => setActiveTab(tab.key)}
+              accessibilityRole="tab"
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {tab.label}
+              </Text>
+              {tab.count > 0 && (
+                <View style={[styles.tabBadge, isActive && styles.tabBadgeActive]}>
+                  <Text style={[styles.tabBadgeText, isActive && styles.tabBadgeTextActive]}>
+                    {tab.count}
+                  </Text>
+                </View>
+              )}
+              {isActive && <View style={styles.tabIndicator} />}
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
       {/* List */}
@@ -478,17 +480,24 @@ export default function SellerAuctionCentreScreen() {
         renderSectionFooter={() =>
           cursor && !loading ? (
             <View style={styles.loadMoreWrap}>
-              <Pressable
+              <AnimatedPressable
                 style={styles.loadMoreBtn}
                 onPress={() => void handleLoadMore()}
                 disabled={loadingMore}
+                scaleValue={0.97}
+                activeOpacity={0.9}
                 accessibilityRole="button"
                 accessibilityLabel="Load more auctions"
               >
-                <Text style={styles.loadMoreText}>
-                  {loadingMore ? 'Loading...' : 'Load More'}
-                </Text>
-              </Pressable>
+                {loadingMore ? (
+                  <Text style={styles.loadMoreText}>Loading…</Text>
+                ) : (
+                  <>
+                    <Ionicons name="chevron-down" size={14} color={Colors.brand} />
+                    <Text style={styles.loadMoreText}>Load more</Text>
+                  </>
+                )}
+              </AnimatedPressable>
             </View>
           ) : null
         }
@@ -516,19 +525,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  // ── Header — flagship language ──
   header: {
+    paddingBottom: Space.sm - 2,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.sm,
   },
-  headerTop: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.xs,
+    minHeight: 48,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
+  headerIconBtn: {
+    width: 36,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -536,24 +546,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
+    fontSize: 30,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: -0.3,
+    letterSpacing: -0.8,
   },
   headerSubtitle: {
+    fontFamily: Typography.family.regular,
     fontSize: 13,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_400Regular',
-    marginTop: 2,
+    marginTop: 0,
+    letterSpacing: -0.1,
   },
-  createBtn: {
-    width: 40,
-    height: 40,
+  headerCreateBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(244,240,232,0.10)',
+    marginLeft: 4,
   },
+  // ── Stats — editorial hierarchy ──
   statsRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
@@ -563,64 +577,59 @@ const styles = StyleSheet.create({
   statPill: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   statPillAccent: {
-    backgroundColor: 'rgba(244,63,94,0.08)',
+    backgroundColor: 'rgba(220,38,38,0.08)',
+    borderColor: 'rgba(220,38,38,0.20)',
   },
   statPillValue: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
-  },
-  statPillValueAccent: {
-    color: Colors.danger,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.4,
+    fontVariant: ['tabular-nums'],
   },
   statPillLabel: {
     fontSize: 10,
     color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.medium,
     marginTop: 2,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
-  statPillLabelAccent: {
-    color: Colors.danger,
-  },
+  // ── Tab bar — underline indicator ──
   tabBar: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
+    paddingBottom: 0,
     gap: Space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   tab: {
-    minWidth: 60,
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  tabActive: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingHorizontal: Space.sm + 2,
+    position: 'relative',
   },
   tabText: {
     fontSize: 14,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
   },
   tabTextActive: {
     color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   tabBadge: {
     minWidth: 18,
@@ -629,212 +638,221 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
   },
   tabBadgeActive: {
     backgroundColor: Colors.brand,
   },
   tabBadgeText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textMuted,
+    fontFamily: Typography.family.bold,
   },
   tabBadgeTextActive: {
-    color: '#fff',
+    color: Colors.textInverse,
   },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: Space.sm + 2,
+    right: Space.sm + 2,
+    height: 2,
+    backgroundColor: Colors.textPrimary,
+    borderRadius: 1,
+  },
+  // ── List ──
   listContent: {
     paddingHorizontal: Space.md,
+    paddingTop: Space.md,
     paddingBottom: Space.xl,
   },
+  // ── Card — elevated product card ──
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 12 },
+      android: { elevation: 4 },
+    }),
   },
   cardImageWrap: {
     position: 'relative',
   },
   cardImageContainer: {
     width: '100%',
-    height: 180,
+    height: 220,
   },
   cardImage: {
     width: '100%',
-    height: 180,
+    height: 220,
   },
   cardImagePlaceholder: {
     width: '100%',
-    height: 180,
+    height: 220,
     backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  urgencyPill: {
+  cardGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+  },
+  // Single state badge — top-left, no duplication
+  cardStateBadge: {
+    position: 'absolute',
+    top: Space.sm,
+    left: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  cardStateDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: Colors.danger,
+  },
+  cardStateText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.8,
+    color: '#FFFFFF',
+  },
+  // Urgency flag — top-right, only for live + final minutes
+  cardUrgencyFlag: {
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    backgroundColor: 'rgba(220,38,38,0.9)',
-    borderRadius: Radius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(220,38,38,0.92)',
   },
-  urgencyPillText: {
-    color: '#fff',
+  cardUrgencyText: {
+    color: '#FFFFFF',
     fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.6,
   },
-  soldPill: {
-    position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    backgroundColor: 'rgba(22,163,74,0.9)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  soldPillText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  unsoldPill: {
-    position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    backgroundColor: 'rgba(100,116,139,0.9)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  unsoldPillText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  cancelledPill: {
-    position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    backgroundColor: 'rgba(220,38,38,0.8)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  cancelledPillText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  // ── Card body ──
   cardBody: {
-    padding: Space.sm,
+    padding: Space.md,
     gap: Space.xs,
   },
   cardBrand: {
     fontSize: 11,
     color: Colors.textMuted,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 16,
     color: Colors.textPrimary,
-    fontFamily: 'Inter_600SemiBold',
-    lineHeight: 20,
+    fontFamily: Typography.family.semibold,
+    lineHeight: 21,
+    letterSpacing: -0.2,
   },
   cardMetaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: 2,
+    alignItems: 'flex-end',
+    marginTop: Space.xs,
   },
   cardPriceCol: {
     flex: 1,
+    gap: 1,
   },
   cardPriceLabel: {
     fontSize: 10,
     color: Colors.textMuted,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 0.5,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   cardPriceValue: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.textPrimary,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.4,
+    fontVariant: ['tabular-nums'],
     marginTop: 2,
   },
   cardPriceIze: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     marginTop: 1,
+    fontVariant: ['tabular-nums'],
   },
   cardStatusCol: {
     alignItems: 'flex-end',
-    gap: 3,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  statusBadgeLive: {
-    backgroundColor: 'rgba(220,38,38,0.1)',
-  },
-  statusBadgeUpcoming: {
-    backgroundColor: 'rgba(59,130,246,0.1)',
-  },
-  statusBadgeEnded: {
-    backgroundColor: Colors.surfaceAlt,
-  },
-  statusBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    color: Colors.textMuted,
-  },
-  statusBadgeTextLive: {
-    color: Colors.danger,
+    gap: 2,
   },
   cardBidCount: {
-    fontSize: 12,
+    fontSize: 13,
     color: Colors.textSecondary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
   },
   cardTimeLabel: {
     fontSize: 11,
     color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
   },
+  // ── Loading ──
   loadingWrap: {
     paddingTop: Space.md,
-    gap: Space.sm,
+    gap: Space.md,
   },
   loadingCard: {
     backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
+  // ── Load more ──
   loadMoreWrap: {
-    paddingVertical: Space.md,
+    paddingVertical: Space.lg,
     alignItems: 'center',
   },
   loadMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.lg,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
   loadMoreText: {
     fontSize: 14,
     color: Colors.brand,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
+  // ── Floating CTA ──
   floatingCta: {
     position: 'absolute',
     bottom: Space.lg,
