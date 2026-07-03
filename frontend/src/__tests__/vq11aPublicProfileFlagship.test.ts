@@ -254,14 +254,14 @@ describe('VQ-11A: Public Profile Flagship Elevation', () => {
 
     it('ShopTile shows sold marker for sold items', () => {
       const shopTile = readFile('components/profile/ProfileShopTile.tsx');
-      expect(shopTile).toContain('soldOverlay');
+      expect(shopTile).toContain('soldFade');
       expect(shopTile).toContain('Sold');
     });
 
     it('LookTile shows video badge and tag count', () => {
       const lookTile = readFile('components/profile/ProfileLookTile.tsx');
-      expect(lookTile).toContain('videoBadge');
-      expect(lookTile).toContain('tagCountBadge');
+      expect(lookTile).toContain('videoGlyph');
+      expect(lookTile).toContain('tagGlyph');
     });
 
     it('ReviewRow shows reviewer identity, rating, and listing context', () => {

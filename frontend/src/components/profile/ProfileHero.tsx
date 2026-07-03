@@ -8,6 +8,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, { useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
 import { CachedImage } from '../CachedImage';
@@ -27,9 +28,11 @@ const SURFACE_ALT = Colors.surfaceAlt;
 const BRAND = Colors.brand;
 const TEXT_INVERSE = Colors.textInverse;
 
-const COVER_HEIGHT = 168;
+const COVER_HEIGHT = 160;
 const AVATAR_SIZE = 84;
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
+const ACTION_RADIUS = 11;
+const ACTION_HEIGHT = 44;
 
 interface ProfileHeroProps {
   targetProfile: { displayName?: string | null; username?: string; bio?: string | null; location?: string | null; website?: string | null; createdAt?: string } | null | undefined;
@@ -65,8 +68,14 @@ function getInitials(name: string): string {
 }
 
 /**
- * Composed identity surface: cover → avatar at seam → identity → bio → context → proof → actions.
- * The avatar is absolutely positioned at the cover/canvas seam — it visibly occupies both.
+ * Authored identity surface — Instagram-density seam row + LinkedIn-clarity identity.
+ *
+ * Composition:
+ *   cover (edge-to-edge, gradient fades only)
+ *   seam row: avatar (left, overlapping cover) + 3 primary stats (right, vertically centred)
+ *   identity: full-width, left-aligned — name, @handle, bio, context, website
+ *   trust line: 4.9 ★ · 47 sold · Joined June 2026
+ *   actions: flat 11pt radius, restrained
  */
 export function ProfileHero({
   targetProfile,
@@ -101,16 +110,23 @@ export function ProfileHero({
   });
 
   const initials = getInitials(targetProfile?.displayName || displayUsername || 'Thryft');
+  const followerCount = stats?.followerCount ?? 0;
+  const followingCount = stats?.followingCount ?? 0;
+  const ratingValue = stats?.ratingAverage;
+  const hasRating = ratingValue !== null && ratingValue !== undefined && reviewCount > 0;
 
-  // Build one quiet context line: "London · Joined June 2026"
-  const contextParts: string[] = [];
-  if (targetProfile?.location) contextParts.push(targetProfile.location);
-  if (memberSince) contextParts.push(`Joined ${memberSince}`);
-  const contextLine = contextParts.join(' · ');
+  // Trust line: "4.9 ★ · 47 sold · Joined June 2026"
+  const trustParts: string[] = [];
+  if (hasRating && ratingValue !== null && ratingValue !== undefined) {
+    trustParts.push(`${ratingValue.toFixed(1)} ★`);
+  }
+  if (soldCount > 0) trustParts.push(`${soldCount} sold`);
+  if (memberSince) trustParts.push(`Joined ${memberSince}`);
+  const trustLine = trustParts.join(' · ');
 
   return (
     <View>
-      {/* ── Cover stage ── */}
+      {/* ── Cover stage — edge-to-edge media with gradient fades ── */}
       <Reanimated.View style={[styles.coverContainer, coverParallaxStyle]}>
         <FlagshipProfileMedia
           coverUri={displayCover}
@@ -120,13 +136,23 @@ export function ProfileHero({
           style={{ width: '100%' }}
           coverHeight={COVER_HEIGHT}
         />
-        {/* Subtle bottom scrim so avatar/controls read over bright covers */}
-        <View style={styles.coverScrim} />
+        {/* Top gradient fade for control contrast */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.12)', 'transparent']}
+          style={styles.coverTopFade}
+          pointerEvents="none"
+        />
+        {/* Subtle bottom fade around the avatar seam — no hard dark strip */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.10)']}
+          style={styles.coverBottomFade}
+          pointerEvents="none"
+        />
       </Reanimated.View>
 
       {/* ── Hero root — position relative for absolute avatar ── */}
       <View style={styles.heroRoot}>
-        {/* Avatar — absolutely positioned at the exact cover/canvas seam */}
+        {/* ── Seam row: avatar (left, overlapping) + 3 stats (right, vertically centred) ── */}
         <View style={styles.avatarAbsolute}>
           {displayAvatar ? (
             <CachedImage
@@ -142,31 +168,61 @@ export function ProfileHero({
           )}
         </View>
 
-        {/* Identity canvas — begins immediately after cover, paddingTop reserves avatar space */}
+        {/* Identity canvas — paddingTop reserves avatar space */}
         <View style={styles.identityCanvas}>
-          {/* Name + handle — aligned to the right of the avatar */}
-          <View style={styles.identityHeader}>
-            <View style={styles.identityTextCol}>
-              <Text style={styles.displayName} numberOfLines={2}>
-                {targetProfile?.displayName || displayUsername}
-              </Text>
-              <Text style={styles.username} numberOfLines={1}>
-                @{targetProfile?.username ?? 'thryft'}
-              </Text>
+          {/* Seam row — stats to the right of avatar, vertically centred */}
+          <View style={styles.seamRow}>
+            <View style={styles.seamSpacer} />
+            <View style={styles.seamStats}>
+              <Pressable
+                style={styles.seamStat}
+                onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('forsale'); }}
+                accessibilityRole="button"
+                accessibilityLabel={`${activeCount} for sale — view shop`}
+              >
+                <Text style={styles.seamStatValue}>{activeCount}</Text>
+                <Text style={styles.seamStatLabel} numberOfLines={1}>For sale</Text>
+              </Pressable>
+              <Pressable
+                style={styles.seamStat}
+                onPress={() => onOpenConnections('followers')}
+                accessibilityRole="button"
+                accessibilityLabel={`${followerCount} followers — view followers`}
+              >
+                <Text style={styles.seamStatValue}>{followerCount}</Text>
+                <Text style={styles.seamStatLabel} numberOfLines={1}>Followers</Text>
+              </Pressable>
+              <Pressable
+                style={styles.seamStat}
+                onPress={() => onOpenConnections('following')}
+                accessibilityRole="button"
+                accessibilityLabel={`${followingCount} following — view following`}
+              >
+                <Text style={styles.seamStatValue}>{followingCount}</Text>
+                <Text style={styles.seamStatLabel} numberOfLines={1}>Following</Text>
+              </Pressable>
             </View>
           </View>
 
-          {/* Biography — max 3 readable lines */}
+          {/* Identity — full-width, left-aligned, no avatar indentation */}
+          <Text style={styles.displayName} numberOfLines={2}>
+            {targetProfile?.displayName || displayUsername}
+          </Text>
+          <Text style={styles.username} numberOfLines={1}>
+            @{targetProfile?.username ?? 'thryft'}
+          </Text>
+
+          {/* Biography — concise, readable */}
           {targetProfile?.bio ? (
             <Text style={styles.bio} numberOfLines={3}>{targetProfile.bio}</Text>
           ) : null}
 
-          {/* One quiet context line — no icons */}
-          {contextLine ? (
-            <Text style={styles.contextLine} numberOfLines={1}>{contextLine}</Text>
+          {/* Context line — no icons */}
+          {targetProfile?.location ? (
+            <Text style={styles.contextLine} numberOfLines={1}>{targetProfile.location}</Text>
           ) : null}
 
-          {/* Website as one separate intentional link */}
+          {/* Website — separate intentional link */}
           {targetProfile?.website ? (
             <Pressable
               style={styles.websiteLink}
@@ -178,73 +234,41 @@ export function ProfileHero({
             </Pressable>
           ) : null}
 
-          {/* Compact proof system — stats + rating as one coherent block */}
-          <View style={styles.proofSystem}>
-            <Pressable
-              style={styles.proofCell}
-              onPress={activeCount > 0 ? () => { onTabSelect('Shop'); onShopSegmentSelect('forsale'); } : undefined}
-              disabled={activeCount === 0}
-              accessibilityRole={activeCount > 0 ? 'button' : undefined}
-              accessibilityLabel={`${activeCount} for sale`}
-            >
-              <Text style={styles.proofValue}>{activeCount}</Text>
-              <Text style={styles.proofLabel} numberOfLines={1}>For sale</Text>
-            </Pressable>
-            <Pressable
-              style={styles.proofCell}
-              onPress={soldCount > 0 ? () => { onTabSelect('Shop'); onShopSegmentSelect('sold'); } : undefined}
-              disabled={soldCount === 0}
-              accessibilityRole={soldCount > 0 ? 'button' : undefined}
-              accessibilityLabel={`${soldCount} sold`}
-            >
-              <Text style={styles.proofValue}>{soldCount}</Text>
-              <Text style={styles.proofLabel} numberOfLines={1}>Sold</Text>
-            </Pressable>
-            <Pressable
-              style={styles.proofCell}
-              onPress={(stats?.followerCount ?? 0) > 0 ? () => onOpenConnections('followers') : undefined}
-              disabled={(stats?.followerCount ?? 0) === 0}
-              accessibilityRole={(stats?.followerCount ?? 0) > 0 ? 'button' : undefined}
-              accessibilityLabel={`${stats?.followerCount ?? 0} followers`}
-            >
-              <Text style={styles.proofValue}>{stats?.followerCount ?? 0}</Text>
-              <Text style={styles.proofLabel} numberOfLines={1}>Followers</Text>
-            </Pressable>
-            <Pressable
-              style={styles.proofCell}
-              onPress={(stats?.followingCount ?? 0) > 0 ? () => onOpenConnections('following') : undefined}
-              disabled={(stats?.followingCount ?? 0) === 0}
-              accessibilityRole={(stats?.followingCount ?? 0) > 0 ? 'button' : undefined}
-              accessibilityLabel={`${stats?.followingCount ?? 0} following`}
-            >
-              <Text style={styles.proofValue}>{stats?.followingCount ?? 0}</Text>
-              <Text style={styles.proofLabel} numberOfLines={1}>Following</Text>
-            </Pressable>
-          </View>
-
-          {/* Rating — integrated trust line */}
-          {stats && stats.ratingAverage !== null && reviewCount > 0 ? (
-            <Pressable
-              style={styles.ratingRow}
-              onPress={() => onTabSelect('Reviews')}
-              accessibilityRole="button"
-              accessibilityLabel={`Rating ${stats.ratingAverage} out of 5, ${reviewCount} reviews. View reviews.`}
-            >
-              <Ionicons name="star" size={13} color={BRAND} />
-              <Text style={styles.ratingValue}>{stats.ratingAverage!.toFixed(1)}</Text>
-              <Text style={styles.ratingCount}>· {reviewCount} review{reviewCount !== 1 ? 's' : ''}</Text>
-              <Ionicons name="chevron-forward" size={11} color={MUTED} style={{ marginLeft: 2 }} />
-            </Pressable>
+          {/* Seller trust line — compact, no badge container */}
+          {trustLine ? (
+            <View style={styles.trustRow}>
+              {hasRating ? (
+                <Pressable
+                  onPress={() => onTabSelect('Reviews')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
+                >
+                  <Text style={styles.trustLink}>{ratingValue!.toFixed(1)} ★</Text>
+                </Pressable>
+              ) : null}
+              {hasRating && soldCount > 0 ? <Text style={styles.trustDot}> · </Text> : null}
+              {soldCount > 0 ? (
+                <Pressable
+                  onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('sold'); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${soldCount} sold — view sold items`}
+                >
+                  <Text style={styles.trustLink}>{soldCount} sold</Text>
+                </Pressable>
+              ) : null}
+              {(hasRating || soldCount > 0) && memberSince ? <Text style={styles.trustDot}> · </Text> : null}
+              {memberSince ? <Text style={styles.trustStatic}>Joined {memberSince}</Text> : null}
+            </View>
           ) : null}
         </View>
 
-        {/* Actions — restrained, correct 44pt targets */}
+        {/* Actions — flat 11pt radius, restrained, content-first */}
         {!isSelfProfile && viewer ? (
           <View style={styles.actionRow}>
             <AnimatedPressable
               style={[styles.followBtn, viewer.isFollowing ? styles.followingBtn : styles.followBtnActive, followPending && styles.btnDisabled]}
               onPress={onFollowToggle}
-              activeOpacity={0.85}
+              activeOpacity={0.88}
               disabled={followPending || isBlocked}
               hapticFeedback="light"
               accessibilityRole="button"
@@ -262,19 +286,19 @@ export function ProfileHero({
             <AnimatedPressable
               style={[styles.messageBtn, !viewer.canMessage && styles.btnDisabled]}
               onPress={onMessage}
-              activeOpacity={0.85}
+              activeOpacity={0.88}
               disabled={!viewer.canMessage}
               accessibilityRole="button"
               accessibilityLabel={viewer.canMessage ? 'Send message to seller' : 'Messaging unavailable'}
               accessibilityState={{ disabled: !viewer.canMessage }}
             >
-              <Ionicons name="chatbubble-outline" size={16} color={TEXT} />
+              <Ionicons name="chatbubble-outline" size={15} color={TEXT} />
               <Text style={styles.messageBtnText}>Message</Text>
             </AnimatedPressable>
             <AnimatedPressable
-              style={styles.secondaryActionBtn}
+              style={styles.moreBtn}
               onPress={onMore}
-              activeOpacity={0.85}
+              activeOpacity={0.88}
               accessibilityRole="button"
               accessibilityLabel="More options"
             >
@@ -288,17 +312,17 @@ export function ProfileHero({
             <AnimatedPressable
               style={styles.editProfileBtn}
               onPress={onEditProfile}
-              activeOpacity={0.85}
+              activeOpacity={0.88}
               accessibilityRole="button"
               accessibilityLabel="Edit profile"
             >
-              <Ionicons name="create-outline" size={16} color={TEXT} />
+              <Ionicons name="create-outline" size={15} color={TEXT} />
               <Text style={styles.editProfileBtnText}>Edit profile</Text>
             </AnimatedPressable>
             <AnimatedPressable
-              style={styles.secondaryActionBtn}
+              style={styles.moreBtn}
               onPress={onShare}
-              activeOpacity={0.85}
+              activeOpacity={0.88}
               accessibilityRole="button"
               accessibilityLabel="Share profile"
             >
@@ -325,16 +349,22 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: SURFACE_ALT,
   },
-  coverScrim: {
+  coverTopFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+  },
+  coverBottomFade: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 48,
-    backgroundColor: 'rgba(0,0,0,0.18)',
+    height: 40,
   },
 
-  // Hero root — position relative for absolute avatar
+  // Hero root
   heroRoot: {
     position: 'relative',
     backgroundColor: BG,
@@ -366,26 +396,48 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
 
-  // Identity canvas — begins immediately after cover, paddingTop reserves avatar space
+  // Identity canvas — paddingTop reserves avatar overlap space
   identityCanvas: {
     paddingHorizontal: Space.md,
     paddingTop: AVATAR_OVERLAP + Space.sm,
     paddingBottom: Space.sm,
   },
 
-  // Name + handle
-  identityHeader: {
+  // Seam row — avatar space on left, stats on right, vertically centred
+  seamRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginBottom: Space.xs,
+    alignItems: 'center',
+    marginBottom: Space.sm,
   },
-  identityTextCol: {
+  seamSpacer: {
+    width: AVATAR_SIZE + Space.sm,
+  },
+  seamStats: {
     flex: 1,
-    marginLeft: AVATAR_SIZE + Space.sm,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
+  seamStat: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: Space.lg,
+  },
+  seamStatValue: {
+    fontSize: 17,
+    fontFamily: Typography.family.bold,
+    color: TEXT,
+    letterSpacing: -0.3,
+  },
+  seamStatLabel: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+    marginTop: 1,
+  },
+
+  // Identity — full-width, left-aligned
   displayName: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: Typography.family.bold,
     color: TEXT,
     letterSpacing: -0.4,
@@ -395,6 +447,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Typography.family.regular,
     color: SECONDARY,
+    marginBottom: Space.xs,
   },
 
   // Biography
@@ -406,7 +459,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
 
-  // One quiet context line — no icons
+  // Context line — no icons
   contextLine: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
@@ -414,10 +467,10 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
 
-  // Website as separate intentional link
+  // Website
   websiteLink: {
     paddingVertical: 2,
-    marginBottom: Space.sm,
+    marginBottom: Space.xs,
   },
   websiteText: {
     fontSize: 13,
@@ -426,54 +479,31 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  // Compact proof system — 4 equal cells, no dividers
-  proofSystem: {
-    flexDirection: 'row',
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
-    marginBottom: Space.sm,
-  },
-  proofCell: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xs,
-  },
-  proofValue: {
-    fontSize: 17,
-    fontFamily: Typography.family.bold,
-    color: TEXT,
-    letterSpacing: -0.3,
-  },
-  proofLabel: {
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    color: MUTED,
-    marginTop: 2,
-  },
-
-  // Rating — integrated trust line
-  ratingRow: {
+  // Seller trust line — compact, no badge container
+  trustRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    flexWrap: 'wrap',
     paddingVertical: 2,
+    marginBottom: Space.xs,
   },
-  ratingValue: {
-    fontSize: 14,
-    fontFamily: Typography.family.bold,
+  trustLink: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
     color: TEXT,
   },
-  ratingCount: {
+  trustStatic: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: SECONDARY,
+    color: MUTED,
+  },
+  trustDot: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
   },
 
-  // Actions
+  // Actions — flat 11pt radius, restrained
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -484,8 +514,8 @@ const styles = StyleSheet.create({
   },
   followBtn: {
     flex: 1,
-    height: 44,
-    borderRadius: 22,
+    height: ACTION_HEIGHT,
+    borderRadius: ACTION_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -503,18 +533,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 44,
-    borderRadius: 22,
+    gap: 7,
+    height: ACTION_HEIGHT,
+    borderRadius: ACTION_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER,
     backgroundColor: BG,
   },
   messageBtnText: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
-  secondaryActionBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  moreBtn: {
+    width: ACTION_HEIGHT,
+    height: ACTION_HEIGHT,
+    borderRadius: ACTION_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER,
     backgroundColor: BG,
@@ -526,9 +556,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 44,
-    borderRadius: 22,
+    gap: 7,
+    height: ACTION_HEIGHT,
+    borderRadius: ACTION_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER,
     backgroundColor: BG,

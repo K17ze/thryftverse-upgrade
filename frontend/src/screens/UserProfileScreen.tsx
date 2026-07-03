@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -59,8 +59,6 @@ import { ProfileLookTile } from '../components/profile/ProfileLookTile';
 import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
-// FlagshipProfileMedia is used by ProfileHero; re-imported here for module graph visibility.
-import { FlagshipProfileMedia } from '../components/flagship';
 
 const AnimatedFlashList: any = Reanimated.createAnimatedComponent(FlashList);
 
@@ -74,7 +72,7 @@ const SURFACE_ALT = Colors.surfaceAlt;
 const BRAND = Colors.brand;
 const TEXT_INVERSE = Colors.textInverse;
 
-const COVER_HEIGHT = 168;
+const COVER_HEIGHT = 160;
 const GRID_GAP = 8;
 const CARD_ASPECT = 1.25;
 const LOOK_GAP = 2;
@@ -85,6 +83,13 @@ type Tab = 'Shop' | 'Looks' | 'Reviews';
 type ShopSegment = 'forsale' | 'sold';
 
 const PROFILE_WEB_BASE = 'https://thryftverse.app';
+
+function getCollapsedInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
 
 export default function UserProfileScreen({ navigation, route }: Props) {
   // ═══════════════════════════════════════════════════════════════════════
@@ -155,7 +160,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const soldCount = stats?.soldListingCount ?? 0;
   const lookCount = stats?.publishedLookCount ?? 0;
   const reviewCount = stats?.reviewCount ?? 0;
-  const hasRating = stats && stats.ratingAverage !== null && reviewCount > 0;
 
   // List data
   const listData = useMemo(() => {
@@ -283,29 +287,56 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const scrollOffsets = useRef<Record<string, number>>({});
   const currentDestination: string = activeTab === 'Shop' ? `${activeTab}-${shopSegment}` : activeTab;
   const listRef = useRef<any>(null);
+  const pendingRestore = useRef<string | null>(null);
+  const isListReady = useRef(false);
 
   const saveScrollOffset = useCallback((offset: number) => {
     scrollOffsets.current[currentDestination] = offset;
   }, [currentDestination]);
 
-  const restoreScrollForDestination = useCallback((dest: string) => {
-    const saved = scrollOffsets.current[dest];
-    if (saved !== undefined && saved > 0 && listRef.current) {
-      setTimeout(() => {
-        listRef.current?.scrollToOffset?.({ offset: saved, animated: false });
-      }, 0);
-    }
-  }, []);
-
-  // When tab/segment changes, restore the destination's previous scroll offset
+  // When destination changes, queue a restore — no setTimeout during render
   const prevDestination = useRef<string>(currentDestination);
-  if (prevDestination.current !== currentDestination) {
-    const prev = prevDestination.current;
-    prevDestination.current = currentDestination;
-    // Save the previous destination's offset is already done in scroll handler
-    // Restore the new destination's offset after the list remounts
-    setTimeout(() => restoreScrollForDestination(currentDestination), 50);
-  }
+  useEffect(() => {
+    if (prevDestination.current !== currentDestination) {
+      prevDestination.current = currentDestination;
+      isListReady.current = false;
+      pendingRestore.current = currentDestination;
+    }
+  }, [currentDestination]);
+
+  // Restore scroll position after the new list content is measured
+  const handleContentSizeChange = useCallback(() => {
+    if (pendingRestore.current && listRef.current) {
+      const dest = pendingRestore.current;
+      pendingRestore.current = null;
+      const saved = scrollOffsets.current[dest];
+      if (saved !== undefined && saved > 0) {
+        listRef.current.scrollToOffset?.({ offset: saved, animated: false });
+        // Update overlay state from the restored offset
+        const collapsedAt = COVER_HEIGHT - 60;
+        const stickyAt = stickyThreshold.value;
+        const shouldCollapse = saved > collapsedAt;
+        const shouldSticky = saved > stickyAt;
+        if (shouldCollapse !== collapsedShared.value) {
+          collapsedShared.value = shouldCollapse;
+          setCollapsedVisible(shouldCollapse);
+        }
+        if (shouldSticky !== stickyShared.value) {
+          stickyShared.value = shouldSticky;
+          setStickyRailVisible(shouldSticky);
+        }
+      } else {
+        // No previous offset — if currently collapsed, start at sticky threshold
+        if (collapsedShared.value) {
+          const stickyAt = stickyThreshold.value;
+          if (stickyAt < 9999 && listRef.current) {
+            listRef.current.scrollToOffset?.({ offset: stickyAt + 1, animated: false });
+          }
+        }
+      }
+    }
+    isListReady.current = true;
+  }, [stickyThreshold]);
 
   // Render item
   const renderItem = useCallback(({ item }: { item: ListingApiItem | LookApiItem | SellerReviewItem }): React.ReactElement | null => {
@@ -334,7 +365,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // CONDITIONAL RENDERS — loading, error, unavailable, blocked
   // ═══════════════════════════════════════════════════════════════════════
   if (isLoadingProfile && !targetProfile) {
-    return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} />;
+    return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab} />;
   }
   if (profileError && !targetProfile) {
     return <ProfileErrorState onRetry={() => publicProfileQuery.refetch()} onBack={() => navigation.goBack()} coverHeight={COVER_HEIGHT} />;
@@ -529,7 +560,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               contentFit="cover"
             />
           ) : (
-            <View style={[styles.collapsedAvatar, { backgroundColor: SURFACE_ALT }]} />
+            <View style={[styles.collapsedAvatar, styles.collapsedAvatarMonogram]}>
+              <Text style={styles.collapsedAvatarInitials}>
+                {getCollapsedInitials(targetProfile?.displayName || displayUsername)}
+              </Text>
+            </View>
           )}
           <Text style={styles.collapsedTitle} numberOfLines={1} ellipsizeMode="tail">
             {targetProfile?.displayName || displayUsername}
@@ -607,8 +642,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
-        key={`list-${activeTab}-${shopSegment}-${numColumns}`}
+        key={`list-${numColumns}`}
         estimatedItemSize={estimatedItemSize}
+        onContentSizeChange={handleContentSizeChange}
       />
 
       {/* Sheets */}
@@ -663,10 +699,8 @@ const styles = StyleSheet.create({
   topUtilityRow: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topUtilityRight: { flexDirection: 'row', gap: 8 },
   topUtilityIconBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.28)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
   collapsedHeader: {
@@ -678,10 +712,12 @@ const styles = StyleSheet.create({
   },
   collapsedBackBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
-  collapsedAvatar: { width: 28, height: 28, borderRadius: 14 },
+  collapsedAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  collapsedAvatarMonogram: { backgroundColor: SURFACE_ALT },
+  collapsedAvatarInitials: { fontSize: 12, fontFamily: Typography.family.bold, color: MUTED },
   collapsedTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: TEXT, letterSpacing: -0.3, flexShrink: 1 },
   collapsedRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  collapsedFollowBtn: { height: 32, paddingHorizontal: 14, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  collapsedFollowBtn: { height: 32, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth, borderColor: BORDER, backgroundColor: BG },
   collapsedFollowActiveBtn: { backgroundColor: BRAND },
   collapsedFollowText: { fontSize: 13, fontFamily: Typography.family.semibold, color: TEXT },

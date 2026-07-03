@@ -4,10 +4,6 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-  Easing,
-  useDerivedValue,
-  interpolateColor,
 } from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
 import { Space, Typography } from '../../theme/designTokens';
@@ -17,10 +13,10 @@ const BORDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
 const SECONDARY = Colors.textSecondary;
+const BRAND = Colors.brand;
 
 const TAB_HEIGHT = 44;
 const SPRING_CONFIG = { damping: 18, stiffness: 260, mass: 1 };
-const REDUCED_TIMING = 180;
 
 export type TabKey = 'Shop' | 'Looks' | 'Reviews';
 export type SegmentKey = 'forsale' | 'sold';
@@ -35,57 +31,55 @@ interface TabRailProps {
 /**
  * Canonical tab rail with one shared animated underline.
  * Used by both inline (list header) and sticky (overlay) states.
- * The underline moves between tab positions with a spring transition.
+ * Normal motion: spring (damping 18, stiffness 260).
+ * Reduced motion: instant assignment — no timing animation.
  */
 export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: TabRailProps) {
   const tabWidths = useRef<Record<string, number>>({});
+  const tabOffsets = useRef<Record<string, number>>({});
   const underlineTranslateX = useSharedValue(0);
   const underlineWidth = useSharedValue(0);
+
+  const measureTabs = useCallback(() => {
+    let offsetX = 0;
+    for (const tab of tabs) {
+      tabOffsets.current[tab.key] = offsetX;
+      offsetX += tabWidths.current[tab.key] ?? 0;
+    }
+  }, [tabs]);
+
+  const positionUnderline = useCallback((key: string) => {
+    measureTabs();
+    const tabW = tabWidths.current[key] ?? 0;
+    const offsetX = tabOffsets.current[key] ?? 0;
+    const underlineW = tabW * 0.4;
+    const targetX = offsetX + (tabW - underlineW) / 2;
+    if (reducedMotion) {
+      // Instant — no animation
+      underlineTranslateX.value = targetX;
+      underlineWidth.value = underlineW;
+    } else {
+      underlineTranslateX.value = withSpring(targetX, SPRING_CONFIG);
+      underlineWidth.value = withSpring(underlineW, SPRING_CONFIG);
+    }
+  }, [measureTabs, reducedMotion, underlineTranslateX, underlineWidth]);
 
   const onTabLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
     tabWidths.current[key] = e.nativeEvent.layout.width;
     if (key === activeKey) {
-      underlineWidth.value = reducedMotion
-        ? withTiming(e.nativeEvent.layout.width * 0.4, { duration: REDUCED_TIMING })
-        : withSpring(e.nativeEvent.layout.width * 0.4, SPRING_CONFIG);
+      positionUnderline(key);
     }
-  }, [activeKey, underlineWidth, reducedMotion]);
+  }, [activeKey, positionUnderline]);
 
   const handlePress = useCallback((key: TabKey) => {
-    const width = tabWidths.current[key] ?? 0;
-    // Calculate the center of the pressed tab to position the underline
-    let offsetX = 0;
-    for (const tab of tabs) {
-      if (tab.key === key) break;
-      offsetX += tabWidths.current[tab.key] ?? 0;
-    }
-    const tabW = tabWidths.current[key] ?? 0;
-    const underlineW = tabW * 0.4;
-    underlineTranslateX.value = reducedMotion
-      ? withTiming(offsetX + (tabW - underlineW) / 2, { duration: REDUCED_TIMING })
-      : withSpring(offsetX + (tabW - underlineW) / 2, SPRING_CONFIG);
-    underlineWidth.value = reducedMotion
-      ? withTiming(underlineW, { duration: REDUCED_TIMING })
-      : withSpring(underlineW, SPRING_CONFIG);
+    positionUnderline(key);
     onChange(key);
-  }, [tabs, onChange, underlineTranslateX, underlineWidth, reducedMotion]);
+  }, [positionUnderline, onChange]);
 
-  // Initialize underline position on mount / activeKey change
+  // Initialize/update underline position on activeKey change
   React.useEffect(() => {
-    let offsetX = 0;
-    for (const tab of tabs) {
-      if (tab.key === activeKey) break;
-      offsetX += tabWidths.current[tab.key] ?? 0;
-    }
-    const tabW = tabWidths.current[activeKey] ?? 0;
-    const underlineW = tabW * 0.4;
-    underlineTranslateX.value = reducedMotion
-      ? withTiming(offsetX + (tabW - underlineW) / 2, { duration: REDUCED_TIMING })
-      : withSpring(offsetX + (tabW - underlineW) / 2, SPRING_CONFIG);
-    underlineWidth.value = reducedMotion
-      ? withTiming(underlineW, { duration: REDUCED_TIMING })
-      : withSpring(underlineW, SPRING_CONFIG);
-  }, [activeKey, tabs, underlineTranslateX, underlineWidth, reducedMotion]);
+    positionUnderline(activeKey);
+  }, [activeKey, positionUnderline]);
 
   const underlineStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: underlineTranslateX.value }],
@@ -107,6 +101,7 @@ export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: Ta
             accessibilityLabel={`${tab.label} tab${tab.count !== undefined ? `, ${tab.count} items` : ''}`}
           >
             <View style={styles.tabContent}>
+              {/* Fixed-width label container to prevent layout shift on weight change */}
               <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]} numberOfLines={1}>
                 {tab.label}
               </Text>
@@ -123,61 +118,61 @@ export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: Ta
   );
 }
 
-interface SegmentedControlProps {
-  segments: { key: SegmentKey; label: string }[];
-  activeKey: SegmentKey;
-  onChange: (key: SegmentKey) => void;
+interface SegmentedControlProps<K extends string = SegmentKey> {
+  segments: { key: K; label: string }[];
+  activeKey: K;
+  onChange: (key: K) => void;
   reducedMotion?: boolean;
 }
 
 /**
  * Editorial text segment for For sale / Sold. Quieter equivalent to TabRail.
- * Uses a simple underline that fades between segments.
+ * Uses a simple underline that moves between segments.
+ * Reduced motion: instant assignment.
  */
-export function SegmentedControl({ segments, activeKey, onChange, reducedMotion = false }: SegmentedControlProps) {
+export function SegmentedControl<K extends string = SegmentKey>({ segments, activeKey, onChange, reducedMotion = false }: SegmentedControlProps<K>) {
   const segWidths = useRef<Record<string, number>>({});
+  const segOffsets = useRef<Record<string, number>>({});
   const segUnderlineX = useSharedValue(0);
   const segUnderlineW = useSharedValue(0);
+
+  const measureSegments = useCallback(() => {
+    let offsetX = 0;
+    for (const seg of segments) {
+      segOffsets.current[seg.key] = offsetX;
+      offsetX += segWidths.current[seg.key] ?? 0;
+    }
+  }, [segments]);
+
+  const positionSegUnderline = useCallback((key: string) => {
+    measureSegments();
+    const segW = segWidths.current[key] ?? 0;
+    const offsetX = segOffsets.current[key] ?? 0;
+    if (reducedMotion) {
+      // Instant — no animation
+      segUnderlineX.value = offsetX;
+      segUnderlineW.value = segW;
+    } else {
+      segUnderlineX.value = withSpring(offsetX, SPRING_CONFIG);
+      segUnderlineW.value = withSpring(segW, SPRING_CONFIG);
+    }
+  }, [measureSegments, reducedMotion, segUnderlineX, segUnderlineW]);
 
   const onSegLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
     segWidths.current[key] = e.nativeEvent.layout.width;
     if (key === activeKey) {
-      segUnderlineW.value = reducedMotion
-        ? withTiming(e.nativeEvent.layout.width, { duration: REDUCED_TIMING })
-        : withSpring(e.nativeEvent.layout.width, SPRING_CONFIG);
+      positionSegUnderline(key);
     }
-  }, [activeKey, segUnderlineW, reducedMotion]);
+  }, [activeKey, positionSegUnderline]);
 
-  const handleSegPress = useCallback((key: SegmentKey) => {
-    let offsetX = 0;
-    for (const seg of segments) {
-      if (seg.key === key) break;
-      offsetX += segWidths.current[seg.key] ?? 0;
-    }
-    const segW = segWidths.current[key] ?? 0;
-    segUnderlineX.value = reducedMotion
-      ? withTiming(offsetX, { duration: REDUCED_TIMING })
-      : withSpring(offsetX, SPRING_CONFIG);
-    segUnderlineW.value = reducedMotion
-      ? withTiming(segW, { duration: REDUCED_TIMING })
-      : withSpring(segW, SPRING_CONFIG);
+  const handleSegPress = useCallback((key: K) => {
+    positionSegUnderline(key);
     onChange(key);
-  }, [segments, onChange, segUnderlineX, segUnderlineW, reducedMotion]);
+  }, [positionSegUnderline, onChange]);
 
   React.useEffect(() => {
-    let offsetX = 0;
-    for (const seg of segments) {
-      if (seg.key === activeKey) break;
-      offsetX += segWidths.current[seg.key] ?? 0;
-    }
-    const segW = segWidths.current[activeKey] ?? 0;
-    segUnderlineX.value = reducedMotion
-      ? withTiming(offsetX, { duration: REDUCED_TIMING })
-      : withSpring(offsetX, SPRING_CONFIG);
-    segUnderlineW.value = reducedMotion
-      ? withTiming(segW, { duration: REDUCED_TIMING })
-      : withSpring(segW, SPRING_CONFIG);
-  }, [activeKey, segments, segUnderlineX, segUnderlineW, reducedMotion]);
+    positionSegUnderline(activeKey);
+  }, [activeKey, positionSegUnderline]);
 
   const segUnderlineStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: segUnderlineX.value }],
@@ -223,22 +218,24 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: 5,
   },
   tabLabel: {
     fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: MUTED,
+    fontFamily: Typography.family.medium,
+    color: SECONDARY,
+    letterSpacing: -0.2,
   },
   tabLabelActive: {
     fontFamily: Typography.family.bold,
     color: TEXT,
   },
   tabCount: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: Typography.family.regular,
     color: MUTED,
+    minWidth: 14,
   },
   tabCountActive: {
     color: SECONDARY,
@@ -252,22 +249,22 @@ const styles = StyleSheet.create({
   },
   segmentControl: {
     flexDirection: 'row',
-    gap: Space.lg,
+    backgroundColor: BG,
     position: 'relative',
   },
   segment: {
-    paddingVertical: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: Space.md,
   },
   segmentLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: Typography.family.regular,
     color: MUTED,
+    letterSpacing: -0.1,
   },
   segmentLabelActive: {
-    color: TEXT,
     fontFamily: Typography.family.semibold,
+    color: TEXT,
   },
   segmentUnderline: {
     position: 'absolute',

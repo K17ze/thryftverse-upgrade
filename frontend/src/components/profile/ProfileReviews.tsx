@@ -14,6 +14,13 @@ const SECONDARY = Colors.textSecondary;
 const SURFACE_ALT = Colors.surfaceAlt;
 const BRAND = Colors.brand;
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
 interface ReviewSummaryBlockProps {
   summary: SellerReviewSummary;
 }
@@ -44,7 +51,6 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
         <View style={styles.reviewSummaryDist}>
           {[5, 4, 3, 2, 1].map((star) => {
             const count = distMap.get(star) ?? 0;
-            // Use count / totalReviews for accurate proportions
             const pct = total > 0 ? count / total : 0;
             return (
               <View key={star} style={styles.distRow}>
@@ -72,7 +78,9 @@ interface ProfileReviewRowProps {
 
 /**
  * Review row — compact reviewer identity, strong comment readability,
- * listing context visually subordinate. Reviewer and listing are interactive.
+ * listing context visually subordinate. The full reviewer identity region
+ * (avatar + name + date) is tappable, not just the avatar.
+ * Listing context is quietly tappable with pressed feedback.
  */
 export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   item,
@@ -85,32 +93,30 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
     : '';
   const canOpenReviewer = Boolean(item.reviewer.id && onOpenReviewer);
   const canOpenListing = Boolean(item.listing?.id && onOpenListing);
+  const reviewerInitials = getInitials(reviewerName);
 
   return (
     <View style={styles.reviewRow}>
-      <View style={styles.reviewHeader}>
-        <Pressable
-          style={styles.reviewAvatarWrap}
-          onPress={() => canOpenReviewer && onOpenReviewer!(item.reviewer.id!)}
-          disabled={!canOpenReviewer}
-          accessibilityRole={canOpenReviewer ? 'button' : undefined}
-          accessibilityLabel={canOpenReviewer ? `Open ${reviewerName}'s profile` : undefined}
-        >
-          {item.reviewer.avatar ? (
-            <CachedImage
-              uri={item.reviewer.avatar}
-              style={styles.reviewAvatar}
-              containerStyle={{ width: 36, height: 36, borderRadius: 18 }}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={[styles.reviewAvatar, styles.reviewAvatarFallback]}>
-              <Text style={styles.reviewAvatarInitials}>
-                {reviewerName.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-        </Pressable>
+      {/* Full reviewer identity region — tappable as one unit */}
+      <Pressable
+        style={styles.reviewHeader}
+        onPress={() => canOpenReviewer && onOpenReviewer!(item.reviewer.id!)}
+        disabled={!canOpenReviewer}
+        accessibilityRole={canOpenReviewer ? 'button' : undefined}
+        accessibilityLabel={canOpenReviewer ? `Open ${reviewerName}'s profile` : undefined}
+      >
+        {item.reviewer.avatar ? (
+          <CachedImage
+            uri={item.reviewer.avatar}
+            style={styles.reviewAvatar}
+            containerStyle={{ width: 36, height: 36, borderRadius: 18 }}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[styles.reviewAvatar, styles.reviewAvatarFallback]}>
+            <Text style={styles.reviewAvatarInitials}>{reviewerInitials}</Text>
+          </View>
+        )}
         <View style={styles.reviewIdentityCol}>
           <Text style={styles.reviewName} numberOfLines={1}>{reviewerName}</Text>
           <Text style={styles.reviewDate}>{dateText}</Text>
@@ -119,11 +125,11 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
           <Ionicons name="star" size={12} color={BRAND} />
           <Text style={styles.reviewRatingValue}>{item.rating}</Text>
         </View>
-      </View>
+      </Pressable>
       {item.comment ? <Text style={styles.reviewComment}>{item.comment}</Text> : null}
       {item.listing ? (
         <Pressable
-          style={styles.reviewListingContext}
+          style={({ pressed }) => [styles.reviewListingContext, pressed && styles.reviewListingPressed]}
           onPress={() => canOpenListing && onOpenListing!(item.listing!.id!)}
           disabled={!canOpenListing}
           accessibilityRole={canOpenListing ? 'button' : undefined}
@@ -170,11 +176,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
   },
+  // Full reviewer identity region — tappable as one unit
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
-  reviewAvatarWrap: {},
   reviewAvatar: { width: 36, height: 36, borderRadius: 18 },
   reviewAvatarFallback: { backgroundColor: SURFACE_ALT, alignItems: 'center', justifyContent: 'center' },
-  reviewAvatarInitials: { fontSize: 14, fontFamily: Typography.family.bold, color: SECONDARY },
+  reviewAvatarInitials: { fontSize: 13, fontFamily: Typography.family.bold, color: SECONDARY },
   reviewIdentityCol: { flex: 1 },
   reviewName: { fontSize: 14, fontFamily: Typography.family.semibold, color: TEXT },
   reviewDate: { fontSize: 12, fontFamily: Typography.family.regular, color: MUTED, marginTop: 1 },
@@ -182,6 +188,7 @@ const styles = StyleSheet.create({
   reviewRatingValue: { fontSize: 13, fontFamily: Typography.family.bold, color: TEXT },
   reviewComment: { fontSize: 14, fontFamily: Typography.family.regular, color: TEXT, lineHeight: 20 },
   reviewListingContext: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingVertical: 4 },
+  reviewListingPressed: { opacity: 0.6 },
   reviewListingThumb: { width: 28, height: 28, borderRadius: 4 },
   reviewListingTitle: { flex: 1, fontSize: 12, fontFamily: Typography.family.regular, color: SECONDARY },
 });
