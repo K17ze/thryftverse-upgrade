@@ -51,9 +51,11 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
     expect(src).toContain('FlagshipProfileMedia');
   });
 
-  it('UserProfileScreen imports FlagshipProfileMedia', () => {
-    const src = readSrc('screens/UserProfileScreen.tsx');
-    expect(src).toContain('FlagshipProfileMedia');
+  it('UserProfileScreen uses ProfileHero which renders FlagshipProfileMedia', () => {
+    const heroSrc = readSrc('components/profile/ProfileHero.tsx');
+    expect(heroSrc).toContain('FlagshipProfileMedia');
+    const screenSrc = readSrc('screens/UserProfileScreen.tsx');
+    expect(screenSrc).toContain('ProfileHero');
   });
 
   it('EditProfileScreen imports FlagshipProfileMedia', () => {

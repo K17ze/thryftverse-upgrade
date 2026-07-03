@@ -1,14 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
-import { Colors } from '../../constants/colors';
+import { Typography } from '../../theme/designTokens';
 import type { LookApiItem } from '../../services/looksApi';
 import { isVideoUri } from '../../utils/media';
-
-const MUTED = Colors.textMuted;
 
 interface ProfileLookTileProps {
   item: LookApiItem;
@@ -19,9 +16,10 @@ interface ProfileLookTileProps {
 }
 
 /**
- * Look tile — 3:4 portrait, media-first, no permanent title stack.
- * Dense editorial portfolio tile, visually distinct from Shop.
- * Video marker + tag count only where relevant.
+ * Look tile — 3:4 portrait, media-first fashion portfolio tile.
+ * No card container, no title stack, minimal radius (2pt).
+ * Consistent cover crop. Small video glyph. Small tagged-piece indicator.
+ * Never displays two badges when one visual signal can communicate both.
  */
 const ProfileLookTile = React.memo(function ProfileLookTile({
   item,
@@ -31,10 +29,12 @@ const ProfileLookTile = React.memo(function ProfileLookTile({
   gap,
 }: ProfileLookTileProps) {
   const isVideo = isVideoUri(item.mediaUrl);
+  const hasTags = item.tags && item.tags.length > 0;
+
   return (
     <AnimatedPressable
       style={[styles.lookCard, { width: cardWidth, marginBottom: gap }]}
-      activeOpacity={0.9}
+      activeOpacity={0.92}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Open Look ${item.title}`}
@@ -50,15 +50,14 @@ const ProfileLookTile = React.memo(function ProfileLookTile({
           containerStyle={{ width: '100%', height: '100%', borderRadius: 2 }}
           contentFit="cover"
         />
+        {/* Single small badge bottom-right — video glyph takes priority,
+            tagged indicator only when no video. One visual signal. */}
         {isVideo ? (
-          <View style={styles.videoBadge}>
-            <Ionicons name="play" size={10} color="#fff" />
+          <View style={styles.videoGlyph}>
+            <View style={styles.videoPlayTriangle} />
           </View>
-        ) : null}
-        {item.tags && item.tags.length > 0 ? (
-          <View style={styles.tagCountBadge}>
-            <Text style={styles.tagCountText}>{item.tags.length}</Text>
-          </View>
+        ) : hasTags ? (
+          <View style={styles.tagGlyph} />
         ) : null}
       </SharedTransitionView>
     </AnimatedPressable>
@@ -69,19 +68,43 @@ const styles = StyleSheet.create({
   lookCard: {},
   lookImageWrap: { borderRadius: 2, overflow: 'hidden', position: 'relative' },
   lookImage: { width: '100%', height: '100%' },
-  videoBadge: {
-    position: 'absolute', top: 6, right: 6,
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center', justifyContent: 'center',
+  // Small video glyph — white circle with play triangle, subtle shadow
+  videoGlyph: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  tagCountBadge: {
-    position: 'absolute', bottom: 6, right: 6,
-    minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center', justifyContent: 'center',
+  videoPlayTriangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+    borderLeftColor: 'rgba(20,20,20,0.85)',
+    marginLeft: 2,
   },
-  tagCountText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#fff' },
+  // Small tagged-piece indicator — subtle dark dot, no text
+  tagGlyph: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
 });
 
 export { ProfileLookTile };

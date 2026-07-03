@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -42,7 +42,6 @@ import {
   useBlockMutation,
   useReportUserMutation,
 } from '../platform/server';
-import { isVideoUri } from '../utils/media';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { RootStackParamList } from '../navigation/types';
@@ -51,8 +50,6 @@ import type { LookApiItem } from '../services/looksApi';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-
-// Modular profile components
 import { ProfileSkeleton } from '../components/profile/ProfileSkeleton';
 import { ProfileErrorState, ProfileUnavailableState, ProfileBlockedState } from '../components/profile/ProfileStates';
 import { ProfileHero } from '../components/profile/ProfileHero';
@@ -62,16 +59,6 @@ import { ProfileLookTile } from '../components/profile/ProfileLookTile';
 import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
-
-// Re-import for source-contract visibility (tests check UserProfileScreen.tsx for these tokens).
-// The actual implementations live in the modular components above.
-import { FlagshipProfileMedia } from '../components/flagship';
-import { NativeSheet } from '../platform/native';
-
-// ReportSheetContent and REPORT_REASONS live in ProfileSheets.tsx.
-// Re-exported here for source-contract visibility (tests check this file for these tokens).
-export { ProfileReportSheet as ReportSheetContent } from '../components/profile/ProfileSheets';
-const REPORT_REASONS_REFERENCE = 'REPORT_REASONS';
 
 const AnimatedFlashList: any = Reanimated.createAnimatedComponent(FlashList);
 
@@ -85,17 +72,24 @@ const SURFACE_ALT = Colors.surfaceAlt;
 const BRAND = Colors.brand;
 const TEXT_INVERSE = Colors.textInverse;
 
-const COVER_HEIGHT = 176;
+const COVER_HEIGHT = 160;
 const GRID_GAP = 8;
 const CARD_ASPECT = 1.25;
 const LOOK_GAP = 2;
 const LOOK_COLS = 3;
-const COLLAPSED_HEADER_H = 50;
+const COLLAPSED_BAR_HEIGHT = 50;
 
 type Tab = 'Shop' | 'Looks' | 'Reviews';
 type ShopSegment = 'forsale' | 'sold';
 
 const PROFILE_WEB_BASE = 'https://thryftverse.app';
+
+function getCollapsedInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
 
 export default function UserProfileScreen({ navigation, route }: Props) {
   // ═══════════════════════════════════════════════════════════════════════
@@ -166,7 +160,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const soldCount = stats?.soldListingCount ?? 0;
   const lookCount = stats?.publishedLookCount ?? 0;
   const reviewCount = stats?.reviewCount ?? 0;
-  const hasRating = stats && stats.ratingAverage !== null && reviewCount > 0;
 
   // List data
   const listData = useMemo(() => {
@@ -204,6 +197,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
+      runOnJS(saveScrollOffset)(e.contentOffset.y);
       const collapsedAt = COVER_HEIGHT - 60;
       if (e.contentOffset.y > collapsedAt && !collapsedShared.value) {
         collapsedShared.value = true;
@@ -286,15 +280,63 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const openConnections = useCallback((segment: 'followers' | 'following') => setConnectionsSheet({ visible: true, segment }), []);
   const handleLoadMore = useCallback(() => { if (hasNextPage && !isFetchingNextPage) activeQuery.fetchNextPage(); }, [hasNextPage, isFetchingNextPage, activeQuery]);
   const handleRefresh = useCallback(() => { activeQuery.refetch(); if (!isSelfProfile) publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery, isSelfProfile]);
-  const onTabRailLayout = useCallback((y: number) => { stickyThreshold.value = y - (insets.top + COLLAPSED_HEADER_H); }, [insets.top]);
+  const onTabRailLayout = useCallback((y: number) => { stickyThreshold.value = y - (insets.top + COLLAPSED_BAR_HEIGHT); }, [insets.top]);
 
-  // Reset overlays on tab switch
+  // ── Per-destination scroll offset preservation ──
+  // No overlay reset on tab switch — overlay state is derived from the real scroll offset.
+  const scrollOffsets = useRef<Record<string, number>>({});
+  const currentDestination: string = activeTab === 'Shop' ? `${activeTab}-${shopSegment}` : activeTab;
+  const listRef = useRef<any>(null);
+  const pendingRestore = useRef<string | null>(null);
+  const isListReady = useRef(false);
+
+  const saveScrollOffset = useCallback((offset: number) => {
+    scrollOffsets.current[currentDestination] = offset;
+  }, [currentDestination]);
+
+  // When destination changes, queue a restore — no setTimeout during render
+  const prevDestination = useRef<string>(currentDestination);
   useEffect(() => {
-    setStickyRailVisible(false);
-    setCollapsedVisible(false);
-    collapsedShared.value = false;
-    stickyShared.value = false;
-  }, [activeTab, shopSegment]);
+    if (prevDestination.current !== currentDestination) {
+      prevDestination.current = currentDestination;
+      isListReady.current = false;
+      pendingRestore.current = currentDestination;
+    }
+  }, [currentDestination]);
+
+  // Restore scroll position after the new list content is measured
+  const handleContentSizeChange = useCallback(() => {
+    if (pendingRestore.current && listRef.current) {
+      const dest = pendingRestore.current;
+      pendingRestore.current = null;
+      const saved = scrollOffsets.current[dest];
+      if (saved !== undefined && saved > 0) {
+        listRef.current.scrollToOffset?.({ offset: saved, animated: false });
+        // Update overlay state from the restored offset
+        const collapsedAt = COVER_HEIGHT - 60;
+        const stickyAt = stickyThreshold.value;
+        const shouldCollapse = saved > collapsedAt;
+        const shouldSticky = saved > stickyAt;
+        if (shouldCollapse !== collapsedShared.value) {
+          collapsedShared.value = shouldCollapse;
+          setCollapsedVisible(shouldCollapse);
+        }
+        if (shouldSticky !== stickyShared.value) {
+          stickyShared.value = shouldSticky;
+          setStickyRailVisible(shouldSticky);
+        }
+      } else {
+        // No previous offset — if currently collapsed, start at sticky threshold
+        if (collapsedShared.value) {
+          const stickyAt = stickyThreshold.value;
+          if (stickyAt < 9999 && listRef.current) {
+            listRef.current.scrollToOffset?.({ offset: stickyAt + 1, animated: false });
+          }
+        }
+      }
+    }
+    isListReady.current = true;
+  }, [stickyThreshold]);
 
   // Render item
   const renderItem = useCallback(({ item }: { item: ListingApiItem | LookApiItem | SellerReviewItem }): React.ReactElement | null => {
@@ -304,7 +346,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     if (activeTab === 'Looks') {
       return <ProfileLookTile item={item as LookApiItem} onPress={() => navigation.navigate('LookDetail', { lookId: (item as LookApiItem).id })} cardWidth={lookTileWidth} cardHeight={lookTileHeight} gap={LOOK_GAP} />;
     }
-    return <ProfileReviewRow item={item as SellerReviewItem} />;
+    return <ProfileReviewRow item={item as SellerReviewItem} onOpenReviewer={(uid) => navigation.push('UserProfile', { userId: uid })} onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })} />;
   }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight]);
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -317,25 +359,20 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // State labels — rendered by ProfileStates subcomponents:
   // "Profile unavailable" (ProfileUnavailableState)
   // "You've been blocked" (ProfileBlockedState)
-  // ReportSheetContent + REPORT_REASONS (ProfileReportSheet)
   // canMessage gates the Message button (ProfileHero)
-  // accessibilityRole="tab" + accessibilityState used by TabRail and SegmentedControl
-  // accessibilityLabel with "message" on the Message button (ProfileHero)
-  // SOLD label rendered by ProfileShopTile soldOverlay
-  // styles.btnDisabled used by collapsed header follow button when disabled
 
   // ═══════════════════════════════════════════════════════════════════════
   // CONDITIONAL RENDERS — loading, error, unavailable, blocked
   // ═══════════════════════════════════════════════════════════════════════
   if (isLoadingProfile && !targetProfile) {
-    return <ProfileSkeleton coverHeight={COVER_HEIGHT} />;
+    return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab} />;
   }
   if (profileError && !targetProfile) {
-    return <ProfileErrorState onRetry={() => publicProfileQuery.refetch()} coverHeight={COVER_HEIGHT} />;
+    return <ProfileErrorState onRetry={() => publicProfileQuery.refetch()} onBack={() => navigation.goBack()} coverHeight={COVER_HEIGHT} />;
   }
   if (!targetProfile && !isSelfProfile) {
     // Renders "Profile unavailable" state
-    return <ProfileUnavailableState coverHeight={COVER_HEIGHT} />;
+    return <ProfileUnavailableState onBack={() => navigation.goBack()} coverHeight={COVER_HEIGHT} />;
   }
   if (isBlockedByTarget) {
     // Renders "You've been blocked" state
@@ -386,6 +423,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           ]}
           activeKey={activeTab}
           onChange={(k) => setActiveTab(k as Tab)}
+          reducedMotion={reducedMotion}
         />
       </View>
 
@@ -395,6 +433,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             segments={[{ key: 'forsale', label: 'For sale' }, { key: 'sold', label: 'Sold' }]}
             activeKey={shopSegment}
             onChange={(k) => setShopSegment(k as ShopSegment)}
+            reducedMotion={reducedMotion}
           />
         </View>
       ) : null}
@@ -498,9 +537,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </Reanimated.View>
       </View>
 
-      {/* Collapsed header — pointerEvents controlled by visibility */}
+      {/* Collapsed header — total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
       <Reanimated.View
-        style={[styles.collapsedHeader, { paddingTop: insets.top }, collapsedHeaderStyle, collapsedHeaderShadowStyle]}
+        style={[styles.collapsedHeader, { height: insets.top + COLLAPSED_BAR_HEIGHT, paddingTop: insets.top }, collapsedHeaderStyle, collapsedHeaderShadowStyle]}
         pointerEvents={collapsedVisible ? 'auto' : 'none'}
       >
         <AnimatedPressable
@@ -521,7 +560,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               contentFit="cover"
             />
           ) : (
-            <View style={[styles.collapsedAvatar, { backgroundColor: SURFACE_ALT }]} />
+            <View style={[styles.collapsedAvatar, styles.collapsedAvatarMonogram]}>
+              <Text style={styles.collapsedAvatarInitials}>
+                {getCollapsedInitials(targetProfile?.displayName || displayUsername)}
+              </Text>
+            </View>
           )}
           <Text style={styles.collapsedTitle} numberOfLines={1} ellipsizeMode="tail">
             {targetProfile?.displayName || displayUsername}
@@ -556,7 +599,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
       {/* Sticky tab rail — external overlay, appears when original scrolls past */}
       <Reanimated.View
-        style={[styles.stickyRailWrap, { top: insets.top + COLLAPSED_HEADER_H }, stickyRailStyle]}
+        style={[styles.stickyRailWrap, { top: insets.top + COLLAPSED_BAR_HEIGHT }, stickyRailStyle]}
         pointerEvents={stickyRailVisible ? 'auto' : 'none'}
       >
         <TabRail
@@ -567,6 +610,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           ]}
           activeKey={activeTab}
           onChange={(k) => setActiveTab(k as Tab)}
+          reducedMotion={reducedMotion}
         />
         {activeTab === 'Shop' ? (
           <View style={styles.stickySegmentWrap}>
@@ -574,6 +618,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               segments={[{ key: 'forsale', label: 'For sale' }, { key: 'sold', label: 'Sold' }]}
               activeKey={shopSegment}
               onChange={(k) => setShopSegment(k as ShopSegment)}
+              reducedMotion={reducedMotion}
             />
           </View>
         ) : null}
@@ -581,6 +626,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
       {/* Content list — cover scrolls naturally as first header item */}
       <AnimatedFlashList
+        ref={listRef}
         data={listData as (ListingApiItem | LookApiItem | SellerReviewItem)[]}
         renderItem={renderItem as any}
         keyExtractor={(item: ListingApiItem | LookApiItem | SellerReviewItem, index: number) => (item as { id?: string }).id ?? `item-${index}`}
@@ -596,8 +642,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
-        key={`list-${activeTab}-${shopSegment}-${numColumns}`}
+        key={`list-${numColumns}`}
         estimatedItemSize={estimatedItemSize}
+        onContentSizeChange={handleContentSizeChange}
       />
 
       {/* Sheets */}
@@ -652,25 +699,25 @@ const styles = StyleSheet.create({
   topUtilityRow: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topUtilityRight: { flexDirection: 'row', gap: 8 },
   topUtilityIconBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.28)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
   collapsedHeader: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
     flexDirection: 'row', alignItems: 'center',
-    paddingBottom: 10, paddingHorizontal: 8, height: COLLAPSED_HEADER_H,
+    paddingHorizontal: 8, height: COLLAPSED_BAR_HEIGHT,
     backgroundColor: BG, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 4,
   },
   collapsedBackBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
-  collapsedAvatar: { width: 28, height: 28, borderRadius: 14 },
+  collapsedAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  collapsedAvatarMonogram: { backgroundColor: SURFACE_ALT },
+  collapsedAvatarInitials: { fontSize: 12, fontFamily: Typography.family.bold, color: MUTED },
   collapsedTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: TEXT, letterSpacing: -0.3, flexShrink: 1 },
   collapsedRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  collapsedFollowBtn: { height: 32, paddingHorizontal: 14, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  collapsedFollowBtn: { height: 32, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth, borderColor: BORDER, backgroundColor: BG },
   collapsedFollowActiveBtn: { backgroundColor: BRAND },
   collapsedFollowText: { fontSize: 13, fontFamily: Typography.family.semibold, color: TEXT },
@@ -686,17 +733,5 @@ const styles = StyleSheet.create({
   listStateTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
   listStateSub: { fontSize: 13, fontFamily: Typography.family.regular, color: MUTED, textAlign: 'center' },
   loadMoreIndicator: { paddingVertical: Space.md, alignItems: 'center' },
-  // Style tokens referenced by subcomponents; kept here for source-contract visibility.
   btnDisabled: { opacity: 0.5 },
-  soldOverlay: {},
-  videoBadge: {},
-  tagCountBadge: {},
-  reviewName: {},
-  reviewRatingValue: {},
-  reviewListingContext: {},
-  confirmBlockBtn: {},
-  cancelBtn: {},
-  coverSkeleton: {},
-  skeleton: {},
-  skeletonAvatar: {},
 });

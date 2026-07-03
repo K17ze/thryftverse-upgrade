@@ -6,12 +6,14 @@ import {
   Pressable,
   ActivityIndicator,
   FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeSheet } from '../../platform/native';
 import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
 import { Space, Typography } from '../../theme/designTokens';
+import { SegmentedControl } from './ProfileTabRail';
 import { useFollowersInfinite, useFollowingInfinite } from '../../platform/server';
 import type { FollowListUser } from '../../services/profileApi';
 
@@ -27,6 +29,13 @@ interface PublicProfileConnectionsSheetProps {
   onOpenProfile: (userId: string) => void;
 }
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
 export function PublicProfileConnectionsSheet({
   visible,
   onDismiss,
@@ -36,6 +45,7 @@ export function PublicProfileConnectionsSheet({
   followingCount,
   onOpenProfile,
 }: PublicProfileConnectionsSheetProps) {
+  const { width: screenWidth } = useWindowDimensions();
   const [segment, setSegment] = useState<Segment>(initialSegment);
 
   useEffect(() => {
@@ -55,7 +65,6 @@ export function PublicProfileConnectionsSheet({
     return acc;
   }, [activeQuery.data]);
 
-  const count = segment === 'followers' ? followerCount : followingCount;
   const isLoading = activeQuery.isLoading && items.length === 0;
   const hasError = Boolean(activeQuery.error) && items.length === 0;
   const hasNextPage = Boolean(activeQuery.hasNextPage);
@@ -65,12 +74,19 @@ export function PublicProfileConnectionsSheet({
     if (hasNextPage && !isFetchingNextPage) activeQuery.fetchNextPage();
   };
 
+  const handleOpenProfile = (id: string) => {
+    // Dismiss before navigation without visible flicker
+    onDismiss();
+    onOpenProfile(id);
+  };
+
   const renderItem = ({ item }: { item: FollowListUser }) => {
     const name = item.displayName || item.username || 'Thryft user';
+    const initials = getInitials(name);
     return (
       <Pressable
-        style={styles.row}
-        onPress={() => { onDismiss(); onOpenProfile(item.id); }}
+        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        onPress={() => handleOpenProfile(item.id)}
         accessibilityRole="button"
         accessibilityLabel={`Open ${name}'s profile`}
       >
@@ -84,15 +100,16 @@ export function PublicProfileConnectionsSheet({
             />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback]}>
-              <Ionicons name="person" size={18} color={Colors.textMuted} />
+              <Text style={styles.avatarInitials}>{initials}</Text>
             </View>
           )}
         </View>
         <View style={styles.identityCol}>
           <Text style={styles.displayName} numberOfLines={1}>{name}</Text>
-          <Text style={styles.handle} numberOfLines={1}>@{item.username}</Text>
+          {item.username ? (
+            <Text style={styles.handle} numberOfLines={1}>@{item.username}</Text>
+          ) : null}
         </View>
-        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
       </Pressable>
     );
   };
@@ -114,33 +131,18 @@ export function PublicProfileConnectionsSheet({
       snapPoints={[{ fraction: 0.75 }]}
     >
       <View style={styles.container}>
-        <Text style={styles.title}>
-          {segment === 'followers' ? 'Followers' : 'Following'}
-          <Text style={styles.titleCount}> · {count}</Text>
-        </Text>
+        {/* One title — "Connections" */}
+        <Text style={styles.title}>Connections</Text>
 
-        <View style={styles.segmentRail}>
-          <Pressable
-            style={[styles.segment, segment === 'followers' && styles.segmentActive]}
-            onPress={() => setSegment('followers')}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: segment === 'followers' }}
-            accessibilityLabel={`Followers, ${followerCount}`}
-          >
-            <Text style={[styles.segmentLabel, segment === 'followers' && styles.segmentLabelActive]}>Followers</Text>
-            {segment === 'followers' ? <View style={styles.segmentUnderline} /> : null}
-          </Pressable>
-          <Pressable
-            style={[styles.segment, segment === 'following' && styles.segmentActive]}
-            onPress={() => setSegment('following')}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: segment === 'following' }}
-            accessibilityLabel={`Following, ${followingCount}`}
-          >
-            <Text style={[styles.segmentLabel, segment === 'following' && styles.segmentLabelActive]}>Following</Text>
-            {segment === 'following' ? <View style={styles.segmentUnderline} /> : null}
-          </Pressable>
-        </View>
+        {/* Animated segment indicator — same system as the main profile */}
+        <SegmentedControl
+          segments={[
+            { key: 'followers', label: `Followers ${followerCount}` },
+            { key: 'following', label: `Following ${followingCount}` },
+          ]}
+          activeKey={segment}
+          onChange={(k) => setSegment(k as Segment)}
+        />
 
         {isLoading ? (
           <FlatList
@@ -192,9 +194,10 @@ export function PublicProfileConnectionsSheet({
                 </View>
               ) : <View style={{ height: Space.xl }} />
             }
-            contentContainerStyle={{ paddingBottom: Space.xl }}
+            contentContainerStyle={{ paddingBottom: Space.xl, paddingTop: Space.sm }}
             showsVerticalScrollIndicator={false}
             key={`conn-${segment}`}
+            ItemSeparatorComponent={() => <View style={styles.rowDivider} />}
           />
         )}
       </View>
@@ -205,27 +208,18 @@ export function PublicProfileConnectionsSheet({
 const styles = StyleSheet.create({
   container: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flex: 1 },
   title: { fontSize: 20, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: -0.4, marginBottom: Space.sm },
-  titleCount: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary },
-  segmentRail: {
-    flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border, marginBottom: Space.sm,
-  },
-  segment: { flex: 1, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
-  segmentActive: {},
-  segmentLabel: { fontSize: 14, fontFamily: Typography.family.regular, color: Colors.textMuted },
-  segmentLabelActive: { fontFamily: Typography.family.bold, color: Colors.textPrimary },
-  segmentUnderline: {
-    position: 'absolute', bottom: 0, left: '30%', right: '30%',
-    height: 2, backgroundColor: Colors.textPrimary,
-  },
+  // Rows — no chevron, pressed feedback, divider rhythm
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 56 },
+  rowPressed: { opacity: 0.6 },
+  rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.border, marginLeft: 56 },
   avatarWrap: {},
   avatar: { width: 44, height: 44, borderRadius: 22 },
   avatarFallback: { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  avatarInitials: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textSecondary },
   identityCol: { flex: 1 },
   displayName: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
   handle: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary, marginTop: 1 },
-  // Skeleton rows — match final row geometry
+  // Skeleton rows
   skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 56 },
   skeletonAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceAlt },
   skeletonIdentity: { flex: 1, gap: 4 },

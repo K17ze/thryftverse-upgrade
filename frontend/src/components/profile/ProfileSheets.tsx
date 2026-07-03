@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { NativeSheet } from '../../platform/native';
@@ -59,7 +59,7 @@ export function ProfileMoreSheet({
   onShare, onCopyLink, onReport, onBlock, onUnblock,
 }: MoreSheetProps) {
   return (
-    <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={['half']}>
+    <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.38 }]}>
       <View style={styles.sheetContainer}>
         <Text style={styles.sheetTitle}>Profile options</Text>
         <SheetItem icon="share-outline" label="Share profile" onPress={() => { onDismiss(); onShare(); }} />
@@ -98,40 +98,103 @@ interface ReportSheetProps {
 
 export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: ReportSheetProps) {
   const [selected, setSelected] = useState<ReportReason | null>(null);
+  const [details, setDetails] = useState('');
+  const scrollRef = useRef<ScrollView>(null);
+  const requiresDetails = selected === 'other';
+  const canSubmit = selected !== null && (!requiresDetails || details.trim().length > 0);
+
+  // Reset reason and details whenever the sheet closes or opens fresh
+  useEffect(() => {
+    if (!visible) {
+      setSelected(null);
+      setDetails('');
+    }
+  }, [visible]);
+
+  const handleSubmit = () => {
+    if (canSubmit && selected) {
+      onSubmit(selected, details.trim() || undefined);
+      // Reset after successful submission — parent closes the sheet
+      setSelected(null);
+      setDetails('');
+    }
+  };
+
   return (
     <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.7 }]}>
-      <View style={styles.sheetContainer}>
-        <Text style={styles.sheetTitle}>Report profile</Text>
-        <Text style={styles.sheetDescription}>Help us understand the issue. Reports are reviewed by our team.</Text>
-        {REPORT_REASONS.map((reason) => {
-          const isActive = selected === reason.key;
-          return (
-            <Pressable
-              key={reason.key}
-              style={[styles.reportReason, isActive && styles.reportReasonActive]}
-              onPress={() => setSelected(reason.key)}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: isActive }}
-              accessibilityLabel={reason.label}
-            >
-              <View style={[styles.radioOuter, isActive && styles.radioOuterActive]}>
-                {isActive ? <View style={styles.radioInner} /> : null}
-              </View>
-              <Text style={styles.reportReasonLabel}>{reason.label}</Text>
-            </Pressable>
-          );
-        })}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.reportSheetRoot}
+      >
+        {/* Title stays visible — not scrolled */}
+        <View style={styles.reportSheetHeader}>
+          <Text style={styles.sheetTitle}>Report profile</Text>
+          <Text style={styles.sheetDescription}>Help us understand the issue. Reports are reviewed by our team.</Text>
+        </View>
+
+        {/* Scrollable reason list — usable on short phones */}
+        <ScrollView
+          ref={scrollRef}
+          style={styles.reportScroll}
+          contentContainerStyle={styles.reportScrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {REPORT_REASONS.map((reason) => {
+            const isActive = selected === reason.key;
+            return (
+              <Pressable
+                key={reason.key}
+                style={({ pressed }) => [styles.reportReason, isActive && styles.reportReasonActive, pressed && styles.reportReasonPressed]}
+                onPress={() => setSelected(reason.key)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={reason.label}
+              >
+                <View style={[styles.radioOuter, isActive && styles.radioOuterActive]}>
+                  {isActive ? <View style={styles.radioInner} /> : null}
+                </View>
+                <Text style={styles.reportReasonLabel}>{reason.label}</Text>
+              </Pressable>
+            );
+          })}
+          {/* Details field — above keyboard, scrollable into view */}
+          {selected ? (
+            <View style={styles.detailsWrap}>
+              <Text style={styles.detailsLabel}>
+                {requiresDetails ? 'Details (required)' : 'Additional details (optional)'}
+              </Text>
+              <TextInput
+                style={[styles.detailsInput, requiresDetails && details.trim().length === 0 && styles.detailsInputRequired]}
+                value={details}
+                onChangeText={setDetails}
+                placeholder={requiresDetails ? 'Please describe the issue' : 'Add more context'}
+                placeholderTextColor={MUTED}
+                multiline
+                maxLength={500}
+                accessibilityLabel="Report details"
+                accessibilityHint={requiresDetails ? 'Required when Other is selected' : 'Optional additional context'}
+                onFocus={() => {
+                  // Scroll details into view when keyboard appears
+                  setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
+                }}
+              />
+            </View>
+          ) : null}
+        </ScrollView>
+
+        {/* Submit stays reachable — pinned below scroll */}
         <AnimatedPressable
-          style={[styles.submitBtn, !selected && styles.btnDisabled]}
-          onPress={() => selected && onSubmit(selected)}
+          style={[styles.submitBtn, !canSubmit && styles.btnDisabled]}
+          onPress={handleSubmit}
           activeOpacity={0.85}
-          disabled={!selected || isPending}
+          disabled={!canSubmit || isPending}
           accessibilityRole="button"
           accessibilityLabel="Submit report"
         >
           {isPending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.submitBtnText}>Submit report</Text>}
         </AnimatedPressable>
-      </View>
+      </KeyboardAvoidingView>
     </NativeSheet>
   );
 }
@@ -191,11 +254,17 @@ const styles = StyleSheet.create({
   },
   sheetItemText: { fontSize: 16, fontFamily: Typography.family.regular, color: TEXT, flex: 1 },
   sheetItemTextDestructive: { color: DANGER },
+  // Report sheet — keyboard-aware, scrollable
+  reportSheetRoot: { flex: 1 },
+  reportSheetHeader: { paddingHorizontal: Space.md, paddingTop: Space.sm },
+  reportScroll: { flex: 1 },
+  reportScrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.sm },
   reportReason: {
     flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER, minHeight: 52,
   },
   reportReasonActive: {},
+  reportReasonPressed: { opacity: 0.6 },
   radioOuter: {
     width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: BORDER,
     alignItems: 'center', justifyContent: 'center',
@@ -203,20 +272,29 @@ const styles = StyleSheet.create({
   radioOuterActive: { borderColor: BRAND },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: BRAND },
   reportReasonLabel: { flex: 1, fontSize: 15, fontFamily: Typography.family.regular, color: TEXT },
+  // Details field
+  detailsWrap: { marginTop: Space.md },
+  detailsLabel: { fontSize: 13, fontFamily: Typography.family.medium, color: SECONDARY, marginBottom: Space.xs },
+  detailsInput: {
+    borderWidth: StyleSheet.hairlineWidth, borderColor: BORDER, borderRadius: 8,
+    paddingHorizontal: Space.sm, paddingVertical: Space.sm, fontSize: 14,
+    fontFamily: Typography.family.regular, color: TEXT, minHeight: 80, textAlignVertical: 'top',
+  },
+  detailsInputRequired: { borderColor: DANGER },
   submitBtn: {
-    height: 48, borderRadius: 24, backgroundColor: BRAND,
-    alignItems: 'center', justifyContent: 'center', marginTop: Space.md,
+    height: 48, borderRadius: 11, backgroundColor: BRAND,
+    alignItems: 'center', justifyContent: 'center', marginHorizontal: Space.md, marginTop: Space.sm, marginBottom: Space.sm,
   },
   submitBtnText: { fontSize: 16, fontFamily: Typography.family.semibold, color: TEXT_INVERSE },
   btnDisabled: { opacity: 0.5 },
   confirmRow: { flexDirection: 'row', gap: 12, marginTop: Space.md },
   cancelBtn: {
-    flex: 1, height: 48, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth,
+    flex: 1, height: 48, borderRadius: 11, borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER, backgroundColor: BG, alignItems: 'center', justifyContent: 'center',
   },
   cancelBtnText: { fontSize: 16, fontFamily: Typography.family.semibold, color: TEXT },
   confirmBlockBtn: {
-    flex: 1, height: 48, borderRadius: 24, backgroundColor: DANGER,
+    flex: 1, height: 48, borderRadius: 11, backgroundColor: DANGER,
     alignItems: 'center', justifyContent: 'center',
   },
   confirmBlockBtnText: { fontSize: 16, fontFamily: Typography.family.semibold, color: '#fff' },

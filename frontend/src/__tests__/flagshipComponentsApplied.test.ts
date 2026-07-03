@@ -12,9 +12,11 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain("import { FlagshipProfileMedia } from '../components/flagship';");
   });
 
-  it('UserProfileScreen imports FlagshipProfileMedia', () => {
-    const src = readSrc('screens/UserProfileScreen.tsx');
-    expect(src).toContain("import { FlagshipProfileMedia } from '../components/flagship';");
+  it('UserProfileScreen uses ProfileHero which renders FlagshipProfileMedia', () => {
+    const heroSrc = readSrc('components/profile/ProfileHero.tsx');
+    expect(heroSrc).toContain('FlagshipProfileMedia');
+    const screenSrc = readSrc('screens/UserProfileScreen.tsx');
+    expect(screenSrc).toContain('ProfileHero');
   });
 
   // SKIPPED: Obsolete static guardrail — EditProfileScreen uses useProfileMediaUpload hook,

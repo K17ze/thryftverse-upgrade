@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
@@ -14,20 +14,27 @@ const SECONDARY = Colors.textSecondary;
 const SURFACE_ALT = Colors.surfaceAlt;
 const BRAND = Colors.brand;
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
 interface ReviewSummaryBlockProps {
   summary: SellerReviewSummary;
 }
 
 /**
  * Reputation summary — dominant average, restrained stars, total count,
- * 5→1 distribution bars, completed-order context. One trust surface.
+ * 5→1 distribution bars using count/totalReviews (NOT count/maxCount).
+ * Bars represent actual review proportions.
  */
 export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
   const avg = summary.ratingAverage ?? 0;
   const total = summary.reviewCount;
   const distMap = new Map<number, number>();
   for (const d of summary.distribution) distMap.set(d.rating, d.count);
-  const maxCount = Math.max(1, ...Array.from(distMap.values()));
 
   return (
     <View style={styles.reviewSummary}>
@@ -44,7 +51,7 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
         <View style={styles.reviewSummaryDist}>
           {[5, 4, 3, 2, 1].map((star) => {
             const count = distMap.get(star) ?? 0;
-            const pct = count / maxCount;
+            const pct = total > 0 ? count / total : 0;
             return (
               <View key={star} style={styles.distRow}>
                 <Text style={styles.distStar}>{star}</Text>
@@ -65,34 +72,51 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
 
 interface ProfileReviewRowProps {
   item: SellerReviewItem;
+  onOpenReviewer?: (userId: string) => void;
+  onOpenListing?: (listingId: string) => void;
 }
 
 /**
  * Review row — compact reviewer identity, strong comment readability,
- * listing context visually subordinate. Consistent hairline rhythm.
+ * listing context visually subordinate. The full reviewer identity region
+ * (avatar + name + date) is tappable, not just the avatar.
+ * Listing context is quietly tappable with pressed feedback.
  */
-export const ProfileReviewRow = React.memo(function ProfileReviewRow({ item }: ProfileReviewRowProps) {
+export const ProfileReviewRow = React.memo(function ProfileReviewRow({
+  item,
+  onOpenReviewer,
+  onOpenListing,
+}: ProfileReviewRowProps) {
   const reviewerName = item.reviewer.displayName || item.reviewer.username || 'Anonymous';
   const dateText = item.createdAt
     ? new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : '';
+  const canOpenReviewer = Boolean(item.reviewer.id && onOpenReviewer);
+  const canOpenListing = Boolean(item.listing?.id && onOpenListing);
+  const reviewerInitials = getInitials(reviewerName);
+
   return (
     <View style={styles.reviewRow}>
-      <View style={styles.reviewHeader}>
-        <View style={styles.reviewAvatarWrap}>
-          {item.reviewer.avatar ? (
-            <CachedImage
-              uri={item.reviewer.avatar}
-              style={styles.reviewAvatar}
-              containerStyle={{ width: 36, height: 36, borderRadius: 18 }}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={[styles.reviewAvatar, styles.reviewAvatarFallback]}>
-              <Ionicons name="person" size={16} color={MUTED} />
-            </View>
-          )}
-        </View>
+      {/* Full reviewer identity region — tappable as one unit */}
+      <Pressable
+        style={styles.reviewHeader}
+        onPress={() => canOpenReviewer && onOpenReviewer!(item.reviewer.id!)}
+        disabled={!canOpenReviewer}
+        accessibilityRole={canOpenReviewer ? 'button' : undefined}
+        accessibilityLabel={canOpenReviewer ? `Open ${reviewerName}'s profile` : undefined}
+      >
+        {item.reviewer.avatar ? (
+          <CachedImage
+            uri={item.reviewer.avatar}
+            style={styles.reviewAvatar}
+            containerStyle={{ width: 36, height: 36, borderRadius: 18 }}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[styles.reviewAvatar, styles.reviewAvatarFallback]}>
+            <Text style={styles.reviewAvatarInitials}>{reviewerInitials}</Text>
+          </View>
+        )}
         <View style={styles.reviewIdentityCol}>
           <Text style={styles.reviewName} numberOfLines={1}>{reviewerName}</Text>
           <Text style={styles.reviewDate}>{dateText}</Text>
@@ -101,10 +125,16 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({ item }: P
           <Ionicons name="star" size={12} color={BRAND} />
           <Text style={styles.reviewRatingValue}>{item.rating}</Text>
         </View>
-      </View>
+      </Pressable>
       {item.comment ? <Text style={styles.reviewComment}>{item.comment}</Text> : null}
       {item.listing ? (
-        <View style={styles.reviewListingContext}>
+        <Pressable
+          style={({ pressed }) => [styles.reviewListingContext, pressed && styles.reviewListingPressed]}
+          onPress={() => canOpenListing && onOpenListing!(item.listing!.id!)}
+          disabled={!canOpenListing}
+          accessibilityRole={canOpenListing ? 'button' : undefined}
+          accessibilityLabel={canOpenListing ? `Open listing ${item.listing!.title}` : undefined}
+        >
           {item.listing.imageUrl ? (
             <CachedImage
               uri={item.listing.imageUrl}
@@ -114,7 +144,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({ item }: P
             />
           ) : null}
           <Text style={styles.reviewListingTitle} numberOfLines={1}>{item.listing.title}</Text>
-        </View>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -146,10 +176,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
   },
+  // Full reviewer identity region — tappable as one unit
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
-  reviewAvatarWrap: {},
   reviewAvatar: { width: 36, height: 36, borderRadius: 18 },
   reviewAvatarFallback: { backgroundColor: SURFACE_ALT, alignItems: 'center', justifyContent: 'center' },
+  reviewAvatarInitials: { fontSize: 13, fontFamily: Typography.family.bold, color: SECONDARY },
   reviewIdentityCol: { flex: 1 },
   reviewName: { fontSize: 14, fontFamily: Typography.family.semibold, color: TEXT },
   reviewDate: { fontSize: 12, fontFamily: Typography.family.regular, color: MUTED, marginTop: 1 },
@@ -157,6 +188,7 @@ const styles = StyleSheet.create({
   reviewRatingValue: { fontSize: 13, fontFamily: Typography.family.bold, color: TEXT },
   reviewComment: { fontSize: 14, fontFamily: Typography.family.regular, color: TEXT, lineHeight: 20 },
   reviewListingContext: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingVertical: 4 },
+  reviewListingPressed: { opacity: 0.6 },
   reviewListingThumb: { width: 28, height: 28, borderRadius: 4 },
   reviewListingTitle: { flex: 1, fontSize: 12, fontFamily: Typography.family.regular, color: SECONDARY },
 });

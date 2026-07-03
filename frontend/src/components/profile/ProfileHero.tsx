@@ -8,6 +8,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, { useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
 import { CachedImage } from '../CachedImage';
@@ -27,9 +28,11 @@ const SURFACE_ALT = Colors.surfaceAlt;
 const BRAND = Colors.brand;
 const TEXT_INVERSE = Colors.textInverse;
 
-const COVER_HEIGHT = 176;
-const AVATAR_SIZE = 88;
+const COVER_HEIGHT = 160;
+const AVATAR_SIZE = 84;
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
+const ACTION_RADIUS = 11;
+const ACTION_HEIGHT = 44;
 
 interface ProfileHeroProps {
   targetProfile: { displayName?: string | null; username?: string; bio?: string | null; location?: string | null; website?: string | null; createdAt?: string } | null | undefined;
@@ -57,9 +60,22 @@ interface ProfileHeroProps {
   onShopSegmentSelect: (segment: 'forsale' | 'sold') => void;
 }
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
 /**
- * Composed identity surface: cover → avatar → identity → bio → context → stats → rating → actions.
- * Reads as one authored surface, not stacked blocks.
+ * Authored identity surface — Instagram-density seam row + LinkedIn-clarity identity.
+ *
+ * Composition:
+ *   cover (edge-to-edge, gradient fades only)
+ *   seam row: avatar (left, overlapping cover) + 3 primary stats (right, vertically centred)
+ *   identity: full-width, left-aligned — name, @handle, bio, context, website
+ *   trust line: 4.9 ★ · 47 sold · Joined June 2026
+ *   actions: flat 11pt radius, restrained
  */
 export function ProfileHero({
   targetProfile,
@@ -93,9 +109,24 @@ export function ProfileHero({
     return { transform: [{ scale }] };
   });
 
+  const initials = getInitials(targetProfile?.displayName || displayUsername || 'Thryft');
+  const followerCount = stats?.followerCount ?? 0;
+  const followingCount = stats?.followingCount ?? 0;
+  const ratingValue = stats?.ratingAverage;
+  const hasRating = ratingValue !== null && ratingValue !== undefined && reviewCount > 0;
+
+  // Trust line: "4.9 ★ · 47 sold · Joined June 2026"
+  const trustParts: string[] = [];
+  if (hasRating && ratingValue !== null && ratingValue !== undefined) {
+    trustParts.push(`${ratingValue.toFixed(1)} ★`);
+  }
+  if (soldCount > 0) trustParts.push(`${soldCount} sold`);
+  if (memberSince) trustParts.push(`Joined ${memberSince}`);
+  const trustLine = trustParts.join(' · ');
+
   return (
     <View>
-      {/* Cover — scrolls naturally with the list, parallax scale on overscroll */}
+      {/* ── Cover stage — edge-to-edge media with gradient fades ── */}
       <Reanimated.View style={[styles.coverContainer, coverParallaxStyle]}>
         <FlagshipProfileMedia
           coverUri={displayCover}
@@ -105,182 +136,201 @@ export function ProfileHero({
           style={{ width: '100%' }}
           coverHeight={COVER_HEIGHT}
         />
+        {/* Top gradient fade for control contrast */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.12)', 'transparent']}
+          style={styles.coverTopFade}
+          pointerEvents="none"
+        />
+        {/* Subtle bottom fade around the avatar seam — no hard dark strip */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.10)']}
+          style={styles.coverBottomFade}
+          pointerEvents="none"
+        />
       </Reanimated.View>
 
-      {/* Identity canvas — overlaps cover bottom, one continuous surface */}
-      <View style={styles.identityCanvas}>
-        <View style={styles.avatarRow}>
-          <View style={styles.avatarWrap}>
-            {displayAvatar ? (
-              <CachedImage
-                uri={displayAvatar}
-                style={styles.avatar}
-                containerStyle={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Ionicons name="person" size={32} color={MUTED} />
-              </View>
-            )}
-          </View>
-          <View style={styles.identityCol}>
-            <Text style={styles.displayName} numberOfLines={2}>
-              {targetProfile?.displayName || displayUsername}
-            </Text>
-            <Text style={styles.username} numberOfLines={1}>
-              @{targetProfile?.username ?? 'thryft'}
-            </Text>
-          </View>
+      {/* ── Hero root — position relative for absolute avatar ── */}
+      <View style={styles.heroRoot}>
+        {/* ── Seam row: avatar (left, overlapping) + 3 stats (right, vertically centred) ── */}
+        <View style={styles.avatarAbsolute}>
+          {displayAvatar ? (
+            <CachedImage
+              uri={displayAvatar}
+              style={styles.avatar}
+              containerStyle={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={[styles.avatar, styles.avatarMonogram]}>
+              <Text style={styles.monogramText}>{initials}</Text>
+            </View>
+          )}
         </View>
 
-        {targetProfile?.bio ? (
-          <Text style={styles.bio} numberOfLines={3}>{targetProfile.bio}</Text>
+        {/* Identity canvas — paddingTop reserves avatar space */}
+        <View style={styles.identityCanvas}>
+          {/* Seam row — stats to the right of avatar, vertically centred */}
+          <View style={styles.seamRow}>
+            <View style={styles.seamSpacer} />
+            <View style={styles.seamStats}>
+              <Pressable
+                style={styles.seamStat}
+                onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('forsale'); }}
+                accessibilityRole="button"
+                accessibilityLabel={`${activeCount} for sale — view shop`}
+              >
+                <Text style={styles.seamStatValue}>{activeCount}</Text>
+                <Text style={styles.seamStatLabel} numberOfLines={1}>For sale</Text>
+              </Pressable>
+              <Pressable
+                style={styles.seamStat}
+                onPress={() => onOpenConnections('followers')}
+                accessibilityRole="button"
+                accessibilityLabel={`${followerCount} followers — view followers`}
+              >
+                <Text style={styles.seamStatValue}>{followerCount}</Text>
+                <Text style={styles.seamStatLabel} numberOfLines={1}>Followers</Text>
+              </Pressable>
+              <Pressable
+                style={styles.seamStat}
+                onPress={() => onOpenConnections('following')}
+                accessibilityRole="button"
+                accessibilityLabel={`${followingCount} following — view following`}
+              >
+                <Text style={styles.seamStatValue}>{followingCount}</Text>
+                <Text style={styles.seamStatLabel} numberOfLines={1}>Following</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Identity — full-width, left-aligned, no avatar indentation */}
+          <Text style={styles.displayName} numberOfLines={2}>
+            {targetProfile?.displayName || displayUsername}
+          </Text>
+          <Text style={styles.username} numberOfLines={1}>
+            @{targetProfile?.username ?? 'thryft'}
+          </Text>
+
+          {/* Biography — concise, readable */}
+          {targetProfile?.bio ? (
+            <Text style={styles.bio} numberOfLines={3}>{targetProfile.bio}</Text>
+          ) : null}
+
+          {/* Context line — no icons */}
+          {targetProfile?.location ? (
+            <Text style={styles.contextLine} numberOfLines={1}>{targetProfile.location}</Text>
+          ) : null}
+
+          {/* Website — separate intentional link */}
+          {targetProfile?.website ? (
+            <Pressable
+              style={styles.websiteLink}
+              onPress={() => openWebsite(targetProfile.website!)}
+              accessibilityRole="link"
+              accessibilityLabel={`Open website ${targetProfile.website}`}
+            >
+              <Text style={styles.websiteText} numberOfLines={1}>{targetProfile.website}</Text>
+            </Pressable>
+          ) : null}
+
+          {/* Seller trust line — compact, no badge container */}
+          {trustLine ? (
+            <View style={styles.trustRow}>
+              {hasRating ? (
+                <Pressable
+                  onPress={() => onTabSelect('Reviews')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
+                >
+                  <Text style={styles.trustLink}>{ratingValue!.toFixed(1)} ★</Text>
+                </Pressable>
+              ) : null}
+              {hasRating && soldCount > 0 ? <Text style={styles.trustDot}> · </Text> : null}
+              {soldCount > 0 ? (
+                <Pressable
+                  onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('sold'); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${soldCount} sold — view sold items`}
+                >
+                  <Text style={styles.trustLink}>{soldCount} sold</Text>
+                </Pressable>
+              ) : null}
+              {(hasRating || soldCount > 0) && memberSince ? <Text style={styles.trustDot}> · </Text> : null}
+              {memberSince ? <Text style={styles.trustStatic}>Joined {memberSince}</Text> : null}
+            </View>
+          ) : null}
+        </View>
+
+        {/* Actions — flat 11pt radius, restrained, content-first */}
+        {!isSelfProfile && viewer ? (
+          <View style={styles.actionRow}>
+            <AnimatedPressable
+              style={[styles.followBtn, viewer.isFollowing ? styles.followingBtn : styles.followBtnActive, followPending && styles.btnDisabled]}
+              onPress={onFollowToggle}
+              activeOpacity={0.88}
+              disabled={followPending || isBlocked}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={viewer.isFollowing ? 'Unfollow user' : 'Follow user'}
+              accessibilityState={{ disabled: followPending || isBlocked }}
+            >
+              {followPending ? (
+                <ActivityIndicator size="small" color={viewer.isFollowing ? TEXT : TEXT_INVERSE} />
+              ) : (
+                <Text style={[styles.followBtnText, viewer.isFollowing ? styles.followingBtnText : styles.followActiveBtnText]}>
+                  {viewer.isFollowing ? 'Following' : 'Follow'}
+                </Text>
+              )}
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.messageBtn, !viewer.canMessage && styles.btnDisabled]}
+              onPress={onMessage}
+              activeOpacity={0.88}
+              disabled={!viewer.canMessage}
+              accessibilityRole="button"
+              accessibilityLabel={viewer.canMessage ? 'Send message to seller' : 'Messaging unavailable'}
+              accessibilityState={{ disabled: !viewer.canMessage }}
+            >
+              <Ionicons name="chatbubble-outline" size={15} color={TEXT} />
+              <Text style={styles.messageBtnText}>Message</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.moreBtn}
+              onPress={onMore}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel="More options"
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={TEXT} />
+            </AnimatedPressable>
+          </View>
         ) : null}
 
-        {/* One quiet context line — location · joined · website */}
-        <View style={styles.contextRow}>
-          {targetProfile?.location ? (
-            <View style={styles.contextItem}>
-              <Ionicons name="location-outline" size={12} color={MUTED} />
-              <Text style={styles.contextText} numberOfLines={1}>{targetProfile.location}</Text>
-            </View>
-          ) : null}
-          {targetProfile?.location && memberSince ? <Text style={styles.contextSep}>·</Text> : null}
-          {memberSince ? (
-            <View style={styles.contextItem}>
-              <Ionicons name="calendar-outline" size={12} color={MUTED} />
-              <Text style={styles.contextText} numberOfLines={1}>Joined {memberSince}</Text>
-            </View>
-          ) : null}
-          {targetProfile?.website ? (
-            <>
-              {(targetProfile?.location || memberSince) ? <Text style={styles.contextSep}>·</Text> : null}
-              <Pressable
-                style={styles.contextItem}
-                onPress={() => openWebsite(targetProfile.website!)}
-                accessibilityRole="link"
-                accessibilityLabel={`Open website ${targetProfile.website}`}
-              >
-                <Ionicons name="link-outline" size={12} color={SECONDARY} />
-                <Text style={[styles.contextText, styles.contextLink]} numberOfLines={1}>Website</Text>
-              </Pressable>
-            </>
-          ) : null}
-        </View>
-
-        {/* Four equal-width stats with hairline dividers */}
-        <View style={styles.statsRow}>
-          <StatCell
-            label="For sale"
-            value={activeCount}
-            onPress={activeCount > 0 ? () => { onTabSelect('Shop'); onShopSegmentSelect('forsale'); } : undefined}
-          />
-          <StatDivider />
-          <StatCell
-            label="Sold"
-            value={soldCount}
-            onPress={soldCount > 0 ? () => { onTabSelect('Shop'); onShopSegmentSelect('sold'); } : undefined}
-          />
-          <StatDivider />
-          <StatCell
-            label="Followers"
-            value={stats?.followerCount ?? 0}
-            onPress={(stats?.followerCount ?? 0) > 0 ? () => onOpenConnections('followers') : undefined}
-          />
-          <StatDivider />
-          <StatCell
-            label="Following"
-            value={stats?.followingCount ?? 0}
-            onPress={(stats?.followingCount ?? 0) > 0 ? () => onOpenConnections('following') : undefined}
-          />
-        </View>
-
-        {/* Rating — integrated trust line, not a 5th stat cell */}
-        {stats && stats.ratingAverage !== null && reviewCount > 0 ? (
-          <Pressable
-            style={styles.ratingRow}
-            onPress={() => onTabSelect('Reviews')}
-            accessibilityRole="button"
-            accessibilityLabel={`Rating ${stats.ratingAverage} out of 5, ${reviewCount} reviews. View reviews.`}
-          >
-            <Ionicons name="star" size={13} color={BRAND} />
-            <Text style={styles.ratingValue}>{stats.ratingAverage!.toFixed(1)}</Text>
-            <Text style={styles.ratingCount}>· {reviewCount} review{reviewCount !== 1 ? 's' : ''}</Text>
-            <Ionicons name="chevron-forward" size={11} color={MUTED} style={{ marginLeft: 2 }} />
-          </Pressable>
+        {isSelfProfile ? (
+          <View style={styles.actionRow}>
+            <AnimatedPressable
+              style={styles.editProfileBtn}
+              onPress={onEditProfile}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile"
+            >
+              <Ionicons name="create-outline" size={15} color={TEXT} />
+              <Text style={styles.editProfileBtnText}>Edit profile</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.moreBtn}
+              onPress={onShare}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel="Share profile"
+            >
+              <Ionicons name="share-outline" size={18} color={TEXT} />
+            </AnimatedPressable>
+          </View>
         ) : null}
       </View>
-
-      {/* Actions — Follow primary, Message secondary, More tertiary */}
-      {!isSelfProfile && viewer ? (
-        <View style={styles.actionRow}>
-          <AnimatedPressable
-            style={[styles.followBtn, viewer.isFollowing ? styles.followingBtn : styles.followBtnActive, followPending && styles.btnDisabled]}
-            onPress={onFollowToggle}
-            activeOpacity={0.85}
-            disabled={followPending || isBlocked}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel={viewer.isFollowing ? 'Unfollow user' : 'Follow user'}
-            accessibilityState={{ disabled: followPending || isBlocked }}
-          >
-            {followPending ? (
-              <ActivityIndicator size="small" color={viewer.isFollowing ? TEXT : TEXT_INVERSE} />
-            ) : (
-              <Text style={[styles.followBtnText, viewer.isFollowing ? styles.followingBtnText : styles.followActiveBtnText]}>
-                {viewer.isFollowing ? 'Following' : 'Follow'}
-              </Text>
-            )}
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={[styles.messageBtn, !viewer.canMessage && styles.btnDisabled]}
-            onPress={onMessage}
-            activeOpacity={0.85}
-            disabled={!viewer.canMessage}
-            accessibilityRole="button"
-            accessibilityLabel={viewer.canMessage ? 'Send message to seller' : 'Messaging unavailable'}
-            accessibilityState={{ disabled: !viewer.canMessage }}
-          >
-            <Ionicons name="chatbubble-outline" size={16} color={TEXT} />
-            <Text style={styles.messageBtnText}>Message</Text>
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={styles.secondaryActionBtn}
-            onPress={onMore}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="More options"
-          >
-            <Ionicons name="ellipsis-horizontal" size={18} color={TEXT} />
-          </AnimatedPressable>
-        </View>
-      ) : null}
-
-      {/* Self-profile actions */}
-      {isSelfProfile ? (
-        <View style={styles.actionRow}>
-          <AnimatedPressable
-            style={styles.editProfileBtn}
-            onPress={onEditProfile}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Edit profile"
-          >
-            <Ionicons name="create-outline" size={16} color={TEXT} />
-            <Text style={styles.editProfileBtnText}>Edit profile</Text>
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={styles.secondaryActionBtn}
-            onPress={onShare}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Share profile"
-          >
-            <Ionicons name="share-outline" size={18} color={TEXT} />
-          </AnimatedPressable>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -291,46 +341,42 @@ function openWebsite(url: string) {
   Linking.openURL(normalized).catch(() => {});
 }
 
-function StatCell({ label, value, onPress }: { label: string; value: number; onPress?: () => void }) {
-  const content = (
-    <View style={styles.statCell}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
-    </View>
-  );
-  if (onPress) {
-    return (
-      <Pressable onPress={onPress} style={styles.statCellPressable} accessibilityRole="button" accessibilityLabel={`${value} ${label}`}>
-        {content}
-      </Pressable>
-    );
-  }
-  return content;
-}
-
-function StatDivider() {
-  return <View style={styles.statDivider} />;
-}
-
 const styles = StyleSheet.create({
+  // Cover
   coverContainer: {
     width: '100%',
     height: COVER_HEIGHT,
     overflow: 'hidden',
     backgroundColor: SURFACE_ALT,
   },
-  identityCanvas: {
-    marginTop: -AVATAR_OVERLAP,
-    paddingHorizontal: Space.md,
-    paddingTop: AVATAR_OVERLAP + Space.sm,
-    paddingBottom: Space.sm,
-    backgroundColor: BG,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    overflow: 'hidden',
+  coverTopFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 80,
   },
-  avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: Space.sm },
-  avatarWrap: { position: 'relative' },
+  coverBottomFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+  },
+
+  // Hero root
+  heroRoot: {
+    position: 'relative',
+    backgroundColor: BG,
+  },
+
+  // Avatar — absolutely positioned at the exact cover/canvas seam
+  avatarAbsolute: {
+    position: 'absolute',
+    top: -AVATAR_OVERLAP,
+    left: Space.md,
+    zIndex: 10,
+  },
   avatar: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
@@ -338,51 +384,185 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: BG,
   },
-  avatarFallback: { backgroundColor: SURFACE_ALT, alignItems: 'center', justifyContent: 'center' },
-  identityCol: { flex: 1 },
-  displayName: { fontSize: 22, fontFamily: Typography.family.bold, color: TEXT, letterSpacing: -0.4, marginBottom: 2 },
-  username: { fontSize: 14, fontFamily: Typography.family.regular, color: SECONDARY },
-  bio: { fontSize: 14, fontFamily: Typography.family.regular, color: TEXT, lineHeight: 20, marginBottom: Space.sm },
-  contextRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: Space.sm },
-  contextItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  contextText: { fontSize: 12, fontFamily: Typography.family.regular, color: MUTED },
-  contextSep: { fontSize: 12, color: MUTED },
-  contextLink: { color: SECONDARY },
-  statsRow: {
+  avatarMonogram: {
+    backgroundColor: SURFACE_ALT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monogramText: {
+    fontSize: 28,
+    fontFamily: Typography.family.bold,
+    color: SECONDARY,
+    letterSpacing: -0.5,
+  },
+
+  // Identity canvas — no top padding; seamRow reserves avatar overlap space
+  identityCanvas: {
+    paddingHorizontal: Space.md,
+    paddingTop: 0,
+    paddingBottom: Space.sm,
+  },
+
+  // Seam row — begins immediately at canvas boundary, reserves avatar overlap height
+  seamRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
-    marginBottom: Space.sm,
+    minHeight: AVATAR_OVERLAP + Space.sm,
+    marginBottom: Space.xs,
   },
-  statCellPressable: { flex: 1 },
-  statCell: { flex: 1, alignItems: 'flex-start' },
-  statValue: { fontSize: 17, fontFamily: Typography.family.bold, color: TEXT, letterSpacing: -0.3 },
-  statLabel: { fontSize: 11, fontFamily: Typography.family.regular, color: MUTED, marginTop: 2, letterSpacing: 0.1 },
-  statDivider: { width: StyleSheet.hairlineWidth, height: 22, backgroundColor: BORDER },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2 },
-  ratingValue: { fontSize: 14, fontFamily: Typography.family.bold, color: TEXT },
-  ratingCount: { fontSize: 13, fontFamily: Typography.family.regular, color: SECONDARY },
-  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: BG },
-  followBtn: { flex: 1, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  seamSpacer: {
+    width: AVATAR_SIZE + Space.sm,
+  },
+  seamStats: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  seamStat: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seamStatValue: {
+    fontSize: 17,
+    fontFamily: Typography.family.bold,
+    color: TEXT,
+    letterSpacing: -0.3,
+  },
+  seamStatLabel: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+    marginTop: 1,
+  },
+
+  // Identity — full-width, left-aligned
+  displayName: {
+    fontSize: 20,
+    fontFamily: Typography.family.bold,
+    color: TEXT,
+    letterSpacing: -0.4,
+    marginBottom: 2,
+  },
+  username: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: SECONDARY,
+    marginBottom: Space.xs,
+  },
+
+  // Biography
+  bio: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: TEXT,
+    lineHeight: 20,
+    marginBottom: Space.xs,
+  },
+
+  // Context line — no icons
+  contextLine: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+    marginBottom: Space.xs,
+  },
+
+  // Website
+  websiteLink: {
+    paddingVertical: 2,
+    marginBottom: Space.xs,
+  },
+  websiteText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: SECONDARY,
+    textDecorationLine: 'underline',
+  },
+
+  // Seller trust line — compact, no badge container
+  trustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    paddingVertical: 2,
+    marginBottom: Space.xs,
+  },
+  trustLink: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: TEXT,
+  },
+  trustStatic: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+  },
+  trustDot: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+  },
+
+  // Actions — flat 11pt radius, restrained
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    backgroundColor: BG,
+  },
+  followBtn: {
+    flex: 1,
+    height: ACTION_HEIGHT,
+    borderRadius: ACTION_RADIUS,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   followBtnActive: { backgroundColor: BRAND },
-  followingBtn: { borderWidth: StyleSheet.hairlineWidth, borderColor: BORDER, backgroundColor: BG },
+  followingBtn: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
+    backgroundColor: BG,
+  },
   followBtnText: { fontSize: 15, fontFamily: Typography.family.semibold },
   followActiveBtnText: { color: TEXT_INVERSE },
   followingBtnText: { color: TEXT },
   messageBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 44, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, borderColor: BORDER, backgroundColor: BG,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    height: ACTION_HEIGHT,
+    borderRadius: ACTION_RADIUS,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
+    backgroundColor: BG,
   },
   messageBtnText: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
-  secondaryActionBtn: {
-    width: 44, height: 44, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER, backgroundColor: BG, alignItems: 'center', justifyContent: 'center',
+  moreBtn: {
+    width: ACTION_HEIGHT,
+    height: ACTION_HEIGHT,
+    borderRadius: ACTION_RADIUS,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
+    backgroundColor: BG,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editProfileBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 44, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, borderColor: BORDER, backgroundColor: BG,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    height: ACTION_HEIGHT,
+    borderRadius: ACTION_RADIUS,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
+    backgroundColor: BG,
   },
   editProfileBtnText: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
   btnDisabled: { opacity: 0.5 },
