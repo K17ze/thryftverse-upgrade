@@ -30,7 +30,6 @@ import {
 } from '../utils/auctionHomeLogic';
 import { useAppTheme } from '../theme/ThemeContext';
 import { CachedImage } from '../components/CachedImage';
-import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -134,7 +133,7 @@ function resolveStatePresentation(
       stateColor: Colors.textMuted,
       leadingLabel: `Cancelled${reason}`,
       leadingColor: Colors.textMuted,
-      actionLabel: 'Details',
+      actionLabel: 'View details',
       showLiveDot: false,
       useDangerState: false,
     };
@@ -156,7 +155,7 @@ function resolveStatePresentation(
       stateColor: Colors.textMuted,
       leadingLabel: 'No bids received',
       leadingColor: Colors.textMuted,
-      actionLabel: 'View result',
+      actionLabel: 'Review result',
       showLiveDot: false,
       useDangerState: false,
     };
@@ -179,7 +178,7 @@ function resolveStatePresentation(
       stateColor: Colors.textSecondary,
       leadingLabel: timeLabel,
       leadingColor: Colors.textSecondary,
-      actionLabel: 'Manage',
+      actionLabel: 'View schedule',
       showLiveDot: false,
       useDangerState: false,
     };
@@ -189,7 +188,7 @@ function resolveStatePresentation(
     stateColor: Colors.textMuted,
     leadingLabel: timeLabel,
     leadingColor: Colors.textMuted,
-    actionLabel: 'View result',
+    actionLabel: 'Review result',
     showLiveDot: false,
     useDangerState: false,
   };
@@ -301,39 +300,62 @@ function SellerAuctionRow({
   );
 }
 
-function SellerSummary({ stats }: { stats: SellerStats }) {
+function SellerSummary({
+  stats,
+  formatFromFiat,
+  goldRates,
+}: {
+  stats: SellerStats;
+  formatFromFiat: (amount: number, currency?: any, opts?: any) => string;
+  goldRates: any;
+}) {
   const active = stats.live;
   const activeColor = active > 0 ? Colors.danger : Colors.textPrimary;
+  const hasBidContext = stats.totalBids > 0 && stats.highestBid > 0;
+  const highestBidIze = hasBidContext
+    ? `${formatIzeAmount(toIze(stats.highestBid, 'GBP', goldRates))} 1ZE`
+    : null;
+  const highestBidLocal = hasBidContext
+    ? formatFromFiat(stats.highestBid, 'GBP')
+    : null;
+
   return (
     <View style={styles.summary}>
-      {/* Primary measure — Active auctions */}
-      <View style={styles.summaryPrimary}>
-        <Text style={[styles.summaryPrimaryValue, { color: activeColor }]}>{active}</Text>
-        <Text style={[styles.summaryPrimaryLabel, { color: active > 0 ? Colors.danger : Colors.textMuted }]}>
-          Active
-        </Text>
-      </View>
-      {/* Vertical hairline divider */}
-      <View style={styles.summaryPrimaryDivider} />
-      {/* Secondary measures — hairline-divided compact row */}
-      <View style={styles.summarySecondary}>
-        <View style={styles.summarySecondaryItem}>
-          <Text style={styles.summarySecondaryValue}>{stats.scheduled}</Text>
-          <Text style={styles.summarySecondaryLabel}>Scheduled</Text>
+      <View style={styles.summaryRow}>
+        {/* Primary measure — Active auctions */}
+        <View style={styles.summaryPrimary}>
+          <Text style={[styles.summaryPrimaryValue, { color: activeColor }]}>{active}</Text>
+          <Text style={[styles.summaryPrimaryLabel, { color: active > 0 ? Colors.danger : Colors.textMuted }]}>
+            Active auctions
+          </Text>
         </View>
-        <View style={styles.summarySecondaryItem}>
-          <Text style={styles.summarySecondaryValue}>{stats.sold}</Text>
-          <Text style={styles.summarySecondaryLabel}>Sold</Text>
-        </View>
-        <View style={styles.summarySecondaryItem}>
-          <Text style={styles.summarySecondaryValue}>{stats.unsold}</Text>
-          <Text style={styles.summarySecondaryLabel}>Unsold</Text>
-        </View>
-        <View style={styles.summarySecondaryItem}>
-          <Text style={styles.summarySecondaryValue}>{stats.cancelled}</Text>
-          <Text style={styles.summarySecondaryLabel}>Cancelled</Text>
+        {/* Vertical hairline divider */}
+        <View style={styles.summaryPrimaryDivider} />
+        {/* Secondary measures — hairline-divided compact row */}
+        <View style={styles.summarySecondary}>
+          <View style={styles.summarySecondaryItem}>
+            <Text style={styles.summarySecondaryValue}>{stats.scheduled}</Text>
+            <Text style={styles.summarySecondaryLabel}>Scheduled</Text>
+          </View>
+          <View style={styles.summarySecondaryItem}>
+            <Text style={styles.summarySecondaryValue}>{stats.sold}</Text>
+            <Text style={styles.summarySecondaryLabel}>Sold</Text>
+          </View>
+          <View style={styles.summarySecondaryItem}>
+            <Text style={styles.summarySecondaryValue}>{stats.unsold}</Text>
+            <Text style={styles.summarySecondaryLabel}>Unsold</Text>
+          </View>
         </View>
       </View>
+      {/* Quiet context — total bids + highest bid, only when authoritative */}
+      {hasBidContext && (
+        <View style={styles.summaryContext}>
+          <Text style={styles.summaryContextText}>
+            {stats.totalBids} {stats.totalBids === 1 ? 'bid' : 'bids'} · Highest {highestBidIze}
+            {highestBidLocal ? ` · ${highestBidLocal}` : ''}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -445,6 +467,31 @@ export default function SellerAuctionCentreScreen() {
     navigation.navigate('CreateAuction');
   }, [navigation]);
 
+  // Refs for sticky-tab scroll architecture
+  const listRef = useRef<SectionList>(null);
+  const tabScrollRef = useRef<ScrollView>(null);
+  const tabLayoutsRef = useRef<Record<string, { x: number; width: number }>>({});
+
+  // Tab press: switch tab + scroll list to top for predictable positioning
+  const handleTabPress = useCallback((key: SellerTab) => {
+    setActiveTab(key);
+    // Scroll to top so summary reappears — predictable on tab switch
+    requestAnimationFrame(() => {
+      listRef.current?.getScrollResponder()?.scrollTo({ x: 0, y: 0, animated: false });
+    });
+  }, []);
+
+  // Auto-scroll selected tab into view when it changes
+  React.useEffect(() => {
+    const layout = tabLayoutsRef.current[activeTab];
+    if (layout && tabScrollRef.current) {
+      tabScrollRef.current.scrollTo({
+        x: Math.max(0, layout.x - 40),
+        animated: false,
+      });
+    }
+  }, [activeTab]);
+
   const tabs: { key: SellerTab; label: string; count: number }[] = [
     { key: 'scheduled', label: 'Scheduled', count: stats.scheduled },
     { key: 'live', label: 'Live', count: stats.live },
@@ -487,28 +534,127 @@ export default function SellerAuctionCentreScreen() {
     }
     if (error) {
       return (
-        <EmptyState
-          icon="cloud-offline-outline"
-          title="Couldn't load auctions"
-          subtitle="Pull to refresh and try again."
-        />
+        <View style={styles.inlineStateWrap}>
+          <Text style={styles.inlineStateTitle}>Couldn't load auctions</Text>
+          <Text style={styles.inlineStateMessage}>
+            Check your connection and try again.
+          </Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.retryBtn,
+              pressed && styles.retryBtnPressed,
+            ]}
+            onPress={() => void fetchAuctions(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading auctions"
+          >
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </View>
       );
     }
-    const messages: Record<SellerTab, { title: string; subtitle: string }> = {
-      scheduled: { title: 'No scheduled auctions', subtitle: 'Create an auction to get started.' },
-      live: { title: 'No live auctions', subtitle: 'Your scheduled auctions will appear here when they go live.' },
-      sold: { title: 'No sold auctions', subtitle: 'Auctions that close with bids will appear here.' },
-      unsold: { title: 'No unsold auctions', subtitle: 'Auctions that end without bids will appear here.' },
-      cancelled: { title: 'No cancelled auctions', subtitle: 'Cancelled auctions will appear here.' },
+    const emptyConfig: Record<SellerTab, { title: string; message: string; cta?: string }> = {
+      scheduled: {
+        title: 'No auctions scheduled',
+        message: 'Create an auction when you are ready to sell.',
+        cta: 'Create Auction',
+      },
+      live: {
+        title: 'Nothing live right now',
+        message: 'Scheduled auctions will appear here when they begin.',
+      },
+      sold: {
+        title: 'No completed sales yet',
+        message: 'Auctions sold with bids will appear here.',
+      },
+      unsold: {
+        title: 'No unsold auctions',
+        message: 'Auctions ending without bids will appear here.',
+      },
+      cancelled: {
+        title: 'No cancelled auctions',
+        message: 'Cancelled auctions will remain available here.',
+      },
     };
+    const cfg = emptyConfig[activeTab];
     return (
-      <EmptyState
-        icon="storefront-outline"
-        title={messages[activeTab].title}
-        subtitle={messages[activeTab].subtitle}
+      <View style={styles.inlineStateWrap}>
+        <Text style={styles.inlineStateTitle}>{cfg.title}</Text>
+        <Text style={styles.inlineStateMessage}>{cfg.message}</Text>
+        {cfg.cta && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.inlineCtaBtn,
+              pressed && styles.inlineCtaPressed,
+            ]}
+            onPress={navigateToCreate}
+            accessibilityRole="button"
+            accessibilityLabel={cfg.cta}
+          >
+            <Text style={styles.inlineCtaText}>{cfg.cta}</Text>
+            <Ionicons name="add" size={15} color={Colors.brand} style={styles.inlineCtaIcon} />
+          </Pressable>
+        )}
+      </View>
+    );
+  }, [loading, error, activeTab, fetchAuctions, navigateToCreate]);
+
+  // Tab rail — rendered as sticky section header
+  const renderSectionHeader = useCallback(() => (
+    <View style={styles.tabBarContainer}>
+      <ScrollView
+        ref={tabScrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabBar}
+      >
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              style={({ pressed }) => [
+                styles.tab,
+                pressed && styles.tabPressed,
+              ]}
+              onPress={() => handleTabPress(tab.key)}
+              onLayout={(e) => {
+                tabLayoutsRef.current[tab.key] = {
+                  x: e.nativeEvent.layout.x,
+                  width: e.nativeEvent.layout.width,
+                };
+              }}
+              accessibilityRole="tab"
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {tab.label}
+              </Text>
+              {tab.count > 0 && (
+                <Text style={[styles.tabCount, isActive && styles.tabCountActive]}>
+                  {tab.count}
+                </Text>
+              )}
+              {isActive && <View style={styles.tabIndicator} />}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  ), [tabs, activeTab, handleTabPress]);
+
+  // Summary — scrolls away as ListHeaderComponent
+  const listHeader = useMemo(() => {
+    if (stats.total === 0) return null;
+    return (
+      <SellerSummary
+        stats={stats}
+        formatFromFiat={formatFromFiat}
+        goldRates={goldRates}
       />
     );
-  }, [loading, error, activeTab]);
+  }, [stats, formatFromFiat, goldRates]);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -553,47 +699,18 @@ export default function SellerAuctionCentreScreen() {
         </View>
       </View>
 
-      {/* Seller summary — one integrated operational surface */}
-      {stats.total > 0 && (
-        <SellerSummary stats={stats} />
-      )}
-
-      {/* Tab bar — text-first rail, underline indicator, count subordinate */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabBar}
-      >
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <Pressable
-              key={tab.key}
-              style={styles.tab}
-              onPress={() => setActiveTab(tab.key)}
-              accessibilityRole="tab"
-              accessibilityLabel={tab.label}
-              accessibilityState={{ selected: isActive }}
-            >
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                {tab.label}
-              </Text>
-              {tab.count > 0 && (
-                <Text style={[styles.tabCount, isActive && styles.tabCountActive]}>
-                  {tab.count}
-                </Text>
-              )}
-              {isActive && <View style={styles.tabIndicator} />}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* List */}
+      {/* Single authoritative virtualised list:
+          - ListHeaderComponent: summary (scrolls away)
+          - renderSectionHeader: tab rail (sticky beneath header)
+          - items: inventory rows */}
       <SectionList
+        ref={listRef}
         sections={[{ key: activeTab, data: filteredItems }]}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        stickySectionHeadersEnabled
+        ListHeaderComponent={listHeader}
         ItemSeparatorComponent={() => <View style={styles.rowSeparator} />}
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={[
@@ -601,7 +718,6 @@ export default function SellerAuctionCentreScreen() {
           stats.total === 0 && !loading && !error && { paddingBottom: 120 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
-        stickyHeaderHiddenOnScroll
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -701,11 +817,27 @@ const styles = StyleSheet.create({
   },
   // ── Seller summary — one integrated surface ──
   summary: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    paddingBottom: Space.sm,
+  },
+  summaryContext: {
+    marginTop: Space.sm,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
     gap: Space.md,
+  },
+  summaryContextText: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.1,
   },
   summaryPrimary: {
     alignItems: 'flex-start',
@@ -752,13 +884,16 @@ const styles = StyleSheet.create({
     marginTop: 3,
     letterSpacing: 0.1,
   },
-  // ── Tab bar — text-first, underline indicator ──
+  // ── Tab bar — text-first, underline indicator, sticky container ──
+  tabBarContainer: {
+    backgroundColor: Colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
   tabBar: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     gap: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
     height: 44,
     alignItems: 'center',
   },
@@ -769,6 +904,9 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 2,
     position: 'relative',
+  },
+  tabPressed: {
+    opacity: 0.5,
   },
   tabText: {
     fontSize: 14,
@@ -799,8 +937,6 @@ const styles = StyleSheet.create({
   },
   // ── List ──
   listContent: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
     paddingBottom: Space.xl,
   },
   // ── Inventory row — horizontal, operations studio ──
@@ -809,6 +945,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.md,
     paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
   },
   rowImageWrap: {
     position: 'relative',
@@ -948,10 +1085,11 @@ const styles = StyleSheet.create({
   rowSeparator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
+    marginHorizontal: Space.md,
   },
   // ── Loading ──
   loadingWrap: {
-    paddingTop: Space.sm,
+    paddingTop: Space.md,
     gap: Space.md,
   },
   loadingRow: {
@@ -959,6 +1097,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.md,
     paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
   },
   loadingBody: {
     flex: 1,
@@ -974,6 +1113,66 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
     marginVertical: Space.xs,
+  },
+  // ── Inline empty / error states ──
+  inlineStateWrap: {
+    paddingTop: Space.xl * 2,
+    paddingHorizontal: Space.md,
+    alignItems: 'flex-start',
+  },
+  inlineStateTitle: {
+    fontSize: 17,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  inlineStateMessage: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    marginTop: 6,
+    lineHeight: 20,
+  },
+  retryBtn: {
+    marginTop: Space.md,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryBtnPressed: {
+    opacity: 0.6,
+  },
+  retryBtnText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  inlineCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: Space.md,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.brand,
+    minHeight: 44,
+  },
+  inlineCtaPressed: {
+    opacity: 0.6,
+  },
+  inlineCtaText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  inlineCtaIcon: {
+    marginTop: 1,
   },
   // ── Load more ──
   loadMoreWrap: {
