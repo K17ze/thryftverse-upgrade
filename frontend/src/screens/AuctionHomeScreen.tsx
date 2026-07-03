@@ -134,8 +134,8 @@ const CategoryRailTile = memo(function CategoryRailTile({
       )}
       {/* Restrained gradient only behind label */}
       <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.65)']}
-        locations={[0.55, 1]}
+        colors={['transparent', 'rgba(0,0,0,0.75)']}
+        locations={[0.45, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
@@ -630,7 +630,7 @@ export default function AuctionHomeScreen() {
   // ── 1ZE + local semantic display ──
   const formatDualPrice = useCallback((amountGbp: number): DualPriceResult => {
     const izeAmount = toIze(amountGbp, 'GBP', goldRates);
-    const izeText = formatIzeAmount(izeAmount, 4);
+    const izeText = formatIzeAmount(izeAmount, 2);
     const fiatValue = izeAmount * (goldRates?.[currencyCode] ?? 1);
     const fiatText = formatFiatAmount(fiatValue, currencyCode, 2);
     if (displayMode === 'ize') return { primaryText: izeText, secondaryText: null };
@@ -644,7 +644,7 @@ export default function AuctionHomeScreen() {
   // preserving the user's display preference.
   const formatValueLockup = useCallback((amountGbp: number): { izeText: string; localText: string | null } => {
     const izeAmount = toIze(amountGbp, 'GBP', goldRates);
-    const izeText = formatIzeAmount(izeAmount, 4);
+    const izeText = formatIzeAmount(izeAmount, 2);
     const fiatValue = izeAmount * (goldRates?.[currencyCode] ?? 1);
     const fiatText = formatFiatAmount(fiatValue, currencyCode, 2);
     if (displayMode === 'ize') return { izeText, localText: null };
@@ -2083,10 +2083,10 @@ const styles = StyleSheet.create({
 
   // ── Section title (no subtitle) ──
   sectionTitle: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: '700',
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
     marginBottom: Space.sm + 2,
@@ -2101,7 +2101,7 @@ const styles = StyleSheet.create({
 
   // ── Horizontal discovery rail ──
   railWrap: {
-    marginTop: Space.md,
+    marginTop: Space.md + 4,
     marginBottom: Space.xs,
   },
   railHeader: {
@@ -2109,14 +2109,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.sm + 2,
   },
   railTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
   railCount: {
     fontSize: 12,
@@ -2132,7 +2132,7 @@ const styles = StyleSheet.create({
   // ── Composition ──
   compositionWrap: {
     paddingHorizontal: Space.md,
-    marginTop: Space.lg,
+    marginTop: Space.lg + 4,
   },
   compositionEmpty: {
     paddingHorizontal: Space.md,
@@ -2173,19 +2173,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   endingSoonImageWrap: {
-    width: 72,
-    height: 72,
+    width: 76,
+    height: 76,
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
   endingSoonImage: {
-    width: 72,
-    height: 72,
+    width: 76,
+    height: 76,
   },
   endingSoonBody: {
     flex: 1,
@@ -2196,6 +2196,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
     marginBottom: 3,
   },
   endingSoonPrice: {
@@ -2240,8 +2241,8 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   categoryTile: {
-    height: 132,
-    borderRadius: Radius.md,
+    height: 148,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
   },
@@ -2250,15 +2251,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
   },
   categoryTileName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: Typography.family.bold,
-    letterSpacing: 0.1,
+    letterSpacing: -0.1,
   },
 
   // ── Upcoming rows ──
@@ -2269,36 +2270,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   upcomingImageWrap: {
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
   upcomingImage: {
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
   },
   upcomingBody: {
     flex: 1,
+    gap: 1,
   },
   upcomingDate: {
     fontSize: 11,
     fontWeight: '600',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
     color: Colors.textSecondary,
     fontFamily: Typography.family.semibold,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   upcomingEyebrow: {
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    marginBottom: 2,
+    fontFamily: Typography.family.medium,
+    marginBottom: 1,
+    letterSpacing: 0.1,
   },
   upcomingTitle: {
     fontSize: 14,
@@ -2306,7 +2309,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    marginBottom: 2,
+    letterSpacing: -0.2,
   },
   upcomingNotify: {
     width: 44,
@@ -2323,20 +2326,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   resultImageWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.sm,
+    width: 60,
+    height: 60,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
   },
   resultImage: {
-    width: 56,
-    height: 56,
+    width: 60,
+    height: 60,
   },
   resultBody: {
     flex: 1,
@@ -2446,8 +2449,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   filterChip: {
-    paddingVertical: 4,
-    paddingHorizontal: Space.sm,
+    paddingVertical: 5,
+    paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.full,
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -2458,6 +2461,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textPrimary,
     fontFamily: Typography.family.medium,
+    letterSpacing: 0.1,
   },
   filterChipClear: {
     paddingVertical: 4,
@@ -2484,10 +2488,9 @@ const styles = StyleSheet.create({
   filterSectionLabel: {
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
     color: Colors.textSecondary,
     fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
     marginBottom: Space.sm,
     marginTop: Space.md,
   },

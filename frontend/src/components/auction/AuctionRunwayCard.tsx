@@ -96,8 +96,8 @@ export function AuctionRunwayCard({
           />
           {/* Subtle top gradient only for badge legibility */}
           <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
-            locations={[0, 0.3]}
+            colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0)']}
+            locations={[0, 0.35]}
             style={styles.topGradient}
           />
           <View style={styles.topRow}>
@@ -168,10 +168,10 @@ export function AuctionRunwayCard({
           containerStyle={styles.imageContainer}
           contentFit="cover"
         />
-        {/* Bottom gradient only — for text legibility */}
+        {/* Bottom gradient — deeper for text legibility */}
         <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)']}
-          locations={[0.5, 1]}
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.75)']}
+          locations={[0.35, 0.65, 1]}
           style={styles.gradient}
         />
 
@@ -215,12 +215,12 @@ export function AuctionRunwayCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16 },
-      android: { elevation: 8 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10 },
+      android: { elevation: 3 },
     }),
   },
   cardMetadataBelow: {
@@ -233,18 +233,18 @@ const styles = StyleSheet.create({
   imageWrap: {
     position: 'relative',
   },
-  // Metadata-below variant: image gets its own premium rounding + shadow
+  // Metadata-below variant: image gets its own rounding + restrained shadow
   imageWrapBelow: {
     position: 'relative',
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12 },
-      android: { elevation: 6 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 8 },
+      android: { elevation: 2 },
     }),
   },
   imageContainer: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   image: {
@@ -257,8 +257,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 90,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
   },
   gradient: {
     position: 'absolute',
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   watchBtn: {
     width: 34,
     height: 34,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -291,23 +291,22 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: Space.md + 2,
-    gap: 4,
+    padding: Space.md + 4,
+    gap: 5,
   },
   brand: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.75)',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 0.2,
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 22,
+    fontSize: 24,
     color: '#FFFFFF',
-    letterSpacing: -0.5,
-    lineHeight: 26,
-    marginBottom: 6,
+    letterSpacing: -0.6,
+    lineHeight: 28,
+    marginBottom: 4,
   },
   metaRow: {
     flexDirection: 'row',
@@ -323,24 +322,23 @@ const styles = StyleSheet.create({
 
   // ── Metadata-below variant ──
   belowBody: {
-    paddingTop: Space.md,
+    paddingTop: Space.md - 2,
     paddingHorizontal: 2,
-    gap: 4,
+    gap: 5,
   },
   belowBrand: {
     fontFamily: Typography.family.medium,
     fontSize: 11,
     color: Colors.textMuted,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   belowTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: 22,
+    fontSize: 24,
     color: Colors.textPrimary,
-    letterSpacing: -0.5,
-    lineHeight: 26,
-    marginBottom: 4,
+    letterSpacing: -0.6,
+    lineHeight: 28,
+    marginBottom: 2,
   },
   belowMetaRow: {
     flexDirection: 'row',
@@ -354,16 +352,12 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   personalActionBtn: {
-    marginTop: Space.md,
-    paddingVertical: Space.sm + 2,
+    marginTop: Space.sm + 2,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.full,
     backgroundColor: Colors.brand,
     alignSelf: 'flex-start',
-    ...Platform.select({
-      ios: { shadowColor: Colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
-      android: { elevation: 4 },
-    }),
   },
   personalActionText: {
     fontFamily: Typography.family.semibold,

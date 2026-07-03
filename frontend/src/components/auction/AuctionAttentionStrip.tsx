@@ -21,11 +21,11 @@ interface Props {
 }
 
 const CONFIG: Record<AttentionKind, { accent: string; bg: string; border: string }> = {
-  outbid: { accent: Colors.danger, bg: 'rgba(220,38,38,0.04)', border: 'rgba(220,38,38,0.15)' },
-  leading: { accent: Colors.success, bg: 'rgba(22,163,74,0.04)', border: 'rgba(22,163,74,0.12)' },
-  ending_soon: { accent: Colors.danger, bg: 'rgba(220,38,38,0.04)', border: 'rgba(220,38,38,0.12)' },
-  won: { accent: Colors.brand, bg: 'rgba(244,240,232,0.04)', border: 'rgba(244,240,232,0.10)' },
-  watching: { accent: Colors.textSecondary, bg: 'transparent', border: Colors.border },
+  outbid: { accent: Colors.danger, bg: 'rgba(220,38,38,0.06)', border: 'rgba(220,38,38,0.18)' },
+  leading: { accent: Colors.success, bg: 'rgba(22,163,74,0.04)', border: 'transparent' },
+  ending_soon: { accent: Colors.danger, bg: 'rgba(220,38,38,0.06)', border: 'rgba(220,38,38,0.15)' },
+  won: { accent: Colors.brand, bg: 'rgba(244,240,232,0.04)', border: 'transparent' },
+  watching: { accent: Colors.textSecondary, bg: 'transparent', border: 'transparent' },
 };
 
 const KIND_LABEL: Record<AttentionKind, string> = {
@@ -95,25 +95,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.md,
+    paddingHorizontal: Space.md - 2,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    maxHeight: 72,
+    maxHeight: 76,
   },
   body: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.sm + 2,
   },
   thumbContainer: {
     borderRadius: Radius.sm,
     overflow: 'hidden',
   },
   thumb: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
   },
   content: {
     flex: 1,
@@ -127,7 +127,8 @@ const styles = StyleSheet.create({
   kind: {
     fontFamily: Typography.family.semibold,
     fontSize: 10,
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   title: {
     fontFamily: Typography.family.semibold,
@@ -142,15 +143,15 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   actionBtn: {
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.sm - 2,
-    borderRadius: Radius.sm,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
     backgroundColor: Colors.brand,
   },
   actionBtnGhost: {
     backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
   },
   actionBtnUrgent: {
     backgroundColor: Colors.danger,
@@ -159,6 +160,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: 12,
     color: Colors.textInverse,
+    letterSpacing: 0.2,
   },
   actionTextGhost: {
     color: Colors.textSecondary,

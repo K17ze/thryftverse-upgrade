@@ -293,7 +293,7 @@ export function BuyNowSheet({
               <Text style={styles.fixedPriceValue} numberOfLines={1}>{priceText}</Text>
               {displayPriceGbp && (
                 <Text style={styles.fixedPriceIze}>
-                  {formatIzeAmount(toIze(displayPriceGbp, 'GBP'), 4)}
+                  {formatIzeAmount(toIze(displayPriceGbp, 'GBP'), 2)}
                 </Text>
               )}
               {displayPriceText && (
@@ -480,16 +480,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   fixedPriceIze: {
     fontSize: 14,
     color: Colors.brand,
     fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
   },
   fixedPriceEquivalent: {
     fontSize: 13,
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
   },
   fixedPriceContext: {
     fontSize: 14,

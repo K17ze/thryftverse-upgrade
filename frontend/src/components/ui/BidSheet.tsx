@@ -364,7 +364,7 @@ export function BidSheet({
 
             {/* 1ZE equivalent — platform value */}
             <Text style={styles.amountIzeEquivalent}>
-              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 4)}
+              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 2)}
             </Text>
 
             {/* Minimum and current — stacked, not columns */}
@@ -445,7 +445,7 @@ export function BidSheet({
                 {currencyCode} {bidInput}
               </Text>
               <Text style={styles.reviewAmountIze}>
-                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0, 4)}
+                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0, 2)}
               </Text>
               {isNonGbp && gbpEquivalentText && (
                 <Text style={styles.reviewGbpEquivalent}>{gbpEquivalentText}</Text>
@@ -698,6 +698,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     textAlign: 'center',
     marginBottom: Space.sm,
+    fontVariant: ['tabular-nums'],
   },
   bidContextStack: {
     gap: Space.xs + 2,
@@ -717,16 +718,19 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   bidContextValue: {
     fontSize: 15,
     color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   bidContextValueSecondary: {
     fontSize: 14,
     color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
   },
   dominantAction: {
     width: '100%',
@@ -750,6 +754,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textAlign: 'center',
     marginBottom: Space.sm,
+    textTransform: 'uppercase',
   },
   reviewAmountBlock: {
     alignItems: 'center',
@@ -763,16 +768,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   reviewAmountIze: {
     fontSize: 14,
     color: Colors.brand,
     fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
   },
   reviewGbpEquivalent: {
     fontSize: 12,
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
   },
   reviewReceipt: {
     gap: Space.xs + 2,
