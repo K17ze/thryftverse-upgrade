@@ -38,9 +38,9 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain("CoOwnDiscoveryCard");
   });
 
-  it('PortfolioScreen imports FlagshipAssetCard', () => {
+  it('PortfolioScreen imports CoOwnDiscoveryCard', () => {
     const src = readSrc('screens/PortfolioScreen.tsx');
-    expect(src).toContain("import { FlagshipAssetCard");
+    expect(src).toContain("CoOwnDiscoveryCard");
   });
 
   it('AssetDetailScreen imports FlagshipActionCluster', () => {
@@ -69,9 +69,9 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain('<CoOwnDiscoveryCard');
   });
 
-  it('PortfolioScreen renders FlagshipAssetCard in list', () => {
+  it('PortfolioScreen renders CoOwnDiscoveryCard in list', () => {
     const src = readSrc('screens/PortfolioScreen.tsx');
-    expect(src).toContain('<FlagshipAssetCard');
+    expect(src).toContain('<CoOwnDiscoveryCard');
   });
 
   it('ClosetScreen imports FlagshipEmptyGraphic', () => {

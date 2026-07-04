@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,14 +19,15 @@ import {
 } from '../services/marketApi';
 import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { useToast } from '../context/ToastContext';
-import { TradeHeader, OrderHistoryRow } from '../components/trade';
+import { OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Space } from '../theme/designTokens';
+import { Space, Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis } from '../components/ui/Text';
 import { parseApiError } from '../lib/apiClient';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -204,7 +205,21 @@ export default function CoOwnOrderHistoryScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <TradeHeader title="Order History" onBack={() => navigation.goBack()} />
+      {/* Editorial header */}
+      <View style={styles.header}>
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          style={styles.headerBackBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+        </AnimatedPressable>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Activity</Text>
+          <Text style={styles.headerContext} numberOfLines={1}>Your Co-Own order history</Text>
+        </View>
+      </View>
 
       <View style={styles.filtersWrap}>
         <AppSegmentControl options={SIDE_FILTERS} value={sideFilter} onChange={setSideFilter} fullWidth />
@@ -287,6 +302,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.6,
+  },
+  headerContext: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    marginTop: 1,
   },
   filtersWrap: {
     paddingHorizontal: Space.md,

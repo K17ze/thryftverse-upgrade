@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,14 +15,11 @@ import { EmptyState } from '../components/EmptyState';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius } from '../theme/designTokens';
-import {
-  TradeHeader,
-  MetricGrid,
-} from '../components/trade';
-import { Meta, BodyEmphasis } from '../components/ui/Text';
-import { FlagshipAssetCard, FlagshipEmptyGraphic } from '../components/flagship';
+import { Space, Radius, Typography, Type } from '../theme/designTokens';
+import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { FlagshipEmptyGraphic } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { CoOwnDiscoveryCard } from '../components/coown';
 import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 
@@ -38,58 +35,63 @@ export default function PortfolioScreen() {
 
   const [holdings, setHoldings] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isError, setIsError] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  React.useEffect(() => {
+  const loadPortfolio = React.useCallback(async () => {
     if (!currentUser?.id) { setIsLoading(false); return; }
-    let cancelled = false;
     setIsLoading(true);
+    setIsError(false);
 
-    Promise.all([
-      listCoOwnAssets({ limit: 120 }),
-      fetchCoOwnHoldings(currentUser.id).catch(() => []),
-    ])
-      .then(([assets, userHoldings]) => {
-        if (cancelled) return;
-        const holdingMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
-        for (const h of userHoldings) {
-          holdingMap.set(h.assetId, { units: h.unitsOwned, avgEntry: h.avgEntryPriceGbp, realized: h.realizedPnlGbp });
-        }
-        const merged = assets
-          .filter((a) => (holdingMap.get(a.id)?.units ?? 0) > 0)
-          .map((a) => {
-            const h = holdingMap.get(a.id);
-            return {
-              id: a.id,
-              title: a.title,
-              image: a.imageUrl ?? '',
-              totalUnits: a.totalUnits,
-              availableUnits: a.availableUnits,
-              unitPriceGBP: a.unitPriceGbp,
-              unitPriceStable: a.unitPriceStable,
-              settlementMode: a.settlementMode,
-              issuerId: a.issuerId,
-              marketMovePct24h: a.marketMovePct24h,
-              holders: a.holders,
-              volume24hGBP: a.volume24hGbp,
-              isOpen: a.isOpen,
-              yourUnits: h?.units ?? 0,
-              avgEntryPriceGBP: h?.avgEntry,
-              realizedProfitGBP: h?.realized,
-            };
-          });
-        setHoldings(merged);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        const parsed = parseApiError(err, 'Unable to load portfolio');
-        show(parsed.message, 'error');
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => { cancelled = true; };
+    try {
+      const [assets, userHoldings] = await Promise.all([
+        listCoOwnAssets({ limit: 120 }),
+        fetchCoOwnHoldings(currentUser.id).catch(() => []),
+      ]);
+      const holdingMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
+      for (const h of userHoldings) {
+        holdingMap.set(h.assetId, { units: h.unitsOwned, avgEntry: h.avgEntryPriceGbp, realized: h.realizedPnlGbp });
+      }
+      const merged = assets
+        .filter((a) => (holdingMap.get(a.id)?.units ?? 0) > 0)
+        .map((a) => {
+          const h = holdingMap.get(a.id);
+          return {
+            id: a.id,
+            title: a.title,
+            image: a.imageUrl ?? '',
+            totalUnits: a.totalUnits,
+            availableUnits: a.availableUnits,
+            unitPriceGBP: a.unitPriceGbp,
+            unitPriceStable: a.unitPriceStable,
+            settlementMode: a.settlementMode,
+            issuerId: a.issuerId,
+            marketMovePct24h: a.marketMovePct24h,
+            holders: a.holders,
+            volume24hGBP: a.volume24hGbp,
+            isOpen: a.isOpen,
+            yourUnits: h?.units ?? 0,
+            avgEntryPriceGBP: h?.avgEntry,
+            realizedProfitGBP: h?.realized,
+          };
+        });
+      setHoldings(merged);
+    } catch (err) {
+      const parsed = parseApiError(err, 'Unable to load portfolio');
+      show(parsed.message, 'error');
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
   }, [currentUser?.id, show]);
+
+  React.useEffect(() => { void loadPortfolio(); }, [loadPortfolio]);
+
+  const handleRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await loadPortfolio();
+    setRefreshing(false);
+  }, [loadPortfolio]);
 
   const totalValue = React.useMemo(
     () => holdings.reduce((sum, asset) => sum + asset.yourUnits * asset.unitPriceGBP, 0),
@@ -105,6 +107,11 @@ export default function PortfolioScreen() {
 
   const realized = React.useMemo(
     () => holdings.reduce((sum, asset) => sum + (asset.realizedProfitGBP ?? 0), 0),
+    [holdings]
+  );
+
+  const totalUnits = React.useMemo(
+    () => holdings.reduce((sum, asset) => sum + asset.yourUnits, 0),
     [holdings]
   );
 
@@ -127,17 +134,16 @@ export default function PortfolioScreen() {
                 .duration(Motion.list.enterDuration)
                 .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
         }
+        style={styles.holdingCardWrap}
       >
-        <FlagshipAssetCard
+        <CoOwnDiscoveryCard
           imageUri={item.image}
-          name={item.title}
+          title={item.title}
           unitPrice={formatFromFiat(item.unitPriceGBP, 'GBP')}
-          yourUnits={item.yourUnits}
+          availableUnits={item.availableUnits}
           totalUnits={item.totalUnits}
-          status={item.isOpen ? 'active' : 'paused'}
+          status={item.isOpen ? (item.availableUnits > 0 ? 'open' : 'closed') : 'paused'}
           onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-          onAction={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
-          actionLabel="Trade"
           index={index}
         />
       </Reanimated.View>
@@ -148,51 +154,76 @@ export default function PortfolioScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
-      <TradeHeader
-        title="Portfolio"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <Ionicons
-            name="receipt-outline"
-            size={20}
-            color={Colors.textPrimary}
-            onPress={() => navigation.navigate('CoOwnOrderHistory')}
-          />
-        }
-      />
+      {/* Editorial header */}
+      <View style={styles.header}>
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          style={styles.headerBackBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+        </AnimatedPressable>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Portfolio</Text>
+          <Text style={styles.headerContext} numberOfLines={1}>Your Co-Own positions</Text>
+        </View>
+        <AnimatedPressable
+          onPress={() => navigation.navigate('CoOwnOrderHistory')}
+          style={styles.headerBackBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Order history"
+        >
+          <Ionicons name="receipt-outline" size={22} color={Colors.textPrimary} />
+        </AnimatedPressable>
+      </View>
 
       <FlashList
         data={holdings}
         keyExtractor={(item) => item.id}
+        numColumns={2}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.textSecondary}
+          />
+        }
         ListHeaderComponent={
           <View>
-            <MetricGrid
-              metrics={[
-                { label: 'Total Value', value: formatFromFiat(totalValue, 'GBP', { displayMode: 'fiat' }) },
-                { label: 'Unrealized P&L', value: `${unrealized >= 0 ? '+' : ''}${formatFromFiat(Math.abs(unrealized), 'GBP', { displayMode: 'fiat' })}`, tone: unrealized >= 0 ? 'positive' : 'negative' },
-                { label: 'Realized P&L', value: `${realized >= 0 ? '+' : ''}${formatFromFiat(Math.abs(realized), 'GBP', { displayMode: 'fiat' })}`, tone: realized >= 0 ? 'positive' : 'negative' },
-              ]}
-              columns={3}
-            />
-
-            <View style={styles.sectionRow}>
-              <Meta style={styles.sectionLabel}>HOLDINGS</Meta>
-              <AnimatedPressable
-                style={styles.sectionLinkWrap}
-                onPress={() => navigation.navigate('AssetLeaderboard')}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Open asset leaderboards"
-                accessibilityHint="Shows top performing co-own assets"
-              >
-                <Meta style={styles.sectionLink}>Leaderboards</Meta>
-              </AnimatedPressable>
+            {/* Portfolio summary card */}
+            <View style={styles.summaryCard}>
+              <Meta style={styles.summaryLabel}>PORTFOLIO VALUE</Meta>
+              <Text style={styles.summaryValue}>
+                {formatFromFiat(totalValue, 'GBP', { displayMode: 'fiat' })}
+              </Text>
+              <View style={styles.summaryStats}>
+                <View style={styles.summaryStat}>
+                  <Meta style={styles.summaryStatLabel}>Units</Meta>
+                  <BodyEmphasis style={styles.summaryStatValue}>{totalUnits}</BodyEmphasis>
+                </View>
+                <View style={styles.summaryStatDivider} />
+                <View style={styles.summaryStat}>
+                  <Meta style={styles.summaryStatLabel}>Unrealized</Meta>
+                  <BodyEmphasis style={[styles.summaryStatValue, unrealized >= 0 ? styles.positive : styles.negative]}>
+                    {unrealized >= 0 ? '+' : ''}{formatFromFiat(Math.abs(unrealized), 'GBP', { displayMode: 'fiat' })}
+                  </BodyEmphasis>
+                </View>
+                <View style={styles.summaryStatDivider} />
+                <View style={styles.summaryStat}>
+                  <Meta style={styles.summaryStatLabel}>Realized</Meta>
+                  <BodyEmphasis style={[styles.summaryStatValue, realized >= 0 ? styles.positive : styles.negative]}>
+                    {realized >= 0 ? '+' : ''}{formatFromFiat(Math.abs(realized), 'GBP', { displayMode: 'fiat' })}
+                  </BodyEmphasis>
+                </View>
+              </View>
             </View>
 
+            {/* Allocation */}
             {portfolioBars.length > 0 && (
-              <View style={styles.allocationWrap}>
-                <Meta style={styles.sectionLabel}>ALLOCATION</Meta>
+              <View style={styles.allocationCard}>
+                <Meta style={styles.allocationLabel}>ALLOCATION</Meta>
                 <View style={styles.barsContainer}>
                   {portfolioBars.map((bar) => (
                     <View key={bar.id} style={styles.barItem}>
@@ -206,13 +237,37 @@ export default function PortfolioScreen() {
                 </View>
               </View>
             )}
+
+            {/* Section header */}
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>Holdings</Text>
+              <AnimatedPressable
+                style={styles.sectionLinkWrap}
+                onPress={() => navigation.navigate('AssetLeaderboard')}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Open asset leaderboards"
+              >
+                <Meta style={styles.sectionLink}>Leaderboards</Meta>
+              </AnimatedPressable>
+            </View>
           </View>
         }
         ListEmptyComponent={
           isLoading ? (
-            <View style={{ padding: Space.lg }}>
-              <Meta style={{ textAlign: 'center', color: Colors.textMuted }}>Loading portfolio...</Meta>
+            <View style={styles.loadingWrap}>
+              <View style={styles.skeletonSummary} />
+              <View style={styles.skeletonRow}>
+                <View style={styles.skeletonCard} />
+                <View style={styles.skeletonCard} />
+              </View>
             </View>
+          ) : isError ? (
+            <EmptyState
+              graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
+              title="Unable to load"
+              subtitle="Pull down to retry, or check your connection."
+            />
           ) : (
             <EmptyState
               graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
@@ -235,34 +290,94 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  listContent: {
-    paddingBottom: Space.xl,
-  },
-  sectionRow: {
+  // Header
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.6,
+  },
+  headerContext: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  // Summary card
+  summaryCard: {
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    marginTop: Space.sm,
-  },
-  sectionLinkWrap: {
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  sectionLink: {
-    color: Colors.brand,
-  },
-  allocationWrap: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
     backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
+    padding: Space.lg,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: Space.md,
   },
-  sectionLabel: {
+  summaryLabel: {
+    color: Colors.textMuted,
+    marginBottom: Space.xs,
+  },
+  summaryValue: {
+    fontSize: 32,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.8,
+    marginBottom: Space.md,
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  summaryStat: {
+    flex: 1,
+    gap: 2,
+  },
+  summaryStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: Colors.border,
+    marginHorizontal: Space.sm,
+  },
+  summaryStatLabel: {
+    color: Colors.textMuted,
+  },
+  summaryStatValue: {
+    fontSize: 15,
+  },
+  positive: {
+    color: Colors.success,
+  },
+  negative: {
+    color: Colors.danger,
+  },
+  // Allocation
+  allocationCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  allocationLabel: {
+    color: Colors.textMuted,
     marginBottom: Space.sm,
   },
   barsContainer: {
@@ -290,5 +405,58 @@ const styles = StyleSheet.create({
   barPct: {
     width: 40,
     textAlign: 'right',
+  },
+  // Section
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
+    marginTop: Space.xs,
+  },
+  sectionTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  sectionLinkWrap: {
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  sectionLink: {
+    color: Colors.brand,
+  },
+  // List
+  listContent: {
+    paddingBottom: Space.xl,
+  },
+  holdingCardWrap: {
+    flex: 1,
+    paddingHorizontal: Space.sm / 2,
+    marginBottom: Space.sm,
+  },
+  // Loading
+  loadingWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+  },
+  skeletonSummary: {
+    width: '100%',
+    height: 140,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+    marginBottom: Space.md,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  skeletonCard: {
+    flex: 1,
+    height: 280,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
   },
 });
