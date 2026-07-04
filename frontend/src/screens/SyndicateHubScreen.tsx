@@ -1,38 +1,37 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, useWindowDimensions, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
-import { EmptyState } from '../components/EmptyState';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Motion } from '../constants/motion';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { AppInput } from '../components/ui/AppInput';
-import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
-import { FlagshipEmptyGraphic } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { CoOwnFeaturedHero, CoOwnDiscoveryCard } from '../components/coown';
+import {
+  CoOwnMarketHeader,
+  CoOwnFeaturedAsset,
+  CoOwnAssetTile,
+  CoOwnEducationCard,
+  CoOwnHubSkeleton,
+  CoOwnStateCanvas,
+  type CoOwnAssetStatus,
+} from '../components/coown';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
-type HubSort = 'value' | 'movers' | 'latest';
-const SORT_OPTIONS: Array<{ value: HubSort; label: string; accessibilityLabel: string }> = [
-  { value: 'latest', label: 'NEW', accessibilityLabel: 'Sort by newest' },
-  { value: 'value', label: 'VALUE', accessibilityLabel: 'Sort by market value' },
-  { value: 'movers', label: 'MOVERS', accessibilityLabel: 'Sort by price movers' },
-];
+type HubTab = 'discover' | 'portfolio' | 'activity';
+
+type SortOption = 'newest' | 'available' | 'allocation';
 
 interface HubAsset {
   id: string;
@@ -46,9 +45,7 @@ interface HubAsset {
   unitPriceStable: number;
   settlementMode: 'GBP' | 'TVUSD' | 'HYBRID';
   issuerJurisdiction?: string;
-  marketMovePct24h: number;
   holders: number;
-  volume24hGBP: number;
   yourUnits: number;
   avgEntryPriceGBP?: number;
   realizedProfitGBP?: number;
@@ -56,25 +53,32 @@ interface HubAsset {
   createdAt: string;
 }
 
+const SORT_LABELS: Record<SortOption, string> = {
+  newest: 'Newest',
+  available: 'Most available',
+  allocation: 'Most allocated',
+};
+
 export default function CoOwnHubScreen() {
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
-  const { isDark } = useAppTheme();
-  const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
+  const { colors, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const actingUserId = currentUser?.id;
 
   const [query, setQuery] = React.useState('');
-  const [sortBy, setSortBy] = React.useState<HubSort>('latest');
+  const [sortBy, setSortBy] = React.useState<SortOption>('newest');
+  const [activeTab, setActiveTab] = React.useState<HubTab>('discover');
   const [remoteAssets, setRemoteAssets] = React.useState<HubAsset[]>([]);
   const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
   const [isSyncing, setIsSyncing] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  React.useEffect(() => {
+  const loadData = React.useCallback(() => {
     if (!actingUserId) { setIsSyncing(false); return; }
     let cancelled = false;
     setIsSyncing(true);
@@ -98,9 +102,7 @@ export default function CoOwnHubScreen() {
           unitPriceStable: item.unitPriceStable,
           settlementMode: item.settlementMode as 'GBP' | 'TVUSD' | 'HYBRID',
           issuerJurisdiction: item.issuerJurisdiction ?? undefined,
-          marketMovePct24h: item.marketMovePct24h,
           holders: item.holders,
-          volume24hGBP: item.volume24hGbp,
           yourUnits: 0,
           isOpen: item.isOpen,
           createdAt: item.createdAt,
@@ -114,7 +116,7 @@ export default function CoOwnHubScreen() {
       })
       .catch(() => {
         if (cancelled) return;
-        show('Failed to load co-own assets', 'error');
+        show('Failed to load marketplace', 'error');
         setIsError(true);
       })
       .finally(() => {
@@ -124,10 +126,21 @@ export default function CoOwnHubScreen() {
     return () => { cancelled = true; };
   }, [actingUserId, show]);
 
+  React.useEffect(() => {
+    const cleanup = loadData();
+    return cleanup;
+  }, [loadData]);
+
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
     navigation.navigate('MainTabs');
   }, [navigation]);
+
+  const handleRefresh = React.useCallback(() => {
+    setIsRefreshing(true);
+    loadData();
+    setTimeout(() => setIsRefreshing(false), 800);
+  }, [loadData]);
 
   const marketAssets = React.useMemo(
     () => remoteAssets.map((asset) => {
@@ -147,18 +160,28 @@ export default function CoOwnHubScreen() {
     const normalized = query.trim().toLowerCase();
     const filtered = marketAssets.filter((asset) => {
       if (!normalized) return true;
-      return asset.title.toLowerCase().includes(normalized);
+      return (
+        asset.title.toLowerCase().includes(normalized) ||
+        (asset.issuerJurisdiction ?? '').toLowerCase().includes(normalized)
+      );
     });
     const sorted = [...filtered];
-    if (sortBy === 'movers') sorted.sort((a, b) => b.marketMovePct24h - a.marketMovePct24h);
-    else if (sortBy === 'latest') sorted.sort((a, b) => b.createdAt?.localeCompare(a.createdAt ?? '') ?? 0);
-    else sorted.sort((a, b) => b.totalUnits * b.unitPriceGBP - a.totalUnits * a.unitPriceGBP);
+    if (sortBy === 'allocation') {
+      sorted.sort((a, b) => {
+        const aAlloc = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
+        const bAlloc = b.totalUnits > 0 ? (b.totalUnits - b.availableUnits) / b.totalUnits : 0;
+        return bAlloc - aAlloc;
+      });
+    } else if (sortBy === 'available') {
+      sorted.sort((a, b) => b.availableUnits - a.availableUnits);
+    } else {
+      sorted.sort((a, b) => b.createdAt?.localeCompare(a.createdAt ?? '') ?? 0);
+    }
     return sorted;
   }, [marketAssets, query, sortBy]);
 
   const featuredAsset = React.useMemo(() => {
     if (filteredAssets.length === 0) return null;
-    // Feature the asset with the most allocation momentum (most allocated, still open)
     const open = filteredAssets.filter((a) => a.isOpen && a.availableUnits > 0);
     if (open.length === 0) return filteredAssets[0];
     return open.reduce((best, current) => {
@@ -178,28 +201,42 @@ export default function CoOwnHubScreen() {
     [marketAssets]
   );
 
+  const newIssues = React.useMemo(
+    () => filteredAssets.filter((a) => a.isOpen && a.availableUnits === a.totalUnits).slice(0, 4),
+    [filteredAssets]
+  );
+
+  const nearlyAllocated = React.useMemo(
+    () => filteredAssets.filter((a) => {
+      if (!a.isOpen || a.availableUnits === 0) return false;
+      const pct = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
+      return pct >= 0.7;
+    }).slice(0, 4),
+    [filteredAssets]
+  );
+
   const isSearching = query.trim().length > 0;
+
+  const formatStatus = (asset: HubAsset): CoOwnAssetStatus => {
+    if (!asset.isOpen) return 'paused';
+    return asset.availableUnits > 0 ? 'open' : 'closed';
+  };
 
   // ── Loading state ──
   if (isSyncing && remoteAssets.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-        <CoOwnHubHeader
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
           title="Co-Own"
-          context="Shared ownership of fashion and collectibles"
+          subtitle="Shared ownership of desirable items"
           onBack={handleBack}
-          insets={insets}
-          onLedger={() => navigation.navigate('MarketLedger')}
-          onCreate={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
+          actions={[
+            { icon: 'receipt-outline', label: 'Ledger', onPress: () => navigation.navigate('MarketLedger') },
+            { icon: 'add-circle-outline', label: 'Create', onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
+          ]}
         />
-        <View style={styles.loadingWrap}>
-          <View style={styles.skeletonHero} />
-          <View style={styles.skeletonRow}>
-            <View style={styles.skeletonCard} />
-            <View style={styles.skeletonCard} />
-          </View>
-        </View>
+        <CoOwnHubSkeleton />
       </SafeAreaView>
     );
   }
@@ -207,36 +244,65 @@ export default function CoOwnHubScreen() {
   // ── Error state ──
   if (isError && remoteAssets.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-        <CoOwnHubHeader
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
           title="Co-Own"
-          context="Shared ownership of fashion and collectibles"
+          subtitle="Shared ownership of desirable items"
           onBack={handleBack}
-          insets={insets}
-          onLedger={() => navigation.navigate('MarketLedger')}
-          onCreate={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
+          actions={[
+            { icon: 'receipt-outline', label: 'Ledger', onPress: () => navigation.navigate('MarketLedger') },
+            { icon: 'add-circle-outline', label: 'Create', onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
+          ]}
         />
-        <EmptyState
-          graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
-          title="Unable to load"
-          subtitle="Pull down to retry, or check your connection."
+        <CoOwnStateCanvas
+          variant="error"
+          actionLabel="Try again"
+          onAction={loadData}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ── Empty state ──
+  if (remoteAssets.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Co-Own"
+          subtitle="Shared ownership of desirable items"
+          onBack={handleBack}
+          actions={[
+            { icon: 'receipt-outline', label: 'Ledger', onPress: () => navigation.navigate('MarketLedger') },
+            { icon: 'add-circle-outline', label: 'Create', onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
+          ]}
+        />
+        <CoOwnStateCanvas
+          variant="empty"
+          title="No items yet"
+          subtitle="When issuers list items for shared ownership, you will find them here."
+          actionLabel="Issue a Co-Own"
+          onAction={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
+          secondaryActionLabel="Learn how it works"
+          onSecondaryAction={() => navigation.navigate('CoOwnOnboarding')}
         />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      <CoOwnHubHeader
+      <CoOwnMarketHeader
         title="Co-Own"
-        context="Shared ownership of fashion and collectibles"
+        subtitle="Shared ownership of desirable items"
         onBack={handleBack}
-        insets={insets}
-        onLedger={() => navigation.navigate('MarketLedger')}
-        onCreate={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
+        actions={[
+          { icon: 'receipt-outline', label: 'Ledger', onPress: () => navigation.navigate('MarketLedger') },
+          { icon: 'add-circle-outline', label: 'Create', onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
+        ]}
       />
 
       <FlashList
@@ -245,6 +311,13 @@ export default function CoOwnHubScreen() {
         numColumns={2}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.textSecondary}
+          />
+        }
         ListHeaderComponent={
           <View>
             {/* Search */}
@@ -252,270 +325,247 @@ export default function CoOwnHubScreen() {
               <AppInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search Co-Own items..."
-                prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
-                accessibilityLabel="Search co-own assets"
+                placeholder="Search items, brands, categories..."
+                prefix={<Ionicons name="search-outline" size={16} color={colors.textMuted} />}
+                accessibilityLabel="Search Co-Own marketplace"
               />
             </View>
 
-            {/* Navigation tabs: Discover / Portfolio / Activity */}
-            <View style={styles.navTabs}>
-              <NavTab
+            {/* Tab rail: Discover / Portfolio / Activity */}
+            <View style={styles.tabRail}>
+              <TabButton
                 label="Discover"
-                active={!isSearching}
-                onPress={() => { setQuery(''); haptics.selection(); }}
+                active={activeTab === 'discover' && !isSearching}
+                onPress={() => { setActiveTab('discover'); setQuery(''); haptics.selection(); }}
+                colors={colors}
               />
-              <NavTab
+              <TabButton
                 label="Portfolio"
+                badge={yourPositions.length}
+                active={activeTab === 'portfolio'}
                 onPress={() => { haptics.tap(); navigation.navigate('Portfolio'); }}
+                colors={colors}
               />
-              <NavTab
+              <TabButton
                 label="Activity"
+                active={activeTab === 'activity'}
                 onPress={() => { haptics.tap(); navigation.navigate('CoOwnOrderHistory'); }}
+                colors={colors}
               />
             </View>
 
-            {/* Sort control */}
-            <View style={styles.sortWrap}>
-              <AppSegmentControl
-                options={SORT_OPTIONS}
-                value={sortBy}
-                onChange={setSortBy}
-                fullWidth
-              />
-            </View>
-
-            {/* Featured hero (only when not searching) */}
-            {!isSearching && featuredAsset && (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Featured</Text>
-              </View>
-            )}
-            {!isSearching && featuredAsset && (
-              <CoOwnFeaturedHero
-                imageUri={featuredAsset.image}
-                title={featuredAsset.title}
-                unitPrice={formatFromFiat(featuredAsset.unitPriceGBP, 'GBP')}
-                availableUnits={featuredAsset.availableUnits}
-                totalUnits={featuredAsset.totalUnits}
-                status={featuredAsset.isOpen ? (featuredAsset.availableUnits > 0 ? 'open' : 'closed') : 'paused'}
-                onPress={() => navigation.navigate('AssetDetail', { assetId: featuredAsset.id })}
-                onAction={() => navigation.navigate('AssetDetail', { assetId: featuredAsset.id })}
-                actionLabel="View details"
-              />
-            )}
-
-            {/* Your positions (when authenticated and holdings exist) */}
-            {!isSearching && yourPositions.length > 0 && (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Your positions</Text>
-                <AnimatedPressable
-                  onPress={() => { haptics.tap(); navigation.navigate('Portfolio'); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="View all positions"
-                >
-                  <Meta style={styles.sectionLink}>All</Meta>
-                </AnimatedPressable>
-              </View>
-            )}
-            {!isSearching && yourPositions.length > 0 && (
-              <View style={styles.positionsRow}>
-                {yourPositions.slice(0, 2).map((asset) => (
-                  <CoOwnDiscoveryCard
-                    key={asset.id}
-                    imageUri={asset.image}
-                    title={asset.title}
-                    unitPrice={formatFromFiat(asset.unitPriceGBP, 'GBP')}
-                    availableUnits={asset.availableUnits}
-                    totalUnits={asset.totalUnits}
-                    status={asset.isOpen ? (asset.availableUnits > 0 ? 'open' : 'closed') : 'paused'}
-                    onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-                  />
+            {/* Sort control — non-speculative language */}
+            {!isSearching && (
+              <View style={styles.sortRow}>
+                {(['newest', 'available', 'allocation'] as SortOption[]).map((opt) => (
+                  <AnimatedPressable
+                    key={opt}
+                    onPress={() => { setSortBy(opt); haptics.selection(); }}
+                    style={[
+                      styles.sortChip,
+                      {
+                        backgroundColor: sortBy === opt ? colors.brand : colors.surfaceAlt,
+                        borderColor: sortBy === opt ? colors.brand : colors.border,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Sort by ${SORT_LABELS[opt]}`}
+                    accessibilityState={{ selected: sortBy === opt }}
+                  >
+                    <Text style={[
+                      styles.sortChipText,
+                      { color: sortBy === opt ? colors.background : colors.textSecondary },
+                    ]}>
+                      {SORT_LABELS[opt]}
+                    </Text>
+                  </AnimatedPressable>
                 ))}
               </View>
             )}
 
-            {/* Available now section header */}
+            {/* Featured asset — media-first, product desire */}
+            {!isSearching && featuredAsset && (
+              <View style={styles.featuredWrap}>
+                <CoOwnFeaturedAsset
+                  imageUri={featuredAsset.image}
+                  title={featuredAsset.title}
+                  categoryEyebrow="Featured Co-Own"
+                  unitPriceLabel={formatFromFiat(featuredAsset.unitPriceGBP, 'GBP')}
+                  availableUnits={featuredAsset.availableUnits}
+                  totalUnits={featuredAsset.totalUnits}
+                  status={formatStatus(featuredAsset)}
+                  onPress={() => navigation.navigate('AssetDetail', { assetId: featuredAsset.id })}
+                  onAction={() => navigation.navigate('AssetDetail', { assetId: featuredAsset.id })}
+                  actionLabel="View item"
+                />
+              </View>
+            )}
+
+            {/* Your positions preview */}
+            {!isSearching && yourPositions.length > 0 && (
+              <View style={styles.sectionWrap}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your positions</Text>
+                  <AnimatedPressable
+                    onPress={() => { haptics.tap(); navigation.navigate('Portfolio'); }}
+                    accessibilityRole="button"
+                    accessibilityLabel="View all positions"
+                  >
+                    <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>All {yourPositions.length}</Text>
+                  </AnimatedPressable>
+                </View>
+                <View style={styles.positionsRow}>
+                  {yourPositions.slice(0, 2).map((asset) => (
+                    <CoOwnAssetTile
+                      key={asset.id}
+                      imageUri={asset.image}
+                      title={asset.title}
+                      unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
+                      availableUnits={asset.availableUnits}
+                      totalUnits={asset.totalUnits}
+                      status={formatStatus(asset)}
+                      onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* New issues */}
+            {!isSearching && newIssues.length > 0 && (
+              <View style={styles.sectionWrap}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>New issues</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{newIssues.length} items</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Nearly allocated — only if real */}
+            {!isSearching && nearlyAllocated.length > 0 && (
+              <View style={styles.sectionWrap}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Nearly allocated</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{nearlyAllocated.length} items</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Available now header */}
             {!isSearching && discoveryAssets.length > 0 && (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Available now</Text>
-                <Meta style={styles.sectionCount}>{discoveryAssets.length} items</Meta>
+              <View style={styles.sectionWrap}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Available now</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{discoveryAssets.length} items</Text>
+                </View>
               </View>
             )}
 
             {/* Search results header */}
             {isSearching && (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Results</Text>
-                <Meta style={styles.sectionCount}>{filteredAssets.length} items</Meta>
+              <View style={styles.sectionWrap}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Results</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{filteredAssets.length} items</Text>
+                </View>
               </View>
             )}
           </View>
         }
         renderItem={({ item, index }) => (
-          <View style={styles.discoveryCardWrap}>
-            <CoOwnDiscoveryCard
+          <View style={styles.tileWrap}>
+            <CoOwnAssetTile
               imageUri={item.image}
               title={item.title}
-              unitPrice={formatFromFiat(item.unitPriceGBP, 'GBP')}
+              unitPriceLabel={formatFromFiat(item.unitPriceGBP, 'GBP')}
               availableUnits={item.availableUnits}
               totalUnits={item.totalUnits}
-              status={item.isOpen ? (item.availableUnits > 0 ? 'open' : 'closed') : 'paused'}
+              status={formatStatus(item)}
               onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
               index={index}
             />
           </View>
         )}
         ListEmptyComponent={
-          <EmptyState
-            graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
-            title={isSearching ? "No results" : "No co-own assets"}
-            subtitle={isSearching ? "Try a different search term." : "Assets will appear here once pools are issued."}
+          <CoOwnStateCanvas
+            variant="empty"
+            title={isSearching ? 'No results' : 'No items available'}
+            subtitle={isSearching ? 'Try a different search term.' : 'Check back soon for new Co-Own items.'}
+            emptyGraphicVariant="search"
           />
         }
         ListFooterComponent={
           !isSearching ? (
-            <View>
-              {/* How it works module */}
-              <View style={styles.educationModule}>
-                <Text style={styles.educationTitle}>How Co-Own works</Text>
-                <View style={styles.educationItem}>
-                  <Ionicons name="cube-outline" size={18} color={Colors.brand} />
-                  <View style={styles.educationTextWrap}>
-                    <BodyEmphasis style={styles.educationItemTitle}>Buy units</BodyEmphasis>
-                    <Body style={styles.educationItemBody}>Own a fraction of a fashion item through affordable units.</Body>
-                  </View>
-                </View>
-                <View style={styles.educationItem}>
-                  <Ionicons name="swap-horizontal-outline" size={18} color={Colors.brand} />
-                  <View style={styles.educationTextWrap}>
-                    <BodyEmphasis style={styles.educationItemTitle}>Trade units</BodyEmphasis>
-                    <Body style={styles.educationItemBody}>List your units for sale or buy more from other co-owners.</Body>
-                  </View>
-                </View>
-                <View style={styles.educationItem}>
-                  <Ionicons name="shield-checkmark-outline" size={18} color={Colors.brand} />
-                  <View style={styles.educationTextWrap}>
-                    <BodyEmphasis style={styles.educationItemTitle}>Transparent rules</BodyEmphasis>
-                    <Body style={styles.educationItemBody}>Fees, settlement, and risks are disclosed before every transaction.</Body>
-                  </View>
-                </View>
-                <AnimatedPressable
-                  style={styles.educationLink}
-                  onPress={() => { haptics.tap(); navigation.navigate('CoOwnOnboarding'); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Learn more about co-own"
-                >
-                  <Text style={styles.educationLinkText}>Learn more</Text>
-                  <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
-                </AnimatedPressable>
-              </View>
+            <View style={styles.footerWrap}>
+              {/* How Co-Own works */}
+              <CoOwnEducationCard
+                onLearnMore={() => navigation.navigate('CoOwnOnboarding')}
+                learnMoreLabel="Read full guide"
+              />
 
-              {/* Quick links */}
-              <View style={styles.quickLinks}>
-                <AnimatedPressable
-                  style={styles.quickLink}
-                  onPress={() => { haptics.tap(); navigation.navigate('Portfolio'); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open portfolio"
-                >
-                  <Ionicons name="pie-chart-outline" size={20} color={Colors.textPrimary} />
-                  <Meta style={styles.quickLinkLabel}>Portfolio</Meta>
-                </AnimatedPressable>
-                <AnimatedPressable
-                  style={styles.quickLink}
-                  onPress={() => { haptics.tap(); navigation.navigate('CoOwnOrderHistory'); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open order history"
-                >
-                  <Ionicons name="time-outline" size={20} color={Colors.textPrimary} />
-                  <Meta style={styles.quickLinkLabel}>Orders</Meta>
-                </AnimatedPressable>
-                <AnimatedPressable
-                  style={styles.quickLink}
-                  onPress={() => { haptics.tap(); navigation.navigate('MarketLedger'); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open market ledger"
-                >
-                  <Ionicons name="pulse-outline" size={20} color={Colors.textPrimary} />
-                  <Meta style={styles.quickLinkLabel}>Ledger</Meta>
-                </AnimatedPressable>
-              </View>
+              {/* Ledger link */}
+              <AnimatedPressable
+                onPress={() => { haptics.tap(); navigation.navigate('MarketLedger'); }}
+                style={[styles.ledgerLink, { borderColor: colors.border }]}
+                accessibilityRole="button"
+                accessibilityLabel="View market ledger"
+              >
+                <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
+                <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]}>View market ledger</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </AnimatedPressable>
+
+              <View style={{ height: Space.xxl }} />
             </View>
           ) : null
         }
+        estimatedItemSize={240}
       />
     </SafeAreaView>
   );
 }
 
-// ── Editorial header matching AuctionMarketHeader language ──
-function CoOwnHubHeader({
-  title,
-  context,
-  onBack,
-  insets,
-  onLedger,
-  onCreate,
+// ── Tab button ──
+function TabButton({
+  label,
+  active,
+  onPress,
+  badge,
+  colors,
 }: {
-  title: string;
-  context: string;
-  onBack: () => void;
-  insets: { top: number };
-  onLedger: () => void;
-  onCreate: () => void;
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  badge?: number;
+  colors: { brand: string; background: string; textPrimary: string; textSecondary: string; surfaceAlt: string; border: string };
 }) {
-  return (
-    <View style={[styles.header, { paddingTop: insets.top + Space.xs }]}>
-      <View style={styles.headerRow}>
-        <AnimatedPressable
-          onPress={onBack}
-          style={styles.headerIconBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
-          <Text style={styles.headerContext} numberOfLines={1}>{context}</Text>
-        </View>
-
-        <View style={styles.headerActions}>
-          <AnimatedPressable
-            onPress={onLedger}
-            style={styles.headerIconBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Open market ledger"
-          >
-            <Ionicons name="pulse-outline" size={22} color={Colors.textPrimary} />
-          </AnimatedPressable>
-          <AnimatedPressable
-            onPress={onCreate}
-            style={styles.headerCreateBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Issue new co-own"
-          >
-            <Ionicons name="add" size={22} color={Colors.brand} />
-          </AnimatedPressable>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// ── Navigation tab ──
-function NavTab({ label, active, onPress }: { label: string; active?: boolean; onPress: () => void }) {
   return (
     <AnimatedPressable
       onPress={onPress}
-      style={[styles.navTab, active && styles.navTabActive]}
-      accessibilityRole="tab"
+      style={[
+        styles.tabBtn,
+        {
+          backgroundColor: active ? colors.brand : 'transparent',
+          borderColor: active ? colors.brand : colors.border,
+        },
+      ]}
+      accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ selected: !!active }}
+      accessibilityState={{ selected: active }}
     >
-      <Text style={[styles.navTabText, active && styles.navTabTextActive]}>{label}</Text>
+      <Text style={[
+        styles.tabBtnText,
+        { color: active ? colors.background : colors.textSecondary },
+      ]}>
+        {label}
+      </Text>
+      {badge != null && badge > 0 ? (
+        <View style={[styles.tabBadge, { backgroundColor: active ? colors.background : colors.brand }]}>
+          <Text style={[styles.tabBadgeText, { color: active ? colors.brand : colors.background }]}>
+            {badge}
+          </Text>
+        </View>
+      ) : null}
     </AnimatedPressable>
   );
 }
@@ -523,215 +573,109 @@ function NavTab({ label, active, onPress }: { label: string; active?: boolean; o
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
-  // Header
-  header: {
-    paddingBottom: Space.sm - 2,
+  listContent: {
     paddingHorizontal: Space.md,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    minHeight: 48,
-  },
-  headerIconBtn: {
-    width: 36,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCreateBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(244,240,232,0.10)',
-    marginLeft: 4,
-  },
-  headerTitleWrap: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontFamily: Typography.family.bold,
-    fontSize: 30,
-    color: Colors.textPrimary,
-    letterSpacing: -0.8,
-  },
-  headerContext: {
-    fontFamily: Typography.family.regular,
-    fontSize: 13,
-    color: Colors.textSecondary,
-    letterSpacing: -0.1,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  // Search
   searchWrap: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
-  // Nav tabs
-  navTabs: {
-    flexDirection: 'row',
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    gap: Space.sm,
-  },
-  navTab: {
-    paddingVertical: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  navTabActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-  },
-  navTabText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-  },
-  navTabTextActive: {
-    color: Colors.background,
-  },
-  // Sort
-  sortWrap: {
-    marginHorizontal: Space.md,
     marginBottom: Space.md,
   },
-  // Section headers
-  sectionHeader: {
+  tabRail: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginBottom: Space.md,
+  },
+  tabBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+  },
+  tabBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  tabBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    marginBottom: Space.lg,
+  },
+  sortChip: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-    marginTop: Space.sm,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  sortChipText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+  },
+  featuredWrap: {
+    marginBottom: Space.lg,
+  },
+  sectionWrap: {
+    marginBottom: Space.lg,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Space.md,
   },
   sectionTitle: {
     fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
     letterSpacing: -0.3,
   },
   sectionLink: {
-    color: Colors.brand,
-    fontWeight: '600',
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
   },
   sectionCount: {
-    color: Colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
   },
-  // Discovery grid
-  discoveryCardWrap: {
-    flex: 1,
-    paddingHorizontal: Space.sm / 2,
-    marginBottom: Space.sm,
-  },
-  listContent: {
-    paddingBottom: Space.xxl,
-  },
-  // Positions row
   positionsRow: {
     flexDirection: 'row',
-    paddingHorizontal: Space.md - Space.sm / 2,
-    marginBottom: Space.lg,
-  },
-  // Loading skeleton
-  loadingWrap: {
-    flex: 1,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
-  skeletonHero: {
-    width: '100%',
-    height: 280,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    marginBottom: Space.lg,
-  },
-  skeletonRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-  },
-  skeletonCard: {
-    flex: 1,
-    height: 280,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-  },
-  // Education module
-  educationModule: {
-    marginHorizontal: Space.md,
-    marginTop: Space.lg,
-    marginBottom: Space.md,
-    padding: Space.lg,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  educationTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginBottom: Space.md,
-  },
-  educationItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: Space.md,
-    marginBottom: Space.md,
   },
-  educationTextWrap: {
+  tileWrap: {
     flex: 1,
-    gap: 2,
-  },
-  educationItemTitle: {
-    fontSize: Type.body.size,
-    color: Colors.textPrimary,
-  },
-  educationItemBody: {
-    fontSize: Type.caption.size,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-  },
-  educationLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: Space.xs,
-  },
-  educationLinkText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-  },
-  // Quick links
-  quickLinks: {
-    flexDirection: 'row',
-    marginHorizontal: Space.md,
+    paddingHorizontal: Space.xs,
     marginBottom: Space.lg,
-    gap: Space.sm,
   },
-  quickLink: {
-    flex: 1,
+  footerWrap: {
+    paddingTop: Space.lg,
+  },
+  ledgerLink: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: Space.sm,
     paddingVertical: Space.md,
-    backgroundColor: Colors.surface,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    marginTop: Space.lg,
   },
-  quickLinkLabel: {
-    color: Colors.textSecondary,
+  ledgerLinkText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
   },
 });
