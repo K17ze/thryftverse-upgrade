@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -12,8 +12,8 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
-import { Space, Radius } from '../theme/designTokens';
-import { TradeHeader, TradeCard } from '../components/trade';
+import { Space, Radius, Typography } from '../theme/designTokens';
+import { TradeCard } from '../components/trade';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Meta, BodyEmphasis } from '../components/ui/Text';
@@ -32,39 +32,42 @@ export default function AssetLeaderboardScreen() {
 
   const [assets, setAssets] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  React.useEffect(() => {
-    let cancelled = false;
+  const loadLeaderboard = React.useCallback(async () => {
     setIsLoading(true);
-    listCoOwnAssets({ limit: 120 })
-      .then((items) => {
-        if (cancelled) return;
-        setAssets(items.map((item) => ({
-          id: item.id,
-          title: item.title,
-          image: item.imageUrl ?? '',
-          totalUnits: item.totalUnits,
-          availableUnits: item.availableUnits,
-          unitPriceGBP: item.unitPriceGbp,
-          unitPriceStable: item.unitPriceStable,
-          settlementMode: item.settlementMode,
-          issuerId: item.issuerId,
-          marketMovePct24h: item.marketMovePct24h,
-          holders: item.holders,
-          volume24hGBP: item.volume24hGbp,
-          isOpen: item.isOpen,
-        })));
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        const parsed = parseApiError(err, 'Unable to load leaderboard');
-        show(parsed.message, 'error');
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => { cancelled = true; };
+    try {
+      const items = await listCoOwnAssets({ limit: 120 });
+      setAssets(items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        image: item.imageUrl ?? '',
+        totalUnits: item.totalUnits,
+        availableUnits: item.availableUnits,
+        unitPriceGBP: item.unitPriceGbp,
+        unitPriceStable: item.unitPriceStable,
+        settlementMode: item.settlementMode,
+        issuerId: item.issuerId,
+        marketMovePct24h: item.marketMovePct24h,
+        holders: item.holders,
+        volume24hGBP: item.volume24hGbp,
+        isOpen: item.isOpen,
+      })));
+    } catch (err) {
+      const parsed = parseApiError(err, 'Unable to load leaderboard');
+      show(parsed.message, 'error');
+    } finally {
+      setIsLoading(false);
+    }
   }, [show]);
+
+  React.useEffect(() => { void loadLeaderboard(); }, [loadLeaderboard]);
+
+  const handleRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await loadLeaderboard();
+    setRefreshing(false);
+  }, [loadLeaderboard]);
 
   const topMovers = React.useMemo(() => [...assets].sort((a, b) => b.marketMovePct24h - a.marketMovePct24h).slice(0, 5), [assets]);
   const topMarketValue = React.useMemo(
@@ -131,12 +134,49 @@ export default function AssetLeaderboardScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
-      <TradeHeader title="Asset Leaderboard" onBack={() => navigation.goBack()} />
+      {/* Editorial header */}
+      <View style={styles.header}>
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          style={styles.headerBackBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+        </AnimatedPressable>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Leaderboards</Text>
+          <Text style={styles.headerContext} numberOfLines={1}>Top performing Co-Own assets</Text>
+        </View>
+      </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.textSecondary}
+          />
+        }
+      >
         {isLoading ? (
-          <View style={styles.centered}>
-            <Meta style={styles.emptyText}>Loading leaderboard...</Meta>
+          <View style={styles.skeletonWrap}>
+            {[0, 1, 2].map((section) => (
+              <View key={section} style={styles.skeletonCard}>
+                <View style={styles.skeletonHeader} />
+                {[0, 1, 2, 3].map((row) => (
+                  <View key={row} style={styles.skeletonRow}>
+                    <View style={styles.skeletonThumb} />
+                    <View style={styles.skeletonTextWrap}>
+                      <View style={styles.skeletonTitle} />
+                      <View style={styles.skeletonSub} />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ))}
           </View>
         ) : (
           <>
@@ -155,18 +195,84 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.6,
+  },
+  headerContext: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
     gap: Space.sm,
   },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Skeleton
+  skeletonWrap: {
+    gap: Space.sm,
   },
-  emptyText: {
-    color: Colors.textSecondary,
+  skeletonCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  skeletonHeader: {
+    width: 120,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.surfaceAlt,
+    marginBottom: Space.sm,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  skeletonThumb: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  skeletonTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  skeletonTitle: {
+    width: '60%',
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  skeletonSub: {
+    width: '40%',
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.surfaceAlt,
   },
   sectionCard: {
     padding: Space.sm,

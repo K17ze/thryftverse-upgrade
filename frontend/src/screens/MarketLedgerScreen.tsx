@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,15 +16,16 @@ import {
   MarketHistoryCursor,
   listUserMarketHistory,
 } from '../services/marketApi';
-import { Space } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { TradeHeader, MetricGrid, OrderHistoryRow } from '../components/trade';
+import { OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { EmptyState } from '../components/EmptyState';
-import { Meta } from '../components/ui/Text';
+import { Meta, BodyEmphasis } from '../components/ui/Text';
 import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -196,19 +197,45 @@ export default function MarketLedgerScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <TradeHeader title="Market Ledger" onBack={() => navigation.goBack()} />
+      {/* Editorial header */}
+      <View style={styles.header}>
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          style={styles.headerBackBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+        </AnimatedPressable>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Ledger</Text>
+          <Text style={styles.headerContext} numberOfLines={1}>Market activity and trade history</Text>
+        </View>
+      </View>
 
       <Reanimated.View
         entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}
       >
-        <MetricGrid
-          metrics={[
-            { label: 'Volume', value: formatMoney(totalMarketValue) },
-            { label: 'Net Cashflow', value: formatSignedMoney(netCashflow), tone: netCashflow >= 0 ? 'positive' : 'negative' },
-            { label: 'Realized P&L', value: formatSignedMoney(realizedCoOwnPL), tone: realizedCoOwnPL >= 0 ? 'positive' : 'negative' },
-          ]}
-          columns={3}
-        />
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryStat}>
+            <Meta style={styles.summaryStatLabel}>Volume</Meta>
+            <BodyEmphasis style={styles.summaryStatValue}>{formatMoney(totalMarketValue)}</BodyEmphasis>
+          </View>
+          <View style={styles.summaryStatDivider} />
+          <View style={styles.summaryStat}>
+            <Meta style={styles.summaryStatLabel}>Net cashflow</Meta>
+            <BodyEmphasis style={[styles.summaryStatValue, netCashflow >= 0 ? styles.positive : styles.negative]}>
+              {formatSignedMoney(netCashflow)}
+            </BodyEmphasis>
+          </View>
+          <View style={styles.summaryStatDivider} />
+          <View style={styles.summaryStat}>
+            <Meta style={styles.summaryStatLabel}>Realized P&L</Meta>
+            <BodyEmphasis style={[styles.summaryStatValue, realizedCoOwnPL >= 0 ? styles.positive : styles.negative]}>
+              {formatSignedMoney(realizedCoOwnPL)}
+            </BodyEmphasis>
+          </View>
+        </View>
       </Reanimated.View>
 
       <Reanimated.View
@@ -309,6 +336,67 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.6,
+  },
+  headerContext: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  summaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  summaryStat: {
+    flex: 1,
+    gap: 2,
+  },
+  summaryStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: Colors.border,
+    marginHorizontal: Space.sm,
+  },
+  summaryStatLabel: {
+    color: Colors.textMuted,
+  },
+  summaryStatValue: {
+    fontSize: 15,
+  },
+  positive: {
+    color: Colors.success,
+  },
+  negative: {
+    color: Colors.danger,
   },
   filterWrap: {
     marginHorizontal: Space.md,
