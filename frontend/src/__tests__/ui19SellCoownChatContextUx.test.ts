@@ -88,8 +88,8 @@ describe('UI-19 sell co-own and chat marketplace context UX', () => {
 
   it('TradeConfirmScreen uses premium visual primitives', () => {
     const src = read(resolve(SCREENS, 'TradeConfirmScreen.tsx'));
-    expect(src).toContain('ScreenHeader');
-    expect(src).toContain('PremiumStatusPill');
+    expect(src).toContain('CoOwnMarketHeader');
+    expect(src).toContain('CoOwnTradeReceipt');
     expect(src).toContain('FadeInDown');
   });
 
@@ -97,8 +97,8 @@ describe('UI-19 sell co-own and chat marketplace context UX', () => {
   it('TradeScreen navigates to TradeConfirm with order summary', () => {
     const src = read(resolve(SCREENS, 'TradeScreen.tsx'));
     expect(src).toContain('TradeConfirm');
-    expect(src).toContain('feeGbp');
-    expect(src).toContain('totalGbp');
+    expect(src).toContain('fee');
+    expect(src).toContain('totalValue');
   });
 
   // ── 9. ManageListingScreen uses FlagshipActionCluster ──

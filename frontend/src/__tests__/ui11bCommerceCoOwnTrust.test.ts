@@ -35,13 +35,12 @@ describe('UI-11B commerce + co-own trust UI rebuild', () => {
     expect(src).not.toContain('picsum.photos');
   });
 
-  // 4. CoOwnIssue uses flagship action cluster and form hierarchy.
-  // The screen no longer renders a fake success state (FlagshipEmptyGraphic
-  // was part of the removed fake "Report recorded" success screen).
+  // 4. CoOwnIssue uses CoOwn component system and routes to HelpSupport.
+  // The screen no longer renders a fake success state.
   // It now routes to the real Help & Support flow.
-  it('CoOwnIssueScreen uses FlagshipActionCluster and routes to HelpSupport', () => {
+  it('CoOwnIssueScreen uses CoOwn component system and routes to HelpSupport', () => {
     const src = readSrc('screens/CoOwnIssueScreen.tsx');
-    expect(src).toContain('FlagshipActionCluster');
+    expect(src).toContain("from '../components/coown'");
     expect(src).toContain('AppInput');
     expect(src).toContain('FadeInDown');
     expect(src).toContain("navigation.navigate('HelpSupport')");
