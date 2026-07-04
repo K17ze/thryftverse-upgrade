@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import Reanimated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import type { Listing } from '../data/mockData';
@@ -23,15 +23,22 @@ import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { FinancialDisclosure } from '../components/FinancialDisclosure';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'CreateCoOwn'>;
+
+// The backend enforces a maximum of 20 units per Co-Own issuance.
+// This is a real backend constraint, not a UI-only limit.
+const MAX_UNITS = 20;
+
+type Stage = 'select' | 'configure' | 'review';
 
 export default function CreateCoOwnScreen() {
   const navigation = useNavigation<NavT>();
@@ -41,6 +48,8 @@ export default function CreateCoOwnScreen() {
   const { currencyCode, goldRates } = useCurrencyContext();
   const { listings } = useBackendData();
   const reducedMotionEnabled = useReducedMotion();
+  const haptic = useHaptic();
+  const insets = useSafeAreaInsets();
 
   const prefill = route.params;
 
@@ -61,6 +70,7 @@ export default function CreateCoOwnScreen() {
     [prefill, issuerListings]
   );
 
+  const [stage, setStage] = React.useState<Stage>('select');
   const [selectedListingId, setSelectedListingId] = React.useState(initialState.selectedListingId);
   const [totalUnitsInput, setTotalUnitsInput] = React.useState(initialState.totalUnitsInput);
   const [unitPriceInput, setUnitPriceInput] = React.useState(initialState.unitPriceInput);
@@ -71,7 +81,7 @@ export default function CreateCoOwnScreen() {
     if (!sanitized) { setTotalUnitsInput(''); return; }
     const parsed = Math.floor(Number(sanitized));
     if (!Number.isFinite(parsed) || parsed <= 0) { setTotalUnitsInput('1'); return; }
-    setTotalUnitsInput(String(Math.min(20, parsed)));
+    setTotalUnitsInput(String(Math.min(MAX_UNITS, parsed)));
   }, []);
 
   const fromDisplayToGbp = React.useCallback(
@@ -106,8 +116,8 @@ export default function CreateCoOwnScreen() {
     }
 
     const totalUnits = Number(totalUnitsInput);
-    if (!Number.isFinite(totalUnits) || totalUnits < 1 || totalUnits > 20 || !Number.isInteger(totalUnits)) {
-      show('Units must be an integer between 1 and 20', 'error');
+    if (!Number.isFinite(totalUnits) || totalUnits < 1 || totalUnits > MAX_UNITS || !Number.isInteger(totalUnits)) {
+      show(`Units must be an integer between 1 and ${MAX_UNITS}`, 'error');
       return;
     }
 
@@ -163,15 +173,50 @@ export default function CreateCoOwnScreen() {
     return toIze(unitPriceGBP, 'GBP', goldRates);
   }, [fromDisplayToGbp, goldRates, unitPriceInput]);
 
+  const previewImage = selectedListing
+    ? getListingCoverUri(selectedListing.images, '')
+    : '';
+
+  const canProceedToConfigure = !!selectedListing;
+  const canProceedToReview = !!selectedListing
+    && Number(totalUnitsInput) >= 1
+    && Number(totalUnitsInput) <= MAX_UNITS
+    && Number(unitPriceInput) > 0;
+
+  const handleNext = () => {
+    if (stage === 'select' && canProceedToConfigure) {
+      haptic.medium();
+      setStage('configure');
+    } else if (stage === 'configure' && canProceedToReview) {
+      haptic.medium();
+      setStage('review');
+    }
+  };
+
+  const handleBack = () => {
+    if (stage === 'configure') {
+      setStage('select');
+    } else if (stage === 'review') {
+      setStage('configure');
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const stageTitle = stage === 'select' ? 'Select listing' : stage === 'configure' ? 'Configure' : 'Review';
+
   const renderListingCard = ({ item }: { item: Listing }) => {
     const selected = item.id === selectedListingId;
     return (
       <AnimatedPressable
         style={[styles.listingCard, selected && styles.listingCardSelected]}
-        onPress={() => setSelectedListingId(item.id)}
+        onPress={() => { haptic.selection(); setSelectedListingId(item.id); }}
         activeOpacity={0.9}
         disableAnimation={false}
         scaleValue={0.97}
+        accessibilityRole="button"
+        accessibilityLabel={`Select ${item.title}`}
+        accessibilityState={{ selected }}
       >
         <CachedImage
           uri={getListingCoverUri(item.images, '')}
@@ -192,151 +237,247 @@ export default function CreateCoOwnScreen() {
     );
   };
 
-  const previewImage = selectedListing
-    ? getListingCoverUri(selectedListing.images, '')
-    : '';
-
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <TradeHeader
-        title="Issue Co-Own"
-        showClose
-        onClose={() => navigation.goBack()}
-        rightAction={
-          <AppButton
-            title="Issue"
-            onPress={issueCoOwn}
-            variant="primary"
-            size="sm"
-            style={styles.headerIssueBtn}
-            hapticFeedback="medium"
-            accessibilityLabel="Issue co-own"
-          />
-        }
-      />
+      {/* Header with back/close and stage indicator */}
+      <View style={styles.header}>
+        <AnimatedPressable
+          onPress={handleBack}
+          style={styles.headerBackBtn}
+          accessibilityRole="button"
+          accessibilityLabel={stage === 'select' ? 'Close' : 'Go back'}
+        >
+          <Ionicons name={stage === 'select' ? 'close' : 'chevron-back'} size={24} color={Colors.textPrimary} />
+        </AnimatedPressable>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>{stageTitle}</Text>
+          <Text style={styles.headerContext}>Issue Co-Own</Text>
+        </View>
+        <View style={styles.stageIndicator}>
+          <View style={[styles.stageDot, stage === 'select' && styles.stageDotActive]} />
+          <View style={[styles.stageDot, stage === 'configure' && styles.stageDotActive]} />
+          <View style={[styles.stageDot, stage === 'review' && styles.stageDotActive]} />
+        </View>
+      </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-          <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
-        </Reanimated.View>
-
-        <FlashList
-          data={issuerListings}
-          horizontal
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.listingListContent}
-          renderItem={renderListingCard}
-          ListEmptyComponent={
-            <View style={styles.emptyListWrap}>
-              <Ionicons name="cube-outline" size={32} color={Colors.textMuted} />
-              <Meta style={styles.emptyListText}>
-                {issuerId
-                  ? 'You have no eligible listings. Create a listing first to issue a Co-Own.'
-                  : 'Sign in to issue a Co-Own from your listings.'}
-              </Meta>
-              {!issuerId ? (
-                <AppButton
-                  title="Sign In"
-                  onPress={() => navigation.goBack()}
-                  variant="secondary"
-                  size="sm"
-                  style={{ marginTop: Space.sm }}
-                />
-              ) : (
-                <AppButton
-                  title="Create Listing"
-                  onPress={() => navigation.navigate('Sell')}
-                  variant="secondary"
-                  size="sm"
-                  style={{ marginTop: Space.sm }}
-                />
-              )}
-            </View>
-          }
-        />
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
-          <TradeCard variant="elevated" style={styles.previewCard}>
-            <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
-            <View style={styles.previewMeta}>
-              <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
-                {selectedListing?.title ?? 'Select a listing'}
-              </BodyEmphasis>
-              <Meta style={styles.previewPrice}>
-                {selectedListing ? formatFromFiat(selectedListing.price, 'GBP', { displayMode: 'fiat' }) : '—'}
-              </Meta>
-            </View>
-          </TradeCard>
-        </Reanimated.View>
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
-          <TradeCard style={styles.formCard}>
-            <Meta style={styles.sectionLabel}>TOTAL UNITS (MAX 20)</Meta>
-            <AppInput
-              value={totalUnitsInput}
-              onChangeText={handleTotalUnitsChange}
-              keyboardType="number-pad"
-              placeholder="1"
-              accessibilityLabel="Total units"
-              containerStyle={styles.input}
+        {/* ── Stage 1: Select listing ── */}
+        {stage === 'select' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+            <Meta style={styles.sectionLabel}>Select a listing to split into Co-Own units</Meta>
+            <FlashList
+              data={issuerListings}
+              horizontal
+              keyExtractor={(item) => item.id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.listingListContent}
+              renderItem={renderListingCard}
+              ListEmptyComponent={
+                <View style={styles.emptyListWrap}>
+                  <Ionicons name="cube-outline" size={32} color={Colors.textMuted} />
+                  <Meta style={styles.emptyListText}>
+                    {issuerId
+                      ? 'You have no eligible listings. Create a listing first to issue a Co-Own.'
+                      : 'Sign in to issue a Co-Own from your listings.'}
+                  </Meta>
+                  {!issuerId ? (
+                    <AppButton
+                      title="Sign In"
+                      onPress={() => navigation.goBack()}
+                      variant="secondary"
+                      size="sm"
+                      style={{ marginTop: Space.sm }}
+                    />
+                  ) : (
+                    <AppButton
+                      title="Create Listing"
+                      onPress={() => navigation.navigate('Sell')}
+                      variant="secondary"
+                      size="sm"
+                      style={{ marginTop: Space.sm }}
+                    />
+                  )}
+                </View>
+              }
             />
-          </TradeCard>
-        </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
-          <TradeCard style={styles.formCard}>
-            <Meta style={styles.sectionLabel}>UNIT PRICE ({currencyCode})</Meta>
-            <AppInput
-              value={unitPriceInput}
-              onChangeText={(value) => setUnitPriceInput(sanitizeDecimalInput(value))}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              prefix={currencyCode}
-              accessibilityLabel="Unit price"
-              containerStyle={styles.input}
-            />
-          </TradeCard>
-        </Reanimated.View>
+            {selectedListing && (
+              <View style={styles.previewCard}>
+                <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
+                <View style={styles.previewMeta}>
+                  <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
+                    {selectedListing.title}
+                  </BodyEmphasis>
+                  <Meta style={styles.previewPrice}>
+                    {formatFromFiat(selectedListing.price, 'GBP', { displayMode: 'fiat' })}
+                  </Meta>
+                </View>
+              </View>
+            )}
+          </Reanimated.View>
+        )}
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
-          <TradeCard style={styles.formCard}>
-            <Meta style={styles.sectionLabel}>ESTIMATED VALUE</Meta>
-            <View style={styles.estimatedRow}>
-              <View>
-                <BodyEmphasis style={styles.estimatedValue}>
-                  {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
-                </BodyEmphasis>
-                <Meta style={styles.estimatedSub}>
-                  {estimatedValueIze > 0 ? `${formatIzeAmount(estimatedValueIze)} 1ze` : ''}
+        {/* ── Stage 2: Configure units and price ── */}
+        {stage === 'configure' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+            {/* Selected listing context */}
+            <View style={styles.contextCard}>
+              <CachedImage uri={previewImage} style={styles.contextImage} contentFit="cover" />
+              <View style={styles.contextInfo}>
+                <BodyEmphasis style={styles.contextTitle} numberOfLines={1}>{selectedListing?.title}</BodyEmphasis>
+                <Meta style={styles.contextPrice}>
+                  {selectedListing ? formatFromFiat(selectedListing.price, 'GBP', { displayMode: 'fiat' }) : '—'}
                 </Meta>
               </View>
-              <View style={styles.stablePreview}>
-                <Meta style={styles.stableLabel}>1ze / unit</Meta>
-                <Body style={styles.stableValue}>
-                  {unitPriceStablePreview > 0 ? formatIzeAmount(unitPriceStablePreview) : '—'}
-                </Body>
+            </View>
+
+            {/* Total units */}
+            <View style={styles.formCard}>
+              <View style={styles.formLabelRow}>
+                <Meta style={styles.formLabel}>Total units</Meta>
+                <Meta style={styles.formHint}>Max {MAX_UNITS}</Meta>
+              </View>
+              <AppInput
+                value={totalUnitsInput}
+                onChangeText={handleTotalUnitsChange}
+                keyboardType="number-pad"
+                placeholder="1"
+                suffix="units"
+                accessibilityLabel="Total units"
+              />
+              <View style={styles.unitPresets}>
+                {[5, 10, 20].map((preset) => (
+                  <AnimatedPressable
+                    key={preset}
+                    style={styles.unitPreset}
+                    onPress={() => { haptic.selection(); setTotalUnitsInput(String(preset)); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set units to ${preset}`}
+                  >
+                    <Text style={styles.unitPresetText}>{preset}</Text>
+                  </AnimatedPressable>
+                ))}
               </View>
             </View>
-          </TradeCard>
-        </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}>
+            {/* Unit price */}
+            <View style={styles.formCard}>
+              <Meta style={styles.formLabel}>Unit price ({currencyCode})</Meta>
+              <AppInput
+                value={unitPriceInput}
+                onChangeText={(value) => setUnitPriceInput(sanitizeDecimalInput(value))}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                prefix={currencyCode}
+                accessibilityLabel="Unit price"
+              />
+            </View>
+
+            {/* Estimated value */}
+            <View style={styles.estimateCard}>
+              <Meta style={styles.formLabel}>Estimated value</Meta>
+              <View style={styles.estimatedRow}>
+                <View>
+                  <BodyEmphasis style={styles.estimatedValue}>
+                    {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
+                  </BodyEmphasis>
+                  <Meta style={styles.estimatedSub}>
+                    {estimatedValueIze > 0 ? `${formatIzeAmount(estimatedValueIze)} 1ze` : ''}
+                  </Meta>
+                </View>
+                <View style={styles.stablePreview}>
+                  <Meta style={styles.stableLabel}>1ze / unit</Meta>
+                  <Body style={styles.stableValue}>
+                    {unitPriceStablePreview > 0 ? formatIzeAmount(unitPriceStablePreview) : '—'}
+                  </Body>
+                </View>
+              </View>
+            </View>
+          </Reanimated.View>
+        )}
+
+        {/* ── Stage 3: Review and issue ── */}
+        {stage === 'review' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+            {/* Asset preview */}
+            <View style={styles.reviewAssetCard}>
+              <CachedImage uri={previewImage} style={styles.reviewAssetImage} contentFit="cover" />
+              <View style={styles.reviewAssetInfo}>
+                <BodyEmphasis style={styles.reviewAssetTitle} numberOfLines={2}>
+                  {selectedListing?.title} Split
+                </BodyEmphasis>
+                <Meta style={styles.reviewAssetSub}>Co-Own issuance</Meta>
+              </View>
+            </View>
+
+            {/* Summary */}
+            <View style={styles.summaryCard}>
+              <Meta style={styles.summaryLabel}>ISSUANCE SUMMARY</Meta>
+              <View style={styles.summaryRow}>
+                <Meta style={styles.summaryKey}>Listing</Meta>
+                <Text style={styles.summaryValue} numberOfLines={1}>{selectedListing?.title}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Meta style={styles.summaryKey}>Total units</Meta>
+                <Text style={styles.summaryValue}>{totalUnitsInput}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Meta style={styles.summaryKey}>Unit price</Meta>
+                <Text style={styles.summaryValue}>
+                  {Number(unitPriceInput) > 0 ? `${unitPriceInput} ${currencyCode}` : '—'}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Meta style={styles.summaryKey}>Settlement</Meta>
+                <Text style={styles.summaryValue}>TVUSD</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryRow}>
+                <BodyEmphasis style={styles.summaryKey}>Total value</BodyEmphasis>
+                <BodyEmphasis style={styles.summaryTotal}>
+                  {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
+                </BodyEmphasis>
+              </View>
+            </View>
+
+            {/* Risk disclosure */}
+            <View style={styles.riskCard}>
+              <FinancialDisclosure />
+            </View>
+          </Reanimated.View>
+        )}
+      </ScrollView>
+
+      {/* Bottom action bar */}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {stage === 'review' ? (
           <AppButton
             title={isSubmitting ? 'Issuing...' : 'Issue Co-Own'}
             icon={<Ionicons name="flash-outline" size={16} color={Colors.background} />}
             onPress={() => void issueCoOwn()}
             variant="primary"
-            size="md"
-            style={styles.issueBtn}
+            size="lg"
             disabled={isSubmitting}
-            hapticFeedback="medium"
+            hapticFeedback="heavy"
             accessibilityLabel="Issue co-own"
+            style={{ flex: 1 }}
           />
-        </Reanimated.View>
-      </ScrollView>
+        ) : (
+          <AppButton
+            title="Continue"
+            icon={<Ionicons name="arrow-forward" size={18} color={Colors.background} />}
+            onPress={handleNext}
+            variant="primary"
+            size="lg"
+            disabled={stage === 'select' ? !canProceedToConfigure : !canProceedToReview}
+            hapticFeedback="medium"
+            accessibilityLabel="Continue to next step"
+            style={{ flex: 1 }}
+          />
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -346,19 +487,59 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerIssueBtn: {
-    borderRadius: 12,
-    minHeight: 34,
-    paddingHorizontal: 12,
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.xs,
   },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  headerContext: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  stageIndicator: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  stageDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  stageDotActive: {
+    backgroundColor: Colors.brand,
+  },
+  // Content
   content: {
-    paddingBottom: Space.xl,
+    paddingBottom: Space.xxl,
   },
   sectionLabel: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     marginTop: Space.md,
+    color: Colors.textSecondary,
   },
+  // Listing selection
   listingListContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
@@ -415,14 +596,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Preview (stage 1)
   previewCard: {
-    marginTop: Space.sm,
+    marginHorizontal: Space.md,
+    marginTop: Space.md,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
     padding: Space.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   previewImageContainer: {
     width: '100%',
     height: 200,
     borderRadius: Radius.md,
+    overflow: 'hidden',
   },
   previewImage: {
     width: '100%',
@@ -435,11 +623,86 @@ const styles = StyleSheet.create({
   previewPrice: {
     marginTop: 2,
   },
+  // Context card (stage 2)
+  contextCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    marginHorizontal: Space.md,
+    marginTop: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  contextImage: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  contextInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  contextTitle: {
+    fontSize: 15,
+  },
+  contextPrice: {
+    color: Colors.textSecondary,
+  },
+  // Form cards
   formCard: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  formLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Space.sm,
+  },
+  formLabel: {
+    color: Colors.textSecondary,
+    marginBottom: Space.sm,
+  },
+  formHint: {
+    color: Colors.textMuted,
+  },
+  // Unit presets
+  unitPresets: {
+    flexDirection: 'row',
+    gap: Space.sm,
     marginTop: Space.sm,
   },
-  input: {
-    marginTop: Space.xs,
+  unitPreset: {
+    flex: 1,
+    paddingVertical: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+  },
+  unitPresetText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  // Estimate
+  estimateCard: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   estimatedRow: {
     flexDirection: 'row',
@@ -448,21 +711,107 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   estimatedValue: {
-    color: Colors.brand,
+    fontSize: 22,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.3,
   },
   estimatedSub: {
+    color: Colors.textSecondary,
     marginTop: 2,
   },
   stablePreview: {
     alignItems: 'flex-end',
   },
-  stableLabel: {},
+  stableLabel: {
+    color: Colors.textMuted,
+  },
   stableValue: {
     color: Colors.textPrimary,
     marginTop: 2,
   },
-  issueBtn: {
+  // Review stage
+  reviewAssetCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
     marginHorizontal: Space.md,
-    marginTop: Space.lg,
+    marginTop: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  reviewAssetImage: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  reviewAssetInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  reviewAssetTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  reviewAssetSub: {
+    color: Colors.textSecondary,
+  },
+  summaryCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  summaryLabel: {
+    color: Colors.textMuted,
+    marginBottom: Space.sm,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  summaryKey: {
+    color: Colors.textSecondary,
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: Space.md,
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: Space.sm,
+  },
+  summaryTotal: {
+    fontSize: 18,
+    fontFamily: Typography.family.bold,
+    color: Colors.brand,
+  },
+  riskCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.lg,
+  },
+  // Bottom bar
+  bottomBar: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    backgroundColor: Colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
   },
 });
