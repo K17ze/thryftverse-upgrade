@@ -32,9 +32,10 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain("import { OrderLedgerRow");
   });
 
-  it('SyndicateHubScreen imports FlagshipAssetCard', () => {
+  it('SyndicateHubScreen imports Co-Own discovery components', () => {
     const src = readSrc('screens/SyndicateHubScreen.tsx');
-    expect(src).toContain("import { FlagshipAssetCard");
+    expect(src).toContain("CoOwnFeaturedHero");
+    expect(src).toContain("CoOwnDiscoveryCard");
   });
 
   it('PortfolioScreen imports FlagshipAssetCard', () => {
@@ -63,9 +64,9 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain('<OrderLedgerRow');
   });
 
-  it('SyndicateHubScreen renders FlagshipAssetCard in list', () => {
+  it('SyndicateHubScreen renders CoOwnDiscoveryCard in list', () => {
     const src = readSrc('screens/SyndicateHubScreen.tsx');
-    expect(src).toContain('<FlagshipAssetCard');
+    expect(src).toContain('<CoOwnDiscoveryCard');
   });
 
   it('PortfolioScreen renders FlagshipAssetCard in list', () => {
