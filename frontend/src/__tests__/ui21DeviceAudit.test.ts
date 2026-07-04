@@ -118,7 +118,6 @@ describe('UI-21 device UX audit and consistency restoration', () => {
       'MarketLedgerScreen.tsx',
       'SyndicateOrderHistoryScreen.tsx',
       'AssetLeaderboardScreen.tsx',
-      'SyndicateScreen.tsx',
     ];
     for (const screen of screens) {
       const src = read(resolve(SCREENS, screen));

@@ -93,7 +93,8 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
         id: item.id,
         assetId: item.referenceId,
         // The backend joins sa.title as note — use it instead of the raw asset ID.
-        assetTitle: item.note ?? `Co-Own ${item.referenceId.slice(-6).toUpperCase()}`,
+        // Do not fabricate a title by slicing the reference UUID.
+        assetTitle: item.note ?? 'Co-Own asset',
         side: item.action === 'buy-units' ? 'buy' : 'sell',
         // Preserve the real order type from the backend, default to market when null.
         type: item.orderType === 'limit' ? 'limit' : 'market',

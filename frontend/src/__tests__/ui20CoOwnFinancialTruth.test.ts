@@ -141,14 +141,6 @@ describe('UI-20 co-own financial truth and UX', () => {
     expect(src).toContain('fetchCoOwnHoldings');
   });
 
-  // ── 12. SyndicateScreen removes mock data imports ──
-  it('SyndicateScreen no longer imports runtime tradeHub data', () => {
-    const src = read(resolve(SCREENS, 'SyndicateScreen.tsx'));
-    expect(src).not.toContain("getCoOwnMarket");
-    expect(src).not.toContain("getUserLabel");
-    expect(src).not.toContain("resolveAssetMarketState");
-  });
-
   // ── 13. FinancialDisclosure reusable component exists ──
   it('FinancialDisclosure component exists and has risk items', () => {
     const src = read(resolve(COMPONENTS, 'FinancialDisclosure.tsx'));

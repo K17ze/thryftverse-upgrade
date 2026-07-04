@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar } from 'react-native';
+import { View, StyleSheet, StatusBar, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -12,15 +12,14 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { parseApiError } from '../lib/apiClient';
-import { createCoOwnBuyoutOffer, fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
+import { fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
-import { TradeHeader, TradeCard } from '../components/trade';
-import { Space, Radius } from '../theme/designTokens';
+import { TradeHeader } from '../components/trade';
+import { Space, Radius, Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
-import { FinancialDisclosure } from '../components/FinancialDisclosure';
 
 type RouteT = RouteProp<RootStackParamList, 'Buyout'>;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -30,7 +29,6 @@ export default function BuyoutScreen() {
   const route = useRoute<RouteT>();
   const { show } = useToast();
   const { isDark } = useAppTheme();
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
@@ -95,51 +93,8 @@ export default function BuyoutScreen() {
     );
   }
 
-  const sharesNeeded = Math.max(0, asset.totalUnits - sharesOwned);
   const ownershipPct = asset.totalUnits > 0 ? (sharesOwned / asset.totalUnits) * 100 : 0;
-  const offerPricePerShare = Number((asset.unitPriceGbp * 1.08).toFixed(2));
-  const totalCost = sharesNeeded * offerPricePerShare;
-
-  const handleBuyout = async () => {
-    if (isSubmitting) return;
-
-    // Never fabricate an actor identity. Buyout requires authentication.
-    if (!currentUser?.id) {
-      show('Sign in is required to initiate a buyout.', 'error');
-      return;
-    }
-
-    if (sharesNeeded <= 0) {
-      // Viewer already owns all units — no buyout transition is needed.
-      // Do not claim a success state that implies a backend transition occurred.
-      show('You already own 100% of this asset pool.', 'info');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const response = await createCoOwnBuyoutOffer(asset.id, {
-        bidderUserId: currentUser.id,
-        offerPriceGbp: offerPricePerShare,
-        targetUnits: sharesNeeded,
-        expiresInHours: 24,
-        metadata: { source: 'buyout_screen' },
-      });
-
-      show('Buyout offer submitted. Track progress in order history.', 'success');
-      if (response.aml?.alertId) show('Buyout offer is flagged for AML review.', 'info');
-      navigation.navigate('CoOwnOrderHistory');
-    } catch (error) {
-      const parsedError = parseApiError(error, 'Unable to submit buyout offer');
-      if (parsedError.isNetworkError) {
-        show('Network unavailable. Could not submit buyout offer.', 'error');
-      } else {
-        show(parsedError.message, 'error');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const ownsAll = sharesOwned >= asset.totalUnits && asset.totalUnits > 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -147,62 +102,83 @@ export default function BuyoutScreen() {
 
       <TradeHeader title="Buyout" onBack={() => navigation.goBack()} />
 
-      <View style={styles.content}>
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-          <CachedImage uri={asset.imageUrl ?? ''} style={styles.image} containerStyle={styles.imageContainer} contentFit="cover" />
-        </Reanimated.View>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {asset.imageUrl ? (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+            <CachedImage uri={asset.imageUrl} style={styles.image} containerStyle={styles.imageContainer} contentFit="cover" />
+          </Reanimated.View>
+        ) : null}
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(50)}>
           <BodyEmphasis style={styles.title}>{asset.title}</BodyEmphasis>
         </Reanimated.View>
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
-          <TradeCard>
-            <View style={styles.row}>
-              <Meta>Owned shares</Meta>
-              <BodyEmphasis>{sharesOwned} / {asset.totalUnits}</BodyEmphasis>
+          <View style={styles.positionSummary}>
+            <View style={styles.positionRow}>
+              <Meta style={styles.positionLabel}>Your units</Meta>
+              <BodyEmphasis style={styles.positionValue}>{sharesOwned} / {asset.totalUnits}</BodyEmphasis>
             </View>
-            <View style={styles.row}>
-              <Meta>Ownership</Meta>
-              <BodyEmphasis>{ownershipPct.toFixed(2)}%</BodyEmphasis>
+            <View style={styles.positionRow}>
+              <Meta style={styles.positionLabel}>Ownership</Meta>
+              <BodyEmphasis style={styles.positionValue}>{ownershipPct.toFixed(1)}%</BodyEmphasis>
             </View>
-            <View style={styles.row}>
-              <Meta>Remaining shares</Meta>
-              <BodyEmphasis>{sharesNeeded}</BodyEmphasis>
-            </View>
-            <View style={styles.row}>
-              <Meta>Buyout offer/share</Meta>
-              <BodyEmphasis>{formatFromFiat(offerPricePerShare, 'GBP', { displayMode: 'fiat' })}</BodyEmphasis>
-            </View>
-            <View style={[styles.row, styles.totalRow]}>
-              <BodyEmphasis>Estimated buyout total</BodyEmphasis>
-              <BodyEmphasis style={{ color: Colors.brand }}>{formatFromFiat(totalCost, 'GBP')}</BodyEmphasis>
-            </View>
-          </TradeCard>
+          </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
-          <FinancialDisclosure />
-        </Reanimated.View>
+        {ownsAll ? (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+            <View style={styles.unavailableCard}>
+              <Ionicons name="checkmark-circle-outline" size={32} color={Colors.success} />
+              <BodyEmphasis style={styles.unavailableTitle}>You own 100% of this Co-Own</BodyEmphasis>
+              <Body style={styles.unavailableBody}>
+                You already hold all units in this pool. No buyout is needed.
+              </Body>
+            </View>
+          </Reanimated.View>
+        ) : (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+            <View style={styles.unavailableCard}>
+              <View style={styles.unavailableIconWrap}>
+                <Ionicons name="lock-closed-outline" size={28} color={Colors.textMuted} />
+              </View>
+              <BodyEmphasis style={styles.unavailableTitle}>Buyout is not available yet</BodyEmphasis>
+              <Body style={styles.unavailableBody}>
+                Full buyout lifecycle — including offer acceptance, rejection, cancellation, and settlement — is not yet supported for this Co-Own.
+              </Body>
+              <Body style={styles.unavailableBody}>
+                When buyout is enabled, you will be able to make an offer on the remaining units, track acceptance from other co-owners, and complete the transfer through a server-verified process.
+              </Body>
+              <View style={styles.futureFeatures}>
+                <View style={styles.futureFeatureRow}>
+                  <Ionicons name="checkmark" size={14} color={Colors.textMuted} />
+                  <Meta style={styles.futureFeatureText}>Server-calculated buyout price</Meta>
+                </View>
+                <View style={styles.futureFeatureRow}>
+                  <Ionicons name="checkmark" size={14} color={Colors.textMuted} />
+                  <Meta style={styles.futureFeatureText}>Co-owner acceptance tracking</Meta>
+                </View>
+                <View style={styles.futureFeatureRow}>
+                  <Ionicons name="checkmark" size={14} color={Colors.textMuted} />
+                  <Meta style={styles.futureFeatureText}>Settlement and transfer receipt</Meta>
+                </View>
+              </View>
+            </View>
+          </Reanimated.View>
+        )}
 
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
           <AppButton
-            style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
-            title={isSubmitting ? 'Submitting...' : sharesNeeded > 0 ? 'Initiate Buyout' : 'You Own 100%'}
-            icon={<Ionicons name="diamond-outline" size={16} color={Colors.textInverse} />}
-            onPress={handleBuyout}
-            disabled={isSubmitting || sharesNeeded <= 0}
-            variant="primary"
+            title="Back to asset"
+            onPress={() => navigation.replace('AssetDetail', { assetId: asset.id })}
+            variant="secondary"
             size="md"
-            hapticFeedback="heavy"
-            accessibilityLabel={sharesNeeded > 0 ? 'Initiate buyout' : 'You own 100 percent of this pool'}
+            style={styles.backBtn}
+            icon={<Ionicons name="arrow-back" size={16} color={Colors.textPrimary} />}
+            accessibilityLabel="Go back to asset detail"
           />
         </Reanimated.View>
-
-        <Meta style={styles.footNote}>
-          Buyout requests are routed to the order ledger so you can monitor acceptance and settlement status.
-        </Meta>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -222,7 +198,8 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: 4,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xxl,
   },
   imageContainer: {
     width: '100%',
@@ -230,34 +207,74 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     backgroundColor: Colors.surface,
     marginBottom: Space.sm,
+    overflow: 'hidden',
   },
   image: {
     width: '100%',
     height: '100%',
   },
   title: {
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
   },
-  row: {
+  positionSummary: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    marginBottom: Space.lg,
+  },
+  positionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: Space.xs,
   },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    marginTop: Space.xs,
-    paddingTop: Space.sm,
+  positionLabel: {
+    color: Colors.textSecondary,
   },
-  submitBtn: {
-    marginTop: Space.lg,
+  positionValue: {
+    fontSize: 16,
   },
-  submitBtnDisabled: {
-    opacity: 0.52,
+  unavailableCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.lg,
+    alignItems: 'center',
+    marginBottom: Space.lg,
   },
-  footNote: {
-    marginTop: Space.md,
+  unavailableIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Space.md,
+  },
+  unavailableTitle: {
     textAlign: 'center',
+    marginBottom: Space.sm,
+    fontSize: 17,
+  },
+  unavailableBody: {
+    textAlign: 'center',
+    color: Colors.textSecondary,
+    marginBottom: Space.sm,
+    lineHeight: 22,
+  },
+  futureFeatures: {
+    marginTop: Space.md,
+    alignSelf: 'stretch',
+    gap: Space.xs,
+  },
+  futureFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  futureFeatureText: {
+    color: Colors.textMuted,
+  },
+  backBtn: {
+    marginTop: Space.sm,
   },
 });

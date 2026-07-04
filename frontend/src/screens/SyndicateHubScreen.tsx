@@ -285,7 +285,6 @@ export default function CoOwnHubScreen() {
         data={filteredAssets}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => {
-          const issuerHandle = item.issuerId.slice(0, 12);
           const canMessageIssuer = currentUser?.id !== item.issuerId;
           const marketValue = item.totalUnits * item.unitPriceGBP;
           const openValue = item.availableUnits * item.unitPriceGBP;

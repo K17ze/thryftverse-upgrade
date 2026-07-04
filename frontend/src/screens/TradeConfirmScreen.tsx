@@ -92,7 +92,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     navigation.goBack();
   };
 
-  const assetName = assetTitle ?? `Co-Own ${assetId.slice(-6).toUpperCase()}`;
+  const assetName = assetTitle ?? 'Co-Own asset';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

@@ -192,6 +192,10 @@ export default function AssetDetailScreen() {
   const bestBid = orderBook.bids.length > 0 ? orderBook.bids[0] : null;
   const bestAsk = orderBook.asks.length > 0 ? orderBook.asks[0] : null;
 
+  // Ownership distribution: only show authoritative accounts.
+  // The backend provides aggregate holder count (asset.holders) but does NOT
+  // provide individual holder identities or per-holder unit distribution.
+  // Do NOT fabricate "other holders" by subtraction — that invents data.
   const ownerAccounts: Array<{ id: string; handle: string; role: string; units: number; isYou?: boolean }> = [];
   ownerAccounts.push({
     id: `issuer_${asset.issuerId}`,
@@ -210,14 +214,6 @@ export default function AssetDetailScreen() {
   }
   const allocatedUnits = ownerAccounts.reduce((sum, account) => sum + account.units, 0);
   const remainingUnits = Math.max(0, totalUnits - allocatedUnits);
-  if (remainingUnits > 0) {
-    ownerAccounts.push({
-      id: 'other_holders',
-      handle: `${Math.max(0, asset.holders - (isHolder ? 1 : 0) - 1)} other holders`,
-      role: 'Co-owners',
-      units: remainingUnits,
-    });
-  }
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
 
@@ -520,6 +516,10 @@ export default function AssetDetailScreen() {
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Total supply</Text>
               <Text style={styles.totalValue}>{totalUnits}u</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total holders</Text>
+              <Text style={styles.totalValue}>{asset.holders}</Text>
             </View>
             {isHolder && !isIssuer && (
               <Pressable
