@@ -1,12 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, StatusBar, ScrollView } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -25,16 +24,19 @@ import { fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
-import { AppStatusPill } from '../components/ui/AppStatusPill';
-import { TradeHeader } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Typography } from '../theme/designTokens';
-import { Motion } from '../constants/motion';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
-import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
-import { FinancialDisclosure } from '../components/FinancialDisclosure';
-import { CachedImage } from '../components/CachedImage';
+import { haptics } from '../utils/haptics';
+import {
+  CoOwnMarketHeader,
+  CoOwnTradeComposer,
+  CoOwnTradeSkeleton,
+  CoOwnStateCanvas,
+  CoOwnStickyActionDock,
+  CoOwnRiskDisclosure,
+} from '../components/coown';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
@@ -44,23 +46,13 @@ const TRADE_SIDE_OPTIONS: Array<{ value: TradeSide; label: string; accessibility
   { value: 'sell', label: 'SELL', accessibilityLabel: 'Sell side' },
 ];
 
-const COMPLIANCE_BLOCK_CODES = new Set([
-  'RISK_DISCLOSURE_REQUIRED', 'KYC_REQUIRED', 'KYC_LEVEL_INSUFFICIENT',
-  'JURISDICTION_BLOCKED', 'JURISDICTION_RULE_MISSING', 'SANCTIONS_BLOCKED',
-  'SANCTIONS_REVIEW_REQUIRED', 'TRADING_DISABLED', 'MAX_ORDER_NOTIONAL_EXCEEDED',
-  'MAX_DAILY_NOTIONAL_EXCEEDED', 'MAX_OPEN_ORDERS_EXCEEDED', 'AML_BLOCKED',
-]);
-
-function isComplianceBlocked(code: string | null) {
-  return !!code && COMPLIANCE_BLOCK_CODES.has(code);
-}
-
 export default function TradeScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
-  const { isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
+  const insets = useSafeAreaInsets();
 
   const currentUser = useStore((state) => state.currentUser);
   const checkCoOwnEligibility = useStore((state) => state.checkCoOwnEligibility);
@@ -116,7 +108,6 @@ export default function TradeScreen() {
   );
 
   const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: 'Asset not found' };
-
   const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote });
 
   const haptic = useHaptic();
@@ -147,32 +138,43 @@ export default function TradeScreen() {
     });
   };
 
+  const handleBack = React.useCallback(() => {
+    if (navigation.canGoBack()) { navigation.goBack(); return; }
+    navigation.navigate('AssetDetail', { assetId: tradeAssetId ?? '' });
+  }, [navigation, tradeAssetId]);
+
+  // ── Loading state ──
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-        <TradeHeader title="Trade" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyWrap}>
-          <Meta style={styles.emptyText}>Loading asset details...</Meta>
-        </View>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Trade"
+          subtitle="Buy or sell Co-Own units"
+          onBack={handleBack}
+        />
+        <CoOwnTradeSkeleton />
       </SafeAreaView>
     );
   }
 
+  // ── Error state ──
   if (isError || !asset) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-        <TradeHeader title="Trade" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyWrap}>
-          <BodyEmphasis style={styles.emptyText}>Asset not found.</BodyEmphasis>
-          <AppButton
-            title="Back to Hub"
-            onPress={() => navigation.navigate('CoOwnHub')}
-            variant="secondary"
-            style={{ marginTop: Space.md }}
-          />
-        </View>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Trade"
+          subtitle="Buy or sell Co-Own units"
+          onBack={handleBack}
+        />
+        <CoOwnStateCanvas
+          variant="error"
+          title="Item not found"
+          subtitle="This Co-Own item may have been delisted."
+          actionLabel="Back to Co-Own"
+          onAction={() => navigation.navigate('CoOwnHub')}
+        />
       </SafeAreaView>
     );
   }
@@ -180,90 +182,67 @@ export default function TradeScreen() {
   const availableUnits = Math.max(0, asset.availableUnits);
   const sellableUnits = side === 'sell' ? yourUnits : availableUnits;
   const maxUnits = side === 'sell' ? yourUnits : availableUnits;
+  const settlementLabel = asset.settlementMode === 'GBP' ? 'GBP' : asset.settlementMode === 'TVUSD' ? 'TVUSD' : 'GBP + TVUSD';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      <TradeHeader title={side === 'buy' ? 'Buy units' : 'Sell units'} onBack={() => navigation.goBack()} />
+      <CoOwnMarketHeader
+        title={side === 'buy' ? 'Buy units' : 'Sell units'}
+        subtitle={asset.title}
+        onBack={handleBack}
+      />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* ── Product identity ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-          <View style={styles.productCard}>
-            {asset.imageUrl ? (
-              <CachedImage uri={asset.imageUrl} style={styles.productImage} contentFit="cover" />
-            ) : (
-              <View style={[styles.productImage, styles.productImageFallback]}>
-                <Ionicons name="cube-outline" size={24} color={Colors.textMuted} />
-              </View>
-            )}
-            <View style={styles.productInfo}>
-              <BodyEmphasis style={styles.productTitle} numberOfLines={2}>{asset.title}</BodyEmphasis>
-              <View style={styles.productPriceRow}>
-                <Meta style={styles.productPriceLabel}>Unit price</Meta>
-                <BodyEmphasis style={styles.productPriceValue}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</BodyEmphasis>
-              </View>
-              <View style={styles.productPriceRow}>
-                <Meta style={styles.productPriceLabel}>Settlement</Meta>
-                <Meta style={styles.productPriceValue}>{asset.settlementMode}</Meta>
-              </View>
-            </View>
-          </View>
-        </Reanimated.View>
-
-        {/* ── Buy/Sell selector ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(50)}>
+        {/* Buy/Sell selector */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <AppSegmentControl
             options={TRADE_SIDE_OPTIONS}
             value={side}
-            onChange={setSide}
+            onChange={(v) => { setSide(v); haptics.selection(); }}
             fullWidth
             style={styles.sideSwitcher}
           />
         </Reanimated.View>
 
-        {/* ── Compliance alert ── */}
+        {/* Compliance alert */}
         {!eligibility.ok && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(60)}>
-            <View style={styles.alertCard}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+            <View style={[styles.alertCard, { backgroundColor: colors.danger + '12', borderColor: colors.danger + '40' }]}>
               <View style={styles.alertRow}>
-                <Ionicons name="warning-outline" size={16} color={Colors.danger} />
-                <BodyEmphasis style={styles.alertTitle}>Trading Restricted</BodyEmphasis>
+                <Ionicons name="warning-outline" size={16} color={colors.danger} />
+                <Text style={[styles.alertTitle, { color: colors.danger }]}>Trading restricted</Text>
               </View>
-              <Body style={styles.alertText}>{eligibility.message}</Body>
+              <Text style={[styles.alertText, { color: colors.textSecondary }]}>{eligibility.message}</Text>
             </View>
           </Reanimated.View>
         )}
 
-        {/* ── Available/sellable units ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(80)}>
-          <View style={styles.availabilityCard}>
-            <View style={styles.availabilityRow}>
-              <Meta style={styles.availabilityLabel}>
-                {side === 'buy' ? 'Available units' : 'Your units'}
-              </Meta>
-              <BodyEmphasis style={styles.availabilityValue}>
-                {side === 'buy' ? availableUnits : yourUnits} / {asset.totalUnits}
-              </BodyEmphasis>
-            </View>
-            {side === 'sell' && yourUnits === 0 && (
-              <Body style={styles.availabilityHint}>
-                You do not hold any units in this Co-Own.
-              </Body>
-            )}
-            {side === 'buy' && availableUnits === 0 && (
-              <Body style={styles.availabilityHint}>
-                All units are allocated. Check the secondary market for sell offers.
-              </Body>
-            )}
-          </View>
+        {/* Trade composer — product identity, availability, quote */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+          <CoOwnTradeComposer
+            imageUri={asset.imageUrl}
+            title={asset.title}
+            side={side}
+            mode={orderMode}
+            units={quote.quantity}
+            unitPriceLabel={formatFromFiat(marketPrice, 'GBP')}
+            grossLabel={formatFromFiat(quote.grossValue, 'GBP')}
+            feeLabel={formatFromFiat(quote.fee, 'GBP')}
+            totalLabel={formatFromFiat(quote.netValue, 'GBP')}
+            totalCaption={side === 'buy' ? 'Including 1% fee' : 'After 1% fee'}
+            settlementLabel={settlementLabel}
+            availableUnits={availableUnits}
+            sellableUnits={yourUnits}
+            maxUnits={maxUnits}
+          />
         </Reanimated.View>
 
-        {/* ── Unit selector ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
-          <View style={styles.sectionCard}>
-            <Meta style={styles.sectionLabel}>Quantity</Meta>
+        {/* Quantity selector */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+          <View style={[styles.inputCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Quantity</Text>
             <AppInput
               value={quantityInput}
               onChangeText={(v) => setQuantityInput(sanitizeTradeQuantityInput(v))}
@@ -274,26 +253,28 @@ export default function TradeScreen() {
             />
             {maxUnits > 0 && (
               <AnimatedPressable
-                onPress={() => setQuantityInput(String(maxUnits))}
+                onPress={() => { haptics.tap(); setQuantityInput(String(maxUnits)); }}
                 accessibilityRole="button"
                 accessibilityLabel={`Set quantity to maximum ${maxUnits} units`}
+                scaleValue={0.96}
+                hapticFeedback="light"
               >
-                <Meta style={styles.maxLink}>Max: {maxUnits}</Meta>
+                <Text style={[styles.maxLink, { color: colors.textSecondary }]}>Max: {maxUnits}</Text>
               </AnimatedPressable>
             )}
           </View>
         </Reanimated.View>
 
-        {/* ── Limit price (optional) ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
-          <View style={styles.sectionCard}>
+        {/* Limit price (optional) */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
+          <View style={[styles.inputCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.limitRow}>
-              <Meta style={styles.sectionLabel}>Limit price (optional)</Meta>
-              <AppStatusPill
-                tone="neutral"
-                label={orderMode === 'limit' ? 'LIMIT' : 'MARKET'}
-                size="sm"
-              />
+              <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Limit price (optional)</Text>
+              <View style={[styles.modePill, { backgroundColor: orderMode === 'limit' ? colors.brand : colors.surfaceAlt }]}>
+                <Text style={[styles.modePillText, { color: orderMode === 'limit' ? colors.background : colors.textSecondary }]}>
+                  {orderMode === 'limit' ? 'LIMIT' : 'MARKET'}
+                </Text>
+              </View>
             </View>
             <AppInput
               value={offerPriceInput}
@@ -302,53 +283,36 @@ export default function TradeScreen() {
               placeholder={`Market: ${formatFromFiat(marketPrice, 'GBP')}`}
               accessibilityLabel="Limit price"
             />
-            <Meta style={styles.marketHint}>
+            <Text style={[styles.marketHint, { color: colors.textMuted }]}>
               {orderMode === 'market'
                 ? `Market price: ${formatFromFiat(marketPrice, 'GBP')} per unit`
                 : `Limit order at ${formatFromFiat(quote.limitPrice ?? 0, 'GBP')} per unit`}
-            </Meta>
+            </Text>
           </View>
         </Reanimated.View>
 
-        {/* ── Quote summary ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
-          <View style={styles.quoteCard}>
-            <Meta style={styles.sectionLabel}>Summary</Meta>
-            <View style={styles.quoteRow}>
-              <Meta>{side === 'buy' ? 'Gross cost' : 'Gross proceeds'}</Meta>
-              <BodyEmphasis>{formatFromFiat(quote.grossValue, 'GBP')}</BodyEmphasis>
-            </View>
-            <View style={styles.quoteRow}>
-              <Meta>Fee ({(CO_OWN_FEE_RATE * 100).toFixed(1)}%)</Meta>
-              <Body>{formatFromFiat(quote.fee, 'GBP')}</Body>
-            </View>
-            <View style={[styles.quoteRow, styles.totalRow]}>
-              <BodyEmphasis>{side === 'buy' ? 'Total cost' : 'Net proceeds'}</BodyEmphasis>
-              <BodyEmphasis style={{ color: Colors.brand }}>{formatFromFiat(quote.netValue, 'GBP')}</BodyEmphasis>
-            </View>
-          </View>
+        {/* Risk disclosure */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
+          <CoOwnRiskDisclosure />
         </Reanimated.View>
 
-        {/* ── Risk disclosure ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
-          <FinancialDisclosure />
-        </Reanimated.View>
-
-        {/* ── Review action ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}>
-          <AppButton
-            title="Review order"
-            icon={<Ionicons name="arrow-forward" size={18} color={Colors.background} />}
-            onPress={handleSubmit}
-            disabled={!canSubmit || isSubmittingOrder}
-            variant="primary"
-            size="lg"
-            style={styles.submitBtn}
-            hapticFeedback="medium"
-            accessibilityLabel={`Review ${side} order`}
-          />
-        </Reanimated.View>
+        <View style={{ height: 120 }} />
       </ScrollView>
+
+      {/* Sticky action dock */}
+      <CoOwnStickyActionDock>
+        <AppButton
+          title="Review order"
+          icon={<Ionicons name="arrow-forward" size={18} color={colors.background} />}
+          onPress={handleSubmit}
+          disabled={!canSubmit || isSubmittingOrder}
+          variant="primary"
+          size="lg"
+          hapticFeedback="medium"
+          accessibilityLabel={`Review ${side} order`}
+          style={styles.submitBtn}
+        />
+      </CoOwnStickyActionDock>
     </SafeAreaView>
   );
 }
@@ -356,76 +320,19 @@ export default function TradeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-  },
-  emptyWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.md,
-  },
-  emptyText: {
-    color: Colors.textSecondary,
   },
   content: {
-    paddingBottom: Space.xxl,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
   },
-  // Product identity
-  productCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  productImage: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  productImageFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  productInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  productTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  productPriceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  productPriceLabel: {
-    color: Colors.textSecondary,
-  },
-  productPriceValue: {
-    color: Colors.textPrimary,
-  },
-  // Side switcher
   sideSwitcher: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
   },
-  // Alert
   alertCard: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     borderWidth: 1,
-    borderColor: Colors.danger + '40',
+    marginBottom: Space.md,
   },
   alertRow: {
     flexDirection: 'row',
@@ -434,91 +341,52 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   alertTitle: {
-    color: Colors.danger,
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
   },
   alertText: {
-    color: Colors.textSecondary,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 20,
   },
-  // Availability
-  availabilityCard: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
+  inputCard: {
     borderRadius: Radius.lg,
+    borderWidth: 0.5,
     padding: Space.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    gap: Space.sm,
+    marginBottom: Space.md,
   },
-  availabilityRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  availabilityLabel: {
-    color: Colors.textSecondary,
-  },
-  availabilityValue: {
-    fontSize: 16,
-  },
-  availabilityHint: {
-    color: Colors.textMuted,
-    marginTop: Space.xs,
-    fontSize: 13,
-  },
-  // Section card
-  sectionCard: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  sectionLabel: {
-    marginBottom: Space.sm,
-    color: Colors.textSecondary,
+  inputLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
   },
   limitRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Space.sm,
+    justifyContent: 'space-between',
   },
-  marketHint: {
-    marginTop: Space.xs,
-    color: Colors.textMuted,
+  modePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  modePillText: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.4,
   },
   maxLink: {
-    color: Colors.brand,
-    marginTop: Space.xs,
-    fontWeight: '600',
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    alignSelf: 'flex-start',
   },
-  // Quote
-  quoteCard: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  marketHint: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
   },
-  quoteRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    marginTop: Space.xs,
-    paddingTop: Space.sm,
-  },
-  // Submit
   submitBtn: {
-    marginHorizontal: Space.md,
-    marginTop: Space.lg,
+    flex: 1,
   },
 });
