@@ -2554,3 +2554,18 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
 });
+});
+    fontFamily: Typography.family.semibold,
+  },
+});
+    fontFamily: Typography.family.semibold,
+  },
+});
+    fontFamily: Typography.family.semibold,
+  },
+});
+  },
+});
+});
+});
+});

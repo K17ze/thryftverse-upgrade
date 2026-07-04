@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar, ScrollView, Text, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { View, StyleSheet, StatusBar, ScrollView, Text, KeyboardAvoidingView, Platform } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,18 +13,18 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { toFiat, toIze, formatAuctionIze } from '../utils/currency';
+import { toFiat, toIze, formatIzeAmount } from '../utils/currency';
 import { useBackendData } from '../context/BackendDataContext';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import { TradeHeader } from '../components/trade';
+import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Meta, BodyEmphasis } from '../components/ui/Text';
+import { Meta, BodyEmphasis, Body, Headline } from '../components/ui/Text';
 import { createAuction } from '../services/marketApi';
 import { createStableId } from '../utils/createStableId';
 import { EmptyState } from '../components/EmptyState';
@@ -193,12 +193,12 @@ export default function CreateAuctionScreen() {
           contentFit="cover"
         />
         <View style={styles.listingMeta}>
-          <BodyEmphasis style={styles.listingTitle} numberOfLines={2}>{item.title}</BodyEmphasis>
+          <BodyEmphasis style={styles.listingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
           <Meta style={styles.listingPrice}>{formatFromFiat(item.price, 'GBP')}</Meta>
         </View>
         {selected && (
           <View style={styles.selectedTick}>
-            <Ionicons name="checkmark" size={12} color={Colors.textInverse} />
+            <Ionicons name="checkmark" size={14} color={Colors.textInverse} />
           </View>
         )}
       </AnimatedPressable>
@@ -223,25 +223,24 @@ export default function CreateAuctionScreen() {
         backIcon="chevron-back"
       />
 
-      {/* Step progress — slim line, compact labels */}
+      {/* Step indicator — refined active/inactive, weighted connectors */}
       <View style={styles.stepIndicator}>
         {['Listing', 'Configure', 'Review'].map((label, i) => {
           const isComplete = i < stage;
           const isActive = i === stage;
+          const isReached = i <= stage;
           return (
-            <React.Fragment key={label}>
-              <View style={styles.stepItem}>
-                <View style={[styles.stepDot, isComplete && styles.stepDotComplete, isActive && styles.stepDotActive]}>
-                  {isComplete ? (
-                    <Ionicons name="checkmark" size={11} color={Colors.textInverse} />
-                  ) : (
-                    <Text style={[styles.stepDotText, (isActive || isComplete) && styles.stepDotTextActive]}>{i + 1}</Text>
-                  )}
-                </View>
-                <Text style={[styles.stepLabel, (isActive || isComplete) && styles.stepLabelActive, isActive && styles.stepLabelCurrent]}>{label}</Text>
+            <View key={label} style={styles.stepItem}>
+              <View style={[styles.stepDot, isReached && styles.stepDotActive, isComplete && styles.stepDotComplete]}>
+                {isComplete ? (
+                  <Ionicons name="checkmark" size={12} color={Colors.textInverse} />
+                ) : (
+                  <Text style={[styles.stepDotText, isReached && styles.stepDotTextActive]}>{i + 1}</Text>
+                )}
               </View>
+              <Text style={[styles.stepLabel, isReached && styles.stepLabelActive, isActive && styles.stepLabelCurrent]}>{label}</Text>
               {i < 2 && <View style={[styles.stepConnector, i < stage && styles.stepConnectorActive]} />}
-            </React.Fragment>
+            </View>
           );
         })}
       </View>
@@ -267,7 +266,7 @@ export default function CreateAuctionScreen() {
             {stage === 0 && (
               <>
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-                  <Meta style={styles.sectionLabel}>Select listing</Meta>
+                  <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
                 </Reanimated.View>
 
                 <FlashList
@@ -280,22 +279,17 @@ export default function CreateAuctionScreen() {
                 />
 
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
-                  <View style={styles.previewRow}>
-                    <CachedImage
-                      uri={previewImage}
-                      style={styles.previewThumb}
-                      containerStyle={styles.previewThumbContainer}
-                      contentFit="cover"
-                    />
+                  <TradeCard variant="elevated" style={styles.previewCard}>
+                    <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
                     <View style={styles.previewMeta}>
-                      <BodyEmphasis style={styles.previewTitle} numberOfLines={2}>
+                      <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
                         {selectedListing?.title ?? 'Select a listing'}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
                         {selectedListing ? formatFromFiat(selectedListing.price, 'GBP') : '—'}
                       </Meta>
                     </View>
-                  </View>
+                  </TradeCard>
                 </Reanimated.View>
               </>
             )}
@@ -303,10 +297,9 @@ export default function CreateAuctionScreen() {
             {/* ── Stage 1: Configure ── */}
             {stage === 1 && (
               <>
-                {/* Starts */}
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-                  <View style={styles.formSection}>
-                    <Text style={styles.formSectionLabel}>Starts</Text>
+                  <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>START WINDOW</Meta>
                     <View style={styles.windowRow}>
                       {START_WINDOWS.map((win) => (
                         <AnimatedPressable
@@ -316,27 +309,24 @@ export default function CreateAuctionScreen() {
                             startInMinutes === win.minutes && styles.windowChipActive,
                           ]}
                           onPress={() => setStartInMinutes(win.minutes)}
-                          activeOpacity={0.7}
+                          activeOpacity={0.9}
                           hapticFeedback="light"
                           accessibilityRole="button"
                           accessibilityState={{ selected: startInMinutes === win.minutes }}
                           accessibilityLabel={`Start ${win.label}`}
                         >
-                          <Text style={[styles.windowChipText, startInMinutes === win.minutes && styles.windowChipTextActive]}>
+                          <Body style={[styles.windowChipText, startInMinutes === win.minutes && styles.windowChipTextActive]}>
                             {win.label}
-                          </Text>
+                          </Body>
                         </AnimatedPressable>
                       ))}
                     </View>
-                  </View>
+                  </TradeCard>
                 </Reanimated.View>
 
-                <View style={styles.formHairline} />
-
-                {/* Duration */}
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
-                  <View style={styles.formSection}>
-                    <Text style={styles.formSectionLabel}>Duration</Text>
+                  <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>DURATION</Meta>
                     <View style={styles.windowRow}>
                       {DURATION_OPTIONS.map((opt) => (
                         <AnimatedPressable
@@ -346,27 +336,24 @@ export default function CreateAuctionScreen() {
                             durationHours === opt.hours && styles.windowChipActive,
                           ]}
                           onPress={() => setDurationHours(opt.hours)}
-                          activeOpacity={0.7}
+                          activeOpacity={0.9}
                           hapticFeedback="light"
                           accessibilityRole="button"
                           accessibilityState={{ selected: durationHours === opt.hours }}
                           accessibilityLabel={`Duration ${opt.label}`}
                         >
-                          <Text style={[styles.windowChipText, durationHours === opt.hours && styles.windowChipTextActive]}>
+                          <Body style={[styles.windowChipText, durationHours === opt.hours && styles.windowChipTextActive]}>
                             {opt.label}
-                          </Text>
+                          </Body>
                         </AnimatedPressable>
                       ))}
                     </View>
-                  </View>
+                  </TradeCard>
                 </Reanimated.View>
 
-                <View style={styles.formHairline} />
-
-                {/* Starting bid */}
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
-                  <View style={styles.formSection}>
-                    <Text style={styles.formSectionLabel}>Starting bid</Text>
+                  <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>STARTING BID</Meta>
                     <AppInput
                       value={startingBidInput}
                       onChangeText={setStartingBidInput}
@@ -376,130 +363,124 @@ export default function CreateAuctionScreen() {
                       accessibilityLabel="Starting bid"
                       containerStyle={styles.input}
                     />
-                    {startingBidInput && Number(startingBidInput) > 0 && (
-                      <Text style={styles.inputIzeHint}>
-                        {formatAuctionIze(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
-                      </Text>
-                    )}
-                  </View>
+                  </TradeCard>
                 </Reanimated.View>
 
-                <View style={styles.formHairline} />
-
-                {/* Buy Now */}
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
-                  <View style={styles.formSection}>
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+                  <TradeCard style={styles.formCard}>
                     <View style={styles.buyNowRow}>
-                      <Text style={styles.formSectionLabel}>Buy now price</Text>
-                      <Pressable
-                        style={({ pressed }) => [styles.switchTrack, buyNowEnabled && styles.switchTrackActive, pressed && { opacity: 0.7 }]}
+                      <Meta style={styles.sectionLabel}>BUY NOW PRICE</Meta>
+                      <AnimatedPressable
+                        style={[styles.toggleChip, buyNowEnabled && styles.toggleChipActive]}
                         onPress={() => setBuyNowEnabled((v) => !v)}
+                        activeOpacity={0.9}
+                        hapticFeedback="light"
                         accessibilityRole="switch"
                         accessibilityState={{ checked: buyNowEnabled }}
-                        accessibilityLabel="Toggle buy now"
                       >
-                        <View style={[styles.switchThumb, buyNowEnabled && styles.switchThumbActive]} />
-                      </Pressable>
+                        <Body style={[styles.toggleText, buyNowEnabled && styles.toggleTextActive]}>
+                          {buyNowEnabled ? 'ON' : 'OFF'}
+                        </Body>
+                      </AnimatedPressable>
                     </View>
                     {buyNowEnabled && (
-                      <>
-                        <AppInput
-                          value={buyNowInput}
-                          onChangeText={setBuyNowInput}
-                          keyboardType="decimal-pad"
-                          placeholder="0.00"
-                          prefix={currencyCode}
-                          accessibilityLabel="Buy now price"
-                          containerStyle={styles.input}
-                        />
-                        {buyNowInput && Number(buyNowInput) > 0 && (
-                          <Text style={styles.inputIzeHint}>
-                            {formatAuctionIze(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
-                          </Text>
-                        )}
-                      </>
+                      <AppInput
+                        value={buyNowInput}
+                        onChangeText={setBuyNowInput}
+                        keyboardType="decimal-pad"
+                        placeholder="0.00"
+                        prefix={currencyCode}
+                        accessibilityLabel="Buy now price"
+                        containerStyle={styles.input}
+                      />
                     )}
-                  </View>
+                  </TradeCard>
                 </Reanimated.View>
               </>
             )}
 
-            {/* ── Stage 2: Review & Launch — one coherent receipt ── */}
+            {/* ── Stage 2: Review & Launch ── */}
             {stage === 2 && (
               <>
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-                  <Text style={styles.reviewHeadline}>Review your auction</Text>
-                  <Text style={styles.reviewSubheadline}>Confirm the details below before launching.</Text>
+                  <Headline style={styles.reviewHeadline}>Review your auction</Headline>
+                  <Meta style={styles.reviewSubheadline}>Confirm the details below before launching.</Meta>
                 </Reanimated.View>
 
-                {/* Item identity — compact media + title */}
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
-                  <View style={styles.reviewItemRow}>
-                    <CachedImage
-                      uri={previewImage}
-                      style={styles.reviewThumb}
-                      containerStyle={styles.reviewThumbContainer}
-                      contentFit="cover"
-                    />
-                    <View style={styles.reviewItemMeta}>
-                      <Text style={styles.reviewItemTitle} numberOfLines={2}>
+                  <TradeCard variant="elevated" style={styles.previewCard}>
+                    <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
+                    <View style={styles.previewMeta}>
+                      <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
                         {selectedListing?.title ?? 'Select a listing'}
-                      </Text>
-                      <Text style={styles.reviewItemPrice}>
+                      </BodyEmphasis>
+                      <Meta style={styles.previewPrice}>
                         {selectedListing ? formatFromFiat(selectedListing.price, 'GBP') : '—'}
-                      </Text>
+                      </Meta>
                     </View>
-                  </View>
+                  </TradeCard>
                 </Reanimated.View>
 
-                {/* Launch receipt — hairline-divided rows on page surface */}
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
-                  <View style={styles.receiptSection}>
+                  <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>AUCTION SUMMARY</Meta>
                     <View style={styles.termsRow}>
-                      <Text style={styles.termsLabel}>Starts</Text>
-                      <Text style={styles.termsValue}>
+                      <Meta style={styles.termsLabel}>Listing</Meta>
+                      <Body style={styles.termsValue} numberOfLines={1}>{selectedListing?.title ?? '—'}</Body>
+                    </View>
+                    <View style={styles.termsRow}>
+                      <Meta style={styles.termsLabel}>Starts</Meta>
+                      <Body style={styles.termsValue}>
                         {startInMinutes === 0 ? 'Immediately' : `In ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`}
-                      </Text>
+                      </Body>
                     </View>
                     <View style={styles.termsRow}>
-                      <Text style={styles.termsLabel}>Duration</Text>
-                      <Text style={styles.termsValue}>
+                      <Meta style={styles.termsLabel}>Duration</Meta>
+                      <Body style={styles.termsValue}>
                         {DURATION_OPTIONS.find(d => d.hours === durationHours)?.label ?? `${durationHours}h`}
-                      </Text>
+                      </Body>
                     </View>
                     <View style={styles.termsRow}>
-                      <Text style={styles.termsLabel}>Starting bid</Text>
+                      <Meta style={styles.termsLabel}>Starting bid</Meta>
                       <View style={styles.termsValueCol}>
-                        <Text style={styles.termsValue}>
+                        <Body style={styles.termsValue}>
                           {startingBidInput ? `${currencyCode} ${startingBidInput}` : '—'}
-                        </Text>
+                        </Body>
                         {startingBidInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatAuctionIze(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
+                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
                           </Text>
                         )}
                       </View>
                     </View>
                     <View style={styles.termsRow}>
-                      <Text style={styles.termsLabel}>Buy now</Text>
+                      <Meta style={styles.termsLabel}>Buy now</Meta>
                       <View style={styles.termsValueCol}>
-                        <Text style={styles.termsValue}>
+                        <Body style={styles.termsValue}>
                           {buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : 'Disabled'}
-                        </Text>
+                        </Body>
                         {buyNowEnabled && buyNowInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatAuctionIze(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
+                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
                           </Text>
                         )}
                       </View>
                     </View>
-                    <View style={styles.termsRow}>
-                      <Text style={styles.termsLabel}>Platform fee</Text>
-                      <Text style={styles.termsValue}>3% of winning bid</Text>
+                  </TradeCard>
+                </Reanimated.View>
+
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
+                  <View style={styles.termsCard}>
+                    <Meta style={styles.termsSectionLabel}>TERMS & FEES</Meta>
+                    <View style={styles.termsInlineRow}>
+                      <Ionicons name="pricetag-outline" size={13} color={Colors.textMuted} />
+                      <Text style={styles.termsInlineLabel}>Platform fee</Text>
+                      <Text style={styles.termsInlineValue}>3% of winning bid</Text>
                     </View>
-                    <View style={styles.termsRow}>
-                      <Text style={styles.termsLabel}>Settlement</Text>
-                      <Text style={styles.termsValue}>After auction ends</Text>
+                    <View style={styles.termsInlineRow}>
+                      <Ionicons name="time-outline" size={13} color={Colors.textMuted} />
+                      <Text style={styles.termsInlineLabel}>Settlement</Text>
+                      <Text style={styles.termsInlineValue}>After auction ends</Text>
                     </View>
                   </View>
                 </Reanimated.View>
@@ -551,7 +532,7 @@ export default function CreateAuctionScreen() {
       </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Result overlay — compact confirmation ── */}
+      {/* ── Result overlay — crafted success moment ── */}
       {resultData && (
         <View style={styles.resultOverlay}>
           <StatusBar barStyle="light-content" />
@@ -559,40 +540,54 @@ export default function CreateAuctionScreen() {
             entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}
             style={styles.resultCard}
           >
-            <Ionicons name="checkmark-circle" size={32} color={Colors.success} style={styles.resultIcon} />
-            <Text style={styles.resultTitle}>
-              {resultData.startLabel === 'Immediately' ? 'Auction is now live' : 'Auction scheduled'}
-            </Text>
-            <Text style={styles.resultSubtitle} numberOfLines={2}>{resultData.title}</Text>
+            {/* Success mark — refined, not a giant icon */}
+            <View style={styles.resultIconWrap}>
+              <Ionicons name="checkmark" size={28} color={Colors.success} />
+            </View>
+            <Headline style={styles.resultTitle}>Auction Launched</Headline>
+            <Meta style={styles.resultSubtitle}>{resultData.startLabel === 'Immediately' ? 'Your auction is now live' : 'Your auction is scheduled'}</Meta>
+
+            {resultData.imageUrl ? (
+              <CachedImage
+                uri={resultData.imageUrl}
+                style={styles.resultImage}
+                containerStyle={styles.resultImageContainer}
+                contentFit="cover"
+              />
+            ) : null}
 
             <View style={styles.resultSummary}>
               <View style={styles.termsRow}>
-                <Text style={styles.termsLabel}>Starts</Text>
-                <Text style={styles.termsValue}>{resultData.startLabel}</Text>
+                <Meta style={styles.termsLabel}>Listing</Meta>
+                <Body style={styles.termsValue} numberOfLines={1}>{resultData.title}</Body>
               </View>
               <View style={styles.termsRow}>
-                <Text style={styles.termsLabel}>Duration</Text>
-                <Text style={styles.termsValue}>{resultData.durationLabel}</Text>
+                <Meta style={styles.termsLabel}>Starts</Meta>
+                <Body style={styles.termsValue}>{resultData.startLabel}</Body>
               </View>
               <View style={styles.termsRow}>
-                <Text style={styles.termsLabel}>Starting bid</Text>
+                <Meta style={styles.termsLabel}>Duration</Meta>
+                <Body style={styles.termsValue}>{resultData.durationLabel}</Body>
+              </View>
+              <View style={styles.termsRow}>
+                <Meta style={styles.termsLabel}>Starting bid</Meta>
                 <View style={styles.termsValueCol}>
-                  <Text style={styles.termsValue}>{resultData.startingBid}</Text>
+                  <Body style={styles.termsValue}>{resultData.startingBid}</Body>
                   {startingBidInput && (
                     <Text style={styles.termsIzeText}>
-                      {formatAuctionIze(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
+                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
                     </Text>
                   )}
                 </View>
               </View>
               {resultData.buyNow && (
                 <View style={styles.termsRow}>
-                  <Text style={styles.termsLabel}>Buy now</Text>
+                  <Meta style={styles.termsLabel}>Buy now</Meta>
                   <View style={styles.termsValueCol}>
-                    <Text style={styles.termsValue}>{resultData.buyNow}</Text>
+                    <Body style={styles.termsValue}>{resultData.buyNow}</Body>
                     {buyNowInput && (
                       <Text style={styles.termsIzeText}>
-                        {formatAuctionIze(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
+                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
                       </Text>
                     )}
                   </View>
@@ -610,12 +605,12 @@ export default function CreateAuctionScreen() {
                 accessibilityLabel="View the launched auction"
               />
               <AppButton
-                title="Return to Seller Centre"
+                title="Done"
                 onPress={() => navigation.goBack()}
                 variant="secondary"
                 size="md"
                 style={styles.resultBtn}
-                accessibilityLabel="Return to Seller Centre"
+                accessibilityLabel="Close and go back"
               />
             </View>
           </Reanimated.View>
@@ -643,27 +638,37 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     marginTop: Space.md,
   },
-  // ── Listing cards — compact, subtle keyline selected state ──
+  // ── Listing cards — elevated with shadow + rounded image ──
   listingListContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
     paddingBottom: Space.sm,
   },
   listingCard: {
-    width: 120,
+    width: 150,
     backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
+      android: { elevation: 2 },
+    }),
   },
   listingCardSelected: {
     borderColor: Colors.brand,
-    borderWidth: 1.5,
+    borderWidth: 2,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.16, shadowRadius: 12 },
+      android: { elevation: 6 },
+    }),
   },
   listingImageContainer: {
     width: '100%',
-    height: 100,
+    height: 170,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
     overflow: 'hidden',
   },
   listingImage: {
@@ -679,62 +684,49 @@ const styles = StyleSheet.create({
   listingPrice: {},
   selectedTick: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    top: Space.sm,
+    right: Space.sm,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.surface,
   },
-  // ── Compact preview row (stage 0) ──
-  previewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+  // ── Preview card ──
+  previewCard: {
+    marginTop: Space.sm,
+    padding: Space.sm,
   },
-  previewThumbContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.sm,
+  previewImageContainer: {
+    width: '100%',
+    height: 240,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
-  previewThumb: {
+  previewImage: {
     width: '100%',
     height: '100%',
   },
   previewMeta: {
-    flex: 1,
+    marginTop: Space.sm,
   },
   previewTitle: {},
   previewPrice: {
     marginTop: 2,
   },
-  // ── Form sections — page surface, hairline dividers ──
-  formSection: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-  },
-  formSectionLabel: {
-    fontSize: 14,
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
-    marginBottom: Space.sm,
-  },
-  formHairline: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginHorizontal: Space.md,
+  // ── Form cards ──
+  formCard: {
+    marginTop: Space.sm,
   },
   windowRow: {
     flexDirection: 'row',
     gap: Space.sm,
+    marginTop: Space.xs,
   },
-  // ── Selection chips — precise, no heavy shadow ──
+  // ── Window chips — refined inactive, solid active ──
   windowChip: {
     flex: 1,
     alignItems: 'center',
@@ -743,18 +735,14 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     backgroundColor: Colors.surfaceAlt,
-    paddingVertical: 11,
+    paddingVertical: 12,
     minHeight: 44,
   },
   windowChipActive: {
     backgroundColor: Colors.brand,
     borderColor: Colors.brand,
   },
-  windowChipPressed: {
-    opacity: 0.7,
-  },
   windowChipText: {
-    fontSize: 14,
     color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
@@ -763,72 +751,63 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   input: {
-    marginTop: 0,
-  },
-  inputIzeHint: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    marginTop: 6,
-    fontVariant: ['tabular-nums'],
+    marginTop: Space.xs,
   },
   buyNowRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  // ── Switch — accessible native-style ──
-  switchTrack: {
-    width: 44,
-    height: 26,
-    borderRadius: 13,
+  // ── Toggle — refined pill ──
+  toggleChip: {
+    borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     backgroundColor: Colors.surfaceAlt,
-    justifyContent: 'center',
-    paddingHorizontal: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    minWidth: 48,
+    alignItems: 'center',
   },
-  switchTrackActive: {
+  toggleChipActive: {
     backgroundColor: Colors.brand,
     borderColor: Colors.brand,
   },
-  switchThumb: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.surface,
-    alignSelf: 'flex-start',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2 },
-      android: { elevation: 1 },
-    }),
+  toggleText: {
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.medium,
+    fontSize: 12,
   },
-  switchThumbActive: {
-    alignSelf: 'flex-end',
+  toggleTextActive: {
+    color: Colors.textInverse,
+    fontFamily: Typography.family.bold,
+    fontSize: 12,
   },
   launchBtn: {
     marginHorizontal: Space.md,
     marginTop: Space.lg,
   },
-  // ── Step progress — slim line, compact labels ──
+  // ── Step indicator — refined active/inactive, weighted connectors ──
   stepIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
+    gap: 0,
   },
   stepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   stepDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 1.5,
     borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -841,8 +820,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.brand,
   },
   stepDotText: {
-    fontSize: 10,
+    fontSize: 12,
     color: Colors.textMuted,
+    fontWeight: '700',
     fontFamily: Typography.family.bold,
   },
   stepDotTextActive: {
@@ -860,66 +840,27 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   stepConnector: {
-    width: 24,
+    width: 28,
     height: 1.5,
     backgroundColor: Colors.border,
-    marginHorizontal: 4,
+    marginHorizontal: 6,
   },
   stepConnectorActive: {
     backgroundColor: Colors.brand,
+    height: 2,
   },
   // ── Review ──
   reviewHeadline: {
-    fontSize: 22,
+    fontSize: 26,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
-    marginBottom: 4,
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   reviewSubheadline: {
     color: Colors.textMuted,
     paddingHorizontal: Space.md,
+    marginTop: 4,
     marginBottom: Space.sm,
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-  },
-  reviewItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  reviewThumbContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.sm,
-    overflow: 'hidden',
-  },
-  reviewThumb: {
-    width: '100%',
-    height: '100%',
-  },
-  reviewItemMeta: {
-    flex: 1,
-  },
-  reviewItemTitle: {
-    fontSize: 15,
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
-  },
-  reviewItemPrice: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-  },
-  receiptSection: {
-    paddingHorizontal: Space.md,
-    marginTop: Space.sm,
   },
   stageNavRow: {
     flexDirection: 'row',
@@ -944,10 +885,11 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   termsLabel: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    letterSpacing: -0.1,
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   termsValue: {
     color: Colors.textPrimary,
@@ -964,49 +906,100 @@ const styles = StyleSheet.create({
     marginTop: 1,
     fontVariant: ['tabular-nums'],
   },
-  // ── Result overlay — compact confirmation ──
+  // ── Terms & fees — inline, lighter than summary ──
+  termsCard: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    gap: Space.xs,
+  },
+  termsSectionLabel: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: Space.xs,
+  },
+  termsInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  termsInlineLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+  },
+  termsInlineValue: {
+    fontSize: 13,
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.medium,
+  },
+  // ── Result overlay — crafted success moment ──
   resultOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.88)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Space.lg,
   },
   resultCard: {
     backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     padding: Space.lg,
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 380,
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16 },
-      android: { elevation: 8 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.3, shadowRadius: 24 },
+      android: { elevation: 16 },
     }),
   },
-  resultIcon: {
+  resultIconWrap: {
     marginBottom: Space.sm,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(22,163,74,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(22,163,74,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   resultTitle: {
-    fontSize: 20,
+    fontSize: 24,
     textAlign: 'center',
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
   resultSubtitle: {
     color: Colors.textMuted,
     textAlign: 'center',
     marginTop: 4,
     marginBottom: Space.md,
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
+  },
+  resultImageContainer: {
+    width: '100%',
+    height: 180,
+    borderRadius: Radius.lg,
+    marginBottom: Space.md,
+    overflow: 'hidden',
+  },
+  resultImage: {
+    width: '100%',
+    height: '100%',
   },
   resultSummary: {
     width: '100%',

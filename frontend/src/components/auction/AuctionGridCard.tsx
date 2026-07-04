@@ -184,3 +184,51 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
 });
+});
+});
+    fontFamily: Typography.family.medium,
+    fontSize: 10,
+    color: Colors.textMuted,
+  },
+});
+  },
+});
+    fontFamily: Typography.family.bold,
+    fontSize: 15,
+    color: Colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.3,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  bidCount: {
+    fontFamily: Typography.family.regular,
+    fontSize: 10,
+    color: Colors.textMuted,
+  },
+});
+    letterSpacing: 0.5,
+  },
+  priceValue: {
+    fontFamily: Typography.family.bold,
+    fontSize: 15,
+    color: Colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.3,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  bidCount: {
+    fontFamily: Typography.family.regular,
+    fontSize: 10,
+    color: Colors.textMuted,
+  },
+});

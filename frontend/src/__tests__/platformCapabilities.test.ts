@@ -20,9 +20,9 @@ describe('Platform: Native UI adapters', () => {
     expect(src).toContain('export function NativeSheet');
   });
 
-  it('NativeSheet wraps children in ExpoUIHost', () => {
+  it('NativeSheet wraps children in RNHostView', () => {
     const src = readFile('native/NativeSheet.tsx');
-    expect(src).toContain('ExpoUIHost');
+    expect(src).toContain('RNHostView');
   });
 
   it('NativePicker wraps @expo/ui Picker', () => {

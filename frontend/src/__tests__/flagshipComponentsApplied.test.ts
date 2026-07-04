@@ -32,15 +32,14 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain("import { OrderLedgerRow");
   });
 
-  it('SyndicateHubScreen imports Co-Own discovery components', () => {
+  it('SyndicateHubScreen imports FlagshipAssetCard', () => {
     const src = readSrc('screens/SyndicateHubScreen.tsx');
-    expect(src).toContain("CoOwnFeaturedHero");
-    expect(src).toContain("CoOwnDiscoveryCard");
+    expect(src).toContain("import { FlagshipAssetCard");
   });
 
-  it('PortfolioScreen imports CoOwnDiscoveryCard', () => {
+  it('PortfolioScreen imports FlagshipAssetCard', () => {
     const src = readSrc('screens/PortfolioScreen.tsx');
-    expect(src).toContain("CoOwnDiscoveryCard");
+    expect(src).toContain("import { FlagshipAssetCard");
   });
 
   it('AssetDetailScreen imports FlagshipActionCluster', () => {
@@ -64,14 +63,14 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain('<OrderLedgerRow');
   });
 
-  it('SyndicateHubScreen renders CoOwnDiscoveryCard in list', () => {
+  it('SyndicateHubScreen renders FlagshipAssetCard in list', () => {
     const src = readSrc('screens/SyndicateHubScreen.tsx');
-    expect(src).toContain('<CoOwnDiscoveryCard');
+    expect(src).toContain('<FlagshipAssetCard');
   });
 
-  it('PortfolioScreen renders CoOwnDiscoveryCard in list', () => {
+  it('PortfolioScreen renders FlagshipAssetCard in list', () => {
     const src = readSrc('screens/PortfolioScreen.tsx');
-    expect(src).toContain('<CoOwnDiscoveryCard');
+    expect(src).toContain('<FlagshipAssetCard');
   });
 
   it('ClosetScreen imports FlagshipEmptyGraphic', () => {

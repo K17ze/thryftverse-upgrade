@@ -173,3 +173,5 @@ const styles = StyleSheet.create({
   stateText: { fontSize: 16, fontFamily: Typography.family.semibold, color: TEXT },
   stateSubtext: { fontSize: 14, fontFamily: Typography.family.regular, color: MUTED, textAlign: 'center' },
 });
+  stateSubtext: { fontSize: 14, fontFamily: Typography.family.regular, color: MUTED, textAlign: 'center' },
+});
