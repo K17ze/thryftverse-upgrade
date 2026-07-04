@@ -26,14 +26,15 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AppStatusPill } from '../components/ui/AppStatusPill';
-import { TradeHeader, TradeCard } from '../components/trade';
+import { TradeHeader } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
 import { FinancialDisclosure } from '../components/FinancialDisclosure';
+import { CachedImage } from '../components/CachedImage';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
@@ -106,8 +107,6 @@ export default function TradeScreen() {
     return () => { cancelled = true; };
   }, [tradeAssetId, currentUser?.id, show]);
 
-  // marketPrice is the authoritative backend unit price in GBP.
-  // The quote math stays in GBP end-to-end; limitPriceGbp is a real GBP value.
   const marketPrice = asset ? asset.unitPriceGbp : 0;
   const orderMode = offerPriceInput.trim().length > 0 ? 'limit' : 'market';
 
@@ -133,9 +132,6 @@ export default function TradeScreen() {
     if (!decision.ok) { show(decision.message, 'error'); return; }
     if (!asset) { show('Asset not found', 'error'); return; }
 
-    // quote.fee and quote.netValue are already correctly computed in GBP:
-    //   buy  → netValue = gross + fee  (total cost)
-    //   sell → netValue = gross - fee  (net proceeds)
     haptic.medium();
     navigation.navigate('TradeConfirm', {
       assetId: asset.id,
@@ -181,14 +177,43 @@ export default function TradeScreen() {
     );
   }
 
+  const availableUnits = Math.max(0, asset.availableUnits);
+  const sellableUnits = side === 'sell' ? yourUnits : availableUnits;
+  const maxUnits = side === 'sell' ? yourUnits : availableUnits;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
-      <TradeHeader title={`Trade ${asset.title}`} onBack={() => navigation.goBack()} />
+      <TradeHeader title={side === 'buy' ? 'Buy units' : 'Sell units'} onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* ── Product identity ── */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+          <View style={styles.productCard}>
+            {asset.imageUrl ? (
+              <CachedImage uri={asset.imageUrl} style={styles.productImage} contentFit="cover" />
+            ) : (
+              <View style={[styles.productImage, styles.productImageFallback]}>
+                <Ionicons name="cube-outline" size={24} color={Colors.textMuted} />
+              </View>
+            )}
+            <View style={styles.productInfo}>
+              <BodyEmphasis style={styles.productTitle} numberOfLines={2}>{asset.title}</BodyEmphasis>
+              <View style={styles.productPriceRow}>
+                <Meta style={styles.productPriceLabel}>Unit price</Meta>
+                <BodyEmphasis style={styles.productPriceValue}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</BodyEmphasis>
+              </View>
+              <View style={styles.productPriceRow}>
+                <Meta style={styles.productPriceLabel}>Settlement</Meta>
+                <Meta style={styles.productPriceValue}>{asset.settlementMode}</Meta>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
+
+        {/* ── Buy/Sell selector ── */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(50)}>
           <AppSegmentControl
             options={TRADE_SIDE_OPTIONS}
             value={side}
@@ -198,21 +223,47 @@ export default function TradeScreen() {
           />
         </Reanimated.View>
 
+        {/* ── Compliance alert ── */}
         {!eligibility.ok && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(50)}>
-            <TradeCard variant="tint" style={styles.alertCard}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(60)}>
+            <View style={styles.alertCard}>
               <View style={styles.alertRow}>
                 <Ionicons name="warning-outline" size={16} color={Colors.danger} />
                 <BodyEmphasis style={styles.alertTitle}>Trading Restricted</BodyEmphasis>
               </View>
               <Body style={styles.alertText}>{eligibility.message}</Body>
-            </TradeCard>
+            </View>
           </Reanimated.View>
         )}
 
+        {/* ── Available/sellable units ── */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(80)}>
+          <View style={styles.availabilityCard}>
+            <View style={styles.availabilityRow}>
+              <Meta style={styles.availabilityLabel}>
+                {side === 'buy' ? 'Available units' : 'Your units'}
+              </Meta>
+              <BodyEmphasis style={styles.availabilityValue}>
+                {side === 'buy' ? availableUnits : yourUnits} / {asset.totalUnits}
+              </BodyEmphasis>
+            </View>
+            {side === 'sell' && yourUnits === 0 && (
+              <Body style={styles.availabilityHint}>
+                You do not hold any units in this Co-Own.
+              </Body>
+            )}
+            {side === 'buy' && availableUnits === 0 && (
+              <Body style={styles.availabilityHint}>
+                All units are allocated. Check the secondary market for sell offers.
+              </Body>
+            )}
+          </View>
+        </Reanimated.View>
+
+        {/* ── Unit selector ── */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
-          <TradeCard>
-            <Meta style={styles.sectionLabel}>QUANTITY</Meta>
+          <View style={styles.sectionCard}>
+            <Meta style={styles.sectionLabel}>Quantity</Meta>
             <AppInput
               value={quantityInput}
               onChangeText={(v) => setQuantityInput(sanitizeTradeQuantityInput(v))}
@@ -221,13 +272,23 @@ export default function TradeScreen() {
               suffix="units"
               accessibilityLabel="Trade quantity"
             />
-          </TradeCard>
+            {maxUnits > 0 && (
+              <AnimatedPressable
+                onPress={() => setQuantityInput(String(maxUnits))}
+                accessibilityRole="button"
+                accessibilityLabel={`Set quantity to maximum ${maxUnits} units`}
+              >
+                <Meta style={styles.maxLink}>Max: {maxUnits}</Meta>
+              </AnimatedPressable>
+            )}
+          </View>
         </Reanimated.View>
 
+        {/* ── Limit price (optional) ── */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
-          <TradeCard>
+          <View style={styles.sectionCard}>
             <View style={styles.limitRow}>
-              <Meta style={styles.sectionLabel}>LIMIT PRICE (OPTIONAL)</Meta>
+              <Meta style={styles.sectionLabel}>Limit price (optional)</Meta>
               <AppStatusPill
                 tone="neutral"
                 label={orderMode === 'limit' ? 'LIMIT' : 'MARKET'}
@@ -246,12 +307,13 @@ export default function TradeScreen() {
                 ? `Market price: ${formatFromFiat(marketPrice, 'GBP')} per unit`
                 : `Limit order at ${formatFromFiat(quote.limitPrice ?? 0, 'GBP')} per unit`}
             </Meta>
-          </TradeCard>
+          </View>
         </Reanimated.View>
 
+        {/* ── Quote summary ── */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
-          <TradeCard variant="tint">
-            <Meta style={styles.sectionLabel}>QUOTE</Meta>
+          <View style={styles.quoteCard}>
+            <Meta style={styles.sectionLabel}>Summary</Meta>
             <View style={styles.quoteRow}>
               <Meta>{side === 'buy' ? 'Gross cost' : 'Gross proceeds'}</Meta>
               <BodyEmphasis>{formatFromFiat(quote.grossValue, 'GBP')}</BodyEmphasis>
@@ -264,35 +326,26 @@ export default function TradeScreen() {
               <BodyEmphasis>{side === 'buy' ? 'Total cost' : 'Net proceeds'}</BodyEmphasis>
               <BodyEmphasis style={{ color: Colors.brand }}>{formatFromFiat(quote.netValue, 'GBP')}</BodyEmphasis>
             </View>
-          </TradeCard>
+          </View>
         </Reanimated.View>
 
-        {yourUnits > 0 && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
-            <TradeCard variant="surface">
-              <Meta style={styles.sectionLabel}>YOUR POSITION</Meta>
-              <View style={styles.positionRow}>
-                <Meta>Units held</Meta>
-                <BodyEmphasis>{yourUnits}</BodyEmphasis>
-              </View>
-            </TradeCard>
-          </Reanimated.View>
-        )}
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}>
+        {/* ── Risk disclosure ── */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
           <FinancialDisclosure />
         </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(350)}>
+        {/* ── Review action ── */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}>
           <AppButton
-            title={isSubmittingOrder ? 'Submitting...' : side === 'buy' ? 'Buy Units' : 'Sell Units'}
-            icon={<Ionicons name={side === 'buy' ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline'} size={18} color={Colors.background} />}
+            title="Review order"
+            icon={<Ionicons name="arrow-forward" size={18} color={Colors.background} />}
             onPress={handleSubmit}
             disabled={!canSubmit || isSubmittingOrder}
             variant="primary"
             size="lg"
             style={styles.submitBtn}
             hapticFeedback="medium"
+            accessibilityLabel={`Review ${side} order`}
           />
         </Reanimated.View>
       </ScrollView>
@@ -315,13 +368,63 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   content: {
-    paddingBottom: Space.xl,
+    paddingBottom: Space.xxl,
   },
+  // Product identity
+  productCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  productImage: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  productImageFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  productTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  productPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  productPriceLabel: {
+    color: Colors.textSecondary,
+  },
+  productPriceValue: {
+    color: Colors.textPrimary,
+  },
+  // Side switcher
   sideSwitcher: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
   },
+  // Alert
   alertCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
     borderColor: Colors.danger + '40',
   },
   alertRow: {
@@ -336,17 +439,70 @@ const styles = StyleSheet.create({
   alertText: {
     color: Colors.textSecondary,
   },
+  // Availability
+  availabilityCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  availabilityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  availabilityLabel: {
+    color: Colors.textSecondary,
+  },
+  availabilityValue: {
+    fontSize: 16,
+  },
+  availabilityHint: {
+    color: Colors.textMuted,
+    marginTop: Space.xs,
+    fontSize: 13,
+  },
+  // Section card
+  sectionCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   sectionLabel: {
     marginBottom: Space.sm,
+    color: Colors.textSecondary,
   },
   limitRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Space.xs,
+    marginBottom: Space.sm,
   },
   marketHint: {
     marginTop: Space.xs,
+    color: Colors.textMuted,
+  },
+  maxLink: {
+    color: Colors.brand,
+    marginTop: Space.xs,
+    fontWeight: '600',
+  },
+  // Quote
+  quoteCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   quoteRow: {
     flexDirection: 'row',
@@ -360,12 +516,7 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
     paddingTop: Space.sm,
   },
-  positionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
+  // Submit
   submitBtn: {
     marginHorizontal: Space.md,
     marginTop: Space.lg,

@@ -132,6 +132,20 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           </View>
 
           <View style={styles.summaryRow}>
+            <Caption color={Colors.textMuted}>Order type</Caption>
+            <Text style={styles.summaryValue}>
+              {orderMode === 'limit' ? 'Limit' : 'Market'}
+            </Text>
+          </View>
+
+          {orderMode === 'limit' && limitPriceGbp != null && (
+            <View style={styles.summaryRow}>
+              <Caption color={Colors.textMuted}>Limit price</Caption>
+              <Text style={styles.summaryValue}>{formatFromFiat(limitPriceGbp, 'GBP')}</Text>
+            </View>
+          )}
+
+          <View style={styles.summaryRow}>
             <Caption color={Colors.textMuted}>Quantity</Caption>
             <Text style={styles.summaryValue}>{quantity} units</Text>
           </View>
