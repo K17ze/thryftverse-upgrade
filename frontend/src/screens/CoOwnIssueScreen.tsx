@@ -1,40 +1,51 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { ActiveTheme, Colors } from '../constants/colors';
-import { Space, Radius, Type , Typography  } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppInput } from '../components/ui/AppInput';
 import { useToast } from '../context/ToastContext';
-import { FlagshipActionCluster } from '../components/flagship';
+import { fetchCoOwnAssetById } from '../services/marketApi';
+import { haptics } from '../utils/haptics';
+import { CoOwnMarketHeader, CoOwnStickyActionDock } from '../components/coown';
 
 type Props = StackScreenProps<RootStackParamList, 'CoOwnIssue'>;
 
 const CATEGORIES = [
-  { value: 'dispute', label: 'Ownership Dispute', icon: 'shield-half-outline' as const },
-  { value: 'technical', label: 'Technical Problem', icon: 'bug-outline' as const },
-  { value: 'fraud', label: 'Fraud / Scam', icon: 'warning-outline' as const },
+  { value: 'dispute', label: 'Ownership dispute', icon: 'shield-half-outline' as const },
+  { value: 'technical', label: 'Technical problem', icon: 'bug-outline' as const },
+  { value: 'fraud', label: 'Fraud or scam', icon: 'warning-outline' as const },
   { value: 'other', label: 'Other', icon: 'chatbox-ellipses-outline' as const },
 ];
 
 export default function CoOwnIssueScreen({ navigation, route }: Props) {
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const [category, setCategory] = useState<string | null>(null);
   const [description, setDescription] = useState('');
+  const [assetTitle, setAssetTitle] = useState<string | null>(null);
 
   const assetId = route.params?.assetId;
+
+  // Fetch the asset title so we can show it instead of the raw UUID.
+  React.useEffect(() => {
+    if (!assetId) return;
+    let cancelled = false;
+    fetchCoOwnAssetById(assetId)
+      .then((asset) => {
+        if (!cancelled) setAssetTitle(asset.title);
+      })
+      .catch(() => {
+        if (!cancelled) setAssetTitle(null);
+      });
+    return () => { cancelled = true; };
+  }, [assetId]);
 
   const handleSubmit = () => {
     if (!category) {
@@ -45,46 +56,69 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       show('Describe the issue', 'error');
       return;
     }
-    // Route to the real Help & Support flow with Co-Own context.
-    // Do not simulate a local submission or claim a report was recorded.
     const categoryLabel = CATEGORIES.find((c) => c.value === category)?.label ?? 'Issue';
     show(`Opening support — reference: ${categoryLabel} for this Co-Own.`, 'info');
     navigation.navigate('HelpSupport');
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-      <ScreenHeader title="Report Issue" onBack={() => navigation.goBack()} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+
+      <CoOwnMarketHeader
+        title="Report an issue"
+        subtitle="Help us resolve your concern"
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Asset context — show title, not UUID */}
         {assetId && (
-          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.assetContext}>
-            <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
-            <Text style={styles.assetContextText}>Asset: {assetId}</Text>
+          <Reanimated.View entering={FadeInDown.duration(300)}>
+            <View style={[styles.assetContext, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+              <Text style={[styles.assetContextLabel, { color: colors.textMuted }]}>Item:</Text>
+              <Text style={[styles.assetContextText, { color: colors.textPrimary }]} numberOfLines={1}>
+                {assetTitle ?? 'Loading...'}
+              </Text>
+            </View>
           </Reanimated.View>
         )}
 
+        {/* Issue category */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
-          <Text style={styles.sectionLabel}>Issue Category</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Issue category</Text>
           <View style={styles.categoryGrid}>
             {CATEGORIES.map((cat) => {
               const active = category === cat.value;
               return (
                 <AnimatedPressable
                   key={cat.value}
-                  style={[styles.categoryCard, active && styles.categoryCardActive]}
-                  onPress={() => setCategory(cat.value)}
-                  activeOpacity={0.85}
+                  style={[
+                    styles.categoryCard,
+                    {
+                      backgroundColor: active ? colors.surfaceAlt : colors.surface,
+                      borderColor: active ? colors.brand : colors.border,
+                    },
+                  ]}
+                  onPress={() => { haptics.selection(); setCategory(cat.value); }}
+                  scaleValue={0.97}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel={cat.label}
+                  accessibilityState={{ selected: active }}
                 >
-                  <Ionicons name={cat.icon} size={22} color={active ? Colors.brand : Colors.textSecondary} />
-                  <Text style={[styles.categoryLabel, active && styles.categoryLabelActive]}>{cat.label}</Text>
+                  <Ionicons name={cat.icon} size={22} color={active ? colors.brand : colors.textSecondary} />
+                  <Text style={[styles.categoryLabel, { color: active ? colors.brand : colors.textPrimary }]}>
+                    {cat.label}
+                  </Text>
                 </AnimatedPressable>
               );
             })}
           </View>
         </Reanimated.View>
 
+        {/* Description */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(100)} style={{ marginTop: Space.lg }}>
           <AppInput
             label="Description"
@@ -98,58 +132,94 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
           />
         </Reanimated.View>
 
+        {/* Note */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(150)} style={styles.note}>
-          <Ionicons name="information-circle-outline" size={16} color={Colors.textMuted} />
-          <Text style={styles.noteText}>
+          <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+          <Text style={[styles.noteText, { color: colors.textMuted }]}>
             Your report will be submitted through the Help & Support flow. Use the description above when contacting support.
           </Text>
         </Reanimated.View>
 
-        <FlagshipActionCluster
-          actions={[
-            { label: 'Continue to Support', onPress: handleSubmit, variant: 'primary' },
-          ]}
-          style={{ marginTop: Space.lg }}
-        />
+        <View style={{ height: 120 }} />
       </ScrollView>
+
+      {/* Sticky action dock */}
+      <CoOwnStickyActionDock>
+        <AppButton
+          title="Continue to support"
+          onPress={handleSubmit}
+          variant="primary"
+          size="lg"
+          hapticFeedback="medium"
+          accessibilityLabel="Continue to support"
+          style={{ flex: 1 }}
+        />
+      </CoOwnStickyActionDock>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-
+  container: {
+    flex: 1,
+  },
+  scroll: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+  },
   assetContext: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Space.sm,
+    borderWidth: 0.5,
+    padding: Space.sm + 2,
     marginBottom: Space.md,
   },
-  assetContextText: { fontSize: Type.caption.size, fontFamily: Typography.family.medium, color: Colors.textSecondary },
-
-  sectionLabel: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: Colors.textMuted, marginBottom: Space.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
+  assetContextLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  assetContextText: {
+    flex: 1,
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
+  },
+  sectionLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    marginBottom: Space.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+  },
   categoryCard: {
     width: '48%',
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
     padding: Space.md,
     gap: Space.sm,
     alignItems: 'flex-start',
   },
-  categoryCardActive: { borderColor: Colors.brand, backgroundColor: Colors.surfaceAlt },
-  categoryLabel: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-  categoryLabelActive: { color: Colors.brand },
-
-  note: { flexDirection: 'row', gap: Space.sm, marginTop: Space.lg, alignItems: 'flex-start' },
-  noteText: { flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, lineHeight: 18 },
+  categoryLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  note: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.lg,
+    alignItems: 'flex-start',
+  },
+  noteText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 18,
+  },
 });

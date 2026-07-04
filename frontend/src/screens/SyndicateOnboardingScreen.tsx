@@ -1,56 +1,48 @@
 import React from 'react';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
-  View,
-  Text,
-  StyleSheet,
-  StatusBar
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, StatusBar } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { haptics } from '../utils/haptics';
 
 type NavT = StackNavigationProp<RootStackParamList>;
-const TRADE_ACCENT = Colors.brand;
-const HEADER_BUTTON_BG = Colors.surface;
-const HEADER_BUTTON_BORDER = Colors.border;
-const ICON_RING_BG = Colors.surfaceAlt;
-const ICON_RING_BORDER = Colors.border;
-const DOT_BG = Colors.borderLight;
 
+// Co-Own specific educational slides — not generic explainer content.
 const SLIDES = [
   {
-    icon: 'pie-chart-outline' as const,
-    title: 'Fractional Ownership',
-    body: 'Split premium fashion assets into tradable shares and let buyers enter positions at any size.',
+    icon: 'cube-outline' as const,
+    title: 'Own a piece of something desirable',
+    body: 'Co-Own lets you buy units of fashion, luxury, and collectable items. You own a real fraction of the item, not the item itself.',
   },
   {
-    icon: 'trending-up-outline' as const,
-    title: 'Trade In Real Time',
-    body: 'Execute instantly at market or send direct buy/sell offers to owners at your chosen price.',
+    icon: 'cart-outline' as const,
+    title: 'Buy units at your own pace',
+    body: 'Browse available items, see the unit price, and buy as many units as you want. Settlement is in GBP, TVUSD, or both. A 1% fee applies.',
   },
   {
-    icon: 'wallet-outline' as const,
-    title: '1ze + Local Fiat',
-    body: 'Use your preferred display mode while transactions settle through the closed-loop, market-referenced wallet layer.',
+    icon: 'swap-horizontal-outline' as const,
+    title: 'Sell when you are ready',
+    body: 'List your units for sale at market price or set a limit. Buyers must match your offer for the trade to fill. Liquidity is not guaranteed.',
   },
   {
     icon: 'shield-checkmark-outline' as const,
-    title: 'Compliance Controls',
-    body: 'Country rules, KYC status, and settlement eligibility guard trading access for each market.',
+    title: 'Trust and protection',
+    body: 'Issuers are verified sellers. Authenticity, buyer protection, and storage information are shown on each item. Risks are clearly disclosed.',
   },
 ];
 
 export default function CoOwnOnboardingScreen() {
   const navigation = useNavigation<NavT>();
+  const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
+  const insets = useSafeAreaInsets();
   const [index, setIndex] = React.useState(0);
 
   const slide = SLIDES[index];
@@ -58,26 +50,47 @@ export default function CoOwnOnboardingScreen() {
 
   const handleNext = () => {
     if (isLast) {
+      haptics.tap();
       navigation.replace('CoOwnHub');
       return;
     }
-
+    haptics.selection();
     setIndex((prev) => Math.min(prev + 1, SLIDES.length - 1));
   };
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+  const handleSkip = () => {
+    haptics.tap();
+    navigation.replace('CoOwnHub');
+  };
 
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+
+      {/* Header */}
       <View style={styles.headerRow}>
-        <AnimatedPressable onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Ionicons name="close" size={22} color={Colors.textPrimary} />
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          style={[styles.headerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          scaleValue={0.92}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
+          <Ionicons name="close" size={22} color={colors.textPrimary} />
         </AnimatedPressable>
-        <AnimatedPressable onPress={() => navigation.replace('CoOwnHub')}>
-          <Text style={styles.skipText}>Skip</Text>
+        <AnimatedPressable
+          onPress={handleSkip}
+          scaleValue={0.96}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding"
+        >
+          <Text style={[styles.skipText, { color: colors.textSecondary }]}>Skip</Text>
         </AnimatedPressable>
       </View>
 
+      {/* Hero slide */}
       <View style={styles.hero}>
         <Reanimated.View
           key={slide.title}
@@ -85,24 +98,41 @@ export default function CoOwnOnboardingScreen() {
           exiting={reducedMotionEnabled ? undefined : FadeOutUp.duration(220)}
           style={styles.heroSlide}
         >
-          <View style={styles.iconRing}>
-            <Ionicons name={slide.icon} size={64} color={TRADE_ACCENT} />
+          <View style={[styles.iconRing, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <Ionicons name={slide.icon} size={64} color={colors.brand} />
           </View>
-          <Text style={styles.title}>{slide.title}</Text>
-          <Text style={styles.body}>{slide.body}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{slide.title}</Text>
+          <Text style={[styles.body, { color: colors.textSecondary }]}>{slide.body}</Text>
         </Reanimated.View>
       </View>
 
-      <View style={styles.footer}>
+      {/* Footer */}
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Space.lg) }]}>
         <View style={styles.dotsRow}>
           {SLIDES.map((_, dotIdx) => (
-            <View key={`dot_${dotIdx}`} style={[styles.dot, dotIdx === index && styles.dotActive]} />
+            <View
+              key={`dot_${dotIdx}`}
+              style={[
+                styles.dot,
+                { backgroundColor: dotIdx === index ? colors.brand : colors.surfaceAlt },
+                dotIdx === index && styles.dotActive,
+              ]}
+            />
           ))}
         </View>
 
-        <AnimatedPressable style={styles.primaryBtn} onPress={handleNext} activeOpacity={0.9}>
-          <Text style={styles.primaryBtnText}>{isLast ? 'Enter Co-Own Hub' : 'Next'}</Text>
-          <Ionicons name="arrow-forward" size={16} color={Colors.background} />
+        <AnimatedPressable
+          style={[styles.primaryBtn, { backgroundColor: colors.brand }]}
+          onPress={handleNext}
+          scaleValue={0.97}
+          hapticFeedback="medium"
+          accessibilityRole="button"
+          accessibilityLabel={isLast ? 'Enter Co-Own hub' : 'Next slide'}
+        >
+          <Text style={[styles.primaryBtnText, { color: colors.background }]}>
+            {isLast ? 'Enter Co-Own' : 'Next'}
+          </Text>
+          <Ionicons name="arrow-forward" size={16} color={colors.background} />
         </AnimatedPressable>
       </View>
     </SafeAreaView>
@@ -112,11 +142,10 @@ export default function CoOwnOnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-    paddingHorizontal: 20,
+    paddingHorizontal: Space.lg,
   },
   headerRow: {
-    paddingTop: 8,
+    paddingTop: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -126,14 +155,11 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: HEADER_BUTTON_BORDER,
-    backgroundColor: HEADER_BUTTON_BG,
     alignItems: 'center',
     justifyContent: 'center',
   },
   skipText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   hero: {
@@ -146,63 +172,57 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconRing: {
-    width: 170,
-    height: 170,
-    borderRadius: 85,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
     borderWidth: 1,
-    borderColor: ICON_RING_BORDER,
-    backgroundColor: ICON_RING_BG,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    marginTop: 22,
-    color: Colors.textPrimary,
-    fontSize: 30,
+    marginTop: Space.lg,
+    fontSize: Type.display.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.8,
     textAlign: 'center',
+    lineHeight: 36,
   },
   body: {
-    marginTop: 10,
-    color: Colors.textSecondary,
-    fontSize: 15,
-    fontFamily: Typography.family.medium,
+    marginTop: Space.sm,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
     lineHeight: 23,
     textAlign: 'center',
+    paddingHorizontal: Space.md,
   },
   footer: {
-    paddingBottom: 22,
+    paddingTop: Space.lg,
   },
   dotsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    marginBottom: 18,
+    marginBottom: Space.lg,
   },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: DOT_BG,
   },
   dotActive: {
     width: 24,
-    backgroundColor: TRADE_ACCENT,
   },
   primaryBtn: {
-    borderRadius: 14,
-    backgroundColor: Colors.brand,
-    paddingVertical: 14,
+    borderRadius: Radius.lg,
+    paddingVertical: Space.sm + 4,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: Space.xs,
   },
   primaryBtnText: {
-    color: Colors.background,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
 });

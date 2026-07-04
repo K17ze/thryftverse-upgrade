@@ -7,11 +7,9 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { EmptyState } from '../components/EmptyState';
 import {
   MarketHistoryCursor,
   MarketHistoryItem,
@@ -22,12 +20,12 @@ import { useToast } from '../context/ToastContext';
 import { OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Space, Typography } from '../theme/designTokens';
-import { Motion } from '../constants/motion';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Meta, BodyEmphasis } from '../components/ui/Text';
 import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { haptics } from '../utils/haptics';
+import { CoOwnMarketHeader, CoOwnStateCanvas } from '../components/coown';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -84,7 +82,6 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
     .map<HistoryEntry>((item) => {
       const quantity = Math.max(0, item.units ?? 0);
       const pricePerShare = item.unitPriceGbp ?? (quantity > 0 ? Number((item.amountGbp / quantity).toFixed(4)) : 0);
-      // Preserve the exact backend status — never map open/partial/cancelled to filled.
       const rawStatus = item.status;
       const status: HistoryEntry['status'] =
         rawStatus === 'open' || rawStatus === 'partially_filled' || rawStatus === 'filled' || rawStatus === 'cancelled' || rawStatus === 'rejected'
@@ -93,11 +90,8 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
       return {
         id: item.id,
         assetId: item.referenceId,
-        // The backend joins sa.title as note — use it instead of the raw asset ID.
-        // Do not fabricate a title by slicing the reference UUID.
         assetTitle: item.note ?? 'Co-Own asset',
         side: item.action === 'buy-units' ? 'buy' : 'sell',
-        // Preserve the real order type from the backend, default to market when null.
         type: item.orderType === 'limit' ? 'limit' : 'market',
         quantity,
         pricePerShare,
@@ -114,9 +108,9 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
 
 export default function CoOwnOrderHistoryScreen() {
   const navigation = useNavigation<NavT>();
+  const { colors, isDark } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
-  const { isDark } = useAppTheme();
   const viewerId = currentUser?.id;
   const reducedMotionEnabled = useReducedMotion();
 
@@ -188,6 +182,11 @@ export default function CoOwnOrderHistoryScreen() {
     setRefreshing(false);
   }, [syncRemoteHistory]);
 
+  const handleBack = React.useCallback(() => {
+    if (navigation.canGoBack()) { navigation.goBack(); return; }
+    navigation.navigate('Portfolio');
+  }, [navigation]);
+
   const entries = React.useMemo(() => {
     const all = [...remoteEntries];
     const windowMs = getFilterWindowMs(dateFilter);
@@ -202,29 +201,29 @@ export default function CoOwnOrderHistoryScreen() {
   }, [remoteEntries, sideFilter, dateFilter]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      {/* Editorial header */}
-      <View style={styles.header}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          style={styles.headerBackBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle} numberOfLines={1}>Activity</Text>
-          <Text style={styles.headerContext} numberOfLines={1}>Your Co-Own order history</Text>
-        </View>
-      </View>
+      <CoOwnMarketHeader
+        title="Activity"
+        subtitle="Your Co-Own order history"
+        onBack={handleBack}
+      />
 
       <View style={styles.filtersWrap}>
-        <AppSegmentControl options={SIDE_FILTERS} value={sideFilter} onChange={setSideFilter} fullWidth />
+        <AppSegmentControl
+          options={SIDE_FILTERS}
+          value={sideFilter}
+          onChange={(v) => { haptics.selection(); setSideFilter(v); }}
+          fullWidth
+        />
         <View style={styles.filterRow}>
-          <AppSegmentControl options={DATE_FILTERS} value={dateFilter} onChange={setDateFilter} fullWidth />
+          <AppSegmentControl
+            options={DATE_FILTERS}
+            value={dateFilter}
+            onChange={(v) => { haptics.selection(); setDateFilter(v); }}
+            fullWidth
+          />
         </View>
       </View>
 
@@ -235,32 +234,29 @@ export default function CoOwnOrderHistoryScreen() {
         showsVerticalScrollIndicator={false}
         onEndReached={() => void loadMoreRemoteHistory()}
         onEndReachedThreshold={0.5}
-        renderItem={({ item, index }) => {
-          return (
-            <Reanimated.View
-              entering={
-                reducedMotionEnabled
-                  ? undefined
-                  : FadeInDown
-                      .duration(Motion.list.enterDuration)
-                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-              }
-            >
-              <OrderHistoryRow
-                id={item.id}
-                side={item.side}
-                type={item.type}
-                assetTitle={item.assetTitle}
-                quantity={item.quantity}
-                pricePerShare={formatFromFiat(item.pricePerShare, 'GBP')}
-                totalAmount={formatFromFiat(item.totalAmount, 'GBP')}
-                status={item.status}
-                timestamp={item.createdAt}
-                onPress={() => navigation.navigate('AssetDetail', { assetId: item.assetId })}
-              />
-            </Reanimated.View>
-          );
-        }}
+        estimatedItemSize={92}
+        renderItem={({ item, index }) => (
+          <Reanimated.View
+            entering={
+              reducedMotionEnabled
+                ? undefined
+                : FadeInDown.duration(300).delay(Math.min(index, 8) * 40)
+            }
+          >
+            <OrderHistoryRow
+              id={item.id}
+              side={item.side}
+              type={item.type}
+              assetTitle={item.assetTitle}
+              quantity={item.quantity}
+              pricePerShare={formatFromFiat(item.pricePerShare, 'GBP')}
+              totalAmount={formatFromFiat(item.totalAmount, 'GBP')}
+              status={item.status}
+              timestamp={item.createdAt}
+              onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId: item.assetId }); }}
+            />
+          </Reanimated.View>
+        )}
         ListEmptyComponent={
           isSyncingRemote ? (
             <View style={styles.loadingWrap}>
@@ -275,12 +271,13 @@ export default function CoOwnOrderHistoryScreen() {
               ))}
             </View>
           ) : (
-            <EmptyState
-              icon="receipt-outline"
+            <CoOwnStateCanvas
+              variant="empty"
               title="No orders yet"
-              subtitle="Your co-own trade history will appear here."
-              ctaLabel="Open Hub"
-              onCtaPress={() => navigation.navigate('CoOwnHub')}
+              subtitle="Your Co-Own trade history will appear here."
+              actionLabel="Browse items"
+              onAction={() => navigation.navigate('CoOwnHub')}
+              emptyGraphicVariant="receipt"
             />
           )
         }
@@ -288,9 +285,9 @@ export default function CoOwnOrderHistoryScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
           />
         }
       />
@@ -301,35 +298,6 @@ export default function CoOwnOrderHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.xs,
-  },
-  headerBackBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleWrap: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.6,
-  },
-  headerContext: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    marginTop: 1,
   },
   filtersWrap: {
     paddingHorizontal: Space.md,

@@ -7,25 +7,21 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import {
   MarketHistoryItem,
   MarketHistoryCursor,
   listUserMarketHistory,
 } from '../services/marketApi';
-import { Space, Radius, Typography } from '../theme/designTokens';
-import { Motion } from '../constants/motion';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { EmptyState } from '../components/EmptyState';
-import { Meta, BodyEmphasis } from '../components/ui/Text';
 import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
-import { AnimatedPressable } from '../components/AnimatedPressable';
+import { haptics } from '../utils/haptics';
+import { CoOwnMarketHeader, CoOwnStateCanvas } from '../components/coown';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -97,7 +93,7 @@ function mapHistoryToLedgerEntries(items: MarketHistoryItem[]): LedgerEntry[] {
 
 export default function MarketLedgerScreen() {
   const navigation = useNavigation<NavT>();
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const localEntries = useStore((state) => state.marketLedger);
   const currentUser = useStore((state) => state.currentUser);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
@@ -193,56 +189,54 @@ export default function MarketLedgerScreen() {
     setRefreshing(false);
   }, [refreshRemoteLedger]);
 
+  const handleBack = React.useCallback(() => {
+    if (navigation.canGoBack()) { navigation.goBack(); return; }
+    navigation.navigate('Portfolio');
+  }, [navigation]);
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      {/* Editorial header */}
-      <View style={styles.header}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          style={styles.headerBackBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle} numberOfLines={1}>Ledger</Text>
-          <Text style={styles.headerContext} numberOfLines={1}>Market activity and trade history</Text>
-        </View>
-      </View>
+      <CoOwnMarketHeader
+        title="Ledger"
+        subtitle="Market activity and trade history"
+        onBack={handleBack}
+      />
 
-      <Reanimated.View
-        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}
-      >
-        <View style={styles.summaryCard}>
+      {/* Summary card */}
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.summaryStat}>
-            <Meta style={styles.summaryStatLabel}>Volume</Meta>
-            <BodyEmphasis style={styles.summaryStatValue}>{formatMoney(totalMarketValue)}</BodyEmphasis>
+            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Volume</Text>
+            <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{formatMoney(totalMarketValue)}</Text>
           </View>
-          <View style={styles.summaryStatDivider} />
+          <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
           <View style={styles.summaryStat}>
-            <Meta style={styles.summaryStatLabel}>Net cashflow</Meta>
-            <BodyEmphasis style={[styles.summaryStatValue, netCashflow >= 0 ? styles.positive : styles.negative]}>
+            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Net cashflow</Text>
+            <Text style={[styles.summaryStatValue, { color: netCashflow >= 0 ? colors.success : colors.danger }]}>
               {formatSignedMoney(netCashflow)}
-            </BodyEmphasis>
+            </Text>
           </View>
-          <View style={styles.summaryStatDivider} />
+          <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
           <View style={styles.summaryStat}>
-            <Meta style={styles.summaryStatLabel}>Realized P&L</Meta>
-            <BodyEmphasis style={[styles.summaryStatValue, realizedCoOwnPL >= 0 ? styles.positive : styles.negative]}>
+            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Realized P&L</Text>
+            <Text style={[styles.summaryStatValue, { color: realizedCoOwnPL >= 0 ? colors.success : colors.danger }]}>
               {formatSignedMoney(realizedCoOwnPL)}
-            </BodyEmphasis>
+            </Text>
           </View>
         </View>
       </Reanimated.View>
 
-      <Reanimated.View
-        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)}
-      >
+      {/* Filter */}
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
         <View style={styles.filterWrap}>
-          <AppSegmentControl options={FILTER_OPTIONS} value={filter} onChange={setFilter} fullWidth />
+          <AppSegmentControl
+            options={FILTER_OPTIONS}
+            value={filter}
+            onChange={(v) => { haptics.selection(); setFilter(v); }}
+            fullWidth
+          />
         </View>
       </Reanimated.View>
 
@@ -253,19 +247,18 @@ export default function MarketLedgerScreen() {
         showsVerticalScrollIndicator={false}
         onEndReached={() => void loadMoreRemoteLedger()}
         onEndReachedThreshold={0.5}
+        estimatedItemSize={92}
         renderItem={({ item, index }) => {
           const isAuction = item.channel === 'auction';
           const side = item.action === 'sell-units' ? 'sell' as const : 'buy' as const;
-          const title = item.action === 'bid' ? 'Bid Submitted' : item.action === 'win' ? 'Auction Settlement' : item.action === 'sell-units' ? 'Units Sold' : 'Units Purchased';
+          const title = item.action === 'bid' ? 'Bid submitted' : item.action === 'win' ? 'Auction settlement' : item.action === 'sell-units' ? 'Units sold' : 'Units purchased';
 
           return (
             <Reanimated.View
               entering={
                 reducedMotionEnabled
                   ? undefined
-                  : FadeInDown
-                      .duration(Motion.list.enterDuration)
-                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+                  : FadeInDown.duration(300).delay(Math.min(index, 8) * 40)
               }
             >
               <OrderHistoryRow
@@ -279,6 +272,7 @@ export default function MarketLedgerScreen() {
                 status={item.action === 'bid' ? 'open' : 'filled'}
                 timestamp={relativeTime(item.timestamp)}
                 onPress={() => {
+                  haptics.tap();
                   const source: CommerceDestinationSource = isAuction
                     ? { commerceMode: 'auction', auctionId: item.referenceId }
                     : { commerceMode: 'co_own', assetId: item.referenceId };
@@ -311,10 +305,11 @@ export default function MarketLedgerScreen() {
               ))}
             </View>
           ) : (
-            <EmptyState
-              icon="pulse-outline"
+            <CoOwnStateCanvas
+              variant="empty"
               title="No activity"
               subtitle="Trading activity will appear here."
+              emptyGraphicVariant="receipt"
             />
           )
         }
@@ -322,9 +317,9 @@ export default function MarketLedgerScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
           />
         }
       />
@@ -335,71 +330,38 @@ export default function MarketLedgerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.xs,
-  },
-  headerBackBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleWrap: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.6,
-  },
-  headerContext: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    marginTop: 1,
   },
   summaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
+    marginBottom: Space.md,
     borderRadius: Radius.lg,
+    borderWidth: 0.5,
     padding: Space.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
   summaryStat: {
     flex: 1,
-    gap: 2,
+    gap: 4,
+  },
+  summaryStatLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  summaryStatValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.2,
   },
   summaryStatDivider: {
     width: 1,
-    height: 32,
-    backgroundColor: Colors.border,
+    alignSelf: 'stretch',
     marginHorizontal: Space.sm,
   },
-  summaryStatLabel: {
-    color: Colors.textMuted,
-  },
-  summaryStatValue: {
-    fontSize: 15,
-  },
-  positive: {
-    color: Colors.success,
-  },
-  negative: {
-    color: Colors.danger,
-  },
   filterWrap: {
-    marginHorizontal: Space.md,
+    paddingHorizontal: Space.md,
     marginBottom: Space.sm,
   },
   listContent: {
@@ -412,6 +374,6 @@ const styles = StyleSheet.create({
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.sm,
+    paddingVertical: 10,
   },
 });
