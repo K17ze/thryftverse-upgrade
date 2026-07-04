@@ -73,6 +73,7 @@ export default function AssetDetailScreen() {
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
   const [fullscreenVisible, setFullscreenVisible] = React.useState(false);
+  const [orderBookExpanded, setOrderBookExpanded] = React.useState(false);
 
   const handleOpenFullscreen = (index: number) => {
     setFullscreenIndex(index);
@@ -417,82 +418,9 @@ export default function AssetDetailScreen() {
           })()}
         </Reanimated.View>
 
+        {/* ── Ownership summary (before order book — user understands ownership first) ── */}
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
-          style={styles.sectionWrap}
-        >
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Live market</Text>
-
-            <View style={styles.orderBookGrid}>
-              <View style={styles.orderBookCol}>
-                <View style={styles.orderBookHeader}>
-                  <Ionicons name="arrow-up-circle-outline" size={14} color={Colors.success} />
-                  <Text style={styles.orderBookHeaderText}>Buy interest</Text>
-                </View>
-                {bestBid && (
-                  <Text style={styles.orderBookBest}>
-                    Best: {formatFromFiat(bestBid.unitPriceGbp, 'GBP')}
-                  </Text>
-                )}
-                {orderBook.bids.slice(0, 5).map((entry: any, i: number) => (
-                  <View key={`bid-${i}`} style={styles.orderBookRow}>
-                    <Text style={styles.orderBookPrice}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
-                    <Text style={styles.orderBookUnits}>{entry.units}u</Text>
-                  </View>
-                ))}
-                {orderBook.bids.length === 0 && (
-                  <Text style={styles.orderBookEmpty}>No buy interest yet</Text>
-                )}
-              </View>
-
-              <View style={styles.orderBookDivider} />
-
-              <View style={styles.orderBookCol}>
-                <View style={styles.orderBookHeader}>
-                  <Ionicons name="arrow-down-circle-outline" size={14} color={Colors.danger} />
-                  <Text style={styles.orderBookHeaderText}>Sell availability</Text>
-                </View>
-                {bestAsk && (
-                  <Text style={styles.orderBookBest}>
-                    Best: {formatFromFiat(bestAsk.unitPriceGbp, 'GBP')}
-                  </Text>
-                )}
-                {orderBook.asks.slice(0, 5).map((entry: any, i: number) => (
-                  <View key={`ask-${i}`} style={styles.orderBookRow}>
-                    <Text style={styles.orderBookPrice}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
-                    <Text style={styles.orderBookUnits}>{entry.units}u</Text>
-                  </View>
-                ))}
-                {orderBook.asks.length === 0 && (
-                  <Text style={styles.orderBookEmpty}>No sell offers yet</Text>
-                )}
-              </View>
-            </View>
-          </View>
-        </Reanimated.View>
-
-        {/* ── Price history (honest unavailable state) ── */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(210)}
-          style={styles.sectionWrap}
-        >
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Price history</Text>
-            <View style={styles.priceHistoryEmpty}>
-              <Ionicons name="analytics-outline" size={24} color={Colors.textMuted} />
-              <Text style={styles.priceHistoryEmptyText}>
-                Price history is not available
-              </Text>
-              <Text style={styles.priceHistoryEmptySub}>
-                Historical price data will appear here once the secondary market has sufficient trading activity.
-              </Text>
-            </View>
-          </View>
-        </Reanimated.View>
-
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(230)}
           style={styles.sectionWrap}
         >
           <View style={styles.sectionCard}>
@@ -568,6 +496,98 @@ export default function AssetDetailScreen() {
           style={styles.sectionWrap}
         >
           <FinancialDisclosure />
+        </Reanimated.View>
+
+        {/* ── Order book (secondary, collapsible — after user understands item, issuer, ownership, risk) ── */}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(350)}
+          style={styles.sectionWrap}
+        >
+          <Pressable
+            style={styles.collapsibleHeader}
+            onPress={() => setOrderBookExpanded((prev) => !prev)}
+            accessibilityRole="button"
+            accessibilityLabel={orderBookExpanded ? 'Collapse order book' : 'Expand order book'}
+            accessibilityState={{ expanded: orderBookExpanded }}
+          >
+            <View style={styles.collapsibleHeaderLeft}>
+              <Text style={styles.sectionTitle}>Live market</Text>
+              <Text style={styles.collapsibleSubtext}>
+                {orderBook.bids.length + orderBook.asks.length} offers
+              </Text>
+            </View>
+            <Ionicons
+              name={orderBookExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
+              size={18}
+              color={Colors.textSecondary}
+            />
+          </Pressable>
+          {orderBookExpanded && (
+            <View style={styles.orderBookGrid}>
+              <View style={styles.orderBookCol}>
+                <View style={styles.orderBookHeader}>
+                  <Ionicons name="arrow-up-circle-outline" size={14} color={Colors.success} />
+                  <Text style={styles.orderBookHeaderText}>Buy interest</Text>
+                </View>
+                {bestBid && (
+                  <Text style={styles.orderBookBest}>
+                    Best: {formatFromFiat(bestBid.unitPriceGbp, 'GBP')}
+                  </Text>
+                )}
+                {orderBook.bids.slice(0, 5).map((entry: any, i: number) => (
+                  <View key={`bid-${i}`} style={styles.orderBookRow}>
+                    <Text style={styles.orderBookPrice}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
+                    <Text style={styles.orderBookUnits}>{entry.units}u</Text>
+                  </View>
+                ))}
+                {orderBook.bids.length === 0 && (
+                  <Text style={styles.orderBookEmpty}>No buy interest yet</Text>
+                )}
+              </View>
+
+              <View style={styles.orderBookDivider} />
+
+              <View style={styles.orderBookCol}>
+                <View style={styles.orderBookHeader}>
+                  <Ionicons name="arrow-down-circle-outline" size={14} color={Colors.danger} />
+                  <Text style={styles.orderBookHeaderText}>Sell availability</Text>
+                </View>
+                {bestAsk && (
+                  <Text style={styles.orderBookBest}>
+                    Best: {formatFromFiat(bestAsk.unitPriceGbp, 'GBP')}
+                  </Text>
+                )}
+                {orderBook.asks.slice(0, 5).map((entry: any, i: number) => (
+                  <View key={`ask-${i}`} style={styles.orderBookRow}>
+                    <Text style={styles.orderBookPrice}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
+                    <Text style={styles.orderBookUnits}>{entry.units}u</Text>
+                  </View>
+                ))}
+                {orderBook.asks.length === 0 && (
+                  <Text style={styles.orderBookEmpty}>No sell offers yet</Text>
+                )}
+              </View>
+            </View>
+          )}
+        </Reanimated.View>
+
+        {/* ── Price history (honest unavailable state) ── */}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(370)}
+          style={styles.sectionWrap}
+        >
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Price history</Text>
+            <View style={styles.priceHistoryEmpty}>
+              <Ionicons name="analytics-outline" size={24} color={Colors.textMuted} />
+              <Text style={styles.priceHistoryEmptyText}>
+                Price history is not available
+              </Text>
+              <Text style={styles.priceHistoryEmptySub}>
+                Historical price data will appear here once the secondary market has sufficient trading activity.
+              </Text>
+            </View>
+          </View>
         </Reanimated.View>
 
         <Reanimated.View
@@ -885,8 +905,30 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: Space.sm,
   },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+  },
+  collapsibleHeaderLeft: {
+    flex: 1,
+  },
+  collapsibleSubtext: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
   orderBookGrid: {
     flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    paddingTop: Space.sm,
+    marginTop: Space.xs,
   },
   orderBookCol: {
     flex: 1,
