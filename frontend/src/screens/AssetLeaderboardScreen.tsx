@@ -94,7 +94,7 @@ export default function AssetLeaderboardScreen() {
     navigation.navigate('Portfolio');
   }, [navigation]);
 
-  // ── Rankings (no speculative marketMovePct24h) ──
+  // ── Rankings (no speculative price-move metrics) ──
   // Top by allocation: most allocated = most popular by real ownership
   const topAllocated = React.useMemo(
     () => [...assets]

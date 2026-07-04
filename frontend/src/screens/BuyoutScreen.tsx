@@ -103,7 +103,7 @@ export default function BuyoutScreen() {
         />
         <CoOwnStateCanvas
           variant="error"
-          title="Item not found"
+          title="Asset not found"
           subtitle="This Co-Own item may have been delisted."
           actionLabel="Back to Co-Own"
           onAction={() => navigation.navigate('CoOwnHub')}

@@ -73,7 +73,11 @@ export default function CreateCoOwnScreen() {
     fetchUserListingsFromApi(issuerId, { status: 'active', limit: 50 })
       .then((result) => {
         if (cancelled) return;
-        setIssuerListings(result.items);
+        // Safety filter: only show listings where sellerId === issuerId.
+        // The backend should already filter by userId, but this prevents
+        // any cross-user listing leakage.
+        const ownListings = result.items.filter((item) => item.sellerId === issuerId);
+        setIssuerListings(ownListings);
       })
       .catch(() => {
         if (cancelled) return;

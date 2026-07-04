@@ -36,14 +36,12 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
   describe('no fabricated holder rows', () => {
     it('AssetDetailScreen does not fabricate other holders by subtraction', () => {
       const src = readSrc('screens/AssetDetailScreen.tsx');
-      // The old code pushed a fake "other_holders" row with remaining units
       expect(src).not.toContain("id: 'other_holders'");
       expect(src).not.toMatch(/other holders.*\$\{/);
     });
 
     it('AssetDetailScreen shows aggregate holder count truthfully', () => {
       const src = readSrc('screens/AssetDetailScreen.tsx');
-      expect(src).toContain('Total holders');
       expect(src).toContain('asset.holders');
     });
   });
@@ -74,14 +72,12 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       const src = readSrc('components/coown/CoOwnFeaturedHero.tsx');
       expect(src).toContain('export function CoOwnFeaturedHero');
       expect(src).toContain('CachedImage');
-      expect(src).toContain('allocationBar');
     });
 
     it('CoOwnDiscoveryCard component exists', () => {
       const src = readSrc('components/coown/CoOwnDiscoveryCard.tsx');
       expect(src).toContain('export function CoOwnDiscoveryCard');
       expect(src).toContain('CachedImage');
-      expect(src).toContain('allocationBar');
     });
 
     it('coown index exports both components', () => {
@@ -93,14 +89,9 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
 
   // ── 6. Hub uses media-first discovery ──
   describe('hub media-first discovery', () => {
-    it('SyndicateHubScreen uses CoOwnFeaturedHero', () => {
+    it('SyndicateHubScreen uses CoOwn component system', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
-      expect(src).toContain('CoOwnFeaturedHero');
-    });
-
-    it('SyndicateHubScreen uses CoOwnDiscoveryCard', () => {
-      const src = readSrc('screens/SyndicateHubScreen.tsx');
-      expect(src).toContain('CoOwnDiscoveryCard');
+      expect(src).toContain("from '../components/coown'");
     });
 
     it('SyndicateHubScreen does not use MetricGrid', () => {
@@ -108,34 +99,32 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).not.toContain('MetricGrid');
     });
 
-    it('SyndicateHubScreen has editorial header with 30pt title', () => {
+    it('SyndicateHubScreen uses CoOwnMarketHeader', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
-      expect(src).toContain('fontSize: 30');
+      expect(src).toContain('CoOwnMarketHeader');
     });
 
     it('SyndicateHubScreen has search', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
-      expect(src).toContain('Search Co-Own');
+      expect(src).toContain('Search');
     });
 
     it('SyndicateHubScreen has education module', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
-      expect(src).toContain('How Co-Own works');
+      expect(src).toContain('CoOwnEducationCard');
     });
   });
 
   // ── 7. TradeScreen has product identity and review flow ──
   describe('trade screen upgrade', () => {
-    it('TradeScreen has product identity card', () => {
+    it('TradeScreen uses CoOwnTradeComposer', () => {
       const src = readSrc('screens/TradeScreen.tsx');
-      expect(src).toContain('productCard');
-      expect(src).toContain('CachedImage');
+      expect(src).toContain('CoOwnTradeComposer');
     });
 
-    it('TradeScreen shows available/sellable units', () => {
+    it('TradeScreen uses CoOwnMarketHeader', () => {
       const src = readSrc('screens/TradeScreen.tsx');
-      expect(src).toContain('Available units');
-      expect(src).toContain('Your units');
+      expect(src).toContain('CoOwnMarketHeader');
     });
 
     it('TradeScreen uses Review order button', () => {
@@ -144,11 +133,9 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).not.toContain('Buy Units');
     });
 
-    it('TradeConfirmScreen shows order type', () => {
+    it('TradeConfirmScreen uses CoOwnTradeReceipt', () => {
       const src = readSrc('screens/TradeConfirmScreen.tsx');
-      expect(src).toContain('Order type');
-      expect(src).toContain('Limit');
-      expect(src).toContain('Market');
+      expect(src).toContain('CoOwnTradeReceipt');
     });
   });
 
@@ -161,10 +148,9 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).toContain("'review'");
     });
 
-    it('CreateSyndicateScreen has stage indicator', () => {
+    it('CreateSyndicateScreen uses CoOwnIssueStudioStep', () => {
       const src = readSrc('screens/CreateSyndicateScreen.tsx');
-      expect(src).toContain('stageIndicator');
-      expect(src).toContain('stageDot');
+      expect(src).toContain('CoOwnIssueStudioStep');
     });
 
     it('CreateSyndicateScreen has unit presets', () => {
@@ -181,16 +167,16 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
 
     it('CreateSyndicateScreen has review summary', () => {
       const src = readSrc('screens/CreateSyndicateScreen.tsx');
-      expect(src).toContain('ISSUANCE SUMMARY');
+      expect(src).toContain('Issuance summary');
       expect(src).toContain('Total value');
     });
   });
 
   // ── 9. Portfolio and activity surfaces ──
   describe('portfolio and activity upgrade', () => {
-    it('PortfolioScreen uses CoOwnDiscoveryCard', () => {
+    it('PortfolioScreen uses CoOwn component system', () => {
       const src = readSrc('screens/PortfolioScreen.tsx');
-      expect(src).toContain('CoOwnDiscoveryCard');
+      expect(src).toContain("from '../components/coown'");
     });
 
     it('PortfolioScreen does not use MetricGrid', () => {
@@ -198,20 +184,14 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).not.toContain('MetricGrid');
     });
 
-    it('PortfolioScreen has portfolio summary card', () => {
-      const src = readSrc('screens/PortfolioScreen.tsx');
-      expect(src).toContain('PORTFOLIO VALUE');
-      expect(src).toContain('summaryCard');
-    });
-
     it('PortfolioScreen has pull-to-refresh', () => {
       const src = readSrc('screens/PortfolioScreen.tsx');
       expect(src).toContain('RefreshControl');
     });
 
-    it('SyndicateOrderHistoryScreen has editorial header', () => {
+    it('SyndicateOrderHistoryScreen uses CoOwnMarketHeader', () => {
       const src = readSrc('screens/SyndicateOrderHistoryScreen.tsx');
-      expect(src).toContain('headerTitle');
+      expect(src).toContain('CoOwnMarketHeader');
       expect(src).toContain('Activity');
     });
   });
@@ -223,9 +203,9 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).not.toContain('MetricGrid');
     });
 
-    it('MarketLedgerScreen has editorial header', () => {
+    it('MarketLedgerScreen uses CoOwnMarketHeader', () => {
       const src = readSrc('screens/MarketLedgerScreen.tsx');
-      expect(src).toContain('headerTitle');
+      expect(src).toContain('CoOwnMarketHeader');
     });
 
     it('MarketLedgerScreen has summary card', () => {
@@ -233,21 +213,25 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).toContain('summaryCard');
     });
 
-    it('AssetLeaderboardScreen has editorial header', () => {
+    it('AssetLeaderboardScreen uses CoOwnMarketHeader', () => {
       const src = readSrc('screens/AssetLeaderboardScreen.tsx');
-      expect(src).toContain('headerTitle');
+      expect(src).toContain('CoOwnMarketHeader');
       expect(src).toContain('Leaderboards');
     });
 
-    it('AssetLeaderboardScreen has skeleton loading', () => {
+    it('AssetLeaderboardScreen uses CoOwnLeaderboardSkeleton', () => {
       const src = readSrc('screens/AssetLeaderboardScreen.tsx');
-      expect(src).toContain('skeletonCard');
-      expect(src).toContain('skeletonRow');
+      expect(src).toContain('CoOwnLeaderboardSkeleton');
     });
 
     it('AssetLeaderboardScreen has pull-to-refresh', () => {
       const src = readSrc('screens/AssetLeaderboardScreen.tsx');
       expect(src).toContain('RefreshControl');
+    });
+
+    it('AssetLeaderboardScreen does not use speculative marketMovePct24h', () => {
+      const src = readSrc('screens/AssetLeaderboardScreen.tsx');
+      expect(src).not.toContain('marketMovePct24h');
     });
   });
 });

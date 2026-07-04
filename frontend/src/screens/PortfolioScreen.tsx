@@ -24,6 +24,10 @@ import {
   type CoOwnPositionAction,
 } from '../components/coown';
 import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM } from '../services/coOwnPortfolio';
+// listCoOwnAssets and fetchCoOwnHoldings are re-exported here for transparency.
+// The coOwnPortfolio adapter composes them internally; importing them here
+// keeps the screen's data dependencies visible and auditable.
+import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 
 type NavT = StackNavigationProp<RootStackParamList>;

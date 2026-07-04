@@ -1,10 +1,14 @@
 // Co-Own component system — purpose-built for each context
 export { CoOwnMarketHeader } from './CoOwnMarketHeader';
 export type { CoOwnMarketHeaderProps, CoOwnMarketHeaderAction } from './CoOwnMarketHeader';
+export { CoOwnFeaturedHero } from './CoOwnFeaturedHero';
+export type { CoOwnFeaturedHeroProps } from './CoOwnFeaturedHero';
 export { CoOwnFeaturedAsset } from './CoOwnFeaturedAsset';
 export type { CoOwnFeaturedAssetProps, CoOwnAssetStatus } from './CoOwnFeaturedAsset';
 export { CoOwnAssetTile } from './CoOwnAssetTile';
 export type { CoOwnAssetTileProps } from './CoOwnAssetTile';
+export { CoOwnDiscoveryCard } from './CoOwnDiscoveryCard';
+export type { CoOwnDiscoveryCardProps } from './CoOwnDiscoveryCard';
 export { CoOwnPositionCard } from './CoOwnPositionCard';
 export type { CoOwnPositionCardProps, CoOwnPositionStatus } from './CoOwnPositionCard';
 export { CoOwnPositionActionSheet } from './CoOwnPositionActionSheet';

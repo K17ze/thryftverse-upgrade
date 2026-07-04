@@ -344,6 +344,23 @@ export default function AssetDetailScreen() {
           />
         </Reanimated.View>
 
+        {/* Price history — honest unavailable state */}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(170)}
+          style={styles.sectionWrap}
+        >
+          <View style={[styles.priceHistoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.priceHistoryRow}>
+              <Ionicons name="analytics-outline" size={16} color={colors.textMuted} />
+              <Text style={[styles.priceHistoryTitle, { color: colors.textPrimary }]}>Price history</Text>
+            </View>
+            <Text style={[styles.priceHistoryBody, { color: colors.textSecondary }]}>
+              Price history is not available for this Co-Own item. Historical pricing data requires
+              backend aggregation and is not yet supported.
+            </Text>
+          </View>
+        </Reanimated.View>
+
         {/* Category evidence — editorial details when available */}
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
@@ -653,6 +670,27 @@ const styles = StyleSheet.create({
   sectionWrap: {
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
+  },
+  priceHistoryCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+    padding: Space.md,
+    gap: Space.sm,
+  },
+  priceHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  priceHistoryTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.3,
+  },
+  priceHistoryBody: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 20,
   },
   sectionTitle: {
     fontSize: Type.subtitle.size,

@@ -277,7 +277,7 @@ export default function CoOwnOrderHistoryScreen() {
               subtitle="Your Co-Own trade history will appear here."
               actionLabel="Browse items"
               onAction={() => navigation.navigate('CoOwnHub')}
-              emptyGraphicVariant="receipt"
+              emptyGraphicVariant="box"
             />
           )
         }

@@ -309,7 +309,7 @@ export default function MarketLedgerScreen() {
               variant="empty"
               title="No activity"
               subtitle="Trading activity will appear here."
-              emptyGraphicVariant="receipt"
+              emptyGraphicVariant="box"
             />
           )
         }
