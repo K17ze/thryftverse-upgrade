@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+﻿import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -92,9 +92,9 @@ function getCollapsedInitials(name: string): string {
 }
 
 export default function UserProfileScreen({ navigation, route }: Props) {
-  // ═══════════════════════════════════════════════════════════════════════
-  // ALL HOOKS — unconditional, no early returns before this section ends
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ALL HOOKS â€” unconditional, no early returns before this section ends
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
@@ -155,7 +155,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   const profileDeepLink = useMemo(() => targetUserId ? `${PROFILE_WEB_BASE}/u/${encodeURIComponent(targetUserId)}` : PROFILE_WEB_BASE, [targetUserId]);
 
-  // Tab counts — ratingAverage consumed by ProfileHero via stats
+  // Tab counts â€” ratingAverage consumed by ProfileHero via stats
   const activeCount = stats?.activeListingCount ?? 0;
   const soldCount = stats?.soldListingCount ?? 0;
   const lookCount = stats?.publishedLookCount ?? 0;
@@ -244,7 +244,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // Handlers
   const handleShare = useCallback(async () => {
     try {
-      await Share.share({ message: `${displayUsername} on Thryftverse — ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
+      await Share.share({ message: `${displayUsername} on Thryftverse â€” ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
     } catch { /* ignore */ }
   }, [displayUsername, profileDeepLink]);
 
@@ -282,8 +282,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const handleRefresh = useCallback(() => { activeQuery.refetch(); if (!isSelfProfile) publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery, isSelfProfile]);
   const onTabRailLayout = useCallback((y: number) => { stickyThreshold.value = y - (insets.top + COLLAPSED_BAR_HEIGHT); }, [insets.top]);
 
-  // ── Per-destination scroll offset preservation ──
-  // No overlay reset on tab switch — overlay state is derived from the real scroll offset.
+  // â”€â”€ Per-destination scroll offset preservation â”€â”€
+  // No overlay reset on tab switch â€” overlay state is derived from the real scroll offset.
   const scrollOffsets = useRef<Record<string, number>>({});
   const currentDestination: string = activeTab === 'Shop' ? `${activeTab}-${shopSegment}` : activeTab;
   const listRef = useRef<any>(null);
@@ -294,7 +294,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     scrollOffsets.current[currentDestination] = offset;
   }, [currentDestination]);
 
-  // When destination changes, queue a restore — no setTimeout during render
+  // When destination changes, queue a restore â€” no setTimeout during render
   const prevDestination = useRef<string>(currentDestination);
   useEffect(() => {
     if (prevDestination.current !== currentDestination) {
@@ -326,7 +326,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           setStickyRailVisible(shouldSticky);
         }
       } else {
-        // No previous offset — if currently collapsed, start at sticky threshold
+        // No previous offset â€” if currently collapsed, start at sticky threshold
         if (collapsedShared.value) {
           const stickyAt = stickyThreshold.value;
           if (stickyAt < 9999 && listRef.current) {
@@ -349,21 +349,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return <ProfileReviewRow item={item as SellerReviewItem} onOpenReviewer={(uid) => navigation.push('UserProfile', { userId: uid })} onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })} />;
   }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight]);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // DERIVED RENDER STATE — after all hooks
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // DERIVED RENDER STATE â€” after all hooks
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const isBlockedByTarget = viewer?.isBlockedByTarget && !viewer.isSelf;
   const isBlocked = viewer?.isBlocked ?? false;
   const canMessage = viewer?.canMessage ?? false;
 
-  // State labels — rendered by ProfileStates subcomponents:
+  // State labels â€” rendered by ProfileStates subcomponents:
   // "Profile unavailable" (ProfileUnavailableState)
   // "You've been blocked" (ProfileBlockedState)
   // canMessage gates the Message button (ProfileHero)
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // CONDITIONAL RENDERS — loading, error, unavailable, blocked
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // CONDITIONAL RENDERS â€” loading, error, unavailable, blocked
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   if (isLoadingProfile && !targetProfile) {
     return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab} />;
   }
@@ -379,9 +379,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return <ProfileBlockedState onBack={() => navigation.goBack()} onShare={handleShare} coverHeight={COVER_HEIGHT} />;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // MAIN RENDER
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? LOOK_COLS : 2;
   const estimatedItemSize = activeTab === 'Shop' ? cardHeight + 64 : activeTab === 'Looks' ? lookTileHeight + LOOK_GAP : 130;
 
@@ -413,7 +413,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onShopSegmentSelect={(s) => setShopSegment(s)}
       />
 
-      {/* Tab rail — measures Y for sticky threshold */}
+      {/* Tab rail â€” measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
         <TabRail
           tabs={[
@@ -493,7 +493,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     <View style={styles.container}>
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
-      {/* Top utility controls — overlay cover, fade out on scroll */}
+      {/* Top utility controls â€” overlay cover, fade out on scroll */}
       <View pointerEvents="box-none" style={styles.coverActionLayer}>
         <Reanimated.View
           style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}
@@ -537,7 +537,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </Reanimated.View>
       </View>
 
-      {/* Collapsed header — total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
+      {/* Collapsed header â€” total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
       <Reanimated.View
         style={[styles.collapsedHeader, { height: insets.top + COLLAPSED_BAR_HEIGHT, paddingTop: insets.top }, collapsedHeaderStyle, collapsedHeaderShadowStyle]}
         pointerEvents={collapsedVisible ? 'auto' : 'none'}
@@ -597,7 +597,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       </Reanimated.View>
 
-      {/* Sticky tab rail — external overlay, appears when original scrolls past */}
+      {/* Sticky tab rail â€” external overlay, appears when original scrolls past */}
       <Reanimated.View
         style={[styles.stickyRailWrap, { top: insets.top + COLLAPSED_BAR_HEIGHT }, stickyRailStyle]}
         pointerEvents={stickyRailVisible ? 'auto' : 'none'}
@@ -624,7 +624,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         ) : null}
       </Reanimated.View>
 
-      {/* Content list — cover scrolls naturally as first header item */}
+      {/* Content list â€” cover scrolls naturally as first header item */}
       <AnimatedFlashList
         ref={listRef}
         data={listData as (ListingApiItem | LookApiItem | SellerReviewItem)[]}

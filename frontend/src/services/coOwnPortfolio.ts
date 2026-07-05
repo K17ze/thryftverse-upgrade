@@ -1,0 +1,103 @@
+import { listCoOwnAssets, fetchCoOwnHoldings, type MarketCoOwnAsset, type MarketCoOwnHolding } from './marketApi';
+
+// ── Portfolio DTO ──
+// A joined position view model that the PortfolioScreen consumes.
+// The screen must not contain raw market join logic.
+
+export interface CoOwnPositionVM {
+  assetId: string;
+  listingId: string;
+  issuerId: string;
+  title: string;
+  imageUrl: string | null;
+  unitsOwned: number;
+  totalUnits: number;
+  ownershipPct: number;
+  unitPriceGbp: number;
+  unitPriceStable: number;
+  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID';
+  currentValueGbp: number;
+  avgEntryPriceGbp: number;
+  realizedPnlGbp: number;
+  unrealizedPnlGbp: number;
+  availableUnits: number;
+  sellableUnits: number;
+  isOpen: boolean;
+  status: 'open' | 'closed' | 'paused';
+  createdAt: string;
+}
+
+export interface CoOwnPortfolioSummary {
+  totalValueGbp: number;
+  totalUnits: number;
+  totalUnrealizedGbp: number;
+  totalRealizedGbp: number;
+  positionCount: number;
+}
+
+export interface CoOwnPortfolioResult {
+  positions: CoOwnPositionVM[];
+  summary: CoOwnPortfolioSummary;
+}
+
+// ── Service adapter ──
+// Internally fetches assets + holdings and joins them into position DTOs.
+// The screen consumes this typed contract, not raw market data.
+
+export async function fetchCoOwnPortfolioPositions(userId: string): Promise<CoOwnPortfolioResult> {
+  const [assets, holdings] = await Promise.all([
+    listCoOwnAssets({ limit: 200 }),
+    fetchCoOwnHoldings(userId).catch(() => [] as MarketCoOwnHolding[]),
+  ]);
+
+  const holdingMap = new Map<string, MarketCoOwnHolding>();
+  for (const h of holdings) {
+    holdingMap.set(h.assetId, h);
+  }
+
+  const positions: CoOwnPositionVM[] = assets
+    .filter((asset: MarketCoOwnAsset) => {
+      const h = holdingMap.get(asset.id);
+      return h != null && h.unitsOwned > 0;
+    })
+    .map((asset: MarketCoOwnAsset) => {
+      const h = holdingMap.get(asset.id)!;
+      const ownershipPct = asset.totalUnits > 0 ? Math.round((h.unitsOwned / asset.totalUnits) * 100 * 10) / 10 : 0;
+      const currentValueGbp = h.unitsOwned * asset.unitPriceGbp;
+      const unrealizedPnlGbp = (asset.unitPriceGbp - h.avgEntryPriceGbp) * h.unitsOwned;
+      const sellableUnits = h.unitsOwned; // All owned units are sellable if the market is open
+
+      return {
+        assetId: asset.id,
+        listingId: asset.listingId,
+        issuerId: asset.issuerId,
+        title: asset.title,
+        imageUrl: asset.imageUrl,
+        unitsOwned: h.unitsOwned,
+        totalUnits: asset.totalUnits,
+        ownershipPct,
+        unitPriceGbp: asset.unitPriceGbp,
+        unitPriceStable: asset.unitPriceStable,
+        settlementMode: asset.settlementMode,
+        currentValueGbp,
+        avgEntryPriceGbp: h.avgEntryPriceGbp,
+        realizedPnlGbp: h.realizedPnlGbp,
+        unrealizedPnlGbp,
+        availableUnits: asset.availableUnits,
+        sellableUnits: asset.isOpen ? sellableUnits : 0,
+        isOpen: asset.isOpen,
+        status: asset.isOpen ? 'open' : 'closed',
+        createdAt: asset.createdAt,
+      };
+    });
+
+  const summary: CoOwnPortfolioSummary = {
+    totalValueGbp: positions.reduce((sum, p) => sum + p.currentValueGbp, 0),
+    totalUnits: positions.reduce((sum, p) => sum + p.unitsOwned, 0),
+    totalUnrealizedGbp: positions.reduce((sum, p) => sum + p.unrealizedPnlGbp, 0),
+    totalRealizedGbp: positions.reduce((sum, p) => sum + p.realizedPnlGbp, 0),
+    positionCount: positions.length,
+  };
+
+  return { positions, summary };
+}

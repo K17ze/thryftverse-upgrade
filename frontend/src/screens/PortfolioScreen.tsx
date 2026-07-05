@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, RefreshControl, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,22 +7,26 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { EmptyState } from '../components/EmptyState';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Motion } from '../constants/motion';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius } from '../theme/designTokens';
-import {
-  TradeHeader,
-  MetricGrid,
-} from '../components/trade';
-import { Meta, BodyEmphasis } from '../components/ui/Text';
-import { FlagshipAssetCard, FlagshipEmptyGraphic } from '../components/flagship';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { haptics } from '../utils/haptics';
+import {
+  CoOwnMarketHeader,
+  CoOwnPositionCard,
+  CoOwnPositionActionSheet,
+  CoOwnPortfolioSkeleton,
+  CoOwnStateCanvas,
+  type CoOwnPositionAction,
+} from '../components/coown';
+import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM } from '../services/coOwnPortfolio';
+// listCoOwnAssets and fetchCoOwnHoldings are re-exported here for transparency.
+// The coOwnPortfolio adapter composes them internally; importing them here
+// keeps the screen's data dependencies visible and auditable.
 import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 
@@ -30,59 +34,43 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function PortfolioScreen() {
   const navigation = useNavigation<NavT>();
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
+  const { width: screenWidth } = useWindowDimensions();
 
-  const [holdings, setHoldings] = React.useState<any[]>([]);
+  const [positions, setPositions] = React.useState<CoOwnPositionVM[]>([]);
+  const [summary, setSummary] = React.useState({
+    totalValueGbp: 0,
+    totalUnits: 0,
+    totalUnrealizedGbp: 0,
+    totalRealizedGbp: 0,
+    positionCount: 0,
+  });
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isError, setIsError] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [actionSheetAsset, setActionSheetAsset] = React.useState<CoOwnPositionVM | null>(null);
 
-  React.useEffect(() => {
+  const loadPortfolio = React.useCallback(() => {
     if (!currentUser?.id) { setIsLoading(false); return; }
     let cancelled = false;
     setIsLoading(true);
+    setIsError(false);
 
-    Promise.all([
-      listCoOwnAssets({ limit: 120 }),
-      fetchCoOwnHoldings(currentUser.id).catch(() => []),
-    ])
-      .then(([assets, userHoldings]) => {
+    fetchCoOwnPortfolioPositions(currentUser.id)
+      .then((result) => {
         if (cancelled) return;
-        const holdingMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
-        for (const h of userHoldings) {
-          holdingMap.set(h.assetId, { units: h.unitsOwned, avgEntry: h.avgEntryPriceGbp, realized: h.realizedPnlGbp });
-        }
-        const merged = assets
-          .filter((a) => (holdingMap.get(a.id)?.units ?? 0) > 0)
-          .map((a) => {
-            const h = holdingMap.get(a.id);
-            return {
-              id: a.id,
-              title: a.title,
-              image: a.imageUrl ?? '',
-              totalUnits: a.totalUnits,
-              availableUnits: a.availableUnits,
-              unitPriceGBP: a.unitPriceGbp,
-              unitPriceStable: a.unitPriceStable,
-              settlementMode: a.settlementMode,
-              issuerId: a.issuerId,
-              marketMovePct24h: a.marketMovePct24h,
-              holders: a.holders,
-              volume24hGBP: a.volume24hGbp,
-              isOpen: a.isOpen,
-              yourUnits: h?.units ?? 0,
-              avgEntryPriceGBP: h?.avgEntry,
-              realizedProfitGBP: h?.realized,
-            };
-          });
-        setHoldings(merged);
+        setPositions(result.positions);
+        setSummary(result.summary);
       })
       .catch((err) => {
         if (cancelled) return;
         const parsed = parseApiError(err, 'Unable to load portfolio');
         show(parsed.message, 'error');
+        setIsError(true);
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -91,140 +79,302 @@ export default function PortfolioScreen() {
     return () => { cancelled = true; };
   }, [currentUser?.id, show]);
 
-  const totalValue = React.useMemo(
-    () => holdings.reduce((sum, asset) => sum + asset.yourUnits * asset.unitPriceGBP, 0),
-    [holdings]
-  );
+  React.useEffect(() => {
+    const cleanup = loadPortfolio();
+    return cleanup;
+  }, [loadPortfolio]);
 
-  const unrealized = React.useMemo(() => {
-    return holdings.reduce((sum, asset) => {
-      const avg = asset.avgEntryPriceGBP ?? asset.unitPriceGBP;
-      return sum + (asset.unitPriceGBP - avg) * asset.yourUnits;
-    }, 0);
-  }, [holdings]);
+  const handleRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    loadPortfolio();
+    setTimeout(() => setRefreshing(false), 800);
+  }, [loadPortfolio]);
 
-  const realized = React.useMemo(
-    () => holdings.reduce((sum, asset) => sum + (asset.realizedProfitGBP ?? 0), 0),
-    [holdings]
-  );
+  const handleBack = React.useCallback(() => {
+    if (navigation.canGoBack()) { navigation.goBack(); return; }
+    navigation.navigate('CoOwnHub');
+  }, [navigation]);
 
-  const portfolioBars = React.useMemo(() => {
-    if (holdings.length === 0 || totalValue <= 0) return [];
-    return holdings.map((asset) => ({
-      id: asset.id,
-      ratio: (asset.yourUnits * asset.unitPriceGBP) / totalValue,
-      title: asset.title,
+  // Allocation bars — only when real positions exist
+  const allocationBars = React.useMemo(() => {
+    if (positions.length === 0 || summary.totalValueGbp <= 0) return [];
+    return positions.map((p) => ({
+      id: p.assetId,
+      ratio: (p.unitsOwned * p.unitPriceGbp) / summary.totalValueGbp,
+      title: p.title,
     }));
-  }, [holdings, totalValue]);
+  }, [positions, summary.totalValueGbp]);
 
-  const renderHolding = ({ item, index }: { item: any; index: number }) => {
+  const formatPositionStatus = (p: CoOwnPositionVM): 'open' | 'closed' | 'paused' => {
+    if (!p.isOpen) return 'closed';
+    return p.availableUnits > 0 ? 'open' : 'closed';
+  };
+
+  const handlePositionPress = React.useCallback((p: CoOwnPositionVM) => {
+    navigation.navigate('AssetDetail', { assetId: p.assetId });
+  }, [navigation]);
+
+  const handleBuyMore = React.useCallback((p: CoOwnPositionVM) => {
+    haptics.tap();
+    navigation.navigate('Trade', { assetId: p.assetId, side: 'buy' });
+  }, [navigation]);
+
+  const handleSell = React.useCallback((p: CoOwnPositionVM) => {
+    haptics.tap();
+    navigation.navigate('Trade', { assetId: p.assetId, side: 'sell' });
+  }, [navigation]);
+
+  const handleOpenActions = React.useCallback((p: CoOwnPositionVM) => {
+    haptics.tap();
+    setActionSheetAsset(p);
+  }, []);
+
+  const actionSheetActions: CoOwnPositionAction[] = React.useMemo(() => {
+    if (!actionSheetAsset) return [];
+    const p = actionSheetAsset;
+    const actions: CoOwnPositionAction[] = [
+      {
+        label: 'View item details',
+        icon: 'cube-outline',
+        onPress: () => navigation.navigate('AssetDetail', { assetId: p.assetId }),
+        variant: 'primary',
+      },
+      {
+        label: 'Buy more units',
+        icon: 'add-circle-outline',
+        onPress: () => navigation.navigate('Trade', { assetId: p.assetId, side: 'buy' }),
+      },
+    ];
+    if (p.sellableUnits > 0) {
+      actions.push({
+        label: 'Sell units',
+        icon: 'swap-horizontal-outline',
+        onPress: () => navigation.navigate('Trade', { assetId: p.assetId, side: 'sell' }),
+        variant: 'secondary',
+      });
+    }
+    actions.push({
+      label: 'View order history',
+      icon: 'receipt-outline',
+      onPress: () => navigation.navigate('CoOwnOrderHistory'),
+    });
+    return actions;
+  }, [actionSheetAsset, navigation]);
+
+  const renderPosition = ({ item, index }: { item: CoOwnPositionVM; index: number }) => {
     return (
       <Reanimated.View
         entering={
           reducedMotionEnabled
             ? undefined
-            : FadeInDown
-                .duration(Motion.list.enterDuration)
-                .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+            : FadeInDown.duration(300).delay(Math.min(index, 8) * 40)
         }
       >
-        <FlagshipAssetCard
-          imageUri={item.image}
-          name={item.title}
-          unitPrice={formatFromFiat(item.unitPriceGBP, 'GBP')}
-          yourUnits={item.yourUnits}
+        <CoOwnPositionCard
+          imageUri={item.imageUrl}
+          title={item.title}
+          unitsOwned={item.unitsOwned}
           totalUnits={item.totalUnits}
-          status={item.isOpen ? 'active' : 'paused'}
-          onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-          onAction={() => navigation.navigate('Trade', { assetId: item.id, side: 'buy' })}
-          actionLabel="Trade"
+          ownershipPct={item.ownershipPct}
+          currentValueLabel={formatFromFiat(item.currentValueGbp, 'GBP')}
+          avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, 'GBP')}
+          unrealizedLabel={item.unrealizedPnlGbp >= 0
+            ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
+            : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
+          }
+          realizedLabel={item.realizedPnlGbp !== 0
+            ? (item.realizedPnlGbp >= 0
+              ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`
+              : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`)
+            : undefined
+          }
+          status={formatPositionStatus(item)}
+          sellable={item.sellableUnits > 0}
+          onPress={() => handlePositionPress(item)}
+          onBuyMore={() => handleBuyMore(item)}
+          onSell={() => handleSell(item)}
           index={index}
         />
       </Reanimated.View>
     );
   };
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+  // ── Loading state ──
+  if (isLoading && positions.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Portfolio"
+          subtitle="Your Co-Own positions"
+          onBack={handleBack}
+          actions={[
+            { icon: 'receipt-outline', label: 'Activity', onPress: () => navigation.navigate('CoOwnOrderHistory') },
+          ]}
+        />
+        <CoOwnPortfolioSkeleton />
+      </SafeAreaView>
+    );
+  }
 
-      <TradeHeader
+  // ── Error state ──
+  if (isError && positions.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Portfolio"
+          subtitle="Your Co-Own positions"
+          onBack={handleBack}
+          actions={[
+            { icon: 'receipt-outline', label: 'Activity', onPress: () => navigation.navigate('CoOwnOrderHistory') },
+          ]}
+        />
+        <CoOwnStateCanvas
+          variant="error"
+          actionLabel="Try again"
+          onAction={loadPortfolio}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ── Empty state ──
+  if (positions.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Portfolio"
+          subtitle="Your Co-Own positions"
+          onBack={handleBack}
+          actions={[
+            { icon: 'receipt-outline', label: 'Activity', onPress: () => navigation.navigate('CoOwnOrderHistory') },
+          ]}
+        />
+        <CoOwnStateCanvas
+          variant="empty"
+          title="No positions yet"
+          subtitle="Your Co-Own portfolio will appear here once you purchase units."
+          actionLabel="Browse items"
+          onAction={() => { haptics.tap(); navigation.navigate('CoOwnHub'); }}
+          emptyGraphicVariant="bag"
+        />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+
+      <CoOwnMarketHeader
         title="Portfolio"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <Ionicons
-            name="receipt-outline"
-            size={20}
-            color={Colors.textPrimary}
-            onPress={() => navigation.navigate('CoOwnOrderHistory')}
-          />
-        }
+        subtitle="Your Co-Own positions"
+        onBack={handleBack}
+        actions={[
+          { icon: 'receipt-outline', label: 'Activity', onPress: () => navigation.navigate('CoOwnOrderHistory') },
+        ]}
       />
 
       <FlashList
-        data={holdings}
-        keyExtractor={(item) => item.id}
+        data={positions}
+        keyExtractor={(item) => item.assetId}
         contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.textSecondary}
+          />
+        }
         ListHeaderComponent={
           <View>
-            <MetricGrid
-              metrics={[
-                { label: 'Total Value', value: formatFromFiat(totalValue, 'GBP', { displayMode: 'fiat' }) },
-                { label: 'Unrealized P&L', value: `${unrealized >= 0 ? '+' : ''}${formatFromFiat(Math.abs(unrealized), 'GBP', { displayMode: 'fiat' })}`, tone: unrealized >= 0 ? 'positive' : 'negative' },
-                { label: 'Realized P&L', value: `${realized >= 0 ? '+' : ''}${formatFromFiat(Math.abs(realized), 'GBP', { displayMode: 'fiat' })}`, tone: realized >= 0 ? 'positive' : 'negative' },
-              ]}
-              columns={3}
-            />
+            {/* Portfolio summary — ownership surface, not a finance dashboard */}
+            <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Portfolio value</Text>
+              <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+                {formatFromFiat(summary.totalValueGbp, 'GBP')}
+              </Text>
 
-            <View style={styles.sectionRow}>
-              <Meta style={styles.sectionLabel}>HOLDINGS</Meta>
-              <AnimatedPressable
-                style={styles.sectionLinkWrap}
-                onPress={() => navigation.navigate('AssetLeaderboard')}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Open asset leaderboards"
-                accessibilityHint="Shows top performing co-own assets"
-              >
-                <Meta style={styles.sectionLink}>Leaderboards</Meta>
-              </AnimatedPressable>
+              <View style={[styles.summaryStats, { borderColor: colors.border }]}>
+                <View style={styles.summaryStat}>
+                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Units</Text>
+                  <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{summary.totalUnits}</Text>
+                </View>
+                <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
+                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Unrealised</Text>
+                  <Text style={[
+                    styles.summaryStatValue,
+                    { color: summary.totalUnrealizedGbp >= 0 ? colors.success : colors.danger },
+                  ]}>
+                    {summary.totalUnrealizedGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(summary.totalUnrealizedGbp), 'GBP')}
+                  </Text>
+                </View>
+                <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
+                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Realised</Text>
+                  <Text style={[
+                    styles.summaryStatValue,
+                    { color: summary.totalRealizedGbp >= 0 ? colors.success : colors.danger },
+                  ]}>
+                    {summary.totalRealizedGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(summary.totalRealizedGbp), 'GBP')}
+                  </Text>
+                </View>
+              </View>
             </View>
 
-            {portfolioBars.length > 0 && (
-              <View style={styles.allocationWrap}>
-                <Meta style={styles.sectionLabel}>ALLOCATION</Meta>
+            {/* Allocation bars — only when real */}
+            {allocationBars.length > 0 && (
+              <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.allocationTitle, { color: colors.textPrimary }]}>Allocation</Text>
                 <View style={styles.barsContainer}>
-                  {portfolioBars.map((bar) => (
+                  {allocationBars.map((bar) => (
                     <View key={bar.id} style={styles.barItem}>
-                      <View style={styles.barTrack}>
-                        <View style={[styles.barFill, { width: `${bar.ratio * 100}%` }]} />
+                      <View style={styles.barHeader}>
+                        <Text style={[styles.barLabel, { color: colors.textSecondary }]} numberOfLines={1}>{bar.title}</Text>
+                        <Text style={[styles.barPct, { color: colors.textMuted }]}>{(bar.ratio * 100).toFixed(1)}%</Text>
                       </View>
-                      <Meta style={styles.barLabel} numberOfLines={1}>{bar.title}</Meta>
-                      <Meta style={styles.barPct}>{(bar.ratio * 100).toFixed(1)}%</Meta>
+                      <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
+                        <View style={[styles.barFill, { width: `${bar.ratio * 100}%`, backgroundColor: colors.brand }]} />
+                      </View>
                     </View>
                   ))}
                 </View>
               </View>
             )}
+
+            {/* Section header */}
+            <View style={styles.sectionRow}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your positions</Text>
+              <AnimatedPressable
+                onPress={() => { haptics.tap(); navigation.navigate('AssetLeaderboard'); }}
+                accessibilityRole="button"
+                accessibilityLabel="Open asset leaderboards"
+                scaleValue={0.96}
+                hapticFeedback="light"
+              >
+                <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Leaderboards</Text>
+              </AnimatedPressable>
+            </View>
           </View>
         }
-        ListEmptyComponent={
-          isLoading ? (
-            <View style={{ padding: Space.lg }}>
-              <Meta style={{ textAlign: 'center', color: Colors.textMuted }}>Loading portfolio...</Meta>
-            </View>
-          ) : (
-            <EmptyState
-              graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
-              title="No holdings"
-              subtitle="Your co-own portfolio will appear here once you purchase units."
-              ctaLabel="Browse Assets"
-              onCtaPress={() => navigation.navigate('CoOwnHub')}
-            />
-          )
-        }
-        renderItem={renderHolding}
-        showsVerticalScrollIndicator={false}
+        renderItem={renderPosition}
+        ListFooterComponent={<View style={{ height: Space.xxl }} />}
+        estimatedItemSize={220}
+      />
+
+      {/* Position action sheet */}
+      <CoOwnPositionActionSheet
+        visible={actionSheetAsset != null}
+        onClose={() => setActionSheetAsset(null)}
+        imageUri={actionSheetAsset?.imageUrl ?? null}
+        title={actionSheetAsset?.title ?? ''}
+        unitsOwned={actionSheetAsset?.unitsOwned ?? 0}
+        ownershipPct={actionSheetAsset?.ownershipPct ?? 0}
+        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, 'GBP') : ''}
+        statusLabel={actionSheetAsset ? (actionSheetAsset.isOpen ? 'Active' : 'Closed') : ''}
+        actions={actionSheetActions}
       />
     </SafeAreaView>
   );
@@ -233,62 +383,103 @@ export default function PortfolioScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   listContent: {
-    paddingBottom: Space.xl,
+    paddingHorizontal: Space.md,
   },
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    marginTop: Space.sm,
-  },
-  sectionLinkWrap: {
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  sectionLink: {
-    color: Colors.brand,
-  },
-  allocationWrap: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
+  summaryCard: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
     padding: Space.md,
+    gap: Space.sm,
+    marginBottom: Space.lg,
   },
-  sectionLabel: {
-    marginBottom: Space.sm,
+  summaryLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  summaryValue: {
+    fontSize: Type.priceLarge.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.5,
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  summaryStat: {
+    flex: 1,
+    paddingHorizontal: Space.xs,
+    alignItems: 'center',
+    gap: 3,
+  },
+  summaryStatLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  summaryStatValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.bold,
+  },
+  allocationCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+    padding: Space.md,
+    gap: Space.sm,
+    marginBottom: Space.lg,
+  },
+  allocationTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.3,
   },
   barsContainer: {
     gap: Space.sm,
   },
   barItem: {
+    gap: 4,
+  },
+  barHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: Space.sm,
-  },
-  barTrack: {
-    flex: 1,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  barFill: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.brand,
   },
   barLabel: {
-    width: 80,
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
   },
   barPct: {
-    width: 40,
-    textAlign: 'right',
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+  },
+  barTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Space.md,
+  },
+  sectionTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.3,
+  },
+  sectionLink: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
   },
 });

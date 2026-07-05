@@ -1,3 +1,7 @@
+// Hermes polyfill must run before ANY module evaluation.
+// This fixes the "property is not configurable" error from RN 0.85 Event constants.
+import './polyfills/hermes-defineProperty';
+
 // Sentry must initialise before any other code runs.
 import './src/lib/sentry';
 

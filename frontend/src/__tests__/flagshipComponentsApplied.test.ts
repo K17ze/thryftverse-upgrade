@@ -32,19 +32,19 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain("import { OrderLedgerRow");
   });
 
-  it('SyndicateHubScreen imports FlagshipAssetCard', () => {
+  it('SyndicateHubScreen imports CoOwn component system', () => {
     const src = readSrc('screens/SyndicateHubScreen.tsx');
-    expect(src).toContain("import { FlagshipAssetCard");
+    expect(src).toContain("from '../components/coown'");
   });
 
-  it('PortfolioScreen imports FlagshipAssetCard', () => {
+  it('PortfolioScreen imports CoOwn component system', () => {
     const src = readSrc('screens/PortfolioScreen.tsx');
-    expect(src).toContain("import { FlagshipAssetCard");
+    expect(src).toContain("from '../components/coown'");
   });
 
-  it('AssetDetailScreen imports FlagshipActionCluster', () => {
+  it('AssetDetailScreen imports CoOwn component system', () => {
     const src = readSrc('screens/AssetDetailScreen.tsx');
-    expect(src).toContain("import { FlagshipActionCluster } from '../components/flagship';");
+    expect(src).toContain("from '../components/coown'");
   });
 
   it('EmptyState supports graphic prop', () => {
@@ -63,14 +63,14 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain('<OrderLedgerRow');
   });
 
-  it('SyndicateHubScreen renders FlagshipAssetCard in list', () => {
+  it('SyndicateHubScreen renders CoOwn components in list', () => {
     const src = readSrc('screens/SyndicateHubScreen.tsx');
-    expect(src).toContain('<FlagshipAssetCard');
+    expect(src).toContain('<CoOwn');
   });
 
-  it('PortfolioScreen renders FlagshipAssetCard in list', () => {
+  it('PortfolioScreen renders CoOwn components in list', () => {
     const src = readSrc('screens/PortfolioScreen.tsx');
-    expect(src).toContain('<FlagshipAssetCard');
+    expect(src).toContain('<CoOwn');
   });
 
   it('ClosetScreen imports FlagshipEmptyGraphic', () => {
@@ -90,9 +90,9 @@ describe('flagship components applied to production screens', () => {
     expect(src).toContain("import { FlagshipActionCluster } from '../components/flagship';");
   });
 
-  it('CoOwnIssueScreen imports FlagshipEmptyGraphic and FlagshipActionCluster', () => {
+  it('CoOwnIssueScreen imports CoOwn component system', () => {
     const src = readSrc('screens/CoOwnIssueScreen.tsx');
-    expect(src).toContain("import { FlagshipEmptyGraphic, FlagshipActionCluster } from '../components/flagship';");
+    expect(src).toContain("from '../components/coown'");
   });
 
   it('SignUpScreen imports AppButton', () => {

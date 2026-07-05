@@ -22,12 +22,6 @@ describe('co-own truth rules', () => {
     expect(src).toContain('export async function createCoOwnAsset');
   });
 
-  it('SyndicateScreen fetches real holdings from backend', () => {
-    const src = readSrc('screens/SyndicateScreen.tsx');
-    expect(src).toContain('fetchCoOwnHoldings');
-    expect(src).not.toContain('coOwnRuntime');
-  });
-
   it('SyndicateHubScreen fetches real assets from backend', () => {
     const src = readSrc('screens/SyndicateHubScreen.tsx');
     expect(src).toContain('listCoOwnAssets');

@@ -1,66 +1,101 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, ScrollView, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import Reanimated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import type { Listing } from '../data/mockData';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { toFiat, toIze } from '../utils/currency';
+import { toFiat, toIze, formatIzeAmount } from '../utils/currency';
 import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAuthoringFlows';
-import { formatIzeAmount } from '../utils/currency';
 import { getCreateCoOwnInitialState } from '../utils/syndicatePrefill';
-import { useBackendData } from '../context/BackendDataContext';
 import { createCoOwnAsset } from '../services/marketApi';
+import { fetchUserListingsFromApi, type ListingApiItem } from '../services/listingsApi';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius } from '../theme/designTokens';
-import { Motion } from '../constants/motion';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Meta, BodyEmphasis, Body } from '../components/ui/Text';
+import { useHaptic } from '../hooks/useHaptic';
+import { haptics } from '../utils/haptics';
+import {
+  CoOwnMarketHeader,
+  CoOwnIssueStudioStep,
+  CoOwnStickyActionDock,
+  CoOwnRiskDisclosure,
+  CoOwnCreateStudioSkeleton,
+  CoOwnStateCanvas,
+} from '../components/coown';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'CreateCoOwn'>;
 
+// The backend enforces a maximum of 20 units per Co-Own issuance.
+// This is a real backend constraint, not a UI-only limit.
+const MAX_UNITS = 20;
+
+type Stage = 'select' | 'configure' | 'review';
+
 export default function CreateCoOwnScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
-  const { listings } = useBackendData();
   const reducedMotionEnabled = useReducedMotion();
+  const haptic = useHaptic();
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
 
   const prefill = route.params;
 
   const currentUser = useStore((state) => state.currentUser);
-
   const issuerId = currentUser?.id ?? '';
 
-  // Only show listings owned by the authenticated issuer.
-  // Never fall back to other users' listings — that could expose or attempt
-  // to issue a listing the viewer does not own.
-  const issuerListings = React.useMemo(() => {
-    if (!issuerId) return [];
-    return listings.filter((item) => item.sellerId === issuerId);
-  }, [issuerId, listings]);
+  // Fetch issuer listings from the backend API (not mockData).
+  const [issuerListings, setIssuerListings] = React.useState<ListingApiItem[]>([]);
+  const [isLoadingListings, setIsLoadingListings] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!issuerId) { setIsLoadingListings(false); return; }
+    let cancelled = false;
+    setIsLoadingListings(true);
+
+    fetchUserListingsFromApi(issuerId, { status: 'active', limit: 50 })
+      .then((result) => {
+        if (cancelled) return;
+        // Safety filter: only show listings where sellerId === issuerId.
+        // The backend should already filter by userId, but this prevents
+        // any cross-user listing leakage.
+        const ownListings = result.items.filter((item) => item.sellerId === issuerId);
+        setIssuerListings(ownListings);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setIssuerListings([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingListings(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [issuerId]);
 
   const initialState = React.useMemo(
     () => getCreateCoOwnInitialState(prefill, issuerListings[0]?.id ?? ''),
     [prefill, issuerListings]
   );
 
+  const [stage, setStage] = React.useState<Stage>('select');
   const [selectedListingId, setSelectedListingId] = React.useState(initialState.selectedListingId);
   const [totalUnitsInput, setTotalUnitsInput] = React.useState(initialState.totalUnitsInput);
   const [unitPriceInput, setUnitPriceInput] = React.useState(initialState.unitPriceInput);
@@ -71,7 +106,7 @@ export default function CreateCoOwnScreen() {
     if (!sanitized) { setTotalUnitsInput(''); return; }
     const parsed = Math.floor(Number(sanitized));
     if (!Number.isFinite(parsed) || parsed <= 0) { setTotalUnitsInput('1'); return; }
-    setTotalUnitsInput(String(Math.min(20, parsed)));
+    setTotalUnitsInput(String(Math.min(MAX_UNITS, parsed)));
   }, []);
 
   const fromDisplayToGbp = React.useCallback(
@@ -106,8 +141,8 @@ export default function CreateCoOwnScreen() {
     }
 
     const totalUnits = Number(totalUnitsInput);
-    if (!Number.isFinite(totalUnits) || totalUnits < 1 || totalUnits > 20 || !Number.isInteger(totalUnits)) {
-      show('Units must be an integer between 1 and 20', 'error');
+    if (!Number.isFinite(totalUnits) || totalUnits < 1 || totalUnits > MAX_UNITS || !Number.isInteger(totalUnits)) {
+      show(`Units must be an integer between 1 and ${MAX_UNITS}`, 'error');
       return;
     }
 
@@ -119,13 +154,13 @@ export default function CreateCoOwnScreen() {
 
     const unitPriceStable = toIze(unitPriceGBP, 'GBP', goldRates);
     if (!Number.isFinite(unitPriceStable) || unitPriceStable <= 0) {
-      show('Unable to derive a valid 1ze split value from this price', 'error');
+      show('Unable to derive a valid stablecoin value from this price', 'error');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const imageUrl = getListingCoverUri(selectedListing.images, '');
+      const imageUrl = getListingCoverUri(selectedListing.images, selectedListing.imageUrl ?? '');
       await createCoOwnAsset({
         listingId: selectedListing.id,
         issuerId,
@@ -163,180 +198,340 @@ export default function CreateCoOwnScreen() {
     return toIze(unitPriceGBP, 'GBP', goldRates);
   }, [fromDisplayToGbp, goldRates, unitPriceInput]);
 
-  const renderListingCard = ({ item }: { item: Listing }) => {
+  const previewImage = selectedListing
+    ? getListingCoverUri(selectedListing.images, selectedListing.imageUrl ?? '')
+    : '';
+
+  const canProceedToConfigure = !!selectedListing;
+  const canProceedToReview = !!selectedListing
+    && Number(totalUnitsInput) >= 1
+    && Number(totalUnitsInput) <= MAX_UNITS
+    && Number(unitPriceInput) > 0;
+
+  const handleNext = () => {
+    if (stage === 'select' && canProceedToConfigure) {
+      haptic.medium();
+      setStage('configure');
+    } else if (stage === 'configure' && canProceedToReview) {
+      haptic.medium();
+      setStage('review');
+    }
+  };
+
+  const handleBack = () => {
+    if (stage === 'configure') {
+      setStage('select');
+    } else if (stage === 'review') {
+      setStage('configure');
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const stageTitles: Record<Stage, string> = {
+    select: 'Select listing',
+    configure: 'Configure',
+    review: 'Review & issue',
+  };
+
+  const renderListingCard = ({ item }: { item: ListingApiItem }) => {
     const selected = item.id === selectedListingId;
     return (
       <AnimatedPressable
-        style={[styles.listingCard, selected && styles.listingCardSelected]}
-        onPress={() => setSelectedListingId(item.id)}
-        activeOpacity={0.9}
-        disableAnimation={false}
+        style={[
+          styles.listingCard,
+          { backgroundColor: colors.surface, borderColor: selected ? colors.brand : colors.border },
+        ]}
+        onPress={() => { haptic.selection(); setSelectedListingId(item.id); }}
         scaleValue={0.97}
+        accessibilityRole="button"
+        accessibilityLabel={`Select ${item.title}`}
+        accessibilityState={{ selected }}
       >
         <CachedImage
-          uri={getListingCoverUri(item.images, '')}
+          uri={getListingCoverUri(item.images, item.imageUrl ?? '')}
           style={styles.listingImage}
           containerStyle={styles.listingImageContainer}
           contentFit="cover"
         />
         <View style={styles.listingMeta}>
-          <BodyEmphasis style={styles.listingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Meta>
+          <Text style={[styles.listingTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+          <Text style={[styles.listingPrice, { color: colors.textSecondary }]}>
+            {formatFromFiat(item.priceGbp, 'GBP', { displayMode: 'fiat' })}
+          </Text>
         </View>
         {selected && (
-          <View style={styles.selectedTick}>
-            <Ionicons name="checkmark" size={12} color={Colors.textInverse} />
+          <View style={[styles.selectedTick, { backgroundColor: colors.brand }]}>
+            <Ionicons name="checkmark" size={12} color={colors.background} />
           </View>
         )}
       </AnimatedPressable>
     );
   };
 
-  const previewImage = selectedListing
-    ? getListingCoverUri(selectedListing.images, '')
-    : '';
+  // ── Loading state ──
+  if (isLoadingListings) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Issue Co-Own"
+          subtitle="Create a shared ownership item"
+          onBack={handleBack}
+        />
+        <CoOwnCreateStudioSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  // ── Empty state (no listings) ──
+  if (issuerListings.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Issue Co-Own"
+          subtitle="Create a shared ownership item"
+          onBack={handleBack}
+        />
+        <CoOwnStateCanvas
+          variant="empty"
+          title={issuerId ? 'No eligible listings' : 'Sign in required'}
+          subtitle={issuerId
+            ? 'Create a listing first to issue a Co-Own from it.'
+            : 'Sign in to issue a Co-Own from your listings.'
+          }
+          actionLabel={issuerId ? 'Create listing' : 'Sign in'}
+          onAction={() => {
+            haptics.tap();
+            if (issuerId) navigation.navigate('Sell');
+            else navigation.goBack();
+          }}
+          emptyGraphicVariant="box"
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      <TradeHeader
-        title="Issue Co-Own"
-        showClose
-        onClose={() => navigation.goBack()}
-        rightAction={
-          <AppButton
-            title="Issue"
-            onPress={issueCoOwn}
-            variant="primary"
-            size="sm"
-            style={styles.headerIssueBtn}
-            hapticFeedback="medium"
-            accessibilityLabel="Issue co-own"
-          />
-        }
+      <CoOwnMarketHeader
+        title={stageTitles[stage]}
+        subtitle="Issue Co-Own"
+        onBack={handleBack}
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
-          <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
-        </Reanimated.View>
+        {/* ── Stage 1: Select listing ── */}
+        {stage === 'select' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+            <CoOwnIssueStudioStep
+              stepNumber={1}
+              totalSteps={3}
+              title="Select a listing"
+              description="Choose one of your active listings to split into Co-Own units."
+            >
+              <FlashList
+                data={issuerListings}
+                horizontal
+                keyExtractor={(item) => item.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.listingListContent}
+                renderItem={renderListingCard}
+                estimatedItemSize={180}
+              />
 
-        <FlashList
-          data={issuerListings}
-          horizontal
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.listingListContent}
-          renderItem={renderListingCard}
-          ListEmptyComponent={
-            <View style={styles.emptyListWrap}>
-              <Ionicons name="cube-outline" size={32} color={Colors.textMuted} />
-              <Meta style={styles.emptyListText}>
-                {issuerId
-                  ? 'You have no eligible listings. Create a listing first to issue a Co-Own.'
-                  : 'Sign in to issue a Co-Own from your listings.'}
-              </Meta>
-              {!issuerId ? (
-                <AppButton
-                  title="Sign In"
-                  onPress={() => navigation.goBack()}
-                  variant="secondary"
-                  size="sm"
-                  style={{ marginTop: Space.sm }}
-                />
-              ) : (
-                <AppButton
-                  title="Create Listing"
-                  onPress={() => navigation.navigate('Sell')}
-                  variant="secondary"
-                  size="sm"
-                  style={{ marginTop: Space.sm }}
-                />
+              {selectedListing && (
+                <View style={[styles.previewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
+                  <View style={styles.previewMeta}>
+                    <Text style={[styles.previewTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {selectedListing.title}
+                    </Text>
+                    <Text style={[styles.previewPrice, { color: colors.textSecondary }]}>
+                      {formatFromFiat(selectedListing.priceGbp, 'GBP', { displayMode: 'fiat' })}
+                    </Text>
+                  </View>
+                </View>
               )}
-            </View>
-          }
-        />
+            </CoOwnIssueStudioStep>
+          </Reanimated.View>
+        )}
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
-          <TradeCard variant="elevated" style={styles.previewCard}>
-            <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
-            <View style={styles.previewMeta}>
-              <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
-                {selectedListing?.title ?? 'Select a listing'}
-              </BodyEmphasis>
-              <Meta style={styles.previewPrice}>
-                {selectedListing ? formatFromFiat(selectedListing.price, 'GBP', { displayMode: 'fiat' }) : '—'}
-              </Meta>
-            </View>
-          </TradeCard>
-        </Reanimated.View>
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
-          <TradeCard style={styles.formCard}>
-            <Meta style={styles.sectionLabel}>TOTAL UNITS (MAX 20)</Meta>
-            <AppInput
-              value={totalUnitsInput}
-              onChangeText={handleTotalUnitsChange}
-              keyboardType="number-pad"
-              placeholder="1"
-              accessibilityLabel="Total units"
-              containerStyle={styles.input}
-            />
-          </TradeCard>
-        </Reanimated.View>
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
-          <TradeCard style={styles.formCard}>
-            <Meta style={styles.sectionLabel}>UNIT PRICE ({currencyCode})</Meta>
-            <AppInput
-              value={unitPriceInput}
-              onChangeText={(value) => setUnitPriceInput(sanitizeDecimalInput(value))}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              prefix={currencyCode}
-              accessibilityLabel="Unit price"
-              containerStyle={styles.input}
-            />
-          </TradeCard>
-        </Reanimated.View>
-
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
-          <TradeCard style={styles.formCard}>
-            <Meta style={styles.sectionLabel}>ESTIMATED VALUE</Meta>
-            <View style={styles.estimatedRow}>
-              <View>
-                <BodyEmphasis style={styles.estimatedValue}>
-                  {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
-                </BodyEmphasis>
-                <Meta style={styles.estimatedSub}>
-                  {estimatedValueIze > 0 ? `${formatIzeAmount(estimatedValueIze)} 1ze` : ''}
-                </Meta>
+        {/* ── Stage 2: Configure units and price ── */}
+        {stage === 'configure' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+            <CoOwnIssueStudioStep
+              stepNumber={2}
+              totalSteps={3}
+              title="Configure units & price"
+              description="Set how many units to split the item into and the price per unit."
+            >
+              {/* Selected listing context */}
+              <View style={[styles.contextCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <CachedImage uri={previewImage} style={styles.contextImage} contentFit="cover" />
+                <View style={styles.contextInfo}>
+                  <Text style={[styles.contextTitle, { color: colors.textPrimary }]} numberOfLines={1}>{selectedListing?.title}</Text>
+                  <Text style={[styles.contextPrice, { color: colors.textSecondary }]}>
+                    {selectedListing ? formatFromFiat(selectedListing.priceGbp, 'GBP', { displayMode: 'fiat' }) : '—'}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.stablePreview}>
-                <Meta style={styles.stableLabel}>1ze / unit</Meta>
-                <Body style={styles.stableValue}>
-                  {unitPriceStablePreview > 0 ? formatIzeAmount(unitPriceStablePreview) : '—'}
-                </Body>
-              </View>
-            </View>
-          </TradeCard>
-        </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(300)}>
+              {/* Total units */}
+              <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.formLabelRow}>
+                  <Text style={[styles.formLabel, { color: colors.textMuted }]}>Total units</Text>
+                  <Text style={[styles.formHint, { color: colors.textMuted }]}>Max {MAX_UNITS}</Text>
+                </View>
+                <AppInput
+                  value={totalUnitsInput}
+                  onChangeText={handleTotalUnitsChange}
+                  keyboardType="number-pad"
+                  placeholder="1"
+                  suffix="units"
+                  accessibilityLabel="Total units"
+                />
+                <View style={styles.unitPresets}>
+                  {[5, 10, 20].map((preset) => (
+                    <AnimatedPressable
+                      key={preset}
+                      style={[styles.unitPreset, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                      onPress={() => { haptic.selection(); setTotalUnitsInput(String(preset)); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set units to ${preset}`}
+                      scaleValue={0.96}
+                      hapticFeedback="light"
+                    >
+                      <Text style={[styles.unitPresetText, { color: colors.textSecondary }]}>{preset}</Text>
+                    </AnimatedPressable>
+                  ))}
+                </View>
+              </View>
+
+              {/* Unit price */}
+              <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.formLabel, { color: colors.textMuted }]}>Unit price ({currencyCode})</Text>
+                <AppInput
+                  value={unitPriceInput}
+                  onChangeText={(value) => setUnitPriceInput(sanitizeDecimalInput(value))}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  prefix={currencyCode}
+                  accessibilityLabel="Unit price"
+                />
+              </View>
+
+              {/* Estimated value */}
+              <View style={[styles.estimateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.formLabel, { color: colors.textMuted }]}>Estimated value</Text>
+                <View style={styles.estimatedRow}>
+                  <View>
+                    <Text style={[styles.estimatedValue, { color: colors.textPrimary }]}>
+                      {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
+                    </Text>
+                    <Text style={[styles.estimatedSub, { color: colors.textMuted }]}>
+                      {estimatedValueIze > 0 ? `${formatIzeAmount(estimatedValueIze)} stablecoin` : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.stablePreview}>
+                    <Text style={[styles.stableLabel, { color: colors.textMuted }]}>Stable / unit</Text>
+                    <Text style={[styles.stableValue, { color: colors.textSecondary }]}>
+                      {unitPriceStablePreview > 0 ? formatIzeAmount(unitPriceStablePreview) : '—'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </CoOwnIssueStudioStep>
+          </Reanimated.View>
+        )}
+
+        {/* ── Stage 3: Review and issue ── */}
+        {stage === 'review' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+            <CoOwnIssueStudioStep
+              stepNumber={3}
+              totalSteps={3}
+              title="Review & issue"
+              description="Confirm the details below. Once issued, the Co-Own will be available on the marketplace."
+            >
+              {/* Asset preview */}
+              <View style={[styles.reviewAssetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <CachedImage uri={previewImage} style={styles.reviewAssetImage} contentFit="cover" />
+                <View style={styles.reviewAssetInfo}>
+                  <Text style={[styles.reviewAssetTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {selectedListing?.title} Split
+                  </Text>
+                  <Text style={[styles.reviewAssetSub, { color: colors.textSecondary }]}>Co-Own issuance</Text>
+                </View>
+              </View>
+
+              {/* Summary */}
+              <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Issuance summary</Text>
+                <View style={[styles.summaryRow, { borderColor: colors.border }]}>
+                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]}>Listing</Text>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>{selectedListing?.title}</Text>
+                </View>
+                <View style={[styles.summaryRow, { borderColor: colors.border }]}>
+                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]}>Total units</Text>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{totalUnitsInput}</Text>
+                </View>
+                <View style={[styles.summaryRow, { borderColor: colors.border }]}>
+                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]}>Unit price</Text>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+                    {Number(unitPriceInput) > 0 ? `${unitPriceInput} ${currencyCode}` : '—'}
+                  </Text>
+                </View>
+                <View style={[styles.summaryRow, { borderColor: colors.border }]}>
+                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]}>Settlement</Text>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>TVUSD</Text>
+                </View>
+                <View style={[styles.totalRow, { borderColor: colors.border }]}>
+                  <Text style={[styles.totalKey, { color: colors.textPrimary }]}>Total value</Text>
+                  <Text style={[styles.totalValue, { color: colors.textPrimary }]}>
+                    {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Risk disclosure */}
+              <CoOwnRiskDisclosure />
+            </CoOwnIssueStudioStep>
+          </Reanimated.View>
+        )}
+      </ScrollView>
+
+      {/* Sticky action dock */}
+      <CoOwnStickyActionDock>
+        {stage === 'review' ? (
           <AppButton
             title={isSubmitting ? 'Issuing...' : 'Issue Co-Own'}
-            icon={<Ionicons name="flash-outline" size={16} color={Colors.background} />}
+            icon={<Ionicons name="flash-outline" size={16} color={colors.background} />}
             onPress={() => void issueCoOwn()}
             variant="primary"
-            size="md"
-            style={styles.issueBtn}
+            size="lg"
             disabled={isSubmitting}
-            hapticFeedback="medium"
+            hapticFeedback="heavy"
             accessibilityLabel="Issue co-own"
+            style={{ flex: 1 }}
           />
-        </Reanimated.View>
-      </ScrollView>
+        ) : (
+          <AppButton
+            title="Continue"
+            icon={<Ionicons name="arrow-forward" size={18} color={colors.background} />}
+            onPress={handleNext}
+            variant="primary"
+            size="lg"
+            disabled={stage === 'select' ? !canProceedToConfigure : !canProceedToReview}
+            hapticFeedback="medium"
+            accessibilityLabel="Continue to next step"
+            style={{ flex: 1 }}
+          />
+        )}
+      </CoOwnStickyActionDock>
     </SafeAreaView>
   );
 }
@@ -344,125 +539,251 @@ export default function CreateCoOwnScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-  },
-  headerIssueBtn: {
-    borderRadius: 12,
-    minHeight: 34,
-    paddingHorizontal: 12,
   },
   content: {
-    paddingBottom: Space.xl,
-  },
-  sectionLabel: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    marginTop: Space.md,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    paddingBottom: 120,
   },
   listingListContent: {
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-    paddingBottom: Space.sm,
-  },
-  emptyListWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.xl,
-    gap: Space.sm,
-  },
-  emptyListText: {
-    textAlign: 'center',
-    color: Colors.textMuted,
+    gap: Space.md,
+    paddingRight: Space.md,
   },
   listingCard: {
-    width: 120,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
+    width: 160,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
-  },
-  listingCardSelected: {
-    borderColor: Colors.brand,
-    borderWidth: 2,
+    padding: Space.sm,
+    gap: Space.xs,
+    position: 'relative',
   },
   listingImageContainer: {
-    width: '100%',
-    height: 140,
-    borderTopLeftRadius: Radius.md,
-    borderTopRightRadius: Radius.md,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
   },
   listingImage: {
     width: '100%',
-    height: '100%',
+    height: 120,
   },
   listingMeta: {
-    padding: 8,
+    gap: 2,
   },
   listingTitle: {
-    marginBottom: 2,
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
   },
-  listingPrice: {},
+  listingPrice: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
   selectedTick: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: Space.xs,
+    right: Space.xs,
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
   previewCard: {
-    marginTop: Space.sm,
-    padding: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+    padding: Space.md,
+    marginTop: Space.lg,
   },
   previewImageContainer: {
-    width: '100%',
-    height: 200,
     borderRadius: Radius.md,
+    overflow: 'hidden',
   },
   previewImage: {
-    width: '100%',
-    height: '100%',
+    width: 56,
+    height: 56,
   },
   previewMeta: {
-    marginTop: Space.sm,
+    flex: 1,
+    gap: 3,
   },
-  previewTitle: {},
+  previewTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
+  },
   previewPrice: {
-    marginTop: 2,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  contextCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+    padding: Space.md,
+  },
+  contextImage: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+  },
+  contextInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  contextTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
+  },
+  contextPrice: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
   },
   formCard: {
-    marginTop: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+    padding: Space.md,
+    gap: Space.sm,
   },
-  input: {
-    marginTop: Space.xs,
+  formLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  formLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  formHint: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  unitPresets: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  unitPreset: {
+    flex: 1,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  unitPresetText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  estimateCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+    padding: Space.md,
+    gap: Space.sm,
   },
   estimatedRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: Space.xs,
   },
   estimatedValue: {
-    color: Colors.brand,
+    fontSize: Type.priceList.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.3,
   },
   estimatedSub: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
     marginTop: 2,
   },
   stablePreview: {
     alignItems: 'flex-end',
+    gap: 2,
   },
-  stableLabel: {},
+  stableLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+  },
   stableValue: {
-    color: Colors.textPrimary,
-    marginTop: 2,
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
   },
-  issueBtn: {
-    marginHorizontal: Space.md,
-    marginTop: Space.lg,
+  reviewAssetCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+    padding: Space.md,
+  },
+  reviewAssetImage: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.md,
+  },
+  reviewAssetInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  reviewAssetTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
+  },
+  reviewAssetSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  summaryCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+    padding: Space.md,
+    gap: 0,
+  },
+  summaryLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    marginBottom: Space.sm,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  summaryKey: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  summaryValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: Space.md,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Space.md,
+    marginTop: Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  totalKey: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.bold,
+  },
+  totalValue: {
+    fontSize: Type.priceList.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.3,
   },
 });

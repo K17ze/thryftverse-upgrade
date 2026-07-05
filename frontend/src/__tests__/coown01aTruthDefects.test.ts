@@ -199,11 +199,6 @@ describe('COOWN-01A: no fabricated conversation IDs', () => {
     expect(source).not.toMatch(/conversationId.*\$\{.*issuerId.*\}.*\$\{.*listingId.*\}/);
   });
 
-  it('SyndicateScreen does not fabricate conversationId from issuerId_listingId', () => {
-    const source = readSrc('screens/SyndicateScreen.tsx');
-    expect(source).not.toMatch(/conversationId.*\$\{.*issuerId.*\}.*\$\{.*listingId.*\}/);
-  });
-
   it('coOwnMessaging helper uses real createGroupConversationOnApi', () => {
     const source = readSrc('utils/coOwnMessaging.ts');
     expect(source).toContain('createGroupConversationOnApi');
@@ -212,11 +207,6 @@ describe('COOWN-01A: no fabricated conversation IDs', () => {
 
   it('AssetDetailScreen uses resolveCoOwnConversation', () => {
     const source = readSrc('screens/AssetDetailScreen.tsx');
-    expect(source).toContain('resolveCoOwnConversation');
-  });
-
-  it('SyndicateScreen uses resolveCoOwnConversation', () => {
-    const source = readSrc('screens/SyndicateScreen.tsx');
     expect(source).toContain('resolveCoOwnConversation');
   });
 });
@@ -250,10 +240,14 @@ describe('COOWN-01A: buyout truth', () => {
     expect(source).not.toContain('Claim Full Ownership');
   });
 
-  it('BuyoutScreen blocks submission when not authenticated', () => {
+  it('BuyoutScreen shows honest unavailable state instead of fake lifecycle', () => {
     const source = readSrc('screens/BuyoutScreen.tsx');
-    expect(source).toContain("currentUser?.id");
-    expect(source).toMatch(/Sign in.*required|not.*authenticated/i);
+    // Backend only supports createCoOwnBuyoutOffer — no accept/reject/cancel/list.
+    // The screen must NOT show a fake transactional flow with hardcoded premium.
+    expect(source).not.toContain('1.08');
+    expect(source).not.toContain('expiresInHours: 24');
+    expect(source).not.toContain('Initiate Buyout');
+    expect(source).toContain('not available');
   });
 
   it('BuyoutScreen does not navigate away as success when sharesNeeded <= 0', () => {

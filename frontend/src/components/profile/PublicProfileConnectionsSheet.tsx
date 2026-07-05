@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -131,10 +131,10 @@ export function PublicProfileConnectionsSheet({
       snapPoints={[{ fraction: 0.75 }]}
     >
       <View style={styles.container}>
-        {/* One title — "Connections" */}
+        {/* One title ΓÇö "Connections" */}
         <Text style={styles.title}>Connections</Text>
 
-        {/* Animated segment indicator — same system as the main profile */}
+        {/* Animated segment indicator ΓÇö same system as the main profile */}
         <SegmentedControl
           segments={[
             { key: 'followers', label: `Followers ${followerCount}` },
@@ -208,7 +208,7 @@ export function PublicProfileConnectionsSheet({
 const styles = StyleSheet.create({
   container: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flex: 1 },
   title: { fontSize: 20, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: -0.4, marginBottom: Space.sm },
-  // Rows — no chevron, pressed feedback, divider rhythm
+  // Rows ΓÇö no chevron, pressed feedback, divider rhythm
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 56 },
   rowPressed: { opacity: 0.6 },
   rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.border, marginLeft: 56 },
