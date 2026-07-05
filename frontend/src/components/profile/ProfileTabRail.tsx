@@ -274,6 +274,3 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
 });
-    borderRadius: 1,
-  },
-});

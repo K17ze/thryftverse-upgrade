@@ -1,7 +1,12 @@
-import React, { useEffect } from 'react';
-import { BackHandler 
-import { BottomSheet as ExpoBottomSheet, RNHosRView, tNHosRView, tNHosRView, tNHosRView, tNHostView, type SnapPoint } from '@expo/ui';
+﻿import React, { useEffect } from 'react';
+import { BackHandler, StyleSheet, View, Text, Pressable } from 'react-native';
+import { BottomSheet as ExpoBottomSheet, type SnapPoint } from '@expo/ui';
+import { ExpoUIHost } from './ExpoUIHost';
 
+export interface NativeSheetProps {
+  visible: boolean;
+  onDismiss: () => void;
+  children: React.ReactNode;
   snapPoints?: SnapPoint[];
   showDragIndicator?: boolean;
   testID?: string;
@@ -33,10 +38,14 @@ export function NativeSheet({
       testID={testID}
     >
       <ExpoUIHost style={styles.host}>
-       RNdrenView}
-      <RNIHenViewstt>
-    </ERNhVenViewetweet>
-  );RNVRNas RViRw
-}RNViewen as React.ReactElemt
-RNView
-cons
+        {children}
+      </ExpoUIHost>
+    </ExpoBottomSheet>
+  );
+}
+
+const styles = StyleSheet.create({
+  host: {
+    flex: 1,
+  },
+});

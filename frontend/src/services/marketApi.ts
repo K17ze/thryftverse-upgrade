@@ -824,6 +824,183 @@ export async function listAuctionBids(
   return payload.items;
 }
 
+// ── Dev mock fallback for Co-Own assets ──
+// Used only when ENABLE_RUNTIME_MOCKS is true and the backend is unreachable.
+// Follows the same pattern as getAuctionHome() dev mock fallback.
+const MOCK_COOWN_ISSUER_1 = 'mock-issuer-1';
+const MOCK_COOWN_ISSUER_2 = 'mock-issuer-2';
+
+function mockCoOwnAsset(
+  id: string,
+  title: string,
+  opts: {
+    issuerId?: string;
+    totalUnits?: number;
+    availableUnits?: number;
+    unitPriceGbp?: number;
+    unitPriceStable?: number;
+    settlementMode?: CoOwnSettlementMode;
+    issuerJurisdiction?: string | null;
+    holders?: number;
+    volume24hGbp?: number;
+    isOpen?: boolean;
+    imageUrl?: string | null;
+    createdAtMinAgo?: number;
+  } = {}
+): MarketCoOwnAsset {
+  const total = opts.totalUnits ?? 100;
+  const available = opts.availableUnits ?? Math.floor(total * 0.4);
+  return {
+    id,
+    listingId: `listing-${id}`,
+    issuerId: opts.issuerId ?? MOCK_COOWN_ISSUER_1,
+    title,
+    imageUrl: opts.imageUrl ?? null,
+    totalUnits: total,
+    availableUnits: available,
+    unitPriceGbp: opts.unitPriceGbp ?? 25,
+    unitPriceStable: opts.unitPriceStable ?? 30,
+    settlementMode: opts.settlementMode ?? 'HYBRID',
+    issuerJurisdiction: opts.issuerJurisdiction ?? 'United Kingdom',
+    marketMovePct24h: 0,
+    holders: opts.holders ?? total - available,
+    volume24hGbp: opts.volume24hGbp ?? 0,
+    isOpen: opts.isOpen ?? true,
+    createdAt: new Date(Date.now() - (opts.createdAtMinAgo ?? 180) * 60_000).toISOString(),
+    updatedAt: new Date(Date.now() - (opts.createdAtMinAgo ?? 60) * 60_000).toISOString(),
+  };
+}
+
+function getMockCoOwnAssets(): MarketCoOwnAsset[] {
+  return [
+    mockCoOwnAsset('mock-coown-1', 'Hermès Birkin 30 Togo Etoupe', {
+      issuerId: MOCK_COOWN_ISSUER_1,
+      totalUnits: 100,
+      availableUnits: 35,
+      unitPriceGbp: 85,
+      unitPriceStable: 102,
+      settlementMode: 'HYBRID',
+      holders: 65,
+      volume24hGbp: 1200,
+      imageUrl: 'https://images.unsplash.com/photo-1584937887424-8f5a4f9f6e5e?w=800',
+      createdAtMinAgo: 320,
+    }),
+    mockCoOwnAsset('mock-coown-2', 'Rolex Submariner Date 126610LN', {
+      issuerId: MOCK_COOWN_ISSUER_2,
+      totalUnits: 50,
+      availableUnits: 12,
+      unitPriceGbp: 180,
+      unitPriceStable: 216,
+      settlementMode: 'GBP',
+      holders: 38,
+      volume24hGbp: 2400,
+      imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
+      createdAtMinAgo: 240,
+    }),
+    mockCoOwnAsset('mock-coown-3', 'Louis Vuitton Multi Pochette Accessoires', {
+      issuerId: MOCK_COOWN_ISSUER_1,
+      totalUnits: 200,
+      availableUnits: 200,
+      unitPriceGbp: 22,
+      unitPriceStable: 26,
+      settlementMode: 'TVUSD',
+      holders: 0,
+      volume24hGbp: 0,
+      imageUrl: 'https://images.unsplash.com/photo-1584937887424-8f5a4f9f6e5e?w=800',
+      createdAtMinAgo: 30,
+    }),
+    mockCoOwnAsset('mock-coown-4', 'Patek Philippe Nautilus 5711/1A', {
+      issuerId: MOCK_COOWN_ISSUER_2,
+      totalUnits: 30,
+      availableUnits: 5,
+      unitPriceGbp: 650,
+      unitPriceStable: 780,
+      settlementMode: 'HYBRID',
+      holders: 25,
+      volume24hGbp: 5200,
+      imageUrl: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=800',
+      createdAtMinAgo: 480,
+    }),
+    mockCoOwnAsset('mock-coown-5', 'Chanel Classic Flap Medium Black', {
+      issuerId: MOCK_COOWN_ISSUER_1,
+      totalUnits: 80,
+      availableUnits: 28,
+      unitPriceGbp: 95,
+      unitPriceStable: 114,
+      settlementMode: 'GBP',
+      holders: 52,
+      volume24hGbp: 1800,
+      imageUrl: 'https://images.unsplash.com/photo-1584937887424-8f5a4f9f6e5e?w=800',
+      createdAtMinAgo: 200,
+    }),
+    mockCoOwnAsset('mock-coown-6', 'Audemars Piguet Royal Oak 15500ST', {
+      issuerId: MOCK_COOWN_ISSUER_2,
+      totalUnits: 40,
+      availableUnits: 40,
+      unitPriceGbp: 420,
+      unitPriceStable: 504,
+      settlementMode: 'TVUSD',
+      holders: 0,
+      volume24hGbp: 0,
+      imageUrl: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=800',
+      createdAtMinAgo: 15,
+    }),
+    mockCoOwnAsset('mock-coown-7', 'Gucci Dionysus Small GG Supreme', {
+      issuerId: MOCK_COOWN_ISSUER_1,
+      totalUnits: 120,
+      availableUnits: 48,
+      unitPriceGbp: 18,
+      unitPriceStable: 22,
+      settlementMode: 'HYBRID',
+      holders: 72,
+      volume24hGbp: 600,
+      imageUrl: 'https://images.unsplash.com/photo-1584937887424-8f5a4f9f6e5e?w=800',
+      createdAtMinAgo: 120,
+    }),
+    mockCoOwnAsset('mock-coown-8', 'Cartier Santos Large Steel', {
+      issuerId: MOCK_COOWN_ISSUER_2,
+      totalUnits: 60,
+      availableUnits: 18,
+      unitPriceGbp: 140,
+      unitPriceStable: 168,
+      settlementMode: 'GBP',
+      holders: 42,
+      volume24hGbp: 900,
+      imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
+      createdAtMinAgo: 360,
+    }),
+  ];
+}
+
+function getMockCoOwnHoldings(userId: string): MarketCoOwnHolding[] {
+  return [
+    {
+      userId,
+      assetId: 'mock-coown-1',
+      unitsOwned: 5,
+      avgEntryPriceGbp: 82,
+      realizedPnlGbp: 0,
+      updatedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+    },
+    {
+      userId,
+      assetId: 'mock-coown-2',
+      unitsOwned: 2,
+      avgEntryPriceGbp: 175,
+      realizedPnlGbp: 10,
+      updatedAt: new Date(Date.now() - 120 * 60_000).toISOString(),
+    },
+    {
+      userId,
+      assetId: 'mock-coown-5',
+      unitsOwned: 3,
+      avgEntryPriceGbp: 92,
+      realizedPnlGbp: 0,
+      updatedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+    },
+  ];
+}
+
 export async function listCoOwnAssets(
   options: ListCoOwnAssetsOptions = {}
 ): Promise<MarketCoOwnAsset[]> {
@@ -832,8 +1009,16 @@ export async function listCoOwnAssets(
     issuerId: options.issuerId,
     limit: options.limit,
   });
-  const payload = await fetchJson<ListCoOwnAssetsResponse>(`/co-own/assets${query}`);
-  return payload.items;
+  try {
+    const payload = await fetchJson<ListCoOwnAssetsResponse>(`/co-own/assets${query}`);
+    return payload.items;
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      console.warn('[marketApi] /co-own/assets failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
+      return getMockCoOwnAssets();
+    }
+    throw err;
+  }
 }
 
 interface GetCoOwnAssetResponse {
@@ -842,10 +1027,20 @@ interface GetCoOwnAssetResponse {
 }
 
 export async function fetchCoOwnAssetById(assetId: string): Promise<MarketCoOwnAsset> {
-  const payload = await fetchJson<GetCoOwnAssetResponse>(
-    `/co-own/assets/${encodeURIComponent(assetId)}`
-  );
-  return payload.item;
+  try {
+    const payload = await fetchJson<GetCoOwnAssetResponse>(
+      `/co-own/assets/${encodeURIComponent(assetId)}`
+    );
+    return payload.item;
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      console.warn('[marketApi] /co-own/assets/:id failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
+      const mockAssets = getMockCoOwnAssets();
+      const found = mockAssets.find((a) => a.id === assetId);
+      if (found) return found;
+    }
+    throw err;
+  }
 }
 
 export interface CoOwnOrderBookEntry {
@@ -866,10 +1061,31 @@ export async function fetchCoOwnOrderBook(
   options: { limit?: number } = {}
 ): Promise<{ bids: CoOwnOrderBookEntry[]; asks: CoOwnOrderBookEntry[] }> {
   const query = toQuery({ limit: options.limit });
-  const payload = await fetchJson<GetCoOwnOrderBookResponse>(
-    `/co-own/assets/${encodeURIComponent(assetId)}/orderbook${query}`
-  );
-  return { bids: payload.bids, asks: payload.asks };
+  try {
+    const payload = await fetchJson<GetCoOwnOrderBookResponse>(
+      `/co-own/assets/${encodeURIComponent(assetId)}/orderbook${query}`
+    );
+    return { bids: payload.bids, asks: payload.asks };
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      console.warn('[marketApi] /co-own/orderbook failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
+      const mockAsset = getMockCoOwnAssets().find((a) => a.id === assetId);
+      const basePrice = mockAsset?.unitPriceGbp ?? 50;
+      return {
+        bids: [
+          { side: 'buy', unitPriceGbp: basePrice - 1, units: 8, orderCount: 3 },
+          { side: 'buy', unitPriceGbp: basePrice - 2, units: 15, orderCount: 5 },
+          { side: 'buy', unitPriceGbp: basePrice - 3, units: 22, orderCount: 7 },
+        ],
+        asks: [
+          { side: 'sell', unitPriceGbp: basePrice + 1, units: 5, orderCount: 2 },
+          { side: 'sell', unitPriceGbp: basePrice + 2, units: 12, orderCount: 4 },
+          { side: 'sell', unitPriceGbp: basePrice + 3, units: 18, orderCount: 6 },
+        ],
+      };
+    }
+    throw err;
+  }
 }
 
 export async function placeCoOwnOrder(
@@ -939,11 +1155,25 @@ export async function listCoOwnAssetOrders(
     limit: options.limit,
   });
 
-  const payload = await fetchJson<ListCoOwnOrdersResponse>(
-    `/co-own/assets/${encodeURIComponent(assetId)}/orders${query}`
-  );
-
-  return payload.items;
+  try {
+    const payload = await fetchJson<ListCoOwnOrdersResponse>(
+      `/co-own/assets/${encodeURIComponent(assetId)}/orders${query}`
+    );
+    return payload.items;
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      console.warn('[marketApi] /co-own/orders failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
+      const mockAsset = getMockCoOwnAssets().find((a) => a.id === assetId);
+      const basePrice = mockAsset?.unitPriceGbp ?? 50;
+      return [
+        { id: 1, assetId, userId: 'mock-user-1', side: 'buy', units: 3, unitPriceGbp: basePrice, feeGbp: basePrice * 3 * 0.01, totalGbp: basePrice * 3 * 1.01, status: 'filled', createdAt: new Date(Date.now() - 120 * 60_000).toISOString() },
+        { id: 2, assetId, userId: 'mock-user-2', side: 'sell', units: 2, unitPriceGbp: basePrice + 1, feeGbp: (basePrice + 1) * 2 * 0.01, totalGbp: (basePrice + 1) * 2 * 1.01, status: 'filled', createdAt: new Date(Date.now() - 90 * 60_000).toISOString() },
+        { id: 3, assetId, userId: 'mock-user-3', side: 'buy', units: 5, unitPriceGbp: basePrice - 1, feeGbp: (basePrice - 1) * 5 * 0.01, totalGbp: (basePrice - 1) * 5 * 1.01, status: 'filled', createdAt: new Date(Date.now() - 60 * 60_000).toISOString() },
+        { id: 4, assetId, userId: 'mock-user-4', side: 'buy', units: 1, unitPriceGbp: basePrice + 2, feeGbp: (basePrice + 2) * 0.01, totalGbp: (basePrice + 2) * 1.01, status: 'open', createdAt: new Date(Date.now() - 15 * 60_000).toISOString() },
+      ] as MarketCoOwnOrder[];
+    }
+    throw err;
+  }
 }
 
 export interface MarketCoOwnHolding {
@@ -961,10 +1191,18 @@ interface ListCoOwnHoldingsResponse {
 }
 
 export async function fetchCoOwnHoldings(userId: string): Promise<MarketCoOwnHolding[]> {
-  const payload = await fetchJson<ListCoOwnHoldingsResponse>(
-    `/users/${encodeURIComponent(userId)}/co-own/holdings`
-  );
-  return payload.items;
+  try {
+    const payload = await fetchJson<ListCoOwnHoldingsResponse>(
+      `/users/${encodeURIComponent(userId)}/co-own/holdings`
+    );
+    return payload.items;
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      console.warn('[marketApi] /co-own/holdings failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
+      return getMockCoOwnHoldings(userId);
+    }
+    throw err;
+  }
 }
 
 export async function listUserMarketHistory(
@@ -978,12 +1216,26 @@ export async function listUserMarketHistory(
     cursorId: options.cursorId,
   });
 
-  const payload = await fetchJson<ListUserMarketHistoryResponse>(
-    `/users/${encodeURIComponent(userId)}/market-history${query}`
-  );
+  try {
+    const payload = await fetchJson<ListUserMarketHistoryResponse>(
+      `/users/${encodeURIComponent(userId)}/market-history${query}`
+    );
 
-  return {
-    items: payload.items,
-    pageInfo: payload.pageInfo,
-  };
+    return {
+      items: payload.items,
+      pageInfo: payload.pageInfo,
+    };
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      console.warn('[marketApi] /market-history failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
+      const mockItems: MarketHistoryItem[] = [
+        { id: 'mock-hist-1', channel: 'co-own', action: 'buy-units', referenceId: 'mock-coown-1', amountGbp: 255, units: 3, unitPriceGbp: 85, feeGbp: 2.55, status: 'filled', orderType: 'market', note: null, timestamp: new Date(Date.now() - 120 * 60_000).toISOString() },
+        { id: 'mock-hist-2', channel: 'co-own', action: 'buy-units', referenceId: 'mock-coown-2', amountGbp: 360, units: 2, unitPriceGbp: 180, feeGbp: 3.60, status: 'filled', orderType: 'limit', note: null, timestamp: new Date(Date.now() - 300 * 60_000).toISOString() },
+        { id: 'mock-hist-3', channel: 'co-own', action: 'sell-units', referenceId: 'mock-coown-2', amountGbp: 185, units: 1, unitPriceGbp: 185, feeGbp: 1.85, status: 'filled', orderType: 'market', note: null, timestamp: new Date(Date.now() - 600 * 60_000).toISOString() },
+        { id: 'mock-hist-4', channel: 'co-own', action: 'buy-units', referenceId: 'mock-coown-5', amountGbp: 285, units: 3, unitPriceGbp: 95, feeGbp: 2.85, status: 'filled', orderType: 'market', note: null, timestamp: new Date(Date.now() - 1440 * 60_000).toISOString() },
+      ];
+      return { items: mockItems, pageInfo: { hasMore: false } };
+    }
+    throw err;
+  }
 }

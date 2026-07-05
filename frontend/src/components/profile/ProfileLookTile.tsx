@@ -108,8 +108,3 @@ const styles = StyleSheet.create({
 });
 
 export { ProfileLookTile };
-  },
-  tagCountText: { fontSize: 10, fontFamily: Typography.family.semibold, color: 'rgba(255,255,255,0.9)' },
-});
-
-export { ProfileLookTile };

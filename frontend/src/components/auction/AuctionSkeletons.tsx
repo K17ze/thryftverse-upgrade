@@ -114,5 +114,3 @@ const styles = StyleSheet.create({
     backgroundColor: SKELETON_BG,
   },
 });
-  },
-});

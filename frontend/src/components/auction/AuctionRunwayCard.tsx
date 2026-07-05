@@ -366,40 +366,4 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 });
-});
-  },
-});
-  },
-});
-  },
-});
-    fontFamily: Typography.family.semibold,
-    fontSize: 13,
-    color: Colors.textInverse,
-    letterSpacing: 0.3,
-  },
-});
-    fontFamily: Typography.family.semibold,
-    fontSize: 13,
-    color: Colors.textInverse,
-    letterSpacing: 0.3,
-  },
-});
-    fontFamily: Typography.family.semibold,
-    fontSize: 13,
-    color: Colors.textInverse,
-    letterSpacing: 0.3,
-  },
-});
-    fontFamily: Typography.family.semibold,
-    fontSize: 13,
-    color: Colors.textInverse,
-    letterSpacing: 0.3,
-  },
-});
-    fontFamily: Typography.family.semibold,
-    fontSize: 13,
-    color: Colors.textInverse,
-    letterSpacing: 0.3,
-  },
-});
+

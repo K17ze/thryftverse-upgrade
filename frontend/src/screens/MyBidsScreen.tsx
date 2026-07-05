@@ -519,9 +519,4 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
   },
 });
-    fontFamily: 'Inter_600SemiBold',
-  },
-});
-    fontFamily: 'Inter_600SemiBold',
-  },
-});
+

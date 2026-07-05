@@ -62,9 +62,9 @@ export function CoOwnEducationCard({
             <View style={[styles.topicIcon, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name={topic.icon as any} size={18} color={colors.textPrimary} />
             </View>
-            <View style={styles.topicBody}>
+            <View style={styles.topicContent}>
               <Text style={[styles.topicTitle, { color: colors.textPrimary }]}>{topic.title}</Text>
-              <Text style={[styles.topicBody, { color: colors.textSecondary }]}>{topic.body}</Text>
+              <Text style={[styles.topicText, { color: colors.textSecondary }]}>{topic.body}</Text>
             </View>
           </View>
         ))}
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  topicBody: {
+  topicContent: {
     flex: 1,
     gap: 3,
   },
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
-  topicBody: {
+  topicText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     lineHeight: 18,
