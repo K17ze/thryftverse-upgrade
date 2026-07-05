@@ -513,3 +513,129 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
   },
 });
+  activityMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginTop: 6,
+  },
+  activityMetaValue: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+    fontVariant: ['tabular-nums'],
+  },
+  activityNextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginLeft: 'auto',
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+});
+    gap: Space.sm,
+    marginTop: 6,
+  },
+  activityMetaValue: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+    fontVariant: ['tabular-nums'],
+  },
+  activityNextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginLeft: 'auto',
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+});
+    marginLeft: 'auto',
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+});
+    marginLeft: 'auto',
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+});
+    marginLeft: 'auto',
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+});
+    marginLeft: 'auto',
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+});
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+});
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+  },
+});
+    fontFamily: 'Inter_500Medium',
+    marginTop: 1,
+  },
+  activityNextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginLeft: 'auto',
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.brand,
+    fontFamily: 'Inter_600SemiBold',
+  },
+});
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.brand,
+    fontFamily: 'Inter_600SemiBold',
+  },
+});
+  },
+  activityNextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginLeft: 'auto',
+  },
+  activityNextText: {
+    fontSize: 12,
+    color: Colors.brand,
+    fontFamily: 'Inter_600SemiBold',
+  },
+});

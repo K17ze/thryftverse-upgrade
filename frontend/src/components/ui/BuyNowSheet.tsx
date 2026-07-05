@@ -602,3 +602,68 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
 });
+    marginBottom: Space.xs,
+  },
+  errorIconSmall: {
+    marginBottom: Space.xs,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    paddingHorizontal: Space.md,
+  },
+});
+    minWidth: 160,
+    marginTop: Space.sm,
+  },
+  errorIcon: {
+    marginBottom: Space.xs,
+  },
+  errorIconSmall: {
+    marginBottom: Space.xs,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    paddingHorizontal: Space.md,
+  },
+});
+    minWidth: 160,
+    marginTop: Space.sm,
+  },
+  errorIcon: {
+    marginBottom: Space.xs,
+  },
+  errorIconSmall: {
+    marginBottom: Space.xs,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    paddingHorizontal: Space.md,
+  },
+});
+  doneBtn: {
+    minWidth: 160,
+    marginTop: Space.sm,
+  },
+  errorIcon: {
+    marginBottom: Space.xs,
+  },
+  errorIconSmall: {
+    marginBottom: Space.xs,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    paddingHorizontal: Space.md,
+  },
+});

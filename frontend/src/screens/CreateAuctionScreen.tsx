@@ -1020,4 +1020,178 @@ const styles = StyleSheet.create({
   resultBtn: {
     flex: 1,
   },
+});,
+}); flex: 1,
+  },
+});,
+  resultSummary: {
+    width: '100%',
+    marginBottom: Space.md,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
+  },
+});,
+  resultSummary: {
+    width: '100%',
+    marginBottom: Space.md,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
+  },
+});,
+  resultSummary: {
+    width: '100%',
+    marginBottom: Space.md,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
+  },
+});,
+  resultImage: {
+    width: '100%',
+    height: '100%',
+  },
+  resultSummary: {
+    width: '100%',
+    marginBottom: Space.md,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
+  },
+}); borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.3, shadowRadius: 24 },
+      android: { elevation: 16 },
+    }),
+  },
+  resultIconWrap: {
+    marginBottom: Space.sm,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(22,163,74,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(22,163,74,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resultTitle: {
+    fontSize: 24,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  resultSubtitle: {
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: Space.md,
+  },
+  resultImageContainer: {
+    width: '100%',
+    height: 180,
+    borderRadius: Radius.lg,
+    marginBottom: Space.md,
+    overflow: 'hidden',
+  },
+  resultImage: {
+    width: '100%',
+    height: '100%',
+  },
+  resultSummary: {
+    width: '100%',
+    marginBottom: Space.md,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
+  },
+});esultSummary: {
+    width: '100%',
+    marginBottom: Space.md,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
+  },
+});esultImage: {
+    width: '100%',
+    height: '100%',
+  },
+  resultSummary: {
+    width: '100%',
+    marginBottom: Space.md,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
+  },
+});,
+  resultImage: {
+    width: '100%',
+    height: '100%',
+  },
+  resultSummary: {
+    width: '100%',
+    marginBottom: Space.md,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
+  },
+}); overflow: 'hidden',
+  },
+  resultImage: {
+    width: '100%',
+    height: '100%',
+  },
+  resultSummary: {
+    width: '100%',
+    marginBottom: Space.md,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
+  },
 });

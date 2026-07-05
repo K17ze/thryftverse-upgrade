@@ -110,4 +110,9 @@ export function formatPrice({
   }
 
   return `${formatIzeAmount(izeAmount, izeFractionDigits)} · ${fiatFormatted}`;
+} if (displayMode === 'fiat') {
+    return fiatFormatted;
+  }
+
+  return `${formatIzeAmount(izeAmount, izeFractionDigits)} · ${fiatFormatted}`;
 }
