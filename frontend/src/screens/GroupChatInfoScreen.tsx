@@ -17,6 +17,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = StackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
@@ -24,6 +25,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
   const { show } = useToast();
   const haptic = useHaptic();
+  const insets = useSafeAreaInsets();
 
   const conversations = useStore((state) => state.conversations);
   const currentUser = useStore((state) => state.currentUser);
@@ -116,7 +118,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Group Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, Space.xxl) + Space.lg }]}>
         {/* Group Identity */}
         <View style={styles.identityCardV2}>
           <View style={styles.groupAvatarWrap}>
@@ -146,6 +148,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <RowItem
             icon="create-outline"
             label="Edit group"
+            subtitle="Name, description, photo"
             onPress={() => navigation.navigate('EditGroup', { conversationId })}
             showChevron
           />
@@ -156,6 +159,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <RowItem
             icon="people-outline"
             label={`${memberCount} member${memberCount !== 1 ? 's' : ''}`}
+            subtitle="View, add, or remove members"
             onPress={() => navigation.navigate('GroupMembers', { conversationId })}
             showChevron
           />
@@ -166,7 +170,15 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <RowItem
             icon="hardware-chip-outline"
             label="Manage bots"
+            subtitle={deployedBotCount > 0 ? `${deployedBotCount} active` : 'Deploy automation bots'}
             onPress={() => navigation.navigate('GroupBotManagement', { conversationId })}
+            showChevron
+          />
+          <RowItem
+            icon="chatbubbles-outline"
+            label="Quick replies"
+            subtitle="Reusable message templates"
+            onPress={() => navigation.navigate('ManageQuickReplies', { role: 'seller' })}
             showChevron
           />
         </Section>
@@ -227,6 +239,7 @@ function Section({ title, children, danger }: { title: string; children: React.R
 function RowItem({
   icon,
   label,
+  subtitle,
   onPress,
   showChevron,
   danger,
@@ -234,6 +247,7 @@ function RowItem({
 }: {
   icon: string;
   label: string;
+  subtitle?: string;
   onPress?: () => void;
   showChevron?: boolean;
   danger?: boolean;
@@ -246,14 +260,19 @@ function RowItem({
         size={20}
         color={danger ? Colors.danger : Colors.textSecondary}
       />
-      <Text
-        style={[
-          styles.rowLabel,
-          { color: danger ? Colors.danger : Colors.textPrimary },
-        ]}
-      >
-        {label}
-      </Text>
+      <View style={styles.rowTextBody}>
+        <Text
+          style={[
+            styles.rowLabel,
+            { color: danger ? Colors.danger : Colors.textPrimary },
+          ]}
+        >
+          {label}
+        </Text>
+        {subtitle ? (
+          <Text style={styles.rowSubtitle} numberOfLines={1}>{subtitle}</Text>
+        ) : null}
+      </View>
       {showChevron && (
         <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
       )}
@@ -416,9 +435,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
-  rowLabel: {
+  rowTextBody: {
     flex: 1,
+    gap: 2,
+  },
+  rowLabel: {
     fontSize: Type.body.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
+  rowSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
   },
 });
