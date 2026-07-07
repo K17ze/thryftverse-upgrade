@@ -71,6 +71,7 @@ export default function AssetDetailScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < 390;
+  const isVeryCompact = screenWidth < 340;
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const { formatFromFiat } = useFormattedPrice();
@@ -211,11 +212,16 @@ export default function AssetDetailScreen() {
 
   const settlementLabel = asset.settlementMode === 'GBP' ? 'GBP' : asset.settlementMode === 'TVUSD' ? 'TVUSD' : 'GBP + TVUSD';
 
-  // Compute scroll bottom padding from dock geometry + safe area
+  // Compute scroll bottom padding from dock geometry + safe area.
+  // Compact mode stacks price above actions (taller dock); very compact also
+  // stacks the holder Sell / Buy more actions vertically.
   const isDualActionDock = isHolder && asset.isOpen && availableUnits > 0;
-  const dockHeight = isDualActionDock
-    ? DockConstants.dualActionHeight
-    : DockConstants.singleActionHeight;
+  const isTradeDock = asset.isOpen && (availableUnits > 0 || isHolder) && !isIssuer;
+  const dockHeight = isTradeDock && isCompact
+    ? (isVeryCompact && isDualActionDock ? DockConstants.stackedActionHeight + 32 : DockConstants.stackedActionHeight)
+    : isDualActionDock
+      ? DockConstants.dualActionHeight
+      : DockConstants.singleActionHeight;
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + dockHeight;
 
   return (
@@ -269,7 +275,7 @@ export default function AssetDetailScreen() {
           isSaved={social.isSavedToCollection}
           showSaveControl
           showFavControl
-          heightFraction={0.65}
+          heightFraction={isCompact ? 0.52 : 0.65}
           onOpenFullscreen={handleOpenFullscreen}
           overlayTopContent={
             <View style={styles.familyBadgeOverlay}>
@@ -542,25 +548,40 @@ export default function AssetDetailScreen() {
       {/* Sticky action dock — viewer-specific CTAs */}
       <CoOwnStickyActionDock>
         {isIssuer ? (
-          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="storefront-outline" size={16} color={colors.brand} />
-            <Text style={[styles.issuerDockText, { color: colors.textPrimary }]} numberOfLines={2}>
-              Issuer view · {availableUnits} units in treasury
-            </Text>
+          <View style={[styles.issuerDock, { backgroundColor: colors.brand + '14', borderColor: colors.brand + '40' }]}>
+            <View style={[styles.issuerDockIcon, { backgroundColor: colors.brand + '22' }]}>
+              <Ionicons name="storefront-outline" size={16} color={colors.brand} />
+            </View>
+            <View style={styles.issuerDockBody}>
+              <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Issuer view</Text>
+              <Text style={[styles.issuerDockText, { color: colors.textSecondary }]} numberOfLines={1}>
+                {availableUnits} units in treasury
+              </Text>
+            </View>
           </View>
         ) : !asset.isOpen ? (
-          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="pause-circle-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.issuerDockText, { color: colors.textSecondary }]} numberOfLines={2}>
-              Paused · trading temporarily unavailable
-            </Text>
+          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <View style={[styles.issuerDockIcon, { backgroundColor: colors.surface }]}>
+              <Ionicons name="pause-circle-outline" size={16} color={colors.textSecondary} />
+            </View>
+            <View style={styles.issuerDockBody}>
+              <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Trading paused</Text>
+              <Text style={[styles.issuerDockText, { color: colors.textMuted }]} numberOfLines={1}>
+                Temporarily unavailable
+              </Text>
+            </View>
           </View>
         ) : availableUnits === 0 && !isHolder ? (
-          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.issuerDockText, { color: colors.textSecondary }]} numberOfLines={2}>
-              Fully allocated · check secondary market
-            </Text>
+          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <View style={[styles.issuerDockIcon, { backgroundColor: colors.surface }]}>
+              <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
+            </View>
+            <View style={styles.issuerDockBody}>
+              <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Fully allocated</Text>
+              <Text style={[styles.issuerDockText, { color: colors.textMuted }]} numberOfLines={1}>
+                Check the secondary market
+              </Text>
+            </View>
           </View>
         ) : (
           <View style={[styles.dockRow, isCompact && styles.dockRowCompact]}>
@@ -568,10 +589,14 @@ export default function AssetDetailScreen() {
               <Text style={[styles.dockPriceLabel, { color: colors.textMuted }]} numberOfLines={1}>Unit price</Text>
               <Text style={[styles.dockPriceValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</Text>
             </View>
-            <View style={[styles.dockActions, isCompact && styles.dockActionsCompact]}>
+            <View style={[styles.dockActions, isCompact && styles.dockActionsCompact, isVeryCompact && isHolder && styles.dockActionsStacked]}>
               {isHolder && (
                 <AnimatedPressable
-                  style={[styles.dockSecondaryBtn, { borderColor: colors.border }]}
+                  style={[
+                    styles.dockSecondaryBtn,
+                    { borderColor: colors.border },
+                    isVeryCompact && styles.dockSecondaryBtnStacked,
+                  ]}
                   onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'sell' })}
                   accessibilityLabel="Sell your units"
                   accessibilityRole="button"
@@ -587,7 +612,11 @@ export default function AssetDetailScreen() {
                 size="md"
                 onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' })}
                 accessibilityLabel={isHolder ? 'Buy more units' : 'Buy units in this Co-Own'}
-                style={[styles.dockPrimaryBtn, isCompact && styles.dockPrimaryBtnCompact]}
+                style={[
+                  styles.dockPrimaryBtn,
+                  isCompact && styles.dockPrimaryBtnCompact,
+                  isVeryCompact && isHolder && styles.dockPrimaryBtnStacked,
+                ]}
                 hapticFeedback="medium"
               />
             </View>
@@ -809,10 +838,29 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
+    borderWidth: 1,
+  },
+  issuerDockIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  issuerDockBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  issuerDockTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.1,
   },
   issuerDockText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
   },
   dockRow: {
     flexDirection: 'row',
@@ -858,12 +906,20 @@ const styles = StyleSheet.create({
     flex: 0,
     flexShrink: 0,
   },
+  dockActionsStacked: {
+    flexDirection: 'column-reverse',
+    alignItems: 'stretch',
+  },
   dockSecondaryBtn: {
     minHeight: 44,
     paddingVertical: Space.sm + 4,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.lg,
     borderWidth: 1,
+  },
+  dockSecondaryBtnStacked: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dockSecondaryText: {
     fontSize: Type.body.size,
@@ -876,5 +932,9 @@ const styles = StyleSheet.create({
   dockPrimaryBtnCompact: {
     minWidth: 0,
     flex: 1,
+  },
+  dockPrimaryBtnStacked: {
+    flex: 0,
+    width: '100%',
   },
 });

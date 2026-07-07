@@ -203,6 +203,15 @@ export default function CoOwnHubScreen() {
 
   const isSearching = query.trim().length > 0;
 
+  const gridColumns = screenWidth < 360 ? 1 : 2;
+
+  // Real market context — no fabricated volume/growth figures
+  const marketContext = React.useMemo(() => {
+    const openItems = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0).length;
+    const totalAvailableUnits = marketAssets.reduce((sum, a) => sum + Math.max(0, a.availableUnits), 0);
+    return { openItems, totalAvailableUnits };
+  }, [marketAssets]);
+
   const formatStatus = (asset: HubAsset): CoOwnAssetStatus => {
     if (!asset.isOpen) return 'paused';
     return asset.availableUnits > 0 ? 'open' : 'closed';
@@ -292,9 +301,10 @@ export default function CoOwnHubScreen() {
       />
 
       <FlashList
+        key={`hub-grid-${gridColumns}`}
         data={isSearching ? filteredAssets : discoveryAssets}
         keyExtractor={(item) => item.id}
-        numColumns={2}
+        numColumns={gridColumns}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -339,6 +349,14 @@ export default function CoOwnHubScreen() {
                 colors={colors}
               />
             </View>
+
+            {/* Market context — quiet, real data only */}
+            {!isSearching && marketContext.openItems > 0 && (
+              <Text style={[styles.marketContext, { color: colors.textMuted }]} numberOfLines={1}>
+                {marketContext.openItems} {marketContext.openItems === 1 ? 'item' : 'items'} open · {marketContext.totalAvailableUnits} units available
+                {yourPositions.length > 0 ? ` · ${yourPositions.length} ${yourPositions.length === 1 ? 'position' : 'positions'} held` : ''}
+              </Text>
+            )}
 
             {/* Sort control — non-speculative language */}
             {!isSearching && (
@@ -401,7 +419,7 @@ export default function CoOwnHubScreen() {
                   </AnimatedPressable>
                 </View>
                 <View style={styles.positionsRow}>
-                  {yourPositions.slice(0, 2).map((asset) => (
+                  {yourPositions.slice(0, gridColumns).map((asset) => (
                     <View key={asset.id} style={styles.positionTileWrap}>
                       <CoOwnAssetTile
                         imageUri={asset.image}
@@ -506,7 +524,7 @@ export default function CoOwnHubScreen() {
             </View>
           ) : null
         }
-        estimatedItemSize={240}
+        estimatedItemSize={gridColumns === 1 ? 480 : 300}
       />
     </SafeAreaView>
   );
@@ -602,6 +620,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Space.xs,
     marginBottom: Space.lg,
+  },
+  marketContext: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginBottom: Space.md,
   },
   sortChip: {
     paddingHorizontal: Space.md,
