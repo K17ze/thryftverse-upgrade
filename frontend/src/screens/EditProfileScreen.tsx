@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   Alert,
   Modal,
   TextInput,
-  useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,11 +18,9 @@ import { parseApiError } from '../lib/apiClient';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppInput } from '../components/ui/AppInput';
+import { CachedImage } from '../components/CachedImage';
 import { updateMyProfile } from '../services/profileApi';
 import { updateUserProfile as updateUserProfileApi } from '../services/accountApi';
-import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
-import { EditProfilePreview } from '../components/profile/EditProfilePreview';
-import { ProfileMediaEditor } from '../components/profile/ProfileMediaEditor';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -40,9 +37,6 @@ export default function EditProfileScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const userAvatar = useStore((state) => state.userAvatar);
-  const userCover = useStore((state) => state.userCover);
-  const updateUserAvatar = useStore((state) => state.updateUserAvatar);
-  const updateUserCover = useStore((state) => state.updateUserCover);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
 
@@ -69,27 +63,7 @@ export default function EditProfileScreen() {
     website !== (user?.website ?? '');
   const hasPhoneChanged = phone !== (userAny?.phone ?? '');
 
-  const {
-    avatar: avatarState,
-    cover: coverState,
-    pickAvatar,
-    pickCover,
-    retryAvatar,
-    retryCover,
-    revertAvatar,
-    revertCover,
-    hasUnsavedMedia,
-  } = useProfileMediaUpload(
-    currentUser?.id,
-    user?.avatar ?? null,
-    user?.coverPhoto ?? null,
-    updateUserAvatar,
-    updateUserCover
-  );
-
   const hasChanges = hasTextChanges || hasPhoneChanged;
-  const isMediaActive = avatarState.status === 'uploading' || coverState.status === 'uploading';
-  const hasMediaFailure = avatarState.status === 'failed' || coverState.status === 'failed';
 
   // ── Private details helpers ──
   const openEdit = (field: string, current: string) => {
@@ -126,10 +100,6 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!validateWebsite(website)) return;
-    if (isMediaActive) {
-      show('Media upload in progress. Please wait.', 'info');
-      return;
-    }
     setIsSaving(true);
     try {
       // ── Save public profile fields ──
@@ -170,12 +140,8 @@ export default function EditProfileScreen() {
       }
 
       await fetchMyProfile();
-      if (hasMediaFailure) {
-        show('Text saved. Media upload failed — retry or revert below.', 'info');
-      } else {
-        show('Profile updated', 'success');
-        navigation.goBack();
-      }
+      show('Profile updated', 'success');
+      navigation.goBack();
     } catch (err: any) {
       const message = err?.message || 'Failed to save profile. Please try again.';
       show(message, 'error');
@@ -184,25 +150,14 @@ export default function EditProfileScreen() {
     }
   };
 
-  const displayAvatar = avatarState.pendingLocal || avatarState.confirmedRemote || userAvatar || '';
-  const displayCover = coverState.pendingLocal || coverState.confirmedRemote || userCover || '';
-
-  const memberSince = user?.createdAt
-    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
-    : undefined;
-
   const handleDiscard = () => {
-    if (!hasChanges && !hasUnsavedMedia) {
+    if (!hasChanges) {
       navigation.goBack();
       return;
     }
-    // hasChanges already includes hasPhoneChanged via hasTextChanges || hasPhoneChanged
-    let message = 'You have unsaved changes. Are you sure you want to discard them?';
-    if (isMediaActive) message = 'Media upload in progress. Leaving now will discard the upload.';
-    if (hasMediaFailure) message = 'Media upload failed. Leaving now will discard your changes.';
     Alert.alert(
       'Unsaved changes',
-      message,
+      'You have unsaved changes. Are you sure you want to discard them?',
       [
         { text: 'Keep editing', style: 'cancel' },
         { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
@@ -264,49 +219,33 @@ export default function EditProfileScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: EDIT_PROFILE_FOOTER_CLEARANCE }}
       >
-        {/* ── 1. INTRO COPY — calm, focused intent ── */}
+        {/* ── 1. COMPACT READ-ONLY IDENTITY HEADER (no camera/edit controls) ── */}
+        <View style={styles.identityHeader}>
+          {userAvatar ? (
+            <CachedImage
+              uri={userAvatar}
+              style={styles.identityAvatar}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={[styles.identityAvatar, styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+              <Text style={styles.identityAvatarText}>
+                {(user?.username ?? '?').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View style={styles.identityHeaderText}>
+            <Text style={styles.identityName} numberOfLines={1}>{name || username}</Text>
+            <Text style={styles.identityHandle} numberOfLines={1}>@{username}</Text>
+          </View>
+        </View>
+
+        {/* ── 2. INTRO COPY — calm, focused intent ── */}
         <Text style={styles.introCopy}>
           Information you add here is visible on your public profile.
         </Text>
 
-        {/* ── 2. LIVE PROFILE PREVIEW (compact, deterministic) ── */}
-        <EditProfilePreview
-          coverUri={displayCover}
-          avatarUri={displayAvatar}
-          displayName={name}
-          username={username}
-          bio={bio}
-          location={user?.location}
-          memberSince={memberSince}
-          onEditCover={pickCover}
-          onEditAvatar={pickAvatar}
-          isUploadingCover={coverState.status === 'uploading'}
-          isUploadingAvatar={avatarState.status === 'uploading'}
-        />
-
-        {/* ── 3. MEDIA STATUS SURFACES (uploading / failed / retry only — no idle duplicate) ── */}
-        {(coverState.status === 'uploading' || coverState.status === 'failed') && (
-          <ProfileMediaEditor
-            label="Cover"
-            status={coverState.status}
-            error={coverState.error}
-            onChange={pickCover}
-            onRetry={retryCover}
-            onRevert={revertCover}
-          />
-        )}
-        {(avatarState.status === 'uploading' || avatarState.status === 'failed') && (
-          <ProfileMediaEditor
-            label="Avatar"
-            status={avatarState.status}
-            error={avatarState.error}
-            onChange={pickAvatar}
-            onRetry={retryAvatar}
-            onRevert={revertAvatar}
-          />
-        )}
-
-        {/* ── 4. CORE IDENTITY FIELDS ── */}
+        {/* ── 3. CORE IDENTITY FIELDS ── */}
         <View style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Public identity</Text>
 
@@ -553,6 +492,46 @@ function ProfileEditField({
 
 const styles = StyleSheet.create({
   // Section groups
+  // ── Compact read-only identity header (no camera/edit controls) ──
+  identityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.sm,
+  },
+  identityAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  identityAvatarFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  identityAvatarText: {
+    fontSize: 18,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+  },
+  identityHeaderText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  identityName: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  identityHandle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    letterSpacing: Type.caption.letterSpacing,
+  },
   sectionGroup: {
     paddingTop: Space.lg,
     paddingHorizontal: Space.md,
