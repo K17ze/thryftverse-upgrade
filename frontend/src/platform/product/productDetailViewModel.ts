@@ -563,7 +563,7 @@ export function buildCoOwnViewModel(input: CoOwnAdapterInput): ProductDetailView
     seller: null,
     issuer: issuer ?? {
       id: asset.issuerId,
-      username: asset.issuerId.slice(0, 12),
+      username: 'Issuer',
       avatar: null,
       verified: false,
     },

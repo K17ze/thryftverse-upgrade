@@ -294,30 +294,30 @@ export default function PortfolioScreen() {
             {/* Portfolio summary — ownership surface, not a finance dashboard */}
             <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Portfolio value</Text>
-              <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+              <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>
                 {formatFromFiat(summary.totalValueGbp, 'GBP')}
               </Text>
 
               <View style={[styles.summaryStats, { borderColor: colors.border }]}>
                 <View style={styles.summaryStat}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Units</Text>
-                  <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{summary.totalUnits}</Text>
+                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Units</Text>
+                  <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]} numberOfLines={1}>{summary.totalUnits}</Text>
                 </View>
                 <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Unrealised</Text>
+                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Unrealised</Text>
                   <Text style={[
                     styles.summaryStatValue,
                     { color: summary.totalUnrealizedGbp >= 0 ? colors.success : colors.danger },
-                  ]}>
+                  ]} numberOfLines={1}>
                     {summary.totalUnrealizedGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(summary.totalUnrealizedGbp), 'GBP')}
                   </Text>
                 </View>
                 <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Realised</Text>
+                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Realised</Text>
                   <Text style={[
                     styles.summaryStatValue,
                     { color: summary.totalRealizedGbp >= 0 ? colors.success : colors.danger },
-                  ]}>
+                  ]} numberOfLines={1}>
                     {summary.totalRealizedGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(summary.totalRealizedGbp), 'GBP')}
                   </Text>
                 </View>

@@ -1,0 +1,20 @@
+fix(product,coown): harden layout clipping, touch targets, and text overflow
+
+- AppButton: add flex:1/flexShrink:1 to textCol so long titles don't push icons off-screen; add minWidth:0 to base
+- ProductDetailHeader: increase icon buttons from 36x36 to 44x44 for minimum touch target
+- ProductActionBar: add minHeight:44 to all buttons, flexShrink to action row, responsive stacking below 360pt, numberOfLines on texts
+- SellerTrustCard: increase follow/message button padding to meet 44pt minimum
+- CoOwnPositionCard: increase buy/sell button padding to 44pt, detailBtn to 44x44, add numberOfLines to value labels
+- FlagshipAssetCard: increase action button to 44pt, add numberOfLines to unitPrice
+- CoOwnIssuerCard: increase msgBtn from 40x40 to 44x44
+- CoOwnAssetTile: fix cardWidth calculation to account for tileWrap padding, add numberOfLines to unitPrice
+- CoOwnFeaturedAsset: increase action button to 48pt, add numberOfLines to price/allocation text
+- CoOwnOwnershipPanel: add numberOfLines to price label/value
+- AssetDetailScreen: add flexShrink to dock price section and actions, minHeight:44 to secondary button, numberOfLines to dock/order book/description texts
+- PortfolioScreen: add numberOfLines to summary value and stat labels/values
+- ItemDetailScreen: add numberOfLines to posted date, loading text, error text
+- productDetailViewModel: replace issuerId.slice(0,12) UUID display with honest 'Issuer' fallback
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

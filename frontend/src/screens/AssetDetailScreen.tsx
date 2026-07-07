@@ -277,7 +277,7 @@ export default function AssetDetailScreen() {
           <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>Co-Own item</Text>
           <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{asset.title}</Text>
           {asset.description ? (
-            <Text style={[styles.description, { color: colors.textSecondary }]}>{asset.description}</Text>
+            <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={4}>{asset.description}</Text>
           ) : null}
         </Reanimated.View>
 
@@ -354,7 +354,7 @@ export default function AssetDetailScreen() {
               <Ionicons name="analytics-outline" size={16} color={colors.textMuted} />
               <Text style={[styles.priceHistoryTitle, { color: colors.textPrimary }]}>Price history</Text>
             </View>
-            <Text style={[styles.priceHistoryBody, { color: colors.textSecondary }]}>
+            <Text style={[styles.priceHistoryBody, { color: colors.textSecondary }]} numberOfLines={4}>
               Price history is not available for this Co-Own item. Historical pricing data requires
               backend aggregation and is not yet supported.
             </Text>
@@ -415,7 +415,7 @@ export default function AssetDetailScreen() {
           >
             <View style={styles.collapsibleHeaderLeft}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Live market</Text>
-              <Text style={[styles.collapsibleSubtext, { color: colors.textMuted }]}>
+              <Text style={[styles.collapsibleSubtext, { color: colors.textMuted }]} numberOfLines={1}>
                 {orderBook.bids.length + orderBook.asks.length} offers
               </Text>
             </View>
@@ -433,14 +433,14 @@ export default function AssetDetailScreen() {
                   <Text style={[styles.orderBookHeaderText, { color: colors.textSecondary }]}>Buy interest</Text>
                 </View>
                 {bestBid && (
-                  <Text style={[styles.orderBookBest, { color: colors.textPrimary }]}>
+                  <Text style={[styles.orderBookBest, { color: colors.textPrimary }]} numberOfLines={1}>
                     Best: {formatFromFiat(bestBid.unitPriceGbp, 'GBP')}
                   </Text>
                 )}
                 {orderBook.bids.slice(0, 5).map((entry: any, i: number) => (
                   <View key={`bid-${i}`} style={styles.orderBookRow}>
-                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary }]}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
-                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary }]}>{entry.units}u</Text>
+                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary }]} numberOfLines={1}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
+                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary }]} numberOfLines={1}>{entry.units}u</Text>
                   </View>
                 ))}
                 {orderBook.bids.length === 0 && (
@@ -456,14 +456,14 @@ export default function AssetDetailScreen() {
                   <Text style={[styles.orderBookHeaderText, { color: colors.textSecondary }]}>Sell availability</Text>
                 </View>
                 {bestAsk && (
-                  <Text style={[styles.orderBookBest, { color: colors.textPrimary }]}>
+                  <Text style={[styles.orderBookBest, { color: colors.textPrimary }]} numberOfLines={1}>
                     Best: {formatFromFiat(bestAsk.unitPriceGbp, 'GBP')}
                   </Text>
                 )}
                 {orderBook.asks.slice(0, 5).map((entry: any, i: number) => (
                   <View key={`ask-${i}`} style={styles.orderBookRow}>
-                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary }]}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
-                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary }]}>{entry.units}u</Text>
+                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary }]} numberOfLines={1}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
+                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary }]} numberOfLines={1}>{entry.units}u</Text>
                   </View>
                 ))}
                 {orderBook.asks.length === 0 && (
@@ -535,29 +535,29 @@ export default function AssetDetailScreen() {
         {isIssuer ? (
           <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="storefront-outline" size={16} color={colors.brand} />
-            <Text style={[styles.issuerDockText, { color: colors.textPrimary }]}>
+            <Text style={[styles.issuerDockText, { color: colors.textPrimary }]} numberOfLines={2}>
               Issuer view · {availableUnits} units in treasury
             </Text>
           </View>
         ) : !asset.isOpen ? (
           <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="pause-circle-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.issuerDockText, { color: colors.textSecondary }]}>
+            <Text style={[styles.issuerDockText, { color: colors.textSecondary }]} numberOfLines={2}>
               Paused · trading temporarily unavailable
             </Text>
           </View>
         ) : availableUnits === 0 && !isHolder ? (
           <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.issuerDockText, { color: colors.textSecondary }]}>
+            <Text style={[styles.issuerDockText, { color: colors.textSecondary }]} numberOfLines={2}>
               Fully allocated · check secondary market
             </Text>
           </View>
         ) : (
           <View style={styles.dockRow}>
             <View style={styles.dockPriceSection}>
-              <Text style={[styles.dockPriceLabel, { color: colors.textMuted }]}>Unit price</Text>
-              <Text style={[styles.dockPriceValue, { color: colors.textPrimary }]}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</Text>
+              <Text style={[styles.dockPriceLabel, { color: colors.textMuted }]} numberOfLines={1}>Unit price</Text>
+              <Text style={[styles.dockPriceValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</Text>
             </View>
             <View style={styles.dockActions}>
               {isHolder && (
@@ -569,7 +569,7 @@ export default function AssetDetailScreen() {
                   scaleValue={0.97}
                   hapticFeedback="medium"
                 >
-                  <Text style={[styles.dockSecondaryText, { color: colors.textPrimary }]}>Sell</Text>
+                  <Text style={[styles.dockSecondaryText, { color: colors.textPrimary }]} numberOfLines={1}>Sell</Text>
                 </AnimatedPressable>
               )}
               <AppButton
@@ -798,6 +798,8 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   dockPriceSection: {
+    flex: 1,
+    flexShrink: 1,
     gap: 2,
   },
   dockPriceLabel: {
@@ -815,9 +817,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Space.sm,
     alignItems: 'center',
+    flexShrink: 1,
   },
   dockSecondaryBtn: {
-    paddingVertical: Space.sm + 2,
+    minHeight: 44,
+    paddingVertical: Space.sm + 4,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.lg,
     borderWidth: 1,
@@ -828,5 +832,6 @@ const styles = StyleSheet.create({
   },
   dockPrimaryBtn: {
     minWidth: 140,
+    flexShrink: 1,
   },
 });

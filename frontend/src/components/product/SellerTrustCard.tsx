@@ -277,7 +277,8 @@ const styles = StyleSheet.create({
   },
   followBtn: {
     flex: 1,
-    paddingVertical: 10,
+    minHeight: 44,
+    paddingVertical: 12,
     backgroundColor: Colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
@@ -297,7 +298,8 @@ const styles = StyleSheet.create({
   messageBtn: {
     flex: 1,
     flexDirection: 'row',
-    paddingVertical: 10,
+    minHeight: 44,
+    paddingVertical: 12,
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.md,
     alignItems: 'center',

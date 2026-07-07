@@ -75,7 +75,7 @@ export function CoOwnFeaturedAsset({
           <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
 
           <View style={styles.priceRow}>
-            <Text style={[styles.unitPrice, { color: colors.textPrimary }]}>{unitPriceLabel}</Text>
+            <Text style={[styles.unitPrice, { color: colors.textPrimary }]} numberOfLines={1}>{unitPriceLabel}</Text>
             <Text style={[styles.perUnit, { color: colors.textSecondary }]}>per unit</Text>
           </View>
 
@@ -83,7 +83,7 @@ export function CoOwnFeaturedAsset({
             <View style={[styles.allocationBarBg, { backgroundColor: colors.surfaceAlt }]}>
               <View style={[styles.allocationBarFill, { width: `${Math.min(allocatedPct, 100)}%`, backgroundColor: colors.brand }]} />
             </View>
-            <Text style={[styles.allocationText, { color: colors.textSecondary }]}>
+            <Text style={[styles.allocationText, { color: colors.textSecondary }]} numberOfLines={1}>
               {allocatedPct}% owned · {availableUnits} of {totalUnits} units available
             </Text>
           </View>
@@ -212,7 +212,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: Space.sm + 2,
+    minHeight: 48,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.lg,
     marginTop: Space.xs,
   },

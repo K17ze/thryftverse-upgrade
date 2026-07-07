@@ -365,7 +365,7 @@ export default function ItemDetailScreen() {
           <ProductDescription description={item.description} />
 
           {item.createdAt ? (
-            <Text style={styles.postedDate}>
+            <Text style={styles.postedDate} numberOfLines={1}>
               Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
           ) : null}
@@ -417,7 +417,7 @@ export default function ItemDetailScreen() {
           {recsLoading && recommendationSections.length === 0 ? (
             <View style={styles.railLoading}>
               <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.railLoadingText}>Finding recommendations...</Text>
+              <Text style={styles.railLoadingText} numberOfLines={1}>Finding recommendations...</Text>
             </View>
           ) : (
             railSections.map((section) => (
@@ -445,7 +445,7 @@ export default function ItemDetailScreen() {
 
           {recsError && recommendationSections.length === 0 && (
             <View style={styles.recErrorRow}>
-              <Text style={styles.recErrorText}>
+              <Text style={styles.recErrorText} numberOfLines={2}>
                 Recommendations are temporarily unavailable.
               </Text>
             </View>

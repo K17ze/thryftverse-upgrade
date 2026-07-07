@@ -32,7 +32,7 @@ export function CoOwnAssetTile({
   const { colors } = useAppTheme();
   const { width } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
-  const cardWidth = (width - Space.md * 3) / 2;
+  const cardWidth = (width - Space.md * 2 - Space.xs * 4) / 2;
   const imageHeight = cardWidth * 1.25;
   const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
 
@@ -63,7 +63,7 @@ export function CoOwnAssetTile({
         <View style={styles.content}>
           <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
           <View style={styles.priceRow}>
-            <Text style={[styles.unitPrice, { color: colors.textPrimary }]}>{unitPriceLabel}</Text>
+            <Text style={[styles.unitPrice, { color: colors.textPrimary }]} numberOfLines={1}>{unitPriceLabel}</Text>
             <Text style={[styles.perUnit, { color: colors.textSecondary }]}>/unit</Text>
           </View>
           <View style={[styles.allocationBarBg, { backgroundColor: colors.surfaceAlt }]}>

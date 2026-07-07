@@ -48,9 +48,9 @@ export function CoOwnOwnershipPanel({
       </View>
 
       <View style={styles.priceBlock}>
-        <Text style={[styles.priceLabel, { color: colors.textMuted }]}>Unit price</Text>
+        <Text style={[styles.priceLabel, { color: colors.textMuted }]} numberOfLines={1}>Unit price</Text>
         <View style={styles.priceRow}>
-          <Text style={[styles.priceValue, { color: colors.textPrimary }]}>{unitPriceLabel}</Text>
+          <Text style={[styles.priceValue, { color: colors.textPrimary }]} numberOfLines={1}>{unitPriceLabel}</Text>
           <Text style={[styles.pricePer, { color: colors.textSecondary }]}>per unit</Text>
         </View>
       </View>

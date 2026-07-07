@@ -194,6 +194,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
     justifyContent: 'center',
+    minWidth: 0,
   },
   alignStart: {
     alignItems: 'flex-start',
@@ -232,10 +233,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   textCol: {
+    flex: 1,
+    flexShrink: 1,
     justifyContent: 'center',
   },
   textColCentered: {
     alignItems: 'center',
+    flex: 0,
+    flexShrink: 1,
   },
   title: {
     fontSize: Type.body.size,
