@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { Typography } from '../theme/designTokens';
@@ -28,6 +29,7 @@ const UNVERIFIED_LABEL = 'Not verified';
 
 export default function AccountSettingsScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
@@ -105,7 +107,7 @@ export default function AccountSettingsScreen() {
         ) : undefined
       }
     >
-      {/* ── Identity summary — routes to public profile editor ── */}
+      {/* ── Identity summary — compact, routes to public profile editor ── */}
       <View style={[styles.identitySurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
         <View style={styles.identityRow}>
           {user?.avatar ? (
@@ -127,17 +129,15 @@ export default function AccountSettingsScreen() {
             hapticFeedback="light"
             accessibilityRole="button"
             accessibilityLabel="Edit public profile"
+            style={styles.identityEditBtn}
           >
             <Text style={[styles.identityEdit, { color: Colors.brand }]}>Edit</Text>
           </AnimatedPressable>
         </View>
-        <Text style={[styles.identityHint, { color: Colors.textMuted }]}>
-          Public profile fields are managed in Edit profile.
-        </Text>
       </View>
 
       {/* ── Private contact — editable here ── */}
-      <SettingsSection title="Private contact" description="Used for account security and order updates. Not shown on your public profile.">
+      <SettingsSection title="Private contact" description="Used for account security and order updates.">
         <SettingsRow
           title="Email"
           value={email || '—'}
@@ -165,27 +165,33 @@ export default function AccountSettingsScreen() {
         />
       </SettingsSection>
 
-      {/* ── Security ── */}
+      {/* ── Security — prominent, trust-centre feel ── */}
       <SettingsSection title="Security">
         <SettingsRow
           title="Password"
           value="••••••••"
+          icon="lock-closed-outline"
           onPress={() => navigation.navigate('ChangePassword')}
           isFirst
         />
         <SettingsRow
           title="Two-factor authentication"
           value={twoFactorEnabled ? 'Enabled' : 'Off'}
+          icon="shield-checkmark-outline"
+          iconColor={twoFactorEnabled ? Colors.success : Colors.textMuted}
           onPress={() => navigation.navigate('TwoFactorSetup')}
           isLast
         />
       </SettingsSection>
 
-      {/* ── Account control — sober navigation ── */}
-      <SettingsSection title="Account">
+      {/* ── Account control — sober navigation, bottom-padded for visibility ── */}
+      <SettingsSection title="Account" style={{ marginBottom: Math.max(insets.bottom, Space.md) + Space.lg }}>
         <SettingsRow
           title="Account control"
           subtitle="Download data, delete account"
+          icon="warning-outline"
+          iconColor={Colors.danger}
+          danger
           onPress={() => (navigation as any).navigate('AccountControl')}
           isFirst
           isLast
@@ -223,47 +229,49 @@ export default function AccountSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ── Identity surface ──
+  // ── Identity surface ── compact
   identitySurface: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.lg,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    marginBottom: Space.md,
   },
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
+    gap: Space.sm,
   },
   identityAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     overflow: 'hidden',
   },
   identityAvatarImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   identityAvatarFallback: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
   identityAvatarText: {
-    fontSize: 18,
+    fontSize: 15,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
   identityText: {
     flex: 1,
-    gap: 2,
+    minWidth: 0,
+    gap: 1,
   },
   identityName: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
     letterSpacing: -0.2,
@@ -273,17 +281,18 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
   },
+  identityEditBtn: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   identityEdit: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
-  },
-  identityHint: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight + 2,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.sm,
   },
   // ── Edit modal ──
   editModalOverlay: {
