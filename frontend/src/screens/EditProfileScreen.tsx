@@ -1,33 +1,44 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Alert,
+  Modal,
   TextInput,
-  ScrollView,
   useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
-import { Space, Typography, Radius } from '../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
+import { parseApiError } from '../lib/apiClient';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppInput } from '../components/ui/AppInput';
 import { updateMyProfile } from '../services/profileApi';
+import { updateUserProfile as updateUserProfileApi } from '../services/accountApi';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { EditProfilePreview } from '../components/profile/EditProfilePreview';
 import { ProfileMediaEditor } from '../components/profile/ProfileMediaEditor';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter } from '../components/flagship';
+
+const VERIFIED_LABEL = 'Verified';
+const UNVERIFIED_LABEL = 'Not verified';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
+  const haptic = useHaptic();
   const currentUser = useStore((state) => state.currentUser);
+  const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const userAvatar = useStore((state) => state.userAvatar);
   const userCover = useStore((state) => state.userCover);
   const updateUserAvatar = useStore((state) => state.updateUserAvatar);
@@ -36,6 +47,7 @@ export default function EditProfileScreen() {
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
 
   const user = currentUser;
+  const userAny = user as any;
   const initialName = user?.displayName ?? user?.username ?? '';
   const initialUsername = user?.username ?? '';
 
@@ -43,15 +55,19 @@ export default function EditProfileScreen() {
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(user?.bio ?? '');
   const [website, setWebsite] = useState(user?.website ?? '');
+  const [phone, setPhone] = useState(userAny?.phone ?? '');
 
   const [isSaving, setIsSaving] = useState(false);
   const [websiteError, setWebsiteError] = useState('');
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   const hasTextChanges =
     name !== initialName ||
     username !== initialUsername ||
     bio !== (user?.bio ?? '') ||
     website !== (user?.website ?? '');
+  const hasPhoneChanged = phone !== (userAny?.phone ?? '');
 
   const {
     avatar: avatarState,
@@ -71,9 +87,24 @@ export default function EditProfileScreen() {
     updateUserCover
   );
 
-  const hasChanges = hasTextChanges;
+  const hasChanges = hasTextChanges || hasPhoneChanged;
   const isMediaActive = avatarState.status === 'uploading' || coverState.status === 'uploading';
   const hasMediaFailure = avatarState.status === 'failed' || coverState.status === 'failed';
+
+  // ── Private details helpers ──
+  const openEdit = (field: string, current: string) => {
+    setEditingField(field);
+    setEditValue(current);
+  };
+  const closeEdit = () => {
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  // Derived private-details display values
+  const email = userAny?.email ?? '';
+  const emailVerified = !!user?.emailVerified;
+  const country = (userAny?.country as string) || '';
 
   // Safe-area-aware bottom clearance so the sticky Save footer never covers form fields.
   // Footer = paddingTop(8) + button(48) + paddingBottom(max(insets.bottom, 16)) ≈ 112 on most devices.
@@ -101,6 +132,7 @@ export default function EditProfileScreen() {
     }
     setIsSaving(true);
     try {
+      // ── Save public profile fields ──
       const updates: Record<string, unknown> = {};
       if (name !== initialName) updates.displayName = name;
       if (username !== initialUsername) updates.username = username;
@@ -120,6 +152,23 @@ export default function EditProfileScreen() {
           coverVideo: updated.coverVideo,
         });
       }
+
+      // ── Save private phone field ──
+      if (hasPhoneChanged) {
+        const previousPhone = phone;
+        updateUserProfile({ phone });
+        try {
+          await updateUserProfileApi({ phone });
+        } catch (phoneErr) {
+          const parsed = parseApiError(phoneErr, 'Unable to save phone number.');
+          show(parsed.message, 'error');
+          setPhone(previousPhone);
+          updateUserProfile({ phone: previousPhone });
+          setIsSaving(false);
+          return;
+        }
+      }
+
       await fetchMyProfile();
       if (hasMediaFailure) {
         show('Text saved. Media upload failed — retry or revert below.', 'info');
@@ -147,6 +196,7 @@ export default function EditProfileScreen() {
       navigation.goBack();
       return;
     }
+    // hasChanges already includes hasPhoneChanged via hasTextChanges || hasPhoneChanged
     let message = 'You have unsaved changes. Are you sure you want to discard them?';
     if (isMediaActive) message = 'Media upload in progress. Leaving now will discard the upload.';
     if (hasMediaFailure) message = 'Media upload failed. Leaving now will discard your changes.';
@@ -189,7 +239,7 @@ export default function EditProfileScreen() {
       header={
         <FlagshipHeader
           title="Edit profile"
-          subtitle="Public profile"
+          subtitle="Profile & account"
           onBack={handleDiscard}
         />
       }
@@ -308,7 +358,125 @@ export default function EditProfileScreen() {
             isLast
           />
         </View>
+
+        {/* ── 6. PRIVATE DETAILS ── */}
+        <SettingsSection
+          title="Private details"
+          description="Used for account security and order updates. Not shown on your public profile."
+        >
+          <SettingsRow
+            title="Email"
+            value={email || '—'}
+            isFirst
+          />
+          <SettingsRow
+            title="Email status"
+            value={emailVerified ? VERIFIED_LABEL : UNVERIFIED_LABEL}
+          />
+          <SettingsRow
+            title="Phone"
+            value={phone || '—'}
+            onPress={() => openEdit('phone', phone)}
+            isLast
+          />
+        </SettingsSection>
+
+        {/* ── 7. PERSONAL INFORMATION (read-only) ── */}
+        <SettingsSection title="Personal information">
+          <SettingsRow
+            title="Country or region"
+            value={country || '—'}
+            isFirst
+            isLast
+          />
+        </SettingsSection>
+
+        {/* ── 8. SECURITY ── */}
+        <SettingsSection title="Security" description="Protect your account and sign-ins.">
+          <SettingsRow
+            title="Password"
+            value="••••••••"
+            icon="lock-closed-outline"
+            onPress={() => (navigation as any).navigate('ChangePassword')}
+            isFirst
+          />
+          <SettingsRow
+            title="Two-factor authentication"
+            subtitle={twoFactorEnabled ? 'Enabled — extra layer of security' : 'Add an extra layer of security'}
+            value={twoFactorEnabled ? 'Enabled' : 'Off'}
+            icon="shield-checkmark-outline"
+            iconColor={twoFactorEnabled ? Colors.success : Colors.textMuted}
+            onPress={() => (navigation as any).navigate('TwoFactorSetup')}
+            isLast
+          />
+        </SettingsSection>
+
+        {/* ── 9. PREFERENCES ── */}
+        <SettingsSection title="Preferences">
+          <SettingsRow
+            title="Personalisation"
+            subtitle="Style and experience preferences"
+            icon="apps-outline"
+            onPress={() => (navigation as any).navigate('Personalisation')}
+            isFirst
+            isLast
+          />
+        </SettingsSection>
+
+        {/* ── 10. ACCOUNT ── */}
+        <SettingsSection
+          title="Account"
+          style={{ marginBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
+        >
+          <SettingsRow
+            title="Account control"
+            subtitle="Download data, delete account"
+            icon="warning-outline"
+            iconColor={Colors.danger}
+            danger
+            onPress={() => (navigation as any).navigate('AccountControl')}
+            isFirst
+            isLast
+          />
+        </SettingsSection>
       </KeyboardAwareScrollView>
+
+      {/* ── Inline Phone Edit Modal ── */}
+      <Modal visible={editingField !== null} transparent animationType="slide" onRequestClose={closeEdit}>
+        <View style={styles.editModalOverlay}>
+          <View style={[styles.editModalCard, { backgroundColor: Colors.surface }]}>
+            <Text style={styles.editModalTitle}>
+              Edit {editingField === 'phone' ? 'phone number' : editingField}
+            </Text>
+            <AppInput
+              value={editValue}
+              onChangeText={setEditValue}
+              autoFocus
+              keyboardType={editingField === 'phone' ? 'phone-pad' : 'default'}
+              containerStyle={{ marginBottom: Space.md }}
+            />
+            <View style={styles.editModalActions}>
+              <AnimatedPressable
+                onPress={() => { haptic.light(); closeEdit(); }}
+                style={styles.editModalBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.editModalBtnText}>Cancel</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => {
+                  if (editingField === 'phone') setPhone(editValue);
+                  closeEdit();
+                }}
+                style={[styles.editModalBtn, styles.editModalBtnPrimary]}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.editModalBtnText, styles.editModalBtnPrimaryText]}>Save</Text>
+              </AnimatedPressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </FlagshipScreen>
   );
 }
@@ -495,5 +663,47 @@ const styles = StyleSheet.create({
     color: Colors.danger,
     marginTop: 6,
     lineHeight: 15,
+  },
+  // ── Phone edit modal ──
+  editModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xl,
+  },
+  editModalCard: {
+    padding: Space.lg,
+    borderRadius: Radius.xl,
+  },
+  editModalTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    marginBottom: Space.md,
+    letterSpacing: Type.subtitle.letterSpacing,
+  },
+  editModalActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  editModalBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceAlt,
+  },
+  editModalBtnPrimary: {
+    backgroundColor: Colors.brand,
+  },
+  editModalBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  editModalBtnPrimaryText: {
+    color: Colors.textInverse,
   },
 });
