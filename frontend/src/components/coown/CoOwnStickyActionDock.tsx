@@ -28,7 +28,7 @@ export function CoOwnStickyActionDock({
         {
           backgroundColor: colors.background,
           borderTopColor: colors.border,
-          paddingBottom: Math.max(insets.bottom, Space.sm) + Space.xs,
+          paddingBottom: Math.max(insets.bottom + Space.sm, Space.md),
         },
         style,
       ]}
@@ -57,8 +57,11 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   container: {
+    width: '100%',
+    minWidth: 0,
+    minHeight: 72,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
+    paddingTop: Space.sm + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
     ...Elevation.floating,
   },
