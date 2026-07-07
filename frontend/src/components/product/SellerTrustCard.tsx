@@ -136,7 +136,7 @@ export function SellerTrustCard({
               <View style={styles.badgeRow}>
                 {seller.badges.slice(0, 3).map((badge) => (
                   <View key={badge} style={styles.badge}>
-                    <Text style={styles.badgeText}>{badge}</Text>
+                    <Text style={styles.badgeText} numberOfLines={1}>{badge}</Text>
                   </View>
                 ))}
               </View>
@@ -237,16 +237,20 @@ const styles = StyleSheet.create({
   },
   profileInfo: {
     flex: 1,
+    minWidth: 0,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
+    minWidth: 0,
   },
   username: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
+    flexShrink: 1,
+    minWidth: 0,
   },
   location: {
     fontSize: 13,

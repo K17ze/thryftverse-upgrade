@@ -49,24 +49,24 @@ export function ProductIdentitySummary({
       </Text>
 
       <View style={styles.priceRow}>
-        <Text style={styles.price}>{price}</Text>
+        <Text style={styles.price} numberOfLines={1}>{price}</Text>
         {hasDiscount && originalPrice ? (
-          <Text style={styles.originalPrice}>{originalPrice}</Text>
+          <Text style={styles.originalPrice} numberOfLines={1}>{originalPrice}</Text>
         ) : null}
       </View>
 
       {izeText ? (
-        <Text style={styles.izeText}>{izeText}</Text>
+        <Text style={styles.izeText} numberOfLines={1}>{izeText}</Text>
       ) : null}
 
       {protectionTotal ? (
-        <Text style={styles.protectionTotal}>
+        <Text style={styles.protectionTotal} numberOfLines={2}>
           {protectionTotal} with Buyer Protection
         </Text>
       ) : null}
 
       {engagementParts.length > 0 ? (
-        <Text style={styles.engagementText}>{engagementParts.join(' · ')}</Text>
+        <Text style={styles.engagementText} numberOfLines={1}>{engagementParts.join(' · ')}</Text>
       ) : null}
     </View>
   );
@@ -96,18 +96,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Space.sm,
+    minWidth: 0,
   },
   price: {
     fontSize: 28,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.6,
+    flexShrink: 1,
+    minWidth: 0,
   },
   originalPrice: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     textDecorationLine: 'line-through',
+    flexShrink: 0,
   },
   protectionTotal: {
     fontSize: 13,
