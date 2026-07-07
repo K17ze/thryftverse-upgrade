@@ -442,7 +442,8 @@ const PREMIUM_SCREENS = [
   'BalanceScreen.tsx',
   'PostageScreen.tsx',
   'SettingsScreen.tsx',
-  'AccountSettingsScreen.tsx',
+  // AccountSettingsScreen removed — it is now a thin redirect wrapper to
+  // the unified EditProfileScreen, not a full premium screen.
   'MyOrdersScreen.tsx',
   'ListingSuccessScreen.tsx',
 ];
@@ -489,7 +490,7 @@ describe('Double-boxing guardrails', () => {
     'PaymentsScreen.tsx',
     'PostageScreen.tsx',
     'BalanceScreen.tsx',
-    'AccountSettingsScreen.tsx',
+    // AccountSettingsScreen removed — redirect wrapper has no nesting.
     'SettingsScreen.tsx',
   ];
 

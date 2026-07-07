@@ -267,12 +267,16 @@ describe('UI-22B settings reconstruction architecture guardrails', () => {
     expect(src).toContain('Categories:');
   });
 
-  it('AccountSettingsScreen uses FlagshipScreen, FlagshipHeader, FlagshipStickyFooter', () => {
+  it('AccountSettingsScreen uses FlagshipScreen, FlagshipHeader (redirect wrapper)', () => {
+    // AccountSettingsScreen is now a thin compatibility redirect to the
+    // unified EditProfileScreen. It uses FlagshipScreen + FlagshipHeader
+    // for the brief redirect frame, but no longer has FlagshipStickyFooter
+    // since it has no editable content of its own.
     const src = readSrc('screens/AccountSettingsScreen.tsx');
-    expect(src).toContain("import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter");
-    expect(src).toContain("from '../components/flagship'");
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
     expect(src).toContain('<FlagshipScreen');
-    expect(src).toContain('<FlagshipStickyFooter');
+    expect(src).toContain('replace');
+    expect(src).toContain('EditProfile');
   });
 
   it('ChangePasswordScreen uses FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection', () => {
