@@ -413,15 +413,21 @@ export function CommerceMediaStage({
                     scrollToIndex(index);
                     announceMedia(index);
                   }}
-                  accessibilityLabel={`View image ${index + 1}`}
+                  accessibilityLabel={`View ${isVid ? 'video' : 'image'} ${index + 1}`}
                   style={[styles.thumbnail, isActive && styles.thumbnailActive]}
                 >
-                  <CachedImage
-                    uri={item}
-                    style={styles.thumbnailImage}
-                    containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
-                    contentFit="cover"
-                  />
+                  {isVid ? (
+                    <View style={[styles.thumbnailImage, styles.thumbnailVideoFallback]}>
+                      <Ionicons name="play-circle" size={20} color="#fff" />
+                    </View>
+                  ) : (
+                    <CachedImage
+                      uri={item}
+                      style={styles.thumbnailImage}
+                      containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
+                      contentFit="cover"
+                    />
+                  )}
                   {isVid && (
                     <View style={styles.thumbnailVideoBadge}>
                       <Ionicons name="play" size={8} color="#fff" />
@@ -587,6 +593,11 @@ const styles = StyleSheet.create({
   thumbnailImage: {
     width: '100%',
     height: '100%',
+  },
+  thumbnailVideoFallback: {
+    backgroundColor: '#1a1a1a',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   thumbnailVideoBadge: {
     position: 'absolute',
