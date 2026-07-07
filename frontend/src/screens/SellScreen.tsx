@@ -379,7 +379,7 @@ export default function SellScreen() {
     const numericPrice = Number(sanitizeDecimalInput(price));
     const nextErrors: Record<string, string> = {};
 
-    if (photos.length === 0) nextErrors.photos = 'Add at least one photo or video before publishing.';
+    if (photos.length === 0) nextErrors.photos = 'Add at least one photo before publishing.';
     if (!trimmedTitle) nextErrors.title = 'Please provide a title.';
     if (!category) nextErrors.category = 'Please select a category.';
     if (!size) nextErrors.size = 'Please choose a size.';
