@@ -58,15 +58,15 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
     expect(screenSrc).toContain('ProfileHero');
   });
 
-  it('EditProfileScreen imports FlagshipProfileMedia', () => {
+  it('EditProfileScreen imports EditProfilePreview', () => {
     const src = readSrc('screens/EditProfileScreen.tsx');
-    expect(src).toContain('FlagshipProfileMedia');
+    expect(src).toContain('EditProfilePreview');
   });
 
   // 3. EditProfile does not persist file:// media
-  it('EditProfileScreen calls persistProfileMediaUri', () => {
+  it('EditProfileScreen uses useProfileMediaUpload hook', () => {
     const src = readSrc('screens/EditProfileScreen.tsx');
-    expect(src).toContain('persistProfileMediaUri');
+    expect(src).toContain('useProfileMediaUpload');
   });
 
   // 4. Settings rows navigate to real screens or are honestly disabled/hidden

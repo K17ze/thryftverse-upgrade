@@ -47,9 +47,9 @@ describe('VISUAL-13B Profile Closet Social Upgrade', () => {
     expect(src).toContain('LookPreviewCard');
   });
 
-  it('7. EditProfileScreen preserves uploadMedia/updateMyProfile/fetchMyProfile flow', () => {
+  it('7. EditProfileScreen preserves useProfileMediaUpload/updateMyProfile/fetchMyProfile flow', () => {
     const src = readFile('screens/EditProfileScreen.tsx');
-    expect(src).toContain('uploadMedia');
+    expect(src).toContain('useProfileMediaUpload');
     expect(src).toContain('updateMyProfile');
     expect(src).toContain('fetchMyProfile');
     expect(src).not.toContain('file://');
