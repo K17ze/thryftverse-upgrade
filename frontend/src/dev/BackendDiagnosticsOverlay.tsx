@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    zIndex: 999,
+    zIndex: 40,
   },
   chipDot: {
     width: 8,
