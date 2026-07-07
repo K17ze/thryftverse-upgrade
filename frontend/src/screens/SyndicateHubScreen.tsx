@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, useWindowDimensions, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, useWindowDimensions, RefreshControl, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -418,8 +418,13 @@ export default function CoOwnHubScreen() {
                     <Text style={[styles.sectionLink, { color: colors.textSecondary }]} numberOfLines={1}>All {yourPositions.length}</Text>
                   </AnimatedPressable>
                 </View>
-                <View style={styles.positionsRow}>
-                  {yourPositions.slice(0, gridColumns).map((asset) => (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.positionsRow}
+                  accessibilityLabel="Your positions"
+                >
+                  {yourPositions.slice(0, 6).map((asset) => (
                     <View key={asset.id} style={styles.positionTileWrap}>
                       <CoOwnAssetTile
                         imageUri={asset.image}
@@ -432,7 +437,7 @@ export default function CoOwnHubScreen() {
                       />
                     </View>
                   ))}
-                </View>
+                </ScrollView>
               </View>
             )}
 
@@ -662,12 +667,12 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   positionsRow: {
-    flexDirection: 'row',
     gap: Space.md,
+    paddingRight: Space.md,
   },
   positionTileWrap: {
-    flex: 1,
-    minWidth: 0,
+    width: 180,
+    flex: 0,
   },
   tileWrap: {
     flex: 1,
