@@ -315,7 +315,7 @@ export default function SettingsScreen({ navigation }: Props) {
           icon="lock-closed-outline"
           title="Private details"
           subtitle="Email, phone, identity"
-          onPress={() => navigation.navigate('AccountSettings')}
+          onPress={() => (navigation as any).navigate('EditProfile')}
         />
         <SettingsRow
           icon="key-outline"
