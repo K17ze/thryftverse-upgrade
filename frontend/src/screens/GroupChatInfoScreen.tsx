@@ -56,7 +56,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const handleLeave = () => {
     Alert.alert(
       'Leave group?',
-      'This removes the group from your inbox on this device. You can rejoin if you receive a new invite.',
+      'This removes the group from your inbox on this device. Other members will still see the group. You can rejoin if you receive a new invite.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -65,7 +65,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           onPress: () => {
             haptic.heavy();
             deleteConversation(conversationId);
-            show('You left the group', 'info');
+            show('Group removed from your inbox', 'info');
             navigation.navigate('MainTabs', { screen: 'Inbox' });
           },
         },
@@ -161,6 +161,24 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             label={`${memberCount} member${memberCount !== 1 ? 's' : ''}`}
             subtitle="View, add, or remove members"
             onPress={() => navigation.navigate('GroupMembers', { conversationId })}
+            showChevron
+          />
+        </Section>
+
+        {/* Shared content */}
+        <Section title="Shared">
+          <RowItem
+            icon="images-outline"
+            label="Shared media"
+            subtitle="Photos and videos shared in this chat"
+            onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
+            showChevron
+          />
+          <RowItem
+            icon="document-outline"
+            label="Files"
+            subtitle="Backend support required"
+            onPress={() => show('File sharing requires backend support.', 'info')}
             showChevron
           />
         </Section>
