@@ -1,4 +1,5 @@
 import { listCoOwnAssets, fetchCoOwnHoldings, type MarketCoOwnAsset, type MarketCoOwnHolding } from './marketApi';
+import type { Listing } from '../data/mockData';
 
 // ── Portfolio DTO ──
 // A joined position view model that the PortfolioScreen consumes.
@@ -44,7 +45,10 @@ export interface CoOwnPortfolioResult {
 // Internally fetches assets + holdings and joins them into position DTOs.
 // The screen consumes this typed contract, not raw market data.
 
-export async function fetchCoOwnPortfolioPositions(userId: string): Promise<CoOwnPortfolioResult> {
+export async function fetchCoOwnPortfolioPositions(
+  userId: string,
+  listings?: Listing[],
+): Promise<CoOwnPortfolioResult> {
   const [assets, holdings] = await Promise.all([
     listCoOwnAssets({ limit: 200 }),
     fetchCoOwnHoldings(userId).catch(() => [] as MarketCoOwnHolding[]),
@@ -67,12 +71,24 @@ export async function fetchCoOwnPortfolioPositions(userId: string): Promise<CoOw
       const unrealizedPnlGbp = (asset.unitPriceGbp - h.avgEntryPriceGbp) * h.unitsOwned;
       const sellableUnits = h.unitsOwned; // All owned units are sellable if the market is open
 
+      // Image fallback hierarchy:
+      // 1. asset.imageUrl (direct)
+      // 2. linked listing cover image (listing.images[0])
+      // 3. null → CoOwnPositionCard shows fallback graphic
+      let resolvedImage = asset.imageUrl;
+      if (!resolvedImage && asset.listingId && listings) {
+        const linkedListing = listings.find((l) => l.id === asset.listingId);
+        if (linkedListing?.images?.length) {
+          resolvedImage = linkedListing.images[0];
+        }
+      }
+
       return {
         assetId: asset.id,
         listingId: asset.listingId,
         issuerId: asset.issuerId,
         title: asset.title,
-        imageUrl: asset.imageUrl,
+        imageUrl: resolvedImage,
         unitsOwned: h.unitsOwned,
         totalUnits: asset.totalUnits,
         ownershipPct,

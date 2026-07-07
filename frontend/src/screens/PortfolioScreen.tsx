@@ -29,6 +29,7 @@ import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM } from '../services/
 // keeps the screen's data dependencies visible and auditable.
 import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
+import { useBackendData } from '../context/BackendDataContext';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -40,6 +41,7 @@ export default function PortfolioScreen() {
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
+  const { listings } = useBackendData();
 
   const [positions, setPositions] = React.useState<CoOwnPositionVM[]>([]);
   const [summary, setSummary] = React.useState({
@@ -60,7 +62,7 @@ export default function PortfolioScreen() {
     setIsLoading(true);
     setIsError(false);
 
-    fetchCoOwnPortfolioPositions(currentUser.id)
+    fetchCoOwnPortfolioPositions(currentUser.id, listings)
       .then((result) => {
         if (cancelled) return;
         setPositions(result.positions);
@@ -77,7 +79,7 @@ export default function PortfolioScreen() {
       });
 
     return () => { cancelled = true; };
-  }, [currentUser?.id, show]);
+  }, [currentUser?.id, show, listings]);
 
   React.useEffect(() => {
     const cleanup = loadPortfolio();

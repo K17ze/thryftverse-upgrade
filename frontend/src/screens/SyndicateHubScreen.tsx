@@ -13,6 +13,7 @@ import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
+import { useBackendData } from '../context/BackendDataContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { AppInput } from '../components/ui/AppInput';
@@ -67,6 +68,7 @@ export default function CoOwnHubScreen() {
   const reducedMotion = useReducedMotion();
   const { colors, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
+  const { listings } = useBackendData();
   const actingUserId = currentUser?.id;
 
   const [query, setQuery] = React.useState('');
@@ -90,23 +92,36 @@ export default function CoOwnHubScreen() {
     ])
       .then(([items, holdingItems]) => {
         if (cancelled) return;
-        const mapped: HubAsset[] = items.map((item) => ({
-          id: item.id,
-          listingId: item.listingId,
-          issuerId: item.issuerId,
-          title: item.title,
-          image: item.imageUrl ?? '',
-          totalUnits: item.totalUnits,
-          availableUnits: item.availableUnits,
-          unitPriceGBP: item.unitPriceGbp,
-          unitPriceStable: item.unitPriceStable,
-          settlementMode: item.settlementMode as 'GBP' | 'TVUSD' | 'HYBRID',
-          issuerJurisdiction: item.issuerJurisdiction ?? undefined,
-          holders: item.holders,
-          yourUnits: 0,
-          isOpen: item.isOpen,
-          createdAt: item.createdAt,
-        }));
+        const mapped: HubAsset[] = items.map((item) => {
+          // Image fallback hierarchy:
+          // 1. asset.imageUrl (direct)
+          // 2. linked listing cover image (listing.images[0])
+          // 3. empty string → CoOwnAssetTile shows fallback graphic
+          let resolvedImage = item.imageUrl ?? '';
+          if (!resolvedImage && item.listingId) {
+            const linkedListing = listings.find((l) => l.id === item.listingId);
+            if (linkedListing?.images?.length) {
+              resolvedImage = linkedListing.images[0];
+            }
+          }
+          return {
+            id: item.id,
+            listingId: item.listingId,
+            issuerId: item.issuerId,
+            title: item.title,
+            image: resolvedImage,
+            totalUnits: item.totalUnits,
+            availableUnits: item.availableUnits,
+            unitPriceGBP: item.unitPriceGbp,
+            unitPriceStable: item.unitPriceStable,
+            settlementMode: item.settlementMode as 'GBP' | 'TVUSD' | 'HYBRID',
+            issuerJurisdiction: item.issuerJurisdiction ?? undefined,
+            holders: item.holders,
+            yourUnits: 0,
+            isOpen: item.isOpen,
+            createdAt: item.createdAt,
+          };
+        });
         const holdingsMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
         for (const h of holdingItems) {
           holdingsMap.set(h.assetId, { units: h.unitsOwned, avgEntry: h.avgEntryPriceGbp, realized: h.realizedPnlGbp });
@@ -124,7 +139,7 @@ export default function CoOwnHubScreen() {
       });
 
     return () => { cancelled = true; };
-  }, [actingUserId, show]);
+  }, [actingUserId, show, listings]);
 
   React.useEffect(() => {
     const cleanup = loadData();
