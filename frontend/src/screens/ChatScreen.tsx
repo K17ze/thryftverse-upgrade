@@ -946,7 +946,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.ImagesAndVideos,
+          mediaTypes: ImagePicker.MediaTypeOptions.All,
 
           allowsMultipleSelection: false,
 
@@ -975,7 +975,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         }
 
         const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.ImagesAndVideos,
+          mediaTypes: ImagePicker.MediaTypeOptions.All,
 
           quality: 0.9,
         });
