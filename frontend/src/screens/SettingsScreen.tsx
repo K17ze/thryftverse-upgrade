@@ -45,7 +45,7 @@ interface DestinationMeta {
 
 // Route metadata for search — each entry maps a settings destination to searchable terms
 const ROUTE_METADATA: DestinationMeta[] = [
-  { key: 'EditProfile', label: 'Edit profile', searchTerms: 'edit profile avatar name bio username email phone private details security account', section: 'Account', showSection: true },
+  { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'edit profile avatar name bio username email phone private details security account two factor password', section: 'Account', showSection: true },
   { key: 'AccountControl', label: 'Account control', searchTerms: 'account control delete deactivate download data export', section: 'Account', showSection: true },
   { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'saved addresses delivery shipping address buying', section: 'Buying', showSection: true },
   { key: 'Payments', label: 'Payment methods', searchTerms: 'payment methods card bank buying', section: 'Buying', showSection: true },
@@ -256,14 +256,15 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── IDENTITY HERO CARD ── */}
+      {/* ── IDENTITY HERO CARD — sole profile/account editor entrypoint ── */}
       <AnimatedPressable
         onPress={() => (navigation as any).navigate('EditProfile')}
         activeOpacity={0.9}
         scaleValue={0.99}
         hapticFeedback="light"
         accessibilityRole="button"
-        accessibilityLabel="View and edit public profile"
+        accessibilityLabel="Edit profile and account"
+        accessibilityHint="Opens profile, private details, security and account editor"
       >
         <View style={[styles.identityHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.identityHeroMain}>
@@ -301,20 +302,14 @@ export default function SettingsScreen({ navigation }: Props) {
         </View>
       </AnimatedPressable>
 
-      {/* ── ACCOUNT SECTION (card) ── */}
+      {/* ── ACCOUNT SECTION (card) — no profile/private details rows (top card is the entrypoint) ── */}
       <SettingsSection title="Account">
-        <SettingsRow
-          icon="person-outline"
-          title="Edit profile"
-          subtitle="Profile, private details, security & account"
-          onPress={() => (navigation as any).navigate('EditProfile')}
-          isFirst
-        />
         <SettingsRow
           icon="key-outline"
           title="Change password"
           subtitle={twoFactorEnabled ? '2FA enabled' : 'Password only'}
           onPress={() => navigation.navigate('ChangePassword')}
+          isFirst
         />
         <SettingsRow
           icon="phone-portrait-outline"
