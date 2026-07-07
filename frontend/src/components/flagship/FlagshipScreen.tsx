@@ -28,6 +28,10 @@ export interface FlagshipScreenProps {
   contentStyle?: ViewStyle;
   onScroll?: (y: number) => void;
   scrollRef?: React.RefObject<any>;
+  /** Extra bottom padding for scroll content when a sticky footer is present.
+   *  Use this when the child screen owns its own ScrollView (scrollEnabled={false})
+   *  and needs to ensure the last form field clears the footer. */
+  footerInsetHeight?: number;
 }
 
 export function FlagshipScreen({
@@ -40,6 +44,7 @@ export function FlagshipScreen({
   contentStyle,
   onScroll,
   scrollRef,
+  footerInsetHeight,
 }: FlagshipScreenProps) {
   const { colors, isDark } = useAppTheme();
   const scrollY = useSharedValue(0);
@@ -86,7 +91,7 @@ export function FlagshipScreen({
           scrollEventThrottle={16}
         >
           {children}
-          <View style={{ height: stickyFooter ? Space.xxl : Space.xl }} />
+          <View style={{ height: footerInsetHeight ?? (stickyFooter ? Space.xxl : Space.xl) }} />
         </Reanimated.ScrollView>
       ) : (
         <View style={[styles.content, contentStyle]}>{children}</View>

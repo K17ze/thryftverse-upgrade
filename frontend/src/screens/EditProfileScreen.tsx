@@ -6,10 +6,10 @@ import {
   Alert,
   TextInput,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { Space, Typography } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
@@ -20,11 +20,13 @@ import { updateMyProfile } from '../services/profileApi';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { EditProfilePreview } from '../components/profile/EditProfilePreview';
 import { ProfileMediaEditor } from '../components/profile/ProfileMediaEditor';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter } from '../components/flagship';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
   const { show } = useToast();
+  const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
   const userAvatar = useStore((state) => state.userAvatar);
   const userCover = useStore((state) => state.userCover);
@@ -72,6 +74,10 @@ export default function EditProfileScreen() {
   const hasChanges = hasTextChanges;
   const isMediaActive = avatarState.status === 'uploading' || coverState.status === 'uploading';
   const hasMediaFailure = avatarState.status === 'failed' || coverState.status === 'failed';
+
+  // Safe-area-aware bottom clearance so the sticky Save footer never covers form fields.
+  // Footer = paddingTop(8) + button(48) + paddingBottom(max(insets.bottom, 16)) ≈ 112 on most devices.
+  const EDIT_PROFILE_FOOTER_CLEARANCE = Math.max(insets.bottom, Space.md) + 112;
 
   const validateWebsite = useCallback((value: string) => {
     if (!value) {
@@ -203,150 +209,167 @@ export default function EditProfileScreen() {
         />
       }
     >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: EDIT_PROFILE_FOOTER_CLEARANCE }}
       >
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: Space.xl }}
-        >
-          {/* ── 2. LIVE PROFILE PREVIEW ── */}
-          <EditProfilePreview
-            coverUri={displayCover}
-            avatarUri={displayAvatar}
-            displayName={name}
-            username={username}
-            bio={bio}
-            location={user?.location}
-            memberSince={memberSince}
-            onEditCover={pickCover}
-            onEditAvatar={pickAvatar}
-            isUploadingCover={coverState.status === 'uploading'}
-            isUploadingAvatar={avatarState.status === 'uploading'}
+        {/* ── 2. LIVE PROFILE PREVIEW (compact, deterministic) ── */}
+        <EditProfilePreview
+          coverUri={displayCover}
+          avatarUri={displayAvatar}
+          displayName={name}
+          username={username}
+          bio={bio}
+          location={user?.location}
+          memberSince={memberSince}
+          onEditCover={pickCover}
+          onEditAvatar={pickAvatar}
+          isUploadingCover={coverState.status === 'uploading'}
+          isUploadingAvatar={avatarState.status === 'uploading'}
+        />
+
+        {/* ── 3. MEDIA STATUS SURFACES (uploading / failed / retry only — no idle duplicate) ── */}
+        {(coverState.status === 'uploading' || coverState.status === 'failed') && (
+          <ProfileMediaEditor
+            label="Cover"
+            status={coverState.status}
+            error={coverState.error}
+            onChange={pickCover}
+            onRetry={retryCover}
+            onRevert={revertCover}
+          />
+        )}
+        {(avatarState.status === 'uploading' || avatarState.status === 'failed') && (
+          <ProfileMediaEditor
+            label="Avatar"
+            status={avatarState.status}
+            error={avatarState.error}
+            onChange={pickAvatar}
+            onRetry={retryAvatar}
+            onRevert={revertAvatar}
+          />
+        )}
+
+        {/* ── 4. CORE IDENTITY FIELDS ── */}
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionHeading}>Public identity</Text>
+
+          <ProfileEditField
+            label="Display name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Your name"
+            helper="Shown on your public profile."
+            autoCapitalize="words"
+            returnKeyType="next"
           />
 
-          {/* ── 3. COVER EDITING CONTROLS ── */}
-          <View style={styles.mediaEditorZone}>
-            <Text style={styles.publicProfileNote}>These fields appear on your public profile.</Text>
-            <ProfileMediaEditor
-              label="Cover"
-              status={coverState.status}
-              error={coverState.error}
-              onChange={pickCover}
-              onRetry={retryCover}
-              onRevert={revertCover}
-            />
-          </View>
+          <ProfileEditField
+            label="Username"
+            value={username}
+            onChangeText={setUsername}
+            placeholder="username"
+            helper="Your public handle. How people find you on Thryftverse."
+            autoCapitalize="none"
+            returnKeyType="next"
+          />
+        </View>
 
-          {/* ── 4. AVATAR EDITING CONTROLS ── */}
-          <View style={styles.mediaEditorZone}>
-            <ProfileMediaEditor
-              label="Avatar"
-              status={avatarState.status}
-              error={avatarState.error}
-              onChange={pickAvatar}
-              onRetry={retryAvatar}
-              onRevert={revertAvatar}
-            />
-          </View>
+        {/* ── 5. BIO AND ADDITIONAL FIELDS ── */}
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionHeading}>Public about</Text>
 
-          {/* ── 5. CORE IDENTITY FIELDS ── */}
-          <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Public identity</Text>
+          <ProfileEditField
+            label="Bio"
+            value={bio}
+            onChangeText={setBio}
+            placeholder="Tell people about yourself…"
+            helper={`${bio.length}/200`}
+            multiline
+            maxLength={200}
+          />
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Display name</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={name}
-                onChangeText={setName}
-                placeholder="Your name"
-                placeholderTextColor={Colors.textMuted}
-                autoCapitalize="words"
-                returnKeyType="next"
-              />
-              <Text style={styles.fieldHelper}>Shown on your public profile.</Text>
-              <View style={styles.hairline} />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Username</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={username}
-                onChangeText={setUsername}
-                placeholder="username"
-                placeholderTextColor={Colors.textMuted}
-                autoCapitalize="none"
-                returnKeyType="next"
-              />
-              <Text style={styles.fieldHelper}>Your public handle. How people find you on Thryftverse.</Text>
-              <View style={styles.hairline} />
-            </View>
-          </View>
-
-          {/* ── 6. BIO AND ADDITIONAL FIELDS ── */}
-          <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Public about</Text>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Bio</Text>
-              <TextInput
-                style={[styles.fieldInput, styles.fieldInputMultiline]}
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Tell people about yourself…"
-                placeholderTextColor={Colors.textMuted}
-                multiline
-                maxLength={200}
-                textAlignVertical="top"
-              />
-              <Text style={styles.fieldHelper}>{bio.length}/200</Text>
-              <View style={styles.hairline} />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Website</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={website}
-                onChangeText={setWebsite}
-                onBlur={() => validateWebsite(website)}
-                placeholder="https://"
-                placeholderTextColor={Colors.textMuted}
-                autoCapitalize="none"
-                keyboardType="url"
-                returnKeyType="done"
-              />
-              {websiteError ? (
-                <Text style={styles.fieldError}>{websiteError}</Text>
-              ) : null}
-              <View style={styles.hairline} />
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <ProfileEditField
+            label="Website"
+            value={website}
+            onChangeText={setWebsite}
+            onBlur={() => validateWebsite(website)}
+            placeholder="https://"
+            helper="A link to your shop, portfolio, or social profile."
+            error={websiteError}
+            autoCapitalize="none"
+            keyboardType="url"
+            returnKeyType="done"
+            isLast
+          />
+        </View>
+      </KeyboardAwareScrollView>
     </FlagshipScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  // Media editor zone
-  mediaEditorZone: {
-    paddingVertical: 2,
-  },
-  publicProfileNote: {
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-    letterSpacing: 0.3,
-  },
+// ── Compact, premium editable field component ──
+interface ProfileEditFieldProps {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  onBlur?: () => void;
+  placeholder?: string;
+  helper?: string;
+  error?: string;
+  multiline?: boolean;
+  maxLength?: number;
+  autoCapitalize?: 'none' | 'words' | 'sentences';
+  keyboardType?: 'default' | 'url' | 'email-address' | 'phone-pad';
+  returnKeyType?: 'done' | 'next' | 'go';
+  isLast?: boolean;
+}
 
+function ProfileEditField({
+  label,
+  value,
+  onChangeText,
+  onBlur,
+  placeholder,
+  helper,
+  error,
+  multiline,
+  maxLength,
+  autoCapitalize = 'none',
+  keyboardType = 'default',
+  returnKeyType = 'next',
+  isLast,
+}: ProfileEditFieldProps) {
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        style={[styles.fieldInput, multiline && styles.fieldInputMultiline]}
+        value={value}
+        onChangeText={onChangeText}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        placeholderTextColor={Colors.textMuted}
+        autoCapitalize={autoCapitalize}
+        keyboardType={keyboardType}
+        returnKeyType={returnKeyType}
+        multiline={multiline}
+        maxLength={maxLength}
+        textAlignVertical={multiline ? 'top' : undefined}
+        selectionColor={Colors.brand}
+      />
+      {error ? (
+        <Text style={styles.fieldError}>{error}</Text>
+      ) : helper ? (
+        <Text style={styles.fieldHelper}>{helper}</Text>
+      ) : null}
+      {!isLast && <View style={styles.hairline} />}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
   // Section groups
   sectionGroup: {
     paddingTop: Space.lg,
@@ -363,13 +386,14 @@ const styles = StyleSheet.create({
 
   // Fields
   fieldGroup: {
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   fieldLabel: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
-    marginBottom: 6,
+    marginBottom: 4,
+    letterSpacing: 0.2,
   },
   fieldInput: {
     fontSize: 15,
@@ -380,9 +404,10 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
   fieldInputMultiline: {
-    minHeight: 80,
+    minHeight: 72,
     textAlignVertical: 'top',
     paddingTop: 8,
+    lineHeight: 21,
   },
   fieldHelper: {
     fontSize: 12,
@@ -399,7 +424,6 @@ const styles = StyleSheet.create({
   hairline: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
-    marginTop: 8,
+    marginTop: 6,
   },
-
 });
