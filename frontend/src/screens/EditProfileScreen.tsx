@@ -11,7 +11,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, Radius } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
@@ -214,6 +214,11 @@ export default function EditProfileScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: EDIT_PROFILE_FOOTER_CLEARANCE }}
       >
+        {/* ── 1. INTRO COPY — calm, focused intent ── */}
+        <Text style={styles.introCopy}>
+          Information you add here is visible on your public profile.
+        </Text>
+
         {/* ── 2. LIVE PROFILE PREVIEW (compact, deterministic) ── */}
         <EditProfilePreview
           coverUri={displayCover}
@@ -285,7 +290,6 @@ export default function EditProfileScreen() {
             value={bio}
             onChangeText={setBio}
             placeholder="Tell people about yourself…"
-            helper={`${bio.length}/200`}
             multiline
             maxLength={200}
           />
@@ -309,7 +313,10 @@ export default function EditProfileScreen() {
   );
 }
 
-// ── Compact, premium editable field component ──
+// ── Premium rounded form field for edit-profile ──
+// Rounded surface, label-above, focus border, helper/error/counter below.
+// Matches AppInput's elevated input language but tuned for the edit-profile
+// form rhythm: 52pt single-line height, compact multiline Bio, counter chip.
 interface ProfileEditFieldProps {
   label: string;
   value: string;
@@ -341,30 +348,49 @@ function ProfileEditField({
   returnKeyType = 'next',
   isLast,
 }: ProfileEditFieldProps) {
+  const [isFocused, setIsFocused] = useState(false);
+  const hasError = Boolean(error);
+  const showCounter = maxLength !== undefined;
+  const counterText = showCounter ? `${value.length}/${maxLength}` : helper;
+
   return (
-    <View style={styles.fieldGroup}>
+    <View style={[styles.fieldGroup, isLast && styles.fieldGroupLast]}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        style={[styles.fieldInput, multiline && styles.fieldInputMultiline]}
-        value={value}
-        onChangeText={onChangeText}
-        onBlur={onBlur}
-        placeholder={placeholder}
-        placeholderTextColor={Colors.textMuted}
-        autoCapitalize={autoCapitalize}
-        keyboardType={keyboardType}
-        returnKeyType={returnKeyType}
-        multiline={multiline}
-        maxLength={maxLength}
-        textAlignVertical={multiline ? 'top' : undefined}
-        selectionColor={Colors.brand}
-      />
+      <View
+        style={[
+          styles.fieldSurface,
+          isFocused && !hasError && styles.fieldSurfaceFocused,
+          hasError && styles.fieldSurfaceError,
+          multiline && styles.fieldSurfaceMultiline,
+        ]}
+      >
+        <TextInput
+          style={[styles.fieldInput, multiline && styles.fieldInputMultiline]}
+          value={value}
+          onChangeText={onChangeText}
+          onFocus={(e) => setIsFocused(true)}
+          onBlur={(e) => { setIsFocused(false); onBlur?.(); }}
+          placeholder={placeholder}
+          placeholderTextColor={Colors.textMuted}
+          autoCapitalize={autoCapitalize}
+          keyboardType={keyboardType}
+          returnKeyType={returnKeyType}
+          multiline={multiline}
+          maxLength={maxLength}
+          textAlignVertical={multiline ? 'top' : 'center'}
+          selectionColor={Colors.brand}
+        />
+        {showCounter && (
+          <Text style={[styles.fieldCounter, hasError && styles.fieldCounterError]}>
+            {counterText}
+          </Text>
+        )}
+      </View>
       {error ? (
         <Text style={styles.fieldError}>{error}</Text>
-      ) : helper ? (
+      ) : helper && !showCounter ? (
         <Text style={styles.fieldHelper}>{helper}</Text>
       ) : null}
-      {!isLast && <View style={styles.hairline} />}
     </View>
   );
 }
@@ -375,6 +401,15 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
     paddingHorizontal: Space.md,
   },
+  introCopy: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    paddingBottom: Space.sm,
+  },
   sectionHeading: {
     fontSize: 11,
     fontFamily: Typography.family.bold,
@@ -384,46 +419,81 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
 
-  // Fields
+  // Fields — premium rounded surfaces
   fieldGroup: {
-    paddingVertical: 8,
+    marginBottom: Space.sm + 2,
+  },
+  fieldGroupLast: {
+    marginBottom: 0,
   },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
-    marginBottom: 4,
-    letterSpacing: 0.2,
+    marginBottom: 6,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  fieldSurface: {
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: Space.md - 2,
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  fieldSurfaceFocused: {
+    borderColor: Colors.textSecondary,
+    backgroundColor: Colors.surface,
+    borderWidth: 1.5,
+  },
+  fieldSurfaceError: {
+    borderColor: Colors.danger,
+    backgroundColor: Colors.background,
+  },
+  fieldSurfaceMultiline: {
+    alignItems: 'flex-end',
+    paddingVertical: Space.sm,
+    minHeight: 96,
   },
   fieldInput: {
+    flex: 1,
     fontSize: 15,
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 0,
-    minHeight: 40,
   },
   fieldInputMultiline: {
-    minHeight: 72,
-    textAlignVertical: 'top',
-    paddingTop: 8,
+    flex: 1,
+    minHeight: 64,
     lineHeight: 21,
+    paddingVertical: 0,
+  },
+  fieldCounter: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    paddingBottom: 2,
+  },
+  fieldCounterError: {
+    color: Colors.danger,
   },
   fieldHelper: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    marginTop: 4,
+    marginTop: 6,
+    lineHeight: 15,
   },
   fieldError: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Typography.family.semibold,
     color: Colors.danger,
-    marginTop: 4,
-  },
-  hairline: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginTop: 6,
+    lineHeight: 15,
   },
 });

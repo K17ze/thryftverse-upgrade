@@ -13,8 +13,8 @@ import { Colors } from '../../constants/colors';
 import { Typography, Space } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
-const COVER_H = 140;
-const AVATAR_SIZE = 80;
+const COVER_H = 120;
+const AVATAR_SIZE = 76;
 
 interface EditProfilePreviewProps {
   coverUri: string;
@@ -50,7 +50,7 @@ export function EditProfilePreview({
 
   return (
     <View style={[styles.container, { width: SCREEN_W }]}>
-      {/* Cover — stable height, deterministic fallback */}
+      {/* Cover — compact, deterministic. Subtle surface when no cover exists. */}
       <View style={[styles.coverWrap, { width: SCREEN_W }]}>
         {coverUri ? (
           <CachedImage
@@ -61,19 +61,24 @@ export function EditProfilePreview({
           />
         ) : (
           <View style={[styles.coverImage, styles.coverFallback, { width: SCREEN_W }]}>
-            <Ionicons name="image-outline" size={28} color={Colors.textMuted} style={{ opacity: 0.4 }} />
+            <View style={styles.coverFallbackInner}>
+              <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
+              <Text style={styles.coverFallbackText}>Add a cover photo</Text>
+            </View>
           </View>
         )}
 
-        {/* Bottom gradient for button legibility */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.35)']}
-          style={styles.coverGradient}
-        />
+        {/* Bottom gradient for button legibility (only over real media) */}
+        {coverUri ? (
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.35)']}
+            style={styles.coverGradient}
+          />
+        ) : null}
 
         {/* Edit cover button — primary control on the preview */}
         <Pressable
-          style={styles.editCoverBtn}
+          style={[styles.editCoverBtn, !coverUri && styles.editCoverBtnEmpty]}
           onPress={onEditCover}
           accessibilityRole="button"
           accessibilityLabel="Change cover photo"
@@ -82,7 +87,7 @@ export function EditProfilePreview({
           {isUploadingCover ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Ionicons name="camera" size={18} color="#fff" />
+            <Ionicons name="camera" size={18} color={coverUri ? '#fff' : Colors.textSecondary} />
           )}
         </Pressable>
       </View>
@@ -159,6 +164,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  coverFallbackInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  coverFallbackText: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+  },
   coverGradient: {
     position: 'absolute',
     bottom: 0,
@@ -178,6 +193,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+  },
+  editCoverBtnEmpty: {
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
   },
   avatarRow: {
     flexDirection: 'row',

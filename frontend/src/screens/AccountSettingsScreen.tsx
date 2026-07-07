@@ -107,32 +107,35 @@ export default function AccountSettingsScreen() {
         ) : undefined
       }
     >
-      {/* ── Identity summary — compact, routes to public profile editor ── */}
-      <View style={[styles.identitySurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-        <View style={styles.identityRow}>
-          {user?.avatar ? (
-            <View style={styles.identityAvatar}>
-              <CachedImage uri={user.avatar} style={styles.identityAvatarImage} contentFit="cover" />
+      {/* ── Identity bridge — routes to public profile editor ── */}
+      <View style={styles.identityBridgeWrap}>
+        <Text style={styles.identityBridgeLabel}>PUBLIC PROFILE</Text>
+        <View style={[styles.identitySurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <View style={styles.identityRow}>
+            {user?.avatar ? (
+              <View style={styles.identityAvatar}>
+                <CachedImage uri={user.avatar} style={styles.identityAvatarImage} contentFit="cover" />
+              </View>
+            ) : (
+              <View style={[styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+                <Text style={styles.identityAvatarText}>{(user?.username ?? '?').charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={styles.identityText}>
+              <Text style={styles.identityName}>{displayName}</Text>
+              <Text style={[styles.identityMeta, { color: Colors.textMuted }]}>@{username}</Text>
             </View>
-          ) : (
-            <View style={[styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
-              <Text style={styles.identityAvatarText}>{(user?.username ?? '?').charAt(0).toUpperCase()}</Text>
-            </View>
-          )}
-          <View style={styles.identityText}>
-            <Text style={styles.identityName}>{displayName}</Text>
-            <Text style={[styles.identityMeta, { color: Colors.textMuted }]}>@{username}</Text>
+            <AnimatedPressable
+              onPress={() => (navigation as any).navigate('EditProfile')}
+              scaleValue={0.92}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Edit public profile"
+              style={styles.identityEditBtn}
+            >
+              <Text style={[styles.identityEdit, { color: Colors.brand }]}>Edit</Text>
+            </AnimatedPressable>
           </View>
-          <AnimatedPressable
-            onPress={() => (navigation as any).navigate('EditProfile')}
-            scaleValue={0.92}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="Edit public profile"
-            style={styles.identityEditBtn}
-          >
-            <Text style={[styles.identityEdit, { color: Colors.brand }]}>Edit</Text>
-          </AnimatedPressable>
         </View>
       </View>
 
@@ -165,8 +168,8 @@ export default function AccountSettingsScreen() {
         />
       </SettingsSection>
 
-      {/* ── Security — prominent, trust-centre feel ── */}
-      <SettingsSection title="Security">
+      {/* ── Security — trust-centre feel, elevated importance ── */}
+      <SettingsSection title="Security" description="Protect your account and sign-ins.">
         <SettingsRow
           title="Password"
           value="••••••••"
@@ -176,6 +179,7 @@ export default function AccountSettingsScreen() {
         />
         <SettingsRow
           title="Two-factor authentication"
+          subtitle={twoFactorEnabled ? 'Enabled — extra layer of security' : 'Add an extra layer of security'}
           value={twoFactorEnabled ? 'Enabled' : 'Off'}
           icon="shield-checkmark-outline"
           iconColor={twoFactorEnabled ? Colors.success : Colors.textMuted}
@@ -229,9 +233,20 @@ export default function AccountSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ── Identity surface ── compact
+  // ── Identity bridge ──
+  identityBridgeWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+  },
+  identityBridgeLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
+    letterSpacing: 0.8,
+    marginBottom: Space.sm,
+  },
   identitySurface: {
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
