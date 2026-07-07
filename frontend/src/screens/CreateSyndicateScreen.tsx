@@ -22,7 +22,7 @@ import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { haptics } from '../utils/haptics';
@@ -55,6 +55,7 @@ export default function CreateCoOwnScreen() {
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
 
   const prefill = route.params;
 
@@ -323,7 +324,7 @@ export default function CreateCoOwnScreen() {
         onBack={handleBack}
       />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* ── Stage 1: Select listing ── */}
         {stage === 'select' && (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
@@ -543,7 +544,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    paddingBottom: 120,
   },
   listingListContent: {
     gap: Space.md,

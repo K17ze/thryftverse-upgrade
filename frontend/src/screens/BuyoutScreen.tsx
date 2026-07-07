@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, StatusBar, ScrollView, useWindowDimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -14,7 +14,7 @@ import { parseApiError } from '../lib/apiClient';
 import { fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import {
@@ -32,9 +32,11 @@ export default function BuyoutScreen() {
   const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
+  const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const { width: screenWidth } = useWindowDimensions();
+  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
 
   const buyoutAssetId = route.params?.assetId;
 
@@ -127,7 +129,7 @@ export default function BuyoutScreen() {
         onBack={handleBack}
       />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* Item image */}
         {asset.imageUrl ? (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
@@ -200,8 +202,6 @@ export default function BuyoutScreen() {
             </View>
           )}
         </Reanimated.View>
-
-        <View style={{ height: 120 }} />
       </ScrollView>
 
       {/* Sticky action dock */}

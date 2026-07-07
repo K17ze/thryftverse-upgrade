@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, StatusBar, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar, Pressable, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -18,7 +18,7 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { fetchCoOwnAssetById, fetchCoOwnOrderBook, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -69,6 +69,8 @@ export default function AssetDetailScreen() {
   const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const isCompact = screenWidth < 390;
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const { formatFromFiat } = useFormattedPrice();
@@ -209,6 +211,13 @@ export default function AssetDetailScreen() {
 
   const settlementLabel = asset.settlementMode === 'GBP' ? 'GBP' : asset.settlementMode === 'TVUSD' ? 'TVUSD' : 'GBP + TVUSD';
 
+  // Compute scroll bottom padding from dock geometry + safe area
+  const isDualActionDock = isHolder && asset.isOpen && availableUnits > 0;
+  const dockHeight = isDualActionDock
+    ? DockConstants.dualActionHeight
+    : DockConstants.singleActionHeight;
+  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + dockHeight;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar translucent backgroundColor="transparent" style={isDark ? 'light' : 'dark'} />
@@ -244,7 +253,7 @@ export default function AssetDetailScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 100 }}
+        contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
       >
         {/* Hero — large media stage */}
         <CommerceMediaStage
@@ -426,11 +435,11 @@ export default function AssetDetailScreen() {
             />
           </Pressable>
           {orderBookExpanded && (
-            <View style={[styles.orderBookGrid, { borderColor: colors.border }]}>
+            <View style={[styles.orderBookGrid, isCompact && styles.orderBookGridCompact, { borderColor: colors.border }]}>
               <View style={styles.orderBookCol}>
                 <View style={styles.orderBookHeader}>
                   <Ionicons name="arrow-up-circle-outline" size={14} color={colors.success} />
-                  <Text style={[styles.orderBookHeaderText, { color: colors.textSecondary }]}>Buy interest</Text>
+                  <Text style={[styles.orderBookHeaderText, { color: colors.textSecondary }]} numberOfLines={1}>Buy interest</Text>
                 </View>
                 {bestBid && (
                   <Text style={[styles.orderBookBest, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -439,21 +448,21 @@ export default function AssetDetailScreen() {
                 )}
                 {orderBook.bids.slice(0, 5).map((entry: any, i: number) => (
                   <View key={`bid-${i}`} style={styles.orderBookRow}>
-                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary }]} numberOfLines={1}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
-                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary }]} numberOfLines={1}>{entry.units}u</Text>
+                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary, flexShrink: 1, minWidth: 0 }]} numberOfLines={1}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
+                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary, flexShrink: 0 }]} numberOfLines={1}>{entry.units}u</Text>
                   </View>
                 ))}
                 {orderBook.bids.length === 0 && (
-                  <Text style={[styles.orderBookEmpty, { color: colors.textMuted }]}>No buy interest yet</Text>
+                  <Text style={[styles.orderBookEmpty, { color: colors.textMuted }]} numberOfLines={1}>No buy interest yet</Text>
                 )}
               </View>
 
-              <View style={[styles.orderBookDivider, { backgroundColor: colors.border }]} />
+              <View style={[styles.orderBookDivider, { backgroundColor: colors.border }, isCompact && styles.orderBookDividerCompact]} />
 
               <View style={styles.orderBookCol}>
                 <View style={styles.orderBookHeader}>
                   <Ionicons name="arrow-down-circle-outline" size={14} color={colors.danger} />
-                  <Text style={[styles.orderBookHeaderText, { color: colors.textSecondary }]}>Sell availability</Text>
+                  <Text style={[styles.orderBookHeaderText, { color: colors.textSecondary }]} numberOfLines={1}>Sell availability</Text>
                 </View>
                 {bestAsk && (
                   <Text style={[styles.orderBookBest, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -462,12 +471,12 @@ export default function AssetDetailScreen() {
                 )}
                 {orderBook.asks.slice(0, 5).map((entry: any, i: number) => (
                   <View key={`ask-${i}`} style={styles.orderBookRow}>
-                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary }]} numberOfLines={1}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
-                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary }]} numberOfLines={1}>{entry.units}u</Text>
+                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary, flexShrink: 1, minWidth: 0 }]} numberOfLines={1}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
+                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary, flexShrink: 0 }]} numberOfLines={1}>{entry.units}u</Text>
                   </View>
                 ))}
                 {orderBook.asks.length === 0 && (
-                  <Text style={[styles.orderBookEmpty, { color: colors.textMuted }]}>No sell offers yet</Text>
+                  <Text style={[styles.orderBookEmpty, { color: colors.textMuted }]} numberOfLines={1}>No sell offers yet</Text>
                 )}
               </View>
             </View>
@@ -554,12 +563,12 @@ export default function AssetDetailScreen() {
             </Text>
           </View>
         ) : (
-          <View style={styles.dockRow}>
-            <View style={styles.dockPriceSection}>
+          <View style={[styles.dockRow, isCompact && styles.dockRowCompact]}>
+            <View style={[styles.dockPriceSection, isCompact && styles.dockPriceSectionCompact]}>
               <Text style={[styles.dockPriceLabel, { color: colors.textMuted }]} numberOfLines={1}>Unit price</Text>
               <Text style={[styles.dockPriceValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</Text>
             </View>
-            <View style={styles.dockActions}>
+            <View style={[styles.dockActions, isCompact && styles.dockActionsCompact]}>
               {isHolder && (
                 <AnimatedPressable
                   style={[styles.dockSecondaryBtn, { borderColor: colors.border }]}
@@ -578,7 +587,7 @@ export default function AssetDetailScreen() {
                 size="md"
                 onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' })}
                 accessibilityLabel={isHolder ? 'Buy more units' : 'Buy units in this Co-Own'}
-                style={styles.dockPrimaryBtn}
+                style={[styles.dockPrimaryBtn, isCompact && styles.dockPrimaryBtnCompact]}
                 hapticFeedback="medium"
               />
             </View>
@@ -630,11 +639,12 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   collapsedBackBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   collapsedTitle: {
     flex: 1,
@@ -708,6 +718,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
   },
   collapsibleSubtext: {
     fontSize: Type.caption.size,
@@ -718,13 +731,23 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  orderBookGridCompact: {
+    flexDirection: 'column',
+  },
   orderBookCol: {
     flex: 1,
     gap: Space.xs,
+    minWidth: 0,
   },
   orderBookDivider: {
     width: StyleSheet.hairlineWidth,
     marginHorizontal: Space.md,
+  },
+  orderBookDividerCompact: {
+    width: '100%',
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 0,
+    marginVertical: Space.md,
   },
   orderBookHeader: {
     flexDirection: 'row',
@@ -797,10 +820,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.md,
   },
+  dockRowCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: Space.sm,
+  },
   dockPriceSection: {
     flex: 1,
     flexShrink: 1,
     gap: 2,
+  },
+  dockPriceSectionCompact: {
+    flex: 0,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Space.sm,
   },
   dockPriceLabel: {
     fontSize: Type.meta.size,
@@ -819,6 +854,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexShrink: 1,
   },
+  dockActionsCompact: {
+    flex: 0,
+    flexShrink: 0,
+  },
   dockSecondaryBtn: {
     minHeight: 44,
     paddingVertical: Space.sm + 4,
@@ -833,5 +872,9 @@ const styles = StyleSheet.create({
   dockPrimaryBtn: {
     minWidth: 140,
     flexShrink: 1,
+  },
+  dockPrimaryBtnCompact: {
+    minWidth: 0,
+    flex: 1,
   },
 });

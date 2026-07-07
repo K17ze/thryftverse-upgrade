@@ -16,7 +16,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
-import { Typography, Space } from '../theme/designTokens';
+import { Typography, Space, DockConstants } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Listing } from '../data/mockData';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -299,7 +299,7 @@ export default function ItemDetailScreen() {
 
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 100 }}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.md) + DockConstants.dualActionHeight }}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >

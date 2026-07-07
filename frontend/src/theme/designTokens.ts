@@ -350,3 +350,19 @@ export const CommonStyles = {
     justifyContent: 'center',
   },
 } as const;
+
+// ============================================================================
+// STICKY DOCK GEOMETRY
+// ============================================================================
+// CoOwnStickyActionDock and CommerceStickyDock both have minHeight: 72.
+// Use these to compute scroll bottom padding instead of hardcoded spacers.
+export const DockConstants = {
+  /** Base dock content height (minHeight from dock styles) */
+  baseHeight: 72,
+  /** Single-action dock (one full-width button) — typical total */
+  singleActionHeight: 96,
+  /** Two-action dock (cancel + confirm side by side) — typical total */
+  dualActionHeight: 132,
+  /** Stacked compact dock (buttons stacked vertically) — typical total */
+  stackedActionHeight: 180,
+} as const;
