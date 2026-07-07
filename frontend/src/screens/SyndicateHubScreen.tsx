@@ -201,6 +201,32 @@ export default function CoOwnHubScreen() {
     [marketAssets]
   );
 
+  // ── Horizontal rail data: newest, most available, most allocated ──
+  const newestRail = React.useMemo(() => {
+    const open = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0);
+    return [...open]
+      .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+      .slice(0, 10);
+  }, [marketAssets]);
+
+  const mostAvailableRail = React.useMemo(() => {
+    const open = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0);
+    return [...open]
+      .sort((a, b) => b.availableUnits - a.availableUnits)
+      .slice(0, 10);
+  }, [marketAssets]);
+
+  const mostAllocatedRail = React.useMemo(() => {
+    const open = marketAssets.filter((a) => a.isOpen && a.totalUnits > 0);
+    return [...open]
+      .sort((a, b) => {
+        const aPct = (a.totalUnits - a.availableUnits) / a.totalUnits;
+        const bPct = (b.totalUnits - b.availableUnits) / b.totalUnits;
+        return bPct - aPct;
+      })
+      .slice(0, 10);
+  }, [marketAssets]);
+
   const isSearching = query.trim().length > 0;
 
   const gridColumns = screenWidth < 360 ? 1 : 2;
@@ -302,7 +328,7 @@ export default function CoOwnHubScreen() {
 
       <FlashList
         key={`hub-grid-${gridColumns}`}
-        data={isSearching ? filteredAssets : discoveryAssets}
+        data={isSearching ? filteredAssets : []}
         keyExtractor={(item) => item.id}
         numColumns={gridColumns}
         contentContainerStyle={styles.listContent}
@@ -358,8 +384,8 @@ export default function CoOwnHubScreen() {
               </Text>
             )}
 
-            {/* Sort control — non-speculative language */}
-            {!isSearching && (
+            {/* Sort control — only in search mode */}
+            {isSearching && (
               <View style={styles.sortRow}>
                 {(['newest', 'available', 'allocation'] as SortOption[]).map((opt) => (
                   <AnimatedPressable
@@ -441,13 +467,88 @@ export default function CoOwnHubScreen() {
               </View>
             )}
 
-            {/* Available now header */}
-            {!isSearching && discoveryAssets.length > 0 && (
+            {/* ── Horizontal rails: Newest, Most available, Most allocated ── */}
+            {!isSearching && newestRail.length > 0 && (
               <View style={styles.sectionWrap}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Available now</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]} numberOfLines={1}>{discoveryAssets.length} items</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Newest</Text>
                 </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.railContent}
+                  accessibilityLabel="Newest Co-Own items"
+                >
+                  {newestRail.map((asset) => (
+                    <View key={asset.id} style={styles.railTileWrap}>
+                      <CoOwnAssetTile
+                        imageUri={asset.image}
+                        title={asset.title}
+                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
+                        availableUnits={asset.availableUnits}
+                        totalUnits={asset.totalUnits}
+                        status={formatStatus(asset)}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {!isSearching && mostAvailableRail.length > 0 && (
+              <View style={styles.sectionWrap}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Most available</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.railContent}
+                  accessibilityLabel="Most available Co-Own items"
+                >
+                  {mostAvailableRail.map((asset) => (
+                    <View key={asset.id} style={styles.railTileWrap}>
+                      <CoOwnAssetTile
+                        imageUri={asset.image}
+                        title={asset.title}
+                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
+                        availableUnits={asset.availableUnits}
+                        totalUnits={asset.totalUnits}
+                        status={formatStatus(asset)}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {!isSearching && mostAllocatedRail.length > 0 && (
+              <View style={styles.sectionWrap}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Nearly allocated</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.railContent}
+                  accessibilityLabel="Nearly allocated Co-Own items"
+                >
+                  {mostAllocatedRail.map((asset) => (
+                    <View key={asset.id} style={styles.railTileWrap}>
+                      <CoOwnAssetTile
+                        imageUri={asset.image}
+                        title={asset.title}
+                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
+                        availableUnits={asset.availableUnits}
+                        totalUnits={asset.totalUnits}
+                        status={formatStatus(asset)}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
               </View>
             )}
 
@@ -672,6 +773,14 @@ const styles = StyleSheet.create({
   },
   positionTileWrap: {
     width: 180,
+    flex: 0,
+  },
+  railContent: {
+    gap: Space.md,
+    paddingRight: Space.md,
+  },
+  railTileWrap: {
+    width: 160,
     flex: 0,
   },
   tileWrap: {
