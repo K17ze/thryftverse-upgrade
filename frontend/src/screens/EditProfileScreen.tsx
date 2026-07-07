@@ -411,19 +411,7 @@ export default function EditProfileScreen() {
           />
         </SettingsSection>
 
-        {/* ── 9. PREFERENCES ── */}
-        <SettingsSection title="Preferences">
-          <SettingsRow
-            title="Personalisation"
-            subtitle="Style and experience preferences"
-            icon="apps-outline"
-            onPress={() => (navigation as any).navigate('Personalisation')}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
-
-        {/* ── 10. ACCOUNT ── */}
+        {/* ── 9. ACCOUNT ── */}
         <SettingsSection
           title="Account"
           style={{ marginBottom: Math.max(insets.bottom, Space.md) + Space.lg }}

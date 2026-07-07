@@ -45,8 +45,7 @@ interface DestinationMeta {
 
 // Route metadata for search — each entry maps a settings destination to searchable terms
 const ROUTE_METADATA: DestinationMeta[] = [
-  { key: 'EditProfile', label: 'Public profile', searchTerms: 'edit profile avatar name bio username', section: 'Account', showSection: true },
-  { key: 'AccountSettings', label: 'Private details', searchTerms: 'account details email phone private', section: 'Account', showSection: true },
+  { key: 'EditProfile', label: 'Edit profile', searchTerms: 'edit profile avatar name bio username email phone private details security account', section: 'Account', showSection: true },
   { key: 'AccountControl', label: 'Account control', searchTerms: 'account control delete deactivate download data export', section: 'Account', showSection: true },
   { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'saved addresses delivery shipping address buying', section: 'Buying', showSection: true },
   { key: 'Payments', label: 'Payment methods', searchTerms: 'payment methods card bank buying', section: 'Buying', showSection: true },
@@ -306,28 +305,16 @@ export default function SettingsScreen({ navigation }: Props) {
       <SettingsSection title="Account">
         <SettingsRow
           icon="person-outline"
-          title="Public profile"
-          subtitle="Avatar, name, bio, username"
+          title="Edit profile"
+          subtitle="Profile, private details, security & account"
           onPress={() => (navigation as any).navigate('EditProfile')}
           isFirst
         />
         <SettingsRow
-          icon="lock-closed-outline"
-          title="Private details"
-          subtitle="Email, phone, identity"
-          onPress={() => (navigation as any).navigate('EditProfile')}
-        />
-        <SettingsRow
           icon="key-outline"
-          title="Password & authentication"
+          title="Change password"
           subtitle={twoFactorEnabled ? '2FA enabled' : 'Password only'}
           onPress={() => navigation.navigate('ChangePassword')}
-        />
-        <SettingsRow
-          icon="shield-checkmark-outline"
-          title="Two-factor authentication"
-          subtitle={twoFactorEnabled ? 'Enabled' : 'Not enabled'}
-          onPress={() => navigation.navigate('TwoFactorSetup')}
         />
         <SettingsRow
           icon="phone-portrait-outline"

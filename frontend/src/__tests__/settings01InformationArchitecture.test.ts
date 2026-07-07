@@ -128,10 +128,6 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     it('contains account control section', () => {
       expect(editSrc).toContain('AccountControl');
     });
-
-    it('contains personalisation entrypoint', () => {
-      expect(editSrc).toContain('Personalisation');
-    });
   });
 
   describe('Information ownership — EditProfileScreen', () => {
