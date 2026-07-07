@@ -396,6 +396,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   }, []);
 
   const syncMessagesFromApi = async () => {
+    if (!conversationId) return;
+
     setIsSyncing(true);
 
     setSyncError(false);
@@ -434,11 +436,11 @@ export default function ChatScreen({ navigation, route }: Props) {
   }, [hydratedMessages]);
 
   useEffect(() => {
-    markConversationRead(conversationId);
+    if (conversationId) markConversationRead(conversationId);
   }, [conversationId, markConversationRead]);
 
   useEffect(() => {
-    setConversationDraft(conversationId, input);
+    if (conversationId) setConversationDraft(conversationId, input);
   }, [input, conversationId, setConversationDraft]);
 
   const resolvedPartnerId = useMemo(() => {
@@ -511,6 +513,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     next: Message,
     senderIdOverride?: string,
   ) => {
+    if (!conversationId) return;
     appendConversationMessage(conversationId, {
       id: next.id,
 
@@ -551,7 +554,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const sendMessage = () => {
     const trimmed = input.trim();
 
-    if (!trimmed) return;
+    if (!trimmed || !conversationId) return;
 
     setComposerSending(true);
 
@@ -753,6 +756,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             scheduleUndoClear();
 
             try {
+              if (!conversationId) throw new Error("No conversation");
               await Promise.all(
                 toDelete.map((m) =>
                   deleteConversationMessageOnApi(conversationId, m.id),
@@ -800,6 +804,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             scheduleUndoClear();
 
             try {
+              if (!conversationId) throw new Error("No conversation");
               await deleteConversationMessageOnApi(conversationId, msg.id);
 
               deleteApiStatusRef.current = "success";
@@ -828,6 +833,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     uri: string,
     mediaType: "image" | "video",
   ) => {
+    if (!conversationId) return;
     sendConversationMessageOnApi(conversationId, "", {
       mediaUri: uri,
 
@@ -875,7 +881,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const handleRetrySendMessage = (msgId: string) => {
     const msg = messages.find((m) => m.id === msgId);
 
-    if (!msg?.text || msg.status === "sending") return;
+    if (!msg?.text || msg.status === "sending" || !conversationId) return;
 
     setMessages((prev) =>
       prev.map((m) =>
@@ -1581,7 +1587,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             <EmojiReactionsBar
               reactions={reactingToMessage.reactions ?? []}
               onReact={(emoji) => {
-                if (reactingToMessage) {
+                if (reactingToMessage && conversationId) {
                   addMessageReaction(
                     conversationId,
                     reactingToMessage.id,

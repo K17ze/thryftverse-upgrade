@@ -41,9 +41,10 @@ export type RootStackParamList = {
   Buyout: { assetId: string };
   CoOwnOnboarding: undefined;
   Chat: {
-    conversationId: string;
+    conversationId?: string;
     focusQuery?: string;
     partnerUserId?: string;
+    partnerDisplayName?: string;
     itemId?: string;
   };
   CreateGroupChat: undefined;
