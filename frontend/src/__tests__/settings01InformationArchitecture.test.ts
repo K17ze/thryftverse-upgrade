@@ -147,8 +147,10 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     });
 
     it('clarifies these are public profile fields', () => {
-      expect(editSrc).toContain('public');
-      expect(editSrc).toContain('Public identity');
+      // Section label is now "Profile" (calmer than the old "Public identity").
+      // The photo hint clarifies that photo/cover are managed elsewhere.
+      expect(editSrc).toContain('Profile');
+      expect(editSrc).toContain('profile');
     });
 
     it('has unsaved-changes discard warning', () => {

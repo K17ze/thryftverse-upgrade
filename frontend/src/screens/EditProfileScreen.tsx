@@ -6,6 +6,7 @@ import {
   Alert,
   Modal,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +25,7 @@ import { updateUserProfile as updateUserProfileApi } from '../services/accountAp
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
-import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 const VERIFIED_LABEL = 'Verified';
 const UNVERIFIED_LABEL = 'Not verified';
@@ -62,10 +63,8 @@ export default function EditProfileScreen() {
     bio !== (user?.bio ?? '') ||
     website !== (user?.website ?? '');
   const hasPhoneChanged = phone !== (userAny?.phone ?? '');
-
   const hasChanges = hasTextChanges || hasPhoneChanged;
 
-  // ── Private details helpers ──
   const openEdit = (field: string, current: string) => {
     setEditingField(field);
     setEditValue(current);
@@ -75,14 +74,9 @@ export default function EditProfileScreen() {
     setEditValue('');
   };
 
-  // Derived private-details display values
   const email = userAny?.email ?? '';
   const emailVerified = !!user?.emailVerified;
   const country = (userAny?.country as string) || '';
-
-  // Safe-area-aware bottom clearance so the sticky Save footer never covers form fields.
-  // Footer = paddingTop(8) + button(48) + paddingBottom(max(insets.bottom, 16)) ≈ 112 on most devices.
-  const EDIT_PROFILE_FOOTER_CLEARANCE = Math.max(insets.bottom, Space.md) + 112;
 
   const validateWebsite = useCallback((value: string) => {
     if (!value) {
@@ -99,10 +93,10 @@ export default function EditProfileScreen() {
   }, []);
 
   const handleSave = async () => {
+    if (!hasChanges || isSaving) return;
     if (!validateWebsite(website)) return;
     setIsSaving(true);
     try {
-      // ── Save public profile fields ──
       const updates: Record<string, unknown> = {};
       if (name !== initialName) updates.displayName = name;
       if (username !== initialUsername) updates.username = username;
@@ -123,7 +117,6 @@ export default function EditProfileScreen() {
         });
       }
 
-      // ── Save private phone field ──
       if (hasPhoneChanged) {
         const previousPhone = phone;
         updateUserProfile({ phone });
@@ -171,7 +164,6 @@ export default function EditProfileScreen() {
         header={
           <FlagshipHeader
             title="Edit profile"
-            subtitle="Public profile"
             onBack={() => navigation.goBack()}
           />
         }
@@ -187,40 +179,46 @@ export default function EditProfileScreen() {
     );
   }
 
-  const saveDisabled = !hasChanges || isSaving;
+  // ── Top-right Save/Done action ──
+  const saveAction = (
+    <AnimatedPressable
+      onPress={() => void handleSave()}
+      disabled={!hasChanges || isSaving}
+      scaleValue={0.94}
+      hapticFeedback="light"
+      accessibilityRole="button"
+      accessibilityLabel={isSaving ? 'Saving' : 'Save changes'}
+      style={[styles.saveBtn, (!hasChanges || isSaving) && styles.saveBtnDisabled]}
+    >
+      {isSaving ? (
+        <ActivityIndicator size="small" color={Colors.brand} />
+      ) : (
+        <Text style={[styles.saveBtnText, (!hasChanges || isSaving) && styles.saveBtnTextDisabled]}>
+          Done
+        </Text>
+      )}
+    </AnimatedPressable>
+  );
 
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
           title="Edit profile"
-          subtitle="Profile & account"
           onBack={handleDiscard}
+          rightAction={saveAction}
         />
       }
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
-      stickyFooter={
-        <FlagshipStickyFooter
-          actions={[
-            {
-              label: isSaving ? 'Saving…' : 'Save changes',
-              onPress: () => void handleSave(),
-              variant: 'primary',
-              disabled: saveDisabled,
-              loading: isSaving,
-            },
-          ]}
-        />
-      }
     >
       <KeyboardAwareScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: EDIT_PROFILE_FOOTER_CLEARANCE }}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
       >
-        {/* ── 1. COMPACT READ-ONLY IDENTITY HEADER (no camera/edit controls) ── */}
-        <View style={styles.identityHeader}>
+        {/* ── Compact identity row ── */}
+        <View style={styles.identityRow}>
           {userAvatar ? (
             <CachedImage
               uri={userAvatar}
@@ -228,33 +226,31 @@ export default function EditProfileScreen() {
               contentFit="cover"
             />
           ) : (
-            <View style={[styles.identityAvatar, styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+            <View style={[styles.identityAvatar, { backgroundColor: Colors.surfaceAlt }]}>
               <Text style={styles.identityAvatarText}>
                 {(user?.username ?? '?').charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
-          <View style={styles.identityHeaderText}>
+          <View style={styles.identityText}>
             <Text style={styles.identityName} numberOfLines={1}>{name || username}</Text>
             <Text style={styles.identityHandle} numberOfLines={1}>@{username}</Text>
           </View>
         </View>
 
-        {/* ── 2. INTRO COPY — calm, focused intent ── */}
-        <Text style={styles.introCopy}>
-          Information you add here is visible on your public profile.
+        <Text style={styles.photoHint}>
+          Photo and cover are managed from your profile.
         </Text>
 
-        {/* ── 3. CORE IDENTITY FIELDS ── */}
+        {/* ── Profile fields ── */}
         <View style={styles.sectionGroup}>
-          <Text style={styles.sectionHeading}>Public identity</Text>
+          <Text style={styles.sectionLabel}>Profile</Text>
 
           <ProfileEditField
-            label="Display name"
+            label="Name"
             value={name}
             onChangeText={setName}
             placeholder="Your name"
-            helper="Shown on your public profile."
             autoCapitalize="words"
             returnKeyType="next"
           />
@@ -264,15 +260,14 @@ export default function EditProfileScreen() {
             value={username}
             onChangeText={setUsername}
             placeholder="username"
-            helper="Your public handle. How people find you on Thryftverse."
             autoCapitalize="none"
             returnKeyType="next"
           />
         </View>
 
-        {/* ── 5. BIO AND ADDITIONAL FIELDS ── */}
+        {/* ── About fields ── */}
         <View style={styles.sectionGroup}>
-          <Text style={styles.sectionHeading}>Public about</Text>
+          <Text style={styles.sectionLabel}>About</Text>
 
           <ProfileEditField
             label="Bio"
@@ -289,7 +284,6 @@ export default function EditProfileScreen() {
             onChangeText={setWebsite}
             onBlur={() => validateWebsite(website)}
             placeholder="https://"
-            helper="A link to your shop, portfolio, or social profile."
             error={websiteError}
             autoCapitalize="none"
             keyboardType="url"
@@ -298,11 +292,8 @@ export default function EditProfileScreen() {
           />
         </View>
 
-        {/* ── 6. PRIVATE DETAILS ── */}
-        <SettingsSection
-          title="Private details"
-          description="Used for account security and order updates. Not shown on your public profile."
-        >
+        {/* ── Private details ── */}
+        <SettingsSection title="Private details">
           <SettingsRow
             title="Email"
             value={email || '—'}
@@ -320,18 +311,8 @@ export default function EditProfileScreen() {
           />
         </SettingsSection>
 
-        {/* ── 7. PERSONAL INFORMATION (read-only) ── */}
-        <SettingsSection title="Personal information">
-          <SettingsRow
-            title="Country or region"
-            value={country || '—'}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
-
-        {/* ── 8. SECURITY ── */}
-        <SettingsSection title="Security" description="Protect your account and sign-ins.">
+        {/* ── Security ── */}
+        <SettingsSection title="Security">
           <SettingsRow
             title="Password"
             value="••••••••"
@@ -341,7 +322,7 @@ export default function EditProfileScreen() {
           />
           <SettingsRow
             title="Two-factor authentication"
-            subtitle={twoFactorEnabled ? 'Enabled — extra layer of security' : 'Add an extra layer of security'}
+            subtitle={twoFactorEnabled ? 'Enabled' : 'Off'}
             value={twoFactorEnabled ? 'Enabled' : 'Off'}
             icon="shield-checkmark-outline"
             iconColor={twoFactorEnabled ? Colors.success : Colors.textMuted}
@@ -350,11 +331,8 @@ export default function EditProfileScreen() {
           />
         </SettingsSection>
 
-        {/* ── 9. ACCOUNT ── */}
-        <SettingsSection
-          title="Account"
-          style={{ marginBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
-        >
+        {/* ── Account ── */}
+        <SettingsSection title="Account">
           <SettingsRow
             title="Account control"
             subtitle="Download data, delete account"
@@ -408,10 +386,9 @@ export default function EditProfileScreen() {
   );
 }
 
-// ── Premium rounded form field for edit-profile ──
-// Rounded surface, label-above, focus border, helper/error/counter below.
-// Matches AppInput's elevated input language but tuned for the edit-profile
-// form rhythm: 52pt single-line height, compact multiline Bio, counter chip.
+// ── Lightweight premium form field ──
+// Transparent background, 1px muted border, focus border slightly stronger.
+// Label is calm sentence-case, not uppercase shouting. Compact vertical rhythm.
 interface ProfileEditFieldProps {
   label: string;
   value: string;
@@ -463,8 +440,8 @@ function ProfileEditField({
           style={[styles.fieldInput, multiline && styles.fieldInputMultiline]}
           value={value}
           onChangeText={onChangeText}
-          onFocus={(e) => setIsFocused(true)}
-          onBlur={(e) => { setIsFocused(false); onBlur?.(); }}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => { setIsFocused(false); onBlur?.(); }}
           placeholder={placeholder}
           placeholderTextColor={Colors.textMuted}
           autoCapitalize={autoCapitalize}
@@ -476,46 +453,64 @@ function ProfileEditField({
           selectionColor={Colors.brand}
         />
         {showCounter && (
-          <Text style={[styles.fieldCounter, hasError && styles.fieldCounterError]}>
+          <Text style={[styles.fieldCounter, value.length >= (maxLength ?? 0) * 0.9 && styles.fieldCounterError]}>
             {counterText}
           </Text>
         )}
       </View>
-      {error ? (
-        <Text style={styles.fieldError}>{error}</Text>
-      ) : helper && !showCounter ? (
+      {helper && !showCounter ? (
         <Text style={styles.fieldHelper}>{helper}</Text>
+      ) : null}
+      {hasError ? (
+        <Text style={styles.fieldError}>{error}</Text>
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // Section groups
-  // ── Compact read-only identity header (no camera/edit controls) ──
-  identityHeader: {
+  // ── Top-right Save/Done button ──
+  saveBtn: {
+    paddingHorizontal: Space.sm + 2,
+    height: 36,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+  },
+  saveBtnDisabled: {
+    opacity: 0.4,
+  },
+  saveBtnText: {
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  saveBtnTextDisabled: {
+    color: Colors.textMuted,
+  },
+
+  // ── Compact identity row ──
+  identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,
     paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-    paddingBottom: Space.sm,
+    paddingTop: Space.md,
   },
   identityAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  identityAvatarFallback: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   identityAvatarText: {
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
+    textAlign: 'center',
+    lineHeight: 44,
   },
-  identityHeaderText: {
+  identityText: {
     flex: 1,
     minWidth: 0,
     gap: 1,
@@ -532,29 +527,28 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
   },
-  sectionGroup: {
-    paddingTop: Space.lg,
-    paddingHorizontal: Space.md,
-  },
-  introCopy: {
-    fontSize: 13,
+  photoHint: {
+    fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
-  sectionHeading: {
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
     color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.xs,
+    paddingBottom: 0,
+  },
+
+  // ── Sections ──
+  sectionGroup: {
+    paddingTop: Space.md + 2,
+    paddingHorizontal: Space.md,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
     marginBottom: Space.sm,
   },
 
-  // Fields — premium rounded surfaces
+  // ── Fields — lightweight premium ──
   fieldGroup: {
     marginBottom: Space.sm + 2,
   },
@@ -562,49 +556,45 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   fieldLabel: {
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
-    marginBottom: 6,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    marginBottom: 5,
   },
   fieldSurface: {
-    borderRadius: Radius.md,
+    borderRadius: Radius.md + 2,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: 'transparent',
     paddingHorizontal: Space.md - 2,
-    minHeight: 52,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
   },
   fieldSurfaceFocused: {
-    borderColor: Colors.textSecondary,
-    backgroundColor: Colors.surface,
+    borderColor: Colors.brand,
     borderWidth: 1.5,
   },
   fieldSurfaceError: {
     borderColor: Colors.danger,
-    backgroundColor: Colors.background,
   },
   fieldSurfaceMultiline: {
     alignItems: 'flex-end',
     paddingVertical: Space.sm,
-    minHeight: 96,
+    minHeight: 80,
   },
   fieldInput: {
     flex: 1,
     fontSize: 15,
-    fontFamily: Typography.family.medium,
+    fontFamily: Typography.family.regular,
     color: Colors.textPrimary,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 0,
   },
   fieldInputMultiline: {
     flex: 1,
-    minHeight: 64,
+    minHeight: 56,
     lineHeight: 21,
     paddingVertical: 0,
   },
@@ -621,16 +611,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    marginTop: 6,
+    marginTop: 5,
     lineHeight: 15,
   },
   fieldError: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
     color: Colors.danger,
-    marginTop: 6,
+    marginTop: 5,
     lineHeight: 15,
   },
+
   // ── Phone edit modal ──
   editModalOverlay: {
     flex: 1,
