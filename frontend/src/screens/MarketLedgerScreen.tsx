@@ -208,20 +208,20 @@ export default function MarketLedgerScreen() {
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.summaryStat}>
-            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Volume</Text>
-            <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{formatMoney(totalMarketValue)}</Text>
+            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Volume</Text>
+            <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatMoney(totalMarketValue)}</Text>
           </View>
           <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
           <View style={styles.summaryStat}>
-            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Net cashflow</Text>
-            <Text style={[styles.summaryStatValue, { color: netCashflow >= 0 ? colors.success : colors.danger }]}>
+            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Net cashflow</Text>
+            <Text style={[styles.summaryStatValue, { color: netCashflow >= 0 ? colors.success : colors.danger }]} numberOfLines={1}>
               {formatSignedMoney(netCashflow)}
             </Text>
           </View>
           <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
           <View style={styles.summaryStat}>
-            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Realized P&L</Text>
-            <Text style={[styles.summaryStatValue, { color: realizedCoOwnPL >= 0 ? colors.success : colors.danger }]}>
+            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Realized P&L</Text>
+            <Text style={[styles.summaryStatValue, { color: realizedCoOwnPL >= 0 ? colors.success : colors.danger }]} numberOfLines={1}>
               {formatSignedMoney(realizedCoOwnPL)}
             </Text>
           </View>
@@ -342,6 +342,7 @@ const styles = StyleSheet.create({
   },
   summaryStat: {
     flex: 1,
+    minWidth: 0,
     gap: 4,
   },
   summaryStatLabel: {
