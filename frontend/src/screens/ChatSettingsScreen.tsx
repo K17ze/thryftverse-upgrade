@@ -123,6 +123,16 @@ export default function ChatSettingsScreen({ navigation }: Props) {
         />
       </SettingsSection>
 
+      <SettingsSection title="Quick replies" noCard>
+        <SettingsRow
+          title="Manage quick replies"
+          subtitle="Save time with reusable message templates"
+          onPress={() => navigation.navigate('ManageQuickReplies', { role: 'buyer' })}
+          isFirst
+          isLast
+        />
+      </SettingsSection>
+
       <SettingsSection title="Bots & automation" noCard>
         <SettingsRow
           title="Bot directory"
