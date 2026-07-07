@@ -739,6 +739,30 @@ export default function InboxScreen() {
 
           <AnimatedPressable
 
+            style={styles.iconBtn}
+
+            onPress={() => navigation.navigate('ChatSettings')}
+
+            activeOpacity={0.7}
+
+            scaleValue={0.95}
+
+            hapticFeedback="light"
+
+            accessibilityLabel="Message settings"
+
+            accessibilityHint="Opens privacy, automation, and quick reply settings"
+
+            accessibilityRole="button"
+
+          >
+
+            <Ionicons name="settings-outline" size={20} color={Colors.textSecondary} />
+
+          </AnimatedPressable>
+
+          <AnimatedPressable
+
             style={styles.newMessageBtn}
 
             onPress={() => navigation.navigate('NewMessage')}
@@ -825,9 +849,12 @@ export default function InboxScreen() {
 
         <View style={styles.errorBanner}>
 
-          <Ionicons name="alert-circle-outline" size={18} color={Colors.danger} />
+          <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
 
-          <Text style={styles.errorBannerText}>{syncError}</Text>
+          <View style={styles.errorBannerCopy}>
+            <Text style={styles.errorBannerTitle}>Couldn't sync messages</Text>
+            <Text style={styles.errorBannerSub}>Check your connection or retry.</Text>
+          </View>
 
           <AnimatedPressable
 
@@ -840,6 +867,8 @@ export default function InboxScreen() {
             hapticFeedback="light"
 
             accessibilityLabel="Retry loading conversations"
+
+            style={styles.errorBannerRetryBtn}
 
           >
 
@@ -1923,7 +1952,7 @@ const styles = StyleSheet.create({
 
     gap: Space.sm,
 
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: '#FFF5F5',
 
     paddingVertical: Space.sm,
 
@@ -1935,16 +1964,26 @@ const styles = StyleSheet.create({
 
   },
 
-  errorBannerText: {
-
+  errorBannerCopy: {
     flex: 1,
+    gap: 1,
+  },
 
+  errorBannerTitle: {
     color: Colors.danger,
-
     fontSize: Type.caption.size,
-
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
 
+  errorBannerSub: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    fontFamily: TypeStyles.body.fontFamily,
+  },
+
+  errorBannerRetryBtn: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: 4,
   },
 
   errorBannerRetry: {
