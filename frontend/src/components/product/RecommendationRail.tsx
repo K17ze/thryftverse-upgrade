@@ -129,7 +129,7 @@ export function RecommendationRail({
     >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.title}>{section.title}</Text>
+          <Text style={styles.title} numberOfLines={1}>{section.title}</Text>
           {section.subtitle ? (
             <Text style={styles.subtitle} numberOfLines={1}>
               {section.subtitle}
@@ -204,6 +204,7 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
+    minWidth: 0,
   },
   title: {
     fontSize: 17,

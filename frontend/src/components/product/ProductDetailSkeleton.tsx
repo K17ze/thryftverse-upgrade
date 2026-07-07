@@ -1,15 +1,19 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Space, Radius } from '../../theme/designTokens';
 
 export function ProductDetailSkeleton() {
+  const { width, height } = useWindowDimensions();
+  const isCompact = width < 390;
+  const heroHeight = Math.min(height * (isCompact ? 0.5 : 0.62), width * 1.35);
+
   return (
     <View style={styles.container}>
-      {/* Hero skeleton */}
-      <View style={styles.heroSkeleton} />
+      {/* Hero skeleton — matches CommerceMediaStage height */}
+      <View style={[styles.heroSkeleton, { height: heroHeight }]} />
 
-      {/* Identity skeleton */}
+      {/* Identity skeleton — matches ProductIdentitySummary */}
       <View style={styles.identitySection}>
         <View style={styles.skeletonLine} />
         <View style={[styles.skeletonLine, { width: '70%' }]} />
@@ -55,7 +59,6 @@ const styles = StyleSheet.create({
   },
   heroSkeleton: {
     width: '100%',
-    height: 400,
     backgroundColor: Colors.surfaceAlt,
   },
   identitySection: {

@@ -80,6 +80,7 @@ export default function ItemDetailScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isCompactScreen = screenWidth < 390;
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [fullscreenIndex, setFullscreenIndex] = useState(0);
@@ -318,6 +319,7 @@ export default function ItemDetailScreen() {
           onDoubleTap={handleDoubleTap}
           onZoomStart={() => { if (item) ProductAnalytics.mediaZoom(item.id); }}
           onOpenFullscreen={handleOpenFullscreen}
+          heightFraction={isCompactScreen ? 0.5 : 0.62}
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
           overlayTopContent={
