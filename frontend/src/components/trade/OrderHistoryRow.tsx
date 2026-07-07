@@ -196,6 +196,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     gap: Space.sm,
   },
+  metaLabel: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
   timestamp: {
     textTransform: 'lowercase',
     flexShrink: 0,
