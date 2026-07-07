@@ -371,7 +371,7 @@ export default function MyProfileScreen() {
       </View>
 
       {/* ── COLLAPSED SCROLL HEADER ── */}
-      <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]}>
+      <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]} pointerEvents="none">
         <View style={{ flex: 1 }} />
         <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{user.username}</Text>
         <View style={{ flex: 1 }} />
@@ -417,7 +417,7 @@ export default function MyProfileScreen() {
 
         {/* LISTINGS TAB — two-column portfolio grid */}
         {activeTab === 'listings' && (
-          <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
+          <View style={{ backgroundColor: Colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {allOwnedListings.length === 0 ? (
               <View style={styles.listingsEmpty}>
                 <View style={styles.listingsEmptyIcon}>
@@ -494,7 +494,7 @@ export default function MyProfileScreen() {
 
         {/* LOOKS TAB — fetched from backend */}
         {activeTab === 'looks' && (
-          <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
+          <View style={{ backgroundColor: Colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {looksLoading ? (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                 <Text style={{ color: Colors.textMuted, fontSize: 14 }}>Loading looks...</Text>
@@ -531,7 +531,7 @@ export default function MyProfileScreen() {
 
         {/* ABOUT TAB — flat editorial layout */}
         {activeTab === 'about' && (
-          <View style={{ backgroundColor: Colors.background, paddingBottom: 120, paddingTop: Space.md }}>
+          <View style={{ backgroundColor: Colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             <View style={styles.aboutContainer}>
               {user.bio ? (
                 <View style={styles.aboutRow}>
@@ -570,7 +570,7 @@ export default function MyProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, overflow: 'hidden' },
-  scrollContent: { paddingBottom: 120, overflow: 'hidden' },
+  scrollContent: { paddingBottom: 100, overflow: 'hidden' },
 
   // Cover
   coverWrap: {
