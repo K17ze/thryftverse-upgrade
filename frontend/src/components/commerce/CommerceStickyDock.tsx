@@ -31,7 +31,7 @@ export function CommerceStickyDock({
       style={[
         styles.container,
         showTopBorder && styles.topBorder,
-        { paddingBottom: Math.max(safeBottom, Space.sm) + Space.xs },
+        { paddingBottom: Math.max(safeBottom + Space.sm, Space.md) },
         style,
       ]}
     >
@@ -59,9 +59,12 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   container: {
+    width: '100%',
+    minWidth: 0,
+    minHeight: 72,
     backgroundColor: Colors.background,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
+    paddingTop: Space.sm + 2,
     ...Elevation.floating,
   },
   topBorder: {
