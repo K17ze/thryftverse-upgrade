@@ -56,7 +56,7 @@ export function CoOwnAssetTile({
           )}
           <View style={[styles.statusPill, { backgroundColor: colors.background + 'E6' }]}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusText, { color: colors.textPrimary }]}>{statusLabel}</Text>
+            <Text style={[styles.statusText, { color: colors.textPrimary }]} numberOfLines={1}>{statusLabel}</Text>
           </View>
         </View>
 
@@ -69,7 +69,7 @@ export function CoOwnAssetTile({
           <View style={[styles.allocationBarBg, { backgroundColor: colors.surfaceAlt }]}>
             <View style={[styles.allocationBarFill, { width: `${Math.min(allocatedPct, 100)}%`, backgroundColor: colors.brand }]} />
           </View>
-          <Text style={[styles.allocationText, { color: colors.textMuted }]}>
+          <Text style={[styles.allocationText, { color: colors.textMuted }]} numberOfLines={1}>
             {availableUnits} left
           </Text>
         </View>

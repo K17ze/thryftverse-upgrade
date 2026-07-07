@@ -201,20 +201,6 @@ export default function CoOwnHubScreen() {
     [marketAssets]
   );
 
-  const newIssues = React.useMemo(
-    () => filteredAssets.filter((a) => a.isOpen && a.availableUnits === a.totalUnits).slice(0, 4),
-    [filteredAssets]
-  );
-
-  const nearlyAllocated = React.useMemo(
-    () => filteredAssets.filter((a) => {
-      if (!a.isOpen || a.availableUnits === 0) return false;
-      const pct = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
-      return pct >= 0.7;
-    }).slice(0, 4),
-    [filteredAssets]
-  );
-
   const isSearching = query.trim().length > 0;
 
   const formatStatus = (asset: HubAsset): CoOwnAssetStatus => {
@@ -375,7 +361,7 @@ export default function CoOwnHubScreen() {
                     <Text style={[
                       styles.sortChipText,
                       { color: sortBy === opt ? colors.background : colors.textSecondary },
-                    ]}>
+                    ]} numberOfLines={1}>
                       {SORT_LABELS[opt]}
                     </Text>
                   </AnimatedPressable>
@@ -405,48 +391,29 @@ export default function CoOwnHubScreen() {
             {!isSearching && yourPositions.length > 0 && (
               <View style={styles.sectionWrap}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your positions</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Your positions</Text>
                   <AnimatedPressable
                     onPress={() => { haptics.tap(); navigation.navigate('Portfolio'); }}
                     accessibilityRole="button"
                     accessibilityLabel="View all positions"
                   >
-                    <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>All {yourPositions.length}</Text>
+                    <Text style={[styles.sectionLink, { color: colors.textSecondary }]} numberOfLines={1}>All {yourPositions.length}</Text>
                   </AnimatedPressable>
                 </View>
                 <View style={styles.positionsRow}>
                   {yourPositions.slice(0, 2).map((asset) => (
-                    <CoOwnAssetTile
-                      key={asset.id}
-                      imageUri={asset.image}
-                      title={asset.title}
-                      unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
-                      availableUnits={asset.availableUnits}
-                      totalUnits={asset.totalUnits}
-                      status={formatStatus(asset)}
-                      onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-                    />
+                    <View key={asset.id} style={styles.positionTileWrap}>
+                      <CoOwnAssetTile
+                        imageUri={asset.image}
+                        title={asset.title}
+                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
+                        availableUnits={asset.availableUnits}
+                        totalUnits={asset.totalUnits}
+                        status={formatStatus(asset)}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                      />
+                    </View>
                   ))}
-                </View>
-              </View>
-            )}
-
-            {/* New issues */}
-            {!isSearching && newIssues.length > 0 && (
-              <View style={styles.sectionWrap}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>New issues</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{newIssues.length} items</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Nearly allocated — only if real */}
-            {!isSearching && nearlyAllocated.length > 0 && (
-              <View style={styles.sectionWrap}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Nearly allocated</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{nearlyAllocated.length} items</Text>
                 </View>
               </View>
             )}
@@ -455,8 +422,8 @@ export default function CoOwnHubScreen() {
             {!isSearching && discoveryAssets.length > 0 && (
               <View style={styles.sectionWrap}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Available now</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{discoveryAssets.length} items</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Available now</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]} numberOfLines={1}>{discoveryAssets.length} items</Text>
                 </View>
               </View>
             )}
@@ -465,8 +432,8 @@ export default function CoOwnHubScreen() {
             {isSearching && (
               <View style={styles.sectionWrap}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Results</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{filteredAssets.length} items</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Results</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]} numberOfLines={1}>{filteredAssets.length} items</Text>
                 </View>
               </View>
             )}
@@ -497,6 +464,26 @@ export default function CoOwnHubScreen() {
         ListFooterComponent={
           !isSearching ? (
             <View style={styles.footerWrap}>
+              {/* Creator action — intentional, not a random admin button */}
+              <AnimatedPressable
+                onPress={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
+                style={[styles.creatorCard, { borderColor: colors.brand + '40' }]}
+                accessibilityRole="button"
+                accessibilityLabel="Issue a new Co-Own item"
+                scaleValue={0.98}
+              >
+                <View style={[styles.creatorIcon, { backgroundColor: colors.brand + '18' }]}>
+                  <Ionicons name="add-circle-outline" size={22} color={colors.brand} />
+                </View>
+                <View style={styles.creatorBody}>
+                  <Text style={[styles.creatorTitle, { color: colors.textPrimary }]} numberOfLines={1}>Issue a new Co-Own</Text>
+                  <Text style={[styles.creatorSub, { color: colors.textSecondary }]} numberOfLines={2}>
+                    List an item for shared ownership and invite co-owners
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </AnimatedPressable>
+
               {/* How Co-Own works */}
               <CoOwnEducationCard
                 onLearnMore={() => navigation.navigate('CoOwnOnboarding')}
@@ -511,7 +498,7 @@ export default function CoOwnHubScreen() {
                 accessibilityLabel="View market ledger"
               >
                 <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
-                <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]}>View market ledger</Text>
+                <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]} numberOfLines={1}>View market ledger</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </AnimatedPressable>
 
@@ -655,6 +642,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Space.md,
   },
+  positionTileWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
   tileWrap: {
     flex: 1,
     paddingHorizontal: Space.xs,
@@ -662,6 +653,40 @@ const styles = StyleSheet.create({
   },
   footerWrap: {
     paddingTop: Space.lg,
+  },
+  creatorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    marginBottom: Space.lg,
+    minHeight: 64,
+  },
+  creatorIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  creatorBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  creatorTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
+  },
+  creatorSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 18,
   },
   ledgerLink: {
     flexDirection: 'row',
