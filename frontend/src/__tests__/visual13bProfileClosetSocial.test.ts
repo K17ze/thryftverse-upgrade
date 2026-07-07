@@ -50,9 +50,11 @@ describe('VISUAL-13B Profile Closet Social Upgrade', () => {
     expect(src).not.toMatch(/https?:\/\/(picsum|unsplash|placeholder|loremflickr)/i);
   });
 
-  it('7. EditProfileScreen preserves useProfileMediaUpload/updateMyProfile/fetchMyProfile flow', () => {
+  it('7. EditProfileScreen preserves updateMyProfile/fetchMyProfile flow (media moved to profile surface)', () => {
     const src = readFile('screens/EditProfileScreen.tsx');
-    expect(src).toContain('useProfileMediaUpload');
+    // Media editing was moved to MyProfileScreen/FlagshipProfileMedia.
+    // EditProfileScreen is now a text/account form — no media upload hook.
+    expect(src).not.toContain('useProfileMediaUpload');
     expect(src).toContain('updateMyProfile');
     expect(src).toContain('fetchMyProfile');
     expect(src).not.toContain('file://');

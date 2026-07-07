@@ -58,15 +58,20 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
     expect(screenSrc).toContain('ProfileHero');
   });
 
-  it('EditProfileScreen imports EditProfilePreview', () => {
+  it('EditProfileScreen does not import EditProfilePreview (media editing moved to profile surface)', () => {
     const src = readSrc('screens/EditProfileScreen.tsx');
-    expect(src).toContain('EditProfilePreview');
+    // Media editing (cover/avatar) was moved to MyProfileScreen/FlagshipProfileMedia.
+    // EditProfileScreen is now a text/account form only.
+    expect(src).not.toContain('EditProfilePreview');
+    expect(src).not.toContain('ProfileMediaEditor');
   });
 
-  // 3. EditProfile does not persist file:// media
-  it('EditProfileScreen uses useProfileMediaUpload hook', () => {
+  // 3. EditProfile does not handle media uploads (moved to profile surface)
+  it('EditProfileScreen does not use useProfileMediaUpload (media moved to profile surface)', () => {
     const src = readSrc('screens/EditProfileScreen.tsx');
-    expect(src).toContain('useProfileMediaUpload');
+    expect(src).not.toContain('useProfileMediaUpload');
+    expect(src).not.toContain('pickCover');
+    expect(src).not.toContain('pickAvatar');
   });
 
   // 4. Settings rows navigate to real screens or are honestly disabled/hidden
