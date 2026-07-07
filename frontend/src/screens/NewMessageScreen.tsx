@@ -148,32 +148,17 @@ export default function NewMessageScreen({ navigation, route }: Props) {
     }
   }, [preselectedUserId, preselectedDisplayName, recentContacts, navigation, show]);
 
-  const upsertConversation = useStore((state) => state.upsertConversation);
-
   const handlePress = (contact: ContactItem) => {
     haptic.light();
     if (contact.conversationId) {
       navigation.navigate('Chat', { conversationId: contact.conversationId });
       return;
     }
-    // Create a local placeholder conversation so ChatScreen has a valid ID
-    const sortedIds = [currentUser?.id ?? 'me', contact.userId].sort();
-    const newConvoId = `dm_${sortedIds[0]}_${sortedIds[1]}`;
-    upsertConversation({
-      id: newConvoId,
-      type: 'dm',
-      title: contact.name,
-      avatar: contact.avatar,
-      participantIds: [currentUser?.id ?? 'me', contact.userId],
-      lastMessage: '',
-      lastMessageTime: new Date().toISOString(),
-      unread: false,
-      messages: [],
-    });
-    navigation.navigate('Chat', {
-      conversationId: newConvoId,
-      partnerUserId: contact.userId,
-    });
+    // No backend DM creation endpoint exists — be honest.
+    show(
+      'Starting new chats requires backend support. Message from a listing for now.',
+      'info',
+    );
   };
 
   const renderItem = ({ item }: { item: ContactItem }) => (
@@ -183,7 +168,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       activeOpacity={0.85}
       scaleValue={0.98}
       hapticFeedback="light"
-      accessibilityLabel={`Message ${item.name}`}
+      accessibilityLabel={item.isExisting ? `Open conversation with ${item.name}` : `${item.name} — no conversation yet`}
       accessibilityRole="button"
     >
       <View style={styles.contactAvatar}>
@@ -204,10 +189,14 @@ export default function NewMessageScreen({ navigation, route }: Props) {
         ) : item.isExisting ? (
           <Caption color={Colors.textMuted}>Existing conversation</Caption>
         ) : (
-          <Caption color={Colors.brand}>Tap to start chatting</Caption>
+          <Caption color={Colors.textMuted}>No conversation yet — message from a listing</Caption>
         )}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+      <Ionicons
+        name={item.isExisting ? 'chevron-forward' : 'pricetag-outline'}
+        size={18}
+        color={Colors.textMuted}
+      />
     </AnimatedPressable>
   );
 
@@ -315,7 +304,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
           <EmptyState
             icon="people-outline"
             title="No recent contacts yet"
-            subtitle="Search for someone by name, or start a group chat to invite multiple people."
+            subtitle="Start a group chat, or message a seller from one of their listings to build your contact list."
             ctaLabel="Start group chat"
             onCtaPress={() => navigation.navigate('CreateGroupChat')}
           />
