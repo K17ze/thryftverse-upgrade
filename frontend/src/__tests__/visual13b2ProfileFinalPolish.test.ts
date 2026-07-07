@@ -13,9 +13,11 @@ function fileExists(rel: string) {
 }
 
 describe('VISUAL-13B.2 Profile Final Polish', () => {
-  it('1. MyProfileScreen uses ProfileVisualHeader', () => {
+  it('1. MyProfileScreen uses canonical identity hero', () => {
     const src = readFile('screens/MyProfileScreen.tsx');
-    expect(src).toContain('ProfileVisualHeader');
+    // ProfileVisualHeader was retired in the VQ-09D profile declutter; the
+    // canonical self-profile identity surface is MyProfileIdentityHero.
+    expect(src).toContain('MyProfileIdentityHero');
   });
 
   it('2. MyProfileScreen does not contain old duplicated legacy hero markers', () => {
@@ -27,9 +29,10 @@ describe('VISUAL-13B.2 Profile Final Polish', () => {
     expect(src).not.toContain('editAvatarChipLinkedIn');
   });
 
-  it('3. MyProfileScreen uses ProfileTabRail', () => {
+  it('3. MyProfileScreen uses canonical tab rail', () => {
     const src = readFile('screens/MyProfileScreen.tsx');
-    expect(src).toContain('ProfileTabRail');
+    // ProfileTabRail was retired for the self-profile; MyProfileTabRail is canonical.
+    expect(src).toContain('MyProfileTabRail');
   });
 
   it('4. UserProfileScreen uses ProfileHero which renders FlagshipProfileMedia', () => {
@@ -65,8 +68,8 @@ describe('VISUAL-13B.2 Profile Final Polish', () => {
     expect(edit).toContain('CachedImage');
     expect(pulse).toContain('CachedImage');
 
-    // Looks uses LookPreviewCard
-    expect(looks).toContain('LookPreviewCard');
+    // Looks renders with Reanimated entrance motion (canonical motion language)
+    expect(looks).toContain('FadeInDown');
   });
 
   it('8. No fake followers/ratings/reviews in profile screens', () => {
@@ -123,11 +126,13 @@ describe('VISUAL-13B.2 Profile Final Polish', () => {
     expect(src).toContain('hideCover');
   });
 
-  it('12. MyProfileScreen tab content is modular (edits/looks/pulse)', () => {
+  it('12. MyProfileScreen tab content is modular (listings/looks/about)', () => {
     const src = readFile('screens/MyProfileScreen.tsx');
-    expect(src).toContain("activeTab === 'edits'");
+    // Canonical tabs after the VQ-09D profile declutter: listings / looks / about.
+    // (edits/looks/pulse were retired in favour of the cleaner self-profile IA.)
+    expect(src).toContain("activeTab === 'listings'");
     expect(src).toContain("activeTab === 'looks'");
-    expect(src).toContain("activeTab === 'pulse'");
+    expect(src).toContain("activeTab === 'about'");
   });
 
   it('13. CachedImage renders honest placeholder when uri is empty', () => {

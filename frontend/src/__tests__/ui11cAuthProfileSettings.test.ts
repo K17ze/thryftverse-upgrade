@@ -200,19 +200,23 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
     expect(src).not.toContain('Sam Rivera');
   });
 
-  // 12. AboutScreen uses FadeInDown and design tokens
-  it('AboutScreen uses FadeInDown and design tokens', () => {
+  // 12. AboutScreen uses FlagshipScreen and design tokens
+  it('AboutScreen uses FlagshipScreen and design tokens', () => {
     const src = readSrc('screens/AboutScreen.tsx');
-    expect(src).toContain('FadeInDown');
+    // AboutScreen uses the canonical FlagshipScreen + FlagshipHeader scaffold
+    // with Reanimated entrance motion (FadeIn) and design tokens.
+    expect(src).toContain('FlagshipScreen');
     expect(src).toContain('Type.');
     expect(src).toContain('Space.');
   });
 
-  // 13. ChatSettingsScreenV2 uses FadeInDown
-  it('ChatSettingsScreen uses FadeInDown', () => {
+  // 13. ChatSettingsScreen uses FlagshipScreen scaffold
+  it('ChatSettingsScreen uses FlagshipScreen scaffold', () => {
     const src = readSrc('screens/ChatSettingsScreen.tsx');
-    expect(src).toContain('FadeInDown');
-    expect(src).toContain('useReducedMotion');
+    // ChatSettingsScreen uses the canonical FlagshipScreen + FlagshipHeader
+    // scaffold with SettingsSection/SettingsRow primitives.
+    expect(src).toContain('FlagshipScreen');
+    expect(src).toContain('SettingsSection');
   });
 
   // 14. BlockedUsersScreen uses FlagshipEmptyGraphic
