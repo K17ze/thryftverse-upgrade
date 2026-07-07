@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, ScrollView, useWindowDimensions, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -42,8 +42,8 @@ type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
 
 const TRADE_SIDE_OPTIONS: Array<{ value: TradeSide; label: string; accessibilityLabel: string }> = [
-  { value: 'buy', label: 'BUY', accessibilityLabel: 'Buy side' },
-  { value: 'sell', label: 'SELL', accessibilityLabel: 'Sell side' },
+  { value: 'buy', label: 'Buy', accessibilityLabel: 'Buy side' },
+  { value: 'sell', label: 'Sell', accessibilityLabel: 'Sell side' },
 ];
 
 export default function TradeScreen() {
@@ -197,7 +197,17 @@ export default function TradeScreen() {
         onBack={handleBack}
       />
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={Keyboard.dismiss}
+      >
         {/* Buy/Sell selector */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <AppSegmentControl
@@ -299,6 +309,7 @@ export default function TradeScreen() {
           <CoOwnRiskDisclosure />
         </Reanimated.View>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Sticky action dock */}
       <CoOwnStickyActionDock>

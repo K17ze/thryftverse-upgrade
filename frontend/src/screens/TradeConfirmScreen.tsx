@@ -140,7 +140,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             title="Cancel"
             variant="secondary"
             size="lg"
-            style={styles.cancelBtn}
+            style={[styles.cancelBtn, isCompactDock && styles.cancelBtnCompact]}
             onPress={handleCancel}
             hapticFeedback="medium"
             accessibilityLabel="Cancel order"
@@ -149,7 +149,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             title={isBuy ? 'Confirm buy' : 'Confirm sell'}
             variant="primary"
             size="lg"
-            style={styles.confirmBtn}
+            style={[styles.confirmBtn, isCompactDock && styles.confirmBtnCompact]}
             onPress={handleConfirm}
             disabled={isSubmitting}
             hapticFeedback="heavy"
@@ -192,8 +192,16 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  cancelBtnCompact: {
+    flex: 0,
+    width: '100%',
+  },
   confirmBtn: {
     flex: 1.5,
     minWidth: 0,
+  },
+  confirmBtnCompact: {
+    flex: 0,
+    width: '100%',
   },
 });
