@@ -7,7 +7,9 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
@@ -22,8 +24,6 @@ import { AppInput } from '../components/ui/AppInput';
 import { CachedImage } from '../components/CachedImage';
 import { updateMyProfile } from '../services/profileApi';
 import { updateUserProfile as updateUserProfileApi } from '../services/accountApi';
-import { SettingsSection } from '../components/settings/SettingsSection';
-import { SettingsRow } from '../components/settings/SettingsRow';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
@@ -179,21 +179,22 @@ export default function EditProfileScreen() {
     );
   }
 
-  // ── Top-right Save/Done action ──
+  // ── Top-right Save/Done — visible pill, brand-filled when active ──
+  const canSave = hasChanges && !isSaving;
   const saveAction = (
     <AnimatedPressable
       onPress={() => void handleSave()}
-      disabled={!hasChanges || isSaving}
+      disabled={!canSave}
       scaleValue={0.94}
       hapticFeedback="light"
       accessibilityRole="button"
       accessibilityLabel={isSaving ? 'Saving' : 'Save changes'}
-      style={[styles.saveBtn, (!hasChanges || isSaving) && styles.saveBtnDisabled]}
+      style={[styles.saveBtn, canSave && styles.saveBtnActive]}
     >
       {isSaving ? (
-        <ActivityIndicator size="small" color={Colors.brand} />
+        <ActivityIndicator size="small" color="#fff" />
       ) : (
-        <Text style={[styles.saveBtnText, (!hasChanges || isSaving) && styles.saveBtnTextDisabled]}>
+        <Text style={[styles.saveBtnText, canSave && styles.saveBtnTextActive]}>
           Done
         </Text>
       )}
@@ -292,103 +293,195 @@ export default function EditProfileScreen() {
           />
         </View>
 
-        {/* ── Private details ── */}
-        <SettingsSection title="Private details">
-          <SettingsRow
-            title="Email"
-            value={email || '—'}
-            isFirst
-          />
-          <SettingsRow
-            title="Email status"
-            value={emailVerified ? VERIFIED_LABEL : UNVERIFIED_LABEL}
-          />
-          <SettingsRow
-            title="Phone"
-            value={phone || '—'}
-            onPress={() => openEdit('phone', phone)}
-            isLast
-          />
-        </SettingsSection>
+        {/* ── Private details — integrated as form fields, not settings dump ── */}
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionLabel}>Private details</Text>
 
-        {/* ── Security ── */}
-        <SettingsSection title="Security">
-          <SettingsRow
-            title="Password"
-            value="••••••••"
-            icon="lock-closed-outline"
-            onPress={() => (navigation as any).navigate('ChangePassword')}
-            isFirst
-          />
-          <SettingsRow
-            title="Two-factor authentication"
-            subtitle={twoFactorEnabled ? 'Enabled' : 'Off'}
-            value={twoFactorEnabled ? 'Enabled' : 'Off'}
-            icon="shield-checkmark-outline"
-            iconColor={twoFactorEnabled ? Colors.success : Colors.textMuted}
-            onPress={() => (navigation as any).navigate('TwoFactorSetup')}
-            isLast
-          />
-        </SettingsSection>
+          <View style={styles.detailCard}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Email</Text>
+              <Text style={styles.detailValue} numberOfLines={1}>{email || '—'}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Email status</Text>
+              <View style={styles.detailStatusWrap}>
+                {emailVerified ? (
+                  <View style={[styles.statusPill, styles.statusPillVerified]}>
+                    <Ionicons name="checkmark-circle" size={12} color={Colors.success} />
+                    <Text style={[styles.statusPillText, { color: Colors.success }]}>Verified</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.statusPill, styles.statusPillUnverified]}>
+                    <Ionicons name="alert-circle" size={12} color={Colors.textMuted} />
+                    <Text style={[styles.statusPillText, { color: Colors.textMuted }]}>Not verified</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            <View style={styles.detailDivider} />
+            <Pressable
+              onPress={() => openEdit('phone', phone)}
+              style={styles.detailRowTouchable}
+              accessibilityRole="button"
+              accessibilityLabel="Edit phone number"
+            >
+              <Text style={styles.detailLabel}>Phone</Text>
+              <View style={styles.detailRight}>
+                <Text style={styles.detailValue} numberOfLines={1}>{phone || '—'}</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              </View>
+            </Pressable>
+          </View>
+        </View>
 
-        {/* ── Account ── */}
-        <SettingsSection title="Account">
-          <SettingsRow
-            title="Account control"
-            subtitle="Download data, delete account"
-            icon="warning-outline"
-            iconColor={Colors.danger}
-            danger
+        {/* ── Security — stronger hierarchy with icon chips ── */}
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionLabel}>Security</Text>
+
+          <View style={styles.detailCard}>
+            <PressableRow
+              icon="lock-closed-outline"
+              iconColor={Colors.brand}
+              title="Password"
+              subtitle="Change your password"
+              onPress={() => (navigation as any).navigate('ChangePassword')}
+              isFirst
+            />
+            <View style={styles.detailDivider} />
+            <PressableRow
+              icon="shield-checkmark-outline"
+              iconColor={twoFactorEnabled ? Colors.success : Colors.textMuted}
+              title="Two-factor authentication"
+              subtitle={twoFactorEnabled ? 'Enabled' : 'Add an extra layer of security'}
+              statusPill={
+                twoFactorEnabled ? (
+                  <View style={[styles.statusPill, styles.statusPillVerified]}>
+                    <Text style={[styles.statusPillText, { color: Colors.success }]}>On</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.statusPill, styles.statusPillUnverified]}>
+                    <Text style={[styles.statusPillText, { color: Colors.textMuted }]}>Off</Text>
+                  </View>
+                )
+              }
+              onPress={() => (navigation as any).navigate('TwoFactorSetup')}
+              isLast
+            />
+          </View>
+        </View>
+
+        {/* ── Account — prominent, not buried ── */}
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionLabel}>Account</Text>
+
+          <Pressable
             onPress={() => (navigation as any).navigate('AccountControl')}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
+            style={({ pressed }) => [
+              styles.accountCard,
+              pressed && styles.accountCardPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Account control — download data or delete account"
+          >
+            <View style={[styles.accountIconWrap, { backgroundColor: `${Colors.danger}12` }]}>
+              <Ionicons name="warning-outline" size={20} color={Colors.danger} />
+            </View>
+            <View style={styles.accountText}>
+              <Text style={styles.accountTitle}>Account control</Text>
+              <Text style={styles.accountSubtitle}>Download your data or delete your account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </Pressable>
+        </View>
       </KeyboardAwareScrollView>
 
-      {/* ── Inline Phone Edit Modal ── */}
+      {/* ── Phone Edit Modal — premium bottom sheet ── */}
       <Modal visible={editingField !== null} transparent animationType="slide" onRequestClose={closeEdit}>
-        <View style={styles.editModalOverlay}>
-          <View style={[styles.editModalCard, { backgroundColor: Colors.surface }]}>
-            <Text style={styles.editModalTitle}>
-              Edit {editingField === 'phone' ? 'phone number' : editingField}
+        <Pressable style={styles.modalOverlay} onPress={closeEdit}>
+          <Pressable style={[styles.modalCard, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>
+              {editingField === 'phone' ? 'Phone number' : editingField}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              Used for account security and order updates.
             </Text>
             <AppInput
               value={editValue}
               onChangeText={setEditValue}
               autoFocus
               keyboardType={editingField === 'phone' ? 'phone-pad' : 'default'}
-              containerStyle={{ marginBottom: Space.md }}
+              placeholder={editingField === 'phone' ? 'Enter phone number' : ''}
+              containerStyle={{ marginBottom: Space.md + 2 }}
             />
-            <View style={styles.editModalActions}>
+            <View style={styles.modalActions}>
               <AnimatedPressable
                 onPress={() => { haptic.light(); closeEdit(); }}
-                style={styles.editModalBtn}
+                style={styles.modalBtnSecondary}
                 activeOpacity={0.8}
               >
-                <Text style={styles.editModalBtnText}>Cancel</Text>
+                <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
               </AnimatedPressable>
               <AnimatedPressable
                 onPress={() => {
                   if (editingField === 'phone') setPhone(editValue);
                   closeEdit();
                 }}
-                style={[styles.editModalBtn, styles.editModalBtnPrimary]}
+                style={styles.modalBtnPrimary}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.editModalBtnText, styles.editModalBtnPrimaryText]}>Save</Text>
+                <Text style={styles.modalBtnPrimaryText}>Save</Text>
               </AnimatedPressable>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </FlagshipScreen>
   );
 }
 
-// ── Lightweight premium form field ──
-// Transparent background, 1px muted border, focus border slightly stronger.
-// Label is calm sentence-case, not uppercase shouting. Compact vertical rhythm.
+// ── PressableRow — compact row with icon chip for security section ──
+interface PressableRowProps {
+  icon: string;
+  iconColor: string;
+  title: string;
+  subtitle?: string;
+  statusPill?: React.ReactNode;
+  onPress: () => void;
+  isFirst?: boolean;
+  isLast?: boolean;
+}
+
+function PressableRow({ icon, iconColor, title, subtitle, statusPill, onPress, isLast }: PressableRowProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.pressableRow,
+        pressed && styles.pressableRowPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+    >
+      <View style={[styles.rowIconChip, { backgroundColor: `${iconColor}15` }]}>
+        <Ionicons name={icon as any} size={18} color={iconColor} />
+      </View>
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
+        {subtitle ? (
+          <Text style={styles.rowSubtitle} numberOfLines={1}>{subtitle}</Text>
+        ) : null}
+      </View>
+      <View style={styles.rowRight}>
+        {statusPill}
+        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+      </View>
+    </Pressable>
+  );
+}
+
+// ── Premium form field ──
 interface ProfileEditFieldProps {
   label: string;
   value: string;
@@ -424,6 +517,7 @@ function ProfileEditField({
   const hasError = Boolean(error);
   const showCounter = maxLength !== undefined;
   const counterText = showCounter ? `${value.length}/${maxLength}` : helper;
+  const isNearLimit = showCounter && value.length >= (maxLength ?? 0) * 0.9;
 
   return (
     <View style={[styles.fieldGroup, isLast && styles.fieldGroupLast]}>
@@ -453,7 +547,7 @@ function ProfileEditField({
           selectionColor={Colors.brand}
         />
         {showCounter && (
-          <Text style={[styles.fieldCounter, value.length >= (maxLength ?? 0) * 0.9 && styles.fieldCounterError]}>
+          <Text style={[styles.fieldCounter, isNearLimit && styles.fieldCounterError]}>
             {counterText}
           </Text>
         )}
@@ -469,28 +563,32 @@ function ProfileEditField({
 }
 
 const styles = StyleSheet.create({
-  // ── Top-right Save/Done button ──
+  // ── Top-right Done button — visible pill ──
   saveBtn: {
-    paddingHorizontal: Space.sm + 2,
-    height: 36,
+    paddingHorizontal: Space.md,
+    height: 34,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 44,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  saveBtnDisabled: {
-    opacity: 0.4,
+  saveBtnActive: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
   },
   saveBtnText: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-  },
-  saveBtnTextDisabled: {
     color: Colors.textMuted,
   },
+  saveBtnTextActive: {
+    color: '#fff',
+  },
 
-  // ── Compact identity row ──
+  // ── Identity row ──
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -536,21 +634,21 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
 
-  // ── Sections ──
+  // ── Sections — tighter spacing ──
   sectionGroup: {
-    paddingTop: Space.md + 2,
+    paddingTop: Space.md,
     paddingHorizontal: Space.md,
   },
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
     color: Colors.textSecondary,
-    marginBottom: Space.sm,
+    marginBottom: Space.sm - 2,
   },
 
-  // ── Fields — lightweight premium ──
+  // ── Fields — subtle surface, clean border ──
   fieldGroup: {
-    marginBottom: Space.sm + 2,
+    marginBottom: Space.sm,
   },
   fieldGroupLast: {
     marginBottom: 0,
@@ -559,13 +657,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
-    marginBottom: 5,
+    marginBottom: 4,
   },
   fieldSurface: {
     borderRadius: Radius.md + 2,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.surface,
     paddingHorizontal: Space.md - 2,
     minHeight: 48,
     flexDirection: 'row',
@@ -622,46 +720,224 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
 
-  // ── Phone edit modal ──
-  editModalOverlay: {
+  // ── Detail card (private details + security) ──
+  detailCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    overflow: 'hidden',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md - 2,
+    minHeight: 48,
+  },
+  detailRowTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md - 2,
+    minHeight: 48,
+  },
+  detailLabel: {
+    fontSize: 15,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+  },
+  detailValue: {
+    fontSize: 15,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    flexShrink: 1,
+    textAlign: 'right',
+    maxWidth: 180,
+  },
+  detailRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  detailStatusWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginHorizontal: Space.md - 2,
+  },
+
+  // ── Status pills ──
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  statusPillVerified: {
+    backgroundColor: `${Colors.success}12`,
+    borderColor: `${Colors.success}30`,
+  },
+  statusPillUnverified: {
+    backgroundColor: Colors.surfaceAlt,
+    borderColor: Colors.border,
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+  },
+
+  // ── Pressable row (security) ──
+  pressableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md - 2,
+    minHeight: 52,
+    gap: Space.sm,
+  },
+  pressableRowPressed: {
+    backgroundColor: Colors.surfaceAlt,
+  },
+  rowIconChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowText: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    minWidth: 0,
+    gap: 1,
+  },
+  rowTitle: {
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  rowSubtitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+
+  // ── Account control — prominent card ──
+  accountCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 4,
+    paddingHorizontal: Space.md - 2,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: `${Colors.danger}30`,
+    backgroundColor: `${Colors.danger}06`,
+    minHeight: 56,
+  },
+  accountCardPressed: {
+    backgroundColor: `${Colors.danger}10`,
+  },
+  accountIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  accountTitle: {
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: Colors.danger,
+  },
+  accountSubtitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+
+  // ── Phone edit modal — premium bottom sheet ──
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
-    paddingHorizontal: Space.md,
+  },
+  modalCard: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     paddingBottom: Space.xl,
+    paddingTop: Space.sm,
+    paddingHorizontal: Space.lg,
   },
-  editModalCard: {
-    padding: Space.lg,
-    borderRadius: Radius.xl,
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+    marginBottom: Space.md,
   },
-  editModalTitle: {
+  modalTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    marginBottom: Space.md,
+    marginBottom: 2,
     letterSpacing: Type.subtitle.letterSpacing,
   },
-  editModalActions: {
+  modalSubtitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginBottom: Space.md + 2,
+  },
+  modalActions: {
     flexDirection: 'row',
     gap: Space.sm,
   },
-  editModalBtn: {
+  modalBtnSecondary: {
     flex: 1,
-    height: 48,
+    height: 50,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  editModalBtnPrimary: {
+  modalBtnPrimary: {
+    flex: 1,
+    height: 50,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.brand,
   },
-  editModalBtnText: {
-    fontSize: Type.body.size,
+  modalBtnSecondaryText: {
+    fontSize: 15,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
-  editModalBtnPrimaryText: {
-    color: Colors.textInverse,
+  modalBtnPrimaryText: {
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
   },
 });

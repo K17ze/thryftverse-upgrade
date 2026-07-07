@@ -158,10 +158,11 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(editSrc).toContain('Discard');
     });
 
-    it('does not expose private account fields like email or phone', () => {
-      // EditProfile should not have email or phone editors
-      expect(editSrc).not.toMatch(/label.*Email/i);
-      expect(editSrc).not.toMatch(/label.*Phone/i);
+    it('exposes private account fields (email read-only, phone editable)', () => {
+      // After unification, EditProfileScreen contains private details
+      // (email read-only, phone editable via modal) alongside public fields.
+      expect(editSrc).toContain('Email');
+      expect(editSrc).toContain('Phone');
     });
   });
 
