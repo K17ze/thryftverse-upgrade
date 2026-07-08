@@ -25,6 +25,7 @@ import {
   hashPassword,
   issueAuthSession,
   revokeAllUserSessions,
+  revokeOtherUserSessions,
   revokeSessionByRefreshToken,
   rotateRefreshSession,
   verifyAccessToken,
@@ -45,6 +46,7 @@ import {
   resolveCountryPricingQuoteByCurrency,
   resolveInternalFxRate,
   setInternalFxRate,
+  getOnezeAnchorConfig,
   setOnezeAnchorConfig,
   upsertCountryPricingProfile,
   validatePricingProfileInput,
@@ -914,7 +916,7 @@ async function optionalAuthenticate(request: { headers: Record<string, string | 
     return;
   }
 
-  const token = getBearerToken(authHeader);
+  const token = getBearerToken(Array.isArray(authHeader) ? authHeader[0] : authHeader);
   if (!token) {
     return;
   }
@@ -923,6 +925,32 @@ async function optionalAuthenticate(request: { headers: Record<string, string | 
   if (authUser) {
     request.authUser = authUser;
   }
+}
+
+// Routes where the /users/:userId segment identifies the *target* user of the
+// action (the actor is always request.authUser), so the actor-context check
+// must not compare it against the authenticated user.
+function isUserTargetRoute(method: string, path: string) {
+  if (method === 'GET' && path === '/users/search') {
+    return true;
+  }
+
+  const match = path.match(/^\/users\/[^/]+\/([^/]+)$/);
+  if (!match) {
+    return false;
+  }
+
+  const segment = match[1];
+  if (method === 'GET') {
+    return ['profile', 'follow-counts', 'followers', 'following', 'listings', 'poster-highlights'].includes(segment);
+  }
+  if (method === 'POST') {
+    return ['follow', 'block', 'unblock', 'report'].includes(segment);
+  }
+  if (method === 'DELETE') {
+    return segment === 'follow';
+  }
+  return false;
 }
 
 function resolveActorUserId(requestPath: string, request: { params?: unknown; body?: unknown }) {
@@ -1081,6 +1109,10 @@ app.addHook('preHandler', async (request, reply) => {
   }
 
   request.authUser = authUser;
+
+  if (isUserTargetRoute(request.method, requestPath)) {
+    return;
+  }
 
   const actorUserId = resolveActorUserId(requestPath, request);
   if (actorUserId && authUser.role !== 'admin' && actorUserId !== authUser.userId) {
@@ -11588,6 +11620,87 @@ app.post('/auth/logout', async (request) => {
   return { ok: true };
 });
 
+app.post(
+  '/auth/password/change',
+  {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute',
+      },
+    },
+  },
+  async (request, reply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const bodySchema = z.object({
+      currentPassword: z.string().min(1).max(128),
+      newPassword: z.string().min(8).max(128),
+    });
+
+    const payload = bodySchema.parse(request.body ?? {});
+
+    if (payload.currentPassword === payload.newPassword) {
+      reply.code(400);
+      return { ok: false, error: 'New password must be different from current password' };
+    }
+
+    const userResult = await db.query<{ id: string; password_hash: string | null }>(
+      `
+        SELECT id, password_hash
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [request.authUser.userId]
+    );
+
+    const user = userResult.rows[0];
+    if (!user) {
+      reply.code(404);
+      return { ok: false, error: 'User not found' };
+    }
+
+    if (!user.password_hash) {
+      reply.code(400);
+      return {
+        ok: false,
+        error: 'This account does not use a password. Use your sign-in provider instead.',
+      };
+    }
+
+    const currentMatches = await verifyPassword(payload.currentPassword, user.password_hash);
+    if (!currentMatches) {
+      reply.code(401);
+      return { ok: false, error: 'Current password is incorrect' };
+    }
+
+    const nextPasswordHash = await hashPassword(payload.newPassword);
+
+    await db.query(
+      `
+        UPDATE users
+        SET
+          password_hash = $2,
+          password_changed_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $1
+      `,
+      [user.id, nextPasswordHash]
+    );
+
+    await revokeOtherUserSessions(user.id, request.authUser.sessionId);
+
+    return {
+      ok: true,
+      message: 'Password updated. Other devices have been signed out.',
+    };
+  }
+);
+
 app.post('/auth/password-reset/request', async (request) => {
   const bodySchema = z.object({
     email: z.string().trim().email().max(320),
@@ -11991,6 +12104,113 @@ app.patch('/users/me', async (request, reply) => {
   };
 });
 
+app.patch('/users/me/preferences', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    holidayMode: z.boolean().optional(),
+    privateProfile: z.boolean().optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const allowed: Record<string, unknown> = {};
+  if (payload.holidayMode !== undefined) allowed.holiday_mode = payload.holidayMode;
+  if (payload.privateProfile !== undefined) allowed.private_profile = payload.privateProfile;
+
+  if (Object.keys(allowed).length === 0) {
+    reply.code(400);
+    return { ok: false, error: 'No fields provided to update' };
+  }
+
+  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
+  const values = Object.values(allowed);
+
+  const result = await db.query<{ holiday_mode: boolean; private_profile: boolean }>(
+    `
+      UPDATE users
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $1
+      RETURNING holiday_mode, private_profile
+    `,
+    [request.authUser.userId, ...values]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    preferences: {
+      holidayMode: row.holiday_mode,
+      privateProfile: row.private_profile,
+    },
+  };
+});
+
+app.patch('/users/me/postage', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    carrierKey: z.string().trim().min(1).max(64).optional(),
+    freeShipping: z.boolean().optional(),
+    bundleDiscount: z.boolean().optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const allowed: Record<string, unknown> = {};
+  if (payload.carrierKey !== undefined) allowed.postage_carrier_key = payload.carrierKey;
+  if (payload.freeShipping !== undefined) allowed.postage_free_shipping = payload.freeShipping;
+  if (payload.bundleDiscount !== undefined) allowed.postage_bundle_discount = payload.bundleDiscount;
+
+  if (Object.keys(allowed).length === 0) {
+    reply.code(400);
+    return { ok: false, error: 'No fields provided to update' };
+  }
+
+  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
+  const values = Object.values(allowed);
+
+  const result = await db.query<{
+    postage_carrier_key: string;
+    postage_free_shipping: boolean;
+    postage_bundle_discount: boolean;
+  }>(
+    `
+      UPDATE users
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $1
+      RETURNING postage_carrier_key, postage_free_shipping, postage_bundle_discount
+    `,
+    [request.authUser.userId, ...values]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    postage: {
+      carrierKey: row.postage_carrier_key,
+      freeShipping: row.postage_free_shipping,
+      bundleDiscount: row.postage_bundle_discount,
+    },
+  };
+});
+
 app.get('/sellers/:sellerId', async (request, reply) => {
   const paramsSchema = z.object({ sellerId: z.string().min(2) });
   const { sellerId } = paramsSchema.parse(request.params);
@@ -12037,7 +12257,7 @@ app.get('/sellers/:sellerId', async (request, reply) => {
       `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
       [viewerUserId, sellerId]
     );
-    isFollowing = followResult.rowCount > 0;
+    isFollowing = (followResult.rowCount ?? 0) > 0;
   }
 
   const avgRating = reviewStats.rows[0]?.avg_rating ? Number(reviewStats.rows[0].avg_rating) : null;
@@ -12082,7 +12302,7 @@ app.post('/sellers/:sellerId/follow', async (request, reply) => {
     [userId, sellerId]
   );
 
-  if (existing.rowCount > 0) {
+  if ((existing.rowCount ?? 0) > 0) {
     await db.query(
       `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
       [userId, sellerId]
@@ -15952,7 +16172,17 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     subtitle?: string;
     reason?: string;
     personalised: boolean;
-    items: ReturnType<typeof mapToListingItem>[];
+    items: Array<
+      | ReturnType<typeof mapToListingItem>
+      | {
+          id: string;
+          type: 'look';
+          title: string;
+          coverImage: string;
+          creatorId: string;
+          creatorUsername: string | null;
+        }
+    >;
     nextCursor?: string;
   }> = [];
 
@@ -23768,6 +23998,92 @@ app.post('/users/:userId/payment-methods', async (request, reply) => {
       isDefault: result.rows[0].is_default,
       createdAt: result.rows[0].created_at,
       updatedAt: result.rows[0].updated_at,
+    },
+  };
+});
+
+app.patch('/users/:userId/payment-methods/:paymentMethodId', async (request, reply) => {
+  const paramsSchema = z.object({
+    userId: z.string().min(2),
+    paymentMethodId: z.coerce.number().int().positive(),
+  });
+  const bodySchema = z.object({
+    label: z.string().min(3).max(120).optional(),
+    details: z.string().max(220).optional(),
+    isDefault: z.boolean().optional(),
+  });
+
+  const { userId, paymentMethodId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const allowed: Record<string, unknown> = {};
+  if (payload.label !== undefined) allowed.label = payload.label;
+  if (payload.details !== undefined) allowed.details = payload.details;
+  if (payload.isDefault !== undefined) allowed.is_default = payload.isDefault;
+
+  if (Object.keys(allowed).length === 0) {
+    reply.code(400);
+    return { ok: false, error: 'No fields provided to update' };
+  }
+
+  const existing = await db.query<{ id: number }>(
+    `
+      SELECT id
+      FROM user_payment_methods
+      WHERE id = $1 AND user_id = $2
+      LIMIT 1
+    `,
+    [paymentMethodId, userId]
+  );
+
+  if (!existing.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Payment method not found' };
+  }
+
+  if (payload.isDefault === true) {
+    await db.query(
+      'UPDATE user_payment_methods SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND id <> $2',
+      [userId, paymentMethodId]
+    );
+  }
+
+  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 3}`);
+  const values = Object.values(allowed);
+
+  const result = await db.query<{
+    id: number;
+    user_id: string;
+    method_type: 'card' | 'bank_account';
+    label: string;
+    details: string | null;
+    is_default: boolean;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      UPDATE user_payment_methods
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $1 AND user_id = $2
+      RETURNING id, user_id, method_type, label, details, is_default, created_at, updated_at
+    `,
+    [paymentMethodId, userId, ...values]
+  );
+
+  const row = result.rows[0];
+
+  return {
+    ok: true,
+    item: {
+      id: row.id,
+      userId: row.user_id,
+      type: row.method_type,
+      label: row.label,
+      details: row.details,
+      isDefault: row.is_default,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     },
   };
 });
