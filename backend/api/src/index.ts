@@ -23961,6 +23961,92 @@ app.post('/users/:userId/payment-methods', async (request, reply) => {
   };
 });
 
+app.patch('/users/:userId/payment-methods/:paymentMethodId', async (request, reply) => {
+  const paramsSchema = z.object({
+    userId: z.string().min(2),
+    paymentMethodId: z.coerce.number().int().positive(),
+  });
+  const bodySchema = z.object({
+    label: z.string().min(3).max(120).optional(),
+    details: z.string().max(220).optional(),
+    isDefault: z.boolean().optional(),
+  });
+
+  const { userId, paymentMethodId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const allowed: Record<string, unknown> = {};
+  if (payload.label !== undefined) allowed.label = payload.label;
+  if (payload.details !== undefined) allowed.details = payload.details;
+  if (payload.isDefault !== undefined) allowed.is_default = payload.isDefault;
+
+  if (Object.keys(allowed).length === 0) {
+    reply.code(400);
+    return { ok: false, error: 'No fields provided to update' };
+  }
+
+  const existing = await db.query<{ id: number }>(
+    `
+      SELECT id
+      FROM user_payment_methods
+      WHERE id = $1 AND user_id = $2
+      LIMIT 1
+    `,
+    [paymentMethodId, userId]
+  );
+
+  if (!existing.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Payment method not found' };
+  }
+
+  if (payload.isDefault === true) {
+    await db.query(
+      'UPDATE user_payment_methods SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND id <> $2',
+      [userId, paymentMethodId]
+    );
+  }
+
+  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 3}`);
+  const values = Object.values(allowed);
+
+  const result = await db.query<{
+    id: number;
+    user_id: string;
+    method_type: 'card' | 'bank_account';
+    label: string;
+    details: string | null;
+    is_default: boolean;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      UPDATE user_payment_methods
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $1 AND user_id = $2
+      RETURNING id, user_id, method_type, label, details, is_default, created_at, updated_at
+    `,
+    [paymentMethodId, userId, ...values]
+  );
+
+  const row = result.rows[0];
+
+  return {
+    ok: true,
+    item: {
+      id: row.id,
+      userId: row.user_id,
+      type: row.method_type,
+      label: row.label,
+      details: row.details,
+      isDefault: row.is_default,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    },
+  };
+});
+
 app.delete('/users/:userId/payment-methods/:paymentMethodId', async (request, reply) => {
   const paramsSchema = z.object({
     userId: z.string().min(2),
