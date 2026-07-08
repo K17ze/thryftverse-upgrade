@@ -927,6 +927,32 @@ async function optionalAuthenticate(request: { headers: Record<string, string | 
   }
 }
 
+// Routes where the /users/:userId segment identifies the *target* user of the
+// action (the actor is always request.authUser), so the actor-context check
+// must not compare it against the authenticated user.
+function isUserTargetRoute(method: string, path: string) {
+  if (method === 'GET' && path === '/users/search') {
+    return true;
+  }
+
+  const match = path.match(/^\/users\/[^/]+\/([^/]+)$/);
+  if (!match) {
+    return false;
+  }
+
+  const segment = match[1];
+  if (method === 'GET') {
+    return ['profile', 'follow-counts', 'followers', 'following', 'listings', 'poster-highlights'].includes(segment);
+  }
+  if (method === 'POST') {
+    return ['follow', 'block', 'unblock', 'report'].includes(segment);
+  }
+  if (method === 'DELETE') {
+    return segment === 'follow';
+  }
+  return false;
+}
+
 function resolveActorUserId(requestPath: string, request: { params?: unknown; body?: unknown }) {
   const params = request.params as Record<string, unknown> | undefined;
   if (params && typeof params.userId === 'string') {
@@ -1083,6 +1109,10 @@ app.addHook('preHandler', async (request, reply) => {
   }
 
   request.authUser = authUser;
+
+  if (isUserTargetRoute(request.method, requestPath)) {
+    return;
+  }
 
   const actorUserId = resolveActorUserId(requestPath, request);
   if (actorUserId && authUser.role !== 'admin' && actorUserId !== authUser.userId) {
