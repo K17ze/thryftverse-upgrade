@@ -46,6 +46,7 @@ import {
   resolveCountryPricingQuoteByCurrency,
   resolveInternalFxRate,
   setInternalFxRate,
+  getOnezeAnchorConfig,
   setOnezeAnchorConfig,
   upsertCountryPricingProfile,
   validatePricingProfileInput,
@@ -915,7 +916,7 @@ async function optionalAuthenticate(request: { headers: Record<string, string | 
     return;
   }
 
-  const token = getBearerToken(authHeader);
+  const token = getBearerToken(Array.isArray(authHeader) ? authHeader[0] : authHeader);
   if (!token) {
     return;
   }
@@ -12226,7 +12227,7 @@ app.get('/sellers/:sellerId', async (request, reply) => {
       `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
       [viewerUserId, sellerId]
     );
-    isFollowing = followResult.rowCount > 0;
+    isFollowing = (followResult.rowCount ?? 0) > 0;
   }
 
   const avgRating = reviewStats.rows[0]?.avg_rating ? Number(reviewStats.rows[0].avg_rating) : null;
@@ -12271,7 +12272,7 @@ app.post('/sellers/:sellerId/follow', async (request, reply) => {
     [userId, sellerId]
   );
 
-  if (existing.rowCount > 0) {
+  if ((existing.rowCount ?? 0) > 0) {
     await db.query(
       `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
       [userId, sellerId]
@@ -16141,7 +16142,17 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     subtitle?: string;
     reason?: string;
     personalised: boolean;
-    items: ReturnType<typeof mapToListingItem>[];
+    items: Array<
+      | ReturnType<typeof mapToListingItem>
+      | {
+          id: string;
+          type: 'look';
+          title: string;
+          coverImage: string;
+          creatorId: string;
+          creatorUsername: string | null;
+        }
+    >;
     nextCursor?: string;
   }> = [];
 

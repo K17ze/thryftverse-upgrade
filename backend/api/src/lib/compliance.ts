@@ -112,7 +112,7 @@ interface CreateAmlAlertInput {
   userId: string;
   relatedUserId?: string | null;
   market: ComplianceMarket;
-  eventType: 'trade' | 'bid' | 'deposit' | 'withdrawal' | 'transfer' | 'manual';
+  eventType: 'trade' | 'bid' | 'buy_now' | 'deposit' | 'withdrawal' | 'transfer' | 'manual';
   amountGbp: number;
   referenceId?: string | null;
   ruleCode?: string | null;
