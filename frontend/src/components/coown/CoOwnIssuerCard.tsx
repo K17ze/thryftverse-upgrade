@@ -155,11 +155,12 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   msgBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radius.md,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
 });

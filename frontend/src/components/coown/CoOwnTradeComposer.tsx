@@ -60,10 +60,10 @@ export function CoOwnTradeComposer({
         </View>
         <View style={styles.productBody}>
           <Text style={[styles.productTitle, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
-          <Text style={[styles.productPrice, { color: colors.textSecondary }]}>{unitPriceLabel} / unit</Text>
+          <Text style={[styles.productPrice, { color: colors.textSecondary }]} numberOfLines={1}>{unitPriceLabel} / unit</Text>
         </View>
         <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.success + '22' : colors.danger + '22' }]}>
-          <Text style={[styles.sideText, { color: isBuy ? colors.success : colors.danger }]}>
+          <Text style={[styles.sideText, { color: isBuy ? colors.success : colors.danger }]} numberOfLines={1}>
             {isBuy ? 'BUY' : 'SELL'}
           </Text>
         </View>
@@ -72,46 +72,46 @@ export function CoOwnTradeComposer({
       {/* Availability */}
       <View style={[styles.availRow, { borderColor: colors.border }]}>
         <View style={styles.availItem}>
-          <Text style={[styles.availLabel, { color: colors.textMuted }]}>
+          <Text style={[styles.availLabel, { color: colors.textMuted }]} numberOfLines={1}>
             {isBuy ? 'Available units' : 'Your units'}
           </Text>
-          <Text style={[styles.availValue, { color: colors.textPrimary }]}>
+          <Text style={[styles.availValue, { color: colors.textPrimary }]} numberOfLines={1}>
             {isBuy ? availableUnits : sellableUnits}
           </Text>
         </View>
         <View style={[styles.availItem, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-          <Text style={[styles.availLabel, { color: colors.textMuted }]}>Max per order</Text>
-          <Text style={[styles.availValue, { color: colors.textPrimary }]}>{maxForSide}</Text>
+          <Text style={[styles.availLabel, { color: colors.textMuted }]} numberOfLines={1}>Max per order</Text>
+          <Text style={[styles.availValue, { color: colors.textPrimary }]} numberOfLines={1}>{maxForSide}</Text>
         </View>
       </View>
 
       {/* Quote summary */}
       <View style={[styles.quoteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.quoteRow}>
-          <Text style={[styles.quoteLabel, { color: colors.textSecondary }]}>
+          <Text style={[styles.quoteLabel, { color: colors.textSecondary }]} numberOfLines={1}>
             {units} units × {unitPriceLabel}
           </Text>
-          <Text style={[styles.quoteValue, { color: colors.textPrimary }]}>{grossLabel}</Text>
+          <Text style={[styles.quoteValue, { color: colors.textPrimary }]} numberOfLines={1}>{grossLabel}</Text>
         </View>
         <View style={[styles.quoteRow, { borderColor: colors.border }]}>
-          <Text style={[styles.quoteLabel, { color: colors.textMuted }]}>Fee (1%)</Text>
-          <Text style={[styles.quoteValue, { color: colors.textSecondary }]}>{feeLabel}</Text>
+          <Text style={[styles.quoteLabel, { color: colors.textMuted }]} numberOfLines={1}>Fee (1%)</Text>
+          <Text style={[styles.quoteValue, { color: colors.textSecondary }]} numberOfLines={1}>{feeLabel}</Text>
         </View>
         <View style={[styles.totalRow, { borderColor: colors.border }]}>
-          <View>
-            <Text style={[styles.totalLabel, { color: colors.textPrimary }]}>
+          <View style={styles.totalLabelWrap}>
+            <Text style={[styles.totalLabel, { color: colors.textPrimary }]} numberOfLines={1}>
               {isBuy ? 'Total cost' : 'Net proceeds'}
             </Text>
-            <Text style={[styles.totalCaption, { color: colors.textMuted }]}>{totalCaption}</Text>
+            <Text style={[styles.totalCaption, { color: colors.textMuted }]} numberOfLines={1}>{totalCaption}</Text>
           </View>
-          <Text style={[styles.totalValue, { color: colors.textPrimary }]}>{totalLabel}</Text>
+          <Text style={[styles.totalValue, { color: colors.textPrimary }]} numberOfLines={1}>{totalLabel}</Text>
         </View>
       </View>
 
       {/* Settlement */}
       <View style={styles.settlementRow}>
         <Ionicons name="card-outline" size={14} color={colors.textMuted} />
-        <Text style={[styles.settlementText, { color: colors.textSecondary }]}>
+        <Text style={[styles.settlementText, { color: colors.textSecondary }]} numberOfLines={1}>
           Settlement: {settlementLabel}
         </Text>
       </View>
@@ -145,6 +145,7 @@ const styles = StyleSheet.create({
   },
   productBody: {
     flex: 1,
+    minWidth: 0,
     gap: 3,
   },
   productTitle: {
@@ -175,6 +176,7 @@ const styles = StyleSheet.create({
   },
   availItem: {
     flex: 1,
+    minWidth: 0,
     paddingHorizontal: Space.xs,
     alignItems: 'center',
     gap: 3,
@@ -201,14 +203,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Space.sm,
   },
   quoteLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    flexShrink: 1,
+    minWidth: 0,
   },
   quoteValue: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
+    flexShrink: 0,
   },
   totalRow: {
     flexDirection: 'row',
@@ -216,10 +222,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Space.sm,
   },
   totalLabel: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  totalLabelWrap: {
+    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
   },
   totalCaption: {
     fontSize: Type.meta.size,
@@ -230,6 +244,7 @@ const styles = StyleSheet.create({
     fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
+    flexShrink: 0,
   },
   settlementRow: {
     flexDirection: 'row',

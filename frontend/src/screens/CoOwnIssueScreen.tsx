@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
@@ -27,6 +27,8 @@ const CATEGORIES = [
 export default function CoOwnIssueScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const { show } = useToast();
+  const insets = useSafeAreaInsets();
+  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const [category, setCategory] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [assetTitle, setAssetTitle] = useState<string | null>(null);
@@ -71,7 +73,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         onBack={() => navigation.goBack()}
       />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* Asset context — show title, not UUID */}
         {assetId && (
           <Reanimated.View entering={FadeInDown.duration(300)}>
@@ -139,8 +141,6 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
             Your report will be submitted through the Help & Support flow. Use the description above when contacting support.
           </Text>
         </Reanimated.View>
-
-        <View style={{ height: 120 }} />
       </ScrollView>
 
       {/* Sticky action dock */}

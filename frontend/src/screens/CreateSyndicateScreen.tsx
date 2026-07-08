@@ -22,7 +22,7 @@ import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { haptics } from '../utils/haptics';
@@ -55,6 +55,7 @@ export default function CreateCoOwnScreen() {
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
 
   const prefill = route.params;
 
@@ -323,7 +324,7 @@ export default function CreateCoOwnScreen() {
         onBack={handleBack}
       />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* ── Stage 1: Select listing ── */}
         {stage === 'select' && (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
@@ -476,22 +477,22 @@ export default function CreateCoOwnScreen() {
                   <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>{selectedListing?.title}</Text>
                 </View>
                 <View style={[styles.summaryRow, { borderColor: colors.border }]}>
-                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]}>Total units</Text>
-                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{totalUnitsInput}</Text>
+                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]} numberOfLines={1}>Total units</Text>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>{totalUnitsInput}</Text>
                 </View>
                 <View style={[styles.summaryRow, { borderColor: colors.border }]}>
-                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]}>Unit price</Text>
-                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]} numberOfLines={1}>Unit price</Text>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>
                     {Number(unitPriceInput) > 0 ? `${unitPriceInput} ${currencyCode}` : '—'}
                   </Text>
                 </View>
                 <View style={[styles.summaryRow, { borderColor: colors.border }]}>
-                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]}>Settlement</Text>
-                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>TVUSD</Text>
+                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]} numberOfLines={1}>Settlement</Text>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>TVUSD</Text>
                 </View>
                 <View style={[styles.totalRow, { borderColor: colors.border }]}>
-                  <Text style={[styles.totalKey, { color: colors.textPrimary }]}>Total value</Text>
-                  <Text style={[styles.totalValue, { color: colors.textPrimary }]}>
+                  <Text style={[styles.totalKey, { color: colors.textPrimary }]} numberOfLines={1}>Total value</Text>
+                  <Text style={[styles.totalValue, { color: colors.textPrimary }]} numberOfLines={1}>
                     {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
                   </Text>
                 </View>
@@ -543,7 +544,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    paddingBottom: 120,
   },
   listingListContent: {
     gap: Space.md,
@@ -757,15 +757,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Space.md,
   },
   summaryKey: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    flexShrink: 0,
   },
   summaryValue: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     flex: 1,
+    minWidth: 0,
     textAlign: 'right',
     marginLeft: Space.md,
   },
@@ -776,14 +779,18 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     marginTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Space.md,
   },
   totalKey: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
+    flexShrink: 1,
+    minWidth: 0,
   },
   totalValue: {
     fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
+    flexShrink: 0,
   },
 });

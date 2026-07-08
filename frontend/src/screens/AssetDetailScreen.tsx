@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, StatusBar, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar, Pressable, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -18,7 +18,7 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { fetchCoOwnAssetById, fetchCoOwnOrderBook, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -69,6 +69,9 @@ export default function AssetDetailScreen() {
   const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const isCompact = screenWidth < 390;
+  const isVeryCompact = screenWidth < 340;
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const { formatFromFiat } = useFormattedPrice();
@@ -209,6 +212,18 @@ export default function AssetDetailScreen() {
 
   const settlementLabel = asset.settlementMode === 'GBP' ? 'GBP' : asset.settlementMode === 'TVUSD' ? 'TVUSD' : 'GBP + TVUSD';
 
+  // Compute scroll bottom padding from dock geometry + safe area.
+  // Compact mode stacks price above actions (taller dock); very compact also
+  // stacks the holder Sell / Buy more actions vertically.
+  const isDualActionDock = isHolder && asset.isOpen && availableUnits > 0;
+  const isTradeDock = asset.isOpen && (availableUnits > 0 || isHolder) && !isIssuer;
+  const dockHeight = isTradeDock && isCompact
+    ? (isVeryCompact && isDualActionDock ? DockConstants.stackedActionHeight + 32 : DockConstants.stackedActionHeight)
+    : isDualActionDock
+      ? DockConstants.dualActionHeight
+      : DockConstants.singleActionHeight;
+  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + dockHeight;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar translucent backgroundColor="transparent" style={isDark ? 'light' : 'dark'} />
@@ -244,7 +259,7 @@ export default function AssetDetailScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 100 }}
+        contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
       >
         {/* Hero — large media stage */}
         <CommerceMediaStage
@@ -260,7 +275,7 @@ export default function AssetDetailScreen() {
           isSaved={social.isSavedToCollection}
           showSaveControl
           showFavControl
-          heightFraction={0.65}
+          heightFraction={isCompact ? 0.52 : 0.65}
           onOpenFullscreen={handleOpenFullscreen}
           overlayTopContent={
             <View style={styles.familyBadgeOverlay}>
@@ -277,7 +292,7 @@ export default function AssetDetailScreen() {
           <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>Co-Own item</Text>
           <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{asset.title}</Text>
           {asset.description ? (
-            <Text style={[styles.description, { color: colors.textSecondary }]}>{asset.description}</Text>
+            <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={4}>{asset.description}</Text>
           ) : null}
         </Reanimated.View>
 
@@ -354,7 +369,7 @@ export default function AssetDetailScreen() {
               <Ionicons name="analytics-outline" size={16} color={colors.textMuted} />
               <Text style={[styles.priceHistoryTitle, { color: colors.textPrimary }]}>Price history</Text>
             </View>
-            <Text style={[styles.priceHistoryBody, { color: colors.textSecondary }]}>
+            <Text style={[styles.priceHistoryBody, { color: colors.textSecondary }]} numberOfLines={4}>
               Price history is not available for this Co-Own item. Historical pricing data requires
               backend aggregation and is not yet supported.
             </Text>
@@ -415,7 +430,7 @@ export default function AssetDetailScreen() {
           >
             <View style={styles.collapsibleHeaderLeft}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Live market</Text>
-              <Text style={[styles.collapsibleSubtext, { color: colors.textMuted }]}>
+              <Text style={[styles.collapsibleSubtext, { color: colors.textMuted }]} numberOfLines={1}>
                 {orderBook.bids.length + orderBook.asks.length} offers
               </Text>
             </View>
@@ -426,48 +441,48 @@ export default function AssetDetailScreen() {
             />
           </Pressable>
           {orderBookExpanded && (
-            <View style={[styles.orderBookGrid, { borderColor: colors.border }]}>
+            <View style={[styles.orderBookGrid, isCompact && styles.orderBookGridCompact, { borderColor: colors.border }]}>
               <View style={styles.orderBookCol}>
                 <View style={styles.orderBookHeader}>
                   <Ionicons name="arrow-up-circle-outline" size={14} color={colors.success} />
-                  <Text style={[styles.orderBookHeaderText, { color: colors.textSecondary }]}>Buy interest</Text>
+                  <Text style={[styles.orderBookHeaderText, { color: colors.textSecondary }]} numberOfLines={1}>Buy interest</Text>
                 </View>
                 {bestBid && (
-                  <Text style={[styles.orderBookBest, { color: colors.textPrimary }]}>
+                  <Text style={[styles.orderBookBest, { color: colors.textPrimary }]} numberOfLines={1}>
                     Best: {formatFromFiat(bestBid.unitPriceGbp, 'GBP')}
                   </Text>
                 )}
                 {orderBook.bids.slice(0, 5).map((entry: any, i: number) => (
                   <View key={`bid-${i}`} style={styles.orderBookRow}>
-                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary }]}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
-                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary }]}>{entry.units}u</Text>
+                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary, flexShrink: 1, minWidth: 0 }]} numberOfLines={1}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
+                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary, flexShrink: 0 }]} numberOfLines={1}>{entry.units}u</Text>
                   </View>
                 ))}
                 {orderBook.bids.length === 0 && (
-                  <Text style={[styles.orderBookEmpty, { color: colors.textMuted }]}>No buy interest yet</Text>
+                  <Text style={[styles.orderBookEmpty, { color: colors.textMuted }]} numberOfLines={1}>No buy interest yet</Text>
                 )}
               </View>
 
-              <View style={[styles.orderBookDivider, { backgroundColor: colors.border }]} />
+              <View style={[styles.orderBookDivider, { backgroundColor: colors.border }, isCompact && styles.orderBookDividerCompact]} />
 
               <View style={styles.orderBookCol}>
                 <View style={styles.orderBookHeader}>
                   <Ionicons name="arrow-down-circle-outline" size={14} color={colors.danger} />
-                  <Text style={[styles.orderBookHeaderText, { color: colors.textSecondary }]}>Sell availability</Text>
+                  <Text style={[styles.orderBookHeaderText, { color: colors.textSecondary }]} numberOfLines={1}>Sell availability</Text>
                 </View>
                 {bestAsk && (
-                  <Text style={[styles.orderBookBest, { color: colors.textPrimary }]}>
+                  <Text style={[styles.orderBookBest, { color: colors.textPrimary }]} numberOfLines={1}>
                     Best: {formatFromFiat(bestAsk.unitPriceGbp, 'GBP')}
                   </Text>
                 )}
                 {orderBook.asks.slice(0, 5).map((entry: any, i: number) => (
                   <View key={`ask-${i}`} style={styles.orderBookRow}>
-                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary }]}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
-                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary }]}>{entry.units}u</Text>
+                    <Text style={[styles.orderBookPrice, { color: colors.textPrimary, flexShrink: 1, minWidth: 0 }]} numberOfLines={1}>{formatFromFiat(entry.unitPriceGbp, 'GBP')}</Text>
+                    <Text style={[styles.orderBookUnits, { color: colors.textSecondary, flexShrink: 0 }]} numberOfLines={1}>{entry.units}u</Text>
                   </View>
                 ))}
                 {orderBook.asks.length === 0 && (
-                  <Text style={[styles.orderBookEmpty, { color: colors.textMuted }]}>No sell offers yet</Text>
+                  <Text style={[styles.orderBookEmpty, { color: colors.textMuted }]} numberOfLines={1}>No sell offers yet</Text>
                 )}
               </View>
             </View>
@@ -533,43 +548,62 @@ export default function AssetDetailScreen() {
       {/* Sticky action dock — viewer-specific CTAs */}
       <CoOwnStickyActionDock>
         {isIssuer ? (
-          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="storefront-outline" size={16} color={colors.brand} />
-            <Text style={[styles.issuerDockText, { color: colors.textPrimary }]}>
-              Issuer view · {availableUnits} units in treasury
-            </Text>
+          <View style={[styles.issuerDock, { backgroundColor: colors.brand + '14', borderColor: colors.brand + '40' }]}>
+            <View style={[styles.issuerDockIcon, { backgroundColor: colors.brand + '22' }]}>
+              <Ionicons name="storefront-outline" size={16} color={colors.brand} />
+            </View>
+            <View style={styles.issuerDockBody}>
+              <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Issuer view</Text>
+              <Text style={[styles.issuerDockText, { color: colors.textSecondary }]} numberOfLines={1}>
+                {availableUnits} units in treasury
+              </Text>
+            </View>
           </View>
         ) : !asset.isOpen ? (
-          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="pause-circle-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.issuerDockText, { color: colors.textSecondary }]}>
-              Paused · trading temporarily unavailable
-            </Text>
+          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <View style={[styles.issuerDockIcon, { backgroundColor: colors.surface }]}>
+              <Ionicons name="pause-circle-outline" size={16} color={colors.textSecondary} />
+            </View>
+            <View style={styles.issuerDockBody}>
+              <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Trading paused</Text>
+              <Text style={[styles.issuerDockText, { color: colors.textMuted }]} numberOfLines={1}>
+                Temporarily unavailable
+              </Text>
+            </View>
           </View>
         ) : availableUnits === 0 && !isHolder ? (
-          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.issuerDockText, { color: colors.textSecondary }]}>
-              Fully allocated · check secondary market
-            </Text>
+          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <View style={[styles.issuerDockIcon, { backgroundColor: colors.surface }]}>
+              <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
+            </View>
+            <View style={styles.issuerDockBody}>
+              <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Fully allocated</Text>
+              <Text style={[styles.issuerDockText, { color: colors.textMuted }]} numberOfLines={1}>
+                Check the secondary market
+              </Text>
+            </View>
           </View>
         ) : (
-          <View style={styles.dockRow}>
-            <View style={styles.dockPriceSection}>
-              <Text style={[styles.dockPriceLabel, { color: colors.textMuted }]}>Unit price</Text>
-              <Text style={[styles.dockPriceValue, { color: colors.textPrimary }]}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</Text>
+          <View style={[styles.dockRow, isCompact && styles.dockRowCompact]}>
+            <View style={[styles.dockPriceSection, isCompact && styles.dockPriceSectionCompact]}>
+              <Text style={[styles.dockPriceLabel, { color: colors.textMuted }]} numberOfLines={1}>Unit price</Text>
+              <Text style={[styles.dockPriceValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</Text>
             </View>
-            <View style={styles.dockActions}>
+            <View style={[styles.dockActions, isCompact && styles.dockActionsCompact, isVeryCompact && isHolder && styles.dockActionsStacked]}>
               {isHolder && (
                 <AnimatedPressable
-                  style={[styles.dockSecondaryBtn, { borderColor: colors.border }]}
+                  style={[
+                    styles.dockSecondaryBtn,
+                    { borderColor: colors.border },
+                    isVeryCompact && styles.dockSecondaryBtnStacked,
+                  ]}
                   onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'sell' })}
                   accessibilityLabel="Sell your units"
                   accessibilityRole="button"
                   scaleValue={0.97}
                   hapticFeedback="medium"
                 >
-                  <Text style={[styles.dockSecondaryText, { color: colors.textPrimary }]}>Sell</Text>
+                  <Text style={[styles.dockSecondaryText, { color: colors.textPrimary }]} numberOfLines={1}>Sell</Text>
                 </AnimatedPressable>
               )}
               <AppButton
@@ -578,7 +612,11 @@ export default function AssetDetailScreen() {
                 size="md"
                 onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' })}
                 accessibilityLabel={isHolder ? 'Buy more units' : 'Buy units in this Co-Own'}
-                style={styles.dockPrimaryBtn}
+                style={[
+                  styles.dockPrimaryBtn,
+                  isCompact && styles.dockPrimaryBtnCompact,
+                  isVeryCompact && isHolder && styles.dockPrimaryBtnStacked,
+                ]}
                 hapticFeedback="medium"
               />
             </View>
@@ -630,11 +668,12 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   collapsedBackBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   collapsedTitle: {
     flex: 1,
@@ -708,6 +747,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
   },
   collapsibleSubtext: {
     fontSize: Type.caption.size,
@@ -718,13 +760,23 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  orderBookGridCompact: {
+    flexDirection: 'column',
+  },
   orderBookCol: {
     flex: 1,
     gap: Space.xs,
+    minWidth: 0,
   },
   orderBookDivider: {
     width: StyleSheet.hairlineWidth,
     marginHorizontal: Space.md,
+  },
+  orderBookDividerCompact: {
+    width: '100%',
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 0,
+    marginVertical: Space.md,
   },
   orderBookHeader: {
     flexDirection: 'row',
@@ -786,10 +838,29 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
+    borderWidth: 1,
+  },
+  issuerDockIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  issuerDockBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  issuerDockTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.1,
   },
   issuerDockText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
   },
   dockRow: {
     flexDirection: 'row',
@@ -797,8 +868,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.md,
   },
+  dockRowCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: Space.sm,
+  },
   dockPriceSection: {
+    flex: 1,
+    flexShrink: 1,
     gap: 2,
+  },
+  dockPriceSectionCompact: {
+    flex: 0,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Space.sm,
   },
   dockPriceLabel: {
     fontSize: Type.meta.size,
@@ -815,12 +900,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Space.sm,
     alignItems: 'center',
+    flexShrink: 1,
+  },
+  dockActionsCompact: {
+    flex: 0,
+    flexShrink: 0,
+  },
+  dockActionsStacked: {
+    flexDirection: 'column-reverse',
+    alignItems: 'stretch',
   },
   dockSecondaryBtn: {
-    paddingVertical: Space.sm + 2,
+    minHeight: 44,
+    paddingVertical: Space.sm + 4,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.lg,
     borderWidth: 1,
+  },
+  dockSecondaryBtnStacked: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dockSecondaryText: {
     fontSize: Type.body.size,
@@ -828,5 +927,14 @@ const styles = StyleSheet.create({
   },
   dockPrimaryBtn: {
     minWidth: 140,
+    flexShrink: 1,
+  },
+  dockPrimaryBtnCompact: {
+    minWidth: 0,
+    flex: 1,
+  },
+  dockPrimaryBtnStacked: {
+    flex: 0,
+    width: '100%',
   },
 });

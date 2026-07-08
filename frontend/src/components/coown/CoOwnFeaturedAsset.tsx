@@ -59,23 +59,24 @@ export function CoOwnFeaturedAsset({
             <CachedImage uri={imageUri} style={[styles.image, { height: imageHeight }]} contentFit="cover" transition={300} />
           ) : (
             <View style={[styles.image, styles.imageFallback, { height: imageHeight, backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="cube-outline" size={44} color={colors.textMuted} />
+              <Ionicons name="image-outline" size={40} color={colors.textMuted} />
+              <Text style={[styles.imageFallbackText, { color: colors.textMuted }]}>No photo yet</Text>
             </View>
           )}
           <View style={[styles.statusOverlay, { backgroundColor: statusColor + 'E6' }]}>
             <View style={[styles.statusDot, { backgroundColor: colors.background }]} />
-            <Text style={[styles.statusText, { color: colors.background }]}>{statusLabel}</Text>
+            <Text style={[styles.statusText, { color: colors.background }]} numberOfLines={1}>{statusLabel}</Text>
           </View>
         </View>
 
         <View style={styles.content}>
           {categoryEyebrow ? (
-            <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>{categoryEyebrow}</Text>
+            <Text style={[styles.eyebrow, { color: colors.textSecondary }]} numberOfLines={1}>{categoryEyebrow}</Text>
           ) : null}
           <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
 
           <View style={styles.priceRow}>
-            <Text style={[styles.unitPrice, { color: colors.textPrimary }]}>{unitPriceLabel}</Text>
+            <Text style={[styles.unitPrice, { color: colors.textPrimary }]} numberOfLines={1}>{unitPriceLabel}</Text>
             <Text style={[styles.perUnit, { color: colors.textSecondary }]}>per unit</Text>
           </View>
 
@@ -83,7 +84,7 @@ export function CoOwnFeaturedAsset({
             <View style={[styles.allocationBarBg, { backgroundColor: colors.surfaceAlt }]}>
               <View style={[styles.allocationBarFill, { width: `${Math.min(allocatedPct, 100)}%`, backgroundColor: colors.brand }]} />
             </View>
-            <Text style={[styles.allocationText, { color: colors.textSecondary }]}>
+            <Text style={[styles.allocationText, { color: colors.textSecondary }]} numberOfLines={1}>
               {allocatedPct}% owned · {availableUnits} of {totalUnits} units available
             </Text>
           </View>
@@ -116,6 +117,8 @@ const styles = StyleSheet.create({
   imageWrap: {
     width: '100%',
     position: 'relative',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
   },
   image: {
     width: '100%',
@@ -123,6 +126,12 @@ const styles = StyleSheet.create({
   imageFallback: {
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Space.xs,
+  },
+  imageFallbackText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
   },
   statusOverlay: {
     position: 'absolute',
@@ -212,7 +221,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: Space.sm + 2,
+    minHeight: 48,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.lg,
     marginTop: Space.xs,
   },

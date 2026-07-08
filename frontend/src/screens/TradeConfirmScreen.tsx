@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -14,7 +14,6 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { placeCoOwnOrder } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useStore } from '../store/useStore';
-import { haptics } from '../utils/haptics';
 import {
   CoOwnMarketHeader,
   CoOwnTradeReceipt,
@@ -28,6 +27,8 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const { assetId, assetTitle, assetImageUrl, side, quantity, totalValue, fee, netValue, orderMode, limitPriceGbp } = route.params;
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isCompactDock = width < 360;
   const haptic = useHaptic();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
@@ -100,7 +101,13 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         onBack={handleBack}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom, Space.md) + (isCompactDock ? 180 : 132) },
+        ]}
+      >
         {/* Trade receipt — product identity, order details, totals */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
           <CoOwnTradeReceipt
@@ -124,18 +131,16 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.riskWrap}>
           <CoOwnRiskDisclosure />
         </Reanimated.View>
-
-        <View style={{ height: 120 }} />
       </ScrollView>
 
       {/* Sticky action dock — confirm / cancel */}
       <CoOwnStickyActionDock>
-        <View style={styles.dockRow}>
+        <View style={[styles.dockRow, isCompactDock && styles.dockRowCompact]}>
           <AppButton
             title="Cancel"
             variant="secondary"
             size="lg"
-            style={styles.cancelBtn}
+            style={[styles.cancelBtn, isCompactDock && styles.cancelBtnCompact]}
             onPress={handleCancel}
             hapticFeedback="medium"
             accessibilityLabel="Cancel order"
@@ -144,7 +149,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             title={isBuy ? 'Confirm buy' : 'Confirm sell'}
             variant="primary"
             size="lg"
-            style={styles.confirmBtn}
+            style={[styles.confirmBtn, isCompactDock && styles.confirmBtnCompact]}
             onPress={handleConfirm}
             disabled={isSubmitting}
             hapticFeedback="heavy"
@@ -175,13 +180,28 @@ const styles = StyleSheet.create({
     marginTop: Space.lg,
   },
   dockRow: {
+    width: '100%',
+    minWidth: 0,
     flexDirection: 'row',
     gap: Space.sm,
   },
+  dockRowCompact: {
+    flexDirection: 'column-reverse',
+  },
   cancelBtn: {
     flex: 1,
+    minWidth: 0,
+  },
+  cancelBtnCompact: {
+    flex: 0,
+    width: '100%',
   },
   confirmBtn: {
     flex: 1.5,
+    minWidth: 0,
+  },
+  confirmBtnCompact: {
+    flex: 0,
+    width: '100%',
   },
 });

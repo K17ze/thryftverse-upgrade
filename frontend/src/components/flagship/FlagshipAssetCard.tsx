@@ -56,7 +56,7 @@ export function FlagshipAssetCard({
           </Text>
 
           <View style={styles.priceRow}>
-            <Text style={styles.unitPrice}>{unitPrice}</Text>
+            <Text style={styles.unitPrice} numberOfLines={1}>{unitPrice}</Text>
             <Text style={styles.perUnit}>/ unit</Text>
           </View>
 
@@ -174,10 +174,13 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     marginLeft: Space.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    minHeight: 44,
+    paddingVertical: 10,
     borderRadius: Radius.md,
     backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionLabel: {
     fontSize: Type.meta.size,

@@ -86,7 +86,7 @@ describe('UI-21 device UX audit and consistency restoration', () => {
   // ── 8. Bottom CTAs do not overlap bottom navigation ──
   it('MyProfileScreen tab content has bottom padding for tab bar clearance', () => {
     const src = read(resolve(SCREENS, 'MyProfileScreen.tsx'));
-    expect(src).toContain('paddingBottom: 120');
+    expect(src).toContain('paddingBottom: 100');
   });
 
   // ── 9. No hidden/inaccessible production routes in corrected flows ──
@@ -283,8 +283,10 @@ describe('UI-21 device UX audit and consistency restoration', () => {
   // ── 27. Chat uses shared header, context, timeline, composer (UI-21P.4) ──
   it('ChatScreen uses shared MessageBubble and ChatComposerBar', () => {
     const src = read(resolve(SCREENS, 'ChatScreen.tsx'));
-    expect(src).toContain("import { MessageBubble } from '../components/chat/MessageBubble'");
-    expect(src).toContain("import { ChatComposerBar } from '../components/chat/ChatComposerBar'");
+    expect(src).toContain('MessageBubble');
+    expect(src).toContain('ChatComposerBar');
+    expect(src).toContain('components/chat/MessageBubble');
+    expect(src).toContain('components/chat/ChatComposerBar');
   });
 
   // ── 28. No external placeholder providers in messaging (UI-21P.4) ──

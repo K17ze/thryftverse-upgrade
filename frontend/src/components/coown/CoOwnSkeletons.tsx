@@ -16,22 +16,34 @@ function SkeletonBlock({ width, height, radius = Radius.md }: { width: number | 
 
 export function CoOwnHubSkeleton() {
   const { width } = useWindowDimensions();
+  const isCompact = width < 360;
   const heroHeight = Math.min(width * 0.62, 280);
-  const cardWidth = (width - Space.md * 3) / 2;
+  const cardWidth = isCompact ? width - Space.md * 2 : (width - Space.md * 3) / 2;
+  const cardImageHeight = isCompact ? cardWidth * 0.8 : cardWidth * 1.25;
 
   return (
     <View style={styles.wrap}>
       <SkeletonBlock width={width - Space.md * 2} height={heroHeight + 120} radius={Radius.lg} />
       <View style={styles.sectionGap} />
-      <View style={styles.row}>
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.25} />
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.25} />
-      </View>
-      <View style={styles.rowGap} />
-      <View style={styles.row}>
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.25} />
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.25} />
-      </View>
+      {isCompact ? (
+        <View style={styles.columnGap}>
+          <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
+          <View style={styles.rowGap} />
+          <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
+        </View>
+      ) : (
+        <>
+          <View style={styles.row}>
+            <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
+            <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
+          </View>
+          <View style={styles.rowGap} />
+          <View style={styles.row}>
+            <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
+            <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -39,8 +51,9 @@ export function CoOwnHubSkeleton() {
 // ── Asset detail skeleton ──
 
 export function CoOwnAssetDetailSkeleton() {
-  const { width } = useWindowDimensions();
-  const heroHeight = Math.min(width * 0.75, 360);
+  const { width, height } = useWindowDimensions();
+  const isCompact = width < 390;
+  const heroHeight = Math.min(height * (isCompact ? 0.52 : 0.65), width * 1.35);
 
   return (
     <View style={styles.wrap}>
@@ -64,21 +77,33 @@ export function CoOwnAssetDetailSkeleton() {
 
 export function CoOwnPortfolioSkeleton() {
   const { width } = useWindowDimensions();
-  const cardWidth = (width - Space.md * 3) / 2;
+  const isCompact = width < 360;
+  const cardWidth = isCompact ? width - Space.md * 2 : (width - Space.md * 3) / 2;
+  const cardHeight = isCompact ? cardWidth * 0.7 : cardWidth * 1.3;
 
   return (
     <View style={styles.wrap}>
       <SkeletonBlock width={width - Space.md * 2} height={100} radius={Radius.lg} />
       <View style={styles.sectionGap} />
-      <View style={styles.row}>
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.3} />
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.3} />
-      </View>
-      <View style={styles.rowGap} />
-      <View style={styles.row}>
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.3} />
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.3} />
-      </View>
+      {isCompact ? (
+        <View style={styles.columnGap}>
+          <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+          <View style={styles.rowGap} />
+          <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+        </View>
+      ) : (
+        <>
+          <View style={styles.row}>
+            <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+            <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+          </View>
+          <View style={styles.rowGap} />
+          <View style={styles.row}>
+            <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+            <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -124,19 +149,31 @@ export function CoOwnTradeSkeleton() {
 
 export function CoOwnCreateStudioSkeleton() {
   const { width } = useWindowDimensions();
-  const cardWidth = (width - Space.md * 3) / 2;
+  const isCompact = width < 360;
+  const cardWidth = isCompact ? width - Space.md * 2 : (width - Space.md * 3) / 2;
+  const cardHeight = isCompact ? cardWidth * 0.7 : cardWidth * 1.2;
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.row}>
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.2} />
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.2} />
-      </View>
-      <View style={styles.rowGap} />
-      <View style={styles.row}>
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.2} />
-        <SkeletonBlock width={cardWidth} height={cardWidth * 1.2} />
-      </View>
+      {isCompact ? (
+        <View style={styles.columnGap}>
+          <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+          <View style={styles.rowGap} />
+          <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+        </View>
+      ) : (
+        <>
+          <View style={styles.row}>
+            <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+            <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+          </View>
+          <View style={styles.rowGap} />
+          <View style={styles.row}>
+            <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+            <SkeletonBlock width={cardWidth} height={cardHeight} radius={Radius.md} />
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -177,6 +214,9 @@ const styles = StyleSheet.create({
   },
   rowGap: {
     height: Space.md,
+  },
+  columnGap: {
+    gap: Space.md,
   },
   sectionGap: {
     height: Space.lg,

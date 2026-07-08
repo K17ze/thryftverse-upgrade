@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { TabParamList, RootStackParamList } from './types';
 import { Colors } from '../constants/colors';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useStore } from '../store/useStore';
 import { CachedImage } from '../components/CachedImage';
@@ -107,11 +107,11 @@ const CreateActionSheet = ({
   const haptic = useHaptic();
 
   const actions = [
-    { key: 'sell', label: 'List an item', icon: 'pricetag-outline' as const, route: 'Sell' as const },
-    { key: 'look', label: 'Create a Look', icon: 'shirt-outline' as const, route: 'CreateLook' as const },
-    { key: 'poster', label: 'Create a Poster', icon: 'images-outline' as const, route: 'CreatePoster' as const, params: { mode: 'poster' } },
-    { key: 'auction', label: 'Create auction', icon: 'hammer-outline' as const, route: 'CreateAuction' as const },
-    { key: 'coown', label: 'Create Co-Own opportunity', icon: 'people-outline' as const, route: 'CreateCoOwn' as const },
+    { key: 'sell', label: 'List an item', description: 'Sell something on the marketplace', icon: 'pricetag-outline' as const, route: 'Sell' as const },
+    { key: 'look', label: 'Create a Look', description: 'Style and share an outfit', icon: 'shirt-outline' as const, route: 'CreateLook' as const },
+    { key: 'poster', label: 'Create a Poster', description: 'Design a visual poster', icon: 'images-outline' as const, route: 'CreatePoster' as const, params: { mode: 'poster' } },
+    { key: 'auction', label: 'Create auction', description: 'Time-based bidding for an item', icon: 'hammer-outline' as const, route: 'CreateAuction' as const },
+    { key: 'coown', label: 'Create Co-Own', description: 'Shared ownership opportunity', icon: 'people-outline' as const, route: 'CreateCoOwn' as const },
   ];
 
   const handlePress = (action: typeof actions[0]) => {
@@ -126,26 +126,42 @@ const CreateActionSheet = ({
       onDismiss={onClose}
       testID="create-action-sheet"
     >
-      <View style={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <View style={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, Space.lg) }]}>
+        <View style={styles.sheetHandle} />
         <Text style={styles.sheetTitle}>Create</Text>
-        {actions.map((action) => (
-          <Pressable
-            key={action.key}
-            style={styles.sheetAction}
-            onPress={() => handlePress(action)}
-            accessibilityRole="button"
-            accessibilityLabel={action.label}
-          >
-            <Ionicons
-              name={action.icon}
-              size={22}
-              color={Colors.textPrimary}
-            />
-            <Text style={styles.sheetActionLabel}>
-              {action.label}
-            </Text>
-          </Pressable>
-        ))}
+        <Text style={styles.sheetSubtitle}>Choose what you'd like to create</Text>
+        <View style={styles.sheetList}>
+          {actions.map((action) => (
+            <Pressable
+              key={action.key}
+              style={({ pressed }) => [
+                styles.sheetAction,
+                pressed && styles.sheetActionPressed,
+              ]}
+              onPress={() => handlePress(action)}
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
+              accessibilityHint={action.description}
+            >
+              <View style={styles.sheetActionIcon}>
+                <Ionicons
+                  name={action.icon}
+                  size={22}
+                  color={Colors.brand}
+                />
+              </View>
+              <View style={styles.sheetActionBody}>
+                <Text style={styles.sheetActionLabel}>
+                  {action.label}
+                </Text>
+                <Text style={styles.sheetActionDescription} numberOfLines={1}>
+                  {action.description}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </Pressable>
+          ))}
+        </View>
       </View>
     </NativeSheet>
   );
@@ -379,27 +395,65 @@ const styles = StyleSheet.create({
   },
   sheetContent: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     paddingTop: Space.sm,
     paddingHorizontal: Space.md,
   },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+    marginBottom: Space.sm,
+  },
   sheetTitle: {
-    fontSize: 18,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
-    marginBottom: Space.sm,
+  },
+  sheetSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginBottom: Space.md,
+  },
+  sheetList: {
+    gap: Space.xs,
   },
   sheetAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    gap: 12,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.sm + 2,
+    gap: Space.sm + 2,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  sheetActionPressed: {
+    opacity: 0.7,
+  },
+  sheetActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    backgroundColor: `${Colors.brand}14`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sheetActionBody: {
+    flex: 1,
+    gap: 2,
   },
   sheetActionLabel: {
-    fontSize: 16,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
-    flex: 1,
+  },
+  sheetActionDescription: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
 });

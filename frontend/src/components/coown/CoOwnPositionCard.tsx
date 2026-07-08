@@ -83,19 +83,19 @@ export function CoOwnPositionCard({
 
           <View style={[styles.valueRow, { borderColor: colors.border }]}>
             <View style={styles.valueItem}>
-              <Text style={[styles.valueLabel, { color: colors.textMuted }]}>Current value</Text>
-              <Text style={[styles.valueAmount, { color: colors.textPrimary }]}>{currentValueLabel}</Text>
+              <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Current value</Text>
+              <Text style={[styles.valueAmount, { color: colors.textPrimary }]} numberOfLines={1}>{currentValueLabel}</Text>
             </View>
             {avgEntryLabel ? (
               <View style={styles.valueItem}>
-                <Text style={[styles.valueLabel, { color: colors.textMuted }]}>Avg entry</Text>
-                <Text style={[styles.valueAmount, { color: colors.textSecondary }]}>{avgEntryLabel}</Text>
+                <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Avg entry</Text>
+                <Text style={[styles.valueAmount, { color: colors.textSecondary }]} numberOfLines={1}>{avgEntryLabel}</Text>
               </View>
             ) : null}
             {unrealizedLabel ? (
               <View style={styles.valueItem}>
-                <Text style={[styles.valueLabel, { color: colors.textMuted }]}>Unrealised</Text>
-                <Text style={[styles.valueAmount, { color: colors.textSecondary }]}>{unrealizedLabel}</Text>
+                <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Unrealised</Text>
+                <Text style={[styles.valueAmount, { color: colors.textSecondary }]} numberOfLines={1}>{unrealizedLabel}</Text>
               </View>
             ) : null}
           </View>
@@ -237,7 +237,8 @@ const styles = StyleSheet.create({
   },
   buyBtn: {
     flex: 1,
-    paddingVertical: Space.sm,
+    minHeight: 44,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -248,7 +249,8 @@ const styles = StyleSheet.create({
   },
   sellBtn: {
     flex: 1,
-    paddingVertical: Space.sm,
+    minHeight: 44,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -259,8 +261,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   detailBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, ScrollView, useWindowDimensions, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -25,7 +25,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { haptics } from '../utils/haptics';
@@ -42,8 +42,8 @@ type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
 
 const TRADE_SIDE_OPTIONS: Array<{ value: TradeSide; label: string; accessibilityLabel: string }> = [
-  { value: 'buy', label: 'BUY', accessibilityLabel: 'Buy side' },
-  { value: 'sell', label: 'SELL', accessibilityLabel: 'Sell side' },
+  { value: 'buy', label: 'Buy', accessibilityLabel: 'Buy side' },
+  { value: 'sell', label: 'Sell', accessibilityLabel: 'Sell side' },
 ];
 
 export default function TradeScreen() {
@@ -53,6 +53,9 @@ export default function TradeScreen() {
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const isCompact = screenWidth < 360;
+  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
 
   const currentUser = useStore((state) => state.currentUser);
   const checkCoOwnEligibility = useStore((state) => state.checkCoOwnEligibility);
@@ -194,7 +197,17 @@ export default function TradeScreen() {
         onBack={handleBack}
       />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={Keyboard.dismiss}
+      >
         {/* Buy/Sell selector */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <AppSegmentControl
@@ -269,9 +282,9 @@ export default function TradeScreen() {
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
           <View style={[styles.inputCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.limitRow}>
-              <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Limit price (optional)</Text>
+              <Text style={[styles.inputLabel, { color: colors.textMuted }]} numberOfLines={1}>Limit price (optional)</Text>
               <View style={[styles.modePill, { backgroundColor: orderMode === 'limit' ? colors.brand : colors.surfaceAlt }]}>
-                <Text style={[styles.modePillText, { color: orderMode === 'limit' ? colors.background : colors.textSecondary }]}>
+                <Text style={[styles.modePillText, { color: orderMode === 'limit' ? colors.background : colors.textSecondary }]} numberOfLines={1}>
                   {orderMode === 'limit' ? 'LIMIT' : 'MARKET'}
                 </Text>
               </View>
@@ -283,7 +296,7 @@ export default function TradeScreen() {
               placeholder={`Market: ${formatFromFiat(marketPrice, 'GBP')}`}
               accessibilityLabel="Limit price"
             />
-            <Text style={[styles.marketHint, { color: colors.textMuted }]}>
+            <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={2}>
               {orderMode === 'market'
                 ? `Market price: ${formatFromFiat(marketPrice, 'GBP')} per unit`
                 : `Limit order at ${formatFromFiat(quote.limitPrice ?? 0, 'GBP')} per unit`}
@@ -295,9 +308,8 @@ export default function TradeScreen() {
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
           <CoOwnRiskDisclosure />
         </Reanimated.View>
-
-        <View style={{ height: 120 }} />
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Sticky action dock */}
       <CoOwnStickyActionDock>
@@ -339,10 +351,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
     marginBottom: Space.xs,
+    minWidth: 0,
+    flexShrink: 1,
   },
   alertTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
+    flexShrink: 1,
+    minWidth: 0,
   },
   alertText: {
     fontSize: Type.body.size,
@@ -366,11 +382,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minWidth: 0,
+    gap: Space.sm,
   },
   modePill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: Radius.full,
+    flexShrink: 0,
   },
   modePillText: {
     fontSize: 10,

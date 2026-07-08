@@ -16,7 +16,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
-import { Typography, Space } from '../theme/designTokens';
+import { Typography, Space, DockConstants } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Listing } from '../data/mockData';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -80,6 +80,7 @@ export default function ItemDetailScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isCompactScreen = screenWidth < 390;
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [fullscreenIndex, setFullscreenIndex] = useState(0);
@@ -299,7 +300,7 @@ export default function ItemDetailScreen() {
 
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 100 }}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.md) + DockConstants.dualActionHeight }}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
@@ -318,6 +319,7 @@ export default function ItemDetailScreen() {
           onDoubleTap={handleDoubleTap}
           onZoomStart={() => { if (item) ProductAnalytics.mediaZoom(item.id); }}
           onOpenFullscreen={handleOpenFullscreen}
+          heightFraction={isCompactScreen ? 0.5 : 0.62}
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
           overlayTopContent={
@@ -365,7 +367,7 @@ export default function ItemDetailScreen() {
           <ProductDescription description={item.description} />
 
           {item.createdAt ? (
-            <Text style={styles.postedDate}>
+            <Text style={styles.postedDate} numberOfLines={1}>
               Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
           ) : null}
@@ -417,7 +419,7 @@ export default function ItemDetailScreen() {
           {recsLoading && recommendationSections.length === 0 ? (
             <View style={styles.railLoading}>
               <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.railLoadingText}>Finding recommendations...</Text>
+              <Text style={styles.railLoadingText} numberOfLines={1}>Finding recommendations...</Text>
             </View>
           ) : (
             railSections.map((section) => (
@@ -445,7 +447,7 @@ export default function ItemDetailScreen() {
 
           {recsError && recommendationSections.length === 0 && (
             <View style={styles.recErrorRow}>
-              <Text style={styles.recErrorText}>
+              <Text style={styles.recErrorText} numberOfLines={2}>
                 Recommendations are temporarily unavailable.
               </Text>
             </View>

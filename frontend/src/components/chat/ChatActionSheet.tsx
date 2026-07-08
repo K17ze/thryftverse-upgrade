@@ -1,11 +1,11 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
-import { AnimatedPressable } from '../AnimatedPressable';
+import React, { useMemo } from "react";
+import { View, Text, StyleSheet, Modal, Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Colors } from "../../constants/colors";
+import { Space, Radius, Type, Typography } from "../../theme/designTokens";
+import { AnimatedPressable } from "../AnimatedPressable";
 
-export type ChatAction = 'gallery' | 'camera';
+export type ChatAction = "gallery" | "camera" | "document";
 
 interface ChatActionSheetProps {
   visible: boolean;
@@ -18,6 +18,8 @@ interface ActionDef {
   icon: string;
   label: string;
   description: string;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export function ChatActionSheet({
@@ -25,20 +27,31 @@ export function ChatActionSheet({
   onClose,
   onSelect,
 }: ChatActionSheetProps) {
-  const actions = useMemo<ActionDef[]>(() => [
-    {
-      id: 'gallery',
-      icon: 'images-outline',
-      label: 'Photo & Video',
-      description: 'Choose from your library',
-    },
-    {
-      id: 'camera',
-      icon: 'camera-outline',
-      label: 'Camera',
-      description: 'Take a new photo or video',
-    },
-  ], []);
+  const actions = useMemo<ActionDef[]>(
+    () => [
+      {
+        id: "gallery",
+        icon: "images-outline",
+        label: "Photo & Video",
+        description: "Choose from your library",
+      },
+      {
+        id: "camera",
+        icon: "camera-outline",
+        label: "Camera",
+        description: "Take a new photo or video",
+      },
+      {
+        id: "document",
+        icon: "document-outline",
+        label: "Document",
+        description: "Backend support required",
+        disabled: true,
+        disabledReason: "Coming soon",
+      },
+    ],
+    [],
+  );
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -54,26 +67,59 @@ export function ChatActionSheet({
             {actions.map((action) => (
               <AnimatedPressable
                 key={action.id}
-                style={styles.row}
+                style={[styles.row, action.disabled && styles.rowDisabled]}
                 onPress={() => {
+                  if (action.disabled) return;
                   onSelect(action.id);
                   onClose();
                 }}
                 activeOpacity={0.7}
-                scaleValue={0.98}
-                hapticFeedback="light"
+                scaleValue={action.disabled ? 1 : 0.98}
+                hapticFeedback={action.disabled ? undefined : "light"}
                 accessibilityRole="button"
                 accessibilityLabel={action.label}
                 accessibilityHint={action.description}
+                accessibilityState={action.disabled ? { disabled: true } : undefined}
+                disabled={action.disabled}
               >
-                <View style={styles.iconCircle}>
-                  <Ionicons name={action.icon as any} size={22} color={Colors.brand} />
+                <View
+                  style={[
+                    styles.iconCircle,
+                    action.disabled && styles.iconCircleDisabled,
+                  ]}
+                >
+                  <Ionicons
+                    name={action.icon as any}
+                    size={22}
+                    color={action.disabled ? Colors.textMuted : Colors.brand}
+                  />
                 </View>
                 <View style={styles.rowText}>
-                  <Text style={styles.rowLabel}>{action.label}</Text>
-                  <Text style={styles.rowDescription}>{action.description}</Text>
+                  <Text
+                    style={[
+                      styles.rowLabel,
+                      action.disabled && styles.rowLabelDisabled,
+                    ]}
+                  >
+                    {action.label}
+                  </Text>
+                  <Text style={styles.rowDescription}>
+                    {action.description}
+                  </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                {action.disabled ? (
+                  <View style={styles.disabledBadge}>
+                    <Text style={styles.disabledBadgeText}>
+                      {action.disabledReason}
+                    </Text>
+                  </View>
+                ) : (
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={Colors.textMuted}
+                  />
+                )}
               </AnimatedPressable>
             ))}
           </View>
@@ -98,8 +144,8 @@ export function ChatActionSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
   },
   sheet: {
     backgroundColor: Colors.surface,
@@ -109,7 +155,7 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.xxl,
     gap: Space.md,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -120,7 +166,7 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: Colors.border,
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: Space.sm,
   },
   header: {
@@ -141,21 +187,27 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Space.sm + 4,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.lg,
     backgroundColor: Colors.surfaceAlt,
   },
+  rowDisabled: {
+    opacity: 0.6,
+  },
   iconCircle: {
     width: 44,
     height: 44,
     borderRadius: Radius.full,
     backgroundColor: `${Colors.brand}14`,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  iconCircleDisabled: {
+    backgroundColor: Colors.surfaceAlt,
   },
   rowText: {
     flex: 1,
@@ -166,16 +218,32 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
+  rowLabelDisabled: {
+    color: Colors.textMuted,
+  },
   rowDescription: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  disabledBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  disabledBadgeText: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
     color: Colors.textMuted,
   },
   cancelBtn: {
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     paddingVertical: 14,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,

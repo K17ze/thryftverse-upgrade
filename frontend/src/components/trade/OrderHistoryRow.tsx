@@ -103,15 +103,15 @@ export function OrderHistoryRow({
         </View>
 
         <View style={styles.metaRow}>
-          <Meta>
+          <Meta style={styles.metaLabel} numberOfLines={1}>
             {side.toUpperCase()}  {type}  {quantity} units
           </Meta>
-          <Meta style={styles.timestamp}>{timestamp}</Meta>
+          <Meta style={styles.timestamp} numberOfLines={1}>{timestamp}</Meta>
         </View>
 
         <View style={styles.priceRow}>
-          <Body style={styles.price}>{pricePerShare} / share</Body>
-          <BodyEmphasis style={styles.total}>{totalAmount}</BodyEmphasis>
+          <Body style={styles.price} numberOfLines={1}>{pricePerShare} / share</Body>
+          <BodyEmphasis style={styles.total} numberOfLines={1}>{totalAmount}</BodyEmphasis>
         </View>
 
         {issuerHandle && onPressIssuer && (
@@ -175,35 +175,49 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+    minWidth: 0,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 2,
+    gap: Space.sm,
   },
   title: {
     flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     marginRight: Space.sm,
   },
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 4,
+    gap: Space.sm,
+  },
+  metaLabel: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   timestamp: {
     textTransform: 'lowercase',
+    flexShrink: 0,
   },
   priceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Space.sm,
   },
   price: {
     color: Colors.textSecondary,
+    flexShrink: 1,
+    minWidth: 0,
   },
   total: {
     fontVariant: ['tabular-nums'],
+    flexShrink: 0,
   },
   issuerRow: {
     flexDirection: 'row',

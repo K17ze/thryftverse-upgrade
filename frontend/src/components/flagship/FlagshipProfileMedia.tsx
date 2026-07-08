@@ -80,7 +80,7 @@ export function FlagshipProfileMedia({
           style={styles.coverGradient}
         />
 
-        {/* Edit cover control — discoverable, inside visible bounds */}
+        {/* Edit cover control — compact camera icon button */}
         {isSelf && onEditCover && !showCoverError && (
           <AnimatedPressable
             style={styles.editCoverBtn}
@@ -92,15 +92,9 @@ export function FlagshipProfileMedia({
             accessibilityRole="button"
           >
             {isUploadingCover ? (
-              <>
-                <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.editCoverLabel}>Uploading…</Text>
-              </>
+              <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <>
-                <Ionicons name="camera" size={16} color="#fff" />
-                <Text style={styles.editCoverLabel}>Change cover</Text>
-              </>
+              <Ionicons name="camera" size={18} color="#fff" />
             )}
           </AnimatedPressable>
         )}
@@ -210,21 +204,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 44,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    width: 44,
+    height: 44,
     borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
-  },
-  editCoverLabel: {
-    fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
   },
   coverErrorRow: {
     position: 'absolute',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, useWindowDimensions, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, useWindowDimensions, RefreshControl, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
+import { useBackendData } from '../context/BackendDataContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { AppInput } from '../components/ui/AppInput';
@@ -67,6 +68,7 @@ export default function CoOwnHubScreen() {
   const reducedMotion = useReducedMotion();
   const { colors, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
+  const { listings } = useBackendData();
   const actingUserId = currentUser?.id;
 
   const [query, setQuery] = React.useState('');
@@ -90,23 +92,36 @@ export default function CoOwnHubScreen() {
     ])
       .then(([items, holdingItems]) => {
         if (cancelled) return;
-        const mapped: HubAsset[] = items.map((item) => ({
-          id: item.id,
-          listingId: item.listingId,
-          issuerId: item.issuerId,
-          title: item.title,
-          image: item.imageUrl ?? '',
-          totalUnits: item.totalUnits,
-          availableUnits: item.availableUnits,
-          unitPriceGBP: item.unitPriceGbp,
-          unitPriceStable: item.unitPriceStable,
-          settlementMode: item.settlementMode as 'GBP' | 'TVUSD' | 'HYBRID',
-          issuerJurisdiction: item.issuerJurisdiction ?? undefined,
-          holders: item.holders,
-          yourUnits: 0,
-          isOpen: item.isOpen,
-          createdAt: item.createdAt,
-        }));
+        const mapped: HubAsset[] = items.map((item) => {
+          // Image fallback hierarchy:
+          // 1. asset.imageUrl (direct)
+          // 2. linked listing cover image (listing.images[0])
+          // 3. empty string → CoOwnAssetTile shows fallback graphic
+          let resolvedImage = item.imageUrl ?? '';
+          if (!resolvedImage && item.listingId) {
+            const linkedListing = listings.find((l) => l.id === item.listingId);
+            if (linkedListing?.images?.length) {
+              resolvedImage = linkedListing.images[0];
+            }
+          }
+          return {
+            id: item.id,
+            listingId: item.listingId,
+            issuerId: item.issuerId,
+            title: item.title,
+            image: resolvedImage,
+            totalUnits: item.totalUnits,
+            availableUnits: item.availableUnits,
+            unitPriceGBP: item.unitPriceGbp,
+            unitPriceStable: item.unitPriceStable,
+            settlementMode: item.settlementMode as 'GBP' | 'TVUSD' | 'HYBRID',
+            issuerJurisdiction: item.issuerJurisdiction ?? undefined,
+            holders: item.holders,
+            yourUnits: 0,
+            isOpen: item.isOpen,
+            createdAt: item.createdAt,
+          };
+        });
         const holdingsMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
         for (const h of holdingItems) {
           holdingsMap.set(h.assetId, { units: h.unitsOwned, avgEntry: h.avgEntryPriceGbp, realized: h.realizedPnlGbp });
@@ -124,7 +139,7 @@ export default function CoOwnHubScreen() {
       });
 
     return () => { cancelled = true; };
-  }, [actingUserId, show]);
+  }, [actingUserId, show, listings]);
 
   React.useEffect(() => {
     const cleanup = loadData();
@@ -201,21 +216,42 @@ export default function CoOwnHubScreen() {
     [marketAssets]
   );
 
-  const newIssues = React.useMemo(
-    () => filteredAssets.filter((a) => a.isOpen && a.availableUnits === a.totalUnits).slice(0, 4),
-    [filteredAssets]
-  );
+  // ── Horizontal rail data: newest, most available, most allocated ──
+  const newestRail = React.useMemo(() => {
+    const open = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0);
+    return [...open]
+      .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+      .slice(0, 10);
+  }, [marketAssets]);
 
-  const nearlyAllocated = React.useMemo(
-    () => filteredAssets.filter((a) => {
-      if (!a.isOpen || a.availableUnits === 0) return false;
-      const pct = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
-      return pct >= 0.7;
-    }).slice(0, 4),
-    [filteredAssets]
-  );
+  const mostAvailableRail = React.useMemo(() => {
+    const open = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0);
+    return [...open]
+      .sort((a, b) => b.availableUnits - a.availableUnits)
+      .slice(0, 10);
+  }, [marketAssets]);
+
+  const mostAllocatedRail = React.useMemo(() => {
+    const open = marketAssets.filter((a) => a.isOpen && a.totalUnits > 0);
+    return [...open]
+      .sort((a, b) => {
+        const aPct = (a.totalUnits - a.availableUnits) / a.totalUnits;
+        const bPct = (b.totalUnits - b.availableUnits) / b.totalUnits;
+        return bPct - aPct;
+      })
+      .slice(0, 10);
+  }, [marketAssets]);
 
   const isSearching = query.trim().length > 0;
+
+  const gridColumns = screenWidth < 360 ? 1 : 2;
+
+  // Real market context — no fabricated volume/growth figures
+  const marketContext = React.useMemo(() => {
+    const openItems = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0).length;
+    const totalAvailableUnits = marketAssets.reduce((sum, a) => sum + Math.max(0, a.availableUnits), 0);
+    return { openItems, totalAvailableUnits };
+  }, [marketAssets]);
 
   const formatStatus = (asset: HubAsset): CoOwnAssetStatus => {
     if (!asset.isOpen) return 'paused';
@@ -306,9 +342,10 @@ export default function CoOwnHubScreen() {
       />
 
       <FlashList
-        data={isSearching ? filteredAssets : discoveryAssets}
+        key={`hub-grid-${gridColumns}`}
+        data={isSearching ? filteredAssets : []}
         keyExtractor={(item) => item.id}
-        numColumns={2}
+        numColumns={gridColumns}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -354,8 +391,16 @@ export default function CoOwnHubScreen() {
               />
             </View>
 
-            {/* Sort control — non-speculative language */}
-            {!isSearching && (
+            {/* Market context — quiet, real data only */}
+            {!isSearching && marketContext.openItems > 0 && (
+              <Text style={[styles.marketContext, { color: colors.textMuted }]} numberOfLines={1}>
+                {marketContext.openItems} {marketContext.openItems === 1 ? 'item' : 'items'} open · {marketContext.totalAvailableUnits} units available
+                {yourPositions.length > 0 ? ` · ${yourPositions.length} ${yourPositions.length === 1 ? 'position' : 'positions'} held` : ''}
+              </Text>
+            )}
+
+            {/* Sort control — only in search mode */}
+            {isSearching && (
               <View style={styles.sortRow}>
                 {(['newest', 'available', 'allocation'] as SortOption[]).map((opt) => (
                   <AnimatedPressable
@@ -375,7 +420,7 @@ export default function CoOwnHubScreen() {
                     <Text style={[
                       styles.sortChipText,
                       { color: sortBy === opt ? colors.background : colors.textSecondary },
-                    ]}>
+                    ]} numberOfLines={1}>
                       {SORT_LABELS[opt]}
                     </Text>
                   </AnimatedPressable>
@@ -405,59 +450,120 @@ export default function CoOwnHubScreen() {
             {!isSearching && yourPositions.length > 0 && (
               <View style={styles.sectionWrap}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your positions</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Your positions</Text>
                   <AnimatedPressable
                     onPress={() => { haptics.tap(); navigation.navigate('Portfolio'); }}
                     accessibilityRole="button"
                     accessibilityLabel="View all positions"
                   >
-                    <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>All {yourPositions.length}</Text>
+                    <Text style={[styles.sectionLink, { color: colors.textSecondary }]} numberOfLines={1}>All {yourPositions.length}</Text>
                   </AnimatedPressable>
                 </View>
-                <View style={styles.positionsRow}>
-                  {yourPositions.slice(0, 2).map((asset) => (
-                    <CoOwnAssetTile
-                      key={asset.id}
-                      imageUri={asset.image}
-                      title={asset.title}
-                      unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
-                      availableUnits={asset.availableUnits}
-                      totalUnits={asset.totalUnits}
-                      status={formatStatus(asset)}
-                      onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-                    />
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.positionsRow}
+                  accessibilityLabel="Your positions"
+                >
+                  {yourPositions.slice(0, 6).map((asset) => (
+                    <View key={asset.id} style={styles.positionTileWrap}>
+                      <CoOwnAssetTile
+                        imageUri={asset.image}
+                        title={asset.title}
+                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
+                        availableUnits={asset.availableUnits}
+                        totalUnits={asset.totalUnits}
+                        status={formatStatus(asset)}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                      />
+                    </View>
                   ))}
-                </View>
+                </ScrollView>
               </View>
             )}
 
-            {/* New issues */}
-            {!isSearching && newIssues.length > 0 && (
+            {/* ── Horizontal rails: Newest, Most available, Most allocated ── */}
+            {!isSearching && newestRail.length > 0 && (
               <View style={styles.sectionWrap}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>New issues</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{newIssues.length} items</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Newest</Text>
                 </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.railContent}
+                  accessibilityLabel="Newest Co-Own items"
+                >
+                  {newestRail.map((asset) => (
+                    <View key={asset.id} style={styles.railTileWrap}>
+                      <CoOwnAssetTile
+                        imageUri={asset.image}
+                        title={asset.title}
+                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
+                        availableUnits={asset.availableUnits}
+                        totalUnits={asset.totalUnits}
+                        status={formatStatus(asset)}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
               </View>
             )}
 
-            {/* Nearly allocated — only if real */}
-            {!isSearching && nearlyAllocated.length > 0 && (
+            {!isSearching && mostAvailableRail.length > 0 && (
               <View style={styles.sectionWrap}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Nearly allocated</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{nearlyAllocated.length} items</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Most available</Text>
                 </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.railContent}
+                  accessibilityLabel="Most available Co-Own items"
+                >
+                  {mostAvailableRail.map((asset) => (
+                    <View key={asset.id} style={styles.railTileWrap}>
+                      <CoOwnAssetTile
+                        imageUri={asset.image}
+                        title={asset.title}
+                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
+                        availableUnits={asset.availableUnits}
+                        totalUnits={asset.totalUnits}
+                        status={formatStatus(asset)}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
               </View>
             )}
 
-            {/* Available now header */}
-            {!isSearching && discoveryAssets.length > 0 && (
+            {!isSearching && mostAllocatedRail.length > 0 && (
               <View style={styles.sectionWrap}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Available now</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{discoveryAssets.length} items</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Nearly allocated</Text>
                 </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.railContent}
+                  accessibilityLabel="Nearly allocated Co-Own items"
+                >
+                  {mostAllocatedRail.map((asset) => (
+                    <View key={asset.id} style={styles.railTileWrap}>
+                      <CoOwnAssetTile
+                        imageUri={asset.image}
+                        title={asset.title}
+                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
+                        availableUnits={asset.availableUnits}
+                        totalUnits={asset.totalUnits}
+                        status={formatStatus(asset)}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
               </View>
             )}
 
@@ -465,8 +571,8 @@ export default function CoOwnHubScreen() {
             {isSearching && (
               <View style={styles.sectionWrap}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Results</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{filteredAssets.length} items</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Results</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]} numberOfLines={1}>{filteredAssets.length} items</Text>
                 </View>
               </View>
             )}
@@ -497,6 +603,26 @@ export default function CoOwnHubScreen() {
         ListFooterComponent={
           !isSearching ? (
             <View style={styles.footerWrap}>
+              {/* Creator action — intentional, not a random admin button */}
+              <AnimatedPressable
+                onPress={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
+                style={[styles.creatorCard, { borderColor: colors.brand + '40' }]}
+                accessibilityRole="button"
+                accessibilityLabel="Issue a new Co-Own item"
+                scaleValue={0.98}
+              >
+                <View style={[styles.creatorIcon, { backgroundColor: colors.brand + '18' }]}>
+                  <Ionicons name="add-circle-outline" size={22} color={colors.brand} />
+                </View>
+                <View style={styles.creatorBody}>
+                  <Text style={[styles.creatorTitle, { color: colors.textPrimary }]} numberOfLines={1}>Issue a new Co-Own</Text>
+                  <Text style={[styles.creatorSub, { color: colors.textSecondary }]} numberOfLines={2}>
+                    List an item for shared ownership and invite co-owners
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </AnimatedPressable>
+
               {/* How Co-Own works */}
               <CoOwnEducationCard
                 onLearnMore={() => navigation.navigate('CoOwnOnboarding')}
@@ -511,7 +637,7 @@ export default function CoOwnHubScreen() {
                 accessibilityLabel="View market ledger"
               >
                 <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
-                <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]}>View market ledger</Text>
+                <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]} numberOfLines={1}>View market ledger</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </AnimatedPressable>
 
@@ -519,7 +645,7 @@ export default function CoOwnHubScreen() {
             </View>
           ) : null
         }
-        estimatedItemSize={240}
+        estimatedItemSize={gridColumns === 1 ? 480 : 300}
       />
     </SafeAreaView>
   );
@@ -616,6 +742,11 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     marginBottom: Space.lg,
   },
+  marketContext: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginBottom: Space.md,
+  },
   sortChip: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -652,8 +783,20 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   positionsRow: {
-    flexDirection: 'row',
     gap: Space.md,
+    paddingRight: Space.md,
+  },
+  positionTileWrap: {
+    width: 180,
+    flex: 0,
+  },
+  railContent: {
+    gap: Space.md,
+    paddingRight: Space.md,
+  },
+  railTileWrap: {
+    width: 160,
+    flex: 0,
   },
   tileWrap: {
     flex: 1,
@@ -662,6 +805,40 @@ const styles = StyleSheet.create({
   },
   footerWrap: {
     paddingTop: Space.lg,
+  },
+  creatorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    marginBottom: Space.lg,
+    minHeight: 64,
+  },
+  creatorIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  creatorBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  creatorTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
+  },
+  creatorSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 18,
   },
   ledgerLink: {
     flexDirection: 'row',
