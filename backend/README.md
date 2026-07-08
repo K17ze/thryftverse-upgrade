@@ -57,6 +57,9 @@ $env:EXPO_PUBLIC_API_BASE_URL="http://192.168.1.10:4000"; npx expo start
 - `POST /auth/refresh`
 - `GET /auth/me`
 - `POST /auth/logout`
+- `POST /auth/password/change`
+- `PATCH /users/me/preferences` (holiday mode, private profile)
+- `PATCH /users/me/postage` (carrier, free shipping, bundle discount)
 - `GET /listings`
 - `GET /search/listings?q=<query>`
 - `POST /listings`
