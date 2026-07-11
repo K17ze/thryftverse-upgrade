@@ -41,6 +41,8 @@ import {
 } from '../services/commerceApi';
 import { CapabilityCarrier, getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { CachedImage } from '../components/CachedImage';
+import { BuyerProtectionStrip } from '../components/product';
+import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
 import { Space, Typography } from '../theme/designTokens';
@@ -148,6 +150,7 @@ function buildOrderSignature(params: {
   carrierId?: string;
   platformCharge: number;
   postageFee: number;
+  walletDebit?: number;
 }): string {
   return [
     params.buyerId,
@@ -157,6 +160,7 @@ function buildOrderSignature(params: {
     params.carrierId ?? 'none',
     params.platformCharge.toFixed(2),
     params.postageFee.toFixed(2),
+    params.walletDebit?.toFixed(2) ?? 'none',
   ].join('|');
 }
 
@@ -186,6 +190,29 @@ export default function CheckoutScreen() {
   const [isHydrating, setIsHydrating] = useState(false);
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isSelectingPayment, setIsSelectingPayment] = useState(false);
+
+  // Wallet balance for balance-at-checkout toggle
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [useBalance, setUseBalance] = useState(false);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+
+  // Fetch wallet balance on mount
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    setBalanceLoading(true);
+    getIzePosition(currentUser.id, 'GBP')
+      .then((position) => {
+        if (!cancelled) setWalletBalance(position.balances.userFiatValue);
+      })
+      .catch(() => {
+        if (!cancelled) setWalletBalance(0);
+      })
+      .finally(() => {
+        if (!cancelled) setBalanceLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
   const [stage, setStage] = useState<CheckoutStage>('idle');
   const [addCardSheetVisible, setAddCardSheetVisible] = useState(false);
   const [paymentSelectorVisible, setPaymentSelectorVisible] = useState(false);
@@ -220,11 +247,16 @@ export default function CheckoutScreen() {
     if (!currentUser?.id || !item) return false;
     if (isHydrating || isInteractionLocked) return false;
     if (!savedAddress?.id) return false;
-    if (!savedPaymentMethod?.id) return false;
     if (!postageOption.carrierId) return false;
-    if (!isPaymentMethodAllowed(checkoutCapabilities, savedPaymentMethod.type)) return false;
+    // If balance covers the full total, payment method is not required
+    const grossTotal = item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp;
+    const balanceCoversFull = useBalance && walletBalance >= grossTotal;
+    if (!balanceCoversFull) {
+      if (!savedPaymentMethod?.id) return false;
+      if (!isPaymentMethodAllowed(checkoutCapabilities, savedPaymentMethod.type)) return false;
+    }
     return true;
-  }, [currentUser?.id, item, isHydrating, isInteractionLocked, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, checkoutCapabilities, savedPaymentMethod?.type]);
+  }, [currentUser?.id, item, isHydrating, isInteractionLocked, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, checkoutCapabilities, savedPaymentMethod?.type, useBalance, walletBalance, postageOption.priceFromGbp]);
 
   // --- Mount / unmount ---
   useEffect(() => {
@@ -491,6 +523,7 @@ export default function CheckoutScreen() {
       carrierId: postageOption.carrierId ?? undefined,
       platformCharge: PLATFORM_CHARGE,
       postageFee: POSTAGE_FEE,
+      walletDebit: useBalance ? Math.min(walletBalance, item.price + PLATFORM_CHARGE + POSTAGE_FEE) : undefined,
     });
 
     const attemptId = ++paymentAttemptRef.current;
@@ -537,8 +570,11 @@ export default function CheckoutScreen() {
           addressId: savedAddress?.id,
           paymentMethodId: savedPaymentMethod?.id,
           platformChargeGbp: PLATFORM_CHARGE,
+          buyerProtectionFeeGbp: PLATFORM_CHARGE,
           postageFeeGbp: POSTAGE_FEE,
           shippingCarrierId: postageOption.carrierId ?? undefined,
+          // Pass wallet balance debit so the backend can apply split-tender
+          walletDebitGbp: useBalance ? Math.min(walletBalance, item.price + PLATFORM_CHARGE + POSTAGE_FEE) : undefined,
         });
 
         if (
@@ -659,6 +695,8 @@ export default function CheckoutScreen() {
     show,
     handleSettlementNavigation,
     cancelStaleOrder,
+    useBalance,
+    walletBalance,
   ]);
 
   // --- Address selection change ---
@@ -959,7 +997,9 @@ export default function CheckoutScreen() {
 
   const PLATFORM_CHARGE = calculatePlatformChargeGbp(item.price);
   const POSTAGE_FEE = postageOption.priceFromGbp;
-  const TOTAL = item.price + PLATFORM_CHARGE + POSTAGE_FEE;
+  const GROSS_TOTAL = item.price + PLATFORM_CHARGE + POSTAGE_FEE;
+  const balanceApplied = useBalance ? Math.min(walletBalance, GROSS_TOTAL) : 0;
+  const TOTAL = Math.max(0, GROSS_TOTAL - balanceApplied);
 
   const allowCardPayments = isPaymentMethodAllowed(checkoutCapabilities, 'card');
 
@@ -1027,6 +1067,8 @@ export default function CheckoutScreen() {
           subtitle={addressSubtitle}
           actionLabel={savedAddress ? 'Change' : 'Add'}
           onPress={handleAddressPress}
+          icon="location-outline"
+          isFilled={!!savedAddress}
           warningText={addressNeedsSave ? 'Needs saving before payment' : undefined}
           errorText={addressError ?? undefined}
           accessibilityLabel={
@@ -1044,6 +1086,8 @@ export default function CheckoutScreen() {
           subtitle={`${postageOption.etaLabel}${postageOption.liveQuote ? '' : ' (Estimated)'}${postageOption.tracking ? ' · Tracking' : ''}`}
           actionLabel={formatFromFiat(POSTAGE_FEE, 'GBP')}
           onPress={canChangePostage ? handleDeliveryPress : undefined}
+          icon="cube-outline"
+          isFilled={!!postageOption.carrierId}
           errorText={
             !postageOption.carrierId
               ? 'Shipping not available for your region'
@@ -1085,6 +1129,8 @@ export default function CheckoutScreen() {
               setAddCardSheetVisible(true);
             }
           }}
+          icon="card-outline"
+          isFilled={!!savedPaymentMethod}
           errorText={paymentError ?? undefined}
           accessibilityLabel={
             savedPaymentMethod
@@ -1097,15 +1143,73 @@ export default function CheckoutScreen() {
         <View style={styles.sectionDivider} />
 
         {/* 6. Price breakdown */}
-        <View style={styles.priceBreakdown}>
+        <View style={styles.priceBreakdownCard}>
+          <View style={styles.priceBreakdownHeader}>
+            <Ionicons name="receipt-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.priceBreakdownTitle}>Order summary</Text>
+          </View>
           <PriceRow label="Item" value={formatFromFiat(item.price, 'GBP')} />
           <PriceRow label="Platform charge" value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} />
           <PriceRow
             label={`Delivery${postageOption.liveQuote ? '' : ' (Estimated)'}`}
             value={formatFromFiat(POSTAGE_FEE, 'GBP')}
           />
+          <View style={styles.protectionIncludedRow}>
+            <Ionicons name="shield-checkmark-outline" size={12} color={Colors.success} />
+            <Text style={styles.protectionIncludedText}>
+              Includes buyer protection — funds held in escrow until you confirm
+            </Text>
+          </View>
           <View style={styles.priceDivider} />
-          <PriceRow label="Total" value={formatFromFiat(TOTAL, 'GBP')} bold />
+          <PriceRow label="Total" value={formatFromFiat(GROSS_TOTAL, 'GBP')} bold />
+
+          {/* 6a. Balance-at-checkout toggle */}
+          {walletBalance > 0 && !balanceLoading && (
+            <View style={styles.balanceRow}>
+              <Pressable
+                style={styles.balanceToggle}
+                onPress={() => {
+                  haptics.tap();
+                  setUseBalance((v) => !v);
+                }}
+                accessibilityRole="switch"
+                accessibilityLabel="Use wallet balance"
+                accessibilityState={{ checked: useBalance }}
+              >
+                <View style={[styles.balanceSwitch, useBalance && styles.balanceSwitchOn]}>
+                  <View style={[styles.balanceKnob, useBalance && styles.balanceKnobOn]} />
+                </View>
+                <View style={styles.balanceTextCol}>
+                  <Text style={styles.balanceLabel}>Use wallet balance</Text>
+                  <Text style={styles.balanceAmount} numberOfLines={1}>
+                    {formatFromFiat(walletBalance, 'GBP')} available
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+          )}
+
+          {useBalance && balanceApplied > 0 && (
+            <>
+              <PriceRow
+                label="Wallet balance applied"
+                value={`-${formatFromFiat(balanceApplied, 'GBP')}`}
+              />
+              <View style={styles.priceDivider} />
+              <PriceRow label="To pay" value={formatFromFiat(TOTAL, 'GBP')} bold />
+              <View style={styles.savingsBadge}>
+                <Ionicons name="wallet-outline" size={11} color={Colors.success} />
+                <Text style={styles.savingsText}>
+                  Saving {formatFromFiat(balanceApplied, 'GBP')} with wallet balance
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
+
+        {/* 6b. Buyer protection strip */}
+        <View style={styles.protectionStripWrap}>
+          <BuyerProtectionStrip compact />
         </View>
 
         {/* 7. Transaction feedback */}
@@ -1164,7 +1268,9 @@ export default function CheckoutScreen() {
         >
           {isSubmitting ? (
             <ActivityIndicator size="small" color={Colors.textInverse} />
-          ) : null}
+          ) : (
+            <Ionicons name="lock-closed" size={16} color={Colors.textInverse} />
+          )}
           <Text style={styles.payBtnText}>{payLabel}</Text>
         </Pressable>
       </View>
@@ -1182,6 +1288,15 @@ export default function CheckoutScreen() {
         selectedId={savedPaymentMethod?.id}
         onSelect={handleSelectPaymentMethod}
         isSelecting={isSelectingPayment}
+        onAddCard={() => {
+          setPaymentSelectorVisible(false);
+          setAddCardSheetVisible(true);
+        }}
+        onExpressPay={(type) => {
+          setPaymentSelectorVisible(false);
+          show(`${type === 'apple_pay' ? 'Apple Pay' : 'Google Pay'} setup required — add a card first to enable express checkout.`, 'info');
+          setAddCardSheetVisible(true);
+        }}
       />
     </SafeAreaView>
   );
@@ -1261,13 +1376,117 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginVertical: Space.sm,
   },
-  priceBreakdown: {
-    paddingVertical: Space.sm,
+  priceBreakdownCard: {
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    marginTop: Space.sm,
+  },
+  priceBreakdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: Space.sm + 2,
+  },
+  priceBreakdownTitle: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   priceDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
     marginVertical: Space.sm,
+  },
+  savingsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: Space.xs,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: `${Colors.success}12`,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  savingsText: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: Colors.success,
+  },
+  protectionStripWrap: {
+    marginTop: Space.sm,
+  },
+  protectionIncludedRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+    paddingTop: 6,
+  },
+  protectionIncludedText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.success,
+    lineHeight: 15,
+  },
+  balanceRow: {
+    marginTop: Space.sm,
+  },
+  balanceToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  balanceSwitch: {
+    width: 40,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    justifyContent: 'center',
+    padding: 2,
+  },
+  balanceSwitchOn: {
+    backgroundColor: Colors.success,
+    borderColor: Colors.success,
+  },
+  balanceKnob: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.textMuted,
+    alignSelf: 'flex-start',
+  },
+  balanceKnobOn: {
+    backgroundColor: '#fff',
+    alignSelf: 'flex-end',
+  },
+  balanceTextCol: {
+    flex: 1,
+    gap: 1,
+  },
+  balanceLabel: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  balanceAmount: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   feedbackRow: {
     flexDirection: 'row',

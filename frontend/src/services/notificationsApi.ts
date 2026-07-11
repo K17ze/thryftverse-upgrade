@@ -18,6 +18,9 @@ export type NotificationEventType =
   | 'chat_message'
   | 'payout_processed'
   | 'refund_completed'
+  | 'auction_outbid'
+  | 'auction_won'
+  | 'auction_ending_soon'
   | 'generic';
 
 export type NotificationPushCategory =
@@ -63,6 +66,8 @@ interface ListNotificationDevicesResponse {
   }>;
 }
 
+export type NotificationPriority = 'urgent' | 'normal' | 'low';
+
 export interface NotificationEvent {
   id: string;
   userId: string;
@@ -83,6 +88,40 @@ export interface NotificationEvent {
   readAt: string | null;
   imageUrl: string | null;
   route: NotificationRoute | null;
+  priority?: NotificationPriority;
+}
+
+const URGENT_EVENT_TYPES: NotificationEventType[] = [
+  'order_created',
+  'order_paid',
+  'order_dispatched',
+  'order_delivered',
+  'order_cancelled',
+  'order_refunded',
+  'resolution_opened',
+  'resolution_status_changed',
+  'auction_outbid',
+  'auction_won',
+  'payout_processed',
+  'refund_completed',
+];
+
+const LOW_EVENT_TYPES: NotificationEventType[] = [
+  'generic',
+];
+
+export function resolveNotificationPriority(eventType: NotificationEventType): NotificationPriority {
+  if (URGENT_EVENT_TYPES.includes(eventType)) return 'urgent';
+  if (LOW_EVENT_TYPES.includes(eventType)) return 'low';
+  return 'normal';
+}
+
+export function resolveNotificationCategory(eventType: NotificationEventType): NotificationPushCategory | null {
+  if (eventType === 'chat_message') return 'messages';
+  if (eventType.startsWith('order_') || eventType === 'refund_completed' || eventType === 'payout_processed') return 'orderUpdates';
+  if (eventType === 'auction_outbid' || eventType === 'auction_won' || eventType === 'auction_ending_soon') return 'priceDrops';
+  if (eventType === 'review_received') return 'wishlist';
+  return null;
 }
 
 interface ListNotificationEventsResponse {

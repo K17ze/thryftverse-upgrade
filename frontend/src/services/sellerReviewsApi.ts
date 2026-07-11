@@ -11,6 +11,13 @@ export interface SellerReviewItem {
   rating: number;
   comment: string | null;
   createdAt: string;
+  /** Photo URLs attached by the buyer */
+  photoUrls?: string[];
+  /** Seller response if present */
+  sellerResponse?: {
+    text: string;
+    createdAt: string;
+  } | null;
   reviewer: {
     id: string | null;
     username: string | null;

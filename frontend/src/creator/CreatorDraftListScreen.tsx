@@ -151,7 +151,7 @@ export function CreatorDraftListScreen() {
           accessibilityLabel={`Delete draft ${item.title}`}
           accessibilityRole="button"
         >
-          <Ionicons name="trash-outline" size={16} color="#ff6b6b" />
+          <Ionicons name="trash-outline" size={16} color={Colors.danger} />
         </Pressable>
       </View>
     </Pressable>

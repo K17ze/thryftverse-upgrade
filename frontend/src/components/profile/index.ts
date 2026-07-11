@@ -4,3 +4,7 @@ export { ClosetBoardCard } from './ClosetBoardCard';
 export { MoodboardCollectionGrid } from './MoodboardCollectionGrid';
 export { LookPreviewCard } from './LookPreviewCard';
 export { BoardEmptyGraphic } from './BoardEmptyGraphic';
+export { ProfileTrustSignals, type ProfileTrustSignalsProps } from './ProfileTrustSignals';
+export { VerificationBadge, resolveVerificationTier, type VerificationBadgeProps } from './VerificationBadge';
+export { ReviewSummaryBlock, ProfileReviewRow } from './ProfileReviews';
+export { SellerResponseComposer, type SellerResponseComposerProps } from './SellerResponseComposer';

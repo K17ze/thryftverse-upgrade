@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
 import type { SellerReviewItem, SellerReviewSummary } from '../../services/sellerReviewsApi';
 
 const BG = Colors.background;
@@ -74,18 +74,27 @@ interface ProfileReviewRowProps {
   item: SellerReviewItem;
   onOpenReviewer?: (userId: string) => void;
   onOpenListing?: (listingId: string) => void;
+  /** Called when user taps a review photo (optional fullscreen viewer) */
+  onOpenPhoto?: (photoUrls: string[], index: number) => void;
+  /** Called when the seller wants to respond to this review (only for own profile) */
+  onRespond?: (reviewId: string, reviewerName: string, rating: number) => void;
 }
 
 /**
- * Review row — compact reviewer identity, strong comment readability,
- * listing context visually subordinate. The full reviewer identity region
- * (avatar + name + date) is tappable, not just the avatar.
- * Listing context is quietly tappable with pressed feedback.
+ * Review row — flagship quality with:
+ * - Inline 5-star display (not just "★ 4")
+ * - Verified buyer badge
+ * - Photo thumbnails
+ * - Seller response section
+ * - Listing context visually subordinate
+ * The full reviewer identity region (avatar + name + date) is tappable.
  */
 export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   item,
   onOpenReviewer,
   onOpenListing,
+  onOpenPhoto,
+  onRespond,
 }: ProfileReviewRowProps) {
   const reviewerName = item.reviewer.displayName || item.reviewer.username || 'Anonymous';
   const dateText = item.createdAt
@@ -94,10 +103,15 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   const canOpenReviewer = Boolean(item.reviewer.id && onOpenReviewer);
   const canOpenListing = Boolean(item.listing?.id && onOpenListing);
   const reviewerInitials = getInitials(reviewerName);
+  const photos = item.photoUrls ?? [];
+  const sellerResponse = item.sellerResponse ?? null;
+  const responseDate = sellerResponse?.createdAt
+    ? new Date(sellerResponse.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : '';
 
   return (
     <View style={styles.reviewRow}>
-      {/* Full reviewer identity region — tappable as one unit */}
+      {/* Reviewer identity + rating */}
       <Pressable
         style={styles.reviewHeader}
         onPress={() => canOpenReviewer && onOpenReviewer!(item.reviewer.id!)}
@@ -118,15 +132,83 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
           </View>
         )}
         <View style={styles.reviewIdentityCol}>
-          <Text style={styles.reviewName} numberOfLines={1}>{reviewerName}</Text>
-          <Text style={styles.reviewDate}>{dateText}</Text>
-        </View>
-        <View style={styles.reviewRatingRow}>
-          <Ionicons name="star" size={12} color={BRAND} />
-          <Text style={styles.reviewRatingValue}>{item.rating}</Text>
+          <View style={styles.reviewNameRow}>
+            <Text style={styles.reviewName} numberOfLines={1}>{reviewerName}</Text>
+            <View style={styles.verifiedBadge}>
+              <Ionicons name="checkmark-circle" size={10} color={Colors.success} />
+              <Text style={styles.verifiedBadgeText}>Verified buyer</Text>
+            </View>
+          </View>
+          <View style={styles.reviewMetaRow}>
+            {[1, 2, 3, 4, 5].map((s) => (
+              <Ionicons
+                key={s}
+                name={s <= item.rating ? 'star' : 'star-outline'}
+                size={11}
+                color={s <= item.rating ? BRAND : MUTED}
+              />
+            ))}
+            <Text style={styles.reviewDate}>{dateText}</Text>
+          </View>
         </View>
       </Pressable>
+
+      {/* Comment */}
       {item.comment ? <Text style={styles.reviewComment}>{item.comment}</Text> : null}
+
+      {/* Photo thumbnails */}
+      {photos.length > 0 && (
+        <View style={styles.photoRow}>
+          {photos.slice(0, 4).map((uri, idx) => (
+            <Pressable
+              key={uri + idx}
+              onPress={() => onOpenPhoto?.(photos, idx)}
+              disabled={!onOpenPhoto}
+              accessibilityRole={onOpenPhoto ? 'button' : undefined}
+              accessibilityLabel={onOpenPhoto ? `View review photo ${idx + 1}` : undefined}
+            >
+              <CachedImage
+                uri={uri}
+                style={styles.reviewPhoto}
+                containerStyle={{ width: 72, height: 72, borderRadius: Radius.md }}
+                contentFit="cover"
+              />
+              {photos.length > 4 && idx === 3 && (
+                <View style={styles.photoOverflowOverlay}>
+                  <Text style={styles.photoOverflowText}>+{photos.length - 4}</Text>
+                </View>
+              )}
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {/* Seller response */}
+      {sellerResponse && (
+        <View style={styles.sellerResponseBox}>
+          <View style={styles.sellerResponseHeader}>
+            <Ionicons name="storefront-outline" size={12} color={SECONDARY} />
+            <Text style={styles.sellerResponseLabel}>Seller's response</Text>
+            {responseDate ? <Text style={styles.sellerResponseDate}>{responseDate}</Text> : null}
+          </View>
+          <Text style={styles.sellerResponseText}>{sellerResponse.text}</Text>
+        </View>
+      )}
+
+      {/* Respond button — only for own profile and when no response exists */}
+      {onRespond && !sellerResponse && (
+        <Pressable
+          style={styles.respondBtn}
+          onPress={() => onRespond(item.id, reviewerName, item.rating)}
+          accessibilityRole="button"
+          accessibilityLabel="Respond to this review"
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={14} color={BRAND} />
+          <Text style={styles.respondBtnText}>Respond</Text>
+        </Pressable>
+      )}
+
+      {/* Listing context */}
       {item.listing ? (
         <Pressable
           style={({ pressed }) => [styles.reviewListingContext, pressed && styles.reviewListingPressed]}
@@ -181,12 +263,48 @@ const styles = StyleSheet.create({
   reviewAvatar: { width: 36, height: 36, borderRadius: 18 },
   reviewAvatarFallback: { backgroundColor: SURFACE_ALT, alignItems: 'center', justifyContent: 'center' },
   reviewAvatarInitials: { fontSize: 13, fontFamily: Typography.family.bold, color: SECONDARY },
-  reviewIdentityCol: { flex: 1 },
-  reviewName: { fontSize: 14, fontFamily: Typography.family.semibold, color: TEXT },
-  reviewDate: { fontSize: 12, fontFamily: Typography.family.regular, color: MUTED, marginTop: 1 },
-  reviewRatingRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  reviewRatingValue: { fontSize: 13, fontFamily: Typography.family.bold, color: TEXT },
-  reviewComment: { fontSize: 14, fontFamily: Typography.family.regular, color: TEXT, lineHeight: 20 },
+  reviewIdentityCol: { flex: 1, gap: 2 },
+  reviewNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  reviewName: { fontSize: 14, fontFamily: Typography.family.semibold, color: TEXT, flexShrink: 1 },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 0 },
+  verifiedBadgeText: { fontSize: 10, fontFamily: Typography.family.medium, color: Colors.success, letterSpacing: 0.2 },
+  reviewMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  reviewDate: { fontSize: 12, fontFamily: Typography.family.regular, color: MUTED, marginLeft: 6 },
+  reviewComment: { fontSize: 14, fontFamily: Typography.family.regular, color: TEXT, lineHeight: 20, marginTop: 4 },
+  photoRow: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  reviewPhoto: { width: 72, height: 72, borderRadius: Radius.md },
+  photoOverflowOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoOverflowText: { fontSize: 16, fontFamily: Typography.family.bold, color: '#fff' },
+  sellerResponseBox: {
+    backgroundColor: SURFACE_ALT,
+    borderRadius: Radius.md,
+    padding: Space.sm + 2,
+    marginTop: 8,
+    gap: 4,
+  },
+  sellerResponseHeader: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  sellerResponseLabel: { fontSize: 11, fontFamily: Typography.family.semibold, color: SECONDARY, flex: 1 },
+  sellerResponseDate: { fontSize: 11, fontFamily: Typography.family.regular, color: MUTED },
+  sellerResponseText: { fontSize: 13, fontFamily: Typography.family.regular, color: TEXT, lineHeight: 18 },
+  respondBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: Radius.md,
+    backgroundColor: `${BRAND}10`,
+    alignSelf: 'flex-start',
+  },
+  respondBtnText: { fontSize: 13, fontFamily: Typography.family.semibold, color: BRAND },
   reviewListingContext: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingVertical: 4 },
   reviewListingPressed: { opacity: 0.6 },
   reviewListingThumb: { width: 28, height: 28, borderRadius: 4 },

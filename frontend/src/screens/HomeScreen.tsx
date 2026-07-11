@@ -65,6 +65,9 @@ import { EditorialDiscoveryHero } from '../components/discover/EditorialDiscover
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
+import { CuratedCollectionsRail, type CuratedCollection } from '../components/product';
+import { AppSegmentControl } from '../components/ui/AppSegmentControl';
+import { useFollowingFeed } from '../hooks/useFollowingFeed';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -309,10 +312,12 @@ export default function HomeScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
+  const followingFeed = useFollowingFeed();
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<ExploreTile | null>(null);
   const [newListingIds, setNewListingIds] = React.useState<Set<string>>(() => new Set());
+  const [feedMode, setFeedMode] = React.useState<'foryou' | 'following'>('foryou');
 
   const scrollY = useSharedValue(0);
   const lastScrollY = useSharedValue(0);
@@ -446,6 +451,7 @@ export default function HomeScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshListings();
+    void followingFeed.refresh();
     setPostersLoading(true);
     fetchPosterStories({ active: true, limit: 20 })
       .then((res) => setRealPosters(res.items))
@@ -489,12 +495,55 @@ export default function HomeScreen() {
 
   const wishlist = useStore((state) => state.wishlist);
 
-  // Editorial hero items — UI placeholder for future curated content
-  const heroItems = React.useMemo(() => [
-    { id: 'hero1', uri: '', title: 'The Archive Drop', subtitle: 'Curated vintage essentials', ctaLabel: 'Explore', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'The Archive Drop' }) },
-    { id: 'hero2', uri: '', title: 'Summer Layers', subtitle: 'Lightweight fits for the season', ctaLabel: 'Shop', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Summer Layers' }) },
-    { id: 'hero3', uri: '', title: 'Streetwear Daily', subtitle: 'New arrivals every day', ctaLabel: 'Browse', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Streetwear Daily' }) },
-  ], [navigation]);
+  // Editorial hero items — server-driven with graceful fallback
+  const [serverHeroItems, setServerHeroItems] = React.useState<
+    { id: string; uri: string; title: string; subtitle: string; ctaLabel: string; ctaRoute?: string }[]
+  >([]);
+
+  React.useEffect(() => {
+    let mounted = true;
+    fetch(`${process.env.EXPO_PUBLIC_API_URL ?? ''}/content/editorial-hero`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted || !data?.items?.length) return;
+        setServerHeroItems(
+          data.items.map((h: any) => ({
+            id: h.id,
+            uri: h.uri ?? '',
+            title: h.title ?? '',
+            subtitle: h.subtitle ?? '',
+            ctaLabel: h.ctaLabel ?? 'Explore',
+            ctaRoute: h.ctaRoute,
+          })),
+        );
+      })
+      .catch(() => {
+        // Backend endpoint not available — use fallback items below
+      });
+    return () => { mounted = false; };
+  }, []);
+
+  const heroItems = React.useMemo(() => {
+    const buildAction = (route: string | undefined, fallbackCategoryId: string, fallbackTitle: string) => {
+      if (route === 'auction') return () => navigation.navigate('AuctionHome');
+      if (route === 'coown') return () => navigation.navigate('CoOwnHub');
+      return () => navigation.navigate('Browse', { categoryId: fallbackCategoryId, title: fallbackTitle });
+    };
+
+    if (serverHeroItems.length > 0) {
+      return serverHeroItems.map((h) => ({
+        ...h,
+        ctaAction: buildAction(h.ctaRoute, 'all', h.title),
+      }));
+    }
+
+    // Fallback: UI placeholder for future curated content
+    return [
+      { id: 'hero1', uri: '', title: 'The Archive Drop', subtitle: 'Curated vintage essentials', ctaLabel: 'Explore', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'The Archive Drop' }) },
+      { id: 'hero2', uri: '', title: 'Summer Layers', subtitle: 'Lightweight fits for the season', ctaLabel: 'Shop', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Summer Layers' }) },
+      { id: 'hero3', uri: '', title: 'Streetwear Daily', subtitle: 'New arrivals every day', ctaLabel: 'Browse', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Streetwear Daily' }) },
+    ];
+  }, [serverHeroItems, navigation]);
 
   const exploreData = React.useMemo<ExploreTile[]>(() => {
     return listings.map((item): ExploreTile => {
@@ -518,13 +567,96 @@ export default function HomeScreen() {
     });
   }, [listings, wishlist]);
 
-  const feedGridData = showFeedLoadingSkeleton ? [] : exploreData;
+  // Curated collections — editorial picks
+  const curatedCollections = React.useMemo<CuratedCollection[]>(() => {
+    // Build collections from real listing data
+    const luxuryItems = listings.filter((l) => l.price > 200).slice(0, 12);
+    const vintageItems = listings.filter((l) =>
+      l.condition?.toLowerCase().includes('vintage') ||
+      l.title?.toLowerCase().includes('vintage') ||
+      l.brand?.toLowerCase().includes('vintage')
+    ).slice(0, 12);
+    const streetwearItems = listings.filter((l) =>
+      l.category?.toLowerCase().includes('street') ||
+      l.subcategory?.toLowerCase().includes('street') ||
+      l.title?.toLowerCase().includes('street')
+    ).slice(0, 12);
+
+    const collections: CuratedCollection[] = [];
+
+    if (luxuryItems.length > 0) {
+      collections.push({
+        id: 'luxury_edit',
+        title: 'Luxury Edit',
+        subtitle: 'Investment pieces under £500',
+        coverImage: luxuryItems[0].images?.[0] ?? '',
+        itemCount: luxuryItems.length,
+        curatorName: 'ThryftVerse',
+        accentColor: Colors.brand,
+      });
+    }
+
+    if (vintageItems.length > 0) {
+      collections.push({
+        id: 'vintage_finds',
+        title: 'Vintage Finds',
+        subtitle: 'One-of-a-kind archival pieces',
+        coverImage: vintageItems[0].images?.[0] ?? '',
+        itemCount: vintageItems.length,
+        curatorName: 'ThryftVerse',
+        accentColor: '#8b5cf6',
+      });
+    }
+
+    if (streetwearItems.length > 0) {
+      collections.push({
+        id: 'streetwear_staples',
+        title: 'Streetwear Staples',
+        subtitle: 'Daily-driver grails',
+        coverImage: streetwearItems[0].images?.[0] ?? '',
+        itemCount: streetwearItems.length,
+        curatorName: 'ThryftVerse',
+        accentColor: '#f59e0b',
+      });
+    }
+
+    return collections;
+  }, [listings]);
+
+  // Following feed: transform following listings into the same ExploreTile shape
+  const followingExploreData = React.useMemo<ExploreTile[]>(() => {
+    return followingFeed.listings.map((item): ExploreTile => {
+      const primaryMediaUri = item.images?.[0] ?? '';
+      const posterUri = item.images?.find((uri) => !isVideoUri(uri));
+
+      return {
+        id: `item_${item.id}`,
+        type: 'listing',
+        mediaType: isVideoUri(primaryMediaUri) ? 'video' : 'image',
+        mediaUri: primaryMediaUri,
+        posterUri: isVideoUri(primaryMediaUri) ? posterUri : undefined,
+        likes: item.likes,
+        price: item.price,
+        routeId: item.id,
+        sellerId: item.sellerId,
+        caption: item.title,
+        aspectRatio: resolveTileAspectRatio(item.id),
+        isSaved: wishlist.includes(item.id),
+      };
+    });
+  }, [followingFeed.listings, wishlist]);
+
+  const activeFeedData = feedMode === 'following' ? followingExploreData : exploreData;
+  const activeListings = feedMode === 'following' ? followingFeed.listings : listings;
+  const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
+  const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
+  const feedGridData = (showFeedLoadingSkeleton || showFollowingLoading) ? [] : activeFeedData;
 
   const masonryColumns = React.useMemo(() => {
     const columns: [Array<{ tile: ExploreTile; originalIndex: number }>, Array<{ tile: ExploreTile; originalIndex: number }>] = [[], []];
     const columnHeights = [0, 0];
 
-    feedGridData.forEach((tile, originalIndex) => {
+    activeFeedData.forEach((tile, originalIndex) => {
       const tileHeight = Math.round(gridTileWidth * tile.aspectRatio) + (tile.sellerId && tile.routeId ? 38 : 0);
       const targetIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
       columns[targetIndex].push({ tile, originalIndex });
@@ -532,7 +664,7 @@ export default function HomeScreen() {
     });
 
     return columns;
-  }, [feedGridData, gridTileWidth]);
+  }, [activeFeedData, gridTileWidth]);
 
   const closePeek = React.useCallback(() => {
     setPeekItem(null);
@@ -592,10 +724,20 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {realPosters.map((story) => {
+          {(() => {
+            // Sort stories: unwatched-first, then watched
+            const sortedPosters = [...realPosters].sort((a, b) => {
+              if (a.seenByViewer === b.seenByViewer) return 0;
+              return a.seenByViewer ? 1 : -1;
+            });
+            const unwatchedCount = realPosters.filter((s) => !s.seenByViewer).length;
+            return sortedPosters.map((story, idx) => {
             const firstFrame = story.frames[0];
             const mediaUrl = firstFrame?.mediaUrl ?? '';
             const caption = firstFrame?.caption ?? '';
+            const isUnwatched = !story.seenByViewer;
+            // Show unwatched badge on the first unwatched story
+            const showUnwatchedBadge = isUnwatched && idx === 0 && unwatchedCount > 1;
             return (
             <AnimatedPressable
               key={story.id}
@@ -603,10 +745,10 @@ export default function HomeScreen() {
               activeOpacity={0.9}
               onPress={() => { haptic.light(); navigation.navigate('PosterViewer', { storyId: story.id }); }}
               accessibilityRole="button"
-              accessibilityLabel={`Open poster story by @${story.creator.username ?? story.creatorId}`}
+              accessibilityLabel={`Open poster story by @${story.creator.username ?? story.creatorId}${isUnwatched ? ', new' : ''}`}
               accessibilityHint="Opens poster story viewer"
             >
-              <View style={[styles.posterTile, story.seenByViewer ? styles.posterTileSeen : styles.posterTileUnseen]}>
+              <View style={[styles.posterTile, isUnwatched ? styles.posterTileUnseen : styles.posterTileSeen, isUnwatched && styles.posterTileRing]}>
                 {isVideoUri(mediaUrl) ? (
                   <Video
                     source={{ uri: mediaUrl }}
@@ -639,16 +781,23 @@ export default function HomeScreen() {
                     <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                   </View>
                 )}
+
+                {showUnwatchedBadge && (
+                  <View style={styles.unwatchedBadge}>
+                    <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.posterCardMetaRow}>
-                <Text style={story.seenByViewer ? styles.posterSeenMeta : styles.posterFreshMeta}>
-                  {story.seenByViewer ? 'Seen' : 'New'}
+                <Text style={isUnwatched ? styles.posterFreshMeta : styles.posterSeenMeta}>
+                  {isUnwatched ? 'New' : 'Seen'}
                 </Text>
               </View>
             </AnimatedPressable>
             );
-          })}
+            });
+          })()}
         </ScrollView>
 
         {lastError ? (
@@ -812,35 +961,98 @@ export default function HomeScreen() {
         )}
 
         {renderNewListingsBanner()}
-        <DiscoverySectionHeader
-          kicker="Fresh from the community"
-          title="Explore"
-          actionLabel="See all"
-          onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-          style={{ marginTop: Space.md }}
-        />
-        {showFeedLoadingSkeleton ? (
+
+        {/* Curated collections rail */}
+        {curatedCollections.length > 0 && (
+          <CuratedCollectionsRail
+            collections={curatedCollections}
+            onOpenCollection={(collectionId) => {
+              // Navigate to browse with a category filter matching the collection
+              const collectionMap: Record<string, { categoryId: string; title: string }> = {
+                luxury_edit: { categoryId: 'all', title: 'Luxury Edit' },
+                vintage_finds: { categoryId: 'all', title: 'Vintage Finds' },
+                streetwear_staples: { categoryId: 'all', title: 'Streetwear Staples' },
+              };
+              const config = collectionMap[collectionId];
+              if (config) {
+                navigation.navigate('Browse', { categoryId: config.categoryId, title: config.title });
+              }
+            }}
+          />
+        )}
+
+        {/* For You | Following segment control */}
+        <View style={styles.feedSegmentRow}>
+          <AppSegmentControl
+            options={[
+              { value: 'foryou', label: 'For You', accessibilityLabel: 'For You feed' },
+              {
+                value: 'following',
+                label: followingFeed.listings.length > 0
+                  ? `Following · ${followingFeed.listings.length}`
+                  : 'Following',
+                accessibilityLabel: 'Following feed',
+              },
+            ]}
+            value={feedMode}
+            onChange={(next) => {
+              haptic.selection();
+              setFeedMode(next);
+            }}
+            fullWidth
+            style={styles.feedSegment}
+          />
+        </View>
+
+        {feedMode === 'foryou' && (
+          <DiscoverySectionHeader
+            kicker="Fresh from the community"
+            title="Explore"
+            actionLabel="See all"
+            onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+            style={{ marginTop: Space.sm }}
+          />
+        )}
+
+        {showFeedLoadingSkeleton || showFollowingLoading ? (
           renderExploreLoadingState()
         ) : feedGridData.length === 0 ? (
-          // Premium empty state — backend returned zero items and we are not
-          // loading. Preserves the flagship layout instead of collapsing to
-          // a blank masonry. Distinct from the sync-error banner above.
-          <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
-            <EmptyState
-              icon="sparkles-outline"
-              title="No drops live yet"
-              subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
-              ctaLabel="Browse all"
-              onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-              secondaryCtaLabel="Refresh"
-              onSecondaryCtaPress={() => void handleRefresh()}
-            />
-          </Reanimated.View>
+          feedMode === 'following' ? (
+            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+              <EmptyState
+                icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
+                title={followingFeed.hasFollowing ? 'No new drops from sellers you follow' : 'Follow sellers to see their drops here'}
+                subtitle={followingFeed.hasFollowing
+                  ? 'When sellers you follow list new items, they\u2019ll appear here in chronological order. Pull to refresh.'
+                  : 'Build your following feed by tapping follow on seller profiles. Their latest listings will show up here.'
+                }
+                ctaLabel={followingFeed.hasFollowing ? 'Refresh' : 'Discover sellers'}
+                onCtaPress={followingFeed.hasFollowing ? () => void handleRefresh() : () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                secondaryCtaLabel={followingFeed.hasFollowing ? 'Explore all' : undefined}
+                onSecondaryCtaPress={followingFeed.hasFollowing ? () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' }) : undefined}
+              />
+            </Reanimated.View>
+          ) : (
+            // Premium empty state — backend returned zero items and we are not
+            // loading. Preserves the flagship layout instead of collapsing to
+            // a blank masonry. Distinct from the sync-error banner above.
+            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+              <EmptyState
+                icon="sparkles-outline"
+                title="No drops live yet"
+                subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
+                ctaLabel="Browse all"
+                onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                secondaryCtaLabel="Refresh"
+                onSecondaryCtaPress={() => void handleRefresh()}
+              />
+            </Reanimated.View>
+          )
         ) : (
           <View style={styles.masonryGrid}>
             <View style={styles.masonryColumn}>
               {masonryColumns[0].map(({ tile: item, originalIndex }) => {
-                const listing = listings.find((l) => l.id === item.routeId);
+                const listing = activeListings.find((l) => l.id === item.routeId);
                 return (
                 <View key={item.id}>
                   <ExploreGridItem
@@ -860,7 +1072,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.masonryColumn}>
               {masonryColumns[1].map(({ tile: item, originalIndex }) => {
-                const listing = listings.find((l) => l.id === item.routeId);
+                const listing = activeListings.find((l) => l.id === item.routeId);
                 return (
                 <View key={item.id}>
                   <ExploreGridItem
@@ -1019,7 +1231,7 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: Colors.brand,
+    backgroundColor: Colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
@@ -1034,6 +1246,14 @@ const styles = StyleSheet.create({
   },
   feedContent: {
     paddingBottom: 120,
+  },
+  feedSegmentRow: {
+    paddingHorizontal: 16,
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  feedSegment: {
+    flex: 1,
   },
   newListingsBannerWrap: {
     marginTop: 6,
@@ -1311,6 +1531,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.brand,
   },
+  posterTileRing: {
+    shadowColor: Colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   posterTileSeen: {
     borderWidth: 0.5,
     borderColor: Colors.border,
@@ -1453,6 +1680,20 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   frameCountBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontFamily: Typography.family.bold,
+  },
+  unwatchedBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    backgroundColor: Colors.brand,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  unwatchedBadgeText: {
     color: '#fff',
     fontSize: 9,
     fontFamily: Typography.family.bold,

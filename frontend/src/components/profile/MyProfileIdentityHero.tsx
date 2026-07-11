@@ -5,6 +5,9 @@ import { Colors } from '../../constants/colors';
 import { Typography, Space } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
+import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
+import { VERIFICATION_TIERS } from '../../platform/product';
+import { ProfileTrustSignals } from './ProfileTrustSignals';
 
 const AVATAR_SIZE = 96;
 
@@ -15,6 +18,16 @@ interface MyProfileIdentityHeroProps {
   bio?: string;
   location?: string;
   memberSince?: string;
+  /** Seller trust summary from /sellers/:id — provides verified badge, response time, dispatch time. */
+  sellerTrust?: SellerTrustSummary | null;
+  /** Email-verified flag from the user profile (fallback for verified badge). */
+  emailVerified?: boolean;
+  /** Rating average from public profile stats. */
+  ratingAverage?: number | null;
+  /** Review count from public profile stats. */
+  reviewCount?: number;
+  /** Sold listing count from public profile stats. */
+  soldCount?: number;
   onEditAvatar: () => void;
   onEditProfile: () => void;
   onShare: () => void;
@@ -27,6 +40,11 @@ export function MyProfileIdentityHero({
   bio,
   location,
   memberSince,
+  sellerTrust,
+  emailVerified,
+  ratingAverage,
+  reviewCount,
+  soldCount,
   onEditAvatar,
   onEditProfile,
   onShare,
@@ -34,6 +52,9 @@ export function MyProfileIdentityHero({
   const contextParts: string[] = [];
   if (location) contextParts.push(location);
   if (memberSince) contextParts.push(`Member since ${memberSince}`);
+
+  const isVerified = sellerTrust?.verified === true || emailVerified === true;
+  const verificationTier: VerificationTier | null = sellerTrust?.verificationTier ?? (isVerified ? 'email' : null);
 
   return (
     <View style={styles.container}>
@@ -64,7 +85,18 @@ export function MyProfileIdentityHero({
       </View>
 
       {/* Identity */}
-      <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
+      <View style={styles.displayNameRow}>
+        <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
+        {verificationTier ? (
+          <Ionicons
+            name={VERIFICATION_TIERS[verificationTier].icon as keyof typeof Ionicons.glyphMap}
+            size={18}
+            color={VERIFICATION_TIERS[verificationTier].color === 'brand' ? Colors.brand : Colors.success}
+            style={styles.verifiedBadge}
+            accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
+          />
+        ) : null}
+      </View>
       <Text style={styles.username} numberOfLines={1}>@{username}</Text>
 
       {bio ? (
@@ -74,6 +106,16 @@ export function MyProfileIdentityHero({
       {contextParts.length > 0 ? (
         <Text style={styles.contextLine} numberOfLines={1}>{contextParts.join(' · ')}</Text>
       ) : null}
+
+      {/* Trust signal chips — verified, rating, response time, dispatch time, sales */}
+      <ProfileTrustSignals
+        sellerTrust={sellerTrust}
+        emailVerified={emailVerified}
+        ratingAverage={ratingAverage}
+        reviewCount={reviewCount}
+        soldCount={soldCount}
+        align="center"
+      />
 
       {/* Action row */}
       <View style={styles.actionRow}>
@@ -139,6 +181,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.background,
   },
+  displayNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+  },
   displayName: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
@@ -146,6 +194,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
     textAlign: 'center',
     marginBottom: 2,
+  },
+  verifiedBadge: {
+    flexShrink: 0,
+    marginTop: 2,
   },
   username: {
     fontSize: 14,

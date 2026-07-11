@@ -3,17 +3,16 @@ import { View, Text, StyleSheet, TextInput, ScrollView, Platform } from 'react-n
 import { BottomSheet } from '../BottomSheet';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../../constants/colors';
+import { Colors } from '../../constants/colors';
 import { Typography } from '../../theme/designTokens';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { createUserAddress } from '../../services/commerceApi';
 import * as Haptics from 'expo-haptics';
 
-const IS_LIGHT = ActiveTheme === 'light';
-const PANEL_BG = IS_LIGHT ? '#ffffff' : '#111111';
-const PANEL_SOFT_BG = IS_LIGHT ? '#f7f4ef' : '#151515';
-const PANEL_BORDER = IS_LIGHT ? '#d8d1c6' : '#2a2a2a';
+const PANEL_BG = Colors.background;
+const PANEL_SOFT_BG = Colors.surface;
+const PANEL_BORDER = Colors.border;
 
 interface Props {
   visible: boolean;

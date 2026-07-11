@@ -71,6 +71,7 @@ const baseAuction: AuctionDetail = {
   currentBidGbp: 35.0,
   minimumNextBidGbp: 37.0,
   buyNowPriceGbp: 60.0,
+  reservePriceGbp: null,
   bidCount: 5,
   lifecycle: 'live',
   terminalReason: null,

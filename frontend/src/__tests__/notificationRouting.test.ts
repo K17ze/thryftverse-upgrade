@@ -49,7 +49,7 @@ describe('resolveNotificationRoute', () => {
 
   it('resolves AuctionDetail route with auctionId', () => {
     const result = resolveNotificationRoute({ screen: 'AuctionDetail', params: { auctionId: 'auc_123' } });
-    expect(result).toEqual({ screen: 'AuctionDetail', params: { auctionId: 'auc_123' } });
+    expect(result).toEqual({ screen: 'AuctionDetail', params: { auctionId: 'auc_123', openBidSheet: false, initialBidAmount: undefined } });
   });
 
   it('resolves AuctionHome as valid screen', () => {
@@ -79,7 +79,7 @@ describe('resolveNotificationRoute', () => {
 
   it('falls back to payload auctionId when route is null', () => {
     const result = resolveNotificationRoute(null, { auctionId: 'auc_fb' });
-    expect(result).toEqual({ screen: 'AuctionDetail', params: { auctionId: 'auc_fb' } });
+    expect(result).toEqual({ screen: 'AuctionDetail', params: { auctionId: 'auc_fb', openBidSheet: false, initialBidAmount: undefined } });
   });
 
   it('returns null when no route or payload identifiers', () => {
@@ -100,6 +100,29 @@ describe('resolveNotificationRoute', () => {
   it('returns null when AuctionDetail route is missing auctionId', () => {
     const result = resolveNotificationRoute({ screen: 'AuctionDetail' });
     expect(result).toBeNull();
+  });
+
+  it('passes openBidSheet and initialBidAmount from route params for outbid notifications', () => {
+    const result = resolveNotificationRoute({
+      screen: 'AuctionDetail',
+      params: { auctionId: 'auc_1', openBidSheet: true, initialBidAmount: 155.00 },
+    });
+    expect(result).toEqual({
+      screen: 'AuctionDetail',
+      params: { auctionId: 'auc_1', openBidSheet: true, initialBidAmount: 155.00 },
+    });
+  });
+
+  it('passes openBidSheet and initialBidAmount from payload for outbid notifications', () => {
+    const result = resolveNotificationRoute(null, {
+      auctionId: 'auc_2',
+      openBidSheet: true,
+      minimumNextBidGbp: 150.00,
+    });
+    expect(result).toEqual({
+      screen: 'AuctionDetail',
+      params: { auctionId: 'auc_2', openBidSheet: true, initialBidAmount: 150.00 },
+    });
   });
 
   it('returns null when all inputs are null/undefined', () => {

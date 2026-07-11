@@ -6,8 +6,6 @@ import {
   FlatList,
   Pressable,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
@@ -16,6 +14,7 @@ import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useBackendData } from '../../context/BackendDataContext';
+import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 import type { OutfitTag } from './LookMediaComposer';
 
 export interface OutfitPieceEditorProps {
@@ -190,8 +189,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardStickyView
       style={styles.container}
     >
       <FlatList
@@ -201,7 +199,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
         scrollEnabled={false}
         ItemSeparatorComponent={() => <View style={{ height: Space.sm }} />}
       />
-    </KeyboardAvoidingView>
+    </KeyboardStickyView>
   );
 }
 

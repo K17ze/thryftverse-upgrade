@@ -290,6 +290,30 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
         </ElevatedSurface>
 
+        {/* Tips for selling — first-listing guidance */}
+        <View style={styles.tipsCard}>
+          <View style={styles.tipsHeader}>
+            <Ionicons name="bulb-outline" size={14} color={Colors.brand} />
+            <Text style={styles.tipsTitle}>Tips for selling faster</Text>
+          </View>
+          <View style={styles.tipRow}>
+            <Ionicons name="camera-outline" size={13} color={Colors.textMuted} />
+            <Text style={styles.tipText}>Add clear, well-lit photos from multiple angles</Text>
+          </View>
+          <View style={styles.tipRow}>
+            <Ionicons name="pricetag-outline" size={13} color={Colors.textMuted} />
+            <Text style={styles.tipText}>Price competitively — check similar sold items</Text>
+          </View>
+          <View style={styles.tipRow}>
+            <Ionicons name="chatbubble-outline" size={13} color={Colors.textMuted} />
+            <Text style={styles.tipText}>Respond quickly to buyer questions and offers</Text>
+          </View>
+          <View style={styles.tipRow}>
+            <Ionicons name="share-outline" size={13} color={Colors.textMuted} />
+            <Text style={styles.tipText}>Share your listing on social media for more reach</Text>
+          </View>
+        </View>
+
         {/* Support link */}
         <AnimatedPressable
           style={styles.supportLink}
@@ -471,6 +495,40 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     lineHeight: Type.subtitle.lineHeight,
     letterSpacing: Type.subtitle.letterSpacing,
+  },
+
+  tipsCard: {
+    marginBottom: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    backgroundColor: `${Colors.brand}08`,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.brand}20`,
+    gap: 8,
+  },
+  tipsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  tipsTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  tipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    lineHeight: 17,
   },
 
   supportLink: {

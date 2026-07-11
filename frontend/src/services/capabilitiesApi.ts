@@ -19,7 +19,7 @@ export type CapabilityPaymentGatewayId =
   | 'mock_fiat_gbp';
 
 export type CapabilityPaymentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal';
-export type CapabilityPaymentMethodType = 'card' | 'bank_account' | 'wallet';
+export type CapabilityPaymentMethodType = 'card' | 'bank_account' | 'wallet' | 'apple_pay' | 'google_pay';
 
 export interface CapabilityCarrier {
   id: string;

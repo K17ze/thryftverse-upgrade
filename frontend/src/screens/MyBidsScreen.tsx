@@ -125,6 +125,7 @@ export default function MyBidsScreen() {
   const reducedMotionEnabled = useReducedMotion();
 
   const [filter, setFilter] = React.useState<BidFilter>('all');
+  const [endingSoonest, setEndingSoonest] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [items, setItems] = React.useState<ActivityItem[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -163,6 +164,16 @@ export default function MyBidsScreen() {
       setIsLoadingMore(false);
     }
   }, []);
+
+  // Sort items by ending soonest when the toggle is active
+  const sortedItems = React.useMemo(() => {
+    if (!endingSoonest) return items;
+    return [...items].sort((a, b) => {
+      const aTime = new Date(a.endsAt ?? 0).getTime();
+      const bTime = new Date(b.endsAt ?? 0).getTime();
+      return aTime - bTime;
+    });
+  }, [items, endingSoonest]);
 
   React.useEffect(() => {
     setLoading(true);
@@ -223,8 +234,24 @@ export default function MyBidsScreen() {
         </ScrollView>
       </Reanimated.View>
 
+      {/* Ending-soonest sort toggle — only relevant for active bids */}
+      {(filter === 'all' || filter === 'outbid' || filter === 'leading') && items.length > 1 && (
+        <Pressable
+          style={[styles.sortToggle, endingSoonest && styles.sortToggleActive]}
+          onPress={() => setEndingSoonest((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={endingSoonest ? 'Stop sorting by ending soonest' : 'Sort by ending soonest'}
+          accessibilityState={{ checked: endingSoonest }}
+        >
+          <Ionicons name="time-outline" size={14} color={endingSoonest ? Colors.brand : Colors.textMuted} />
+          <Text style={[styles.sortToggleText, endingSoonest && styles.sortToggleTextActive]}>
+            Ending soonest
+          </Text>
+        </Pressable>
+      )}
+
       <FlashList
-        data={items}
+        data={sortedItems}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -244,12 +271,16 @@ export default function MyBidsScreen() {
             >
               <AnimatedPressable
                 style={styles.activityRow}
-                onPress={() => navigation.navigate('AuctionDetail', { auctionId: item.auctionId })}
+                onPress={() => navigation.navigate('AuctionDetail', {
+                  auctionId: item.auctionId,
+                  // One-tap rebid: auto-open BidSheet when the user is outbid
+                  openBidSheet: item.bidState === 'outbid',
+                })}
                 activeOpacity={0.92}
                 scaleValue={0.985}
                 accessibilityRole="button"
                 accessibilityLabel={`${item.title}, ${stateInfo.label}, your bid ${formatFromFiat(item.amountGbp, 'GBP')}`}
-                accessibilityHint="Opens auction details"
+                accessibilityHint={item.bidState === 'outbid' ? 'Opens auction with bid sheet ready to place a new bid' : 'Opens auction details'}
               >
                 {/* Edge-aligned imagery */}
                 <View style={styles.activityImageWrap}>
@@ -396,6 +427,33 @@ const styles = StyleSheet.create({
     height: 20,
     backgroundColor: Colors.border,
     alignSelf: 'center',
+  },
+  sortToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginHorizontal: 16,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  sortToggleActive: {
+    borderColor: Colors.brand,
+    backgroundColor: `${Colors.brand}08`,
+  },
+  sortToggleText: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textMuted,
+  },
+  sortToggleTextActive: {
+    color: Colors.brand,
+    fontFamily: 'Inter_600SemiBold',
   },
   listContent: {
     paddingHorizontal: Space.md,

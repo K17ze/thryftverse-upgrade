@@ -6,8 +6,6 @@ import {
   FlatList,
   TextInput,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +17,7 @@ import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
+import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 import {
   fetchLookCommentsFromApi,
   createLookCommentOnApi,
@@ -216,8 +215,7 @@ export function LookCommentsSheet({
         />
 
         {isAuthenticated ? (
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          <KeyboardStickyView
             style={styles.inputBar}
           >
             <TextInput
@@ -244,7 +242,7 @@ export function LookCommentsSheet({
                 <Ionicons name="send" size={18} color="#fff" />
               )}
             </AnimatedPressable>
-          </KeyboardAvoidingView>
+          </KeyboardStickyView>
         ) : (
           <View style={styles.signInBar}>
             <Pressable

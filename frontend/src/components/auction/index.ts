@@ -1,5 +1,6 @@
 export { AuctionStateBadge } from './AuctionStateBadge';
 export { AuctionCountdown } from './AuctionCountdown';
+export { ReserveStatusBadge } from './ReserveStatusBadge';
 export { AuctionPriceBlock } from './AuctionPriceBlock';
 export { AuctionSkeletons } from './AuctionSkeletons';
 export { AuctionRunwayCard } from './AuctionRunwayCard';

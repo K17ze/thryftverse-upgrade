@@ -175,7 +175,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
 
         {stage === 'error' && (
           <View style={styles.centerState}>
-            <Ionicons name="warning" size={48} color="#ff6b6b" />
+            <Ionicons name="warning" size={48} color={Colors.danger} />
             <Text style={styles.centerStateTitle}>Publishing failed</Text>
             <Text style={styles.centerStateText}>{errorMessage}</Text>
             <Pressable onPress={() => setStage('review')} style={styles.retryBtn}>

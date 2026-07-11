@@ -431,8 +431,8 @@ export function PosterFrameComposer({
 
           {/* Delete — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={handleDelete} accessibilityLabel="Delete sticker">
-            <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
-            <Text style={[styles.stickerToolLabel, { color: '#ff6b6b' }]}>Delete</Text>
+            <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+            <Text style={[styles.stickerToolLabel, { color: Colors.danger }]}>Delete</Text>
           </Pressable>
         </ScrollView>
       )}

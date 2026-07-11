@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Linking, Platform, Pressable } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,7 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
-import { PUSH_NOTIFICATION_DEFINITIONS } from '../preferences/settingsPreferences';
+import { PUSH_NOTIFICATION_DEFINITIONS, PUSH_NOTIFICATION_GROUPS } from '../preferences/settingsPreferences';
 import { useToast } from '../context/ToastContext';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { useStore } from '../store/useStore';
@@ -19,10 +19,19 @@ import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
+import { haptics } from '../utils/haptics';
 
 type Props = StackScreenProps<RootStackParamList, 'PushNotifications'>;
 
 const NOTIFICATIONS = PUSH_NOTIFICATION_DEFINITIONS;
+
+function formatHour(hour: number): string {
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${displayHour}:00 ${period}`;
+}
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function PushNotificationsScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
@@ -33,11 +42,14 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     pushTotalCount,
     setPushNotificationToggle,
     setAllPushNotificationToggles,
+    quietHours,
+    setQuietHours,
   } = useSettingsPreferences();
   const [isSyncingDevice, setIsSyncingDevice] = React.useState(false);
   const [registeredToken, setRegisteredToken] = React.useState<string | null>(null);
   const [isDeviceRegistered, setIsDeviceRegistered] = React.useState(false);
   const [pushPermissionStatus, setPushPermissionStatus] = React.useState<Notifications.NotificationPermissionsStatus | null>(null);
+  const [editingQuietTime, setEditingQuietTime] = React.useState<'start' | 'end' | null>(null);
 
   React.useEffect(() => {
     Notifications.getPermissionsAsync()
@@ -258,18 +270,109 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         </Text>
       </View>
 
-      <SettingsSection title="Categories" noCard>
-        {NOTIFICATIONS.map((item, idx) => (
-          <SettingsRow
-            key={item.key}
-            title={item.label}
-            subtitle={item.subtitle}
-            toggleValue={toggles[item.key]}
-            onToggle={() => void toggle(item.key)}
-            isFirst={idx === 0}
-            isLast={idx === NOTIFICATIONS.length - 1}
+      {PUSH_NOTIFICATION_GROUPS.map((group) => {
+        const groupItems = NOTIFICATIONS.filter((n) => n.group === group.key);
+        if (groupItems.length === 0) return null;
+        const groupIconColor = group.key === 'orders' ? Colors.success : group.key === 'social' ? Colors.brand : Colors.textMuted;
+        return (
+          <SettingsSection key={group.key} title={group.label} noCard>
+            {groupItems.map((item, idx) => (
+              <SettingsRow
+                key={item.key}
+                title={item.label}
+                subtitle={item.subtitle}
+                icon={item.icon}
+                iconColor={groupIconColor}
+                toggleValue={toggles[item.key]}
+                onToggle={() => void toggle(item.key)}
+                isFirst={idx === 0}
+                isLast={idx === groupItems.length - 1}
+              />
+            ))}
+          </SettingsSection>
+        );
+      })}
+
+      {/* Quiet Hours — suppress non-urgent notifications during a time window */}
+      <SettingsSection title="Quiet Hours" noCard>
+        <SettingsRow
+          title="Do Not Disturb"
+          subtitle="Pause non-urgent notifications during set hours"
+          toggleValue={quietHours.enabled}
+          onToggle={() => setQuietHours({ enabled: !quietHours.enabled })}
+          isFirst
+          isLast={!quietHours.enabled}
+        />
+        {quietHours.enabled ? (
+          <View style={styles.quietHoursRow}>
+            <Pressable
+              style={({ pressed }) => [styles.quietTimePicker, pressed && styles.quietTimePickerPressed]}
+              onPress={() => setEditingQuietTime(editingQuietTime === 'start' ? null : 'start')}
+              accessibilityRole="button"
+              accessibilityLabel={`Quiet hours start: ${formatHour(quietHours.startHour)}. Tap to change.`}
+            >
+              <Text style={styles.quietTimeLabel}>From</Text>
+              <Text style={styles.quietTimeValue}>{formatHour(quietHours.startHour)}</Text>
+              <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
+            </Pressable>
+            <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
+            <Pressable
+              style={({ pressed }) => [styles.quietTimePicker, pressed && styles.quietTimePickerPressed]}
+              onPress={() => setEditingQuietTime(editingQuietTime === 'end' ? null : 'end')}
+              accessibilityRole="button"
+              accessibilityLabel={`Quiet hours end: ${formatHour(quietHours.endHour)}. Tap to change.`}
+            >
+              <Text style={styles.quietTimeLabel}>To</Text>
+              <Text style={styles.quietTimeValue}>{formatHour(quietHours.endHour)}</Text>
+              <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
+            </Pressable>
+          </View>
+        ) : null}
+        {quietHours.enabled && editingQuietTime ? (
+          <View style={styles.quietHoursPickerSheet}>
+            <Text style={styles.quietHoursPickerTitle}>
+              {editingQuietTime === 'start' ? 'Start time' : 'End time'}
+            </Text>
+            <View style={styles.quietHoursPickerGrid}>
+              {HOUR_OPTIONS.map((h) => {
+                const selected = editingQuietTime === 'start'
+                  ? quietHours.startHour === h
+                  : quietHours.endHour === h;
+                return (
+                  <Pressable
+                    key={h}
+                    style={({ pressed }) => [
+                      styles.quietHourCell,
+                      selected && styles.quietHourCellActive,
+                      pressed && styles.quietHourCellPressed,
+                    ]}
+                    onPress={() => {
+                      haptics.tap();
+                      if (editingQuietTime === 'start') {
+                        setQuietHours({ startHour: h });
+                      } else {
+                        setQuietHours({ endHour: h });
+                      }
+                      setEditingQuietTime(null);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set ${editingQuietTime === 'start' ? 'start' : 'end'} time to ${formatHour(h)}`}
+                  >
+                    <Text style={[styles.quietHourCellText, selected && styles.quietHourCellTextActive]}>
+                      {formatHour(h)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+        {quietHours.enabled ? (
+          <SettingsInfoBanner
+            icon="moon-outline"
+            text={`Urgent alerts (order updates, security) still arrive during quiet hours. Non-urgent notifications are held until ${formatHour(quietHours.endHour)}.`}
           />
-        ))}
+        ) : null}
       </SettingsSection>
 
       <Text style={styles.footerNote}>
@@ -363,5 +466,79 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
+  },
+  quietHoursRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.sm,
+  },
+  quietTimePicker: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    minHeight: 48,
+  },
+  quietTimePickerPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.98 }],
+  },
+  quietTimeLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+  },
+  quietTimeValue: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  quietHoursPickerSheet: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  quietHoursPickerTitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    marginBottom: Space.xs,
+  },
+  quietHoursPickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  quietHourCell: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceAlt,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quietHourCellActive: {
+    backgroundColor: Colors.brand,
+  },
+  quietHourCellPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.96 }],
+  },
+  quietHourCellText: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
+  quietHourCellTextActive: {
+    color: Colors.textInverse,
+    fontFamily: Typography.family.bold,
   },
 });

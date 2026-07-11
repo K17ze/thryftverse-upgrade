@@ -16,7 +16,7 @@ export interface CheckoutSavedAddress {
 
 export interface CheckoutSavedPaymentMethod {
   id?: number;
-  type: 'card' | 'bank_account';
+  type: 'card' | 'bank_account' | 'apple_pay' | 'google_pay';
   label: string;
   details?: string;
   isDefault?: boolean;

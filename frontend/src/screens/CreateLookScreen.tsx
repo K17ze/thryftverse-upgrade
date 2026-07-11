@@ -3,12 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
   Pressable,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -28,6 +25,7 @@ import { createLookOnApi } from '../services/looksApi';
 import { useStore } from '../store/useStore';
 import { LookMediaComposer, OutfitTag } from '../components/look/LookMediaComposer';
 import { OutfitPieceEditor } from '../components/look/OutfitPieceEditor';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -172,15 +170,13 @@ export default function CreateLookScreen() {
         </View>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
         style={{ flex: 1 }}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
           {/* Media Composer */}
           <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
             <LookMediaComposer
@@ -285,8 +281,7 @@ export default function CreateLookScreen() {
           </Reanimated.View>
 
           <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

@@ -8,8 +8,6 @@ import {
   Dimensions,
   Alert,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { CreatorProvider, useCreator } from './CreatorContext';
 import type { CreatorLayer } from './composition';
 import { CreatorCanvas } from './CreatorCanvas';
@@ -135,10 +134,11 @@ function CreatorStudioInner() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        contentContainerStyle={{ flex: 1 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
       {/* Top bar */}
       <View style={styles.topBar}>
@@ -155,7 +155,7 @@ function CreatorStudioInner() {
           ) : autosaveStatus === 'saving' ? (
             <Text style={styles.autosaveText}>Saving…</Text>
           ) : autosaveStatus === 'failed' ? (
-            <Text style={[styles.autosaveText, { color: '#ff6b6b' }]}>Save failed</Text>
+            <Text style={[styles.autosaveText, { color: Colors.danger }]}>Save failed</Text>
           ) : isDirty ? (
             <View style={[styles.dirtyDot, { backgroundColor: accentColor }]} />
           ) : null}
@@ -384,7 +384,7 @@ function CreatorStudioInner() {
             accessibilityLabel="Delete layer"
             accessibilityRole="button"
           >
-            <Ionicons name="trash-outline" size={18} color="#ff6b6b" />
+            <Ionicons name="trash-outline" size={18} color={Colors.danger} />
           </Pressable>
         </View>
       )}
@@ -419,7 +419,7 @@ function CreatorStudioInner() {
           }
         }}
       />
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

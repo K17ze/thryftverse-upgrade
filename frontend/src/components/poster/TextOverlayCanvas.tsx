@@ -10,11 +10,10 @@ import {
   PanResponderGestureState,
   Dimensions,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
+import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -273,8 +272,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
 
       {/* Controls panel (only when text tool active + editing) */}
       {isActive && editingId && activeLayer && (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        <KeyboardStickyView
           style={styles.controlsWrap}
           pointerEvents="box-none"
         >
@@ -367,7 +365,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
               <Text style={styles.doneBtnText}>Done</Text>
             </Pressable>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardStickyView>
       )}
     </View>
   );

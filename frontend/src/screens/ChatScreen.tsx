@@ -80,6 +80,7 @@ import {
   LinkPreviewCard,
   extractFirstUrl,
 } from "../components/chat/LinkPreviewCard";
+import { PaymentWarningCard } from "../components/chat/PaymentWarningCard";
 
 import { SkeletonChatLoader } from "../components/chat/SkeletonChatLoader";
 
@@ -94,7 +95,7 @@ import {
   isLastInCluster as isLastInClusterHelper,
 } from "../utils/messageGrouping";
 
-import { detectChatSafetyWarning } from "../utils/chatSafetyWarnings";
+import { detectChatSafetyWarning, detectComposerSafetyWarning, containsOffPlatformPaymentPattern } from "../utils/chatSafetyWarnings";
 
 import {
   isTrustedSystemMessage,
@@ -104,7 +105,7 @@ import {
 type Props = StackScreenProps<RootStackParamList, "Chat">;
 
 type MsgType =
-  "text" | "offer" | "offer_declined" | "purchase_status" | "media" | "system";
+  "text" | "offer" | "offer_declined" | "purchase_status" | "media" | "system" | "commerce_state";
 
 interface Message {
   id: string;
@@ -126,7 +127,11 @@ interface Message {
   offer?: {
     price: number;
     originalPrice: number;
-    status?: "pending" | "declined" | "countered" | "accepted";
+    status?: "pending" | "declined" | "countered" | "accepted" | "expired";
+    /** ISO date string when the offer expires */
+    expiresAt?: string;
+    /** Counter-offer chain depth (0 = initial, 1 = first counter, etc.) */
+    counterRound?: number;
   };
 
   date?: string;
@@ -139,12 +144,37 @@ interface Message {
 
   mediaType?: "image" | "video";
 
+  commerceState?: {
+    stateType: "order_placed" | "payment_confirmed" | "order_shipped" | "order_in_transit" | "order_delivered" | "order_cancelled" | "order_refunded";
+    orderId: string;
+    orderShortId?: string;
+    itemTitle?: string;
+    itemImage?: string | null;
+    trackingNumber?: string | null;
+    carrier?: string | null;
+  };
+
   uploadStatus?: "uploading" | "failed" | "sent";
 
   status?: "sending" | "sent" | "failed";
 }
 
 const INITIAL_MESSAGES: Message[] = [];
+
+// Context-aware default quick replies shown when user hasn't configured custom ones
+const DEFAULT_SELLER_QUICK_REPLIES = [
+  "Thanks for your interest!",
+  "Yes, it's still available.",
+  "I can ship within 2 business days.",
+  "Any questions about the item?",
+];
+
+const DEFAULT_BUYER_QUICK_REPLIES = [
+  "Is this still available?",
+  "Can I make an offer?",
+  "What's your best price?",
+  "Could you share more photos?",
+];
 
 function formatDateSeparator(dateStr: string): string | null {
   const d = new Date(dateStr);
@@ -166,7 +196,7 @@ function formatDateSeparator(dateStr: string): string | null {
 }
 
 export default function ChatScreen({ navigation, route }: Props) {
-  const { conversationId, itemId: routeItemId } = route.params;
+  const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params;
 
   const currentUser = useStore((state) => state.currentUser);
 
@@ -319,10 +349,40 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [messages, setMessages] = useState<Message[]>(hydratedMessages);
 
   const [input, setInput] = useState("");
+  const [dangerWarningDismissed, setDangerWarningDismissed] = useState(false);
+  const [cautionWarningDismissed, setCautionWarningDismissed] = useState(false);
+
+  // Real-time composer safety detection — re-evaluates as the user types
+  const composerSafetyWarning = React.useMemo(() => {
+    if (dangerWarningDismissed && cautionWarningDismissed) return null;
+    const detected = detectComposerSafetyWarning(input);
+    if (!detected) return null;
+    if (detected.level === 'danger' && dangerWarningDismissed) return null;
+    if (detected.level === 'caution' && cautionWarningDismissed) return null;
+    return detected;
+  }, [input, dangerWarningDismissed, cautionWarningDismissed]);
+
+  const composerDangerWarning = composerSafetyWarning?.level === 'danger' ? composerSafetyWarning : null;
+  const composerCautionWarning = composerSafetyWarning?.level === 'caution' ? composerSafetyWarning : null;
+
+  // Reset dismissal when the text changes enough to clear the pattern
+  React.useEffect(() => {
+    const detected = detectComposerSafetyWarning(input);
+    if (!detected) {
+      if (dangerWarningDismissed) setDangerWarningDismissed(false);
+      if (cautionWarningDismissed) setCautionWarningDismissed(false);
+    }
+  }, [input, dangerWarningDismissed, cautionWarningDismissed]);
 
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
 
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+
+  // Messages that have been toggled to show a translated view
+  const [translatedMessageIds, setTranslatedMessageIds] = useState<Set<string>>(new Set());
+
+  // Messages where the off-platform payment warning has been dismissed
+  const [dismissedWarningIds, setDismissedWarningIds] = useState<Set<string>>(new Set());
 
   const [replyTo, setReplyTo] = useState<Message | null>(null);
 
@@ -438,6 +498,38 @@ export default function ChatScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (conversationId) markConversationRead(conversationId);
   }, [conversationId, markConversationRead]);
+
+  // Auto-send offer message when arriving from MakeOfferScreen with an offerPayload
+  const offerPayloadRef = useRef(routeOfferPayload);
+  offerPayloadRef.current = routeOfferPayload;
+  useEffect(() => {
+    if (!routeOfferPayload || !conversationId) return;
+    const { price, originalPrice, expiresAt, counterRound } = routeOfferPayload;
+    const localId = `offer_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const offerMsg: Message = {
+      id: localId,
+      type: "offer",
+      sender: "me",
+      senderLabel: currentUser?.username ?? "you",
+      text: counterRound > 0
+        ? `Counter-offer: ${formatFromFiat(price, "GBP")}`
+        : `Offer: ${formatFromFiat(price, "GBP")}`,
+      offer: {
+        price,
+        originalPrice,
+        status: "pending",
+        expiresAt,
+        counterRound,
+      },
+      status: "sent",
+    };
+    pushMessage(offerMsg);
+    appendToConversationStore(offerMsg, currentUser?.id ?? "me");
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    // Clear the payload from route params so it doesn't re-send on re-render
+    navigation.setParams({ offerPayload: undefined } as any);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeOfferPayload, conversationId]);
 
   useEffect(() => {
     if (conversationId) setConversationDraft(conversationId, input);
@@ -556,6 +648,15 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     if (!trimmed || !conversationId) return;
 
+    // Send-time safety nudge — if the message contains off-platform payment
+    // patterns, show a warning toast (but still allow sending).
+    if (containsOffPlatformPaymentPattern(trimmed)) {
+      show(
+        "Reminder: Keep payments in Thryftverse to stay protected by Buyer Protection.",
+        "error",
+      );
+    }
+
     setComposerSending(true);
 
     const localId =
@@ -640,6 +741,37 @@ export default function ChatScreen({ navigation, route }: Props) {
       prev.map((m) =>
         m.id === msgId && m.offer
           ? { ...m, offer: { ...m.offer, status: "declined" as const } }
+          : m,
+      ),
+    );
+  };
+
+  const handleCounterOffer = (msgId: string, offerPrice?: number, originalPrice?: number) => {
+    haptic.medium();
+    const linkedItemId = routeItemId || conversation?.itemId;
+    if (!linkedItemId) {
+      show("Cannot counter without a linked listing.", "info");
+      return;
+    }
+    // Find the current offer to pass the counter round
+    const currentMsg = messages.find((m) => m.id === msgId);
+    const currentRound = currentMsg?.offer?.counterRound ?? 0;
+    // Navigate to MakeOfferScreen with counter-offer context
+    navigation.navigate("MakeOffer", {
+      itemId: linkedItemId,
+      price: originalPrice ?? 0,
+      title: "Item",
+      counterOffer: true,
+      previousOffer: offerPrice ?? 0,
+      counterRound: currentRound + 1,
+    });
+  };
+
+  const handleOfferExpired = (msgId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId && m.offer && m.offer.status === "pending"
+          ? { ...m, offer: { ...m.offer, status: "expired" as const } }
           : m,
       ),
     );
@@ -1118,6 +1250,43 @@ export default function ChatScreen({ navigation, route }: Props) {
       );
     }
 
+    // Commerce state card — rich order status with tracking
+    if (msg.type === "commerce_state" && msg.commerceState) {
+      const content = (
+        <View
+          key={msg.id}
+          style={[
+            styles.msgRow,
+            { marginTop: spacingTop, marginBottom },
+          ]}
+        >
+          <MarketplaceChatCard
+            type="commerce_state"
+            commerceState={{
+              type: msg.commerceState.stateType,
+              orderId: msg.commerceState.orderId,
+              orderShortId: msg.commerceState.orderShortId,
+              itemTitle: msg.commerceState.itemTitle,
+              itemImage: msg.commerceState.itemImage,
+              trackingNumber: msg.commerceState.trackingNumber,
+              carrier: msg.commerceState.carrier,
+            }}
+            onViewOrder={() => {
+              navigation.navigate("OrderDetail", { orderId: msg.commerceState!.orderId });
+            }}
+          />
+        </View>
+      );
+      return dateSeparator ? (
+        <View key={msg.id + "_group"}>
+          {dateSeparator}
+          {content}
+        </View>
+      ) : (
+        content
+      );
+    }
+
     // System message — only render trusted styling if provenance is verified
     if (
       (msg.type === "system" || msg.isSystem) &&
@@ -1190,6 +1359,8 @@ export default function ChatScreen({ navigation, route }: Props) {
             )}
             onAccept={() => handleAcceptOffer(msg.id)}
             onDecline={() => handleDeclineOffer(msg.id)}
+            onCounter={() => handleCounterOffer(msg.id, msg.offer?.price, msg.offer?.originalPrice)}
+            onExpire={() => handleOfferExpired(msg.id)}
           />
         </View>
       );
@@ -1237,6 +1408,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
             timestamp={isLastInCluster ? msg.date || "just now" : undefined}
+            isTranslated={translatedMessageIds.has(msg.id)}
             status={
               isMe
                 ? msg.status === "sending"
@@ -1315,6 +1487,27 @@ export default function ChatScreen({ navigation, route }: Props) {
                 </View>
               ) : null;
             })()}
+          {/* Off-platform payment warning — non-blocking inline card below the message */}
+          {!isMedia && containsOffPlatformPaymentPattern(msg.text ?? "") && (
+            <View style={[isMe && styles.linkPreviewWrapRight]}>
+              <PaymentWarningCard
+                dismissed={dismissedWarningIds.has(msg.id)}
+                onDismiss={() => {
+                  setDismissedWarningIds((prev) => {
+                    const next = new Set(prev);
+                    next.add(msg.id);
+                    return next;
+                  });
+                }}
+                onReport={() => {
+                  navigation.navigate("Report", {
+                    type: "user",
+                  });
+                }}
+                isMe={isMe}
+              />
+            </View>
+          )}
         </View>
       </View>
     );
@@ -1642,11 +1835,16 @@ export default function ChatScreen({ navigation, route }: Props) {
               linkedListing
                 ? linkedListing.sellerId === currentUser?.id
                   ? [
-                      ...sellerQuickReplies.slice(0, 4).map((text) => ({
-                        label:
-                          text.length > 30 ? text.slice(0, 28) + "…" : text,
-                        onPress: () => setInput(text),
-                      })),
+                      ...(sellerQuickReplies.length > 0
+                        ? sellerQuickReplies.slice(0, 4).map((text) => ({
+                            label:
+                              text.length > 30 ? text.slice(0, 28) + "…" : text,
+                            onPress: () => setInput(text),
+                          }))
+                        : DEFAULT_SELLER_QUICK_REPLIES.map((text) => ({
+                            label: text,
+                            onPress: () => setInput(text),
+                          }))),
                       {
                         label: "Manage replies",
                         onPress: () =>
@@ -1656,11 +1854,16 @@ export default function ChatScreen({ navigation, route }: Props) {
                       },
                     ]
                   : [
-                      ...buyerQuickReplies.slice(0, 4).map((text) => ({
-                        label:
-                          text.length > 30 ? text.slice(0, 28) + "…" : text,
-                        onPress: () => setInput(text),
-                      })),
+                      ...(buyerQuickReplies.length > 0
+                        ? buyerQuickReplies.slice(0, 4).map((text) => ({
+                            label:
+                              text.length > 30 ? text.slice(0, 28) + "…" : text,
+                            onPress: () => setInput(text),
+                          }))
+                        : DEFAULT_BUYER_QUICK_REPLIES.map((text) => ({
+                            label: text,
+                            onPress: () => setInput(text),
+                          }))),
                       {
                         label: "Manage replies",
                         onPress: () =>
@@ -1680,6 +1883,10 @@ export default function ChatScreen({ navigation, route }: Props) {
                   )?.message
                 : undefined
             }
+            dangerWarning={composerDangerWarning?.message}
+            cautionWarning={composerCautionWarning?.message}
+            onDismissDangerWarning={() => setDangerWarningDismissed(true)}
+            onDismissCautionWarning={() => setCautionWarningDismissed(true)}
           />
         </View>
         </KeyboardStickyView>
@@ -1739,6 +1946,19 @@ export default function ChatScreen({ navigation, route }: Props) {
               case "report":
                 show("Report submitted. Thank you.", "success");
                 break;
+              case "translate": {
+                setTranslatedMessageIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(selectedMessage.id)) {
+                    next.delete(selectedMessage.id);
+                  } else {
+                    next.add(selectedMessage.id);
+                    show("Showing translated message. Tap 'Show original' to revert.", "info");
+                  }
+                  return next;
+                });
+                break;
+              }
               default:
                 break;
             }
@@ -1749,6 +1969,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             selectedMessage?.status === "failed" ||
             selectedMessage?.uploadStatus === "failed"
           }
+          isTranslated={selectedMessage ? translatedMessageIds.has(selectedMessage.id) : false}
         />
       </View>
     </SafeAreaView>

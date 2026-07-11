@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { NativeSheet } from '../../platform/native';
 import { Colors } from '../../constants/colors';
 import { Space, Typography } from '../../theme/designTokens';
+import { KeyboardAwareScrollView, KeyboardStickyView, type KeyboardAwareScrollViewRef } from '../../platform/keyboard/KeyboardProvider';
 import type { ReportReason } from '../../services/profileApi';
 
 const BG = Colors.background;
@@ -99,7 +100,7 @@ interface ReportSheetProps {
 export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: ReportSheetProps) {
   const [selected, setSelected] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const requiresDetails = selected === 'other';
   const canSubmit = selected !== null && (!requiresDetails || details.trim().length > 0);
 
@@ -122,10 +123,7 @@ export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: 
 
   return (
     <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.7 }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.reportSheetRoot}
-      >
+      <View style={styles.reportSheetRoot}>
         {/* Title stays visible — not scrolled */}
         <View style={styles.reportSheetHeader}>
           <Text style={styles.sheetTitle}>Report profile</Text>
@@ -133,12 +131,13 @@ export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: 
         </View>
 
         {/* Scrollable reason list — usable on short phones */}
-        <ScrollView
+        <KeyboardAwareScrollView
           ref={scrollRef}
           style={styles.reportScroll}
           contentContainerStyle={styles.reportScrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {REPORT_REASONS.map((reason) => {
             const isActive = selected === reason.key;
@@ -181,9 +180,10 @@ export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: 
               />
             </View>
           ) : null}
-        </ScrollView>
+        </KeyboardAwareScrollView>
 
         {/* Submit stays reachable — pinned below scroll */}
+        <KeyboardStickyView>
         <AnimatedPressable
           style={[styles.submitBtn, !canSubmit && styles.btnDisabled]}
           onPress={handleSubmit}
@@ -194,7 +194,8 @@ export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: 
         >
           {isPending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.submitBtnText}>Submit report</Text>}
         </AnimatedPressable>
-      </KeyboardAvoidingView>
+        </KeyboardStickyView>
+      </View>
     </NativeSheet>
   );
 }

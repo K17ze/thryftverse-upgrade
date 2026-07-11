@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   coverErrorText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: '#ff6b6b',
+    color: Colors.danger,
   },
   coverErrorActions: {
     flexDirection: 'row',

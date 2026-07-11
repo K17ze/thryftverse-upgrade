@@ -81,7 +81,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
               icon="chatbubble-outline"
               title="Live chat"
               subtitle="Not available yet — email us for a fast response"
-              onPress={() => show('Live chat is coming soon. Please use email support for now.', 'info')}
+              disabled
             />
             <SettingsRow
               icon="flag-outline"

@@ -53,7 +53,7 @@ function mapBackendAddress(row: BackendAddressRow): CommerceAddress {
 export interface CommercePaymentMethod {
   id: number;
   userId: string;
-  type: 'card' | 'bank_account';
+  type: 'card' | 'bank_account' | 'apple_pay' | 'google_pay';
   label: string;
   details: string | null;
   isDefault: boolean;
@@ -267,7 +267,7 @@ export interface CreateAddressInput {
 }
 
 export interface CreatePaymentMethodInput {
-  type: 'card' | 'bank_account';
+  type: 'card' | 'bank_account' | 'apple_pay' | 'google_pay';
   label: string;
   details?: string;
   isDefault?: boolean;
@@ -282,6 +282,8 @@ export interface CreateOrderInput {
   buyerProtectionFeeGbp?: number;
   postageFeeGbp?: number;
   shippingCarrierId?: string;
+  /** Wallet balance to debit (GBP) — when > 0, the order uses split-tender */
+  walletDebitGbp?: number;
 }
 
 export interface ShippingQuoteInput {

@@ -467,7 +467,7 @@ export default function AuctionsScreen() {
             </View>
             {featuredAuction.viewerState === 'outbid' && (
               <View style={styles.outbidBanner}>
-                <Ionicons name="trending-down-outline" size={14} color="#ff4444" />
+                <Ionicons name="trending-down-outline" size={14} color={Colors.danger} />
                 <Meta style={styles.outbidText}>You've been outbid</Meta>
               </View>
             )}
@@ -885,7 +885,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#ff4444',
+    backgroundColor: Colors.danger,
   },
   featuredLiveText: {
     color: '#fff',
@@ -910,7 +910,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   featuredTimer: {
-    color: '#ff4444',
+    color: Colors.danger,
   },
   outbidBanner: {
     flexDirection: 'row',
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,68,68,0.1)',
   },
   outbidText: {
-    color: '#ff4444',
+    color: Colors.danger,
   },
   leadingBanner: {
     flexDirection: 'row',

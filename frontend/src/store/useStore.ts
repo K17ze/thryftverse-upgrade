@@ -129,6 +129,24 @@ interface BrowseFilterState {
   condition: BrowseConditionOption;
 }
 
+interface SavedSearch {
+  id: string;
+  query: string;
+  filters: {
+    brands: string[];
+    sizes: string[];
+    condition: BrowseConditionOption;
+    sort: BrowseSortOption;
+    minPrice?: number;
+    maxPrice?: number;
+    category?: string;
+  };
+  alertsEnabled: boolean;
+  createdAt: string;
+  lastCheckedAt?: string;
+  lastMatchCount?: number;
+}
+
 interface SupportTicket {
   id: string;
   orderId: string;
@@ -159,7 +177,7 @@ interface SavedAddress {
 
 interface SavedPaymentMethod {
   id?: number;
-  type: 'card' | 'bank_account';
+  type: 'card' | 'bank_account' | 'apple_pay' | 'google_pay';
   label: string;
   details?: string;
   isDefault?: boolean;
@@ -170,6 +188,7 @@ interface CoOwnComplianceProfile {
   kycVerified: boolean;
   riskDisclosureAccepted: boolean;
   stableCoinWalletConnected: boolean;
+  educationCompleted: boolean;
 }
 
 type CoOwnEligibilityResult = {
@@ -338,10 +357,23 @@ interface StoreState {
   sellCoOwnUnits: (asset: CoOwnAsset, sellerId: string, units: number) => TradeActionResult;
   marketLedger: MarketLedgerEntry[];
 
+  // Co-Own asset watchlist
+  coOwnWatchlist: string[];
+  toggleCoOwnWatch: (assetId: string) => void;
+  isCoOwnWatched: (assetId: string) => boolean;
+
   // Browse filters/search
   browseFilters: BrowseFilterState;
   updateBrowseFilters: (updates: Partial<BrowseFilterState>) => void;
   resetBrowseFilters: () => void;
+
+  // Saved searches with alerts
+  savedSearches: SavedSearch[];
+  addSavedSearch: (search: Omit<SavedSearch, 'id' | 'createdAt'>) => void;
+  removeSavedSearch: (id: string) => void;
+  toggleSavedSearchAlerts: (id: string) => void;
+  updateSavedSearchMeta: (id: string, updates: Partial<Pick<SavedSearch, 'lastCheckedAt' | 'lastMatchCount'>>) => void;
+  markAllSavedSearchesSeen: () => void;
 
   // Checkout state
   savedAddress: SavedAddress | null;
@@ -819,6 +851,7 @@ export const useStore = create<StoreState>()(
     kycVerified: false,
     riskDisclosureAccepted: false,
     stableCoinWalletConnected: false,
+    educationCompleted: false,
   },
   updateCoOwnCompliance: (updates) =>
     set((state) => ({
@@ -1008,6 +1041,19 @@ export const useStore = create<StoreState>()(
   },
   marketLedger: [],
 
+  // Co-Own asset watchlist
+  coOwnWatchlist: [],
+  toggleCoOwnWatch: (assetId) =>
+    set((state) => {
+      const isWatched = state.coOwnWatchlist.includes(assetId);
+      return {
+        coOwnWatchlist: isWatched
+          ? state.coOwnWatchlist.filter((id) => id !== assetId)
+          : [...state.coOwnWatchlist, assetId],
+      };
+    }),
+  isCoOwnWatched: (assetId) => get().coOwnWatchlist.includes(assetId),
+
   browseFilters: {
     query: '',
     sort: 'Recommended',
@@ -1031,6 +1077,59 @@ export const useStore = create<StoreState>()(
         sizes: [],
         condition: 'Any',
       },
+    }),
+
+  // Saved searches
+  savedSearches: [],
+  addSavedSearch: (search) =>
+    set((state) => {
+      // Deduplicate by query string — if same query exists, update it instead
+      const normalized = search.query.trim().toLowerCase();
+      const existing = state.savedSearches.find(
+        (s) => s.query.trim().toLowerCase() === normalized
+      );
+      if (existing) {
+        return {
+          savedSearches: state.savedSearches.map((s) =>
+            s.id === existing.id
+              ? { ...s, ...search, id: existing.id, createdAt: existing.createdAt }
+              : s
+          ),
+        };
+      }
+      const newSearch: SavedSearch = {
+        ...search,
+        id: `saved_search_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: new Date().toISOString(),
+      };
+      return { savedSearches: [newSearch, ...state.savedSearches] };
+    }),
+  removeSavedSearch: (id) =>
+    set((state) => ({
+      savedSearches: state.savedSearches.filter((s) => s.id !== id),
+    })),
+  toggleSavedSearchAlerts: (id) =>
+    set((state) => ({
+      savedSearches: state.savedSearches.map((s) =>
+        s.id === id ? { ...s, alertsEnabled: !s.alertsEnabled } : s
+      ),
+    })),
+  updateSavedSearchMeta: (id, updates) =>
+    set((state) => ({
+      savedSearches: state.savedSearches.map((s) =>
+        s.id === id ? { ...s, ...updates } : s
+      ),
+    })),
+  markAllSavedSearchesSeen: () =>
+    set((state) => {
+      const now = new Date().toISOString();
+      return {
+        savedSearches: state.savedSearches.map((s) => ({
+          ...s,
+          lastCheckedAt: now,
+          lastMatchCount: 0,
+        })),
+      };
     }),
 
   savedAddress: null,
@@ -1693,6 +1792,7 @@ export const useStore = create<StoreState>()(
         seenPosterIds: state.seenPosterIds,
         customPosters: state.customPosters,
         conversations: state.conversations,
+        savedSearches: state.savedSearches,
         savedAddress: state.savedAddress,
         savedPaymentMethod: state.savedPaymentMethod,
         twoFactorEnabled: state.twoFactorEnabled,

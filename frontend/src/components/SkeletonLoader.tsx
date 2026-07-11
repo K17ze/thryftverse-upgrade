@@ -15,7 +15,7 @@ import { ActiveTheme, Colors } from '../constants/colors';
 
 // ELEVATED: Flagship shimmer with brand tint
 const IS_LIGHT = ActiveTheme === 'light';
-const BASE_BG = IS_LIGHT ? '#f0ede8' : '#1c1c1c';
+const BASE_BG = Colors.surface;
 
 // Multi-layer shimmer: white sweep + subtle brand glow
 const SHIMMER_WAVE = IS_LIGHT

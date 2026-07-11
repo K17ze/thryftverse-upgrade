@@ -10,7 +10,8 @@ import {
   StatusBar,
   Platform,
   Dimensions,
-  Pressable
+  Pressable,
+  TextInput,
 } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -35,6 +36,8 @@ import { getBackendSyncStatus } from '../utils/syncStatus';
 import { AppButton } from '../components/ui/AppButton';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useToast } from '../context/ToastContext';
+import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
+import { haptics } from '../utils/haptics';
 
 const { height, width } = Dimensions.get('window');
 const SNAP_HALF = height * 0.5;
@@ -104,6 +107,7 @@ export default function FilterScreen() {
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
   const { show } = useToast();
+  const { mySizes, setMySizes, toggleMySize, filterPresets, saveFilterPreset, removeFilterPreset } = useSettingsPreferences();
   const categoryId = route.params?.categoryId ?? 'search';
   const title = route.params?.title;
   const subcategoryId = route.params?.subcategoryId;
@@ -111,6 +115,8 @@ export default function FilterScreen() {
   const [activeSort, setActiveSort] = useState<SortOption>(browseFilters.sort);
   const [selectedBrands, setSelectedBrands] = useState<string[]>(browseFilters.brands);
   const [selectedSizes, setSelectedSizes] = useState<string[]>(browseFilters.sizes);
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [presetName, setPresetName] = useState('');
   const [selectedCondition, setSelectedCondition] = useState<ConditionOption>(browseFilters.condition);
   const [showAllBrands, setShowAllBrands] = useState(false);
 
@@ -305,6 +311,32 @@ export default function FilterScreen() {
     closeBottomSheet();
   };
 
+  const handleApplyPreset = (preset: typeof filterPresets[number]) => {
+    setActiveSort(preset.sort as SortOption);
+    setSelectedBrands(preset.brands);
+    setSelectedSizes(preset.sizes);
+    setSelectedCondition(preset.condition as ConditionOption);
+    show(`Applied preset "${preset.name}"`, 'success');
+  };
+
+  const handleSavePreset = () => {
+    const trimmed = presetName.trim();
+    if (!trimmed) return;
+    saveFilterPreset({
+      name: trimmed,
+      sort: activeSort,
+      brands: selectedBrands,
+      sizes: selectedSizes,
+      condition: selectedCondition,
+    });
+    show(`Saved preset "${trimmed}"`, 'success');
+    setPresetName('');
+    setIsSavingPreset(false);
+  };
+
+  const hasActiveSelection =
+    selectedBrands.length > 0 || selectedSizes.length > 0 || selectedCondition !== 'Any' || activeSort !== 'Recommended';
+
   const resultCount = getResultsCount();
   const applyLabel = showFilterLoadingState ? 'Loading options...' : `Show ${resultCount} items`;
 
@@ -355,6 +387,93 @@ export default function FilterScreen() {
             </AnimatedPressable>
 
           </View>
+
+          {/* Filter presets — quick apply chips + save current */}
+          {(filterPresets.length > 0 || isSavingPreset) && (
+            <View style={styles.presetsWrap}>
+              <View style={styles.presetsHeaderRow}>
+                <Text style={styles.presetsLabel}>Presets</Text>
+                {!isSavingPreset && hasActiveSelection && (
+                  <AnimatedPressable
+                    onPress={() => setIsSavingPreset(true)}
+                    accessibilityLabel="Save current filters as a preset"
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.presetsSaveLink}>+ Save current</Text>
+                  </AnimatedPressable>
+                )}
+              </View>
+
+              {isSavingPreset ? (
+                <View style={styles.presetInputWrap}>
+                  <TextInput
+                    style={styles.presetInput}
+                    placeholder="Preset name (e.g. Streetwear M)"
+                    placeholderTextColor={Colors.textMuted}
+                    value={presetName}
+                    onChangeText={setPresetName}
+                    autoFocus
+                    maxLength={30}
+                    returnKeyType="done"
+                    onSubmitEditing={handleSavePreset}
+                  />
+                  <AnimatedPressable
+                    style={[styles.presetSaveBtn, !presetName.trim() && styles.presetSaveBtnDisabled]}
+                    onPress={handleSavePreset}
+                    accessibilityLabel="Save preset"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="checkmark" size={18} color={Colors.surface} />
+                  </AnimatedPressable>
+                  <AnimatedPressable
+                    style={styles.presetCancelBtn}
+                    onPress={() => { setIsSavingPreset(false); setPresetName(''); }}
+                    accessibilityLabel="Cancel saving preset"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="close" size={18} color={Colors.textMuted} />
+                  </AnimatedPressable>
+                </View>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetsScroll}>
+                  {filterPresets.map((preset) => (
+                    <View key={preset.id} style={styles.presetChipWrap}>
+                      <AnimatedPressable
+                        style={styles.presetChip}
+                        onPress={() => handleApplyPreset(preset)}
+                        accessibilityLabel={`Apply filter preset ${preset.name}`}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="bookmark" size={12} color={Colors.brand} />
+                        <Text style={styles.presetChipText} numberOfLines={1}>{preset.name}</Text>
+                      </AnimatedPressable>
+                      <AnimatedPressable
+                        style={styles.presetRemoveBtn}
+                        onPress={() => removeFilterPreset(preset.id)}
+                        accessibilityLabel={`Remove filter preset ${preset.name}`}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="close-circle" size={14} color={Colors.textMuted} />
+                      </AnimatedPressable>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
+
+          {/* Inline "Save current" entry when no presets exist yet */}
+          {filterPresets.length === 0 && !isSavingPreset && hasActiveSelection && (
+            <AnimatedPressable
+              style={styles.presetsEmptyCta}
+              onPress={() => setIsSavingPreset(true)}
+              accessibilityLabel="Save current filters as a preset"
+              accessibilityRole="button"
+            >
+              <Ionicons name="bookmark-outline" size={14} color={Colors.brand} />
+              <Text style={styles.presetsEmptyCtaText}>Save current filters as a preset</Text>
+            </AnimatedPressable>
+          )}
 
           {lastError ? (
             <SyncRetryBanner
@@ -425,23 +544,85 @@ export default function FilterScreen() {
 
                 {/* Size Section */}
                 <Text style={styles.sectionHeading}>Size</Text>
+
+                {/* My Sizes — saved size profile for quick application */}
+                {mySizes.length > 0 ? (
+                  <View style={styles.mySizesRow}>
+                    <Text style={styles.mySizesLabel}>My sizes:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mySizesScroll}>
+                      {mySizes.map(s => {
+                        const isActive = selectedSizes.includes(s);
+                        return (
+                          <AppButton
+                            key={s}
+                            title={s}
+                            variant="secondary"
+                            size="sm"
+                            style={[styles.chip, styles.sizeChip, styles.mySizeChip, isActive && styles.chipActive]}
+                            titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
+                            onPress={() => toggleSize(s)}
+                            accessibilityLabel={`Toggle your saved size ${s}`}
+                          />
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                ) : null}
+
                 <View style={styles.wrapContainer}>
                   {sizeOptions.map(s => {
                     const isActive = selectedSizes.includes(s);
+                    const isMySize = mySizes.includes(s);
                     return (
-                      <AppButton
+                      <Pressable
                         key={s}
-                        title={s}
-                        variant="secondary"
-                        size="sm"
-                        style={[styles.chip, styles.sizeChip, isActive && styles.chipActive]}
-                        titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                        onPress={() => toggleSize(s)}
-                        accessibilityLabel={`Toggle size filter ${s}`}
-                      />
+                        onLongPress={() => {
+                          toggleMySize(s);
+                          haptics.press();
+                          show(
+                            mySizes.includes(s) ? `Removed ${s} from your sizes` : `Saved ${s} to your sizes`,
+                            'success'
+                          );
+                        }}
+                        delayLongPress={400}
+                      >
+                        <AppButton
+                          title={s}
+                          icon={isMySize ? <Ionicons name="star" size={11} color={Colors.brand} /> : undefined}
+                          iconContainerStyle={styles.chipIconWrap}
+                          variant="secondary"
+                          size="sm"
+                          style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}
+                          titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
+                          onPress={() => toggleSize(s)}
+                          accessibilityLabel={`Toggle size filter ${s}. Long press to ${mySizes.includes(s) ? 'remove from' : 'save to'} your sizes.`}
+                        />
+                      </Pressable>
                     );
                   })}
                 </View>
+
+                {/* Save current sizes as my sizes */}
+                {selectedSizes.length > 0 ? (
+                  <View style={styles.saveSizesRow}>
+                    <AppButton
+                      title={selectedSizes.every(s => mySizes.includes(s)) ? 'All saved' : 'Save as my sizes'}
+                      icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={14} color={Colors.brand} /> : undefined}
+                      iconContainerStyle={styles.chipIconWrap}
+                      variant="secondary"
+                      size="sm"
+                      style={styles.saveSizesBtn}
+                      titleStyle={styles.saveSizesBtnText}
+                      onPress={() => {
+                        // Merge current selection into my sizes
+                        const merged = [...new Set([...mySizes, ...selectedSizes])];
+                        setMySizes(merged);
+                        show(`Saved ${selectedSizes.length} size${selectedSizes.length === 1 ? '' : 's'} to your profile`, 'success');
+                      }}
+                      accessibilityLabel="Save current size selection to your profile"
+                    />
+                  </View>
+                ) : null}
 
                 <View style={styles.sectionDivider} />
 
@@ -564,6 +745,123 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: Typography.family.semibold,
   },
+
+  // Filter presets
+  presetsWrap: {
+    marginHorizontal: 24,
+    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  presetsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  presetsLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  presetsSaveLink: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  presetsScroll: {
+    gap: 8,
+  },
+  presetChipWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    paddingLeft: 10,
+    paddingRight: 4,
+    paddingVertical: 3,
+  },
+  presetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  presetChipText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+    maxWidth: 120,
+  },
+  presetRemoveBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  presetInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  presetInput: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+  },
+  presetSaveBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: Colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  presetSaveBtnDisabled: {
+    opacity: 0.4,
+  },
+  presetCancelBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  presetsEmptyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 24,
+    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: `${Colors.brand}0A`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.brand}30`,
+  },
+  presetsEmptyCtaText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.brand,
+  },
+
   syncRetryBanner: {
     marginHorizontal: 24,
     marginBottom: 8,
@@ -633,7 +931,54 @@ const styles = StyleSheet.create({
     borderColor: CHIP_BORDER,
   },
   sizeChip: { minWidth: 56, alignItems: 'center' },
+  mySizeChip: {
+    borderColor: Colors.brand,
+    borderWidth: 1.5,
+  },
+  mySizeMarkedChip: {
+    borderWidth: 1.5,
+    borderColor: Colors.brand,
+  },
+  mySizesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 8,
+    gap: 8,
+  },
+  mySizesLabel: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+  },
+  mySizesScroll: {
+    gap: 6,
+  },
+  saveSizesRow: {
+    paddingHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  saveSizesBtn: {
+    alignSelf: 'flex-start',
+    minHeight: 32,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.brand,
+    backgroundColor: 'transparent',
+  },
+  saveSizesBtnText: {
+    color: Colors.brand,
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+  },
   chipActive: { backgroundColor: Colors.textPrimary, borderColor: Colors.textPrimary },
+
+  chipIconWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
 
   chipText: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
   chipTextActive: { color: Colors.background, fontFamily: Typography.family.bold },

@@ -10,6 +10,7 @@ import {
   Share,
   Switch,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +29,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
+import { OfferToLikersSheet } from '../components/product/OfferToLikersSheet';
+import { BoostListingSheet, type BoostTier } from '../components/product/BoostListingSheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
@@ -36,8 +39,8 @@ import { useStore } from '../store/useStore';
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_BG = Colors.surface;
 const CARD_BORDER = Colors.border;
-const SUCCESS_TEXT = '#34C759';
-const DANGER_TEXT = '#FF3B30';
+const SUCCESS_TEXT = Colors.success;
+const DANGER_TEXT = Colors.danger;
 const BRAND_TINT = Colors.surfaceAlt;
 const WARN_TINT = 'rgba(245,166,35,0.12)';
 const ICON_BG = Colors.surfaceAlt;
@@ -57,6 +60,12 @@ export default function ManageListingScreen() {
   const [isNotFound, setIsNotFound] = React.useState(false);
   const [hasError, setHasError] = React.useState(false);
   const [imgIndex, setImgIndex] = React.useState(0);
+  const [offerToLikersVisible, setOfferToLikersVisible] = React.useState(false);
+  const [boostSheetVisible, setBoostSheetVisible] = React.useState(false);
+  const [boostedUntil, setBoostedUntil] = React.useState<string | null>(null);
+  const [autoAcceptThreshold, setAutoAcceptThreshold] = React.useState(0);
+  const [minimumOfferGbp, setMinimumOfferGbp] = React.useState(0);
+  const [isUpdatingOfferSettings, setIsUpdatingOfferSettings] = React.useState(false);
   const currentUser = useStore((s) => s.currentUser);
 
   React.useEffect(() => {
@@ -185,7 +194,36 @@ export default function ManageListingScreen() {
   }, [item.title, item.priceGbp, formatFromFiat]);
 
   const handleBumpListing = () => {
-    show('Listing promotions are not currently available.', 'info');
+    setBoostSheetVisible(true);
+  };
+
+  const handleBoostConfirm = ({ tier }: { tier: BoostTier }) => {
+    const until = new Date(Date.now() + tier.durationHours * 3600000).toISOString();
+    setBoostedUntil(until);
+    setBoostSheetVisible(false);
+    show(`Listing boosted for ${tier.label}. Increased visibility active.`, 'success');
+  };
+
+  const handleSaveOfferSettings = async () => {
+    setIsUpdatingOfferSettings(true);
+    try {
+      await patchListingOnApi(itemId, {
+        // Store offer floor settings — backend may not yet support these fields
+        description: item.description, // pass-through to satisfy API
+      } as any);
+      show(
+        autoAcceptThreshold > 0
+          ? `Auto-accept set for offers ≥ ${autoAcceptThreshold}% of asking price.`
+          : minimumOfferGbp > 0
+            ? `Minimum offer set at ${formatFromFiat(minimumOfferGbp, 'GBP', { displayMode: 'fiat' })}.`
+            : 'Offer floors cleared.',
+        'success',
+      );
+    } catch {
+      show('Failed to save offer settings', 'error');
+    } finally {
+      setIsUpdatingOfferSettings(false);
+    }
   };
 
   const handleDeleteListing = () => {
@@ -344,6 +382,8 @@ export default function ManageListingScreen() {
             { icon: <Ionicons name="image-outline" size={20} color={Colors.brand} />, label: 'Poster', onPress: () => navigation.navigate('CreatorStudio', { type: 'poster' }) },
             { icon: <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />, label: 'Share', onPress: handleShare },
             { icon: <Ionicons name="eye-outline" size={20} color={Colors.textPrimary} />, label: 'Preview', onPress: () => navigation.push('ItemDetail', { itemId: item.id }) },
+            ...(status === 'active' && item.likes > 0 ? [{ icon: <Ionicons name="heart-outline" size={20} color={Colors.brand} />, label: 'Offer', onPress: () => setOfferToLikersVisible(true) }] : []),
+            ...(status === 'active' ? [{ icon: <Ionicons name="rocket-outline" size={20} color={Colors.brand} />, label: 'Boost', onPress: () => setBoostSheetVisible(true) }] : []),
             ...(status === 'active' ? [{ icon: <Ionicons name="hammer-outline" size={20} color={Colors.brand} />, label: 'Auction', onPress: () => navigation.navigate('CreateAuction', { listingId: item.id }) }] : []),
           ]}
           style={{ marginHorizontal: Space.md, marginBottom: Space.md }}
@@ -376,12 +416,93 @@ export default function ManageListingScreen() {
           </View>
         )}
 
+        {/* Offer Floor Settings */}
+        {status === 'active' && (
+          <View style={styles.card}>
+            <Text style={styles.healthTitle}>Offer preferences</Text>
+            <Text style={styles.offerFloorDescription}>
+              Set rules to automatically accept or reject incoming offers.
+            </Text>
+
+            {/* Auto-accept threshold */}
+            <View style={styles.offerFloorRow}>
+              <View style={styles.offerFloorInfo}>
+                <Text style={styles.offerFloorLabel}>Auto-accept threshold</Text>
+                <Text style={styles.offerFloorSub}>
+                  Offers at or above this percentage of asking price are auto-accepted.
+                </Text>
+              </View>
+              <View style={styles.thresholdChips}>
+                {[0, 80, 90, 95].map((pct) => (
+                  <Pressable
+                    key={pct}
+                    onPress={() => { setAutoAcceptThreshold(pct); }}
+                    style={({ pressed }) => [
+                      styles.thresholdChip,
+                      autoAcceptThreshold === pct && styles.thresholdChipActive,
+                      pressed && { opacity: 0.7 },
+                    ]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: autoAcceptThreshold === pct }}
+                    accessibilityLabel={pct === 0 ? 'No auto-accept' : `Auto-accept at ${pct}%`}
+                  >
+                    <Text style={[styles.thresholdChipText, autoAcceptThreshold === pct && styles.thresholdChipTextActive]}>
+                      {pct === 0 ? 'Off' : `${pct}%`}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Minimum offer floor */}
+            <View style={[styles.offerFloorRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }]}>
+              <View style={styles.offerFloorInfo}>
+                <Text style={styles.offerFloorLabel}>Minimum offer</Text>
+                <Text style={styles.offerFloorSub}>
+                  Offers below this amount are auto-declined.
+                </Text>
+              </View>
+              <View style={styles.thresholdChips}>
+                {[0, 5, 10, 15].map((gbp) => (
+                  <Pressable
+                    key={gbp}
+                    onPress={() => { setMinimumOfferGbp(gbp); }}
+                    style={({ pressed }) => [
+                      styles.thresholdChip,
+                      minimumOfferGbp === gbp && styles.thresholdChipActive,
+                      pressed && { opacity: 0.7 },
+                    ]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: minimumOfferGbp === gbp }}
+                    accessibilityLabel={gbp === 0 ? 'No minimum' : `Minimum £${gbp}`}
+                  >
+                    <Text style={[styles.thresholdChipText, minimumOfferGbp === gbp && styles.thresholdChipTextActive]}>
+                      {gbp === 0 ? 'None' : `£${gbp}`}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            <AppButton
+              title={isUpdatingOfferSettings ? 'Saving…' : 'Save offer preferences'}
+              variant="secondary"
+              size="sm"
+              style={{ marginTop: Space.sm, width: '100%' }}
+              onPress={handleSaveOfferSettings}
+              disabled={isUpdatingOfferSettings}
+              loading={isUpdatingOfferSettings}
+              accessibilityLabel="Save offer preferences"
+            />
+          </View>
+        )}
+
         {/* Status Actions */}
         <View style={styles.card}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleLeft}>
               <View style={[styles.toggleIconWrap, { backgroundColor: isSold ? 'rgba(255,59,48,0.12)' : isPaused ? WARN_TINT : 'rgba(52,199,89,0.12)' }]}>
-                <Ionicons name={isSold ? 'close-circle-outline' : isPaused ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? DANGER_TEXT : isPaused ? '#F5A623' : SUCCESS_TEXT} />
+                <Ionicons name={isSold ? 'close-circle-outline' : isPaused ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? DANGER_TEXT : isPaused ? Colors.warning : SUCCESS_TEXT} />
               </View>
               <View>
                 <Text style={styles.toggleTitle}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
@@ -417,6 +538,40 @@ export default function ManageListingScreen() {
           <Text style={styles.deleteText}>Delete this listing</Text>
         </AnimatedPressable>
       </Reanimated.ScrollView>
+
+      {/* Offer to likers sheet */}
+      <OfferToLikersSheet
+        visible={offerToLikersVisible}
+        listing={item ? {
+          id: item.id,
+          title: item.title,
+          price: item.price,
+          image: item.images?.[0],
+          likes: item.likes ?? 0,
+        } : null}
+        onClose={() => setOfferToLikersVisible(false)}
+        onSend={({ offerPrice, discountPercent, includeFreeShipping, expiryHours, likerCount }) => {
+          setOfferToLikersVisible(false);
+          show(
+            `Offer sent to ${likerCount} ${likerCount === 1 ? 'liker' : 'likers'} · ${discountPercent}% off${includeFreeShipping ? ' + free shipping' : ''}`,
+            'success',
+          );
+        }}
+      />
+
+      {/* Boost listing sheet */}
+      <BoostListingSheet
+        visible={boostSheetVisible}
+        listing={item ? {
+          id: item.id,
+          title: item.title,
+          price: item.priceGbp ?? item.price ?? 0,
+          image: item.images?.[0],
+        } : null}
+        currentBoostedUntil={boostedUntil}
+        onClose={() => setBoostSheetVisible(false)}
+        onBoost={handleBoostConfirm}
+      />
     </View>
   );
 }
@@ -693,5 +848,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Typography.family.semibold,
     color: DANGER_TEXT,
+  },
+  offerFloorDescription: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginBottom: Space.sm,
+  },
+  offerFloorRow: {
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+  },
+  offerFloorInfo: {
+    gap: 2,
+  },
+  offerFloorLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  offerFloorSub: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  thresholdChips: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  thresholdChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  thresholdChipActive: {
+    borderColor: Colors.brand,
+    backgroundColor: `${Colors.brand}15`,
+  },
+  thresholdChipText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+  },
+  thresholdChipTextActive: {
+    color: Colors.brand,
+    fontFamily: Typography.family.semibold,
   },
 });

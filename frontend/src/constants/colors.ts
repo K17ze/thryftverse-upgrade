@@ -36,6 +36,7 @@ const DARK_COLORS = {
   // Status (minimal set)
   danger: '#DC2626',
   success: '#16A34A',
+  warning: '#F59E0B',
 } as const;
 
 const LIGHT_COLORS = {
@@ -64,6 +65,7 @@ const LIGHT_COLORS = {
   // Status (minimal set)
   danger: '#DC2626',
   success: '#16A34A',
+  warning: '#F59E0B',
 } as const;
 
 // ============================================================================

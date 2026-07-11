@@ -17,6 +17,8 @@ interface Props {
   icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
+  /** Contextual hint shown below the subtitle as a subtle tip */
+  hint?: string;
   ctaLabel?: string;
   onCtaPress?: () => void;
   secondaryCtaLabel?: string;
@@ -25,7 +27,7 @@ interface Props {
   iconColor?: string;
   graphic?: React.ReactNode;
 }
-export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor = Colors.brand, graphic }: Props) {
+export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor = Colors.brand, graphic }: Props) {
   const enter = FadeIn.duration(300);
 
   return (
@@ -58,6 +60,13 @@ export function EmptyState({ icon, title, subtitle, ctaLabel, onCtaPress, second
           {subtitle}
         </Reanimated.Text>
       )}
+
+      {hint ? (
+        <Reanimated.View entering={enter} style={styles.hintWrap}>
+          <Ionicons name="bulb-outline" size={12} color={Colors.textMuted} />
+          <Text style={styles.hintText}>{hint}</Text>
+        </Reanimated.View>
+      ) : null}
 
       {ctaLabel && onCtaPress && (
         <Reanimated.View entering={enter}>
@@ -132,6 +141,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 21,
     maxWidth: 260,
+  },
+  hintWrap: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 4,
+    maxWidth: 280,
+  },
+  hintText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    lineHeight: 17,
   },
   cta: {
     marginTop: 20,

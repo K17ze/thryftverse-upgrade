@@ -114,6 +114,25 @@ export default function VisualSearchScreen({ navigation }: Props) {
     navigation.navigate('GlobalSearch');
   }, [navigation]);
 
+  const handleBrowseCategory = useCallback((categoryId: string, categoryTitle: string) => {
+    navigation.navigate('Browse', { categoryId, title: categoryTitle });
+  }, [navigation]);
+
+  // Derive available categories from listings for fallback browsing
+  const availableCategories = React.useMemo(() => {
+    const categoryMap = new Map<string, number>();
+    for (const listing of listings) {
+      const cat = (listing.category ?? '').trim();
+      if (cat) {
+        categoryMap.set(cat, (categoryMap.get(cat) ?? 0) + 1);
+      }
+    }
+    return Array.from(categoryMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([category, count]) => ({ category, count }));
+  }, [listings]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
@@ -168,6 +187,28 @@ export default function VisualSearchScreen({ navigation }: Props) {
               />
             )}
 
+            {/* Tips for best results — shown before scanning */}
+            {!isScanning && !hasScanned && (
+              <View style={styles.tipsCard}>
+                <View style={styles.tipsHeader}>
+                  <Ionicons name="bulb-outline" size={16} color={Colors.brand} />
+                  <Text style={styles.tipsTitle}>Tips for best results</Text>
+                </View>
+                <View style={styles.tipRow}>
+                  <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
+                  <Text style={styles.tipText}>Use a well-lit, clear photo of the item</Text>
+                </View>
+                <View style={styles.tipRow}>
+                  <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
+                  <Text style={styles.tipText}>Centre the item and crop out backgrounds</Text>
+                </View>
+                <View style={styles.tipRow}>
+                  <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
+                  <Text style={styles.tipText}>Flat lays and front-facing shots work best</Text>
+                </View>
+              </View>
+            )}
+
             {isScanning && (
               <View style={styles.scanningWrap}>
                 <ActivityIndicator size="small" color={Colors.brand} />
@@ -194,6 +235,37 @@ export default function VisualSearchScreen({ navigation }: Props) {
                 { label: 'Gallery', onPress: handleGallery },
               ]}
             />
+
+            {/* Use different image */}
+            <AppButton
+              title="Use a different image"
+              variant="secondary"
+              size="md"
+              onPress={handleRemoveImage}
+              style={{ marginTop: Space.sm }}
+            />
+
+            {/* Browse by category fallback */}
+            {availableCategories.length > 0 && (
+              <View style={styles.fallbackSection}>
+                <Text style={styles.fallbackTitle}>Browse by category</Text>
+                <View style={styles.categoryChipsWrap}>
+                  {availableCategories.map(({ category, count }) => (
+                    <AnimatedPressable
+                      key={category}
+                      style={styles.categoryChip}
+                      onPress={() => handleBrowseCategory(category, category)}
+                      activeOpacity={0.8}
+                      accessibilityLabel={`Browse ${category} category, ${count} items`}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.categoryChipText}>{category}</Text>
+                      <Text style={styles.categoryChipCount}>{count}</Text>
+                    </AnimatedPressable>
+                  ))}
+                </View>
+              </View>
+            )}
 
             {/* Nearby listings fallback grid */}
             {listings.length > 0 && (
@@ -263,6 +335,68 @@ const styles = StyleSheet.create({
 
   fallbackSection: { marginTop: Space.lg },
   fallbackTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: Space.sm },
+
+  // Tips card
+  tipsCard: {
+    marginTop: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    gap: 8,
+  },
+  tipsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  tipsTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  tipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tipText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
+
+  // Category chips
+  categoryChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
+  categoryChipCount: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
 
   cornerBracket: {
     position: 'absolute',

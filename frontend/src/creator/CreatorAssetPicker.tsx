@@ -9,13 +9,12 @@ import {
   FlatList,
   Image,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Colors } from '../constants/colors';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { searchListingsFromApi, type ListingSearchResult } from '../services/listingsApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { useStore } from '../store/useStore';
@@ -64,7 +63,7 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
 
 function PickerShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
+    <KeyboardAwareScrollView style={styles.overlay} contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       <Pressable style={styles.backdrop} onPress={onClose} />
       <View style={styles.sheet}>
         <View style={styles.handle} />
@@ -76,7 +75,7 @@ function PickerShell({ title, onClose, children }: { title: string; onClose: () 
         </View>
         {children}
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 

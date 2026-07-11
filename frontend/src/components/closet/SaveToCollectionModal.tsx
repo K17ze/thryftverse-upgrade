@@ -5,8 +5,6 @@ import {
   StyleSheet,
   Modal,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +20,7 @@ import { useToast } from '../../context/ToastContext';
 import { Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { useBackendData } from '../../context/BackendDataContext';
+import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 
 interface Props {
   visible: boolean;
@@ -177,8 +176,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
       visible={visible}
       onRequestClose={handleClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <KeyboardStickyView
         style={styles.overlay}
       >
         <View style={[styles.card, { paddingBottom: Space.md + insets.bottom }]}>
@@ -282,7 +280,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
             </AnimatedPressable>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardStickyView>
     </Modal>
   );
 }

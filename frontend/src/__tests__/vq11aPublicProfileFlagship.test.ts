@@ -267,7 +267,9 @@ describe('VQ-11A: Public Profile Flagship Elevation', () => {
     it('ReviewRow shows reviewer identity, rating, and listing context', () => {
       const reviews = readFile('components/profile/ProfileReviews.tsx');
       expect(reviews).toContain('reviewName');
-      expect(reviews).toContain('reviewRatingValue');
+      // Flagship review row uses inline 5-star display + verified buyer badge
+      expect(reviews).toContain('verifiedBadge');
+      expect(reviews).toContain('reviewMetaRow');
       expect(reviews).toContain('reviewListingContext');
     });
   });

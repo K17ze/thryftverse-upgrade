@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import { View,
@@ -89,6 +89,8 @@ export default function BrowseScreen() {
   const toggleWishlist = useStore((state) => state.toggleWishlist);
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
+  const addSavedSearch = useStore((state) => state.addSavedSearch);
+  const savedSearches = useStore((state) => state.savedSearches);
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
@@ -176,6 +178,31 @@ export default function BrowseScreen() {
     browseFilters.brands.length > 0 ||
     browseFilters.sizes.length > 0 ||
     browseFilters.condition !== 'Any';
+
+  // Save search — only available when there's a query or category to save
+  const saveSearchLabel = searchQuery || title;
+  const isCurrentSaved = savedSearches.some(
+    (s) => s.query === saveSearchLabel &&
+    s.filters.brands.join(',') === browseFilters.brands.join(',') &&
+    s.filters.sizes.join(',') === browseFilters.sizes.join(',') &&
+    s.filters.condition === browseFilters.condition
+  );
+
+  const handleSaveSearch = useCallback(() => {
+    if (!saveSearchLabel || saveSearchLabel === 'Browse All') return;
+    addSavedSearch({
+      query: saveSearchLabel,
+      filters: {
+        brands: browseFilters.brands,
+        sizes: browseFilters.sizes,
+        condition: browseFilters.condition,
+        sort: browseFilters.sort,
+        category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
+      },
+      alertsEnabled: true,
+    });
+    show('Search saved with alerts enabled', 'success');
+  }, [saveSearchLabel, browseFilters, categoryId, addSavedSearch, show]);
 
   const dataToRender = useMemo(() => {
     const normalizedCategory = toKey(categoryId);
@@ -285,6 +312,24 @@ export default function BrowseScreen() {
         <Text style={styles.hugeTitle}>{title}</Text>
         <View style={styles.titleMetaRow}>
           <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
+          {saveSearchLabel && saveSearchLabel !== 'Browse All' && (
+            <AnimatedPressable
+              style={[styles.saveSearchPill, isCurrentSaved && styles.saveSearchPillActive]}
+              activeOpacity={0.8}
+              onPress={isCurrentSaved ? undefined : handleSaveSearch}
+              accessibilityLabel={isCurrentSaved ? 'Search saved with alerts' : 'Save this search with alerts'}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={isCurrentSaved ? 'notifications' : 'notifications-outline'}
+                size={13}
+                color={isCurrentSaved ? Colors.brand : Colors.textSecondary}
+              />
+              <Text style={[styles.saveSearchText, isCurrentSaved && styles.saveSearchTextActive]}>
+                {isCurrentSaved ? 'Saved' : 'Save search'}
+              </Text>
+            </AnimatedPressable>
+          )}
         </View>
       </Reanimated.View>
 
@@ -432,6 +477,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  saveSearchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  saveSearchPillActive: {
+    borderColor: Colors.brand,
+    backgroundColor: `${Colors.brand}08`,
+  },
+  saveSearchText: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+  },
+  saveSearchTextActive: {
+    color: Colors.brand,
+    fontFamily: Typography.family.semibold,
   },
 
   filterBar: { paddingBottom: 16 },

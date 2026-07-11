@@ -4,8 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -18,6 +16,7 @@ import { requestPasswordReset } from '../services/authApi';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { AppButton } from '../components/ui/AppButton';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation<any>();
@@ -68,9 +67,12 @@ export default function ForgotPasswordScreen() {
         showBackButton
       />
 
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.delay(0).duration(400)}>
           <Text style={styles.title}>Reset{'\n'}Password</Text>
@@ -131,7 +133,7 @@ export default function ForgotPasswordScreen() {
           </Reanimated.View>
         )}
 
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -139,7 +141,8 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
-  content: { flex: 1, paddingHorizontal: Space.lg, justifyContent: 'center' },
+  content: { flex: 1, paddingHorizontal: Space.lg },
+  contentContainer: { justifyContent: 'center', flexGrow: 1, paddingBottom: Space.xl },
   title: { fontSize: 44, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: 48, letterSpacing: -1, marginBottom: Space.lg },
   subtitle: { fontSize: 16, fontFamily: Typography.family.regular, color: Colors.textSecondary, marginBottom: Space.xl, lineHeight: 24 },
 

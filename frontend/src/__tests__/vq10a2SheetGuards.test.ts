@@ -103,6 +103,7 @@ describe('VQ-10A2: No overlapping sheets and terminal action removal', () => {
       currentBidGbp: 20,
       minimumNextBidGbp: 22,
       buyNowPriceGbp: 100,
+      reservePriceGbp: null,
       bidCount: 5,
       viewerState: 'not_participating' as const,
       isWatched: false,

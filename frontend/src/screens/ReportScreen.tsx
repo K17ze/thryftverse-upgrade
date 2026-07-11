@@ -4,15 +4,14 @@ import {
 import { View,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   StatusBar
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../theme/designTokens';
+import { Typography, Space } from '../theme/designTokens';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 const REASONS = [
   "Spam or misleading",
@@ -50,9 +49,12 @@ export default function ReportScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
         {isSubmitted ? (
           <View style={styles.successState}>
@@ -94,7 +96,7 @@ export default function ReportScreen() {
             </View>
           </View>
         )}
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -114,7 +116,8 @@ const styles = StyleSheet.create({
   backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: Colors.textPrimary, textTransform: 'capitalize' },
 
-  content: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
+  content: { flex: 1, paddingHorizontal: 24 },
+  contentContainer: { paddingTop: 32, paddingBottom: 40 },
   form: { flex: 1 },
 
   promptText: { fontSize: 18, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 24 },
@@ -138,7 +141,7 @@ const styles = StyleSheet.create({
   reasonText: { fontSize: 15, fontFamily: Typography.family.medium, color: Colors.textPrimary },
   selectedText: { color: Colors.textInverse, fontFamily: Typography.family.bold },
 
-  footer: { flex: 1, justifyContent: 'flex-end', paddingBottom: 40 },
+  footer: { marginTop: Space.md },
   primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   disabledBtn: { opacity: 0.5 },
   primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold },

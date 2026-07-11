@@ -14,6 +14,8 @@ export interface DiscoveryGridProps {
   onEndReached?: () => void;
   hasMore?: boolean;
   numColumns?: number;
+  title?: string;
+  subtitle?: string;
 }
 
 export function DiscoveryGrid({
@@ -23,6 +25,8 @@ export function DiscoveryGrid({
   onEndReached,
   hasMore,
   numColumns = 2,
+  title = 'More like this',
+  subtitle,
 }: DiscoveryGridProps) {
   const handlePress = useCallback(
     (item: Listing, index: number) => {
@@ -36,7 +40,8 @@ export function DiscoveryGrid({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Explore more</Text>
+      <Text style={styles.title}>{title}</Text>
+      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       <FlashList
         data={items}
         numColumns={numColumns}
@@ -78,6 +83,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
+    marginBottom: 2,
+  },
+  subtitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
     marginBottom: Space.sm,
   },
   listContent: {

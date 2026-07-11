@@ -100,19 +100,28 @@ export interface Message {
   text?: string;
   offerPrice?: number;
   originalPrice?: number;
-  offerStatus?: 'pending' | 'accepted' | 'declined';
+  offerStatus?: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired';
   isSystem?: boolean;
   systemTitle?: string;
   timestamp: string;
   itemImage?: string;
-  type?: 'text' | 'offer' | 'system';
+  type?: 'text' | 'offer' | 'system' | 'commerce_state';
   sender?: 'me' | 'other' | 'system';
-  offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' };
+  offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired'; expiresAt?: string; counterRound?: number };
   reactions?: MessageReaction[];
   replyToMessageId?: string;
   mediaUri?: string;
   mediaType?: 'image' | 'video';
   uploadStatus?: 'uploading' | 'failed' | 'sent';
+  commerceState?: {
+    stateType: 'order_placed' | 'payment_confirmed' | 'order_shipped' | 'order_in_transit' | 'order_delivered' | 'order_cancelled' | 'order_refunded';
+    orderId: string;
+    orderShortId?: string;
+    itemTitle?: string;
+    itemImage?: string | null;
+    trackingNumber?: string | null;
+    carrier?: string | null;
+  };
 }
 
 export type ConversationType = 'dm' | 'group';

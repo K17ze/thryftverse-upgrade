@@ -37,9 +37,17 @@ interface ChatComposerBarProps {
   attachments?: AttachmentPreview[];
   quickReplies?: QuickReply[];
   safetyWarning?: string;
+  /** Danger-level warning shown prominently above the input */
+  dangerWarning?: string;
+  /** Caution-level warning shown with amber styling */
+  cautionWarning?: string;
+  onDismissDangerWarning?: () => void;
+  onDismissCautionWarning?: () => void;
 }
 
 const MAX_INPUT_HEIGHT = 120;
+const MAX_CHARS = 2000;
+const CHAR_WARN_THRESHOLD = 1800;
 
 export function ChatComposerBar({
   value,
@@ -54,18 +62,66 @@ export function ChatComposerBar({
   attachments = [],
   quickReplies = [],
   safetyWarning,
+  dangerWarning,
+  cautionWarning,
+  onDismissDangerWarning,
+  onDismissCautionWarning,
 }: ChatComposerBarProps) {
   const inputRef = useRef<TextInput>(null);
   const hasText = value.trim().length > 0;
   const canSend = (hasText || attachments.length > 0) && !isSending && !disabled;
   const showQuickReplies = quickReplies.length > 0 && !hasText && attachments.length === 0;
+  const charCount = value.length;
+  const showCharCount = charCount > CHAR_WARN_THRESHOLD;
+  const charCountColor = charCount >= MAX_CHARS ? Colors.danger : Colors.textMuted;
 
   return (
     <View style={styles.root}>
-      {safetyWarning ? (
+      {/* Danger-level safety nudge — real-time composer detection */}
+      {dangerWarning ? (
+        <View style={styles.dangerBanner}>
+          <View style={styles.dangerBannerContent}>
+            <Ionicons name="warning" size={14} color={Colors.danger} />
+            <Text style={styles.dangerBannerText}>{dangerWarning}</Text>
+          </View>
+          {onDismissDangerWarning ? (
+            <Pressable
+              onPress={onDismissDangerWarning}
+              hitSlop={8}
+              accessibilityLabel="Dismiss safety warning"
+              accessibilityRole="button"
+            >
+              <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* Info-level static safety reminder */}
+      {safetyWarning && !dangerWarning && !cautionWarning ? (
         <View style={styles.safetyBanner}>
           <Ionicons name="shield-outline" size={12} color={Colors.textMuted} />
           <Text style={styles.safetyBannerText}>{safetyWarning}</Text>
+        </View>
+      ) : null}
+
+      {/* Caution-level warning — amber styling for high-pressure tactics */}
+      {cautionWarning && !dangerWarning ? (
+        <View style={styles.cautionBanner}>
+          <View style={styles.cautionBannerContent}>
+            <Ionicons name="alert-circle-outline" size={14} color={Colors.warning} />
+            <Text style={styles.cautionBannerText}>{cautionWarning}</Text>
+          </View>
+          {onDismissCautionWarning ? (
+            <Pressable
+              onPress={onDismissCautionWarning}
+              hitSlop={8}
+              accessibilityLabel="Dismiss caution warning"
+              accessibilityRole="button"
+            >
+              <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -108,6 +164,11 @@ export function ChatComposerBar({
         </ScrollView>
       ) : null}
 
+      {/* Subtle separator when safety banners are present */}
+      {(dangerWarning || cautionWarning || safetyWarning) ? (
+        <View style={styles.bannerDivider} />
+      ) : null}
+
       <View style={styles.inputRow}>
         <AnimatedPressable
           onPress={onAttachmentPress}
@@ -131,7 +192,7 @@ export function ChatComposerBar({
             placeholder={placeholder}
             placeholderTextColor={Colors.textMuted}
             multiline
-            maxLength={2000}
+            maxLength={MAX_CHARS}
             editable={!disabled && !isSending}
             autoCapitalize="sentences"
             autoCorrect
@@ -140,6 +201,11 @@ export function ChatComposerBar({
             accessibilityRole="text"
             onSubmitEditing={canSend ? onSend : undefined}
           />
+          {showCharCount ? (
+            <Text style={[styles.charCount, { color: charCountColor }]}>
+              {charCount}/{MAX_CHARS}
+            </Text>
+          ) : null}
         </View>
 
         {hasText || attachments.length > 0 ? (
@@ -201,6 +267,54 @@ const styles = StyleSheet.create({
     fontFamily: TypeStyles.body.fontFamily,
     color: Colors.textMuted,
   },
+  dangerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    backgroundColor: `${Colors.danger}12`,
+    borderBottomWidth: 1,
+    borderBottomColor: `${Colors.danger}30`,
+  },
+  dangerBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs + 2,
+    flex: 1,
+    paddingRight: Space.sm,
+  },
+  dangerBannerText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.danger,
+    lineHeight: 16,
+  },
+  cautionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    backgroundColor: `${Colors.warning}10`,
+    borderBottomWidth: 1,
+    borderBottomColor: `${Colors.warning}30`,
+  },
+  cautionBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs + 2,
+    flex: 1,
+    paddingRight: Space.sm,
+  },
+  cautionBannerText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.warning,
+    lineHeight: 16,
+  },
   attachmentStrip: {
     maxHeight: 52,
   },
@@ -255,6 +369,10 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'ios' ? 8 : 6,
     gap: Space.xs + 2,
   },
+  bannerDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+  },
   actionBtn: {
     width: 44,
     height: 44,
@@ -264,16 +382,22 @@ const styles = StyleSheet.create({
   },
   inputWrap: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
     paddingHorizontal: Space.md - 2,
     paddingVertical: Platform.OS === 'ios' ? 6 : 4,
     minHeight: 44,
-    maxHeight: MAX_INPUT_HEIGHT + 12,
+    maxHeight: MAX_INPUT_HEIGHT + 24,
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
+  },
+  charCount: {
+    fontSize: 11,
+    fontFamily: TypeStyles.metadata.fontFamily,
+    textAlign: 'right',
+    paddingTop: 2,
+    paddingBottom: 2,
   },
   input: {
     flex: 1,

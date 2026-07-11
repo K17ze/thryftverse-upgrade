@@ -327,16 +327,16 @@ describe('deriveMessageActions — production export', () => {
     expect(deleteAction?.destructive).toBe(true);
   });
 
-  it('returns actions in correct order: retry, reply, react, copy, report/delete', () => {
+  it('returns actions in correct order: retry, reply, react, copy, translate, report/delete', () => {
     const actions = deriveMessageActions({ ...baseCaps, isOwnMessage: true, isFailed: true, messageText: 'hello' });
     const ids = actions.map((a) => a.id);
-    expect(ids).toEqual(['retry', 'reply', 'react', 'copy', 'delete']);
+    expect(ids).toEqual(['retry', 'reply', 'react', 'copy', 'translate', 'delete']);
   });
 
   it('returns actions in correct order for others message', () => {
     const actions = deriveMessageActions({ ...baseCaps, isOwnMessage: false, messageText: 'hello' });
     const ids = actions.map((a) => a.id);
-    expect(ids).toEqual(['reply', 'react', 'copy', 'report']);
+    expect(ids).toEqual(['reply', 'react', 'copy', 'translate', 'report']);
   });
 });
 

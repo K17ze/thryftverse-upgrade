@@ -25,7 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { Colors } from '../constants/colors';
+import { Colors, ActiveTheme } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -34,7 +34,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { haptics } from '../utils/haptics';
 import { AppButton } from '../components/ui/AppButton';
-import { Typography } from '../theme/designTokens';
+import { Typography, DockConstants } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 import { Space, Radius, Type } from '../theme/designTokens';
 import {
@@ -353,7 +353,7 @@ export default function OutfitBuilderScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={Colors.background === '#FFFFFF' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -472,7 +472,7 @@ export default function OutfitBuilderScreen() {
           </View>
         )}
 
-        <View style={{ height: 120 }} />
+        <View style={{ height: DockConstants.singleActionHeight }} />
       </ScrollView>
 
       {/* Footer CTA */}

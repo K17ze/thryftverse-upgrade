@@ -4,9 +4,6 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +22,7 @@ import { logoutFromSession } from '../services/authApi';
 import { clearUserScopedQueryCache } from '../platform/server';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type Props = StackScreenProps<RootStackParamList, 'AccountControl'>;
 
@@ -316,22 +314,17 @@ export default function AccountControlScreen({ navigation }: Props) {
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+        contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: insets.bottom + Space.lg }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: insets.bottom + Space.lg }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
           {phase === 'overview' && renderOverview()}
           {phase === 'delete-info' && renderDeleteInfo()}
           {phase === 'delete-confirm' && renderDeleteConfirm()}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </FlagshipScreen>
   );
 }

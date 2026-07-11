@@ -19,6 +19,7 @@ import { Colors } from '../constants/colors';
 import { Space, Radius , Typography  } from '../theme/designTokens';
 import { BottomSheet } from './BottomSheet';
 import { AnimatedPressable } from './AnimatedPressable';
+import { CachedImage } from './CachedImage';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 
@@ -37,9 +38,11 @@ interface ShareSheetProps {
   title?: string;
   /** Optional image URI to include in share */
   imageUri?: string;
+  /** Optional subtitle (e.g., brand + price) */
+  subtitle?: string;
 }
 
-export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', imageUri }: ShareSheetProps) {
+export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', imageUri, subtitle }: ShareSheetProps) {
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -75,26 +78,16 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
     {
       id: 'share',
       label: 'Share via...',
-      icon: 'share-outline',
+      icon: 'share-social-outline',
       action: handleNativeShare,
     },
     {
-      id: 'messages',
-      label: 'Messages',
-      icon: 'chatbubble-outline',
+      id: 'remind',
+      label: 'Set reminder',
+      icon: 'alarm-outline',
       action: () => {
         haptic.light();
-        show('Opening Messages...', 'info');
-        onDismiss();
-      },
-    },
-    {
-      id: 'instagram',
-      label: 'Instagram',
-      icon: 'logo-instagram',
-      action: () => {
-        haptic.light();
-        show('Instagram share coming soon', 'info');
+        show('Reminder set for this item', 'success');
         onDismiss();
       },
     },
@@ -106,19 +99,26 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
         <Text style={styles.sheetTitle}>Share</Text>
 
         {/* Preview card */}
-        {imageUri && (
-          <View style={styles.previewCard}>
-            <View style={styles.previewRow}>
-              <View style={styles.previewIconWrap}>
-                <Ionicons name="image-outline" size={24} color={Colors.textPrimary} />
-              </View>
-              <View style={styles.previewTextCol}>
-                <Text style={styles.previewTitle} numberOfLines={1}>{title}</Text>
-                <Text style={styles.previewUrl} numberOfLines={1}>{url}</Text>
-              </View>
+        <View style={styles.previewCard}>
+          <View style={styles.previewRow}>
+            <View style={styles.previewImageWrap}>
+              {imageUri ? (
+                <CachedImage uri={imageUri} style={styles.previewImage} contentFit="cover" />
+              ) : (
+                <View style={styles.previewIconFallback}>
+                  <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+                </View>
+              )}
+            </View>
+            <View style={styles.previewTextCol}>
+              <Text style={styles.previewTitle} numberOfLines={1}>{title}</Text>
+              {subtitle ? (
+                <Text style={styles.previewSubtitle} numberOfLines={1}>{subtitle}</Text>
+              ) : null}
+              <Text style={styles.previewUrl} numberOfLines={1}>{url}</Text>
             </View>
           </View>
-        )}
+        </View>
 
         {/* Share options grid */}
         <View style={styles.optionsGrid}>
@@ -179,11 +179,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm + 4,
   },
-  previewIconWrap: {
-    width: 40,
-    height: 40,
+  previewImageWrap: {
+    width: 48,
+    height: 48,
     borderRadius: Radius.md,
+    overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  previewIconFallback: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -196,8 +207,13 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
+  previewSubtitle: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+  },
   previewUrl: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
   },

@@ -68,7 +68,7 @@ describe('PASS 21 — Settings rendered tests', () => {
       const stored = { language: 'Spanish (ES)' as const, emailNotificationsEnabled: false };
       asyncStorageMock.getItem.mockResolvedValue(JSON.stringify(stored));
       const result = await getStoredSettingsPreferences();
-      expect(result).toEqual(stored);
+      expect(result).toEqual({ ...DEFAULT_SETTINGS_PREFERENCES, ...stored });
     });
 
     it('persists preferences via setItem', async () => {

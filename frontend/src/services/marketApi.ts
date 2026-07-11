@@ -29,6 +29,7 @@ export interface MarketAuction {
   currentBidGbp: number;
   minimumNextBidGbp: number;
   buyNowPriceGbp: number | null;
+  reservePriceGbp: number | null;
   bidCount: number;
   lifecycle: AuctionLifecycle;
   terminalReason: AuctionTerminalReason;
@@ -66,6 +67,7 @@ export interface AuctionDetail {
   currentBidGbp: number;
   minimumNextBidGbp: number;
   buyNowPriceGbp: number | null;
+  reservePriceGbp: number | null;
   bidCount: number;
   lifecycle: AuctionLifecycle;
   terminalReason: AuctionTerminalReason;
@@ -488,6 +490,7 @@ function mockAuction(
     currentBidGbp?: number;
     bidCount?: number;
     buyNowPriceGbp?: number | null;
+    reservePriceGbp?: number | null;
     lifecycle?: AuctionLifecycle;
     viewerState?: AuctionViewerState;
     isWatched?: boolean;
@@ -513,6 +516,7 @@ function mockAuction(
     currentBidGbp: opts.currentBidGbp ?? 80,
     minimumNextBidGbp: (opts.currentBidGbp ?? 80) + 5,
     buyNowPriceGbp: opts.buyNowPriceGbp ?? null,
+    reservePriceGbp: opts.reservePriceGbp ?? null,
     bidCount: opts.bidCount ?? 3,
     lifecycle: opts.lifecycle ?? 'live',
     terminalReason: null,
@@ -542,6 +546,7 @@ function getMockAuctionHome(): AuctionHomeResponse {
         isWatched: true,
         brand: 'Rolex',
         category: 'Watches',
+        reservePriceGbp: 1500,
       }),
       reason: 'outbid',
     },
@@ -565,6 +570,7 @@ function getMockAuctionHome(): AuctionHomeResponse {
         isWatched: true,
         brand: 'Rolex',
         category: 'Watches',
+        reservePriceGbp: 1500,
       }),
       mockAuction('mock-cs-2', 'Hermès Birkin 30 Togo', {
         seller: MOCK_SELLER,
@@ -577,6 +583,7 @@ function getMockAuctionHome(): AuctionHomeResponse {
         isWatched: true,
         brand: 'Hermès',
         category: 'Bags',
+        reservePriceGbp: 6000,
       }),
       mockAuction('mock-cs-3', 'Leica M6 Black Paint', {
         seller: MOCK_SELLER_2,

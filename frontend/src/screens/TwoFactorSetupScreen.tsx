@@ -5,9 +5,6 @@ import {
   StyleSheet,
   Image,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   TextInput,
   Pressable,
 } from 'react-native';
@@ -24,6 +21,7 @@ import { parseApiError } from '../lib/apiClient';
 import { requestTwoFactorEnrollment, verifyTwoFactorEnrollment, disableTwoFactor } from '../services/authApi';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { FlagshipStickyFooter } from '../components/flagship/FlagshipStickyFooter';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
@@ -549,15 +547,13 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         <FlagshipStickyFooter actions={footerActions} />
       ) : undefined}
     >
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xxl }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xxl }}
-          keyboardShouldPersistTaps="handled"
-        >
           <Reanimated.View entering={FadeIn.duration(300)}>
             {phase === 'disable' && renderDisableOverview()}
             {phase === 'disable-confirm' && renderDisableConfirm()}
@@ -565,8 +561,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
             {phase === 'verify' && renderVerify()}
             {phase === 'recovery' && renderRecovery()}
           </Reanimated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </FlagshipScreen>
   );
 }

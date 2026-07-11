@@ -12,6 +12,8 @@ interface ChatTopBarProps {
   subtitle?: string;
   avatarUrl?: string | null;
   initials?: string;
+  /** Show a verified badge next to the title (trusted seller/partner) */
+  isVerified?: boolean;
   onBack: () => void;
   onSearch?: () => void;
   onInfo?: () => void;
@@ -31,6 +33,7 @@ export function ChatTopBar({
   subtitle,
   avatarUrl,
   initials,
+  isVerified = false,
   onBack,
   onSearch,
   onInfo,
@@ -136,7 +139,18 @@ export function ChatTopBar({
               )}
             </View>
             <View style={styles.titleWrap}>
-              <Text style={styles.title} numberOfLines={1}>{title}</Text>
+              <View style={styles.titleRow}>
+                <Text style={styles.title} numberOfLines={1}>{title}</Text>
+                {isVerified && variant === 'dm' ? (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={13}
+                    color={Colors.brand}
+                    style={styles.verifiedBadge}
+                    accessibilityLabel="Verified user"
+                  />
+                ) : null}
+              </View>
               {subtitle ? (
                 <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
               ) : null}
@@ -255,11 +269,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
   title: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: Colors.textPrimary,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
+    flexShrink: 1,
+  },
+  verifiedBadge: {
+    flexShrink: 0,
   },
   subtitle: {
     fontSize: Type.caption.size,

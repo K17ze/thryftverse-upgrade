@@ -29,6 +29,7 @@ import { EmptyState } from '../components/EmptyState';
 import { LookSocialActions } from '../components/look/LookSocialActions';
 import { LookCommentsSheet } from '../components/look/LookCommentsSheet';
 import { fetchLookByIdFromApi, type LookApiItem } from '../services/looksApi';
+import { Video, ResizeMode } from '../components/compat/Video';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -110,6 +111,14 @@ export default function LookDetailScreen() {
     [haptic, resolveListing, navigation, show]
   );
 
+  const isVideoMedia = (() => {
+    if (!look) return false;
+    if (look.mediaType === 'video') return true;
+    // Fallback: detect video by URL extension for backward compatibility
+    const url = look.mediaUrl.toLowerCase();
+    return url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm') || url.includes('/video/');
+  })();
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -168,13 +177,25 @@ export default function LookDetailScreen() {
         {/* Hero Image */}
         <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
           <View style={styles.heroWrap}>
-            <CachedImage
-              uri={look.mediaUrl}
-              style={styles.heroImage}
-              contentFit="cover"
-              emptyLabel={look.title || look.caption}
-              emptyIcon="image-outline"
-            />
+            {isVideoMedia ? (
+              <Video
+                source={{ uri: look.mediaUrl }}
+                style={styles.heroImage}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay
+                isMuted
+                isLooping
+                useNativeControls
+              />
+            ) : (
+              <CachedImage
+                uri={look.mediaUrl}
+                style={styles.heroImage}
+                contentFit="cover"
+                emptyLabel={look.title || look.caption}
+                emptyIcon="image-outline"
+              />
+            )}
 
             {/* Hotspots */}
             {look.tags.map((tag) => {
@@ -200,7 +221,11 @@ export default function LookDetailScreen() {
                       )}
                       <View style={{ flex: 1 }}>
                         <Text style={styles.tagTooltipTitle} numberOfLines={1}>{listing.title}</Text>
-                        <Text style={styles.tagTooltipPrice}>£{listing.price}</Text>
+                        {listing.isSold ? (
+                          <Text style={styles.tagTooltipSold}>Sold</Text>
+                        ) : (
+                          <Text style={styles.tagTooltipPrice}>£{listing.price}</Text>
+                        )}
                       </View>
                       <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.7)" />
                     </Reanimated.View>
@@ -280,7 +305,11 @@ export default function LookDetailScreen() {
                       )}
                     </View>
                     <Text style={styles.trayCardTitle} numberOfLines={1}>{listing?.title ?? tag.label ?? 'Untitled'}</Text>
-                    {listing && <Text style={styles.trayCardPrice}>£{listing.price}</Text>}
+                    {listing && (
+                      listing.isSold
+                        ? <Text style={styles.trayCardSold}>Sold</Text>
+                        : <Text style={styles.trayCardPrice}>£{listing.price}</Text>
+                    )}
                   </AnimatedPressable>
                 );
               })}
@@ -393,6 +422,7 @@ const styles = StyleSheet.create({
   tagTooltipImg: { width: 36, height: 36, borderRadius: 6, backgroundColor: Colors.surfaceAlt },
   tagTooltipTitle: { fontSize: 11, fontFamily: Typography.family.semibold, color: '#fff' },
   tagTooltipPrice: { fontSize: 10, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.7)' },
+  tagTooltipSold: { fontSize: 10, fontFamily: Typography.family.semibold, color: Colors.danger },
 
   infoSection: {
     paddingHorizontal: Space.md,
@@ -476,5 +506,10 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
     color: Colors.brand,
+  },
+  trayCardSold: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.bold,
+    color: Colors.danger,
   },
 });

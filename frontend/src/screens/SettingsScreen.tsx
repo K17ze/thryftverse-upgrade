@@ -21,6 +21,7 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import {
   getThemePreferenceLabel,
   ThemePreference,
+  updateThemePreference,
 } from '../theme/themePreference';
 import { useAppTheme } from '../theme/ThemeContext';
 import { t } from '../i18n';
@@ -46,6 +47,7 @@ interface DestinationMeta {
 // Route metadata for search — each entry maps a settings destination to searchable terms
 const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'edit profile avatar name bio username email phone private details security account two factor password', section: 'Account', showSection: true },
+  { key: 'Verification', label: 'Verification & KYC', searchTerms: 'verification kyc identity dac7 tax badge verified seller trust', section: 'Account', showSection: true },
   { key: 'AccountControl', label: 'Account control', searchTerms: 'account control delete deactivate download data export', section: 'Account', showSection: true },
   { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'saved addresses delivery shipping address buying', section: 'Buying', showSection: true },
   { key: 'Payments', label: 'Payment methods', searchTerms: 'payment methods card bank buying', section: 'Buying', showSection: true },
@@ -123,11 +125,19 @@ export default function SettingsScreen({ navigation }: Props) {
     }
   };
 
-  const handleThemeSelect = (option: string) => {
+  const [isApplyingTheme, setIsApplyingTheme] = React.useState(false);
+
+  const handleThemeSelect = async (option: string) => {
     const nextPreference = option.toLowerCase() as ThemePreference;
     if (nextPreference === themePreference) return;
+    setThemePickerVisible(false);
+    setIsApplyingTheme(true);
+    show(`Applying ${getThemePreferenceLabel(nextPreference)} theme…`, 'info');
+    await updateThemePreference(nextPreference, { reloadApp: true });
+    // If reload fails (e.g. production without expo-updates), fall back to
+    // the reactive context update so useAppTheme consumers still re-render.
     setThemePreference(nextPreference);
-    show(`Theme set to ${getThemePreferenceLabel(nextPreference)}`, 'success');
+    setIsApplyingTheme(false);
   };
 
   const handleLanguageSelect = (option: string) => {
@@ -305,11 +315,18 @@ export default function SettingsScreen({ navigation }: Props) {
       {/* ── ACCOUNT SECTION (card) — no profile/private details rows (top card is the entrypoint) ── */}
       <SettingsSection title="Account">
         <SettingsRow
+          icon="shield-checkmark-outline"
+          iconColor={currentUser?.emailVerified ? Colors.success : Colors.textMuted}
+          title="Verification"
+          subtitle={currentUser?.emailVerified ? 'Verified' : 'Get the verified badge'}
+          onPress={() => navigation.navigate('Verification')}
+          isFirst
+        />
+        <SettingsRow
           icon="key-outline"
           title="Change password"
           subtitle={twoFactorEnabled ? '2FA enabled' : 'Password only'}
           onPress={() => navigation.navigate('ChangePassword')}
-          isFirst
         />
         <SettingsRow
           icon="phone-portrait-outline"
@@ -449,6 +466,11 @@ export default function SettingsScreen({ navigation }: Props) {
           title="Help Centre"
           onPress={() => navigation.navigate('HelpSupport')}
           isFirst
+        />
+        <SettingsRow
+          icon="folder-open-outline"
+          title="Resolution Centre"
+          onPress={() => navigation.navigate('ResolutionCentre')}
         />
         <SettingsRow
           icon="document-text-outline"

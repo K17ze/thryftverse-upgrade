@@ -12,6 +12,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 import {
   buildDefaultPushNotificationToggles,
   countEnabledPushNotificationToggles,
+  DEFAULT_QUIET_HOURS,
   DEFAULT_SETTINGS_PREFERENCES,
   getStoredPushNotificationToggles,
   getStoredSettingsPreferences,
@@ -65,6 +66,9 @@ describe('settings preference persistence', () => {
     expect(preferences).toEqual({
       language: 'French (FR)',
       emailNotificationsEnabled: false,
+      quietHours: DEFAULT_QUIET_HOURS,
+      mySizes: [],
+      filterPresets: [],
     });
   });
 
@@ -82,11 +86,20 @@ describe('settings preference persistence', () => {
     await setStoredSettingsPreferences({
       language: 'Spanish (ES)',
       emailNotificationsEnabled: true,
+      quietHours: DEFAULT_QUIET_HOURS,
+      mySizes: [],
+      filterPresets: [],
     });
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
       SETTINGS_PREF_STORAGE_KEY,
-      JSON.stringify({ language: 'Spanish (ES)', emailNotificationsEnabled: true })
+      JSON.stringify({
+        language: 'Spanish (ES)',
+        emailNotificationsEnabled: true,
+        quietHours: DEFAULT_QUIET_HOURS,
+        mySizes: [],
+        filterPresets: [],
+      })
     );
   });
 });

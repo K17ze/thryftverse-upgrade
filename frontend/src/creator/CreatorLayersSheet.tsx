@@ -135,7 +135,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                       accessibilityLabel="Delete layer"
                       accessibilityRole="button"
                     >
-                      <Ionicons name="trash-outline" size={16} color="#ff6b6b" />
+                      <Ionicons name="trash-outline" size={16} color={Colors.danger} />
                     </Pressable>
                   </View>
                 </Pressable>

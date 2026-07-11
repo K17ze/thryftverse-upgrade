@@ -25,6 +25,7 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { Type , Typography, Space, Radius  } from '../theme/designTokens';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
+import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import PulseTab from '../components/explore/PulseTab';
 import LooksTab from '../components/explore/LooksTab';
 import EditTab from '../components/explore/EditTab';
@@ -33,6 +34,7 @@ type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const EXPLORE_TABS = [
+  { value: 'discover', label: 'Discover' },
   { value: 'pulse', label: 'Pulse' },
   { value: 'looks', label: 'Looks' },
   { value: 'edit', label: 'Edit' },
@@ -50,7 +52,7 @@ export default function SearchScreen() {
   const scrollRef = useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
 
-  const [activeTab, setActiveTab] = useState<'pulse' | 'looks' | 'edit'>('pulse');
+  const [activeTab, setActiveTab] = useState<'discover' | 'pulse' | 'looks' | 'edit'>('discover');
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -68,6 +70,15 @@ export default function SearchScreen() {
 
   const renderTabContent = () => {
     switch (activeTab) {
+      case 'discover':
+        return (
+          <PinterestMasonryGrid
+            items={listings}
+            onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
+            showSaveButton
+            enableEntranceAnimation
+          />
+        );
       case 'pulse':
         return <PulseTab />;
       case 'looks':
@@ -160,7 +171,7 @@ export default function SearchScreen() {
           <AppSegmentControl
             options={EXPLORE_TABS}
             value={activeTab}
-            onChange={(v) => setActiveTab(v as 'pulse' | 'looks' | 'edit')}
+            onChange={(v) => setActiveTab(v as 'discover' | 'pulse' | 'looks' | 'edit')}
             style={{ marginHorizontal: 16, marginBottom: 12 }}
             fullWidth
           />

@@ -28,7 +28,7 @@ function strengthColor(strength: PasswordStrength): string {
     case 'weak':
       return Colors.danger;
     case 'fair':
-      return '#F59E0B';
+      return Colors.warning;
     case 'good':
       return '#3B82F6';
     case 'strong':

@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { TabParamList, RootStackParamList } from './types';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useStore } from '../store/useStore';
 import { CachedImage } from '../components/CachedImage';
@@ -33,6 +33,7 @@ interface TabIconProps {
 }
 
 const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps) => {
+  const { colors } = useAppTheme();
   const iconName = focused && nameFocused ? nameFocused : name;
   const displayBadge = badgeCount !== undefined && badgeCount > 0;
   const badgeLabel = displayBadge
@@ -40,14 +41,14 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
     : undefined;
 
   return (
-    <View style={styles.tabIconWrap}>
+    <View style={tabStyles.tabIconWrap}>
       <Ionicons name={iconName} size={23} color={color} />
       {displayBadge && (
         <View
-          style={styles.badge}
+          style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
           accessibilityLabel={`${badgeLabel} unread`}
         >
-          <Text style={styles.badgeText}>{badgeLabel}</Text>
+          <Text style={tabStyles.badgeText}>{badgeLabel}</Text>
         </View>
       )}
     </View>
@@ -60,6 +61,7 @@ interface ProfileTabIconProps {
 }
 
 const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
+  const { colors } = useAppTheme();
   const currentUser = useStore((s) => s.currentUser);
   const userAvatar = useStore((s) => s.userAvatar);
   const avatarUri = userAvatar ?? currentUser?.avatar ?? null;
@@ -75,19 +77,19 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
   return (
     <View
       style={[
-        styles.avatarWrap,
-        focused && styles.avatarWrapActive,
+        tabStyles.avatarWrap,
+        focused && { borderWidth: 2, borderColor: colors.textPrimary },
       ]}
     >
       {avatarUri ? (
         <CachedImage
           uri={avatarUri}
-          style={styles.avatarImage}
+          style={tabStyles.avatarImage}
           contentFit="cover"
         />
       ) : (
-        <View style={styles.avatarFallback}>
-          <Text style={styles.avatarFallbackText}>{initials}</Text>
+        <View style={[tabStyles.avatarFallback, { backgroundColor: colors.borderSubtle }]}>
+          <Text style={[tabStyles.avatarFallbackText, { color: colors.textMuted }]}>{initials}</Text>
         </View>
       )}
     </View>
@@ -105,6 +107,8 @@ const CreateActionSheet = ({
 }) => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
+  const s = useMemo(() => sheetStyles(colors), [colors]);
 
   const actions = [
     { key: 'sell', label: 'List an item', description: 'Sell something on the marketplace', icon: 'pricetag-outline' as const, route: 'Sell' as const },
@@ -126,39 +130,40 @@ const CreateActionSheet = ({
       onDismiss={onClose}
       testID="create-action-sheet"
     >
-      <View style={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, Space.lg) }]}>
-        <View style={styles.sheetHandle} />
-        <Text style={styles.sheetTitle}>Create</Text>
-        <Text style={styles.sheetSubtitle}>Choose what you'd like to create</Text>
-        <View style={styles.sheetList}>
+      <View style={[s.sheetContent, { paddingBottom: Math.max(insets.bottom, Space.lg) }]}>
+        <View style={[s.sheetHandle, { backgroundColor: colors.border }]} />
+        <Text style={[s.sheetTitle, { color: colors.textPrimary }]}>Create</Text>
+        <Text style={[s.sheetSubtitle, { color: colors.textMuted }]}>Choose what you'd like to create</Text>
+        <View style={s.sheetList}>
           {actions.map((action) => (
             <Pressable
               key={action.key}
               style={({ pressed }) => [
-                styles.sheetAction,
-                pressed && styles.sheetActionPressed,
+                s.sheetAction,
+                { backgroundColor: colors.surfaceAlt },
+                pressed && s.sheetActionPressed,
               ]}
               onPress={() => handlePress(action)}
               accessibilityRole="button"
               accessibilityLabel={action.label}
               accessibilityHint={action.description}
             >
-              <View style={styles.sheetActionIcon}>
+              <View style={[s.sheetActionIcon, { backgroundColor: `${colors.brand}14` }]}>
                 <Ionicons
                   name={action.icon}
                   size={22}
-                  color={Colors.brand}
+                  color={colors.brand}
                 />
               </View>
-              <View style={styles.sheetActionBody}>
-                <Text style={styles.sheetActionLabel}>
+              <View style={s.sheetActionBody}>
+                <Text style={[s.sheetActionLabel, { color: colors.textPrimary }]}>
                   {action.label}
                 </Text>
-                <Text style={styles.sheetActionDescription} numberOfLines={1}>
+                <Text style={[s.sheetActionDescription, { color: colors.textMuted }]} numberOfLines={1}>
                   {action.description}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
           ))}
         </View>
@@ -171,6 +176,7 @@ export default function TabNavigator() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const { colors } = useAppTheme();
   const createSheetVisible = useStore((s) => s.createSheetVisible);
   const setCreateSheetVisible = useStore((s) => s.setCreateSheetVisible);
   const conversations = useStore((s) => s.conversations);
@@ -201,21 +207,23 @@ export default function TabNavigator() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
           tabBarShowLabel: false,
           tabBarHideOnKeyboard: true,
           tabBarStyle: {
-            ...styles.fixedTabBar,
+            ...tabStyles.fixedTabBar,
+            backgroundColor: colors.surface,
+            borderTopColor: colors.borderSubtle,
             height: NAV_HEIGHT + Math.max(insets.bottom, 0),
             paddingBottom: Math.max(insets.bottom, 0),
             paddingHorizontal: 0,
           },
-          tabBarItemStyle: styles.tabBarItem,
-          tabBarActiveTintColor: Colors.textPrimary,
-          tabBarInactiveTintColor: Colors.textMuted,
+          tabBarItemStyle: tabStyles.tabBarItem,
+          tabBarActiveTintColor: colors.textPrimary,
+          tabBarInactiveTintColor: colors.textMuted,
         }}
         screenListeners={{
           tabPress: (e: any) => {
@@ -254,7 +262,7 @@ export default function TabNavigator() {
             tabBarButton: (props: any) => (
               <Pressable
                 {...props}
-                style={styles.createButton}
+                style={tabStyles.createButton}
                 onPress={handleCreatePress}
                 onLongPress={props.onLongPress}
                 accessibilityRole="button"
@@ -263,8 +271,8 @@ export default function TabNavigator() {
                 accessibilityState={props.accessibilityState}
                 testID={props.testID}
               >
-                <View style={styles.createControl}>
-                  <Ionicons name="add" size={24} color={Colors.surface} />
+                <View style={[tabStyles.createControl, { backgroundColor: colors.brand }]}>
+                  <Ionicons name="add" size={24} color={colors.surface} />
                 </View>
               </Pressable>
             ),
@@ -308,11 +316,10 @@ export default function TabNavigator() {
   );
 }
 
-const styles = StyleSheet.create({
+// Static layout styles (no theme-dependent colors)
+const tabStyles = StyleSheet.create({
   fixedTabBar: {
-    backgroundColor: Colors.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.borderLight,
     shadowColor: 'transparent',
     elevation: 0,
   },
@@ -335,12 +342,10 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: Colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 1.5,
-    borderColor: Colors.surface,
   },
   badgeText: {
     color: '#fff',
@@ -359,7 +364,6 @@ const styles = StyleSheet.create({
     width: CREATE_CONTROL_SIZE,
     height: CREATE_CONTROL_SIZE,
     borderRadius: CREATE_CONTROL_SIZE / 2,
-    backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -371,10 +375,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarWrapActive: {
-    borderWidth: 2,
-    borderColor: Colors.textPrimary,
-  },
   avatarImage: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
@@ -384,76 +384,74 @@ const styles = StyleSheet.create({
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: Colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarFallbackText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: Colors.textMuted,
-  },
-  sheetContent: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    paddingTop: Space.sm,
-    paddingHorizontal: Space.md,
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginBottom: Space.sm,
-  },
-  sheetTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-  },
-  sheetSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginBottom: Space.md,
-  },
-  sheetList: {
-    gap: Space.xs,
-  },
-  sheetAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.sm + 2,
-    gap: Space.sm + 2,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  sheetActionPressed: {
-    opacity: 0.7,
-  },
-  sheetActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}14`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sheetActionBody: {
-    flex: 1,
-    gap: 2,
-  },
-  sheetActionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  sheetActionDescription: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
 });
+
+// Dynamic sheet styles (theme-aware via colors parameter)
+type ThemeColors = import('../theme/ThemeContext').ThemeColors;
+function sheetStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    sheetContent: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: Radius.xl,
+      borderTopRightRadius: Radius.xl,
+      paddingTop: Space.sm,
+      paddingHorizontal: Space.md,
+    },
+    sheetHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      alignSelf: 'center',
+      marginBottom: Space.sm,
+    },
+    sheetTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.bold,
+    },
+    sheetSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      marginBottom: Space.md,
+    },
+    sheetList: {
+      gap: Space.xs,
+    },
+    sheetAction: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: Space.sm + 2,
+      paddingHorizontal: Space.sm + 2,
+      gap: Space.sm + 2,
+      borderRadius: Radius.lg,
+    },
+    sheetActionPressed: {
+      opacity: 0.7,
+    },
+    sheetActionIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    sheetActionBody: {
+      flex: 1,
+      gap: 2,
+    },
+    sheetActionLabel: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+    },
+    sheetActionDescription: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+    },
+  });
+}

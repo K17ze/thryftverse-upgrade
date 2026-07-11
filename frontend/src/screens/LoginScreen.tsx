@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, StatusBar, ScrollView, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, Keyboard } from 'react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Typography } from '../theme/designTokens';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import {
   loginWithPassword,
   requestEmailOtp,
@@ -264,18 +265,13 @@ export default function LoginScreen() {
         )}
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.keyboardWrap}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+      <KeyboardAwareScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
           <View>
             <Text style={styles.title}>Welcome back</Text>
             <Text style={styles.subtitle}>Log in to continue buying, selling, and trading.</Text>
@@ -474,8 +470,7 @@ export default function LoginScreen() {
               </AnimatedPressable>
             </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

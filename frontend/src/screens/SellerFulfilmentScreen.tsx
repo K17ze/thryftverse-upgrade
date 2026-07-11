@@ -21,6 +21,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { getOrder, shipOrder, type CommerceOrder } from '../services/commerceApi';
 import { parseApiError } from '../lib/apiClient';
+import { fetchJson } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
 import { normaliseOrderStatus, humaniseStatus } from '../components/orders/orderCapabilities';
 
@@ -60,6 +61,8 @@ export default function SellerFulfilmentScreen() {
   const [trackingNumber, setTrackingNumber] = useState('');
   const [shippingProvider, setShippingProvider] = useState('');
   const [showCarrierDropdown, setShowCarrierDropdown] = useState(false);
+  const [isGeneratingLabel, setIsGeneratingLabel] = useState(false);
+  const [generatedLabelUrl, setGeneratedLabelUrl] = useState<string | null>(null);
 
   const isMountedRef = useRef(true);
 
@@ -109,6 +112,31 @@ export default function SellerFulfilmentScreen() {
       if (isMountedRef.current) setIsShipping(false);
     }
   }, [canShip, isShipping, orderId, trackingNumber, shippingProvider, show, navigation]);
+
+  const handleGenerateLabel = useCallback(async () => {
+    if (isGeneratingLabel) return;
+    setIsGeneratingLabel(true);
+    haptics.tap();
+    try {
+      // Request label generation from backend
+      const res = await fetchJson<{ shippingLabelUrl?: string; trackingNumber?: string }>(
+        `/orders/${orderId}/shipping-label`,
+        { method: 'POST', body: JSON.stringify({ carrier: shippingProvider || 'Royal Mail' }) }
+      );
+      if (res.shippingLabelUrl) {
+        setGeneratedLabelUrl(res.shippingLabelUrl);
+        show('Shipping label generated. Tap to print.', 'success');
+      }
+      if (res.trackingNumber && !trackingNumber) {
+        setTrackingNumber(res.trackingNumber);
+      }
+    } catch {
+      // Backend endpoint not available — show truthful message
+      show('Label generation requires carrier integration. Enter tracking manually.', 'info');
+    } finally {
+      if (isMountedRef.current) setIsGeneratingLabel(false);
+    }
+  }, [isGeneratingLabel, orderId, shippingProvider, trackingNumber, show]);
 
   if (isLoading) {
     return (
@@ -210,6 +238,40 @@ export default function SellerFulfilmentScreen() {
 
         <View style={styles.sectionDivider} />
 
+        {/* Seller-side escrow narrative — when funds are held */}
+        {(() => {
+          const normalised = normaliseOrderStatus(order.status);
+          const isHeld = normalised === 'paid' || normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery';
+          if (!isHeld) return null;
+          const shippedAt = order.shippedAt ? new Date(order.shippedAt).getTime() : null;
+          const autoReleaseMs = 14 * 24 * 60 * 60 * 1000;
+          const releaseTime = shippedAt ? shippedAt + autoReleaseMs : null;
+          const now = Date.now();
+          const daysLeft = releaseTime ? Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000)) : null;
+          return (
+            <View style={styles.escrowBanner}>
+              <View style={styles.escrowIconWrap}>
+                <Ionicons name="lock-closed" size={14} color={Colors.success} />
+              </View>
+              <View style={styles.escrowTextWrap}>
+                <Text style={styles.escrowTitle}>Funds held in escrow</Text>
+                <Text style={styles.escrowSub}>
+                  {normalised === 'paid'
+                    ? 'Buyer\'s payment is safely held. Dispatch your item to start the release countdown.'
+                    : 'Buyer\'s payment is held until they confirm receipt.'}
+                </Text>
+                {daysLeft != null && daysLeft > 0 && (
+                  <Text style={styles.escrowCountdown}>
+                    Auto-releases to you in {daysLeft} day{daysLeft === 1 ? '' : 's'} if the buyer doesn't act
+                  </Text>
+                )}
+              </View>
+            </View>
+          );
+        })()}
+
+        <View style={styles.sectionDivider} />
+
         <Text style={styles.sectionLabel}>Shipping details</Text>
 
         <Text style={styles.inputLabel}>Carrier</Text>
@@ -264,6 +326,49 @@ export default function SellerFulfilmentScreen() {
           autoCorrect={false}
           accessibilityLabel="Tracking number"
         />
+
+        {/* Generate shipping label */}
+        {canShip && (
+          <View style={styles.labelSection}>
+            <Pressable
+              style={[styles.generateLabelBtn, isGeneratingLabel && styles.generateLabelBtnDisabled]}
+              onPress={handleGenerateLabel}
+              disabled={isGeneratingLabel}
+              accessibilityRole="button"
+              accessibilityLabel="Generate shipping label"
+            >
+              {isGeneratingLabel ? (
+                <ActivityIndicator size="small" color={Colors.brand} />
+              ) : (
+                <>
+                  <Ionicons name="document-text-outline" size={18} color={Colors.brand} />
+                  <Text style={styles.generateLabelBtnText}>
+                    {generatedLabelUrl ? 'Regenerate label' : 'Generate shipping label'}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+
+            {generatedLabelUrl && (
+              <Pressable
+                style={styles.printLabelBtn}
+                onPress={() => {
+                  haptics.tap();
+                  navigation.navigate('ChatMediaPreview', {
+                    mediaUri: generatedLabelUrl,
+                    mediaType: 'image',
+                    senderLabel: 'Shipping label',
+                  });
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="View and print shipping label"
+              >
+                <Ionicons name="print-outline" size={18} color={Colors.textPrimary} />
+                <Text style={styles.printLabelBtnText}>View & print label</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
 
         <Text style={styles.hintText}>
           You can mark the order as shipped without tracking details and add them later.
@@ -434,6 +539,46 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginVertical: Space.sm,
   },
+  escrowBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: 12,
+    backgroundColor: `${Colors.success}08`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.success}25`,
+  },
+  escrowIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: `${Colors.success}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  escrowTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  escrowTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  escrowSub: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+  escrowCountdown: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
@@ -508,6 +653,45 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: Space.xs,
     lineHeight: 18,
+  },
+  labelSection: {
+    marginTop: Space.md,
+    gap: Space.sm,
+  },
+  generateLabelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: Space.sm + 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.brand,
+    backgroundColor: `${Colors.brand}08`,
+  },
+  generateLabelBtnDisabled: {
+    opacity: 0.6,
+  },
+  generateLabelBtnText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  printLabelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: Space.sm + 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  printLabelBtnText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   warningBanner: {
     flexDirection: 'row',

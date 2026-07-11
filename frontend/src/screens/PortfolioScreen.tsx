@@ -37,6 +37,7 @@ export default function PortfolioScreen() {
   const navigation = useNavigation<NavT>();
   const { colors, isDark } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
+  const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
@@ -107,6 +108,20 @@ export default function PortfolioScreen() {
     }));
   }, [positions, summary.totalValueGbp]);
 
+  // Best / worst performer — derived from unrealized P&L percentage
+  const performers = React.useMemo(() => {
+    if (positions.length === 0) return { best: null as CoOwnPositionVM | null, worst: null as CoOwnPositionVM | null };
+    const withPct = positions
+      .filter((p) => p.avgEntryPriceGbp > 0)
+      .map((p) => ({ p, pct: p.unrealizedPnlGbp / (p.avgEntryPriceGbp * p.unitsOwned) }));
+    if (withPct.length === 0) return { best: null, worst: null };
+    const sorted = [...withPct].sort((a, b) => b.pct - a.pct);
+    return {
+      best: sorted[0].pct !== 0 ? sorted[0].p : null,
+      worst: sorted[sorted.length - 1].pct !== 0 ? sorted[sorted.length - 1].p : null,
+    };
+  }, [positions]);
+
   const formatPositionStatus = (p: CoOwnPositionVM): 'open' | 'closed' | 'paused' => {
     if (!p.isOpen) return 'closed';
     return p.availableUnits > 0 ? 'open' : 'closed';
@@ -153,6 +168,11 @@ export default function PortfolioScreen() {
         icon: 'swap-horizontal-outline',
         onPress: () => navigation.navigate('Trade', { assetId: p.assetId, side: 'sell' }),
         variant: 'secondary',
+      });
+      actions.push({
+        label: 'Request buyout',
+        icon: 'exit-outline',
+        onPress: () => navigation.navigate('Buyout', { assetId: p.assetId }),
       });
     }
     actions.push({
@@ -326,6 +346,40 @@ export default function PortfolioScreen() {
               </View>
             </View>
 
+            {/* Best / worst performer highlight — quick at-a-glance insight */}
+            {(performers.best || performers.worst) && (
+              <View style={styles.performerRow}>
+                {performers.best && (
+                  <View style={[styles.performerCard, { backgroundColor: colors.surface, borderColor: `${colors.success}40` }]}>
+                    <View style={styles.performerHeader}>
+                      <Ionicons name="trending-up-outline" size={13} color={colors.success} />
+                      <Text style={[styles.performerLabel, { color: colors.success }]}>TOP PERFORMER</Text>
+                    </View>
+                    <Text style={[styles.performerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {performers.best.title}
+                    </Text>
+                    <Text style={[styles.performerValue, { color: colors.success }]} numberOfLines={1}>
+                      +{((performers.best.unrealizedPnlGbp / (performers.best.avgEntryPriceGbp * performers.best.unitsOwned)) * 100).toFixed(1)}%
+                    </Text>
+                  </View>
+                )}
+                {performers.worst && (
+                  <View style={[styles.performerCard, { backgroundColor: colors.surface, borderColor: `${colors.danger}40` }]}>
+                    <View style={styles.performerHeader}>
+                      <Ionicons name="trending-down-outline" size={13} color={colors.danger} />
+                      <Text style={[styles.performerLabel, { color: colors.danger }]}>LAGGING</Text>
+                    </View>
+                    <Text style={[styles.performerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {performers.worst.title}
+                    </Text>
+                    <Text style={[styles.performerValue, { color: colors.danger }]} numberOfLines={1}>
+                      {((performers.worst.unrealizedPnlGbp / (performers.worst.avgEntryPriceGbp * performers.worst.unitsOwned)) * 100).toFixed(1)}%
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
             {/* Allocation bars — only when real */}
             {allocationBars.length > 0 && (
               <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -345,6 +399,75 @@ export default function PortfolioScreen() {
                 </View>
               </View>
             )}
+
+            {/* Realised returns — income surface from closed positions */}
+            {summary.totalRealizedGbp !== 0 && (
+              <View style={[styles.realisedCard, { backgroundColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}08`, borderColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}30` }]}>
+                <View style={styles.realisedHeader}>
+                  <View style={[styles.realisedIcon, { backgroundColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}15` }]}>
+                    <Ionicons
+                      name={summary.totalRealizedGbp >= 0 ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
+                      size={15}
+                      color={summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}
+                    />
+                  </View>
+                  <View style={styles.realisedHeaderText}>
+                    <Text style={[styles.realisedLabel, { color: colors.textMuted }]}>REALISED RETURNS</Text>
+                    <Text style={[styles.realisedCaption, { color: colors.textSecondary }]}>
+                      From closed positions
+                    </Text>
+                  </View>
+                  <Text style={[styles.realisedAmount, { color: summary.totalRealizedGbp >= 0 ? colors.success : colors.danger }]} numberOfLines={1}>
+                    {summary.totalRealizedGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(summary.totalRealizedGbp), 'GBP')}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Watchlist summary */}
+            {coOwnWatchlist.length > 0 && (
+              <AnimatedPressable
+                style={[styles.watchlistRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => { haptics.tap(); navigation.navigate('AssetLeaderboard'); }}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${coOwnWatchlist.length} watched assets`}
+                scaleValue={0.98}
+                hapticFeedback="light"
+              >
+                <View style={[styles.watchlistIcon, { backgroundColor: `${colors.brand}15` }]}>
+                  <Ionicons name="eye-outline" size={15} color={colors.brand} />
+                </View>
+                <View style={styles.watchlistBody}>
+                  <Text style={[styles.watchlistTitle, { color: colors.textPrimary }]}>Watchlist</Text>
+                  <Text style={[styles.watchlistSub, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {coOwnWatchlist.length} {coOwnWatchlist.length === 1 ? 'asset' : 'assets'} on your radar
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+              </AnimatedPressable>
+            )}
+
+            {/* Ownership rights — what Co-Own entitles */}
+            <View style={[styles.rightsCard, { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}25` }]}>
+              <View style={styles.rightsHeader}>
+                <Ionicons name="shield-checkmark-outline" size={14} color={colors.brand} />
+                <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Your ownership rights</Text>
+              </View>
+              <View style={styles.rightsList}>
+                <View style={styles.rightsItem}>
+                  <Ionicons name="checkmark-circle-outline" size={11} color={colors.brand} />
+                  <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Trade units on the open market</Text>
+                </View>
+                <View style={styles.rightsItem}>
+                  <Ionicons name="checkmark-circle-outline" size={11} color={colors.brand} />
+                  <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Request a buyout for your share</Text>
+                </View>
+                <View style={styles.rightsItem}>
+                  <Ionicons name="checkmark-circle-outline" size={11} color={colors.brand} />
+                  <Text style={[styles.rightsText, { color: colors.textSecondary }]}>View full asset provenance & ledger</Text>
+                </View>
+              </View>
+            </View>
 
             {/* Section header */}
             <View style={styles.sectionRow}>
@@ -435,6 +558,38 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     marginBottom: Space.lg,
   },
+  performerRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginBottom: Space.lg,
+  },
+  performerCard: {
+    flex: 1,
+    borderRadius: Radius.md,
+    borderWidth: 0.5,
+    padding: Space.sm,
+    gap: 4,
+  },
+  performerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  performerLabel: {
+    fontSize: 9,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.5,
+  },
+  performerTitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: -0.2,
+  },
+  performerValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
   allocationTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
@@ -475,6 +630,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Space.md,
   },
+  realisedCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+    padding: Space.md,
+    marginBottom: Space.lg,
+  },
+  realisedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  realisedIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  realisedHeaderText: {
+    flex: 1,
+    gap: 2,
+  },
+  realisedLabel: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.4,
+  },
+  realisedCaption: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  realisedAmount: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  watchlistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.lg,
+  },
+  watchlistIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  watchlistBody: {
+    flex: 1,
+    gap: 2,
+  },
+  watchlistTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
+  },
+  watchlistSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
   sectionTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
@@ -483,5 +703,36 @@ const styles = StyleSheet.create({
   sectionLink: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+  },
+  rightsCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+    padding: Space.md,
+    gap: Space.sm,
+    marginBottom: Space.lg,
+  },
+  rightsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rightsTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.2,
+  },
+  rightsList: {
+    gap: 6,
+  },
+  rightsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rightsText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 17,
   },
 });

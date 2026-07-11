@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../constants/colors';
+import { Colors, ActiveTheme } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBucketedServerClock, resolveAuctionTiming } from '../hooks/useServerClock';
@@ -1108,7 +1108,7 @@ export default function AuctionHomeScreen() {
   if (!hasActiveMarket && !hasAnyContent) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
         <AuctionMarketHeader
           title="Auctions"
           actions={headerActions}
@@ -1823,7 +1823,7 @@ export default function AuctionHomeScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
       <AuctionMarketHeader
         title="Auctions"
         context={headerContext}
