@@ -1,13 +1,11 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Image,
-  Dimensions,
   ScrollView,
   StatusBar,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,21 +21,15 @@ import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
-import { fetchJson } from '../lib/apiClient';
 import { MasonryGrid } from '../components/ProductCardV2';
-import { EmptyState } from '../components/EmptyState';
 
 type Props = StackScreenProps<RootStackParamList, 'VisualSearch'>;
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export default function VisualSearchScreen({ navigation }: Props) {
   const { isDark } = useAppTheme();
   const { show } = useToast();
   const { listings } = useBackendData();
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [hasScanned, setHasScanned] = useState(false);
 
   const handleCapture = useCallback(async () => {
     try {
@@ -54,7 +46,6 @@ export default function VisualSearchScreen({ navigation }: Props) {
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         setImageUri(result.assets[0].uri);
-        setHasScanned(false);
       }
     } catch {
       show('Could not open camera', 'error');
@@ -76,7 +67,6 @@ export default function VisualSearchScreen({ navigation }: Props) {
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         setImageUri(result.assets[0].uri);
-        setHasScanned(false);
       }
     } catch {
       show('Could not open photo library', 'error');
@@ -85,26 +75,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
 
   const handleRemoveImage = useCallback(() => {
     setImageUri(null);
-    setHasScanned(false);
-    setIsScanning(false);
   }, []);
-
-  const handleScan = useCallback(async () => {
-    if (!imageUri) return;
-    setIsScanning(true);
-    setHasScanned(false);
-    try {
-      await fetchJson('/visual-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: imageUri }),
-      });
-    } catch {
-      // 503 is expected — backend records request and returns honest unavailable
-    }
-    setIsScanning(false);
-    setHasScanned(true);
-  }, [imageUri]);
 
   const handleBrowseSimilar = useCallback(() => {
     navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' });
@@ -143,13 +114,27 @@ export default function VisualSearchScreen({ navigation }: Props) {
         {!imageUri && (
           <Reanimated.View entering={FadeInDown.duration(300)} style={styles.sourceWrap}>
             <Text style={styles.sourceTitle}>Find similar items with a photo</Text>
-            <Text style={styles.sourceSub}>Take a photo or choose one from your gallery</Text>
+            <Text style={styles.sourceSub}>
+              Image matching is not connected yet. You can preview a photo, then continue with search or browse.
+            </Text>
             <View style={styles.sourceRow}>
-              <AnimatedPressable style={styles.sourceBtn} onPress={handleCapture} activeOpacity={0.85}>
+              <AnimatedPressable
+                style={styles.sourceBtn}
+                onPress={handleCapture}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Take a photo"
+              >
                 <Ionicons name="camera-outline" size={32} color={Colors.brand} />
                 <Text style={styles.sourceBtnText}>Camera</Text>
               </AnimatedPressable>
-              <AnimatedPressable style={styles.sourceBtn} onPress={handleGallery} activeOpacity={0.85}>
+              <AnimatedPressable
+                style={styles.sourceBtn}
+                onPress={handleGallery}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Choose a photo from gallery"
+              >
                 <Ionicons name="images-outline" size={32} color={Colors.brand} />
                 <Text style={styles.sourceBtnText}>Gallery</Text>
               </AnimatedPressable>
@@ -163,88 +148,56 @@ export default function VisualSearchScreen({ navigation }: Props) {
             <View style={styles.previewCard}>
               <Image source={{ uri: imageUri }} style={styles.previewImg} resizeMode="cover" />
 
-              {/* Scan overlay during scanning */}
-              {isScanning && <ScanOverlay />}
-
-              {/* Corner brackets for visual search framing */}
+              {/* Framing shows the intended crop without implying active analysis. */}
               <View style={[styles.cornerBracket, styles.cornerTL]} />
               <View style={[styles.cornerBracket, styles.cornerTR]} />
               <View style={[styles.cornerBracket, styles.cornerBL]} />
               <View style={[styles.cornerBracket, styles.cornerBR]} />
 
-              <AnimatedPressable style={styles.removeBtn} onPress={handleRemoveImage} activeOpacity={0.85}>
+              <AnimatedPressable
+                style={styles.removeBtn}
+                onPress={handleRemoveImage}
+                activeOpacity={0.85}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Remove selected photo"
+              >
                 <Ionicons name="close-circle" size={24} color="#fff" />
               </AnimatedPressable>
             </View>
 
-            {!isScanning && !hasScanned && (
-              <AppButton
-                title="Find Similar Items"
-                variant="primary"
-                size="lg"
-                onPress={handleScan}
-                style={{ marginTop: Space.md }}
-              />
-            )}
-
-            {/* Tips for best results — shown before scanning */}
-            {!isScanning && !hasScanned && (
-              <View style={styles.tipsCard}>
-                <View style={styles.tipsHeader}>
-                  <Ionicons name="bulb-outline" size={16} color={Colors.brand} />
-                  <Text style={styles.tipsTitle}>Tips for best results</Text>
-                </View>
-                <View style={styles.tipRow}>
-                  <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
-                  <Text style={styles.tipText}>Use a well-lit, clear photo of the item</Text>
-                </View>
-                <View style={styles.tipRow}>
-                  <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
-                  <Text style={styles.tipText}>Centre the item and crop out backgrounds</Text>
-                </View>
-                <View style={styles.tipRow}>
-                  <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
-                  <Text style={styles.tipText}>Flat lays and front-facing shots work best</Text>
-                </View>
+            <View style={styles.availabilityCard} accessibilityRole="summary">
+              <View style={styles.availabilityIcon}>
+                <Ionicons name="scan-outline" size={20} color={Colors.textPrimary} />
               </View>
-            )}
-
-            {isScanning && (
-              <View style={styles.scanningWrap}>
-                <ActivityIndicator size="small" color={Colors.brand} />
-                <Text style={styles.scanningText}>Analysing image</Text>
-                <Text style={styles.scanningSub}>Extracting colours, shapes and patterns</Text>
+              <View style={styles.availabilityCopy}>
+                <Text style={styles.availabilityTitle}>Visual matching is coming soon</Text>
+                <Text style={styles.availabilityText}>
+                  Your photo stays on this device. No scan or upload has been started.
+                </Text>
               </View>
-            )}
+            </View>
+
+            <AppButton
+              title="Search by text"
+              variant="primary"
+              size="lg"
+              onPress={handleSearchByText}
+              style={styles.primaryAction}
+            />
+            <AppButton
+              title="Browse all items"
+              variant="secondary"
+              size="md"
+              onPress={handleBrowseSimilar}
+              style={styles.secondaryAction}
+            />
           </Reanimated.View>
         )}
 
-        {/* Results / honest empty state */}
-        {hasScanned && (
+        {/* Honest browse fallbacks are available as soon as a photo is selected. */}
+        {imageUri && (
           <Reanimated.View entering={FadeInDown.duration(400)}>
-            {/* Honest unavailable state */}
-            <EmptyState
-              icon="scan-outline"
-              title="Visual search is not connected yet"
-              subtitle="We are working on image recognition. In the meantime, try these options to find similar items."
-              ctaLabel="Browse All Items"
-              onCtaPress={handleBrowseSimilar}
-              suggestedActions={[
-                { label: 'Search by Text', onPress: handleSearchByText },
-                { label: 'Camera', onPress: handleCapture },
-                { label: 'Gallery', onPress: handleGallery },
-              ]}
-            />
-
-            {/* Use different image */}
-            <AppButton
-              title="Use a different image"
-              variant="secondary"
-              size="md"
-              onPress={handleRemoveImage}
-              style={{ marginTop: Space.sm }}
-            />
-
             {/* Browse by category fallback */}
             {availableCategories.length > 0 && (
               <View style={styles.fallbackSection}>
@@ -293,9 +246,9 @@ const styles = StyleSheet.create({
   sourceWrap: { marginTop: Space.lg, alignItems: 'center', gap: Space.sm },
   sourceTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, textAlign: 'center' },
   sourceSub: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, textAlign: 'center' },
-  sourceRow: { flexDirection: 'row', gap: Space.md, marginTop: Space.lg },
+  sourceRow: { width: '100%', flexDirection: 'row', gap: Space.md, marginTop: Space.lg },
   sourceBtn: {
-    width: (SCREEN_W - Space.md * 2 - Space.md) / 2,
+    flex: 1,
     aspectRatio: 1,
     backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
@@ -307,9 +260,9 @@ const styles = StyleSheet.create({
   },
   sourceBtnText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
 
-  previewWrap: { marginTop: Space.lg, alignItems: 'center' },
+  previewWrap: { marginTop: Space.lg, alignItems: 'stretch' },
   previewCard: {
-    width: SCREEN_W - Space.md * 2,
+    width: '100%',
     aspectRatio: 1,
     borderRadius: Radius.lg,
     overflow: 'hidden',
@@ -329,46 +282,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  scanningWrap: { marginTop: Space.lg, alignItems: 'center', gap: Space.sm },
-  scanningText: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.sm },
-  scanningSub: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted },
-
-  fallbackSection: { marginTop: Space.lg },
-  fallbackTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: Space.sm },
-
-  // Tips card
-  tipsCard: {
+  availabilityCard: {
     marginTop: Space.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    borderRadius: Radius.md,
+    padding: Space.md,
+    borderRadius: Radius.lg,
     backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    gap: 8,
-  },
-  tipsHeader: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+  },
+  availabilityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    justifyContent: 'center',
   },
-  tipsTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  tipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  tipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    flex: 1,
-  },
+  availabilityCopy: { flex: 1, gap: 3 },
+  availabilityTitle: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
+  availabilityText: { fontSize: Type.caption.size, lineHeight: 18, fontFamily: Typography.family.regular, color: Colors.textSecondary },
+  primaryAction: { marginTop: Space.md },
+  secondaryAction: { marginTop: Space.sm },
+
+  fallbackSection: { marginTop: Space.lg },
+  fallbackTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: Space.sm },
 
   // Category chips
   categoryChipsWrap: {
@@ -409,70 +349,4 @@ const styles = StyleSheet.create({
   cornerBL: { bottom: 12, left: 12, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 8 },
   cornerBR: { bottom: 12, right: 12, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 8 },
 
-  scanLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: Colors.brand,
-    shadowColor: Colors.brand,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  scanDotGrid: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    padding: 20,
-  },
-  scanDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#fff',
-    margin: 16,
-  },
 });
-
-// Scan overlay component with animated moving scan line
-function ScanOverlay() {
-  const [offset, setOffset] = useState(0);
-  const direction = React.useRef(1);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setOffset((prev) => {
-        const next = prev + direction.current * 3;
-        if (next >= 100) { direction.current = -1; return 100; }
-        if (next <= 0) { direction.current = 1; return 0; }
-        return next;
-      });
-    }, 16);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <View style={[styles.scanLine, { top: `${offset}%` }]} />
-      <View style={styles.scanDotGrid}>
-        {[...Array(12)].map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.scanDot,
-              { opacity: 0.3 + 0.7 * Math.abs(Math.sin((offset + i * 30) * Math.PI / 180)) },
-            ]}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}

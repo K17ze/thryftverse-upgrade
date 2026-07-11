@@ -155,6 +155,9 @@ export function AnimatedHeart({
       disableAnimation
       activeOpacity={1}
       hapticFeedback="none"
+      accessibilityRole="button"
+      accessibilityLabel={isActive ? 'Remove from wishlist' : 'Add to wishlist'}
+      accessibilityState={{ selected: isActive }}
     >
       <Reanimated.View style={[animStyle, { alignItems: 'center', justifyContent: 'center' }]}>
         {particles.map((particle) => (

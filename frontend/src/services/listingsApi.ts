@@ -12,6 +12,9 @@ interface ApiListingRow {
   priceGbp: number;
   imageUrl: string | null;
   images: string[];
+  mediaAspectRatio?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
   status: string;
   category: string | null;
   brand: string | null;

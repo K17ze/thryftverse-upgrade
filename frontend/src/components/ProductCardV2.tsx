@@ -1,14 +1,13 @@
 /**
- * ProductCard V2 - Depop Style (Minimal, No Container)
- * Image is the card - no border radius on images
- * Price-first hierarchy like Vinted/Depop
+ * ProductCard V2 — stable, image-first marketplace card.
+ * Geometry is reserved before media loads to prevent masonry reflow.
  */
 
 import React, { useState } from 'react';
-import { View, StyleSheet, Dimensions, Text } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Layout } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
 import { T, Price } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
@@ -23,8 +22,8 @@ import { isVideoUri } from '../utils/media';
 import { Typography } from '../theme/designTokens';
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { PressPresets } from '../hooks/usePremiumPressFeedback';
-
-const DEFAULT_ASPECT_RATIO = 0.8; // 4:5 portrait — common for fashion product photos
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { resolveListingMediaAspectRatio } from '../utils/listingMediaGeometry';
 
 // A URI is only usable when it is a non-blank string. Backend rows can surface
 // `''`, `null`, or whitespace-only strings; treat all of these as "no media"
@@ -39,11 +38,21 @@ interface ProductCardV2Props {
   index?: number;
   showSaveButton?: boolean;
   visualOnly?: boolean;
+  /** Width divided by height. Use API media metadata when available. */
+  mediaAspectRatio?: number;
   /** Enable staggered entrance animation (default true) */
   enableEntranceAnimation?: boolean;
 }
 
-export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false, visualOnly = false, enableEntranceAnimation = true }: ProductCardV2Props) {
+export function ProductCardV2({
+  item,
+  onPress,
+  index = 0,
+  showSaveButton = false,
+  visualOnly = false,
+  mediaAspectRatio,
+  enableEntranceAnimation = true,
+}: ProductCardV2Props) {
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
   const isSaved = useStore((state) => state.isSavedProduct(item.id));
@@ -51,10 +60,10 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
+  const reducedMotionEnabled = useReducedMotion();
 
-  const [imageAspect, setImageAspect] = useState<number | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
-  const aspectRatio = imageAspect ?? DEFAULT_ASPECT_RATIO;
+  const aspectRatio = mediaAspectRatio ?? resolveListingMediaAspectRatio(item);
   // Filter to only usable URIs so empty-string backend sentinels never reach
   // the image layer or the "multiple media" badge.
   const usableImages = (item.images ?? []).filter(isUsableUri);
@@ -67,10 +76,8 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
   const sellerAvatar = item.seller?.avatar ?? null;
 
   const handleToggleFav = () => {
-    haptic.light(); // ELEVATED: Subtle haptic feedback
     toggleFav(item.id);
     if (!isFav) {
-      haptic.success(); // ELEVATED: Success feedback on add
       show('Added to wishlist', 'success');
     }
   };
@@ -81,7 +88,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
     show(isSaved ? 'Removed from saved' : 'Added to saved', 'info');
   };
 
-  const hasPriceDrop = item.originalPrice && item.originalPrice > item.price;
+  const hasPriceDrop = typeof item.originalPrice === 'number' && item.originalPrice > item.price;
   const priceDropPercent = hasPriceDrop
     ? Math.round(((item.originalPrice! - item.price) / item.originalPrice!) * 100)
     : 0;
@@ -89,14 +96,21 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
   const cardContent = (
     <View style={styles.container}>
       {/* Image - Full bleed, subtle radius for modern feel */}
-      <AnimatedPressable onPress={onPress} style={styles.imageWrap} {...PressPresets.card}>
+      <AnimatedPressable
+        onPress={onPress}
+        style={styles.imageWrap}
+        {...PressPresets.card}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
+        accessibilityHint="Opens item details"
+      >
         {showPlaceholder ? (
           // Premium placeholder — matches Thryftverse visual language via
           // ImageEmptyGraphic (gradient + geometric texture + icon ring).
           // Falls back to the 4:5 editorial ratio so the masonry never collapses.
           <ImageEmptyGraphic
             icon="shirt-outline"
-            style={[styles.image, { aspectRatio: DEFAULT_ASPECT_RATIO }]}
+            style={[styles.image, { aspectRatio }]}
           />
         ) : (
           <CachedImage
@@ -104,12 +118,6 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
             style={[styles.image, { aspectRatio }]}
             contentFit="cover"
             transition={300}
-            onLoad={(e: { source: { width: number; height: number } }) => {
-              const { width, height } = e.source;
-              if (width && height && width > 0 && height > 0) {
-                setImageAspect(width / height);
-              }
-            }}
             onError={() => setImageFailed(true)}
           />
         )}
@@ -122,13 +130,13 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
         )}
 
         {/* Condition badge - top left, more subtle */}
-        {!item.isSold && (
+        {!item.isSold && !hasPriceDrop && (
           <View style={styles.conditionBadge}>
             <Text style={styles.conditionText}>{item.condition}</Text>
           </View>
         )}
 
-        {/* Price drop badge - top left below condition */}
+        {/* A single top-left status keeps the image legible. */}
         {hasPriceDrop && !item.isSold && (
           <View style={[styles.conditionBadge, styles.priceDropBadge]}>
             <Text style={styles.conditionText}>-{priceDropPercent}%</Text>
@@ -153,6 +161,7 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
               style={styles.saveBtn}
               onPress={handleToggleSave}
               {...PressPresets.iconButton}
+              hitSlop={6}
               accessibilityRole="button"
               accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
               accessibilityHint="Toggles this product in your saved page"
@@ -182,18 +191,12 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
                 <Text style={styles.originalPrice}>{formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })}</Text>
               )}
             </View>
-            {/* Likes row stays present even when backend reports 0 so the card
-                keeps its social-proof rhythm. Muted when there is no count. */}
-            <View style={styles.likes}>
-              <Ionicons
-                name="heart"
-                size={9}
-                color={item.likes > 0 ? Colors.textMuted : Colors.border}
-              />
-              <T.Caption style={{ fontSize: 11, lineHeight: 14, color: item.likes > 0 ? undefined : Colors.textMuted }}>
-                {item.likes > 0 ? item.likes : '—'}
-              </T.Caption>
-            </View>
+            {item.likes > 0 ? (
+              <View style={styles.likes}>
+                <Ionicons name="heart" size={9} color={Colors.textMuted} />
+                <T.Caption style={styles.likesText}>{item.likes}</T.Caption>
+              </View>
+            ) : null}
           </View>
 
           {item.size ? <T.Caption numberOfLines={1} style={{ marginTop: 1 }}>{item.size}</T.Caption> : null}
@@ -214,24 +217,13 @@ export function ProductCardV2({ item, onPress, index = 0, showSaveButton = false
               )}
               <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
             </View>
-          ) : (
-            // Premium compact seller placeholder when seller is entirely absent
-            // — never leaves a blank gap, never fabricates a username.
-            <View style={styles.sellerRow}>
-              <View style={styles.sellerAvatarPlaceholder}>
-                <Ionicons name="storefront-outline" size={9} color={Colors.textMuted} />
-              </View>
-              <Text style={[styles.sellerName, { color: Colors.textMuted }]} numberOfLines={1}>
-                Thryftverse seller
-              </Text>
-            </View>
-          )}
+          ) : null}
         </View>
       )}
     </View>
   );
 
-  if (!enableEntranceAnimation) {
+  if (!enableEntranceAnimation || reducedMotionEnabled) {
     return cardContent;
   }
 
@@ -260,7 +252,7 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
   const heights = Array.from({ length: numColumns }, () => 0);
 
   items.forEach((item, index) => {
-    const aspect = DEFAULT_ASPECT_RATIO;
+    const aspect = resolveListingMediaAspectRatio(item);
     const imgHeight = 160 / aspect; // approximate; actual width varies
     const infoHeight = visualOnly ? 0 : 42;
     const itemHeight = imgHeight + infoHeight + Space.sm;
@@ -290,6 +282,7 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
               index={originalIndex}
               showSaveButton={showSaveButton}
               visualOnly={visualOnly}
+              mediaAspectRatio={resolveListingMediaAspectRatio(item)}
               enableEntranceAnimation={true}
             />
           ))}
@@ -312,7 +305,7 @@ const styles = StyleSheet.create({
   imageWrap: {
     position: 'relative',
     overflow: 'hidden',
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     backgroundColor: Colors.surfaceAlt,
   },
   image: {
@@ -345,17 +338,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   favBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.32)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.32)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -396,6 +389,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
   },
+  likesText: {
+    fontSize: 11,
+    lineHeight: 14,
+  },
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -434,7 +431,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   priceDropBadge: {
-    top: Space.sm + 26,
     backgroundColor: 'rgba(200,50,50,0.65)',
   },
   conditionText: {

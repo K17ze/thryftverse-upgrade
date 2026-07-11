@@ -28,6 +28,9 @@ export interface BackendListingRow {
   priceGbp?: number | string | null;
   imageUrl?: string | null;
   images?: string[] | null;
+  mediaAspectRatio?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
   status?: string | null;
   category?: string | null;
   subcategory?: string | null;
@@ -170,6 +173,18 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing {
     price: toFinitePrice(row.priceGbp),
     originalPrice: toFiniteOriginalPrice(row.originalPriceGbp),
     images: collectMedia(row),
+    mediaAspectRatio:
+      typeof row.mediaAspectRatio === 'number' && Number.isFinite(row.mediaAspectRatio)
+        ? row.mediaAspectRatio
+        : null,
+    mediaWidth:
+      typeof row.mediaWidth === 'number' && Number.isFinite(row.mediaWidth)
+        ? row.mediaWidth
+        : null,
+    mediaHeight:
+      typeof row.mediaHeight === 'number' && Number.isFinite(row.mediaHeight)
+        ? row.mediaHeight
+        : null,
     likes: typeof row.likes === 'number' && row.likes > 0 ? row.likes : 0,
     views: typeof row.views === 'number' && row.views > 0 ? row.views : 0,
     isSold: row.status === 'sold',

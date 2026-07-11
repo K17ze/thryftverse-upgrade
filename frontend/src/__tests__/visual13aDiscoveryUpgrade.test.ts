@@ -54,15 +54,14 @@ describe('VISUAL-13A Discovery Visual Upgrade', () => {
     expect(detail).toContain('DiscoverySectionHeader');
   });
 
-  it('7. ProductCardV2 does not regress to heavy card treatment', () => {
+  it('7. ProductCardV2 uses a restrained flagship media radius without elevation', () => {
     const card = readFile('components/ProductCardV2.tsx');
     // Should NOT have heavy Elevation.card on imageWrap
     const imageWrapMatch = card.match(/imageWrap:\s*\{[\s\S]*?\}/);
     expect(imageWrapMatch).toBeTruthy();
     const wrapBody = imageWrapMatch![0];
     expect(wrapBody).not.toContain('Elevation.card');
-    expect(wrapBody).not.toContain('Radius.lg');
-    expect(wrapBody).toContain('Radius.sm');
+    expect(wrapBody).toContain('Radius.lg');
   });
 
   it('8. No Unsplash/picsum/placeholder providers in discovery screens', () => {
@@ -138,9 +137,9 @@ describe('VISUAL-13A Discovery Visual Upgrade', () => {
     expect(readFile('screens/CategoryDetailScreen.tsx')).toContain('PinterestMasonryGrid');
     // VisualCategoryTile used in CategoryTreeScreen
     expect(readFile('screens/CategoryTreeScreen.tsx')).toContain('VisualCategoryTile');
-    // DiscoverySectionHeader used in multiple screens
+    // DiscoverySectionHeader used across the discovery journey
     expect(readFile('screens/HomeScreen.tsx')).toContain('DiscoverySectionHeader');
-    expect(readFile('screens/ItemDetailScreen.tsx')).toContain('DiscoverySectionHeader');
+    expect(readFile('screens/CategoryTreeScreen.tsx')).toContain('DiscoverySectionHeader');
     // PremiumSkeletonTile used in HomeScreen
     expect(readFile('screens/HomeScreen.tsx')).toContain('PremiumSkeletonTile');
     // ImageEmptyGraphic used in CachedImage which is used everywhere

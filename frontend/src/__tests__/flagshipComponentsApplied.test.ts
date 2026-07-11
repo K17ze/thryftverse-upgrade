@@ -54,7 +54,7 @@ describe('flagship components applied to production screens', () => {
 
   it('ProductCardV2 uses refined radius and no heavy elevation', () => {
     const src = readSrc('components/ProductCardV2.tsx');
-    expect(src).toContain('borderRadius: Radius.md');
+    expect(src).toContain('borderRadius: Radius.lg');
     expect(src).not.toContain('...Elevation.card');
   });
 

@@ -1,14 +1,14 @@
 ---
-version: "1.3"
-name: "ThryftVerse Flagship Native Design System"
+version: "1.4"
+name: "ThryftVerse Neutral Flagship Native Design System"
 benchmark-date: "2026-07-11"
-description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current Pinterest, Instagram, Depop, Vinted, Vestiaire and Whatnot product patterns while remaining faithful to the ThryftVerse React Native codebase. v1.3 separates current runtime tokens from proposed target tokens, introduces surface-specific canvas modes, accessible luxury accents, adaptive discovery modules, visual-completion performance standards, media-quality rules, visual-search architecture, and profile merchandising."
+description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current Pinterest, Instagram, Depop, Vinted, Vestiaire and Whatnot product patterns while remaining faithful to the ThryftVerse React Native codebase. v1.4 keeps the current neutral palette canonical and raises quality through geometry, media integrity, typography, interaction, state clarity, accessibility and performance. Optional luxury accents remain contextual rather than decorative."
 
 implementation-status:
   current-runtime-theme: "VERIFIED — frontend/src/theme/ThemeContext.tsx currently exposes the neutral base palette and does not yet expose the proposed premium/luxury tokens below."
   current-spacing-type-radius-motion: "VERIFIED — frontend/src/theme/designTokens.ts is the runtime source of truth."
   current-gradients: "VERIFIED — frontend/src/theme/gradients.ts exposes static Gradients, Glass and Glow exports AND a useGradients() reactive hook (line 85)."
-  target-premium-tokens: "PROPOSED — must be added to ThemeContext.tsx before production component use."
+  target-premium-tokens: "DEFERRED — do not introduce decorative champagne or gold in the flagship reconstruction. The current neutral runtime palette remains canonical; optional premium accents require a separate product decision and semantic use case."
   migration-rule: "Never hardcode proposed tokens in screens. Add them to ThemeColors, LIGHT_COLORS and DARK_COLORS in one focused token migration, then consume through useAppTheme().colors."
 
 reference-priority:

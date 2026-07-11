@@ -68,6 +68,7 @@ import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { CuratedCollectionsRail, type CuratedCollection } from '../components/product';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
+import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -78,17 +79,8 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const PANEL_BG = Colors.surfaceAlt;
 
-// Masonry grid: Varied aspect ratios for visual interest
-const TILE_RATIO_SEQUENCE = [1.28, 0.94, 1.16, 0.86, 1.06, 1.22] as const;
-
-function resolveTileAspectRatio(seed: string) {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-  }
-  const index = Math.abs(hash) % TILE_RATIO_SEQUENCE.length;
-  return TILE_RATIO_SEQUENCE[index];
-}
+// Skeleton variation communicates loading without inventing media geometry.
+const SKELETON_HEIGHT_RATIOS = [1.25, 1.08, 1.32, 1.16] as const;
 
 interface MediaPreviewProps {
   uri: string;
@@ -561,7 +553,7 @@ export default function HomeScreen() {
         routeId: item.id,
         sellerId: item.sellerId,
         caption: item.title,
-        aspectRatio: resolveTileAspectRatio(item.id),
+        aspectRatio: resolveListingMediaHeightRatio(item),
         isSaved: wishlist.includes(item.id),
       };
     });
@@ -640,7 +632,7 @@ export default function HomeScreen() {
         routeId: item.id,
         sellerId: item.sellerId,
         caption: item.title,
-        aspectRatio: resolveTileAspectRatio(item.id),
+        aspectRatio: resolveListingMediaHeightRatio(item),
         isSaved: wishlist.includes(item.id),
       };
     });
@@ -845,7 +837,7 @@ export default function HomeScreen() {
     <View style={styles.exploreLoadingGrid}>
       <View style={styles.exploreLoadingColumn}>
         {Array.from({ length: 4 }).map((_, index) => {
-          const ratio = TILE_RATIO_SEQUENCE[index % TILE_RATIO_SEQUENCE.length];
+          const ratio = SKELETON_HEIGHT_RATIOS[index % SKELETON_HEIGHT_RATIOS.length];
           return (
             <View key={`feed_loading_left_${index}`}>
               <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.sm} />
@@ -855,7 +847,7 @@ export default function HomeScreen() {
       </View>
       <View style={styles.exploreLoadingColumn}>
         {Array.from({ length: 4 }).map((_, index) => {
-          const ratio = TILE_RATIO_SEQUENCE[(index + 2) % TILE_RATIO_SEQUENCE.length];
+          const ratio = SKELETON_HEIGHT_RATIOS[(index + 2) % SKELETON_HEIGHT_RATIOS.length];
           return (
             <View key={`feed_loading_right_${index}`}>
               <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.sm} />

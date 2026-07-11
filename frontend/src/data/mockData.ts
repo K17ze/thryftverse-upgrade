@@ -57,6 +57,14 @@ export interface Listing {
   originalPrice?: number;
   priceWithProtection?: number;
   images: string[];
+  /**
+   * Width divided by height for the primary media asset. Backends should
+   * provide this when known so discovery grids can reserve the final frame
+   * before the image downloads and avoid visible layout shifts.
+   */
+  mediaAspectRatio?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
   likes: number;
   views?: number;
   isBumped?: boolean;
