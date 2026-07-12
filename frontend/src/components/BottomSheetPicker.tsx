@@ -8,7 +8,7 @@ import Reanimated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../theme/designTokens';
+import { Typography, Space, Radius } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 
 const { height, width } = Dimensions.get('window');
@@ -175,11 +175,11 @@ const styles = StyleSheet.create({
     backgroundColor: SEARCH_BG,
     borderWidth: 0.5,
     borderColor: SEARCH_BORDER,
-    marginHorizontal: 20,
-    paddingHorizontal: 16,
+    marginHorizontal: Space.md,
+    paddingHorizontal: Space.md,
     height: 50,
-    borderRadius: 25,
-    marginBottom: 16,
+    borderRadius: Radius.full,
+    marginBottom: Space.md,
   },
   searchInput: { flex: 1, marginLeft: 10, color: Colors.textPrimary, fontFamily: Typography.family.medium, fontSize: 16, letterSpacing: 0.08 },
 
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: Space.md,
     borderBottomWidth: 0.5,
     borderBottomColor: OPTION_BORDER,
   },

@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     left: Space.xs,
     width: 7,
     height: 7,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     backgroundColor: Colors.danger,
   },
   outbidDot: {
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     right: Space.xs,
     width: 7,
     height: 7,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     backgroundColor: Colors.danger,
   },
   body: {

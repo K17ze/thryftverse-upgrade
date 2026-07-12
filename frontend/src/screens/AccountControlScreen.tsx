@@ -213,7 +213,7 @@ export default function AccountControlScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Continue to final confirmation"
         >
-          <Text style={[styles.dangerBtnText, { color: '#FFFFFF' }]}>Continue</Text>
+          <Text style={[styles.dangerBtnText, { color: colors.textInverse }]}>Continue</Text>
         </AnimatedPressable>
       </View>
     </>
@@ -285,7 +285,7 @@ export default function AccountControlScreen({ navigation }: Props) {
           {isDeleting ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
-            <Text style={[styles.dangerBtnText, { color: '#FFFFFF' }]}>Delete permanently</Text>
+            <Text style={[styles.dangerBtnText, { color: colors.textInverse }]}>Delete permanently</Text>
           )}
         </AnimatedPressable>
       </View>
