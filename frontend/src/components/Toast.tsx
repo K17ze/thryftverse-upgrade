@@ -6,18 +6,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from './AnimatedPressable';
 import { Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS } from 'react-native-reanimated';
 
 // Info toast uses a warm brand-gold accent (#d7b98f) — a ThryftVerse signature color
 // not yet in the token system. Success and error use theme tokens.
 const INFO_ACCENT = '#d7b98f';
-
-const TYPE_CONFIG: Record<ToastType, { borderColor: string; icon: keyof typeof Ionicons.glyphMap; iconColor: string }> = {
-  success: { borderColor: Colors.success, icon: 'checkmark-circle', iconColor: Colors.success },
-  error: { borderColor: Colors.danger, icon: 'alert-circle', iconColor: Colors.danger },
-  info: { borderColor: INFO_ACCENT, icon: 'information-circle', iconColor: INFO_ACCENT },
-};
 
 interface ToastItemProps {
   id: string;
@@ -27,7 +21,12 @@ interface ToastItemProps {
 
 function ToastItem({ id, message, type }: ToastItemProps) {
   const { dismiss } = useToast();
-  const config = TYPE_CONFIG[type];
+  const { colors } = useAppTheme();
+  const config = {
+    success: { borderColor: colors.success, icon: 'checkmark-circle' as const, iconColor: colors.success },
+    error: { borderColor: colors.danger, icon: 'alert-circle' as const, iconColor: colors.danger },
+    info: { borderColor: INFO_ACCENT, icon: 'information-circle' as const, iconColor: INFO_ACCENT },
+  }[type];
 
   const translateY = useSharedValue(-60);
   const opacity = useSharedValue(0);
