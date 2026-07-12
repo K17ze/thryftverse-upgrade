@@ -1,28 +1,22 @@
-fix(a11y): touch targets, reduced-motion on decorative pulses & skeletons
+fix(theme): migrate CategoryDetailScreen & CategoryTreeScreen to useAppTheme
 
-Per audit section 5.4: "Visual Search runs a JavaScript setInterval
-every 16ms to animate a fake scan line, with no reduced-motion
-alternative" and "Confirmed ProductCard save/favourite controls are
-visually 32x32pt without an explicit 44/48pt hit region."
+Per audit section 5.1: "102/120 screens still import the legacy
+constants/colors module" and "StyleSheet.create() values using the
+mutable legacy Colors export are calculated at module load. Changing
+the theme variable does not reconstruct those styles, so live theme
+changes can leave large parts of the UI stale."
 
-Touch target fixes:
-- Bumped hitSlop from 4 to 8 on 5 AuctionDetailScreen floating
-  controls (back, share, save, like, watch) for 50pt+ effective area.
-- Bumped hitSlop from 6 to 8 on ProductCardV2 save button,
-  VisualSearchScreen close button, and 4 AuctionMarketHeader actions.
-- Bumped LookSocialActions button paddingVertical from 10 to 12 for
-  46pt minimum height (was 42pt — below 44pt minimum).
+Migrated two screens from legacy Colors to useAppTheme().colors:
+- CategoryDetailScreen: removed Colors import, all color references
+  now use reactive colors from useAppTheme(). Static StyleSheet
+  retains only structural properties; color properties are applied
+  inline for theme reactivity.
+- CategoryTreeScreen: removed Colors import and module-level PILL_BG
+  /PILL_BORDER constants (which were frozen at module load). All
+  color references now use reactive colors. Also capped the section
+  stagger animation to max index 6.
 
-Reduced-motion fixes on continuous animations:
-- ActivityBadge PulsingDot: static opacity when reduced motion enabled.
-- PulseDot (chat presence indicator): no pulse animation when reduced
-  motion enabled.
-- AvatarRing (unread glow): no pulse animation when reduced motion
-  enabled; ring still shows as solid border.
-- PremiumSkeletonTile shimmer: static position when reduced motion.
-- SkeletonChatLoader breathing: static opacity when reduced motion.
-- RefreshIndicator rotation: no spin when reduced motion; indicator
-  still shows but without continuous rotation.
+Both screens now support live theme switching without remounting.
 
 Generated with [Devin](https://devin.ai)
 

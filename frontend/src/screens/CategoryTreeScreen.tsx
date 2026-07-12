@@ -11,17 +11,15 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { Typography, Space, Radius } from '../theme/designTokens';
 import { VisualCategoryTile } from '../components/discover/VisualCategoryTile';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme } from '../theme/ThemeContext';
 
 type RouteT = RouteProp<RootStackParamList, 'CategoryTree'>;
-const PILL_BG = Colors.surface;
-const PILL_BORDER = Colors.border;
 
 const TREES: Record<string, { title: string; subs: string[] }[]> = {
   Women: [
@@ -48,33 +46,34 @@ export default function CategoryTreeScreen() {
   const { show } = useToast();
   const { categoryPrefix } = route.params;
   const reducedMotionEnabled = useReducedMotion();
+  const { colors, isDark } = useAppTheme();
 
   const resolvedPrefix = TREES[categoryPrefix] ? categoryPrefix : 'Women';
   const sections = TREES[resolvedPrefix];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Editorial header */}
         <View style={styles.editorialHeader}>
           <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
-          <Text style={styles.editorialTitle}>{resolvedPrefix}</Text>
-          <Text style={styles.editorialSubtitle}>Curated categories, handpicked for you</Text>
+          <Text style={[styles.editorialTitle, { color: colors.textPrimary }]}>{resolvedPrefix}</Text>
+          <Text style={[styles.editorialSubtitle, { color: colors.textMuted }]}>Curated categories, handpicked for you</Text>
         </View>
 
         {/* Premium full-width View All */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>
           <AnimatedPressable
-            style={styles.viewAllRow}
+            style={[styles.viewAllRow, { backgroundColor: colors.brand }]}
             onPress={() => navigation.navigate('Browse', { categoryId: resolvedPrefix.toLowerCase(), title: `All ${resolvedPrefix}` })}
             activeOpacity={0.92}
           >
-            <Text style={styles.viewAllText}>View All {resolvedPrefix}</Text>
-            <Ionicons name="arrow-forward" size={20} color={Colors.background} />
+            <Text style={[styles.viewAllText, { color: colors.background }]}>View All {resolvedPrefix}</Text>
+            <Ionicons name="arrow-forward" size={20} color={colors.background} />
           </AnimatedPressable>
         </Reanimated.View>
 
@@ -100,7 +99,7 @@ export default function CategoryTreeScreen() {
         {sections.map((section, index) => (
           <Reanimated.View
             key={section.title}
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(200 + index * 80)}
+            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(200 + Math.min(index, 6) * 80)}
             style={styles.section}
           >
             <DiscoverySectionHeader
@@ -116,7 +115,7 @@ export default function CategoryTreeScreen() {
               {section.subs.map(sub => (
                 <AnimatedPressable
                   key={sub}
-                  style={styles.subPill}
+                  style={[styles.subPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
                   activeOpacity={0.85}
                   onPress={() => navigation.navigate('Browse', {
                     categoryId: resolvedPrefix.toLowerCase(),
@@ -124,7 +123,7 @@ export default function CategoryTreeScreen() {
                     title: sub
                   })}
                 >
-                  <Text style={styles.subPillText}>{sub}</Text>
+                  <Text style={[styles.subPillText, { color: colors.textPrimary }]}>{sub}</Text>
                 </AnimatedPressable>
               ))}
             </ScrollView>
@@ -138,7 +137,7 @@ export default function CategoryTreeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
 
   editorialHeader: {
     paddingHorizontal: Space.md,
@@ -155,14 +154,12 @@ const styles = StyleSheet.create({
   editorialTitle: {
     fontSize: 32,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.8,
     lineHeight: 40,
   },
   editorialSubtitle: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     marginTop: Space.xs,
     letterSpacing: 0.2,
   },
@@ -173,7 +170,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.lg,
     paddingHorizontal: Space.lg,
-    backgroundColor: Colors.brand,
     marginHorizontal: Space.md,
     marginBottom: Space.lg,
     borderRadius: Radius.xl,
@@ -181,7 +177,6 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.background,
     letterSpacing: 0.3,
   },
 
@@ -206,15 +201,12 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   subPill: {
-    backgroundColor: PILL_BG,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: PILL_BORDER,
   },
   subPillText: {
-    color: Colors.textPrimary,
     fontSize: 13,
     fontFamily: Typography.family.medium,
   },
